@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -613,6 +614,220 @@ func TestEmitJSONResult_Indentation(t *testing.T) {
 	// Should have proper line breaks between fields
 	if !strings.Contains(output, "\n") {
 		t.Error("expected multi-line JSON output")
+	}
+}
+
+// =============================================================================
+// HEAD-fallback integration tests (fresh repos with no commits)
+// =============================================================================
+
+func TestEmitJSONResult_FreshRepoNoHEAD_StagedAndUnstaged(t *testing.T) {
+	// Create a temp directory with git init (no commits = no HEAD)
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create a file and stage it
+	filePath := dir + "/hello.txt"
+	if err := os.WriteFile(filePath, []byte("version 1\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "hello.txt")
+
+	// Now modify it to create unstaged changes on top of the staged version
+	if err := os.WriteFile(filePath, []byte("version 2\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change working directory to the temp repo
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	// Call emitJSONResult and capture output
+	output := captureStdout(t, func() {
+		emitJSONResult("fresh repo test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	// GitDiff should be non-empty (staged + unstaged combined)
+	if result.GitDiff == "" {
+		t.Error("expected non-empty GitDiff for fresh repo with staged and unstaged changes")
+	}
+
+	// FilesModified should contain the modified file
+	if len(result.FilesModified) == 0 {
+		t.Fatal("expected FilesModified to contain hello.txt, got empty/nil")
+	}
+	found := false
+	for _, f := range result.FilesModified {
+		if f == "hello.txt" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected FilesModified to contain %q, got %v", "hello.txt", result.FilesModified)
+	}
+}
+
+func TestEmitJSONResult_FreshRepoNoHEAD_StagedOnly(t *testing.T) {
+	// Create a temp directory with git init (no commits)
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create a file and stage it (staged only, no further modifications)
+	filePath := dir + "/staged_only.go"
+	if err := os.WriteFile(filePath, []byte("package main\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "staged_only.go")
+
+	// Change working directory to the temp repo
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("staged only test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	// GitDiff should contain the staged diff
+	if result.GitDiff == "" {
+		t.Error("expected non-empty GitDiff for fresh repo with staged changes")
+	}
+
+	// FilesModified should contain the file
+	if len(result.FilesModified) == 0 {
+		t.Fatal("expected FilesModified to contain staged_only.go, got empty/nil")
+	}
+	found := false
+	for _, f := range result.FilesModified {
+		if f == "staged_only.go" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected FilesModified to contain %q, got %v", "staged_only.go", result.FilesModified)
+	}
+}
+
+func TestEmitJSONResult_FreshRepoNoHEAD_Deduplication(t *testing.T) {
+	// Create a temp directory with git init (no commits)
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create a file, stage it, then modify it again.
+	// This means the file appears in both staged and unstaged diffs.
+	filePath := dir + "/dedup.txt"
+	if err := os.WriteFile(filePath, []byte("original\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "dedup.txt")
+
+	// Modify the file after staging to create unstaged changes
+	if err := os.WriteFile(filePath, []byte("modified\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change working directory to the temp repo
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("dedup test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	// Verify the file appears exactly once in FilesModified
+	count := 0
+	for _, f := range result.FilesModified {
+		if f == "dedup.txt" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected dedup.txt to appear exactly once in FilesModified, got %d occurrences: %v", count, result.FilesModified)
+	}
+}
+
+func TestEmitJSONResult_FreshRepoNoHEAD_EmptyWorktree(t *testing.T) {
+	// Create a temp directory with git init (no commits, no files)
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+
+	// Change working directory to the empty repo
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("empty worktree test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	// GitDiff should be empty
+	if result.GitDiff != "" {
+		t.Errorf("expected empty GitDiff for empty worktree, got: %q", result.GitDiff)
+	}
+
+	// FilesModified should be empty/nil
+	if len(result.FilesModified) != 0 {
+		t.Errorf("expected empty FilesModified for empty worktree, got: %v", result.FilesModified)
+	}
+}
+
+// runGit is a test helper that runs a git command in the given directory.
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s failed in %s: %v\noutput: %s", strings.Join(args, " "), dir, err, string(out))
 	}
 }
 

@@ -73,19 +73,57 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	}
 
 	// Collect git diff (best-effort)
+	var diffOutput string
 	if diff, err := exec.Command("git", "diff", "HEAD").Output(); err == nil {
 		trimmed := strings.TrimSpace(string(diff))
 		if trimmed != "" {
-			result.GitDiff = trimmed
+			diffOutput = trimmed
 		}
+	} else {
+		// No HEAD ref - try combining unstaged and staged diffs
+		var parts []string
+		if unstaged, err := exec.Command("git", "diff").Output(); err == nil {
+			if trimmed := strings.TrimSpace(string(unstaged)); trimmed != "" {
+				parts = append(parts, trimmed)
+			}
+		}
+		if staged, err := exec.Command("git", "diff", "--cached").Output(); err == nil {
+			if trimmed := strings.TrimSpace(string(staged)); trimmed != "" {
+				parts = append(parts, trimmed)
+			}
+		}
+		if len(parts) > 0 {
+			diffOutput = strings.Join(parts, "\n")
+		}
+	}
+	if diffOutput != "" {
+		result.GitDiff = diffOutput
 	}
 
 	// Collect modified files (best-effort)
+	seen := make(map[string]bool)
 	if out, err := exec.Command("git", "diff", "--name-only", "HEAD").Output(); err == nil {
 		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 		for _, l := range lines {
-			if l = strings.TrimSpace(l); l != "" {
+			if l = strings.TrimSpace(l); l != "" && !seen[l] {
+				seen[l] = true
 				result.FilesModified = append(result.FilesModified, l)
+			}
+		}
+	} else {
+		// No HEAD ref - try combining unstaged and staged file lists
+		for _, cmd := range []*exec.Cmd{
+			exec.Command("git", "diff", "--name-only"),
+			exec.Command("git", "diff", "--cached", "--name-only"),
+		} {
+			if out, err := cmd.Output(); err == nil {
+				lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+				for _, l := range lines {
+					if l = strings.TrimSpace(l); l != "" && !seen[l] {
+						seen[l] = true
+						result.FilesModified = append(result.FilesModified, l)
+					}
+				}
 			}
 		}
 	}

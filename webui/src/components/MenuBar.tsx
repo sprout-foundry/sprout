@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { ApiService } from '../services/api';
+import { supportsLocalTerminal } from '../config/mode';
 import './MenuBar.css';
 
 const APP_VERSION = '1.0.0';
@@ -22,88 +23,96 @@ interface MenuDef {
   items: MenuButtonItem[];
 }
 
-const MENUS: MenuDef[] = [
-  {
-    title: 'File',
-    mnemonic: 'F',
-    items: [
-      { label: 'New File', commandId: 'new_file' },
-      { label: 'Open File...', commandId: 'quick_open' },
-      { label: 'Save', commandId: 'save_file' },
-      { label: 'Save All', commandId: 'save_all_files' },
-      { divider: true, label: '' },
-      { label: 'Close Editor', commandId: 'close_editor' },
-      { label: 'Close All Editors', commandId: 'close_all_editors' },
-      { label: 'Close Other Editors', commandId: 'close_other_editors' },
-    ],
-  },
-  {
-    title: 'Edit',
-    mnemonic: 'E',
-    items: [
-      { label: 'Undo', commandId: 'undo' },
-      { label: 'Redo', commandId: 'redo' },
-      { divider: true, label: '' },
-      { label: 'Cut', commandId: 'editor_cut' },
-      { label: 'Copy', commandId: 'editor_copy' },
-      { label: 'Paste', commandId: 'editor_paste' },
-      { divider: true, label: '' },
-      { label: 'Find', commandId: 'editor_find' },
-      { label: 'Find and Replace', commandId: 'editor_replace' },
-      { divider: true, label: '' },
-      { label: 'Select All', commandId: 'editor_select_all' },
-      { divider: true, label: '' },
-      { label: 'Command Palette...', commandId: 'command_palette' },
-      { divider: true, label: '' },
-      { label: 'Toggle File Explorer', commandId: 'toggle_explorer' },
-      { label: 'Toggle Sidebar', commandId: 'toggle_sidebar' },
-      { label: 'Toggle Terminal', commandId: 'toggle_terminal' },
-    ],
-  },
-  {
-    title: 'View',
-    mnemonic: 'V',
-    items: [
-      { label: 'Switch to Chat', commandId: 'switch_to_chat' },
-      { label: 'Switch to Editor', commandId: 'switch_to_editor' },
-      { label: 'Switch to Git', commandId: 'switch_to_git' },
-      { divider: true, label: '' },
-      { label: 'Toggle Word Wrap', commandId: 'editor_toggle_word_wrap', isToggle: true },
-      { label: 'Toggle Minimap', commandId: 'toggle_minimap', isToggle: true },
-      { label: 'Toggle Linked Scrolling', commandId: 'toggle_linked_scroll', isToggle: true },
-      { divider: true, label: '' },
-      { label: 'Split Editor Vertical', commandId: 'split_editor_vertical' },
-      { label: 'Split Editor Horizontal', commandId: 'split_editor_horizontal' },
-      { label: 'Split Editor Grid', commandId: 'split_editor_grid' },
-      { divider: true, label: '' },
-      { label: 'Reset Saved Layout', commandId: 'reset_saved_layout' },
-    ],
-  },
-  {
-    title: 'Terminal',
-    mnemonic: 'T',
-    items: [
-      { label: 'Focus Terminal', commandId: 'toggle_terminal' },
-      { label: 'Split Terminal Vertical', commandId: 'split_terminal_vertical' },
-      { label: 'Split Terminal Horizontal', commandId: 'split_terminal_horizontal' },
-      { divider: true, label: '' },
-      { label: 'Clear Terminal', commandId: 'clear_terminal' },
-      { label: 'Kill Terminal', commandId: 'kill_terminal' },
-    ],
-  },
-  {
-    title: 'Help',
-    mnemonic: 'H',
-    items: [
-      { label: 'Keyboard Shortcuts', commandId: 'open_hotkeys_config' },
-      { divider: true, label: '' },
-      { label: 'Export Diagnostics', commandId: 'export_diagnostics' },
-      { label: 'Report Issue', commandId: 'open_report_issue' },
-      { divider: true, label: '' },
-      { label: 'About ledit', commandId: 'about' },
-    ],
-  },
-];
+function getMenus(): MenuDef[] {
+  const menus: MenuDef[] = [
+    {
+      title: 'File',
+      mnemonic: 'F',
+      items: [
+        { label: 'New File', commandId: 'new_file' },
+        { label: 'Open File...', commandId: 'quick_open' },
+        { label: 'Save', commandId: 'save_file' },
+        { label: 'Save All', commandId: 'save_all_files' },
+        { divider: true, label: '' },
+        { label: 'Close Editor', commandId: 'close_editor' },
+        { label: 'Close All Editors', commandId: 'close_all_editors' },
+        { label: 'Close Other Editors', commandId: 'close_other_editors' },
+      ],
+    },
+    {
+      title: 'Edit',
+      mnemonic: 'E',
+      items: [
+        { label: 'Undo', commandId: 'undo' },
+        { label: 'Redo', commandId: 'redo' },
+        { divider: true, label: '' },
+        { label: 'Cut', commandId: 'editor_cut' },
+        { label: 'Copy', commandId: 'editor_copy' },
+        { label: 'Paste', commandId: 'editor_paste' },
+        { divider: true, label: '' },
+        { label: 'Find', commandId: 'editor_find' },
+        { label: 'Find and Replace', commandId: 'editor_replace' },
+        { divider: true, label: '' },
+        { label: 'Select All', commandId: 'editor_select_all' },
+        { divider: true, label: '' },
+        { label: 'Command Palette...', commandId: 'command_palette' },
+        { divider: true, label: '' },
+        { label: 'Toggle File Explorer', commandId: 'toggle_explorer' },
+        { label: 'Toggle Sidebar', commandId: 'toggle_sidebar' },
+        ...(supportsLocalTerminal ? [{ label: 'Toggle Terminal', commandId: 'toggle_terminal' }] : []),
+      ],
+    },
+    {
+      title: 'View',
+      mnemonic: 'V',
+      items: [
+        { label: 'Switch to Chat', commandId: 'switch_to_chat' },
+        { label: 'Switch to Editor', commandId: 'switch_to_editor' },
+        { label: 'Switch to Git', commandId: 'switch_to_git' },
+        { divider: true, label: '' },
+        { label: 'Toggle Word Wrap', commandId: 'editor_toggle_word_wrap', isToggle: true },
+        { label: 'Toggle Minimap', commandId: 'toggle_minimap', isToggle: true },
+        { label: 'Toggle Linked Scrolling', commandId: 'toggle_linked_scroll', isToggle: true },
+        { divider: true, label: '' },
+        { label: 'Split Editor Vertical', commandId: 'split_editor_vertical' },
+        { label: 'Split Editor Horizontal', commandId: 'split_editor_horizontal' },
+        { label: 'Split Editor Grid', commandId: 'split_editor_grid' },
+        { divider: true, label: '' },
+        { label: 'Reset Saved Layout', commandId: 'reset_saved_layout' },
+      ],
+    },
+    {
+      title: 'Help',
+      mnemonic: 'H',
+      items: [
+        { label: 'Keyboard Shortcuts', commandId: 'open_hotkeys_config' },
+        { divider: true, label: '' },
+        { label: 'Export Diagnostics', commandId: 'export_diagnostics' },
+        { label: 'Report Issue', commandId: 'open_report_issue' },
+        { divider: true, label: '' },
+        { label: 'About ledit', commandId: 'about' },
+      ],
+    },
+  ];
+
+  // Add Terminal menu only if local terminal is supported
+  if (supportsLocalTerminal) {
+    menus.splice(3, 0, {
+      title: 'Terminal',
+      mnemonic: 'T',
+      items: [
+        { label: 'Focus Terminal', commandId: 'toggle_terminal' },
+        { label: 'Split Terminal Vertical', commandId: 'split_terminal_vertical' },
+        { label: 'Split Terminal Horizontal', commandId: 'split_terminal_horizontal' },
+        { divider: true, label: '' },
+        { label: 'Clear Terminal', commandId: 'clear_terminal' },
+        { label: 'Kill Terminal', commandId: 'kill_terminal' },
+      ],
+    });
+  }
+
+  return menus;
+}
 
 function getActionableItems(menu: MenuDef): MenuButtonItem[] {
   return menu.items.filter((i) => !i.divider && !i.disabled);
@@ -152,6 +161,8 @@ function MenuBar(): JSX.Element | null {
     };
   }, []);
 
+  const MENUS = useMemo(() => getMenus(), []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F10' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
@@ -174,7 +185,7 @@ function MenuBar(): JSX.Element | null {
         }
       } else if (e.altKey && !e.ctrlKey && !e.metaKey) {
         const key = e.key.toLowerCase();
-        const menuIndex = MENUS.findIndex((m) => m.mnemonic.toLowerCase() === key);
+        const menuIndex = MENUS.findIndex((m: MenuDef) => m.mnemonic.toLowerCase() === key);
         if (menuIndex !== -1) {
           e.preventDefault();
           e.stopPropagation();
@@ -333,7 +344,7 @@ function MenuBar(): JSX.Element | null {
   return (
     <>
       <div className="menu-bar" role="menubar">
-        {MENUS.map((menu, index) => {
+        {MENUS.map((menu: MenuDef, index: number) => {
           const isActive = activeMenuIndex === index;
           return (
             <button

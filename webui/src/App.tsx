@@ -10,6 +10,8 @@ import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
 import './components/UpdateNotification.css';
+import SecurityApprovalDialog from './components/SecurityApprovalDialog';
+import SecurityPromptDialog from './components/SecurityPromptDialog';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
@@ -132,6 +134,21 @@ interface AppState {
     lastError: string | null;
     isProcessing: boolean;
   }>;
+  securityApprovalRequest: {
+    requestId: string;
+    toolName: string;
+    riskLevel: string;
+    reasoning: string;
+    command?: string;
+    riskType?: string;
+    target?: string;
+  } | null;
+  securityPromptRequest: {
+    requestId: string;
+    prompt: string;
+    filePath?: string;
+    concern?: string;
+  } | null;
 }
 
 interface ToolExecution {
@@ -383,6 +400,8 @@ function App() {
       activeChatId: null,
       chatSessions: [],
       perChatCache: {},
+      securityApprovalRequest: null,
+      securityPromptRequest: null,
     };
   });
 
@@ -469,6 +488,25 @@ function App() {
 
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
+
+  // Security approval/prompt response handlers
+  const handleSecurityApprovalResponse = useCallback((requestId: string, approved: boolean) => {
+    if (!wsService.isConnected()) return;
+    wsService.sendEvent({
+      type: 'security_approval_response',
+      data: { request_id: requestId, approved },
+    });
+    setState((prev) => ({ ...prev, securityApprovalRequest: null }));
+  }, [wsService]);
+
+  const handleSecurityPromptResponse = useCallback((requestId: string, response: boolean) => {
+    if (!wsService.isConnected()) return;
+    wsService.sendEvent({
+      type: 'security_prompt_response',
+      data: { request_id: requestId, response },
+    });
+    setState((prev) => ({ ...prev, securityPromptRequest: null }));
+  }, [wsService]);
 
   const selectedOnboardingProvider = useMemo(() => {
     return onboarding.providers.find((p) => p.id === onboarding.provider) || null;
@@ -1398,6 +1436,48 @@ function App() {
         }
         break;
 
+      case 'security_approval_request':
+        logEntry.category = 'system';
+        logEntry.level = 'warning';
+        // Skip status echo events that would briefly re-show the dialog
+        if (event.data?.status === 'responded') break;
+        if (event.data) {
+          setState((prev) => ({
+            ...prev,
+            securityApprovalRequest: {
+              requestId: String(event.data.request_id || ''),
+              toolName: String(event.data.tool_name || ''),
+              riskLevel: String(event.data.risk_level || 'CAUTION'),
+              reasoning: String(event.data.reasoning || ''),
+              command: event.data.command != null ? String(event.data.command) : undefined,
+              riskType: event.data.risk_type != null ? String(event.data.risk_type) : undefined,
+              target: event.data.target != null ? String(event.data.target) : undefined,
+            },
+            logs: [...prev.logs, logEntry],
+          }));
+        }
+        debugLog('[security] Approval request:', event.data?.tool_name, event.data?.risk_level);
+        break;
+
+      case 'security_prompt_request':
+        logEntry.category = 'system';
+        logEntry.level = 'warning';
+        // Skip status echo events
+        if (event.data?.status === 'responded') break;
+        if (!event.data?.prompt) break;
+        setState((prev) => ({
+          ...prev,
+          securityPromptRequest: {
+            requestId: String(event.data.request_id || ''),
+            prompt: String(event.data.prompt || ''),
+            filePath: event.data.file_path != null ? String(event.data.file_path) : undefined,
+            concern: event.data.concern != null ? String(event.data.concern) : undefined,
+          },
+          logs: [...prev.logs, logEntry],
+        }));
+        debugLog('[security] Prompt request:', event.data?.file_path, event.data?.concern);
+        break;
+
       default:
         // Handle any unknown event types
         logEntry.level = 'warning';
@@ -2047,6 +2127,27 @@ function App() {
               />
               <Notification />
               <UpdateNotification />
+              {state.securityApprovalRequest && (
+                <SecurityApprovalDialog
+                  requestId={state.securityApprovalRequest.requestId}
+                  toolName={state.securityApprovalRequest.toolName}
+                  riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
+                  reasoning={state.securityApprovalRequest.reasoning}
+                  command={state.securityApprovalRequest.command}
+                  riskType={state.securityApprovalRequest.riskType}
+                  target={state.securityApprovalRequest.target}
+                  onRespond={handleSecurityApprovalResponse}
+                />
+              )}
+              {state.securityPromptRequest && (
+                <SecurityPromptDialog
+                  requestId={state.securityPromptRequest.requestId}
+                  prompt={state.securityPromptRequest.prompt}
+                  filePath={state.securityPromptRequest.filePath}
+                  concern={state.securityPromptRequest.concern}
+                  onRespond={handleSecurityPromptResponse}
+                />
+              )}
               {onboarding.open && (
                 <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up Sprout">
                   <div className="onboarding-card">

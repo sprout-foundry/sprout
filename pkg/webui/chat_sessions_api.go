@@ -627,6 +627,58 @@ func (ws *ReactWebServer) handleAPIChatSessionsCompact(w http.ResponseWriter, r 
 	})
 }
 
+// handleAPIChatSessionClearHistory handles POST /api/chat-sessions/history.
+// Body: { "id": "chat-id" }
+// Clears the conversation messages for a chat session while keeping the session
+// and its config overrides intact.
+func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+	chatID := strings.TrimSpace(req.ID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+
+	if ctx == nil {
+		http.Error(w, "Client context not found", http.StatusNotFound)
+		return
+	}
+
+	cs := ctx.getChatSession(chatID)
+	if cs == nil {
+		http.Error(w, "Chat session not found", http.StatusNotFound)
+		return
+	}
+
+	// Clear conversation history but keep config overrides
+	if agentInst, err := ws.getChatAgent(clientID, chatID); err == nil {
+		agentInst.ClearConversationHistory()
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"chat_id":  chatID,
+		"messages": fmt.Sprintf("Conversation history cleared for chat session %s", chatID),
+	})
+}
+
 // handleAPIChatSessionsDeleteAll handles POST /api/chat-sessions/delete-all
 // Deletes all chat sessions except the default one, then sets the default session as active.
 func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, r *http.Request) {

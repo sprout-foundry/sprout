@@ -286,10 +286,12 @@ func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T
 		Type: events.EventTypeQueryProgress,
 		Data: map[string]interface{}{"client_id": "client-a"},
 	}
-	if !ws.shouldForwardEventToConnection(targeted, "client-a") {
+	connInfoA := &ConnectionInfo{ClientID: "client-a", ChatID: ""}
+	connInfoB := &ConnectionInfo{ClientID: "client-b", ChatID: ""}
+	if !ws.shouldForwardEventToConnection(targeted, connInfoA) {
 		t.Fatal("expected targeted event to be forwarded to matching client")
 	}
-	if ws.shouldForwardEventToConnection(targeted, "client-b") {
+	if ws.shouldForwardEventToConnection(targeted, connInfoB) {
 		t.Fatal("expected targeted event to be blocked for non-matching client")
 	}
 
@@ -297,7 +299,8 @@ func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T
 		Type: events.EventTypeQueryProgress,
 		Data: map[string]interface{}{"message": "no client metadata"},
 	}
-	if ws.shouldForwardEventToConnection(untargeted, "client-a") {
+	connInfoGeneric := &ConnectionInfo{ClientID: "client-a", ChatID: ""}
+	if ws.shouldForwardEventToConnection(untargeted, connInfoGeneric) {
 		t.Fatal("expected untargeted non-global event to be blocked")
 	}
 
@@ -305,8 +308,66 @@ func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T
 		Type: events.EventTypeMetricsUpdate,
 		Data: map[string]interface{}{"uptime": "1m"},
 	}
-	if !ws.shouldForwardEventToConnection(global, "client-a") {
+	if !ws.shouldForwardEventToConnection(global, connInfoGeneric) {
 		t.Fatal("expected global metrics update to be forwarded without client metadata")
+	}
+}
+
+func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+
+	// Test 1: Event with both client_id and chat_id - should match both
+	eventBoth := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{"client_id": "client-a", "chat_id": "chat-1"},
+	}
+	connMatchingBoth := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-1"}
+	connWrongChat := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-2"}
+	connUnfiltered := &ConnectionInfo{ClientID: "client-a", ChatID: ""}
+	
+	if !ws.shouldForwardEventToConnection(eventBoth, connMatchingBoth) {
+		t.Fatal("expected event with client_id and chat_id to match connection with both")
+	}
+	if ws.shouldForwardEventToConnection(eventBoth, connWrongChat) {
+		t.Fatal("expected event with chat_id to be blocked when connection has different chat_id")
+	}
+	if !ws.shouldForwardEventToConnection(eventBoth, connUnfiltered) {
+		t.Fatal("expected event with chat_id to be forwarded to unfiltered connection (no specific chat)")
+	}
+
+	// Test 2: Event with only chat_id (no client_id) - should match by chat_id
+	eventChatOnly := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{"chat_id": "chat-1"},
+	}
+	connMatchingChat := &ConnectionInfo{ClientID: "client-b", ChatID: "chat-1"}
+	connWrongChatOnly := &ConnectionInfo{ClientID: "client-b", ChatID: "chat-2"}
+	
+	if !ws.shouldForwardEventToConnection(eventChatOnly, connMatchingChat) {
+		t.Fatal("expected event with chat_id to match connection with same chat_id")
+	}
+	if ws.shouldForwardEventToConnection(eventChatOnly, connWrongChatOnly) {
+		t.Fatal("expected event with chat_id to be blocked when connection has different chat_id")
+	}
+
+	// Test 3: Event with neither client_id nor chat_id - only global events allowed
+	eventNeither := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{"message": "test"},
+	}
+	connAny := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-1"}
+	
+	if ws.shouldForwardEventToConnection(eventNeither, connAny) {
+		t.Fatal("expected event with no client_id or chat_id to be blocked")
+	}
+
+	// Test 4: Global event without client_id or chat_id - should be forwarded
+	eventGlobal := events.UIEvent{
+		Type: events.EventTypeMetricsUpdate,
+		Data: map[string]interface{}{"uptime": "1m"},
+	}
+	if !ws.shouldForwardEventToConnection(eventGlobal, connAny) {
+		t.Fatal("expected global metrics update to be forwarded")
 	}
 }
 

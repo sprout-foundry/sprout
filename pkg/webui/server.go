@@ -30,6 +30,7 @@ import (
 type ConnectionInfo struct {
 	SessionID   string    // Unique session ID for this connection
 	ClientID    string    // WebUI client/window identifier
+	ChatID      string    // Chat session identifier (optional)
 	Type        string    // "webui" or "terminal"
 	UserID      string    // User ID extracted from trusted header (service mode)
 	ConnectedAt time.Time // When the connection was established

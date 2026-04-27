@@ -98,7 +98,11 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var query struct {
-		Query string `json:"query"`
+		Query         string `json:"query"`
+		Provider      string `json:"provider,omitempty"`
+		Model         string `json:"model,omitempty"`
+		WorkspaceRoot string `json:"workspace_root,omitempty"`
+		SystemPrompt  string `json:"system_prompt,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
@@ -145,6 +149,35 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			http.Error(w, fmt.Sprintf("failed to initialize chat agent: %v", err), http.StatusInternalServerError)
 		}
 		return
+	}
+
+	// Apply per-query overrides: provider, model
+	if query.Provider != "" {
+		cm := ws.getConfigManager(r, w)
+		if cm != nil {
+			if providerType, err := cm.MapStringToClientType(query.Provider); err == nil {
+				if serr := clientAgent.SetProvider(providerType); serr != nil {
+					log.Printf("handleAPIQuery: failed to set provider %q: %v", query.Provider, serr)
+				}
+			} else {
+				log.Printf("handleAPIQuery: invalid provider %q: %v", query.Provider, err)
+			}
+		}
+	}
+	if query.Model != "" {
+		if err := clientAgent.SetModel(query.Model); err != nil {
+			log.Printf("handleAPIQuery: failed to set model %q: %v", query.Model, err)
+		}
+	}
+
+	// Apply per-query workspace root override
+	if query.WorkspaceRoot != "" {
+		workspaceRoot = query.WorkspaceRoot
+	}
+
+	// Apply per-query system prompt override (session-scoped, resets after query not needed)
+	if query.SystemPrompt != "" {
+		clientAgent.SetSystemPrompt(query.SystemPrompt)
 	}
 
 	// Store CurrentQuery atomically with ActiveQuery so that stats responses
@@ -196,13 +229,15 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 				fmt.Sprintf("Executed command: `%s`\n", trimmed),
 				"assistant_text",
 			))
-			ws.publishClientEvent(clientID, events.EventTypeQueryCompleted, events.QueryCompletedEvent(
+			queryCompletedData := events.QueryCompletedEvent(
 				query.Query,
 				fmt.Sprintf("Executed command: %s", trimmed),
 				0,
 				0,
 				time.Since(startedAt),
-			))
+			)
+			queryCompletedData["chat_id"] = chatID
+			ws.publishClientEvent(clientID, events.EventTypeQueryCompleted, queryCompletedData)
 			return
 		}
 
@@ -348,6 +383,29 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 		"accepted":  true,
 		"mode":      "stop",
 		"timestamp": time.Now().Unix(),
+	})
+}
+
+// handleAPIQueryStatus handles GET /api/query/status?chat_id=xxx
+// Returns whether a query is currently active for the specified chat.
+// This is a polling fallback for when the WebSocket drops and reconnects.
+func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+	chatID := ws.resolveChatID(r, clientID)
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	active := ctx != nil && ctx.hasActiveQueryForChat(chatID)
+	ws.mutex.RUnlock()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"active":  active,
+		"chat_id": chatID,
 	})
 }
 

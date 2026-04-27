@@ -2,8 +2,10 @@
 package webui
 
 import (
+	"context"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -118,6 +120,56 @@ func TestExtractUserID(t *testing.T) {
 			headerValue:   "",
 			expectedUserID: "",
 		},
+		// Validation tests for Issue 3
+		{
+			name:          "header value with whitespace is trimmed and accepted",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   "  user123  ",
+			expectedUserID: "user123",
+		},
+		{
+			name:          "header value exceeding 256 chars is rejected",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   strings.Repeat("a", 257),
+			expectedUserID: "",
+		},
+		{
+			name:          "header value with special chars like semicolon is rejected",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   "user;123",
+			expectedUserID: "",
+		},
+		{
+			name:          "header value with script tag is rejected",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   "<script>alert('xss')</script>",
+			expectedUserID: "",
+		},
+		{
+			name:          "header value with valid special chars like @ is accepted",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   "user@example.com",
+			expectedUserID: "user@example.com",
+		},
+		{
+			name:          "header value with hyphens and dots is accepted",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   "user-123.sso",
+			expectedUserID: "user-123.sso",
+		},
+		{
+			name:          "header value with underscore and colon is accepted",
+			serviceMode:   true,
+			headerName:    "X-User-ID",
+			headerValue:   "user_name:123",
+			expectedUserID: "user_name:123",
+		},
 	}
 
 	for _, tt := range tests {
@@ -183,3 +235,72 @@ func TestUserIDContextFunctions(t *testing.T) {
 		}
 	})
 }
+
+// TestGetClientContextForRequestPopulatesUserID verifies that getClientContextForRequest
+// correctly extracts the user ID from the request context and stores it on the client context.
+func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
+	eventBus := events.NewEventBus()
+	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+
+	t.Run("UserID populated from context", func(t *testing.T) {
+		// Create a request with user ID in context
+		req, err := http.NewRequest("GET", "/test", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+
+		// Set user ID in context
+		ctx := context.WithValue(req.Context(), userIDContextKey, "test-user-123")
+		req = req.WithContext(ctx)
+
+		// Get client context
+		clientCtx := server.getClientContextForRequest(req)
+
+		// Assert UserID field is populated
+		if clientCtx.UserID != "test-user-123" {
+			t.Errorf("Expected clientCtx.UserID %q, got %q", "test-user-123", clientCtx.UserID)
+		}
+	})
+
+	t.Run("UserID not overwritten on subsequent calls", func(t *testing.T) {
+		// Create a request with a different user ID in context
+		req, err := http.NewRequest("GET", "/test", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+
+		// First call sets UserID
+		ctx := context.WithValue(req.Context(), userIDContextKey, "test-user-123")
+		req = req.WithContext(ctx)
+		clientCtx := server.getClientContextForRequest(req)
+
+		// Second call with different user ID in context should not overwrite
+		ctx2 := context.WithValue(req.Context(), userIDContextKey, "different-user")
+		req2 := req.WithContext(ctx2)
+		_ = server.getClientContextForRequest(req2)
+
+		// UserID should remain the first value (same client context instance)
+		if clientCtx.UserID != "test-user-123" {
+			t.Errorf("Expected clientCtx.UserID %q to persist, got %q", "test-user-123", clientCtx.UserID)
+		}
+	})
+
+	t.Run("UserID not set when empty in context", func(t *testing.T) {
+		// Create a request without user ID in context
+		req, err := http.NewRequest("GET", "/test", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		// Use a different client ID to avoid reusing cached context
+		req.Header.Set("X-Ledit-Client-ID", "different-client")
+
+		// Get client context
+		clientCtx := server.getClientContextForRequest(req)
+
+		// UserID should remain empty
+		if clientCtx.UserID != "" {
+			t.Errorf("Expected empty clientCtx.UserID, got %q", clientCtx.UserID)
+		}
+	})
+}
+

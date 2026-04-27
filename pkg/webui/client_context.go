@@ -173,7 +173,14 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 }
 
 func (ws *ReactWebServer) getClientContextForRequest(r *http.Request) *webClientContext {
-	return ws.getOrCreateClientContext(ws.resolveClientID(r))
+	ctx := ws.getOrCreateClientContext(ws.resolveClientID(r))
+	// Populate UserID from request context if not already set (avoids overwriting on every request)
+	if ctx.UserID == "" {
+		if userID := UserIDFromContext(r.Context()); userID != "" {
+			ctx.UserID = userID
+		}
+	}
+	return ctx
 }
 
 func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) {

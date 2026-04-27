@@ -1063,11 +1063,11 @@ func defaultSkills() map[string]Skill {
 		},
 		"repo-onboarding": {
 			ID:          "repo-onboarding",
-			Name:        "Repo Onboarding",
-			Description: "Standard process for quickly mapping project structure, entry points, and local development commands.",
-			Path:        "pkg/agent/skills/repo-onboarding",
+			Name:        "Project Planning",
+			Description: "Strategic planning and alignment for new (greenfield) or existing (brownfield) projects. Use when starting a new project, onboarding to an unfamiliar repo, or aligning an existing codebase to a standardized workflow.",
+			Path:        "pkg/agent/skills/project-planning",
 			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
+			Metadata:    map[string]string{"version": "2.0"},
 		},
 		"bug-triage": {
 			ID:          "bug-triage",

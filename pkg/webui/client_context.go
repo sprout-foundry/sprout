@@ -28,6 +28,7 @@ type webClientContext struct {
 	SSHSessionKey    string
 	SSHLauncherURL   string
 	SSHHomePath      string
+	UserID           string // User ID extracted from trusted header (service mode)
 	Terminal         *TerminalManager
 	FileConsents     *fileConsentManager
 	Agent            *agent.Agent

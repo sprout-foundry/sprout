@@ -192,7 +192,7 @@ function Sidebar({
 
   // Load settings on mount / connection
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !supportsSettings) return;
     let cancelled = false;
     apiService
       .getSettings()
@@ -228,6 +228,8 @@ function Sidebar({
   const finalOnMobileMenuToggle = onMobileMenuToggle || onClose;
 
   useEffect(() => {
+    if (!isConnected || !supportsSettings) return;
+
     const fetchProviders = async () => {
       setIsLoadingProviders(true);
       try {
@@ -334,7 +336,7 @@ function Sidebar({
 
   // Load personas from the backend
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || !supportsSettings) return;
 
     const fetchPersonas = async () => {
       setIsLoadingPersonas(true);
@@ -471,6 +473,7 @@ function Sidebar({
   // Handle open-settings-focus event (from Status bar clicks)
   useEffect(() => {
     const handleOpenSettingsFocus = (e: Event) => {
+      if (!supportsSettings) return;
       const detail = (e as CustomEvent<OpenSettingsFocusEventDetail>).detail;
       const focusTarget = detail?.focus;
       if (focusTarget !== 'persona' && focusTarget !== 'provider') return;
@@ -496,7 +499,7 @@ function Sidebar({
 
   // Focus the targeted settings control once it renders
   useEffect(() => {
-    if (!settingsFocusTarget) return;
+    if (!settingsFocusTarget || !supportsSettings) return;
 
     // Brief delay to allow the settings section to mount
     const timerId = setTimeout(() => {
@@ -1048,7 +1051,7 @@ function Sidebar({
       case 'search':
         return renderSearchSection();
       case 'settings':
-        return renderSettingsSection();
+        return supportsSettings ? renderSettingsSection() : null;
       default:
         return null;
     }

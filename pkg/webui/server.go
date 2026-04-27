@@ -73,6 +73,7 @@ type ReactWebServer struct {
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int
 	lspManager                      *lspproxy.Manager
+	allowedOrigins                  []string // Parsed from SPROUT_ALLOWED_ORIGINS env var
 }
 
 const (
@@ -126,6 +127,23 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		security.RunStartupCheck(configDir)
 	}
 
+	// Parse allowed origins from SPROUT_ALLOWED_ORIGINS env var
+	// This is a comma-separated list of origin URLs to allow.
+	allowedOriginsStr := strings.TrimSpace(configuration.GetEnvSimple("ALLOWED_ORIGINS"))
+	var allowedOrigins []string
+	if allowedOriginsStr != "" {
+		parts := strings.Split(allowedOriginsStr, ",")
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+	if len(allowedOrigins) > 0 {
+		log.Printf("[web] Allowed origins: %v", allowedOrigins)
+	}
+
 	return &ReactWebServer{
 		agent:             agent,
 		eventBus:          eventBus,
@@ -143,11 +161,11 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		bindAddr:          bindAddr,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				// Allow localhost connections. When binding to
-				// 0.0.0.0 (cloud/service mode), accept any origin
-				// since the service is explicitly exposed. The
-				// SPROUT_ALLOWED_ORIGINS env var will provide
-				// finer-grained control once implemented.
+				// Allow localhost connections (IPv4 and IPv6).
+				// When binding to 0.0.0.0 (cloud/service mode),
+				// accept any origin since the service is explicitly
+				// exposed. The SPROUT_ALLOWED_ORIGINS env var
+				// provides finer-grained control for specific origins.
 				origin := r.Header.Get("Origin")
 				if origin == "" {
 					return true // Allow same-origin and direct connections
@@ -158,9 +176,28 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 					return false
 				}
 				host := strings.ToLower(parsed.Hostname())
-				if host == "localhost" || host == "127.0.0.1" {
+				if host == "localhost" {
 					return true
 				}
+				if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+					return true
+				}
+
+				// Check against SPROUT_ALLOWED_ORIGINS allowlist.
+				// Compare using case-insensitive matching on scheme + host + port.
+				if len(allowedOrigins) > 0 {
+					normalizedIncoming := normalizeOriginForCompare(parsed)
+					for _, allowedOrigin := range allowedOrigins {
+						allowedParsed, err := url.Parse(allowedOrigin)
+						if err != nil {
+							continue // Skip malformed allowed origins
+						}
+						if normalizedIncoming == normalizeOriginForCompare(allowedParsed) {
+							return true
+						}
+					}
+				}
+
 				// When binding to all interfaces, accept any origin.
 				if bindAddr == "0.0.0.0" || bindAddr == "::" {
 					return true
@@ -174,6 +211,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		sshSessions:       make(map[string]*sshWorkspaceSession),
 		sshInFlight:       make(map[string]chan struct{}),
 		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
+		allowedOrigins:    allowedOrigins,
 	}
 }
 
@@ -579,4 +617,21 @@ func DisplayAddr(bindAddr string) string {
 		return "localhost"
 	}
 	return bindAddr
+}
+
+// normalizeOriginForCompare normalizes a parsed URL for case-insensitive
+// origin comparison. It lowercases the scheme and host, and strips default
+// ports (80 for HTTP, 443 for HTTPS) so that e.g. "https://example.com"
+// and "https://example.com:443" are treated as equivalent.
+func normalizeOriginForCompare(u *url.URL) string {
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.ToLower(u.Hostname())
+	port := u.Port()
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		return scheme + "://" + host + ":" + port
+	}
+	return scheme + "://" + host
 }

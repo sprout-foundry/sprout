@@ -18,7 +18,7 @@ func TestSafeResolvePathWithBypass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	testDir := filepath.Join(homeDir, ".ledit-test-security")
+	testDir := filepath.Join(homeDir, ".sprout-test-security")
 	if err := os.MkdirAll(testDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestSafeResolvePathWithBypass(t *testing.T) {
 	}
 
 	// Create a test file in a sibling directory (outside working directory)
-	siblingDir := filepath.Join(homeDir, ".ledit-test-sibling")
+	siblingDir := filepath.Join(homeDir, ".sprout-test-sibling")
 	if err := os.MkdirAll(siblingDir, 0755); err != nil {
 		t.Fatalf("Failed to create sibling dir: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestSafeResolvePathForWriteWithBypass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	testDir := filepath.Join(homeDir, ".ledit-test-write")
+	testDir := filepath.Join(homeDir, ".sprout-test-write")
 	if err := os.MkdirAll(testDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestSafeResolvePathForWriteWithBypass(t *testing.T) {
 		t.Fatalf("Failed to chdir to test dir: %v", err)
 	}
 
-	siblingDir := filepath.Join(homeDir, ".ledit-test-write-sibling")
+	siblingDir := filepath.Join(homeDir, ".sprout-test-write-sibling")
 	if err := os.MkdirAll(siblingDir, 0755); err != nil {
 		t.Fatalf("Failed to create sibling write dir: %v", err)
 	}

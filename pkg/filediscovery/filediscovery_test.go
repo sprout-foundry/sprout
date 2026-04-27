@@ -60,21 +60,21 @@ func TestGetIgnoreRules_Gitignore(t *testing.T) {
 
 func TestGetIgnoreRules_LeditIgnore(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		".ledit/.ignore": "secret.txt\n",
+		".sprout/.ignore": "secret.txt\n",
 	})
 	rules := GetIgnoreRules(root)
 	if rules == nil {
 		t.Fatal("expected non-nil rules")
 	}
 	if !rules.MatchesPath("secret.txt") {
-		t.Error("expected secret.txt to be ignored via .ledit/.ignore")
+		t.Error("expected secret.txt to be ignored via .sprout/.ignore")
 	}
 }
 
 func TestGetIgnoreRules_BothFiles(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		".gitignore":     "*.log\n",
-		".ledit/.ignore": "dist/\n",
+		".sprout/.ignore": "dist/\n",
 	})
 	rules := GetIgnoreRules(root)
 	if rules == nil {
@@ -357,7 +357,7 @@ func TestGetIgnoreRules_MissingLeditDir(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		".gitignore": "*.log\n",
 	})
-	// Create .gitignore but not .ledit directory - should not error
+	// Create .gitignore but not .sprout directory - should not error
 	rules := GetIgnoreRules(root)
 	if rules == nil {
 		t.Fatal("expected non-nil rules")
@@ -368,11 +368,11 @@ func TestGetIgnoreRules_MissingLeditDir(t *testing.T) {
 }
 
 func TestGetIgnoreRules_LeditPriority(t *testing.T) {
-	// Test that .ledit/.ignore rules are applied in addition to .gitignore
+	// Test that .sprout/.ignore rules are applied in addition to .gitignore
 	// Both should be combined
 	root := makeTree(t, map[string]string{
 		".gitignore":     "*.log\n",
-		".ledit/.ignore": "secret.txt\n*.tmp\n",
+		".sprout/.ignore": "secret.txt\n*.tmp\n",
 	})
 	rules := GetIgnoreRules(root)
 	if rules == nil {
@@ -383,10 +383,10 @@ func TestGetIgnoreRules_LeditPriority(t *testing.T) {
 		t.Error("expected app.log to be ignored (from .gitignore)")
 	}
 	if !rules.MatchesPath("secret.txt") {
-		t.Error("expected secret.txt to be ignored (from .ledit/.ignore)")
+		t.Error("expected secret.txt to be ignored (from .sprout/.ignore)")
 	}
 	if !rules.MatchesPath("temp.tmp") {
-		t.Error("expected temp.tmp to be ignored (from .ledit/.ignore)")
+		t.Error("expected temp.tmp to be ignored (from .sprout/.ignore)")
 	}
 	if rules.MatchesPath("main.go") {
 		t.Error("expected main.go NOT to be ignored")
@@ -2686,7 +2686,7 @@ func TestDiscoverFilesRobust_WithShellPatterns(t *testing.T) {
 // Ignore Rule Integration Tests
 // ============================================================================
 
-// Note: discoverBasic does not currently respect .gitignore or .ledit/.ignore rules.
+// Note: discoverBasic does not currently respect .gitignore or .sprout/.ignore rules.
 // These tests verify the ignore rule parsing functionality via GetIgnoreRules(),
 // which is tested elsewhere. The integration of ignore rules into file discovery
 // is a known limitation and future enhancement.

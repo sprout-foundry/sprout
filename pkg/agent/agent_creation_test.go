@@ -32,12 +32,12 @@ func (h *testConversationHandler) prepareMessagesForTest() ([]api.Message, error
 }
 
 // newIsolatedTestAgent creates a minimal agent backed by a temp config
-// directory so that tests never read or modify the caller's real ~/.ledit
+// directory so that tests never read or modify the caller's real ~/.sprout
 // config.
 func newIsolatedTestAgent(t *testing.T) *Agent {
 	t.Helper()
 
-	configDir := t.TempDir() + "/.ledit"
+	configDir := t.TempDir() + "/.sprout"
 	mgr, err := configuration.NewManagerWithDir(configDir)
 	if err != nil {
 		t.Fatalf("NewManagerWithDir failed: %v", err)

@@ -13,7 +13,7 @@ import (
 const MaxPastedImageSize = 10 * 1024 * 1024
 
 // PastedImageDirName is the subdirectory (relative to CWD) where pasted images are saved.
-const PastedImageDirName = ".ledit/pasted-images"
+const PastedImageDirName = ".sprout/pasted-images"
 
 // DetectImageMagic checks if data starts with a known image format signature.
 // Returns the file extension (e.g., ".png") and MIME type (e.g., "image/png"),
@@ -68,9 +68,9 @@ func DetectImageMagic(data []byte) (ext string, mimeType string) {
 	return "", ""
 }
 
-// SavePastedImage saves raw image data to .ledit/pasted-images/ under the
+// SavePastedImage saves raw image data to .sprout/pasted-images/ under the
 // provided base directory (typically the workspace root). It returns a
-// relative path like "./.ledit/pasted-images/paste_20260320_145959_abc123.png".
+// relative path like "./.sprout/pasted-images/paste_20260320_145959_abc123.png".
 // If baseDir is empty, it falls back to os.Getwd().
 func SavePastedImage(data []byte, baseDir string) (string, error) {
 	if len(data) > MaxPastedImageSize {

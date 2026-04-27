@@ -75,7 +75,7 @@ var encryptCmd = &cobra.Command{
 	Long: `Enable encryption for your API keys using either a machine key or passphrase.
 
 Machine key mode (default):
-  - A unique X25519 key is generated and stored in ~/.ledit/key.age
+  - A unique X25519 key is generated and stored in ~/.config/sprout/key.age
   - No user interaction required after initial setup
   - Keys are encrypted automatically on save
 

@@ -32,7 +32,7 @@ Supported formats:
   openai    - OpenAI fine-tuning JSONL (one example per line)
   alpaca    - Alpaca instruction-following JSON
 
-The command reads session files from ~/.ledit/sessions (or the directory
+The command reads session files from ~/.config/sprout/sessions (or the directory
 configured via SPROUT_CONFIG) and writes cleaned training data to the
 specified output file.
 

@@ -1,10 +1,10 @@
 # Configuration
 
-`ledit` is configured via a `config.json` file. It looks for this file first in `./.ledit/config.json` and then in `~/.ledit/config.json`. A default configuration is created on first run.
+`sprout` is configured via a `config.json` file. It looks for this file first in `./.sprout/config.json` and then in `~/.config/sprout/config.json`. A default configuration is created on first run.
 
 ## API Keys
 
-API keys for services like DeepInfra, OpenAI, Ollama, etc., are stored securely in `~/.ledit/api_keys.json`. If a key is not found, `ledit` will prompt you to enter it. Set environment variables like `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY` for convenience.
+API keys for services like DeepInfra, OpenAI, Ollama, etc., are stored securely in `~/.config/sprout/api_keys.json`. If a key is not found, `sprout` will prompt you to enter it. Set environment variables like `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY` for convenience.
 
 For Z.AI Coding Plan support, set `ZAI_API_KEY` and select the provider/model:
 
@@ -132,7 +132,7 @@ When using zsh as your shell, `ledit` automatically detects commands available i
 
 ### Configuration Options
 
-To modify behavior, add to your `~/.ledit/config.json`:
+To modify behavior, add to your `~/.config/sprout/config.json`:
 
 ```json
 {

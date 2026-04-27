@@ -21,25 +21,19 @@ type InstanceInfo struct {
 	SessionID  string    `json:"session_id,omitempty"`
 }
 
-// getConfigDir returns the config directory path
+// getConfigDir returns the config directory path, using the same canonical
+// resolution as configuration.GetConfigDir() so that all subsystems (config,
+// providers, API keys, instances) share a single directory.
 func getConfigDir() string {
-	if dir := configuration.GetEnvSimple("CONFIG"); dir != "" {
-		return dir
+	dir, err := configuration.GetConfigDir()
+	if err != nil {
+		// Fallback for Android/Termux or environments where home is unavailable
+		if homeDir := os.Getenv("HOME"); homeDir != "" {
+			return filepath.Join(homeDir, ".config", "sprout")
+		}
+		return "/data/data/com.termux/files/home/.config/sprout"
 	}
-
-	// Try XDG_CONFIG_HOME
-	if configHome := os.Getenv("XDG_CONFIG_HOME"); configHome != "" {
-		return filepath.Join(configHome, "sprout")
-	}
-
-	// Use user home directory
-	homeDir := os.Getenv("HOME")
-	if homeDir == "" {
-		// Fallback for Android or special environments
-		return "/data/data/com.termux/files/home/.sprout"
-	}
-
-	return filepath.Join(homeDir, ".sprout")
+	return dir
 }
 
 // loadInstances loads running instances from config

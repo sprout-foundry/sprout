@@ -148,7 +148,7 @@ func NewManagerWithConfig(cfg *Config, apiKeys *APIKeys) *Manager {
 // subsequent Load/Save calls operate deterministically.
 //
 // This is intended for tests and tooling that need a hermetic config
-// environment without touching the caller's real ~/.ledit.
+// environment without touching the caller's real ~/.config/sprout.
 func NewManagerWithDir(configDir string) (*Manager, error) {
 	envMutex.Lock()
 	defer envMutex.Unlock()
@@ -195,8 +195,8 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 }
 
 // NewManagerWithLayers creates a configuration manager using layered config.
-// globalDir is the directory containing global config (~/.ledit/).
-// workspaceDir is the directory containing workspace config ({workspace}/.ledit/).
+// globalDir is the directory containing global config (~/.config/sprout/).
+// workspaceDir is the directory containing workspace config ({workspace}/.sprout/).
 // Each layer is optional - missing layers are skipped.
 // Settings writes go to the workspace dir if provided, otherwise global.
 func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {

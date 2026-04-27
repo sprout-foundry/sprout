@@ -50,9 +50,9 @@ func setupMCPTestEnv(t *testing.T) (string, func()) {
 	return tmpDir, cleanup
 }
 
-// shouldSkipIfRealMCPConfigExists skips the test if ~/.ledit/mcp_config.json
+// shouldSkipIfRealMCPConfigExists skips the test if ~/.config/sprout/mcp_config.json
 // already exists. Tests that modify the real MCP config cannot be safely isolated
-// because pkg/mcp/config.go:getConfigDir() reads from ~/.ledit/ and does not
+// because pkg/mcp/config.go:getConfigDir() reads from ~/.config/sprout/ and does not
 // respect $LEDIT_CONFIG.
 func shouldSkipIfRealMCPConfigExists(t *testing.T) {
 	t.Helper()
@@ -60,8 +60,8 @@ func shouldSkipIfRealMCPConfigExists(t *testing.T) {
 	if err != nil {
 		return
 	}
-	if _, err := os.Stat(filepath.Join(home, ".ledit", "mcp_config.json")); err == nil {
-		t.Skipf("skipping: ~/.ledit/mcp_config.json exists; this test reads/loads the real MCP config")
+	if _, err := os.Stat(filepath.Join(home, ".config", "sprout", "mcp_config.json")); err == nil {
+		t.Skipf("skipping: ~/.config/sprout/mcp_config.json exists; this test reads/loads the real MCP config")
 	}
 }
 

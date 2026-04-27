@@ -65,7 +65,7 @@ func TestFilepathAbsEval_HomeSubPath(t *testing.T) {
 	}
 
 	// Create a subdirectory under home so EvalSymlinks can resolve it.
-	subDir := ".ledit_filepathAbsEval_test_sub"
+	subDir := ".sprout_filepathAbsEval_test_sub"
 	fullPath := filepath.Join(home, subDir)
 	if err := os.MkdirAll(fullPath, 0o755); err != nil {
 		t.Fatalf("failed to create test dir: %v", err)
@@ -98,7 +98,7 @@ func TestFilepathAbsEval_TildeSubPath(t *testing.T) {
 	}
 
 	// Create a subdirectory under home so EvalSymlinks can resolve it.
-	subDir := ".ledit_filepathAbsEval_test_tsub"
+	subDir := ".sprout_filepathAbsEval_test_tsub"
 	fullPath := filepath.Join(home, subDir)
 	if err := os.MkdirAll(fullPath, 0o755); err != nil {
 		t.Fatalf("failed to create test dir: %v", err)
@@ -180,7 +180,7 @@ func TestFilepathAbsEval_NonExistentPath(t *testing.T) {
 		t.Fatalf("os.UserHomeDir() failed: %v", err)
 	}
 
-	nonExistent := filepath.Join(home, ".ledit_test_nonexistent_dir_12345")
+	nonExistent := filepath.Join(home, ".sprout_test_nonexistent_dir_12345")
 	got, err := filepathAbsEval(nonExistent)
 	if err != nil {
 		t.Fatalf("filepathAbsEval(%q) error: %v", nonExistent, err)
@@ -226,7 +226,7 @@ func TestFilepathAbsEval_BraceHomeSubPath(t *testing.T) {
 	}
 
 	// Create a subdirectory under home so EvalSymlinks can resolve it.
-	subDir := ".ledit_filepathAbsEval_test_brace_sub"
+	subDir := ".sprout_filepathAbsEval_test_brace_sub"
 	fullPath := filepath.Join(home, subDir)
 	if err := os.MkdirAll(fullPath, 0o755); err != nil {
 		t.Fatalf("failed to create test dir: %v", err)

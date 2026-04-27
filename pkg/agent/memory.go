@@ -21,7 +21,7 @@ type MemoryInfo struct {
 	Content string // File content string
 }
 
-// getMemoryDir returns the path to ~/.ledit/memories/
+// getMemoryDir returns the path to ~/.config/sprout/memories/
 // Creates the directory if it doesn't exist
 func getMemoryDir() string {
 	configDir, err := configuration.GetConfigDir()

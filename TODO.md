@@ -551,7 +551,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 [x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [x] - CLOUD: Ensure the webui renders gracefully when no Go backend is reachable (shows a connection error message, but editor/file tree/terminal still load via WASM)
-[] - CLOUD: Make `wasmShell.ts` paths configurable — accept optional `wasmUrl` and `wasmExecUrl` in `initWasmShell()` config parameter
+[x] - CLOUD: Make `wasmShell.ts` paths configurable — accept optional `wasmUrl` and `wasmExecUrl` in `initWasmShell()` config parameter
 [] - CLOUD: Add `build-webui-dist` and `build-webui-dist-local` makefile targets for cloud-mode and local-mode distributable bundles
 [] - CLOUD: Verify the dist bundle serves correctly from a plain static HTTP server (all assets load, no 404s, app renders without backend)
 

@@ -259,6 +259,33 @@ function getDirectorySize(dir) {
   return 'unknown';
 }
 
+function postProcessBrowserConfig(targetDir) {
+  console.log('📝 Post-processing browserconfig.xml...');
+
+  const browserConfigPath = join(targetDir, 'browserconfig.xml');
+
+  if (!existsSync(browserConfigPath)) {
+    console.log('  ℹ browserconfig.xml not found, skipping');
+    return;
+  }
+
+  let xml = readFileSync(browserConfigPath, 'utf-8');
+
+  // Replace %PUBLIC_URL% placeholders with empty string (app served from root /)
+  const beforeLength = xml.length;
+  xml = xml.replace(/%PUBLIC_URL%/g, '');
+  const afterLength = xml.length;
+
+  if (beforeLength !== afterLength) {
+    console.log('  ✓ Replaced %PUBLIC_URL% placeholders in browserconfig.xml');
+  } else {
+    console.log('  ℹ No %PUBLIC_URL% placeholders found in browserconfig.xml');
+  }
+
+  writeFileSync(browserConfigPath, xml, 'utf-8');
+  console.log('  ✓ browserconfig.xml updated');
+}
+
 function postProcessIndexHtml(targetDir, buildMode) {
   console.log('📝 Post-processing index.html...');
 
@@ -323,6 +350,10 @@ function main() {
 
   // Copy build output
   copyBuildOutput(buildDir, outputDir);
+  console.log('');
+
+  // Post-process browserconfig.xml
+  postProcessBrowserConfig(outputDir);
   console.log('');
 
   // Post-process index.html

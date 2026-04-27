@@ -63,13 +63,13 @@ make test-unit      # fast unit tests
 1. Build and start the Go backend:
    ```bash
    make build-all        # or: make deploy-ui && make build
-   ./sprout              # serves API on http://localhost:54000
+   ./sprout              # serves API on http://localhost:56000
    ```
 2. In a separate terminal, start the CRA dev server:
    ```bash
    cd webui && npm start  # runs on port 3000 with hot reload
    ```
-   The dev server proxies API requests to `http://localhost:54000` (configured in `webui/package.json`'s `proxy` field). Changes to React components are reflected immediately without rebuilding.
+   The dev server proxies API requests to `http://localhost:56000` (configured in `webui/package.json`'s `proxy` field). Changes to React components are reflected immediately without rebuilding.
 
 **Quick dev cycle** (UI-only changes, no Go changes):
 

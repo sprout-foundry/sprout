@@ -248,7 +248,7 @@ func TestBindAddrStoredCorrectly(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	// Use a non-zero port to avoid DaemonPort (54000) conflicts
+	// Use a non-zero port to avoid DaemonPort (56000) conflicts
 	// This test verifies that the bindAddr is correctly stored, not dynamic port allocation
 	port := DaemonPort + 200
 
@@ -299,7 +299,7 @@ func TestFormatListenAddr(t *testing.T) {
 	}{
 		{"127.0.0.1", 8080, "127.0.0.1:8080"},
 		{"0.0.0.0", 443, "0.0.0.0:443"},
-		{"::", 54000, "[::]:54000"},
+		{"::", 56000, "[::]:56000"},
 		{"::1", 8080, "[::1]:8080"},
 		{"fe80::1", 9090, "[fe80::1]:9090"},
 	}

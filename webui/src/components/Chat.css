@@ -1823,3 +1823,76 @@
   overflow-y: auto;
   padding: 16px;
 }
+
+/* ── Chat Offline Panel (cloud mode, no backend) ─────────────────── */
+.chat-offline-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 24px;
+  background: var(--bg-tertiary);
+  border-radius: 14px;
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-elevated);
+  max-width: 480px;
+  margin: auto;
+  gap: 16px;
+}
+
+.chat-offline-icon {
+  color: var(--text-tertiary);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.chat-offline-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.chat-offline-description {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 400px;
+}
+
+.chat-offline-retry-btn {
+  margin-top: 4px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.chat-offline-retry-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.chat-offline-retry-btn:active {
+  transform: scale(0.98);
+}
+
+.chat-offline-retry-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}

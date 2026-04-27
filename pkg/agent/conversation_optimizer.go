@@ -168,88 +168,106 @@ func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []a
 	return compacted
 }
 
-// compactConversationLayered creates multiple summary messages at graduated detail levels
-// for large middle segments. This prevents over-aggressive single-summary compaction.
+// compactConversationLayered compacts a large middle segment into a single
+// assistant message containing graduated detail levels (brief, summary,
+// detailed). Merging into one message avoids consecutive assistant-role
+// messages that downstream sanitisation (stripConsecutiveAssistantMessages)
+// would otherwise strip, wasting the earlier LLM compaction calls.
 func (co *ConversationOptimizer) compactConversationLayered(messages []api.Message, anchorEnd, recentStart int, middle []api.Message) []api.Message {
 	// Split middle into 3 layers: old-middle, mid-middle, recent-middle
 	layerSize := len(middle) / 3
 	if layerSize < MinLayerSize {
 		layerSize = MinLayerSize
 	}
-	
+
 	oldMiddleEnd := anchorEnd + layerSize
 	midMiddleEnd := oldMiddleEnd + layerSize
-	
-	var summaries []api.Message
-	
-	// Old-middle: most condensed (brief)
+
+	// Compute each layer's summary text (already wrapped via wrapCompactionSummaryWithLevel).
 	oldMiddle := messages[anchorEnd:oldMiddleEnd]
-	briefSummary := co.buildLLMCompactionSummaryWithLimit(oldMiddle, BriefWordLimit, "brief")
-	if briefSummary != "" {
-		summaries = append(summaries, api.Message{
-			Role:    "assistant",
-			Content: briefSummary,
-		})
-	}
-	
-	// Mid-middle: medium detail (summary)
+	briefText := co.buildLLMCompactionSummaryWithLimit(oldMiddle, BriefWordLimit, "brief")
+
 	midMiddle := messages[oldMiddleEnd:midMiddleEnd]
-	summarySummary := co.buildLLMCompactionSummaryWithLimit(midMiddle, SummaryWordLimit, "summary")
-	if summarySummary != "" {
-		summaries = append(summaries, api.Message{
-			Role:    "assistant",
-			Content: summarySummary,
-		})
-	}
-	
-	// Recent-middle: higher detail (detailed)
+	summaryText := co.buildLLMCompactionSummaryWithLimit(midMiddle, SummaryWordLimit, "summary")
+
 	recentMiddle := messages[midMiddleEnd:recentStart]
-	detailedSummary := co.buildLLMCompactionSummaryWithLimit(recentMiddle, DetailedWordLimit, "detailed")
-	if detailedSummary != "" {
-		summaries = append(summaries, api.Message{
-			Role:    "assistant",
-			Content: detailedSummary,
-		})
-	}
-	
-	// If no summaries were created, fall back to single summary
-	if len(summaries) == 0 {
+	detailedText := co.buildLLMCompactionSummaryWithLimit(recentMiddle, DetailedWordLimit, "detailed")
+
+	// Build a single combined summary message. If no layer succeeded, fall back
+	// to a single whole-segment summary.
+	combined := co.mergeLayeredSummaries(briefText, summaryText, detailedText, len(middle))
+
+	if combined == "" {
+		// Fallback: single summary of the whole middle segment
 		summary := co.buildLLMCompactionSummary(middle)
 		if summary == "" {
 			return messages
 		}
-		summaries = append(summaries, api.Message{
-			Role:    "assistant",
-			Content: summary,
-		})
+		combined = summary
 	}
-	
-	// Build compacted message list
-	compacted := make([]api.Message, 0, anchorEnd+len(summaries)+len(messages)-recentStart)
+
+	// Build compacted message list — only one assistant summary message.
+	compacted := make([]api.Message, 0, anchorEnd+1+len(messages)-recentStart)
 	compacted = append(compacted, messages[:anchorEnd]...)
-	compacted = append(compacted, summaries...)
+	compacted = append(compacted, api.Message{
+		Role:    "assistant",
+		Content: combined,
+	})
 	compacted = append(compacted, messages[recentStart:]...)
-	
-	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
-	// Check if the last summary is followed by an assistant message without tool_calls
-	if len(summaries) > 0 {
-		lastSummaryIdx := anchorEnd + len(summaries) - 1
-		if lastSummaryIdx+1 < len(compacted) {
-			if compacted[lastSummaryIdx].Role == "assistant" && len(compacted[lastSummaryIdx].ToolCalls) == 0 &&
-				compacted[lastSummaryIdx+1].Role == "assistant" && len(compacted[lastSummaryIdx+1].ToolCalls) == 0 {
-				if co.debug {
-					fmt.Printf("[clean] Removed consecutive assistant at layered compaction boundary\n")
-				}
-				compacted = append(compacted[:lastSummaryIdx+1], compacted[lastSummaryIdx+2:]...)
+
+	// Safety net: ensure we don't have consecutive assistant messages at the boundary.
+	summaryIdx := anchorEnd
+	if summaryIdx+1 < len(compacted) {
+		if compacted[summaryIdx].Role == "assistant" && len(compacted[summaryIdx].ToolCalls) == 0 &&
+			compacted[summaryIdx+1].Role == "assistant" && len(compacted[summaryIdx+1].ToolCalls) == 0 {
+			if co.debug {
+				fmt.Printf("[clean] Removed consecutive assistant at layered compaction boundary\n")
 			}
+			compacted = append(compacted[:summaryIdx+1], compacted[summaryIdx+2:]...)
 		}
 	}
-	
+
 	if co.debug {
-		fmt.Printf("[layered] Layered compaction: %d messages → %d summary layers\n", len(middle), len(summaries))
+		fmt.Printf("[layered] Layered compaction: %d messages → 1 merged summary\n", len(middle))
 	}
-	
+
 	return compacted
+}
+
+// mergeLayeredSummaries combines up to three graduated summaries into one
+// assistant message body with clear section headers. Returns "" only when
+// all three inputs are empty.
+func (co *ConversationOptimizer) mergeLayeredSummaries(brief, summary, detailed string, totalMiddle int) string {
+	var b strings.Builder
+	b.WriteString("[Context compaction — layered summary]\n\n")
+
+	wrote := false
+
+	if brief != "" {
+		b.WriteString("### Earlier activities (brief)\n")
+		b.WriteString(brief)
+		b.WriteString("\n\n")
+		wrote = true
+	}
+	if summary != "" {
+		b.WriteString("### Mid-session activities (summary)\n")
+		b.WriteString(summary)
+		b.WriteString("\n\n")
+		wrote = true
+	}
+	if detailed != "" {
+		b.WriteString("### Recent activities (detailed)\n")
+		b.WriteString(detailed)
+		b.WriteString("\n\n")
+		wrote = true
+	}
+
+	if !wrote {
+		return ""
+	}
+
+	b.WriteString(fmt.Sprintf("- Summarized %d earlier messages across 3 graduated detail layers.", totalMiddle))
+	return strings.TrimSpace(b.String())
 }
 
 // buildLLMCompactionSummaryWithLimit generates a compaction summary with a specified word limit

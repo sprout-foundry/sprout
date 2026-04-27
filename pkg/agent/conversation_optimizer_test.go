@@ -614,15 +614,30 @@ func TestCompactConversationLayered(t *testing.T) {
 		t.Fatalf("expected compaction to reduce messages: got %d, original %d", len(compacted), len(messages))
 	}
 
-	// Verify multiple summary messages were created (layered compaction produces 3)
+	// Verify a single merged summary message was created (layered compaction now merges all layers)
 	summaryCount := 0
 	for _, msg := range compacted {
-		if msg.Role == "assistant" && strings.Contains(msg.Content, "Compacted earlier conversation state") {
+		if msg.Role == "assistant" && strings.Contains(msg.Content, "[Context compaction — layered summary]") {
 			summaryCount++
 		}
 	}
-	if summaryCount < 2 {
-		t.Fatalf("expected at least 2 layered summary messages, got %d", summaryCount)
+	if summaryCount != 1 {
+		t.Fatalf("expected exactly 1 merged layered summary message, got %d", summaryCount)
+	}
+
+	// Verify the merged summary contains references to all three detail levels
+	for _, msg := range compacted {
+		if msg.Role == "assistant" && strings.Contains(msg.Content, "[Context compaction — layered summary]") {
+			if !strings.Contains(msg.Content, "(brief)") {
+				t.Fatalf("expected merged summary to contain '(brief)' section header")
+			}
+			if !strings.Contains(msg.Content, "(summary)") {
+				t.Fatalf("expected merged summary to contain '(summary)' section header")
+			}
+			if !strings.Contains(msg.Content, "(detailed)") {
+				t.Fatalf("expected merged summary to contain '(detailed)' section header")
+			}
+		}
 	}
 
 	// Verify anchor is preserved

@@ -256,8 +256,12 @@ func ToolEndEvent(toolCallID, toolName, status, result, errorMessage string, dur
 		// Truncate results to 2000 chars for the WebUI - full result stays in the conversation
 		if len(result) > 2000 {
 			data["result"] = result[:2000] + "\n... (truncated)"
+			data["result_truncated"] = true
+			data["result_length"] = len(result)
 		} else {
 			data["result"] = result
+			data["result_truncated"] = false
+			data["result_length"] = len(result)
 		}
 	}
 	if errorMessage != "" {

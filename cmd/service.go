@@ -26,8 +26,8 @@ var newServiceManager func() serviceManager
 
 const (
 	serviceName = "sprout-daemon"
-	servicePort = 54000
-	serviceURL  = "http://localhost:54000"
+	servicePort = 56000
+	serviceURL  = "http://localhost:56000"
 )
 
 // serviceCmd is the root command for service management.

@@ -519,7 +519,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ### 3. Fix `--port` vs `--web-port` Flag Inconsistency
 
-[x] - CLOUD: Add `--port` as a hidden alias for `--web-port` in `cmd/agent.go` so that `sprout agent -d --port 54000` works for the Docker entrypoint
+[x] - CLOUD: Add `--port` as a hidden alias for `--web-port` in `cmd/agent.go` so that `sprout agent -d --port 56000` works for the Docker entrypoint
 
 ### 4. Service Mode: Bind Address, Origin Allowlist, and Auth Header Trust
 
@@ -548,6 +548,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 [x] - CLOUD: Add `--dist` flag to `scripts/build-wasm.sh` that produces a self-contained distributable directory (webui build + WASM binary + version.json)
 [x] - CLOUD: Create `webui/src/config/mode.ts` feature flag module — read `REACT_APP_SPROUT_MODE` and export `isCloud`, `supportsSSH`, `supportsInstances`, `supportsLocalTerminal`, `supportsSettings` flags
+[x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [] - CLOUD: Ensure the webui renders gracefully when no Go backend is reachable (shows a connection error message, but editor/file tree/terminal still load via WASM)
 [] - CLOUD: Make `wasmShell.ts` paths configurable — accept optional `wasmUrl` and `wasmExecUrl` in `initWasmShell()` config parameter

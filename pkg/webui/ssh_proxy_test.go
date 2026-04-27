@@ -24,7 +24,7 @@ import (
 // port points at tunnelPort.  sessionKey is the raw (unencoded) session key.
 func newProxyServer(tunnelPort int, sessionKey string) *ReactWebServer {
 	srv := &ReactWebServer{
-		port:        54000,
+		port:        56000,
 		sshSessions: make(map[string]*sshWorkspaceSession),
 	}
 	srv.sshSessions[sessionKey] = &sshWorkspaceSession{
@@ -534,7 +534,7 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 // Real sprout backend integration test
 // Runs only when LEDIT_INTEGRATION_SSH_TEST=1 is set in the environment.
 // The test expects a local sprout process to be running on LEDIT_WEBUI_PORT
-// (defaults to 54000) that has at least one SSH session attached.
+// (defaults to 56000) that has at least one SSH session attached.
 // It verifies:
 //   1. /ssh/{key}/ returns 200 with LEDIT_PROXY_BASE injected.
 //   2. /ssh/{key}/health returns 200 with {"status":"ok"}.
@@ -548,7 +548,7 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	localPort := os.Getenv("LEDIT_WEBUI_PORT")
 	if localPort == "" {
-		localPort = "54000"
+		localPort = "56000"
 	}
 	sshSessionRaw := os.Getenv("LEDIT_SSH_SESSION_KEY")
 	if sshSessionRaw == "" {

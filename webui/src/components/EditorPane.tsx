@@ -363,20 +363,20 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Load file content - updates buffer in context to keep it in sync with editor
   const loadFile = useCallback(
     async (filePath: string) => {
-      setLoading(true);
       setError(null);
       isExternalUpdateRef.current = true;
 
       try {
         // Virtual workspace buffers have no on-disk file — handle in-memory only.
         if (filePath.startsWith('__workspace/')) {
-          const content = buffer?.content || '';
+          const currentBuffer = bufferRef.current;
+          const content = currentBuffer?.content || '';
           setLocalContent(content);
           setSelectionInfo(null);
           setError(null);
-          if (buffer) {
-            updateBufferContent(buffer.id, content);
-            setBufferOriginalContent(buffer.id, content);
+          if (currentBuffer) {
+            updateBufferContent(currentBuffer.id, content);
+            setBufferOriginalContent(currentBuffer.id, content);
           }
           if (viewRef.current) {
             viewRef.current.dispatch({
@@ -394,6 +394,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           return; // Skip server fetch
         }
 
+        setLoading(true);
         const response = await readFileWithConsent(filePath);
         if (!response.ok) {
           throw new Error(`Failed to load file: ${response.statusText}`);

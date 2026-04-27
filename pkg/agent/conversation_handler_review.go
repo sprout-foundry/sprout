@@ -109,7 +109,7 @@ func hasCodeLikeTrackedFiles(files []string) bool {
 
 func isSelfReviewGatePersonaEnabled(persona string) bool {
 	switch strings.ToLower(strings.TrimSpace(persona)) {
-	case "orchestrator", "coder":
+	case "orchestrator", "repo_orchestrator", "coder":
 		return true
 	default:
 		return false

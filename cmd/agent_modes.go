@@ -30,17 +30,6 @@ func isServiceMode() bool {
 	return configuration.GetEnvSimple("SERVICE") == "1"
 }
 
-// displayAddr returns a user-friendly address for display. It substitutes
-// "localhost" for 127.0.0.1, 0.0.0.0, ::, and ::1 so URLs look familiar
-// in terminal output.
-func displayAddr(bindAddr string) string {
-	switch bindAddr {
-	case "127.0.0.1", "0.0.0.0", "::", "::1":
-		return "localhost"
-	}
-	return bindAddr
-}
-
 var queryInProgress atomic.Bool
 
 func setQueryInProgress(active bool) {
@@ -110,12 +99,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		return fmt.Errorf("invalid bind address %q: must be a valid IP address", bindAddr)
 	}
 
-	// Warn when binding to all interfaces
-	if bindAddr == "0.0.0.0" || bindAddr == "::" {
-		fmt.Fprintf(os.Stderr, "[WARN] Binding to %s — web UI is accessible from all network interfaces\n", bindAddr)
-	}
-
 	if enableWebUI {
+		// Warn when binding to all interfaces
+		if bindAddr == "0.0.0.0" || bindAddr == "::" {
+			fmt.Fprintf(os.Stderr, "[WARN] Binding to %s — web UI is accessible from all network interfaces\n", bindAddr)
+		}
+
 		// Connect agent to event bus for real-time UI updates
 		chatAgent.SetEventBus(eventBus)
 
@@ -163,10 +152,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					webServer,
 					port,
 					func(activePort int) {
-						fmt.Printf("\n[web] Web UI available at http://%s:%d\n", displayAddr(bindAddr), activePort)
+						fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 					func(activePort int) {
-						fmt.Printf("\n[web] Reusing active Web UI at http://%s:%d\n", displayAddr(bindAddr), activePort)
+						fmt.Printf("\n[web] Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 				)
 				go webUISup.Run(ctx)
@@ -228,7 +217,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					}
 				}
 
-				fmt.Printf("\n[web] Web UI available at http://%s:%d\n", displayAddr(bindAddr), webServer.GetPort())
+				fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 			}
 		}
 	}
@@ -346,7 +335,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
-				fmt.Printf("\n[web] Web UI running at http://%s:%d\n", displayAddr(bindAddr), webServer.GetPort())
+				fmt.Printf("\n[web] Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 				if !isServiceMode() {
 					fmt.Println("Press Ctrl+C to stop the server.")
 				}

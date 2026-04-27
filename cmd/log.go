@@ -31,20 +31,20 @@ var logCmd = &cobra.Command{
 }
 
 func init() {
-	logCmd.Flags().BoolVar(&rawLog, "raw-log", false, "Display the raw verbose internal log file (.ledit/workspace.log)")
+	logCmd.Flags().BoolVar(&rawLog, "raw-log", false, "Display the raw verbose internal log file (.sprout/workspace.log)")
 }
 
 // displayVerboseLog reads and displays the verbose log to a buffer for seamless console experience
 func displayVerboseLog() {
 	// The log file path is hardcoded in pkg/utils/logger.go
-	// We need to ensure the .ledit directory exists before trying to open the log file.
-	logDirPath := ".ledit"
+	// We need to ensure the .sprout directory exists before trying to open the log file.
+	logDirPath := ".sprout"
 	if _, err := os.Stat(logDirPath); os.IsNotExist(err) {
 		fmt.Printf("Log directory %s does not exist. No log entries yet.\n", logDirPath)
 		return
 	}
 
-	logFilePath := ".ledit/workspace.log"
+	logFilePath := ".sprout/workspace.log"
 
 	file, err := os.Open(logFilePath)
 	if os.IsNotExist(err) {

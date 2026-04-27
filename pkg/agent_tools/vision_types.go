@@ -1024,7 +1024,7 @@ func persistVisionFullText(sourcePath, fullText string) (string, error) {
 func resolveVisionOutputDirectoryWithRoot(workspaceRoot string) string {
 	raw := strings.TrimSpace(configuration.GetEnvSimple("RESOURCE_DIRECTORY"))
 	if raw == "" {
-		raw = ".ledit_ocr_outputs"
+		raw = ".sprout_ocr_outputs"
 	}
 	cleaned := filepath.Clean(raw)
 	if filepath.IsAbs(cleaned) {

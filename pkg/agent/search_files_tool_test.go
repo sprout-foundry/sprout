@@ -102,7 +102,7 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 
 func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 	root := t.TempDir()
-	writeTestFile(t, root, ".ledit/hidden.txt", "secret needle\n")
+	writeTestFile(t, root, ".sprout/hidden.txt", "secret needle\n")
 	writeTestFile(t, root, "visible.txt", "needle\n")
 
 	args := map[string]interface{}{
@@ -116,8 +116,8 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
-	if strings.Contains(out, ".ledit/hidden.txt") {
-		t.Fatalf(".ledit directory should be excluded by default, got: %s", out)
+	if strings.Contains(out, ".sprout/hidden.txt") {
+		t.Fatalf(".sprout directory should be excluded by default, got: %s", out)
 	}
 	if !strings.Contains(out, "visible.txt") {
 		t.Fatalf("expected visible.txt to appear, got: %s", out)

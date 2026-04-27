@@ -168,7 +168,7 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		}{
 			{"non-interactive mode (case-insensitive)", "non-interactive mode"},
 			{"SPROUT_PROVIDER env var", "SPROUT_PROVIDER"},
-			{"config file path", "~/.ledit/config.json"},
+			{"config file path", "~/.sprout/config.json"},
 			{"interactive run guidance", "run `sprout agent` interactively"},
 		}
 
@@ -185,7 +185,7 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		//   "no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint + ": %w"
 		errMsg := "no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint + ": some error"
 
-		required := []string{"non-interactive mode", "SPROUT_PROVIDER", "~/.ledit/config.json"}
+		required := []string{"non-interactive mode", "SPROUT_PROVIDER", "~/.sprout/config.json"}
 		for _, phrase := range required {
 			if !strings.Contains(errMsg, phrase) {
 				t.Errorf("expected error to contain %q, got: %s", phrase, errMsg)
@@ -207,8 +207,8 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		if !strings.Contains(errMsg, "SPROUT_PROVIDER") {
 			t.Errorf("expected error to contain 'SPROUT_PROVIDER', got: %s", errMsg)
 		}
-		if !strings.Contains(errMsg, "~/.ledit/config.json") {
-			t.Errorf("expected error to contain '~/.ledit/config.json', got: %s", errMsg)
+		if !strings.Contains(errMsg, "~/.sprout/config.json") {
+			t.Errorf("expected error to contain '~/.sprout/config.json', got: %s", errMsg)
 		}
 	})
 
@@ -220,7 +220,7 @@ func TestNonInteractiveErrorMessageContent(t *testing.T) {
 		required := []string{
 			"non-interactive",
 			"SPROUT_PROVIDER",
-			"~/.ledit/config.json",
+			"~/.sprout/config.json",
 			"run `sprout agent` interactively",
 		}
 		for _, phrase := range required {

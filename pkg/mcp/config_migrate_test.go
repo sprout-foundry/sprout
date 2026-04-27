@@ -13,7 +13,7 @@ import (
 
 // setupConfigTestEnv creates a temp config dir, sets environment variables,
 // and forces the file-based credential backend so tests do not depend on an OS
-// keyring being present. Returns the temp directory path (the .ledit subdirectory).
+// keyring being present. Returns the temp directory path (the .sprout subdirectory).
 //
 // NOTE: getConfigDir() in config.go now respects LEDIT_CONFIG, so we set both
 // HOME (for os.UserHomeDir fallback) and LEDIT_CONFIG to ensure MCP config is
@@ -21,7 +21,7 @@ import (
 func setupConfigTestEnv(t *testing.T) string {
 	t.Helper()
 	homeDir := t.TempDir()
-	configDir := filepath.Join(homeDir, ".ledit")
+	configDir := filepath.Join(homeDir, ".sprout")
 	t.Setenv("HOME", homeDir)
 	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
@@ -60,7 +60,7 @@ type rawServerOnDisk struct {
 }
 
 // readRawConfigFile reads and parses the mcp_config.json from the config dir
-// (the `.ledit` directory, i.e. what getConfigDir() returns).
+// (the `.sprout` directory, i.e. what getConfigDir() returns).
 func readRawConfigFile(t *testing.T, configDir string) rawMCPConfigFile {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(configDir, "mcp_config.json"))

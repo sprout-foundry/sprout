@@ -282,7 +282,7 @@ func TestHandlePutWorkspaceSettings(t *testing.T) {
 	}
 
 	// Verify workspace config file was created
-	workspaceConfigPath := filepath.Join(workspaceRoot, ".ledit", "config.json")
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
 	data, err := os.ReadFile(workspaceConfigPath)
 	if err != nil {
 		t.Fatalf("workspace config file should exist: %v", err)
@@ -311,7 +311,7 @@ func TestHandlePutGlobalSettings(t *testing.T) {
 		t.Fatalf("expected 200, got %d: body=%s", rec.Code, rec.Body.String())
 	}
 
-	configPath := filepath.Join(isolatedHome, ".ledit", "config.json")
+	configPath := filepath.Join(isolatedHome, ".sprout", "config.json")
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

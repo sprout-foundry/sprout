@@ -171,6 +171,6 @@ func processContextContent(content string) string {
 // regenerateContextCache forces regeneration of context cache
 func regenerateContextCache() {
 	// Remove any cached context files
-	cachePath := filepath.Join(".ledit", "context_cache.md")
+	cachePath := filepath.Join(".sprout", "context_cache.md")
 	os.Remove(cachePath)
 }

@@ -68,7 +68,7 @@ description: Conventions specific to the myproject codebase.
 
 ### Registering the Skill
 
-Add to your `~/.ledit/config.json`:
+Add to your `~/.config/sprout/config.json`:
 
 ```json
 {
@@ -84,7 +84,7 @@ Add to your `~/.ledit/config.json`:
 }
 ```
 
-Or place in project's `.ledit/skills/` directory (project-specific skills).
+Or place in project's `.sprout/skills/` directory (project-specific skills).
 
 ## Tips
 

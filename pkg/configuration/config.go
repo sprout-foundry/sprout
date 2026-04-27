@@ -20,7 +20,7 @@ var personaDefaultsWarningOnce sync.Once
 
 const (
 	ConfigVersion   = "2.0"
-	ConfigDirName   = ".ledit"
+	ConfigDirName   = ".sprout"
 	ConfigFileName  = "config.json"
 	APIKeysFileName = "api_keys.json"
 
@@ -275,14 +275,14 @@ func getDefaultConfigDir() (string, error) {
 
 	homeEnv := strings.TrimSpace(os.Getenv("HOME"))
 	if homeEnv != "" {
-		return filepath.Join(homeEnv, ConfigDirName), nil
+		return filepath.Join(homeEnv, ".config", "sprout"), nil
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	return filepath.Join(homeDir, ConfigDirName), nil
+	return filepath.Join(homeDir, ".config", "sprout"), nil
 }
 
 // GetConfigPath returns the full path to the config file
@@ -616,7 +616,7 @@ func Load() (*Config, error) {
 
 	warnUnknownPersonaTools(config.SubagentTypes)
 
-	// Discover project-specific skills from .ledit/skills/
+	// Discover project-specific skills from .sprout/skills/
 	discoverProjectSkills(&config)
 
 	return &config, nil
@@ -1159,7 +1159,7 @@ func mergeMissingDefaultSkills(config *Config) {
 	}
 }
 
-// discoverProjectSkills scans the .ledit/skills/ directory for project-specific skills
+// discoverProjectSkills scans the .sprout/skills/ directory for project-specific skills
 // and adds them to the config. This allows users to create custom skills without
 // modifying the global config.
 func discoverProjectSkills(config *Config) {
@@ -1176,8 +1176,8 @@ func discoverProjectSkills(config *Config) {
 		return
 	}
 
-	// Check for .ledit/skills directory
-	skillsDir := filepath.Join(cwd, ".ledit", "skills")
+	// Check for .sprout/skills directory
+	skillsDir := filepath.Join(cwd, ".sprout", "skills")
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
 		return // No project skills directory, that's fine
@@ -1218,7 +1218,7 @@ func discoverProjectSkills(config *Config) {
 				ID:          skillID,
 				Name:        name,
 				Description: description,
-				Path:        filepath.Join(".ledit", "skills", skillID),
+				Path:        filepath.Join(".sprout", "skills", skillID),
 				Enabled:     true,
 				Metadata:    map[string]string{"source": "project"},
 			}

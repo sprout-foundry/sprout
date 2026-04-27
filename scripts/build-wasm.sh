@@ -85,10 +85,10 @@ build_webui() {
     (
         cd "$WEBUI_DIR"
 
-        # Install dependencies if needed
-        if [ ! -d "node_modules" ]; then
+        # Install dependencies (prefer npm ci for reproducibility, fallback to npm install)
+        if [ ! -d "node_modules" ] || [ "package-lock.json" -nt "node_modules" ]; then
             echo "  Installing npm dependencies..."
-            npm install
+            npm ci 2>/dev/null || npm install
         fi
 
         # Build the webui
@@ -268,9 +268,15 @@ if [ "$DIST_MODE" = true ]; then
 
     # Clean and create dist directory
     echo "→ Preparing distribution directory: $DIST_DIR"
-    # Safety: never delete project root, home directory, or root
-    if [ "$DIST_DIR" = "$PROJECT_ROOT" ] || [ "$DIST_DIR" = "$HOME" ] || [ -z "$DIST_DIR" ] || [ "$DIST_DIR" = "/" ]; then
-        echo "Error: Refusing to delete distribution directory '$DIST_DIR' (safety check)" >&2
+    # Safety: never delete critical directories
+    case "$DIST_DIR" in
+        ""|"/"|"/usr"|"/var"|"/etc"|"/opt"|"/home"|"/tmp"|"$HOME"|"$PROJECT_ROOT")
+            echo "Error: Refusing to delete directory '$DIST_DIR' (safety check)" >&2
+            exit 1
+            ;;
+    esac
+    if [ "${#DIST_DIR}" -lt 5 ]; then
+        echo "Error: Distribution path '$DIST_DIR' looks too short to be safe" >&2
         exit 1
     fi
     if [ -d "$DIST_DIR" ]; then
@@ -306,28 +312,10 @@ else
     # Ensure output directory exists.
     mkdir -p "$OUTPUT_DIR"
 
-    GOROOT="$(go env GOROOT)"
-    WASM_EXEC_SRC="$GOROOT/lib/wasm/wasm_exec.js"
-    WASM_EXEC_DST="$OUTPUT_DIR/wasm_exec.js"
+    build_wasm "$OUTPUT_DIR"
 
-    if [ ! -f "$WASM_EXEC_SRC" ]; then
-        echo "Error: wasm_exec.js not found at $WASM_EXEC_SRC" >&2
-        echo "Make sure your Go installation includes WASM support." >&2
-        exit 1
-    fi
-
-    echo "→ Copying wasm_exec.js to $OUTPUT_DIR/"
-    cp "$WASM_EXEC_SRC" "$WASM_EXEC_DST"
-    echo "  ✓ wasm_exec.js"
-
-    echo "→ Building sprout.wasm (GOOS=js GOARCH=wasm)..."
-    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -o "$OUTPUT_DIR/sprout.wasm" ./cmd/wasm/)
-
-    echo "  ✓ sprout.wasm"
-
-    WASM_SIZE=$(ls -lh "$OUTPUT_DIR/sprout.wasm" | awk '{print $5}')
     echo ""
     echo "Build complete:"
-    echo "  $WASM_EXEC_DST ($(ls -lh "$WASM_EXEC_DST" | awk '{print $5}'))"
-    echo "  $OUTPUT_DIR/sprout.wasm ($WASM_SIZE)"
+    echo "  $OUTPUT_DIR/wasm_exec.js ($(ls -lh "$OUTPUT_DIR/wasm_exec.js" | awk '{print $5}'))"
+    echo "  $OUTPUT_DIR/sprout.wasm ($(ls -lh "$OUTPUT_DIR/sprout.wasm" | awk '{print $5}'))"
 fi

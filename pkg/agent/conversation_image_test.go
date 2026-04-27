@@ -256,8 +256,8 @@ func TestProcessImagesInQuery_VisionClient_WithValidImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create the .ledit/pasted-images directory (mimics console behavior).
-	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
+	// Create the .sprout/pasted-images directory (mimics console behavior).
+	pasteDir := filepath.Join(dir, ".sprout", "pasted-images")
 	if err := os.MkdirAll(pasteDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestProcessImagesInQuery_VisionClient_WithValidImages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	query := "Pasted image saved to disk: ./.ledit/pasted-images/paste_test_abc123.png — describe this screenshot"
+	query := "Pasted image saved to disk: ./.sprout/pasted-images/paste_test_abc123.png — describe this screenshot"
 
 	a := &Agent{client: &visionSupportingClient{supportsVision: true}}
 
@@ -315,7 +315,7 @@ func TestProcessImagesInQuery_VisionClient_NoPlaceholders_ReturnsQueryUnchanged(
 }
 
 func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
-	query := "Pasted image saved to disk: ./.ledit/pasted-images/test_a.png\nPlease read this image."
+	query := "Pasted image saved to disk: ./.sprout/pasted-images/test_a.png\nPlease read this image."
 	a := &Agent{client: &visionSupportingClient{supportsVision: false}}
 
 	images, cleaned, err := a.processImagesInQuery(query)
@@ -331,7 +331,7 @@ func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
 }
 
 func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOnly(t *testing.T) {
-	query := "Pasted image saved to disk: ./.ledit/pasted-images/test_a.png\nPlease read this image."
+	query := "Pasted image saved to disk: ./.sprout/pasted-images/test_a.png\nPlease read this image."
 	a := &Agent{
 		client: &visionSupportingClient{
 			supportsVision: false,
@@ -387,14 +387,14 @@ func TestProcessImagesInQuery_VisionClient_OutsideContainmentDir_SkipsImage(t *t
 		t.Fatal(err)
 	}
 
-	// Create the .ledit/pasted-images directory (required for the containment
+	// Create the .sprout/pasted-images directory (required for the containment
 	// check), but do NOT place any image inside it.
-	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
+	pasteDir := filepath.Join(dir, ".sprout", "pasted-images")
 	if err := os.MkdirAll(pasteDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create a valid PNG file in the temp dir root — OUTSIDE .ledit/pasted-images.
+	// Create a valid PNG file in the temp dir root — OUTSIDE .sprout/pasted-images.
 	escapedPath := filepath.Join(dir, "sibling.png")
 	if err := os.WriteFile(escapedPath, pngMagic, 0o644); err != nil {
 		t.Fatal(err)
@@ -410,7 +410,7 @@ func TestProcessImagesInQuery_VisionClient_OutsideContainmentDir_SkipsImage(t *t
 		t.Fatalf("unexpected error (outside-containment path should be skipped silently): %v", err)
 	}
 
-	// The image must be rejected because it is not under .ledit/pasted-images/.
+	// The image must be rejected because it is not under .sprout/pasted-images/.
 	if len(images) != 0 {
 		t.Errorf("expected 0 images (file outside containment dir should be skipped), got %d", len(images))
 	}

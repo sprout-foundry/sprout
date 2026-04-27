@@ -14,7 +14,7 @@ This repo can be wrapped in an Electron desktop shell without replacing the exis
 
 The desktop shell is designed around one workspace per window. Any folder can be opened as the CWD for a desktop window. Using Git worktrees is still useful when you want:
 
-- isolated `.ledit/` config per workspace when launched with `--isolated-config`
+- isolated `.sprout/` config per workspace when launched with `--isolated-config`
 - separate working directories for multiple concurrent instances
 - independent terminal and Git state per desktop window
 

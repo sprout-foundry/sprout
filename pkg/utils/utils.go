@@ -39,7 +39,7 @@ func sanitizeTimestamp(timestamp string) string {
 
 // CreateBackup creates a timestamped backup of a file.
 // It reads the content of the file at filePath, and saves it to a backup directory
-// (.ledit/backups) with a timestamped filename.
+// (.sprout/backups) with a timestamped filename.
 func CreateBackup(filePath string) error {
 	// Read the original file content
 	content, err := os.ReadFile(filePath)
@@ -51,7 +51,7 @@ func CreateBackup(filePath string) error {
 		return fmt.Errorf("failed to read file '%s' for backup: %w", filePath, err)
 	}
 
-	backupDir := ".ledit/backups"
+	backupDir := ".sprout/backups"
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory '%s': %w", backupDir, err)
 	}
@@ -72,9 +72,9 @@ func CreateBackup(filePath string) error {
 	return nil
 }
 
-// LogUserPrompt logs the user's original prompt to a file in the .ledit/prompts directory.
+// LogUserPrompt logs the user's original prompt to a file in the .sprout/prompts directory.
 func LogUserPrompt(prompt string) {
-	logDir := ".ledit/prompts"
+	logDir := ".sprout/prompts"
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		GetLogger(true).LogError(fmt.Errorf("failed to create prompt log directory: %w", err))
 		return
@@ -88,9 +88,9 @@ func LogUserPrompt(prompt string) {
 	}
 }
 
-// LogLLMResponse logs the LLM's response to a file in the .ledit/llm_responses directory.
+// LogLLMResponse logs the LLM's response to a file in the .sprout/llm_responses directory.
 func LogLLMResponse(filename, response string) {
-	logDir := ".ledit/llm_responses"
+	logDir := ".sprout/llm_responses"
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		GetLogger(true).LogError(fmt.Errorf("failed to create LLM response log directory: %w", err))
 		return

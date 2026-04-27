@@ -736,7 +736,7 @@ func TestBuildAndSearchSymbols_GoFile(t *testing.T) {
 		t.Fatalf("expected symbols for m.go")
 	}
 	// Ensure persisted file exists
-	if _, err := os.Stat(filepath.Join(dir, ".ledit", "symbols.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".sprout", "symbols.json")); err != nil {
 		t.Fatalf("symbols.json missing: %v", err)
 	}
 

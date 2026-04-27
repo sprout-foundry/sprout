@@ -17,7 +17,7 @@ func TestSafeResolvePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	tempDir := filepath.Join(homeDir, ".ledit-test-path-security")
+	tempDir := filepath.Join(homeDir, ".sprout-test-path-security")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestSafeResolvePathSymlinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	tempDir := filepath.Join(homeDir, ".ledit-test-symlink-security")
+	tempDir := filepath.Join(homeDir, ".sprout-test-symlink-security")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestSafeResolvePathForWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	tempDir := filepath.Join(homeDir, ".ledit-test-write-security")
+	tempDir := filepath.Join(homeDir, ".sprout-test-write-security")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}
@@ -444,7 +444,7 @@ func TestSafeResolvePathTmpExemption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	tempDir := filepath.Join(homeDir, ".ledit-test-tmp-exemption")
+	tempDir := filepath.Join(homeDir, ".sprout-test-tmp-exemption")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}
@@ -503,7 +503,7 @@ func TestSafeResolvePathForWriteTmpExemption(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home dir: %v", err)
 	}
-	tempDir := filepath.Join(homeDir, ".ledit-test-write-tmp-exemption")
+	tempDir := filepath.Join(homeDir, ".sprout-test-write-tmp-exemption")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		t.Fatalf("Failed to create test dir: %v", err)
 	}

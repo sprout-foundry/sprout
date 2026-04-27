@@ -432,7 +432,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return nil, fmt.Errorf("get config directory: %w", err)
 	}
 
-	// Workspace config is in {workspaceRoot}/.ledit/ (if workspace exists)
+	// Workspace config is in {workspaceRoot}/.sprout/ (if workspace exists)
 	var workspaceDir string
 	if workspaceRoot != "" {
 		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)

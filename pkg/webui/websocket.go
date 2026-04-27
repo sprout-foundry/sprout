@@ -145,16 +145,22 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
+	userID := ws.ExtractUserID(r)
+
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
 		ClientID:    clientID,
 		Type:        "webui",
+		UserID:      userID,
 		ConnectedAt: time.Now(),
 	})
 	defer ws.connections.Delete(conn)
 
 	log.Printf("WebSocket client connected: %s", sessionID)
+	if userID != "" {
+		log.Printf("[web] WebSocket user: %s (session %s)", userID, sessionID)
+	}
 
 	// Send initial connection status
 	safeConn.WriteJSON(map[string]interface{}{
@@ -1005,6 +1011,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
 		Type:        "terminal",
+		UserID:      ws.ExtractUserID(r),
 		ConnectedAt: time.Now(),
 	})
 	defer ws.connections.Delete(conn)

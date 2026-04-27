@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
+import { supportsLocalTerminal } from '../config/mode';
 
 type ViewMode = 'chat' | 'editor' | 'git';
 
@@ -76,6 +77,17 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     const handleHotkey = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.commandId) return;
+
+      // Gate terminal commands in cloud mode
+      if (!supportsLocalTerminal && (
+        detail.commandId === 'toggle_terminal' ||
+        detail.commandId === 'split_terminal_vertical' ||
+        detail.commandId === 'split_terminal_horizontal' ||
+        detail.commandId === 'clear_terminal' ||
+        detail.commandId === 'kill_terminal'
+      )) {
+        return;
+      }
 
       switch (detail.commandId) {
         case 'command_palette':

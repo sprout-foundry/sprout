@@ -12,7 +12,7 @@ Skills are instruction bundles that can be loaded into agent context to provide 
 | `rust-conventions` | Writing/reviewing Rust code |
 | `test-writing` | Creating tests |
 | `commit-msg` | Writing commit messages |
-| `repo-onboarding` | Mapping new project structure |
+| `project-planning` | Starting new projects or onboarding to existing ones |
 | `bug-triage` | Debugging workflow |
 | `safe-refactor` | Refactoring with low risk |
 | `review-workflow` | Code review process |

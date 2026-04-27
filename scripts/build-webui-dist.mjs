@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const webuiDir = join(repoRoot, 'webui');
 const buildDir = join(webuiDir, 'build');
 
@@ -85,24 +85,31 @@ function run(command, argsList, cwd, extraEnv = {}) {
 function cleanOutputDirectory(dir) {
   console.log(`🧹 Cleaning output directory: ${dir}`);
 
-  // Safety checks: never delete critical directories
-  const dangerousPaths = [
-    '/',
-    '/usr',
-    '/var',
-    '/etc',
-    '/opt',
-    '/home',
-    '/tmp',
-    process.env.HOME || '',
-    repoRoot,
-  ];
+  const resolvedDir = resolve(dir);
 
-  for (const dangerous of dangerousPaths) {
-    if (!dangerous) continue;
-    if (resolve(dir) === resolve(dangerous)) {
-      console.error(`Error: Refusing to delete directory '${dir}' (safety check)`);
-      process.exit(1);
+  // If the output directory is within the repo, it's safe to clean.
+  // Only apply extra safety checks for paths outside the repo.
+  if (!resolvedDir.startsWith(repoRoot + '/')) {
+    // Safety checks for external output paths: never delete critical directories
+    const dangerousPaths = [
+      '/',
+      '/usr',
+      '/var',
+      '/etc',
+      '/opt',
+      '/home',
+      '/tmp',
+      process.env.HOME || '',
+      repoRoot,
+    ];
+
+    for (const dangerous of dangerousPaths) {
+      if (!dangerous) continue;
+      const resolvedDangerous = resolve(dangerous);
+      if (resolvedDir === resolvedDangerous || resolvedDir.startsWith(resolvedDangerous + '/')) {
+        console.error(`Error: Refusing to delete '${dir}' — inside protected path '${dangerous}'`);
+        process.exit(1);
+      }
     }
   }
 
@@ -112,6 +119,11 @@ function cleanOutputDirectory(dir) {
   }
 
   if (existsSync(dir)) {
+    const stats = lstatSync(dir, { throwIfNoEntry: false });
+    if (stats && stats.isSymbolicLink()) {
+      console.error(`Error: '${dir}' is a symbolic link. Refusing to follow and delete.`);
+      process.exit(1);
+    }
     rmSync(dir, { recursive: true, force: true });
     console.log('  ✓ Existing directory removed');
   }
@@ -129,19 +141,8 @@ function copyBuildOutput(sourceDir, targetDir) {
     process.exit(1);
   }
 
-  // Copy top-level files and directories (except static/)
   for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
-    if (entry.name === 'static') {
-      continue;
-    }
     cpSync(join(sourceDir, entry.name), join(targetDir, entry.name), { recursive: true });
-  }
-
-  // Merge static/ contents into target directory (flatten)
-  if (existsSync(join(sourceDir, 'static'))) {
-    for (const entry of readdirSync(join(sourceDir, 'static'), { withFileTypes: true })) {
-      cpSync(join(sourceDir, 'static', entry.name), join(targetDir, entry.name), { recursive: true });
-    }
   }
 
   console.log('  ✓ Build assets copied');
@@ -219,7 +220,7 @@ function generateVersionJson(targetDir, buildMode) {
   const date = getBuildDate();
 
   // If no tag, use commit hash as version
-  const version = tag || `dev-${commit}`;
+  const version = tag || (commit ? `dev-${commit}` : 'unknown');
 
   const versionData = {
     version,
@@ -280,6 +281,8 @@ function main() {
     buildEnv.REACT_APP_SPROUT_MODE = 'cloud';
     console.log('🔨 Building React app in cloud mode (REACT_APP_SPROUT_MODE=cloud)...');
   } else {
+    // Explicitly override to prevent env var leak from the shell
+    buildEnv.REACT_APP_SPROUT_MODE = '';
     console.log('🔨 Building React app in local mode (no REACT_APP_SPROUT_MODE)...');
   }
 
@@ -310,8 +313,7 @@ function main() {
   console.log('');
   console.log('Contents:');
   console.log('  index.html      - Application entry point');
-  console.log('  css/            - Stylesheets');
-  console.log('  js/             - JavaScript bundles');
+  console.log('  static/         - Static assets (css/, js/)');
   console.log('  wasm/           - WASM binary and runtime (if available)');
   console.log('  version.json    - Version and build metadata');
   console.log('');

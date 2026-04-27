@@ -3,7 +3,8 @@
 
 .PHONY: help test test-unit test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all build-version build-ui deploy-ui build-wasm \
-       verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local
+       verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
+       verify-dist verify-dist-local
 
 # Default target
 help:
@@ -30,6 +31,8 @@ help:
 	@echo "Distribution Bundles:"
 	@echo "  make build-webui-dist       - Build cloud-mode distributable WebUI bundle"
 	@echo "  make build-webui-dist-local - Build local-mode distributable WebUI bundle"
+	@echo "  make verify-dist            - Verify cloud-mode dist bundle serves correctly"
+	@echo "  make verify-dist-local      - Verify local-mode dist bundle serves correctly"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
@@ -227,6 +230,16 @@ build-webui-dist-local:
 	@echo "Building local-mode WebUI distribution..."
 	@node scripts/build-webui-dist.mjs --mode local
 	@echo "Local-mode distribution ready in dist/local/"
+
+# Verify cloud-mode dist bundle can be served from static HTTP server
+verify-dist:
+	@echo "Verifying cloud-mode dist bundle..."
+	@bash scripts/verify-dist-bundle.sh dist/cloud
+
+# Verify local-mode dist bundle can be served from static HTTP server
+verify-dist-local:
+	@echo "Verifying local-mode dist bundle..."
+	@bash scripts/verify-dist-bundle.sh dist/local
 
 # Full development build: UI + WASM + Go binary
 build-all: deploy-ui build-wasm build

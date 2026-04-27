@@ -147,10 +147,14 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 	userID := ws.ExtractUserID(r)
 
+	// Read chat_id from query params (optional)
+	chatID := r.URL.Query().Get("chat_id")
+
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
 		ClientID:    clientID,
+		ChatID:      chatID,
 		Type:        "webui",
 		UserID:      userID,
 		ConnectedAt: time.Now(),
@@ -260,13 +264,24 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			return
 
 		case event := <-eventCh:
-			if !ws.shouldForwardEventToConnection(event, clientID) {
+			// Get connection info for this connection
+			connInfoVal, ok := ws.connections.Load(conn)
+			if !ok {
+				log.Printf("WebSocket %s connection info not found, skipping event", sessionID)
+				continue
+			}
+			connInfo, ok := connInfoVal.(*ConnectionInfo)
+			if !ok {
+				log.Printf("WebSocket %s connection info type mismatch, skipping event", sessionID)
+				continue
+			}
+			if !ws.shouldForwardEventToConnection(event, connInfo) {
 				continue
 			}
 			if event.Type == events.EventTypeSecurityApprovalRequest {
 				if data, ok := event.Data.(map[string]interface{}); ok {
 					log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
-						clientID, data["request_id"], data["tool_name"], data["risk_level"])
+						connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
 				}
 			}
 			if err := safeConn.WriteJSON(event); err != nil {
@@ -281,22 +296,45 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, clientID string) bool {
+func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, connInfo *ConnectionInfo) bool {
 	data, _ := event.Data.(map[string]interface{})
-	if targetClientID, _ := data["client_id"].(string); strings.TrimSpace(targetClientID) != "" {
-		if strings.TrimSpace(targetClientID) == clientID {
-			return true
+	
+	// Extract target client_id and chat_id from event
+	targetClientID, _ := data["client_id"].(string)
+	targetChatID, _ := data["chat_id"].(string)
+	
+	// Check if event has client_id targeting
+	if strings.TrimSpace(targetClientID) != "" {
+		// Event has explicit client_id - must match connection's client_id
+		if strings.TrimSpace(targetClientID) != strings.TrimSpace(connInfo.ClientID) {
+			// Log mismatched security events for diagnostics
+			if event.Type == events.EventTypeSecurityApprovalRequest || event.Type == events.EventTypeSecurityPromptRequest {
+				log.Printf("[SECURITY] Dropping %s event: payload client_id=%q does not match connection client_id=%q (request_id=%v)",
+					event.Type, strings.TrimSpace(targetClientID), connInfo.ClientID, data["request_id"])
+			}
+			return false
 		}
-		// Log mismatched security events so we can diagnose delivery failures
-		if event.Type == events.EventTypeSecurityApprovalRequest || event.Type == events.EventTypeSecurityPromptRequest {
-			log.Printf("[SECURITY] Dropping %s event: payload client_id=%q does not match connection client_id=%q (request_id=%v)",
-				event.Type, strings.TrimSpace(targetClientID), clientID, data["request_id"])
+		// Client ID matches, now check chat_id if present
+		if strings.TrimSpace(targetChatID) != "" {
+			// Event has chat_id - connection must match or be unfiltered
+			if strings.TrimSpace(connInfo.ChatID) != "" && strings.TrimSpace(connInfo.ChatID) != strings.TrimSpace(targetChatID) {
+				return false
+			}
 		}
-		return false
+		return true
 	}
-
-	// Untargeted events should not leak across client windows.
-	// Only allow explicit global events without a client_id.
+	
+	// No client_id in event - check chat_id targeting
+	if strings.TrimSpace(targetChatID) != "" {
+		// Event has chat_id but no client_id
+		// Forward if connection has matching chat_id or no specific chat
+		if strings.TrimSpace(connInfo.ChatID) != "" && strings.TrimSpace(connInfo.ChatID) != strings.TrimSpace(targetChatID) {
+			return false
+		}
+		return true
+	}
+	
+	// No client_id and no chat_id - only allow known global event types
 	switch event.Type {
 	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest:
 		return true
@@ -1008,8 +1046,11 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	}
 
 	// Store the underlying connection with metadata
+	// Terminal connections don't use chat_id
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
+		ClientID:    "",
+		ChatID:      "",
 		Type:        "terminal",
 		UserID:      ws.ExtractUserID(r),
 		ConnectedAt: time.Now(),

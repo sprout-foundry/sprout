@@ -523,8 +523,10 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ### 4. Service Mode: Bind Address, Origin Allowlist, and Auth Header Trust
 
-[] - CLOUD: Add `--bind` flag and `SPROUT_BIND_ADDR` env var to control web UI listen address (default: `127.0.0.1`) — update `pkg/webui/server.go` to use configurable bind address
-[] - CLOUD: Add `SPROUT_ALLOWED_ORIGINS` env var (comma-separated) to origin-check middleware — accept listed origins in addition to localhost
+[x] - CLOUD: Add `--bind` flag and `SPROUT_BIND_ADDR` env var to control web UI listen address (default: `127.0.0.1`) — update `pkg/webui/server.go` to use configurable bind address
+[x] - CLOUD: Add `--bind` flag and `SPROUT_BIND_ADDR` env var to control web UI listen address (default: `127.0.0.1`) — update `pkg/webui/server.go` to use configurable bind address
+[x] - CLOUD: Add `SPROUT_ALLOWED_ORIGINS` env var (comma-separated) to origin-check middleware — accept listed origins in addition to localhost
+[x] - CLOUD: Add `SPROUT_ALLOWED_ORIGINS` env var (comma-separated) to origin-check middleware — accept listed origins in addition to localhost
 [] - CLOUD: Add `SPROUT_TRUSTED_USER_HEADER` env var for auth header extraction in service mode — read user ID from a configurable header when `SPROUT_SERVICE=1`
 [] - CLOUD: Add `GET /health` endpoint that is always accessible regardless of origin (for ALB health checks)
 [] - CLOUD: Verify that in local mode (no `SPROUT_SERVICE`), the trusted user header is ignored (no spoofing)

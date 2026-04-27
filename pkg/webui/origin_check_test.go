@@ -50,7 +50,7 @@ func TestAllowedOriginsParsing(t *testing.T) {
 		{
 			name:           "mixed case origins",
 			envValue:       "HTTPS://Example.com,http://LOCALHOST:8080",
-			expectedOrigins: []string{"HTTPS://Example.com", "http://LOCALHOST:8080"},
+			expectedOrigins: []string{"https://example.com", "http://localhost:8080"},
 		},
 	}
 
@@ -67,14 +67,14 @@ func TestAllowedOriginsParsing(t *testing.T) {
 			server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
 
 			// Verify the parsed origins match expectations
-			if len(server.allowedOrigins) != len(tt.expectedOrigins) {
-				t.Errorf("Expected %d origins, got %d", len(tt.expectedOrigins), len(server.allowedOrigins))
+			if len(server.normalizedAllowedOrigins) != len(tt.expectedOrigins) {
+				t.Errorf("Expected %d origins, got %d", len(tt.expectedOrigins), len(server.normalizedAllowedOrigins))
 			}
 
 			for i, expected := range tt.expectedOrigins {
-				if i < len(server.allowedOrigins) {
-					if server.allowedOrigins[i] != expected {
-						t.Errorf("Origin %d: expected %q, got %q", i, expected, server.allowedOrigins[i])
+				if i < len(server.normalizedAllowedOrigins) {
+					if server.normalizedAllowedOrigins[i] != expected {
+						t.Errorf("Origin %d: expected %q, got %q", i, expected, server.normalizedAllowedOrigins[i])
 					}
 				}
 			}

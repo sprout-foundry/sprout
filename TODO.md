@@ -534,9 +534,9 @@ Three Python test runner scripts at the project root with overlapping purposes:
 ### 5. Git Diff Robustness — Handle Missing HEAD
 
 [x] - CLOUD: Update `emitJSONResult` in `cmd/agent_result.go` to handle missing HEAD (fall back to `git diff` without HEAD ref)
-[] - CLOUD: Update `emitJSONResult` in `cmd/agent_result.go` to handle missing HEAD (fall back to `git diff` without HEAD ref)
-[] - CLOUD: Include untracked new files in `files_modified` via `git ls-files --others --exclude-standard`
-[] - CLOUD: Verify no duplicate entries in `files_modified` list
+[x] - CLOUD: Update `emitJSONResult` in `cmd/agent_result.go` to handle missing HEAD (fall back to `git diff` without HEAD ref)
+[x] - CLOUD: Include untracked new files in `files_modified` via `git ls-files --others --exclude-standard`
+[x] - CLOUD: Verify no duplicate entries in `files_modified` list
 
 ### 6. WASM Shell — Merge and Rebrand
 

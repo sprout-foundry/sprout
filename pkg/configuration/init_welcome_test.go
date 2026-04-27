@@ -39,9 +39,9 @@ func TestShowWelcomeMessage(t *testing.T) {
 		t.Errorf("ShowWelcomeMessage() should contain 'web' (case insensitive), got:\n%s", output)
 	}
 
-	// Verify port 54000 is mentioned
-	if !strings.Contains(output, "54000") {
-		t.Errorf("ShowWelcomeMessage() should contain port '54000', got:\n%s", output)
+	// Verify port 56000 is mentioned
+	if !strings.Contains(output, "56000") {
+		t.Errorf("ShowWelcomeMessage() should contain port '56000', got:\n%s", output)
 	}
 
 	// Verify the webui section is prominently placed early in the output

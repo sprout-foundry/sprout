@@ -680,7 +680,7 @@ func FindAvailablePort(basePort int) (int, error) {
 }
 
 // formatListenAddr constructs a listen address string in "host:port" format,
-// using bracket notation for IPv6 addresses (e.g., "[::]:54000").
+// using bracket notation for IPv6 addresses (e.g., "[::]:56000").
 func formatListenAddr(host string, port int) string {
 	if strings.Contains(host, ":") {
 		return fmt.Sprintf("[%s]:%d", host, port)

@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const http = require('http');
 const https = require('https');
 
-const DEFAULT_BASE_URLS = ['http://localhost:54000', 'http://localhost:54331'];
+const DEFAULT_BASE_URLS = ['http://localhost:56000', 'http://localhost:56331'];
 
 function now() {
   return new Date().toISOString();

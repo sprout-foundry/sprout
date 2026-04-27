@@ -160,7 +160,7 @@ const (
 	// (both local and SSH-launched remote).  All daemons on a given host
 	// share this port — the launcher detects an existing daemon and
 	// reuses it rather than starting a duplicate.
-	DaemonPort = 54000
+	DaemonPort = 56000
 )
 
 var errNoReleaseTagForArtifact = errors.New("no release tag available for current build")

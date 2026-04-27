@@ -29,7 +29,7 @@ func TestPortAlias_HasSameValueAsWebPort(t *testing.T) {
 
 	// Test with --web-port flag
 	webPort = 0
-	err := agentCmd.Flags().Set("web-port", "54000")
+	err := agentCmd.Flags().Set("web-port", "56000")
 	if err != nil {
 		t.Fatalf("failed to set --web-port flag: %v", err)
 	}
@@ -37,18 +37,18 @@ func TestPortAlias_HasSameValueAsWebPort(t *testing.T) {
 
 	// Reset and test with --port flag
 	webPort = 0
-	err = agentCmd.Flags().Set("port", "54000")
+	err = agentCmd.Flags().Set("port", "56000")
 	if err != nil {
 		t.Fatalf("failed to set --port flag: %v", err)
 	}
 	portValue := webPort
 
 	// Both should set webPort to the same value
-	if webPortValue != 54000 {
-		t.Errorf("after setting --web-port 54000, webPort = %d, want 54000", webPortValue)
+	if webPortValue != 56000 {
+		t.Errorf("after setting --web-port 56000, webPort = %d, want 56000", webPortValue)
 	}
-	if portValue != 54000 {
-		t.Errorf("after setting --port 54000, webPort = %d, want 54000", portValue)
+	if portValue != 56000 {
+		t.Errorf("after setting --port 56000, webPort = %d, want 56000", portValue)
 	}
 	if webPortValue != portValue {
 		t.Errorf("--web-port and --port should set the same value: --web-port=%d, --port=%d",

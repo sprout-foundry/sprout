@@ -26,12 +26,23 @@ async function checkBackendHealth(): Promise<boolean> {
     const isOk = response.ok;
 
     /* Some backends may return 404 for /health but are otherwise functional.
-       Treat 404 as reachable since it confirms the server is responding. */
-    if (!isOk && response.status !== 404) {
+       Only treat 404 as reachable if the response is JSON (indicating it's
+       from our backend, not a static server's HTML 404 page). */
+    if (!isOk && response.status === 404) {
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        debugLog('[backendHealth] Health check returned 404 with non-JSON content-type:', contentType);
+        return false;
+      }
+      debugLog('[backendHealth] Health check returned 404 with JSON content-type, treating as reachable');
+      return true;
+    }
+
+    if (!isOk) {
       debugLog('[backendHealth] Health check failed:', response.status, response.statusText);
     }
 
-    return isOk || response.status === 404;
+    return isOk;
   } catch (error) {
     /* Network errors (fetch failed) indicate backend is unreachable */
     debugLog('[backendHealth] Health check error:', error);

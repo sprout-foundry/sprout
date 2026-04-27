@@ -419,6 +419,11 @@ class ApiService {
   async getOnboardingStatus(): Promise<OnboardingStatusResponse> {
     const response = await clientFetch('/api/onboarding/status', { cache: 'no-store' });
     if (!response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      // If the response is HTML, it's likely from a static server (not our backend)
+      if (contentType.includes('text/html')) {
+        throw new Error('Backend not available');
+      }
       const text = await response.text();
       throw new Error(text || 'Failed to fetch onboarding status');
     }

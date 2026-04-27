@@ -16,6 +16,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import type { ChatSession } from '../services/chatSessions';
+import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
@@ -317,7 +318,7 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [isConnected, apiService]);
 
   useEffect(() => {
-    if (!isConnected) {
+    if (!supportsInstances || !isConnected) {
       return;
     }
 
@@ -419,6 +420,7 @@ const AppContent: React.FC<AppContentProps> = ({
   });
 
   const handleInstanceChange = useCallback(async (pid: number) => {
+    if (!supportsInstances) return;
     if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
       return;
     }
@@ -520,7 +522,9 @@ const AppContent: React.FC<AppContentProps> = ({
           onSidebarToggle();
           break;
         case 'toggle_terminal':
-          onTerminalExpandedChange(!isTerminalExpanded);
+          if (supportsLocalTerminal) {
+            onTerminalExpandedChange(!isTerminalExpanded);
+          }
           break;
         case 'toggle_explorer': {
           // Reveal the active file's path in the file tree explorer.
@@ -1060,7 +1064,7 @@ const AppContent: React.FC<AppContentProps> = ({
           onOpenFile: handleFileClick,
         }}
       />
-      <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${isTerminalExpanded ? 'terminal-expanded' : ''}`}>
+      <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}>
         <div className="header-bar">
           <MenuBar />
           <div className="header-bar-actions">
@@ -1170,10 +1174,12 @@ const AppContent: React.FC<AppContentProps> = ({
         />
       </div>
 
-      <Terminal
-        isExpanded={isTerminalExpanded}
-        onToggleExpand={onTerminalExpandedChange}
-      />
+      {supportsLocalTerminal && (
+        <Terminal
+          isExpanded={isTerminalExpanded}
+          onToggleExpand={onTerminalExpandedChange}
+        />
+      )}
 
       <CommandPalette
         isOpen={isCommandPaletteOpen}
@@ -1192,7 +1198,7 @@ const AppContent: React.FC<AppContentProps> = ({
           });
         }}
         onToggleSidebar={onSidebarToggle}
-        onToggleTerminal={() => onTerminalExpandedChange(!isTerminalExpanded)}
+        onToggleTerminal={supportsLocalTerminal ? () => onTerminalExpandedChange(!isTerminalExpanded) : () => {}}
         onOpenHotkeysConfig={handleOpenHotkeysConfig}
         initialMode={commandPaletteMode}
         onNavigateToLine={(line) => {

@@ -84,9 +84,15 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	}
 
 	// For custom providers, apply tool filtering only when tool_calls is explicitly configured.
+	// Always preserve skill and memory tools regardless of the allowlist — these are
+	// lightweight context tools that should never be hidden from the model.
 	if customProvider, ok := a.getCurrentCustomProvider(); ok {
 		if len(customProvider.ToolCalls) > 0 {
 			allowedToolSet := makeAllowedToolSet(customProvider.ToolCalls)
+			// Always include skill and memory tools so models can discover and use them
+			for _, t := range alwaysIncludedTools {
+				allowedToolSet[t] = struct{}{}
+			}
 			tools = filterToolsByName(tools, allowedToolSet)
 		}
 	}
@@ -122,6 +128,20 @@ func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig,
 		return nil, false
 	}
 	return &provider, true
+}
+
+// alwaysIncludedTools are tools that must always be available to models regardless
+// of custom provider tool_calls filtering. These are lightweight context tools
+// for skill discovery, memory, and self-management that should never be hidden.
+var alwaysIncludedTools = []string{
+	"list_skills",
+	"activate_skill",
+	"add_memory",
+	"read_memory",
+	"list_memories",
+	"delete_memory",
+	"TodoWrite",
+	"TodoRead",
 }
 
 func makeAllowedToolSet(toolNames []string) map[string]struct{} {

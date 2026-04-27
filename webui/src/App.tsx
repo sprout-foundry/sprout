@@ -16,6 +16,9 @@ import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
+import { isCloud } from './config/mode';
+import BackendConnectionBanner from './components/BackendConnectionBanner';
+import { useBackendReachable } from './hooks/useBackendReachable';
 import {
   type ChatSession,
   listChatSessions,
@@ -415,6 +418,11 @@ function App() {
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = state.activeChatId;
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
+
+  /* Backend reachability tracking - only active in cloud mode */
+  const { isReachable: backendReachable } = useBackendReachable();
+  const backendReachableRef = useRef(backendReachable);
+  backendReachableRef.current = backendReachable;
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [onboarding, setOnboarding] = useState<OnboardingState>({
@@ -1529,8 +1537,14 @@ function App() {
   }, [apiService]);
 
   useEffect(() => {
+    /* Skip onboarding if backend is unreachable in cloud mode */
+    if (isCloud && !backendReachable) {
+      debugLog('[onboarding] Backend unreachable, skipping onboarding check');
+      setOnboarding((prev) => ({ ...prev, checking: false }));
+      return;
+    }
     refreshOnboardingStatus().catch(() => {});
-  }, [refreshOnboardingStatus]);
+  }, [refreshOnboardingStatus, backendReachable]);
 
   useEffect(() => {
     // Register Service Worker for PWA functionality
@@ -1621,13 +1635,23 @@ function App() {
     };
 
     // Load initial stats/files/sessions and then reconcile workspace/session startup.
-    loadStats();
-    loadFiles();
-    loadChatSessions();
-    restoreStartupState().catch(() => {});
+    /* In cloud mode, only call backend if reachable */
+    if (backendReachable || !isCloud) {
+      loadStats();
+      loadFiles();
+      loadChatSessions();
+      restoreStartupState().catch(() => {});
+    } else {
+      /* In cloud mode when backend is unreachable, set defaults */
+      debugLog('[startup] Backend unreachable in cloud mode, skipping initialization');
+    }
 
-    // Set up periodic stats updates
-    const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
+    // Set up periodic stats updates (only if backend is reachable in cloud mode)
+    const statsInterval = setInterval(() => {
+      if (backendReachableRef.current || !isCloud) {
+        loadStats();
+      }
+    }, 5000); /* Update every 5 seconds */
 
     // Check for mobile screen size
     const checkMobile = () => {
@@ -1654,6 +1678,37 @@ function App() {
       clearInterval(statsInterval);
     };
   }, [handleEvent, handleReconnect, wsService, apiService, loadChatSessions]);
+
+  // When backend becomes reachable in cloud mode (after being unreachable),
+  // re-run initialization that was skipped.
+  const prevBackendReachableRef = useRef(backendReachable);
+  useEffect(() => {
+    if (!isCloud) return;
+    const wasReachable = prevBackendReachableRef.current;
+    prevBackendReachableRef.current = backendReachable;
+    if (!wasReachable && backendReachable) {
+      debugLog('[startup] Backend became reachable, re-running initialization');
+      apiService.getStats().then((stats: any) => {
+        setState(prev => ({
+          ...prev,
+          provider: stats.provider,
+          model: stats.model,
+          stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats
+        }));
+      }).catch(console.error);
+      apiService.getFiles().then((response: any) => {
+        if (response && response.files) {
+          const files = response.files.map((file: any) => ({
+            path: file.path || file.name,
+            modified: false
+          }));
+          setRecentFiles(files);
+        }
+      }).catch(console.error);
+      loadChatSessions();
+      refreshOnboardingStatus().catch(() => {});
+    }
+  }, [backendReachable, apiService, loadChatSessions, refreshOnboardingStatus]);
 
   // Listen for session-restored events from Chat.tsx to populate messages
   useEffect(() => {
@@ -2082,6 +2137,7 @@ function App() {
         // You could send this to an error reporting service here
       }}
     >
+      <BackendConnectionBanner isReachable={backendReachable} />
       <ThemeProvider>
         <NotificationProvider>
         <HotkeyProvider>

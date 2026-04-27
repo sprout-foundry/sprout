@@ -53,8 +53,9 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 			return "", fmt.Errorf("broad git add patterns (., -A, --all) are not allowed via shell_command. Use the git tool with operation='add' and specific file paths, or use 'git add <filepath>' via shell_command (command: '%s')", command)
 		}
 		if !a.isOrchestratorGitWriteAllowed() {
-			if a.GetActivePersona() == "orchestrator" {
-				return "", fmt.Errorf("git write operations are disabled for the orchestrator. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", command)
+			persona := a.GetActivePersona()
+			if persona == "orchestrator" || persona == "repo_orchestrator" {
+				return "", fmt.Errorf("git write operations are disabled for %s. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", persona, command)
 			}
 			// For commit operations, redirect to the commit tool — this ensures
 			// commits go through the proper message generation code path regardless

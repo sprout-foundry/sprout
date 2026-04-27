@@ -136,7 +136,7 @@ func (r Resolved) String() string {
 // The file is created with the specified permissions.
 func AtomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
-	tmpFile, err := os.CreateTemp(dir, ".tmp-*.ledit")
+	tmpFile, err := os.CreateTemp(dir, ".tmp-*.sprout")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}

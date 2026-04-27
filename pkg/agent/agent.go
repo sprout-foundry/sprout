@@ -264,7 +264,7 @@ func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 }
 
 // NewAgentWithLayers creates a new agent using layered configuration.
-// globalDir contains global config (~/.ledit/), workspaceDir contains workspace config.
+// globalDir contains global config (~/.config/sprout/), workspaceDir contains workspace config.
 // This is the preferred method for WebUI usage where workspace config is supported.
 func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
 	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)

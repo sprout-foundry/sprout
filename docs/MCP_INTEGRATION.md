@@ -30,7 +30,7 @@ Ledit Agent
 ### 3. Tool Discovery Flow
 
 1. Agent starts → Creates MCP manager
-2. Reads MCP config from `~/.ledit/config.json`
+2. Reads MCP config from `~/.config/sprout/config.json`
 3. If enabled and auto-start is true → Starts configured servers
 4. When processing messages → Calls `getMCPTools()` to get available tools
 5. Tools are prefixed with `mcp_<server>_<tool>` (e.g., `mcp_github_list_issues`)
@@ -86,7 +86,7 @@ Try these prompts with the agent to test GitHub functionality:
 # Interactive setup
 ./ledit mcp add
 
-# Or manually edit ~/.ledit/config.json
+# Or manually edit ~/.config/sprout/config.json
 ```
 
 Example configuration:
@@ -134,7 +134,7 @@ For example:
 
 1. **Check if MCP is enabled:**
    ```bash
-   cat ~/.ledit/config.json | jq '.mcp.enabled'
+   cat ~/.config/sprout/config.json | jq '.mcp.enabled'
    ```
 
 2. **Verify server is configured:**

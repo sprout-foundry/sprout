@@ -129,9 +129,9 @@ The `pkg/` directory contains the core modular components of ledit:
 The change tracking system provides comprehensive modification management:
 
 - **Revision Tracking**: Every edit generates a revision ID
-- **Change Recording**: All file modifications tracked in `.ledit/changes/`
+- **Change Recording**: All file modifications tracked in `.sprout/changes/`
 - **Rollback Support**: Complete rollback capability for any changes
-- **Diff Logs**: Per-change diff logs with original and updated files in `.ledit/changes/`
+- **Diff Logs**: Per-change diff logs with original and updated files in `.sprout/changes/`
 - **View History**: `ledit log` command to view changes
 - **Rollback**: `ledit log --raw-log` for verbose logs and rollback support
 
@@ -139,7 +139,7 @@ The change tracking system provides comprehensive modification management:
 
 ## Workspace Files
 
-### Project-Local `.ledit/` Directory
+### Project-Local `.sprout/` Directory
 
 Located in the project root, contains workspace-specific metadata:
 
@@ -153,7 +153,7 @@ Located in the project root, contains workspace-specific metadata:
 | `runlogs/` | JSONL workflow traces |
 | `workspace.log` | Verbose execution log |
 
-### Global `~/.ledit/` Directory
+### Global `~/.config/sprout/` Directory
 
 User-wide configuration and state:
 
@@ -189,9 +189,9 @@ Main CLI commands in `cmd/`:
 
 Configuration uses a layered approach:
 
-1. **Global**: `~/.ledit/config.json` - User-wide defaults
-2. **Project**: `./.ledit/config.json` - Project-specific overrides
-3. **API Keys**: `~/.ledit/api_keys.json` - Secure credential storage
+1. **Global**: `~/.config/sprout/config.json` - User-wide defaults
+2. **Project**: `./.sprout/config.json` - Project-specific overrides
+3. **API Keys**: `~/.config/sprout/api_keys.json` - Secure credential storage
 
 ---
 
@@ -231,12 +231,12 @@ ledit/
 │   ├── tools/                   # Tool registry
 │   ├── webui/                   # React Web UI server
 │   └── ...                      # Other packages
-├── .ledit/                      # Project-local workspace
+├── .sprout/                      # Project-local workspace
 │   ├── config.json              # Local config
 │   ├── changes/                 # Change diffs
 │   ├── memories/                # Persistent memories
 │   └── ...
-├── ~/.ledit/                    # Global configuration
+├── ~/.config/sprout/                    # Global configuration
 │   ├── config.json              # Global config
 │   ├── api_keys.json            # API keys
 │   └── ...

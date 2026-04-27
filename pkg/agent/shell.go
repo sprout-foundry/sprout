@@ -156,7 +156,7 @@ func buildTruncationNotice(headTokens, tailTokens, truncatedTokens, truncatedLin
 }
 
 func (a *Agent) saveShellOutputToFile(output string) (string, error) {
-	dir := ".ledit/shell_outputs"
+	dir := ".sprout/shell_outputs"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("failed to create shell output directory: %w", err)
 	}

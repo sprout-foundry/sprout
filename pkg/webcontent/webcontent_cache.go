@@ -32,9 +32,9 @@ func getPathWithFallback(folderName string) string {
 	// Fallback to current working directory if home directory is not accessible
 	cwd, err := os.Getwd()
 	if err != nil {
-		return filepath.Join(".ledit", folderName)
+		return filepath.Join(".sprout", folderName)
 	}
-	return filepath.Join(cwd, ".ledit", folderName)
+	return filepath.Join(cwd, ".sprout", folderName)
 
 }
 

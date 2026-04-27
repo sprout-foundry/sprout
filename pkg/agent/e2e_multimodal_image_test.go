@@ -39,7 +39,7 @@ func TestE2E_MultimodalImage_VisionModel_SendsImageToAPI(t *testing.T) {
 	// --- Setup: temp directory with pasted image ---
 	dir := t.TempDir()
 
-	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
+	pasteDir := filepath.Join(dir, ".sprout", "pasted-images")
 	require.NoError(t, os.MkdirAll(pasteDir, 0o755))
 
 	imgPath := filepath.Join(pasteDir, "screenshot.png")
@@ -52,7 +52,7 @@ func TestE2E_MultimodalImage_VisionModel_SendsImageToAPI(t *testing.T) {
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.workspaceRoot = dir
 
-	query := "Pasted image saved to disk: ./.ledit/pasted-images/screenshot.png — describe this screenshot"
+	query := "Pasted image saved to disk: ./.sprout/pasted-images/screenshot.png — describe this screenshot"
 
 	// --- Execute ---
 	result, err := agent.ProcessQuery(query)
@@ -167,7 +167,7 @@ func TestE2E_MultimodalImage_MultipleImages(t *testing.T) {
 	// --- Setup: temp directory with two pasted images ---
 	dir := t.TempDir()
 
-	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
+	pasteDir := filepath.Join(dir, ".sprout", "pasted-images")
 	require.NoError(t, os.MkdirAll(pasteDir, 0o755))
 
 	img1Path := filepath.Join(pasteDir, "screenshot1.png")
@@ -181,8 +181,8 @@ func TestE2E_MultimodalImage_MultipleImages(t *testing.T) {
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.workspaceRoot = dir
 
-	query := "Pasted image saved to disk: ./.ledit/pasted-images/screenshot1.png and " +
-		"Pasted image saved to disk: ./.ledit/pasted-images/screenshot2.png — compare these"
+	query := "Pasted image saved to disk: ./.sprout/pasted-images/screenshot1.png and " +
+		"Pasted image saved to disk: ./.sprout/pasted-images/screenshot2.png — compare these"
 
 	// --- Execute ---
 	result, err := agent.ProcessQuery(query)
@@ -220,7 +220,7 @@ func TestE2E_MultimodalImage_MultipleImages(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestE2E_MultimodalImage_OutsideContainmentSkipped verifies that images
-// referenced outside the .ledit/pasted-images/ containment directory are
+// referenced outside the .sprout/pasted-images/ containment directory are
 // silently skipped — the query still succeeds but no image data is attached.
 func TestE2E_MultimodalImage_OutsideContainmentSkipped(t *testing.T) {
 	t.Parallel()
@@ -229,7 +229,7 @@ func TestE2E_MultimodalImage_OutsideContainmentSkipped(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create the pasted-images directory (empty — no allowed images).
-	pasteDir := filepath.Join(dir, ".ledit", "pasted-images")
+	pasteDir := filepath.Join(dir, ".sprout", "pasted-images")
 	require.NoError(t, os.MkdirAll(pasteDir, 0o755))
 
 	// Create an image file OUTSIDE the containment directory.

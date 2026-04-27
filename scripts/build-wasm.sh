@@ -1,43 +1,333 @@
 #!/usr/bin/env bash
 # Build script for the sprout WebAssembly shell module.
 # Usage: ./scripts/build-wasm.sh [output-dir]
+#        ./scripts/build-wasm.sh --dist <dist-dir>
+#        ./scripts/build-wasm.sh --help
 #
-# This script:
+# Default behavior (no --dist flag):
 #   1. Copies wasm_exec.js from GOROOT to the webui public directory
 #   2. Compiles the Go WASM module from cmd/wasm/
+#
+# With --dist flag:
+#   1. Builds the React webui (npm install + npm run build)
+#   2. Builds the WASM binary
+#   3. Generates a version.json with git metadata
+#   4. Copies everything into a self-contained distribution directory
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WEBUI_DIR="$PROJECT_ROOT/webui"
 
-# Output directory defaults to webui/public/wasm/
-OUTPUT_DIR="${1:-$PROJECT_ROOT/webui/public/wasm}"
+# Parse command line arguments
+DIST_MODE=false
+OUTPUT_DIR="$PROJECT_ROOT/webui/public/wasm"
 
-# Ensure output directory exists.
-mkdir -p "$OUTPUT_DIR"
-
-GOROOT="$(go env GOROOT)"
-WASM_EXEC_SRC="$GOROOT/lib/wasm/wasm_exec.js"
-WASM_EXEC_DST="$OUTPUT_DIR/wasm_exec.js"
-
-if [ ! -f "$WASM_EXEC_SRC" ]; then
-    echo "Error: wasm_exec.js not found at $WASM_EXEC_SRC" >&2
-    echo "Make sure your Go installation includes WASM support." >&2
-    exit 1
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    echo "Usage: $0 [output-dir]"
+    echo "       $0 --dist <dist-dir>"
+    echo ""
+    echo "Default behavior (no --dist flag):"
+    echo "  Builds only the WASM module (sprout.wasm + wasm_exec.js)"
+    echo "  to the specified directory (default: webui/public/wasm/)"
+    echo ""
+    echo "With --dist flag:"
+    echo "  Creates a self-contained distribution package:"
+    echo "    1. Builds the React webui (npm install + npm run build)"
+    echo "    2. Builds the WASM binary"
+    echo "    3. Generates a version.json with git metadata"
+    echo "    4. Copies everything into the specified distribution directory"
+    echo ""
+    echo "Examples:"
+    echo "  $0                          # Build WASM to default location"
+    echo "  $0 /path/to/output          # Build WASM to custom directory"
+    echo "  $0 --dist ./dist           # Build full distribution package"
+    echo "  $0 --dist /opt/sprout      # Build full package to /opt/sprout"
+    echo ""
+    exit 0
 fi
 
-echo "→ Copying wasm_exec.js to $OUTPUT_DIR/"
-cp "$WASM_EXEC_SRC" "$WASM_EXEC_DST"
-echo "  ✓ wasm_exec.js"
+if [ "${1:-}" = "--dist" ]; then
+    DIST_MODE=true
+    if [ -z "${2:-}" ]; then
+        echo "Error: --dist requires an output directory argument" >&2
+        echo "Usage: $0 --dist <output-dir>" >&2
+        exit 1
+    fi
+    DIST_DIR="${2}"
+    # Resolve to absolute path (create directory temporarily if needed)
+    mkdir -p "$DIST_DIR"
+    DIST_DIR="$(cd "$DIST_DIR" && pwd)"
+else
+    # Backward compatible: positional arg or default
+    OUTPUT_DIR="${1:-$PROJECT_ROOT/webui/public/wasm}"
+fi
 
-echo "→ Building sprout.wasm (GOOS=js GOARCH=wasm)..."
-(cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -o "$OUTPUT_DIR/sprout.wasm" ./cmd/wasm/)
+# Get current git tag or empty string
+get_git_tag() {
+    git describe --tags --abbrev=0 2>/dev/null || echo ""
+}
 
-echo "  ✓ sprout.wasm"
+# Get current git commit hash (short)
+get_git_commit() {
+    git rev-parse --short HEAD 2>/dev/null || echo ""
+}
 
-WASM_SIZE=$(ls -lh "$OUTPUT_DIR/sprout.wasm" | awk '{print $5}')
-echo ""
-echo "Build complete:"
-echo "  $WASM_EXEC_DST ($(ls -lh "$WASM_EXEC_DST" | awk '{print $5}'))"
-echo "  $OUTPUT_DIR/sprout.wasm ($WASM_SIZE)"
+# Get build timestamp in ISO 8601 UTC format
+get_build_date() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+# Build the React webui
+build_webui() {
+    echo "→ Building React webui..."
+    (
+        cd "$WEBUI_DIR"
+
+        # Install dependencies if needed
+        if [ ! -d "node_modules" ]; then
+            echo "  Installing npm dependencies..."
+            npm install
+        fi
+
+        # Build the webui
+        echo "  Running npm run build..."
+        DISABLE_ESLINT_PLUGIN=true npm run build
+        echo "  ✓ Webui build complete"
+    )
+}
+
+# Build the WASM binary (original logic)
+build_wasm() {
+    local target_dir="$1"
+    echo "→ Building WASM binary..."
+
+    GOROOT="$(go env GOROOT)"
+    WASM_EXEC_SRC="$GOROOT/lib/wasm/wasm_exec.js"
+    WASM_EXEC_DST="$target_dir/wasm_exec.js"
+
+    if [ ! -f "$WASM_EXEC_SRC" ]; then
+        echo "Error: wasm_exec.js not found at $WASM_EXEC_SRC" >&2
+        echo "Make sure your Go installation includes WASM support." >&2
+        exit 1
+    fi
+
+    echo "  Copying wasm_exec.js..."
+    cp "$WASM_EXEC_SRC" "$WASM_EXEC_DST"
+    echo "    ✓ wasm_exec.js"
+
+    echo "  Compiling sprout.wasm (GOOS=js GOARCH=wasm)..."
+    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -o "$target_dir/sprout.wasm" ./cmd/wasm/)
+
+    echo "    ✓ sprout.wasm"
+
+    WASM_SIZE=$(ls -lh "$target_dir/sprout.wasm" | awk '{print $5}')
+    echo "  WASM binary size: $WASM_SIZE"
+}
+
+# Escape special characters for JSON string values
+json_escape() {
+    local str="$1"
+    str="${str//\\/\\\\}"      # backslash → \\
+    str="${str//\"/\\\"}"      # double quote → \"
+    str="${str//$'\n'/\\n}"    # newline → \n
+    str="${str//$'\r'/\\r}"    # carriage return → \r
+    str="${str//$'\t'/\\t}"    # tab → \t
+    echo "$str"
+}
+
+# Generate version.json with git metadata
+generate_version_json() {
+    local output_file="$1"
+    echo "→ Generating version.json..."
+
+    local tag
+    local commit
+    local date
+    local version
+
+    tag=$(get_git_tag)
+    commit=$(get_git_commit)
+    date=$(get_build_date)
+
+    # If no tag, use commit hash as version
+    if [ -z "$tag" ]; then
+        version="dev-$commit"
+    else
+        version="$tag"
+    fi
+
+    # Escape for JSON
+    local escaped_version escaped_commit escaped_date escaped_tag
+    escaped_version=$(json_escape "$version")
+    escaped_commit=$(json_escape "$commit")
+    escaped_date=$(json_escape "$date")
+    escaped_tag=$(json_escape "$tag")
+
+    # Create JSON file
+    cat > "$output_file" <<EOF
+{
+  "version": "$escaped_version",
+  "commit": "$escaped_commit",
+  "buildDate": "$escaped_date",
+  "gitTag": "$escaped_tag"
+}
+EOF
+
+    echo "  ✓ version.json"
+    echo "    version: $version"
+    echo "    commit: $commit"
+    echo "    buildDate: $date"
+    echo "    gitTag: $tag"
+}
+
+# Copy all dist files to the distribution directory
+copy_dist_files() {
+    local dist_dir="$1"
+    echo "→ Copying files to distribution directory..."
+
+    # Create subdirectories
+    mkdir -p "$dist_dir/webui"
+    mkdir -p "$dist_dir/wasm"
+
+    # Copy webui build output
+    if [ -d "$WEBUI_DIR/build" ] && [ "$(ls -A "$WEBUI_DIR/build" 2>/dev/null)" ]; then
+        echo "  Copying webui/build/* → $dist_dir/webui/"
+        cp -r "$WEBUI_DIR/build/"* "$dist_dir/webui/"
+    else
+        echo "  Warning: webui/build directory is empty or missing" >&2
+    fi
+
+    # Copy WASM files
+    echo "  Copying wasm files → $dist_dir/wasm/"
+    cp "$PROJECT_ROOT/webui/public/wasm/wasm_exec.js" "$dist_dir/wasm/"
+    cp "$PROJECT_ROOT/webui/public/wasm/sprout.wasm" "$dist_dir/wasm/"
+
+    # Copy version.json
+    local version_json="$PROJECT_ROOT/webui/public/wasm/version.json"
+    if [ -f "$version_json" ]; then
+        echo "  Copying version.json → $dist_dir/"
+        cp "$version_json" "$dist_dir/version.json"
+    else
+        echo "  Warning: version.json not found at $version_json" >&2
+    fi
+
+    echo "  ✓ All files copied"
+}
+
+# Calculate directory size
+get_dir_size() {
+    local dir="$1"
+    # Use du -s for total size in KB, then format
+    if command -v du >/dev/null 2>&1; then
+        local size_kb
+        size_kb=$(du -sk "$dir" 2>/dev/null | awk '{print $1}')
+        if [ -n "$size_kb" ] && [ "$size_kb" -gt 0 ] 2>/dev/null; then
+            if [ "$size_kb" -lt 1024 ]; then
+                echo "${size_kb}KB"
+            else
+                local size_mb
+                size_mb=$(awk "BEGIN {printf \"%.1f\", $size_kb / 1024}")
+                echo "${size_mb}MB"
+            fi
+        else
+            echo "unknown"
+        fi
+    else
+        echo "unknown"
+    fi
+}
+
+# Print distribution summary
+print_dist_summary() {
+    local dist_dir="$1"
+    echo ""
+    echo "✅ Distribution build complete!"
+    echo ""
+    echo "Output: $dist_dir"
+    echo "Size: $(get_dir_size "$dist_dir")"
+    echo ""
+    echo "Contents:"
+    echo "  webui/          - React application"
+    echo "  wasm/           - WASM binary and runtime"
+    echo "    wasm_exec.js  - Go WASM runtime"
+    echo "    sprout.wasm   - Compiled WASM module"
+    echo "  version.json    - Version metadata"
+    echo ""
+}
+
+# ============================================================================
+# Main execution
+# ============================================================================
+
+if [ "$DIST_MODE" = true ]; then
+    # ===== DIST MODE =====
+    echo "🏗️  Building sprout distribution package..."
+    echo ""
+
+    # Clean and create dist directory
+    echo "→ Preparing distribution directory: $DIST_DIR"
+    # Safety: never delete project root, home directory, or root
+    if [ "$DIST_DIR" = "$PROJECT_ROOT" ] || [ "$DIST_DIR" = "$HOME" ] || [ -z "$DIST_DIR" ] || [ "$DIST_DIR" = "/" ]; then
+        echo "Error: Refusing to delete distribution directory '$DIST_DIR' (safety check)" >&2
+        exit 1
+    fi
+    if [ -d "$DIST_DIR" ]; then
+        echo "  Removing existing directory..."
+        rm -rf "$DIST_DIR"
+    fi
+    mkdir -p "$DIST_DIR"
+    echo "  ✓ Directory ready"
+    echo ""
+
+    # Build webui
+    build_webui
+    echo ""
+
+    # Build WASM to webui/public/wasm (temporary location)
+    mkdir -p "$PROJECT_ROOT/webui/public/wasm"
+    build_wasm "$PROJECT_ROOT/webui/public/wasm"
+    echo ""
+
+    # Generate version.json
+    generate_version_json "$PROJECT_ROOT/webui/public/wasm/version.json"
+    echo ""
+
+    # Copy everything to dist directory
+    copy_dist_files "$DIST_DIR"
+    echo ""
+
+    # Print summary
+    print_dist_summary "$DIST_DIR"
+
+else
+    # ===== DEFAULT MODE (backward compatible) =====
+    # Ensure output directory exists.
+    mkdir -p "$OUTPUT_DIR"
+
+    GOROOT="$(go env GOROOT)"
+    WASM_EXEC_SRC="$GOROOT/lib/wasm/wasm_exec.js"
+    WASM_EXEC_DST="$OUTPUT_DIR/wasm_exec.js"
+
+    if [ ! -f "$WASM_EXEC_SRC" ]; then
+        echo "Error: wasm_exec.js not found at $WASM_EXEC_SRC" >&2
+        echo "Make sure your Go installation includes WASM support." >&2
+        exit 1
+    fi
+
+    echo "→ Copying wasm_exec.js to $OUTPUT_DIR/"
+    cp "$WASM_EXEC_SRC" "$WASM_EXEC_DST"
+    echo "  ✓ wasm_exec.js"
+
+    echo "→ Building sprout.wasm (GOOS=js GOARCH=wasm)..."
+    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -o "$OUTPUT_DIR/sprout.wasm" ./cmd/wasm/)
+
+    echo "  ✓ sprout.wasm"
+
+    WASM_SIZE=$(ls -lh "$OUTPUT_DIR/sprout.wasm" | awk '{print $5}')
+    echo ""
+    echo "Build complete:"
+    echo "  $WASM_EXEC_DST ($(ls -lh "$WASM_EXEC_DST" | awk '{print $5}'))"
+    echo "  $OUTPUT_DIR/sprout.wasm ($WASM_SIZE)"
+fi

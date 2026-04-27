@@ -14,6 +14,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const (
@@ -495,6 +496,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
 	}
 
+	// Track absolute paths of all files for workspace root computation
+	var absFilePaths []string
+	var outsidePaths []string
+
 	// Validate each file path before proceeding
 	for _, filePath := range files {
 		// Clean the path to eliminate any . or redundant separators
@@ -507,9 +512,15 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			absPath = filepath.Join(absWorkspaceDir, cleanedPath)
 		}
 
-		// Verify the file is within the workspace or in /tmp/ for testing
-		if !isPathInWorkspace(absPath, absWorkspaceDir) && !isPathInTmp(absPath) {
-			return "", fmt.Errorf("file path is outside workspace: %s (workspace: %s)", filePath, absWorkspaceDir)
+		// Track absolute path for later workspace root computation
+		absFilePaths = append(absFilePaths, absPath)
+
+		// Check if file is outside workspace and not in /tmp
+		isOutsideWorkspace := !isPathInWorkspace(absPath, absWorkspaceDir)
+		isInTmp := isPathInTmp(absPath)
+
+		if isOutsideWorkspace && !isInTmp {
+			outsidePaths = append(outsidePaths, absPath)
 		}
 
 		// Verify the file exists (missing is OK - subagent can create it)
@@ -518,6 +529,72 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 
 		a.debugLog("Validated file path: %s -> %s\n", filePath, absPath)
+	}
+
+	// If there are files outside the workspace, prompt for user approval
+	var subagentWorkspaceRoot string = absWorkspaceDir // Default to current workspace root
+
+	if len(outsidePaths) > 0 {
+		// Check for auto-approval conditions
+		// Unsafe mode bypasses filesystem security checks automatically
+		alreadyApproved := a.GetUnsafeMode()
+		if !alreadyApproved {
+			// If user already approved filesystem access this session, skip re-prompting
+			alreadyApproved = a.IsSecurityBypassApproved()
+		}
+
+		if !alreadyApproved {
+			// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
+			// because stdin is /dev/null. Instead, we must reject the request.
+			isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1"
+			if isSubagent {
+				a.debugLog("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
+				return "", fmt.Errorf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths)
+			}
+
+			// Build approval prompt
+			outsidePathsStr := strings.Join(outsidePaths, ", ")
+			prompt := fmt.Sprintf("Subagent requests access to files outside the working directory:\n  %s\n\nAllow? This will start the subagent in a directory that covers these files.", outsidePathsStr)
+
+			// Prefer webui approval path when a browser tab is connected
+			agentConfig := a.GetConfig()
+			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+
+			if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !isSubagent && a.HasActiveWebUIClients() {
+				// WEBUI: request approval via event bus for the browser dialog
+				extras := map[string]string{
+					"risk_type": "Subagent External Workspace",
+					"target":    outsidePathsStr,
+				}
+				if !mgr.RequestApproval(a.GetEventBus(), a.GetEventClientID(), "run_subagent", "CAUTION", prompt, extras) {
+					a.debugLog("User rejected subagent access to external workspace\n")
+					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
+				}
+				a.debugLog("User approved subagent access to external workspace via webui\n")
+			} else if canPrompt {
+				// CLI: prompt user interactively via terminal stdin
+				cliPrompt := "[WARN] Subagent External Workspace\n\n" + prompt + "\n\nAllow? (yes/no): "
+				if !logger.AskForConfirmation(cliPrompt, false, false) {
+					a.debugLog("User rejected subagent access to external workspace\n")
+					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
+				}
+				a.debugLog("User approved subagent access to external workspace via CLI\n")
+			} else {
+				// No prompting available (non-interactive): reject
+				a.debugLog("Cannot prompt for subagent external workspace approval (non-interactive)\n")
+				return "", fmt.Errorf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths)
+			}
+
+			// Mark that user has approved filesystem access this session
+			a.SetSecurityBypassApproved()
+		} else {
+			a.debugLog("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
+		}
+
+		// Compute common parent directory of all files as the new workspace root
+		subagentWorkspaceRoot = commonParent(absFilePaths)
+		a.debugLog("Computed subagent workspace root: %s (from %d file paths)\n", subagentWorkspaceRoot, len(absFilePaths))
 	}
 
 	// Build enhanced prompt with context and files
@@ -679,7 +756,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
 
-	resultMap, err := tools.RunSubagent(a.currentWorkspaceRoot(), enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
+	resultMap, err := tools.RunSubagent(subagentWorkspaceRoot, enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
 	if err != nil {
 		a.debugLog("Subagent spawn error: %v\n", err)
 		return "", fmt.Errorf("failed to spawn subagent: %w", err)
@@ -1221,6 +1298,26 @@ func isPathInTmp(path string) bool {
 	return strings.Contains(path, "/tmp/") ||
 		strings.Contains(path, "/var/folders/.../T/") ||
 		strings.Contains(strings.ToLower(path), "/tmp/")
+}
+
+// commonParent finds the common parent directory of multiple paths
+func commonParent(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	if len(paths) == 1 {
+		return filepath.Dir(paths[0])
+	}
+	result := paths[0]
+	for _, p := range paths[1:] {
+		for !strings.HasPrefix(p+string(filepath.Separator), result+string(filepath.Separator)) && p != result {
+			result = filepath.Dir(result)
+			if result == "/" || result == "." {
+				return result
+			}
+		}
+	}
+	return result
 }
 
 // flushAllSubagentBuffers flushes all pending batch buffers

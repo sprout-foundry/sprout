@@ -101,8 +101,8 @@ func TestPlistLogPaths(t *testing.T) {
 	plistXML := string(data)
 
 	expectedPaths := []string{
-		"/Users/bob/.ledit/logs/daemon.stdout.log",
-		"/Users/bob/.ledit/logs/daemon.stderr.log",
+		"/Users/bob/.config/sprout/logs/daemon.stdout.log",
+		"/Users/bob/.config/sprout/logs/daemon.stderr.log",
 	}
 
 	for _, path := range expectedPaths {
@@ -112,8 +112,8 @@ func TestPlistLogPaths(t *testing.T) {
 	}
 
 	// Verify log directory reference.
-	if !strings.Contains(plistXML, ".ledit/logs/") {
-		t.Error("plist missing .ledit/logs/ directory reference")
+	if !strings.Contains(plistXML, ".config/sprout/logs/") {
+		t.Error("plist missing .config/sprout/logs/ directory reference")
 	}
 }
 

@@ -52,8 +52,8 @@ Example:
 			os.Exit(1)
 		}
 		
-		// Create .ledit/skills directory
-		skillsDir := filepath.Join(cwd, ".ledit", "skills")
+		// Create .sprout/skills directory
+		skillsDir := filepath.Join(cwd, ".sprout", "skills")
 		if err := os.MkdirAll(skillsDir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to create skills directory: %v\n", err)
 			os.Exit(1)
@@ -148,7 +148,7 @@ var skillListCmd = &cobra.Command{
 		}
 		
 		// Check for project skills
-		skillsDir := filepath.Join(cwd, ".ledit", "skills")
+		skillsDir := filepath.Join(cwd, ".sprout", "skills")
 		entries, err := os.ReadDir(skillsDir)
 		if err == nil && len(entries) > 0 {
 			fmt.Println()

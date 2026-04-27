@@ -33,7 +33,7 @@ var (
 func GetLogger(skipPrompts bool) *Logger {
 	once.Do(func() {
 		logFile := &lumberjack.Logger{
-			Filename:   ".ledit/workspace.log",
+			Filename:   ".sprout/workspace.log",
 			MaxSize:    15, // megabytes
 			MaxBackups: 3,
 			MaxAge:     28,   // days

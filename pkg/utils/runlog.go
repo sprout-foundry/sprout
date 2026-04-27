@@ -26,14 +26,14 @@ var (
 )
 
 // GetRunLogger creates (once) and returns the run logger.
-// Log file: .ledit/runlogs/run-YYYYmmdd_HHMMSS.jsonl
+// Log file: .sprout/runlogs/run-YYYYmmdd_HHMMSS.jsonl
 func GetRunLogger() *RunLogger {
 	runOnce.Do(func() {
-		if err := os.MkdirAll(".ledit/runlogs", 0755); err != nil {
+		if err := os.MkdirAll(".sprout/runlogs", 0755); err != nil {
 			log.Printf("[debug] failed to create runlogs directory: %v", err)
 		}
 		name := time.Now().Format("20060102_150405")
-		path := filepath.Join(".ledit", "runlogs", fmt.Sprintf("run-%s.jsonl", name))
+		path := filepath.Join(".sprout", "runlogs", fmt.Sprintf("run-%s.jsonl", name))
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			// Fallback: disable run logging if file can't be opened

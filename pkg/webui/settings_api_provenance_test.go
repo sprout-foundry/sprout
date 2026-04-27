@@ -106,12 +106,12 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 	if globalCfg != nil {
 		// getDefaultConfigDir() checks XDG_CONFIG_HOME first, then $HOME.
 		// The test sets XDG_CONFIG_HOME, so the config dir resolves to
-		// $XDG_CONFIG_HOME/ledit (not $HOME/.ledit).
+		// $XDG_CONFIG_HOME/ledit (not $HOME/.sprout).
 		var configDir string
 		if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 			configDir = filepath.Join(xdg, "ledit")
 		} else {
-			configDir = filepath.Join(isolatedHome, ".ledit")
+			configDir = filepath.Join(isolatedHome, ".sprout")
 		}
 		os.MkdirAll(configDir, 0700)
 		configPath := filepath.Join(configDir, "config.json")
@@ -131,7 +131,7 @@ func setupProvenanceTestServer(t *testing.T, globalCfg, workspaceCfg *configurat
 	workspaceRoot := ""
 	if workspaceCfg != nil {
 		workspaceRoot = t.TempDir()
-		workspaceDir := filepath.Join(workspaceRoot, ".ledit")
+		workspaceDir := filepath.Join(workspaceRoot, ".sprout")
 		os.MkdirAll(workspaceDir, 0700)
 		workspaceConfigPath := filepath.Join(workspaceDir, "config.json")
 		data, err := json.Marshal(workspaceCfg)
@@ -319,7 +319,7 @@ func TestHandleGetProvenanceSettings_NoWorkspace_HasGlobal(t *testing.T) {
 
 	// Note: provenance may report 'workspace' even without explicit workspace config
 	// because getConfigManager loads layered config from the current working directory's
-	// .ledit/config.json. The test verifies the endpoint works correctly rather than
+	// .sprout/config.json. The test verifies the endpoint works correctly rather than
 	// asserting a specific source layer.
 	t.Logf("sources[\"reasoning_effort\"] = %v (endpoint works; source depends on layered config behavior)", sources["reasoning_effort"])
 }

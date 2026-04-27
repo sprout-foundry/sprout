@@ -16,7 +16,7 @@ import (
 var customModelCmd = &cobra.Command{
 	Use:   "custom",
 	Short: "Manage custom OpenAI-compatible providers",
-	Long: `Manage custom OpenAI-compatible providers backed by ~/.sprout/providers/*.json.
+	Long: `Manage custom OpenAI-compatible providers backed by ~/.config/sprout/providers/*.json.
 Each custom provider stores an endpoint URL and optional API-key environment variable,
 and sprout discovers available models from the provider's /v1/models endpoint.`,
 	Run: func(cmd *cobra.Command, args []string) {

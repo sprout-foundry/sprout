@@ -9,7 +9,7 @@ import (
 	ignore "github.com/sabhiram/go-gitignore"
 )
 
-// GetIgnoreRules reads ignore files (.gitignore, .ledit/.ignore) and returns a gitignore object.
+// GetIgnoreRules reads ignore files (.gitignore, .sprout/.ignore) and returns a gitignore object.
 func GetIgnoreRules(rootDir string) *ignore.GitIgnore {
 	var allRules []string
 
@@ -19,9 +19,9 @@ func GetIgnoreRules(rootDir string) *ignore.GitIgnore {
 		allRules = append(allRules, rules...)
 	}
 
-	// Read .ledit/.ignore
-	leditIgnorePath := filepath.Join(rootDir, ".ledit", ".ignore")
-	if rules, err := readIgnoreFile(leditIgnorePath); err == nil {
+	// Read .sprout/.ignore
+	sproutIgnorePath := filepath.Join(rootDir, ".sprout", ".ignore")
+	if rules, err := readIgnoreFile(sproutIgnorePath); err == nil {
 		allRules = append(allRules, rules...)
 	}
 

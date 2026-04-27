@@ -103,7 +103,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 	excluded := map[string]bool{
 		".git":         true,
 		"node_modules": true,
-		".ledit":       true,
+		".sprout":       true,
 		".venv":        true,
 		"dist":         true,
 		"build":        true,

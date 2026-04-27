@@ -1393,7 +1393,7 @@ func TestEmitWorkflowOrchestrationEvent_MultipleEvents(t *testing.T) {
 
 func TestDisplayVerboseLog_Truncation(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
+	os.MkdirAll(filepath.Join(dir, ".sprout"), 0755)
 
 	// Write 25001 lines to just exceed the 20000 line limit.
 	// We use short lines and only slightly above the limit to avoid
@@ -1402,7 +1402,7 @@ func TestDisplayVerboseLog_Truncation(t *testing.T) {
 	for i := 0; i < 25001; i++ {
 		buf.WriteString("x\n")
 	}
-	logFile := filepath.Join(dir, ".ledit", "workspace.log")
+	logFile := filepath.Join(dir, ".sprout", "workspace.log")
 	os.WriteFile(logFile, []byte(buf.String()), 0644)
 
 	origDir, _ := os.Getwd()

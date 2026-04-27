@@ -29,10 +29,10 @@ type SymbolIndex struct {
 	Files []FileSymbols `json:"files"`
 }
 
-// LoadSymbols reads the cached symbol index from {root}/.ledit/symbols.json.
+// LoadSymbols reads the cached symbol index from {root}/.sprout/symbols.json.
 // Returns nil, nil if the cache file doesn't exist.
 func LoadSymbols(root string) (*SymbolIndex, error) {
-	cachePath := filepath.Join(root, ".ledit", "symbols.json")
+	cachePath := filepath.Join(root, ".sprout", "symbols.json")
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -113,11 +113,11 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 		return idx.Files[i].File < idx.Files[j].File
 	})
 
-	// Persist to .ledit/symbols.json
-	if err := os.MkdirAll(filepath.Join(root, ".ledit"), 0755); err != nil {
-		log.Printf("[debug] failed to create .ledit directory: %v", err)
+	// Persist to .sprout/symbols.json
+	if err := os.MkdirAll(filepath.Join(root, ".sprout"), 0755); err != nil {
+		log.Printf("[debug] failed to create .sprout directory: %v", err)
 	}
-	outPath := filepath.Join(root, ".ledit", "symbols.json")
+	outPath := filepath.Join(root, ".sprout", "symbols.json")
 	if f, err := os.Create(outPath); err == nil {
 		if err := json.NewEncoder(f).Encode(idx); err != nil {
 			log.Printf("[debug] failed to write symbol index: %v", err)

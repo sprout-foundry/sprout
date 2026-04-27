@@ -43,7 +43,7 @@ Running just 'sprout' without arguments starts enhanced agent mode with automati
 				fmt.Fprintf(os.Stderr, "Failed to resolve working directory for --isolated-config: %v\n", err)
 				os.Exit(1)
 			}
-			isolatedDir := filepath.Join(cwd, ".ledit")
+			isolatedDir := filepath.Join(cwd, ".sprout")
 			if err := configuration.SetEnv("CONFIG", isolatedDir); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to set SPROUT_CONFIG for --isolated-config: %v\n", err)
 				os.Exit(1)
@@ -99,7 +99,7 @@ func initializeSystem() {
 		// If initialization fails, print helpful error and exit
 		fmt.Fprintf(os.Stderr, "Failed to initialize sprout: %v\n", err)
 		fmt.Fprintln(os.Stderr, "\nThis usually means there's an issue with your configuration or API keys.")
-		fmt.Fprintln(os.Stderr, "   Try opening the Web UI onboarding or checking ~/.ledit configuration.")
+		fmt.Fprintln(os.Stderr, "   Try opening the Web UI onboarding or checking ~/.config/sprout configuration.")
 		os.Exit(1)
 	}
 
@@ -123,8 +123,8 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be available to all subcommands in the application.
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.ledit.yaml)")
-	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.ledit (clone from main config on first run)")
+	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sprout/config.json)")
+	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.sprout (clone from main config on first run)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

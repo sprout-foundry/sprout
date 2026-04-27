@@ -69,11 +69,10 @@ export function useWasmShell(options: UseWasmShellOptions = {}): UseWasmShellRet
     setError(null);
 
     try {
-      const config = {
-        ...(home && { home }),
-        ...(wasmUrl && { wasmUrl }),
-        ...(wasmExecUrl && { wasmExecUrl }),
-      };
+      const config: Record<string, string> = {};
+      if (home !== undefined) config.home = home;
+      if (wasmUrl !== undefined) config.wasmUrl = wasmUrl;
+      if (wasmExecUrl !== undefined) config.wasmExecUrl = wasmExecUrl;
       const shell = await initWasmShell(Object.keys(config).length > 0 ? config : undefined);
       shellRef.current = shell;
       setCwd(shell.getCwd());

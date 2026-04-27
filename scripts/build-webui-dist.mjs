@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -259,6 +259,37 @@ function getDirectorySize(dir) {
   return 'unknown';
 }
 
+function postProcessIndexHtml(targetDir, buildMode) {
+  console.log('📝 Post-processing index.html...');
+
+  const indexHtmlPath = join(targetDir, 'index.html');
+
+  if (!existsSync(indexHtmlPath)) {
+    console.error(`Error: index.html not found at ${indexHtmlPath}`);
+    process.exit(1);
+  }
+
+  let html = readFileSync(indexHtmlPath, 'utf-8');
+
+  // In cloud mode, remove the preconnect link to localhost:54421
+  // Handle both minified (no space) and unminified (with space) versions
+  if (buildMode === 'cloud') {
+    const preconnectPattern = /<link rel="preconnect" href="http:\/\/localhost:54421" ?\/>\s*/;
+    const beforeLength = html.length;
+    html = html.replace(preconnectPattern, '');
+    const afterLength = html.length;
+
+    if (beforeLength !== afterLength) {
+      console.log('  ✓ Removed localhost:54421 preconnect link');
+    } else {
+      console.log('  ℹ No localhost:54421 preconnect link found (already removed)');
+    }
+  }
+
+  writeFileSync(indexHtmlPath, html, 'utf-8');
+  console.log('  ✓ index.html updated');
+}
+
 function main() {
   console.log(`🏗️  Building ${mode}-mode WebUI distribution...`);
   console.log('');
@@ -292,6 +323,10 @@ function main() {
 
   // Copy build output
   copyBuildOutput(buildDir, outputDir);
+  console.log('');
+
+  // Post-process index.html
+  postProcessIndexHtml(outputDir, mode);
   console.log('');
 
   // Copy WASM files

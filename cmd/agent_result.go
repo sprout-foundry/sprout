@@ -36,6 +36,9 @@ type AgentResultMetrics struct {
 // outputFormatJSON is the flag value for JSON output mode.
 var outputFormatJSON bool
 
+// maxDiffBytes is the maximum size of git diff output to include.
+const maxDiffBytes = 1 << 20 // 1MB
+
 func init() {
 	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
 }
@@ -102,10 +105,13 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	// Include diffs for untracked files (new files not yet staged, not gitignored).
 	// git diff --no-index exits with code 1 when files differ (normal case), so we
 	// must read output even when err != nil as long as the exit code is 1.
+	// We capture the untracked file list here to reuse later for FilesModified population.
+	var untrackedFiles []string
 	if untracked, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output(); err == nil {
 		var untrackedParts []string
 		for _, f := range strings.Split(strings.TrimSpace(string(untracked)), "\n") {
 			if f = strings.TrimSpace(f); f != "" {
+				untrackedFiles = append(untrackedFiles, f)
 				cmd := exec.Command("git", "diff", "--no-index", "/dev/null", f)
 				d, err := cmd.Output()
 				if err != nil {
@@ -126,6 +132,11 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 			}
 			diffOutput += strings.Join(untrackedParts, "\n")
 		}
+	}
+
+	// Truncate diff output if it exceeds maxDiffBytes
+	if len(diffOutput) > maxDiffBytes {
+		diffOutput = diffOutput[:maxDiffBytes] + "\n\n... [diff truncated at 1MB]"
 	}
 
 	if diffOutput != "" {
@@ -160,13 +171,12 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		}
 	}
 
-	// Include untracked new files (not yet staged, not gitignored)
-	if out, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output(); err == nil {
-		for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if l = strings.TrimSpace(l); l != "" && !seen[l] {
-				seen[l] = true
-				result.FilesModified = append(result.FilesModified, l)
-			}
+	// Include untracked new files (not yet staged, not gitignored).
+	// Reuse the file list captured earlier during diff generation.
+	for _, l := range untrackedFiles {
+		if l = strings.TrimSpace(l); l != "" && !seen[l] {
+			seen[l] = true
+			result.FilesModified = append(result.FilesModified, l)
 		}
 	}
 

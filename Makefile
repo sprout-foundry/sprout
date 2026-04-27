@@ -3,7 +3,7 @@
 
 .PHONY: help test test-unit test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all build-version build-ui deploy-ui build-wasm \
-       verify-ui-embedded test-webui lint lint-fix dev
+       verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local
 
 # Default target
 help:
@@ -26,6 +26,10 @@ help:
 	@echo "  make test-webui      - Test React web UI server"
 	@echo "  make lint            - Lint frontend code"
 	@echo "  make lint-fix        - Auto-fix frontend linting issues"
+	@echo ""
+	@echo "Distribution Bundles:"
+	@echo "  make build-webui-dist       - Build cloud-mode distributable WebUI bundle"
+	@echo "  make build-webui-dist-local - Build local-mode distributable WebUI bundle"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
@@ -211,6 +215,18 @@ build-wasm:
 	@echo "Building WASM shell module..."
 	@./scripts/build-wasm.sh
 	@echo "WASM shell module build completed"
+
+# Build cloud-mode distributable WebUI bundle (sets REACT_APP_SPROUT_MODE=cloud)
+build-webui-dist:
+	@echo "Building cloud-mode WebUI distribution..."
+	@node scripts/build-webui-dist.mjs --mode cloud
+	@echo "Cloud-mode distribution ready in dist/cloud/"
+
+# Build local-mode distributable WebUI bundle (omits REACT_APP_SPROUT_MODE)
+build-webui-dist-local:
+	@echo "Building local-mode WebUI distribution..."
+	@node scripts/build-webui-dist.mjs --mode local
+	@echo "Local-mode distribution ready in dist/local/"
 
 # Full development build: UI + WASM + Go binary
 build-all: deploy-ui build-wasm build

@@ -19,6 +19,7 @@ import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import { isCloud } from './config/mode';
 import BackendConnectionBanner from './components/BackendConnectionBanner';
 import { useBackendReachable } from './hooks/useBackendReachable';
+import { triggerHealthCheck } from './services/backendHealth';
 import {
   type ChatSession,
   listChatSessions,
@@ -1989,7 +1990,14 @@ function App() {
     setOnboarding((prev) => ({ ...prev, platformActionMessage: result?.message || 'Started Git for Windows setup.' }));
   }, []);
 
-  
+  const handleRetryConnection = useCallback(async () => {
+    try {
+      await triggerHealthCheck();
+    } catch {
+      /* Health check failed — hook will keep showing offline state */
+    }
+  }, []);
+
   const handleModelChange = useCallback((model: string) => {
     debugLog('Model changed to:', model);
     const provider = pendingProviderRef.current || state.provider;
@@ -2173,6 +2181,8 @@ function App() {
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalExpandedChange={setIsTerminalExpanded}
                 isConnected={state.isConnected}
+                backendReachable={backendReachable}
+                onRetryConnection={handleRetryConnection}
                 chatSessions={state.chatSessions}
                 activeChatId={state.activeChatId}
                 onActiveChatChange={handleActiveChatChange}

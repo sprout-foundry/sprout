@@ -133,6 +133,9 @@ interface AppContentProps {
   onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
+  // Backend reachability (cloud mode)
+  backendReachable?: boolean;
+  onRetryConnection?: () => void;
   chatSessions?: ChatSession[];
   activeChatId?: string | null;
   perChatCache?: Record<string, any>;
@@ -172,6 +175,8 @@ const AppContent: React.FC<AppContentProps> = ({
   onTerminalOutput,
   onTerminalExpandedChange,
   isConnected,
+  backendReachable,
+  onRetryConnection,
   chatSessions,
   activeChatId,
   perChatCache,
@@ -871,6 +876,9 @@ const AppContent: React.FC<AppContentProps> = ({
                 onStopProcessing,
                 onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
                 stats: state.stats,
+                isConnected: state.isConnected,
+                backendReachable,
+                onRetryConnection,
               }}
               reviewProps={{
                 review: deepReview,

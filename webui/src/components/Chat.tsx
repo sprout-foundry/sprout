@@ -21,6 +21,7 @@ import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
 import LiveLog from './LiveLog';
 import './Chat.css';
+import { supportsSSH } from '../config/mode';
 
 interface Message {
   id: string;
@@ -512,7 +513,7 @@ function Chat({
   }, []);
 
   const showExpiredSessionRecovery =
-    !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
+    supportsSSH && !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
   const handleInsertAtCursor = useCallback(
     (text: string) => {

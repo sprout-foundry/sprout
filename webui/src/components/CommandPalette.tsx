@@ -15,6 +15,7 @@ import {
   type SymbolInfo,
   type SymbolKind,
 } from '../utils/symbolUtils';
+import { supportsLocalTerminal } from '../config/mode';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -105,6 +106,13 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'editor_workspace_symbol', label: 'Go to Symbol in Workspace', category: 'Editor' },
   { id: 'editor_goto_symbol', label: 'Go to Symbol in File', category: 'Editor' },
 ];
+
+const VISIBLE_COMMANDS = COMMAND_DEFINITIONS.filter(cmd => {
+  if (!supportsLocalTerminal && (cmd.id === 'toggle_terminal' || cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')) {
+    return false;
+  }
+  return true;
+});
 
 // ── File browsing constants ────────────────────────────────────────────────
 
@@ -343,7 +351,7 @@ function CommandPalette({
       if (em === 'commands') {
         const items: PaletteResult[] = [];
         let lastCat = '';
-        for (const cmd of COMMAND_DEFINITIONS) {
+        for (const cmd of VISIBLE_COMMANDS) {
           if (cmd.category !== lastCat) {
             lastCat = cmd.category;
             items.push({ kind: 'commands-header', highlightedLabel: cmd.category, score: 0 });
@@ -361,7 +369,7 @@ function CommandPalette({
       // 'all' — show all commands as the homepage
       const items: PaletteResult[] = [];
       let lastCat = '';
-      for (const cmd of COMMAND_DEFINITIONS) {
+      for (const cmd of VISIBLE_COMMANDS) {
         if (cmd.category !== lastCat) {
           lastCat = cmd.category;
           items.push({ kind: 'commands-header', highlightedLabel: cmd.category, score: 0 });
@@ -381,7 +389,7 @@ function CommandPalette({
 
     // ── Commands ─────────────────────────────────────────────────────────
     if (em === 'all' || em === 'commands') {
-      const cmdResults: FuzzyResult<CommandDef>[] = fuzzyFilter(trimmed, COMMAND_DEFINITIONS, (c) => c.label, 50);
+      const cmdResults: FuzzyResult<CommandDef>[] = fuzzyFilter(trimmed, VISIBLE_COMMANDS, (c) => c.label, 50);
       if (cmdResults.length > 0) {
         items.push({ kind: 'commands-header', highlightedLabel: 'Commands', score: Infinity });
         for (const r of cmdResults) {

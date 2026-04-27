@@ -11,6 +11,10 @@ interface UseWasmShellOptions {
   home?: string;
   /** Auto-initialize on mount (default: true) */
   autoInit?: boolean;
+  /** Override the WASM binary URL (default: /wasm/sprout.wasm) */
+  wasmUrl?: string;
+  /** Override the wasm_exec.js URL (default: /wasm/wasm_exec.js) */
+  wasmExecUrl?: string;
 }
 
 interface UseWasmShellReturn {
@@ -51,7 +55,7 @@ interface UseWasmShellReturn {
  * ```
  */
 export function useWasmShell(options: UseWasmShellOptions = {}): UseWasmShellReturn {
-  const { home, autoInit = true } = options;
+  const { home, wasmUrl, wasmExecUrl, autoInit = true } = options;
 
   const [isLoading, setIsLoading] = useState(autoInit);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +69,12 @@ export function useWasmShell(options: UseWasmShellOptions = {}): UseWasmShellRet
     setError(null);
 
     try {
-      const shell = await initWasmShell(home ? { home } : undefined);
+      const config = {
+        ...(home && { home }),
+        ...(wasmUrl && { wasmUrl }),
+        ...(wasmExecUrl && { wasmExecUrl }),
+      };
+      const shell = await initWasmShell(Object.keys(config).length > 0 ? config : undefined);
       shellRef.current = shell;
       setCwd(shell.getCwd());
     } catch (err) {
@@ -75,7 +84,7 @@ export function useWasmShell(options: UseWasmShellOptions = {}): UseWasmShellRet
     } finally {
       setIsLoading(false);
     }
-  }, [home]);
+  }, [home, wasmUrl, wasmExecUrl]);
 
   const reinitialize = useCallback(async () => {
     resetWasmShell();

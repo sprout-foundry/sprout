@@ -235,7 +235,7 @@ func TestSavePastedImage(t *testing.T) {
 	}
 
 	// Check the path format
-	if !strings.HasPrefix(relPath, "./.ledit/pasted-images/paste_") {
+	if !strings.HasPrefix(relPath, "./.sprout/pasted-images/paste_") {
 		t.Errorf("unexpected path format: %s", relPath)
 	}
 	if !strings.HasSuffix(relPath, ".png") {
@@ -339,7 +339,7 @@ func TestSavePastedImage_WithBaseDir(t *testing.T) {
 	}
 
 	// The returned relative path should still use the standard prefix
-	if !strings.HasPrefix(relPath, "./.ledit/pasted-images/paste_") {
+	if !strings.HasPrefix(relPath, "./.sprout/pasted-images/paste_") {
 		t.Errorf("unexpected path format: %s", relPath)
 	}
 	if !strings.HasSuffix(relPath, ".png") {
@@ -356,7 +356,7 @@ func TestSavePastedImage_WithBaseDir(t *testing.T) {
 		t.Errorf("expected file size %d, got %d", len(pngData), info.Size())
 	}
 
-	// Verify the .ledit/pasted-images directory was created under baseDir
+	// Verify the .sprout/pasted-images directory was created under baseDir
 	dirInfo, err := os.Stat(filepath.Join(baseDir, PastedImageDirName))
 	if err != nil {
 		t.Fatalf("image directory does not exist under baseDir: %v", err)

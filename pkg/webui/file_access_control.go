@@ -173,7 +173,7 @@ func isWithinWorkspace(path, workspaceRoot string) bool {
 }
 
 // isAppConfigPath returns true if the path is inside the sprout configuration
-// directory (e.g. ~/.ledit/ or ~/.config/ledit/). These are workspace-owned
+// directory (e.g. ~/.config/sprout/). These are workspace-owned
 // config files and should never trigger the external-path consent prompt.
 func isAppConfigPath(path string) bool {
 	configDir, err := getConfigDir()

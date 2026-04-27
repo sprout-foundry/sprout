@@ -20,8 +20,8 @@ ledit commit --skip-prompt  # Auto-review and commit
 ledit shell "backup all .go files to a timestamped archive"
 
 # View change history
-ledit log
-ledit log --raw-log  # Verbose logs
+sprout log
+sprout log --raw-log  # Verbose logs
 
 # Manage MCP servers
 ledit mcp list
@@ -90,19 +90,19 @@ ledit shell [description] [flags]
 ledit shell "Setup React dev environment and install dependencies"
 ```
 
-### `ledit log`
+### `sprout log`
 
 View and revert change history.
 
 **Basic Usage:**
 ```bash
-ledit log [flags]
+sprout log [flags]
 ```
 
 **Examples:**
 ```bash
-ledit log  # Summary
-ledit log --raw-log  # Verbose .ledit/workspace.log
+sprout log  # Summary
+sprout log --raw-log  # Verbose .sprout/workspace.log
 ```
 
 ### `ledit mcp`
@@ -327,7 +327,7 @@ ledit agent --persona computer_user "execute system administration tasks"
 
 ## Memory System
 
-The memory system persists learned information across all conversations. Memories are markdown files stored in `~/.ledit/memories/` and automatically loaded into the system prompt.
+The memory system persists learned information across all conversations. Memories are markdown files stored in `~/.config/sprout/memories/` and automatically loaded into the system prompt.
 
 ### Memory Commands
 
@@ -356,16 +356,16 @@ ledit> delete_memory "git-safety"
 
 ## Ignoring Files
 
-Add patterns to `.ledit/leditignore` to exclude files from processing. The file respects `.gitignore` patterns.
+Add patterns to `.sprout/sproutignore` to exclude files from processing. The file respects `.gitignore` patterns.
 
 **Setup:**
 ```bash
 # Via agent or manually
-echo "dist/" >> .ledit/leditignore
-echo "*.log" >> .ledit/leditignore
+echo "dist/" >> .sprout/sproutignore
+echo "*.log" >> .sprout/sproutignore
 ```
 
-**Example `.ledit/leditignore`:**
+**Example `.sprout/sproutignore`:**
 ```
 # Build artifacts
 dist/
@@ -474,7 +474,7 @@ ledit mcp remove [name]
 
 ### Configuration
 
-- Config file: `~/.ledit/mcp_config.json`
+- Config file: `~/.config/sprout/mcp_config.json`
 - Use in agent: `Create GitHub PR for feature #WS`
 
 ### Features
@@ -490,7 +490,7 @@ See [docs/MCP_INTEGRATION.md](MCP_INTEGRATION.md) for detailed MCP setup.
 
 ## Workspace Initialization
 
-The `.ledit/` directory is automatically created when you first run `ledit` commands. It contains:
+The `.sprout/` directory is automatically created when you first run `ledit` commands. It contains:
 
 - `config.json` — Local configuration overrides
 - `leditignore` — Ignore patterns (augments `.gitignore`)

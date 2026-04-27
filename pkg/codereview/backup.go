@@ -12,7 +12,7 @@ import (
 // createBackup creates a backup of a file before making changes
 func (s *CodeReviewService) createBackup(filePath string) (string, error) {
 	// Create backup directory if it doesn't exist
-	backupDir := filepath.Join(".ledit", "backups")
+	backupDir := filepath.Join(".sprout", "backups")
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
@@ -73,7 +73,7 @@ func (s *CodeReviewService) restoreFromBackup(backupPath, originalPath string) e
 
 // listBackups lists available backups for a file
 func (s *CodeReviewService) listBackups(filePath string) ([]string, error) {
-	backupDir := filepath.Join(".ledit", "backups")
+	backupDir := filepath.Join(".sprout", "backups")
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		return nil, nil // No backup directory exists
 	}
@@ -91,7 +91,7 @@ func (s *CodeReviewService) listBackups(filePath string) ([]string, error) {
 
 // cleanupOldBackups removes old backup files to prevent backup directory from growing too large
 func (s *CodeReviewService) cleanupOldBackups(maxBackups int) error {
-	backupDir := filepath.Join(".ledit", "backups")
+	backupDir := filepath.Join(".sprout", "backups")
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		return nil // No backup directory exists
 	}

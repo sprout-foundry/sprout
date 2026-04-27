@@ -1141,6 +1141,14 @@ func defaultSkills() map[string]Skill {
 			Enabled:     true,
 			Metadata:    map[string]string{"version": "1.0"},
 		},
+		"project-planning": {
+			ID:          "project-planning",
+			Name:        "Project Planning",
+			Description: "Structured planning and project initialization workflow. Use when starting a new project, setting up a new codebase, or creating a project plan.",
+			Path:        "pkg/agent/skills/project-planning",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
 	}
 }
 

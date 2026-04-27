@@ -624,7 +624,7 @@ func TestDisplayVerboseLog_NoLeditDir(t *testing.T) {
 
 func TestDisplayVerboseLog_NoWorkspaceLog(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
+	os.MkdirAll(filepath.Join(dir, ".sprout"), 0755)
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
 	os.Chdir(dir)
@@ -637,8 +637,8 @@ func TestDisplayVerboseLog_NoWorkspaceLog(t *testing.T) {
 
 func TestDisplayVerboseLog_EmptyLog(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
-	os.WriteFile(filepath.Join(dir, ".ledit", "workspace.log"), []byte(""), 0644)
+	os.MkdirAll(filepath.Join(dir, ".sprout"), 0755)
+	os.WriteFile(filepath.Join(dir, ".sprout", "workspace.log"), []byte(""), 0644)
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
 	os.Chdir(dir)
@@ -651,9 +651,9 @@ func TestDisplayVerboseLog_EmptyLog(t *testing.T) {
 
 func TestDisplayVerboseLog_WithContent(t *testing.T) {
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".ledit"), 0755)
+	os.MkdirAll(filepath.Join(dir, ".sprout"), 0755)
 	content := "line one\nline two\nline three\n"
-	os.WriteFile(filepath.Join(dir, ".ledit", "workspace.log"), []byte(content), 0644)
+	os.WriteFile(filepath.Join(dir, ".sprout", "workspace.log"), []byte(content), 0644)
 	origDir, _ := os.Getwd()
 	defer os.Chdir(origDir)
 	os.Chdir(dir)

@@ -78,7 +78,7 @@ func TestRecordAndFetchChanges_Roundtrip(t *testing.T) {
 	if err := updateChangeStatus(list[0].FileRevisionHash, "reverted"); err != nil {
 		t.Fatalf("updateChangeStatus: %v", err)
 	}
-	metaPath := filepath.Join(".ledit/changes", list[0].FileRevisionHash, "metadata.json")
+	metaPath := filepath.Join(".sprout/changes", list[0].FileRevisionHash, "metadata.json")
 	b, err := os.ReadFile(metaPath)
 	if err != nil {
 		t.Fatalf("read metadata: %v", err)

@@ -17,7 +17,7 @@ var backendCmd = &cobra.Command{
 
 The storage backend determines where encrypted API keys are stored:
   - keyring: OS-native keyring (GNOME Keyring, macOS Keychain, Windows Credential Manager)
-  - file:    Encrypted JSON file in ~/.ledit/
+  - file:    Encrypted JSON file in ~/.config/sprout/
   - auto:    Auto-detect on first use (default)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runBackendStatus()

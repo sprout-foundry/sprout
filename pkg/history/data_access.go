@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	projectChangesDir   = ".ledit/changes"
-	projectRevisionsDir = ".ledit/revisions"
+	projectChangesDir   = ".sprout/changes"
+	projectRevisionsDir = ".sprout/revisions"
 	activeStatus        = "active"
 	revertedStatus      = "reverted"
 	restoredStatus      = "restored"
@@ -92,7 +92,7 @@ func InitializeHistoryPaths(config *configuration.Config) {
 
 	// Determine history path based on configuration scope
 	if config.HistoryScope == "global" {
-		// Use global history in ~/.ledit/
+		// Use global history in ~/.config/sprout/
 		configDir, err := configuration.GetConfigDir()
 		if err != nil {
 			// Fallback to project-scoped if global config dir fails

@@ -211,7 +211,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register search_files tool (cross-platform file content search)
 	registry.RegisterTool(ToolConfig{
 		Name:        "search_files",
-		Description: "Search text pattern in files (cross-platform, ignores .git, node_modules, .ledit by default)",
+		Description: "Search text pattern in files (cross-platform, ignores .git, node_modules, .sprout by default)",
 		Parameters: []ParameterConfig{
 			{"search_pattern", "string", true, []string{"pattern"}, "Text pattern or regex to search for"},
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
@@ -359,7 +359,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register memory tools
 	registry.RegisterTool(ToolConfig{
 		Name:        "add_memory",
-		Description: "Save a memory to persist across all future conversations. Use this to remember user preferences, learned patterns, project-specific conventions, or anything useful for future sessions. Memories are stored as markdown files in ~/.ledit/memories/ and loaded into your system prompt automatically.",
+		Description: "Save a memory to persist across all future conversations. Use this to remember user preferences, learned patterns, project-specific conventions, or anything useful for future sessions. Memories are stored as markdown files in ~/.config/sprout/memories/ and loaded into your system prompt automatically.",
 		Parameters: []ParameterConfig{
 			{"name", "string", true, []string{"title"}, "Short descriptive name for the memory (e.g., 'git-safety', 'test-conventions')"},
 			{"content", "string", true, []string{}, "Markdown content to store in the memory file"},
@@ -385,7 +385,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 
 	registry.RegisterTool(ToolConfig{
 		Name:        "delete_memory",
-		Description: "Delete a memory by name. Permanently removes the memory file from ~/.ledit/memories/.",
+		Description: "Delete a memory by name. Permanently removes the memory file from ~/.config/sprout/memories/.",
 		Parameters: []ParameterConfig{
 			{"name", "string", true, []string{}, "Name of the memory to delete (e.g., 'git-safety')"},
 		},

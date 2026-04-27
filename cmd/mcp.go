@@ -108,7 +108,7 @@ func runMCPAdd() error {
 	templates := registry.ListTemplates()
 
 	if len(templates) == 0 {
-		return errors.New("no templates available. Add templates to ~/.ledit/mcp_templates.json")
+		return errors.New("no templates available. Add templates to ~/.config/sprout/mcp_templates.json")
 	}
 
 	// Display templates (filter out generic templates for main menu)

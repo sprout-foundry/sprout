@@ -832,6 +832,260 @@ func runGit(t *testing.T, dir string, args ...string) {
 }
 
 // =============================================================================
+// Untracked files tests
+// =============================================================================
+
+func TestEmitJSONResult_UntrackedFilesIncluded(t *testing.T) {
+	// Fresh repo (no HEAD) with an untracked file
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create an untracked file (NOT staged)
+	if err := os.WriteFile(dir+"/newfile.txt", []byte("hello world\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("untracked test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	found := false
+	for _, f := range result.FilesModified {
+		if f == "newfile.txt" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected FilesModified to contain untracked file %q, got %v", "newfile.txt", result.FilesModified)
+	}
+}
+
+func TestEmitJSONResult_UntrackedFilesDiff(t *testing.T) {
+	// Fresh repo (no HEAD) with an untracked file — diff should show its content
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	content := "line one\nline two\n"
+	if err := os.WriteFile(dir+"/untracked.go", []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("untracked diff test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	if result.GitDiff == "" {
+		t.Fatal("expected non-empty GitDiff for untracked file")
+	}
+	// The diff should show the file content as additions
+	if !strings.Contains(result.GitDiff, "line one") {
+		t.Errorf("expected GitDiff to contain untracked file content 'line one', got:\n%s", result.GitDiff)
+	}
+}
+
+func TestEmitJSONResult_UntrackedFilesNotDuplicate(t *testing.T) {
+	// Staged file + untracked file — each should appear exactly once
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create and stage a file
+	if err := os.WriteFile(dir+"/staged.txt", []byte("staged content\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "staged.txt")
+
+	// Create an untracked file
+	if err := os.WriteFile(dir+"/untracked.txt", []byte("untracked content\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("dedup untracked test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	// Count occurrences of each file
+	counts := make(map[string]int)
+	for _, f := range result.FilesModified {
+		counts[f]++
+	}
+	for name, count := range counts {
+		if count != 1 {
+			t.Errorf("expected %q to appear exactly once in FilesModified, got %d occurrences: %v", name, count, result.FilesModified)
+		}
+	}
+
+	// Both files should be present
+	if counts["staged.txt"] != 1 {
+		t.Errorf("expected staged.txt to appear once, got %d", counts["staged.txt"])
+	}
+	if counts["untracked.txt"] != 1 {
+		t.Errorf("expected untracked.txt to appear once, got %d", counts["untracked.txt"])
+	}
+}
+
+func TestEmitJSONResult_TrackedRepoUntrackedFiles(t *testing.T) {
+	// Repo WITH a commit (HEAD exists) + an untracked file
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create initial commit so HEAD exists
+	if err := os.WriteFile(dir+"/initial.txt", []byte("initial\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", "initial.txt")
+	runGit(t, dir, "commit", "-m", "initial commit")
+
+	// Create an untracked file
+	if err := os.WriteFile(dir+"/new_untracked.txt", []byte("new stuff\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("tracked repo untracked test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	found := false
+	for _, f := range result.FilesModified {
+		if f == "new_untracked.txt" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected FilesModified to include untracked file %q, got %v", "new_untracked.txt", result.FilesModified)
+	}
+
+	// Untracked file content should also appear in GitDiff
+	if result.GitDiff == "" {
+		t.Error("expected non-empty GitDiff for repo with untracked files")
+	} else if !strings.Contains(result.GitDiff, "new stuff") {
+		t.Errorf("expected GitDiff to contain untracked file content 'new stuff', got:\n%s", result.GitDiff)
+	}
+}
+
+func TestEmitJSONResult_GitignoredFilesExcluded(t *testing.T) {
+	// Untracked files that match .gitignore should NOT appear
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@test.com")
+	runGit(t, dir, "config", "user.name", "Test")
+
+	// Create .gitignore
+	if err := os.WriteFile(dir+"/.gitignore", []byte("*.log\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create both a gitignored file and a regular file
+	if err := os.WriteFile(dir+"/debug.log", []byte("log data\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"/regular.txt", []byte("regular content\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	output := captureStdout(t, func() {
+		emitJSONResult("gitignore test", time.Now(), nil, nil)
+	})
+
+	var result AgentResult
+	if err := json.Unmarshal([]byte(output), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, output)
+	}
+
+	for _, f := range result.FilesModified {
+		if f == "debug.log" {
+			t.Errorf("gitignored file %q should not appear in FilesModified: %v", "debug.log", result.FilesModified)
+		}
+	}
+
+	// Regular file should be present
+	found := false
+	for _, f := range result.FilesModified {
+		if f == "regular.txt" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected FilesModified to include %q, got %v", "regular.txt", result.FilesModified)
+	}
+}
+
+// =============================================================================
 // Backward compatibility: verify JSON field names are stable
 // =============================================================================
 

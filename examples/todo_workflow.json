@@ -11,6 +11,8 @@
         "provider": "zai"
       }
     },
+    "model": "glm-5",
+    "provider": "zai",
     "unsafe": true
   },
   "no_web_ui": true,
@@ -23,6 +25,8 @@
       "reasoning_effort": "high",
       "skip_prompt": true,
       "unsafe": true,
+      "model": "glm-5",
+      "provider": "zai",
       "when": "on_success"
     },
     {
@@ -33,6 +37,8 @@
       "reasoning_effort": "high",
       "skip_prompt": true,
       "unsafe": true,
+      "model": "glm-5",
+      "provider": "zai",
       "when": "on_success"
     }
   ]

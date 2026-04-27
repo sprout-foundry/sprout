@@ -90,7 +90,7 @@
     "underscore": "^1.13.8"
   },
   "private": true,
-  "proxy": "http://localhost:54000",
+  "proxy": "http://localhost:56000",
   "scripts": {
     "build": "react-scripts build",
     "eject": "react-scripts eject",

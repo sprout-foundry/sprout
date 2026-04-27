@@ -659,7 +659,7 @@ func ShowWelcomeMessage() {
 	fmt.Println("[>>] Welcome to sprout - AI-powered code assistance!")
 	fmt.Println()
 	fmt.Println("[i] Get started with the web-based code editor:")
-	fmt.Println("   • Run 'sprout agent -d' to launch at http://localhost:54000")
+	fmt.Println("   • Run 'sprout agent -d' to launch at http://localhost:56000")
 	fmt.Println("   • Full code editor with AI integration built in")
 	fmt.Println("   • Friendly setup experience for providers and models")
 	fmt.Println("   • The recommended way to explore sprout's capabilities")

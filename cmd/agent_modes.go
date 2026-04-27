@@ -111,12 +111,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Determine port strategy.
 		//
 		// Daemon mode (no explicit port): use the single-port supervisor on
-		// the unified daemon port (54000) so all daemons compete for one
+		// the unified daemon port (56000) so all daemons compete for one
 		// stable port.  This is the "primary" instance users bookmark.
 		//
 		// Non-daemon interactive (no explicit port): each instance gets its
 		// own unique port so browser windows can connect independently.
-		// We scan from 54001 (DaemonPort+1) for a free port.
+		// We scan from 56001 (DaemonPort+1) for a free port.
 		//
 		// Explicit --web-port N: always start directly on that port,
 		// regardless of daemon mode.

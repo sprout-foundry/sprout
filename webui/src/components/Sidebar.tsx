@@ -32,6 +32,7 @@ import GitHistoryPanel from './GitHistoryPanel';
 import SproutLogo from './SproutLogo';
 import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
+import { supportsSettings } from '../config/mode';
 
 type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
 
@@ -101,7 +102,7 @@ const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'git', icon: GitBranch, label: 'Git' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
-  { id: 'settings', icon: Settings, label: 'Settings' },
+  ...(supportsSettings ? [{ id: 'settings' as SectionTab, icon: Settings, label: 'Settings' }] : []),
   { id: 'logs', icon: ScrollText, label: 'Logs' },
 ];
 
@@ -181,6 +182,13 @@ function Sidebar({
       setSelectedPersonaState(stats.persona);
     }
   }, [stats?.persona, selectedPersonaState]);
+
+  // Reset active section if settings tab is selected but settings are not supported
+  useEffect(() => {
+    if (selectedSection === 'settings' && !supportsSettings) {
+      setSelectedSection('files');
+    }
+  }, [selectedSection]);
 
   // Load settings on mount / connection
   useEffect(() => {

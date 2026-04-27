@@ -8,7 +8,14 @@
 export type SproutMode = 'local' | 'cloud';
 
 /**
- * Resolved mode value from environment variable, defaulting to 'local'
+ * Resolved mode value from environment variable, defaulting to 'local'.
+ *
+ * CRA replaces REACT_APP_* vars at build time via webpack DefinePlugin,
+ * so this resolves to a compile-time constant. Dead code in the 'local'
+ * branch is tree-shaken from cloud builds and vice versa.
+ *
+ * Strict comparison — any non-'cloud' value (including typos) safely
+ * defaults to local mode.
  */
 export const mode: SproutMode =
   process.env.REACT_APP_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';

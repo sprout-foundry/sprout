@@ -1225,6 +1225,11 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                     )}
                   </div>
                   <FilePathPre text={formatToolDetail(tool.result)} />
+                  {Boolean((tool.details as Record<string, unknown>)?.result_truncated) && (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                      ⚠ Truncated — full result was {Number((tool.details as Record<string, unknown>)?.result_length ?? 0)} characters
+                    </div>
+                  )}
                 </div>
               )}
             </div>

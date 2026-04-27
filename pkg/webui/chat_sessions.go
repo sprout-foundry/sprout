@@ -230,7 +230,8 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		cm := created.GetConfigManager()
 		if cm != nil {
 			if err := cm.UpdateConfig(func(cfg *configuration.Config) error {
-				return applyPartialSettings(cfg, sessionOverrides)
+				_, err := applyPartialSettings(cfg, sessionOverrides)
+				return err
 			}); err != nil {
 				log.Printf("chatSession.getOrCreateAgent: warning: failed to apply session config overrides: %v", err)
 			}

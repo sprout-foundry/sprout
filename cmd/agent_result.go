@@ -74,6 +74,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 
 	// Collect git diff (best-effort)
 	var diffOutput string
+	noHEAD := false
 	if diff, err := exec.Command("git", "diff", "HEAD").Output(); err == nil {
 		trimmed := strings.TrimSpace(string(diff))
 		if trimmed != "" {
@@ -81,6 +82,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		}
 	} else {
 		// No HEAD ref - try combining unstaged and staged diffs
+		noHEAD = true
 		var parts []string
 		if unstaged, err := exec.Command("git", "diff").Output(); err == nil {
 			if trimmed := strings.TrimSpace(string(unstaged)); trimmed != "" {
@@ -96,34 +98,74 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 			diffOutput = strings.Join(parts, "\n")
 		}
 	}
+
+	// Include diffs for untracked files (new files not yet staged, not gitignored).
+	// git diff --no-index exits with code 1 when files differ (normal case), so we
+	// must read output even when err != nil as long as the exit code is 1.
+	if untracked, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output(); err == nil {
+		var untrackedParts []string
+		for _, f := range strings.Split(strings.TrimSpace(string(untracked)), "\n") {
+			if f = strings.TrimSpace(f); f != "" {
+				cmd := exec.Command("git", "diff", "--no-index", "/dev/null", f)
+				d, err := cmd.Output()
+				if err != nil {
+					// Exit code 1 = files differ (normal); accept output.
+					// Exit code 2+ = genuine error; skip.
+					if exitErr, ok := err.(*exec.ExitError); !ok || exitErr.ExitCode() != 1 {
+						continue
+					}
+				}
+				if trimmed := strings.TrimSpace(string(d)); trimmed != "" {
+					untrackedParts = append(untrackedParts, trimmed)
+				}
+			}
+		}
+		if len(untrackedParts) > 0 {
+			if diffOutput != "" {
+				diffOutput += "\n"
+			}
+			diffOutput += strings.Join(untrackedParts, "\n")
+		}
+	}
+
 	if diffOutput != "" {
 		result.GitDiff = diffOutput
 	}
 
 	// Collect modified files (best-effort)
 	seen := make(map[string]bool)
-	if out, err := exec.Command("git", "diff", "--name-only", "HEAD").Output(); err == nil {
-		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-		for _, l := range lines {
-			if l = strings.TrimSpace(l); l != "" && !seen[l] {
-				seen[l] = true
-				result.FilesModified = append(result.FilesModified, l)
+	if !noHEAD {
+		if out, err := exec.Command("git", "diff", "--name-only", "HEAD").Output(); err == nil {
+			for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+				if l = strings.TrimSpace(l); l != "" && !seen[l] {
+					seen[l] = true
+					result.FilesModified = append(result.FilesModified, l)
+				}
 			}
 		}
 	} else {
-		// No HEAD ref - try combining unstaged and staged file lists
+		// No HEAD ref - combine unstaged and staged file lists
 		for _, cmd := range []*exec.Cmd{
 			exec.Command("git", "diff", "--name-only"),
 			exec.Command("git", "diff", "--cached", "--name-only"),
 		} {
 			if out, err := cmd.Output(); err == nil {
-				lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-				for _, l := range lines {
+				for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 					if l = strings.TrimSpace(l); l != "" && !seen[l] {
 						seen[l] = true
 						result.FilesModified = append(result.FilesModified, l)
 					}
 				}
+			}
+		}
+	}
+
+	// Include untracked new files (not yet staged, not gitignored)
+	if out, err := exec.Command("git", "ls-files", "--others", "--exclude-standard").Output(); err == nil {
+		for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if l = strings.TrimSpace(l); l != "" && !seen[l] {
+				seen[l] = true
+				result.FilesModified = append(result.FilesModified, l)
 			}
 		}
 	}

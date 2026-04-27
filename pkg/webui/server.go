@@ -30,6 +30,7 @@ type ConnectionInfo struct {
 	SessionID   string    // Unique session ID for this connection
 	ClientID    string    // WebUI client/window identifier
 	Type        string    // "webui" or "terminal"
+	UserID      string    // User ID extracted from trusted header (service mode)
 	ConnectedAt time.Time // When the connection was established
 }
 
@@ -74,12 +75,44 @@ type ReactWebServer struct {
 	totalClientContextsRemoved      int
 	lspManager                      *lspproxy.Manager
 	normalizedAllowedOrigins        []string // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
+	trustedUserHeader               string   // Header name for user ID extraction in service mode
+	serviceMode                     bool     // true when running as a managed service (SPROUT_SERVICE=1)
 }
 
 const (
 	clientContextCleanupInterval = 5 * time.Minute
 	clientContextMaxIdle         = 30 * time.Minute
 )
+
+type contextKey string
+
+const userIDContextKey contextKey = "userID"
+
+// UserIDFromContext retrieves the user ID from a context.
+func UserIDFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(userIDContextKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// ExtractUserID reads the trusted user header from the request when
+// running in service mode. In local mode, it always returns an empty
+// string to prevent header spoofing.
+func (ws *ReactWebServer) ExtractUserID(r *http.Request) string {
+	if !ws.serviceMode || ws.trustedUserHeader == "" {
+		return ""
+	}
+	return r.Header.Get(ws.trustedUserHeader)
+}
+
+// contextWithUserID returns a new context with the user ID attached.
+func (ws *ReactWebServer) contextWithUserID(ctx context.Context, r *http.Request) context.Context {
+	if userID := ws.ExtractUserID(r); userID != "" {
+		return context.WithValue(ctx, userIDContextKey, userID)
+	}
+	return ctx
+}
 
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string) *ReactWebServer {
@@ -151,6 +184,17 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		log.Printf("[web] Allowed origins: %v", normalizedAllowedOrigins)
 	}
 
+	// Parse service mode and trusted user header
+	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
+	trustedUserHeader := strings.TrimSpace(configuration.GetEnvSimple("TRUSTED_USER_HEADER"))
+	if serviceMode {
+		if trustedUserHeader != "" {
+			log.Printf("[web] Trusted user header: %s (service mode)", trustedUserHeader)
+		} else {
+			log.Printf("[web] Service mode enabled but no trusted user header configured")
+		}
+	}
+
 	return &ReactWebServer{
 		agent:             agent,
 		eventBus:          eventBus,
@@ -216,6 +260,8 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		sshInFlight:       make(map[string]chan struct{}),
 		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
 		normalizedAllowedOrigins: normalizedAllowedOrigins,
+		trustedUserHeader:        trustedUserHeader,
+		serviceMode:              serviceMode,
 	}
 }
 
@@ -362,9 +408,19 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		})
 	})
 
+	// Wrap mux with user ID extraction middleware
+	var handler http.Handler = mux
+	if ws.serviceMode && ws.trustedUserHeader != "" {
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := ws.contextWithUserID(r.Context(), r)
+			r = r.WithContext(ctx)
+			mux.ServeHTTP(w, r)
+		})
+	}
+
 	ws.server = &http.Server{
 		Addr:    formatListenAddr(ws.bindAddr, ws.port),
-		Handler: mux,
+		Handler: handler,
 	}
 
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ws.server.Addr)

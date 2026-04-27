@@ -73,7 +73,7 @@ type ReactWebServer struct {
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int
 	lspManager                      *lspproxy.Manager
-	allowedOrigins                  []string // Parsed from SPROUT_ALLOWED_ORIGINS env var
+	normalizedAllowedOrigins        []string // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
 }
 
 const (
@@ -129,19 +129,26 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 
 	// Parse allowed origins from SPROUT_ALLOWED_ORIGINS env var
 	// This is a comma-separated list of origin URLs to allow.
+	// Origins are pre-normalized at startup so CheckOrigin can do
+	// simple string comparisons without re-parsing on every request.
 	allowedOriginsStr := strings.TrimSpace(configuration.GetEnvSimple("ALLOWED_ORIGINS"))
-	var allowedOrigins []string
+	var normalizedAllowedOrigins []string
 	if allowedOriginsStr != "" {
 		parts := strings.Split(allowedOriginsStr, ",")
 		for _, part := range parts {
 			trimmed := strings.TrimSpace(part)
 			if trimmed != "" {
-				allowedOrigins = append(allowedOrigins, trimmed)
+				parsed, err := url.Parse(trimmed)
+				if err != nil {
+					log.Printf("[web] WARNING: skipping malformed allowed origin %q: %v", trimmed, err)
+					continue
+				}
+				normalizedAllowedOrigins = append(normalizedAllowedOrigins, normalizeOriginForCompare(parsed))
 			}
 		}
 	}
-	if len(allowedOrigins) > 0 {
-		log.Printf("[web] Allowed origins: %v", allowedOrigins)
+	if len(normalizedAllowedOrigins) > 0 {
+		log.Printf("[web] Allowed origins: %v", normalizedAllowedOrigins)
 	}
 
 	return &ReactWebServer{
@@ -184,15 +191,12 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 				}
 
 				// Check against SPROUT_ALLOWED_ORIGINS allowlist.
-				// Compare using case-insensitive matching on scheme + host + port.
-				if len(allowedOrigins) > 0 {
+				// Origins were pre-normalized at startup; only a simple
+				// string comparison is needed per request.
+				if len(normalizedAllowedOrigins) > 0 {
 					normalizedIncoming := normalizeOriginForCompare(parsed)
-					for _, allowedOrigin := range allowedOrigins {
-						allowedParsed, err := url.Parse(allowedOrigin)
-						if err != nil {
-							continue // Skip malformed allowed origins
-						}
-						if normalizedIncoming == normalizeOriginForCompare(allowedParsed) {
+					for _, allowed := range normalizedAllowedOrigins {
+						if normalizedIncoming == allowed {
 							return true
 						}
 					}
@@ -211,7 +215,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		sshSessions:       make(map[string]*sshWorkspaceSession),
 		sshInFlight:       make(map[string]chan struct{}),
 		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
-		allowedOrigins:    allowedOrigins,
+		normalizedAllowedOrigins: normalizedAllowedOrigins,
 	}
 }
 

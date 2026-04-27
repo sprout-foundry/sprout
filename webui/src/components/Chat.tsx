@@ -13,6 +13,7 @@ import {
   Loader2,
   GitBranch,
   Settings,
+  CloudOff,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
 import MessageSegments from './MessageSegments';
@@ -21,7 +22,7 @@ import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
 import LiveLog from './LiveLog';
 import './Chat.css';
-import { supportsSSH } from '../config/mode';
+import { supportsSSH, isCloud } from '../config/mode';
 
 interface Message {
   id: string;
@@ -99,6 +100,9 @@ interface ChatProps {
   // Status bar
   stats?: Record<string, unknown>;
   isConnected?: boolean;
+  // Backend reachability (cloud mode)
+  backendReachable?: boolean;
+  onRetryConnection?: () => void;
 }
 
 // ── Subagent Activity Feed ─────────────────────────────────────────
@@ -433,6 +437,9 @@ function Chat({
   // Status bar
   stats,
   isConnected,
+  // Backend reachability (cloud mode)
+  backendReachable,
+  onRetryConnection,
 }: ChatProps): JSX.Element {
   const chatShellRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -620,7 +627,27 @@ function Chat({
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
-        {messages.length === 0 ? (
+        {/* In cloud mode with unreachable backend, show offline panel */}
+        {isCloud && backendReachable === false && !isProcessing && messages.length === 0 ? (
+          <div className="chat-container chat-container--empty" ref={chatContainerRef}>
+            <div className="chat-offline-panel" role="status">
+              <CloudOff size={48} className="chat-offline-icon" aria-hidden="true" />
+              <h3 className="chat-offline-title">No Server Connection</h3>
+              <p className="chat-offline-description">
+                Chat requires a connection to your Sprout server.
+                Your editor and terminal remain available while offline.
+              </p>
+              <button
+                className="chat-offline-retry-btn"
+                onClick={onRetryConnection}
+                type="button"
+                aria-label="Retry connection"
+              >
+                Retry Connection
+              </button>
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="chat-container chat-container--empty" ref={chatContainerRef}>
             <>
               {providerAvailable === false ? (
@@ -702,12 +729,18 @@ function Chat({
           onSend={onSendMessage}
           onQueue={onQueueMessage}
           onStop={onStopProcessing}
-          placeholder={providerAvailable === false ? 'Configure a provider to start chatting...' : 'Ask me anything about your code...'}
+          placeholder={
+            providerAvailable === false
+              ? 'Configure a provider to start chatting...'
+              : isCloud && backendReachable === false
+                ? 'Waiting for server connection...'
+                : 'Ask me anything about your code...'
+          }
           multiline={true}
-          autoFocus={providerAvailable !== false}
+          autoFocus={providerAvailable !== false && !(isCloud && backendReachable === false)}
           isProcessing={isProcessing}
           isConnected={isConnected}
-          disabled={providerAvailable === false}
+          disabled={providerAvailable === false || (isCloud && backendReachable === false)}
           queuedCount={queuedMessagesCount}
           queuedMessages={queuedMessages}
           onQueueMessageRemove={onQueueMessageRemove}

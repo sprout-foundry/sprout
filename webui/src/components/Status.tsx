@@ -1,4 +1,5 @@
 import './Status.css';
+import { supportsSettings } from '../config/mode';
 
 interface StatusProps {
   isConnected: boolean;
@@ -38,10 +39,12 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
   };
 
   const handlePersonaClick = () => {
+    if (!supportsSettings) return;
     window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('ledit:open-settings-focus', { detail: { focus: 'persona' } }));
   };
 
   const handleProviderModelClick = () => {
+    if (!supportsSettings) return;
     window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('ledit:open-settings-focus', { detail: { focus: 'provider' } }));
   };
 
@@ -75,8 +78,8 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
         {persona && (
           <button
             type="button"
-            className="status-item status-persona clickable"
-            title="Active persona – click to change"
+            className={`status-item status-persona ${supportsSettings ? 'clickable' : ''}`}
+            title={supportsSettings ? 'Active persona – click to change' : 'Active persona'}
             onClick={handlePersonaClick}
           >
             {formatPersonaLabel(persona)}
@@ -98,8 +101,8 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
         {provider && model && (
           <button
             type="button"
-            className="status-item status-provider clickable"
-            title="Provider and model – click to change"
+            className={`status-item status-provider ${supportsSettings ? 'clickable' : ''}`}
+            title={supportsSettings ? 'Provider and model – click to change' : 'Provider and model'}
             onClick={handleProviderModelClick}
           >
             {provider} : {model}

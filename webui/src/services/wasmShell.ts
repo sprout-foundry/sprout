@@ -163,7 +163,11 @@ let sharedInstance: WasmShell | null = null;
  * @param config.home - Override the virtual home directory (default: /home/user)
  * @returns The WasmShell interface
  */
-export async function initWasmShell(config?: { home?: string }): Promise<WasmShell> {
+export async function initWasmShell(config?: {
+  home?: string;
+  wasmUrl?: string;       // default: '/wasm/sprout.wasm'
+  wasmExecUrl?: string;   // default: '/wasm/wasm_exec.js'
+}): Promise<WasmShell> {
   if (sharedInstance) {
     return sharedInstance;
   }
@@ -201,18 +205,20 @@ export async function initWasmShell(config?: { home?: string }): Promise<WasmShe
 
   // 2. Load wasm_exec.js.
   const script = document.createElement('script');
-  script.src = '/wasm/wasm_exec.js';
+  const execUrl = config?.wasmExecUrl ?? '/wasm/wasm_exec.js';
+  script.src = execUrl;
   document.head.appendChild(script);
   await new Promise<void>((resolve, reject) => {
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load wasm_exec.js'));
+    script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
   });
 
   // 3. Fetch and instantiate the WASM binary.
   const go = new window.Go();
-  const wasmResponse = await fetch('/wasm/sprout.wasm');
+  const wasmUrl = config?.wasmUrl ?? '/wasm/sprout.wasm';
+  const wasmResponse = await fetch(wasmUrl);
   if (!wasmResponse.ok) {
-    throw new Error(`Failed to fetch sprout.wasm: ${wasmResponse.status}`);
+    throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
   }
 
   const wasmBuffer = await wasmResponse.arrayBuffer();

@@ -546,6 +546,8 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ### 7. Make WebUI Servable by Sprout Foundry via Service Worker Shim
 
+> **Matrix ref:** This section delivers Environment B (Cloud Web App) for Interface 1 (File System) and Interface 2 (Shell). The WASM shell replaces the Go HTTP server for file ops and terminal — see the "B. Cloud Web App" column in [`docs/INTEGRATION_MATRIX.md`](docs/INTEGRATION_MATRIX.md).
+
 [x] - CLOUD: Add `--dist` flag to `scripts/build-wasm.sh` that produces a self-contained distributable directory (webui build + WASM binary + version.json)
 [x] - CLOUD: Create `webui/src/config/mode.ts` feature flag module — read `REACT_APP_SPROUT_MODE` and export `isCloud`, `supportsSSH`, `supportsInstances`, `supportsLocalTerminal`, `supportsSettings` flags
 [x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
@@ -560,6 +562,8 @@ Three Python test runner scripts at the project root with overlapping purposes:
 ---
 
 ## Cloud APIAdapter — Platform Backend Abstraction
+
+> **Reference:** [`docs/INTEGRATION_MATRIX.md`](docs/INTEGRATION_MATRIX.md) — The complete mapping of all 4 backend interfaces (File System, Shell, Agent, Git) across all 3 execution environments (Local Desktop, Cloud Web App, Cloud + Docker). Every TODO below maps to one cell in that matrix.
 
 The webui now uses an `APIAdapter` interface to decouple API communication from the UI. In local mode, `clientFetch` talks directly to the Go backend on localhost. In cloud mode, a `CloudAdapter` routes all API calls to the Foundry platform backend. This is Option B (adapter pattern) — a stepping stone toward Option A (shared component library).
 
@@ -582,9 +586,11 @@ The webui now uses an `APIAdapter` interface to decouple API communication from 
 
 ### Phase 2: Foundry Backend API Compatibility
 
+> **Matrix ref:** Interface 3 (Agent/Chat → `foundry-backend`) and Interface 4 (Git → `foundry-backend`). See the "What Still Needs Work" section in [`docs/INTEGRATION_MATRIX.md`](docs/INTEGRATION_MATRIX.md).
+
 The sprout webui calls ~100 distinct `/api/*` endpoints. In cloud mode, many of these are handled locally by the WASM shell (files, terminal) or do not apply (SSH, instances). But the webui still makes the calls. The Foundry backend needs to serve the ones that matter, and the `CloudAdapter` needs to handle the ones that do not.
 
-[] - CLOUD-ADAPTER: Inventory all `/api/*` endpoints the webui calls and classify each as: (a) handled by WASM locally in cloud mode, (b) needs Foundry backend implementation, (c) should return synthetic/empty response in cloud mode, (d) not applicable in cloud mode and should be no-oped
+[x] - CLOUD-ADAPTER: Inventory all `/api/*` endpoints the webui calls and classify each as: (a) handled by WASM locally in cloud mode, (b) needs Foundry backend implementation, (c) should return synthetic/empty response in cloud mode, (d) not applicable in cloud mode and should be no-oped
 [] - CLOUD-ADAPTER: Add response interception to `CloudAdapter.fetch()` for endpoints that should return synthetic responses in cloud mode (e.g., `/api/onboarding/status` returns `{ setup_required: false }`, `/api/instances` returns `{ instances: [] }`, `/api/instances/ssh-hosts` returns `{ hosts: [] }`)
 [] - CLOUD-ADAPTER: Map webui chat endpoints to Foundry proxy format. The webui sends `POST /api/query` with `{ query, chat_id }`. Foundry expects `POST /api/proxy/chat` with `{ provider, model, messages, stream }`. Add translation in the `CloudAdapter` or add a Foundry endpoint that accepts the webui format directly.
 [] - CLOUD-ADAPTER: Map webui git endpoints to Foundry git API. The webui calls `/api/git/status`, `/api/git/stage`, `/api/git/commit`, etc. Verify Foundry serves these or adapt the paths.
@@ -594,6 +600,8 @@ The sprout webui calls ~100 distinct `/api/*` endpoints. In cloud mode, many of 
 [] - CLOUD-ADAPTER: Test the full cloud-mode webui against the Foundry backend with all endpoint mappings in place. Verify no 404s or broken flows.
 
 ### Phase 3: Platform Nav Integration
+
+> **Matrix ref:** Platform nav items are unique to Cloud environments (B, C) and do not exist in Local Desktop (A). These are the `platformNavItems` field on the `APIAdapter` interface.
 
 The `CloudAdapter` defines `platformNavItems` (tasks, billing, team) but the webui does not render them yet. These need to become actual routes in the webui.
 
@@ -605,6 +613,8 @@ The `CloudAdapter` defines `platformNavItems` (tasks, billing, team) but the web
 [] - CLOUD-ADAPTER: Create a `TeamPage` component that shows team members and invites via `GET /api/foundry/team`.
 
 ### Phase 4: Option A — Shared Component Library (`@sprout/ui`)
+
+> **Matrix ref:** This replaces the adapter pattern with explicit React providers for each of the 4 interfaces: `<FileSystemProvider>`, `<TerminalProvider>`, `<AgentProvider>`, `<GitProvider>`. See "Architecture Improvements" in [`docs/INTEGRATION_MATRIX.md`](docs/INTEGRATION_MATRIX.md).
 
 This is the full extraction that makes the webui components reusable by any project. Each component stops calling `clientFetch`/`ApiService` directly and instead accepts data and callbacks via props or an adapter context.
 

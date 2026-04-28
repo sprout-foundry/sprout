@@ -1,13 +1,13 @@
 /**
  * BackendConnectionBanner.tsx — Non-blocking banner for backend connection status.
  *
- * Shows at the top of the app when backend is unreachable in cloud mode.
+ * Shows at the top of the app when backend is unreachable and adapter requires health checks.
  * Dismissible but re-appears if still disconnected after next poll.
  */
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { isCloud } from '../config/mode';
+import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import './BackendConnectionBanner.css';
 
 interface BackendConnectionBannerProps {
@@ -42,6 +42,7 @@ function clearBannerDismissed(): void {
 
 function BackendConnectionBanner({ isReachable }: BackendConnectionBannerProps): JSX.Element | null {
   const [dismissed, setDismissed] = useState<boolean>(false);
+  const needsHealthCheck = requiresBackendHealthCheck();
 
   /* Clear dismissed state when backend becomes reachable */
   useEffect(() => {
@@ -51,8 +52,8 @@ function BackendConnectionBanner({ isReachable }: BackendConnectionBannerProps):
     }
   }, [isReachable]);
 
-  /* Not cloud mode — never show */
-  if (!isCloud) {
+  /* No health check needed — never show */
+  if (!needsHealthCheck) {
     return null;
   }
 

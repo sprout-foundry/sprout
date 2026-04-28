@@ -22,7 +22,13 @@ import {
   GitBranch,
   GitFork,
   History,
+  ExternalLink,
   type LucideIcon,
+  // New icons for platform nav items
+  CreditCard,
+  ListChecks,
+  Users,
+  LayoutDashboard,
 } from 'lucide-react';
 import FileTree from './FileTree';
 import SearchView from './SearchView';
@@ -33,6 +39,7 @@ import SproutLogo from './SproutLogo';
 import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
 import { supportsSettings } from '../config/mode';
+import { usePlatformNav } from '../contexts/PlatformNavContext';
 
 type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
 
@@ -97,14 +104,25 @@ interface SidebarProps {
   };
 }
 
-/** Section tab definitions */
-const SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
+/**
+ * Section tabs rendered in the icon rail. Main section tabs (git, files, search)
+ * are rendered first, followed by platform nav items, then settings (conditional)
+ * and logs.
+ */
+const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'git', icon: GitBranch, label: 'Git' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
-  ...(supportsSettings ? [{ id: 'settings' as SectionTab, icon: Settings, label: 'Settings' }] : []),
-  { id: 'logs', icon: ScrollText, label: 'Logs' },
 ];
+
+/** Icon name-to-component mapping for platform nav items */
+const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
+  'credit-card': CreditCard,
+  'list-checks': ListChecks,
+  'users': Users,
+  'layout-dashboard': LayoutDashboard,
+  'external-link': ExternalLink,
+};
 
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 600;
@@ -147,6 +165,7 @@ function Sidebar({
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
   const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled, whitespaceRenderingMode, setWhitespaceRenderingMode, isFormatOnSaveEnabled: formatOnSaveEnabled, setFormatOnSaveEnabled } = useEditorManager();
+  const { platformNavItems } = usePlatformNav();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileTreeRef = useRef<{
     refresh: () => void;
@@ -1089,21 +1108,75 @@ function Sidebar({
         {/* Icon rail (always visible) + Content pane (only when expanded) */}
         <div className="sidebar-body">
           {/* Icon Rail */}
-          <div className="sidebar-icon-rail" role="tablist" aria-orientation="vertical">
-            {SECTION_TABS.map((tab) => (
+          <div className="sidebar-icon-rail" role="navigation" aria-label="Sidebar navigation">
+            {/* Main section tabs: git, files, search */}
+            <div role="tablist" aria-orientation="vertical">
+              {MAIN_SECTION_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={selectedSection === tab.id}
+                  aria-controls="sidebar-tabpanel"
+                  className={`rail-icon ${selectedSection === tab.id ? 'active' : ''}`}
+                  onClick={() => handleSectionTabClick(tab.id)}
+                  title={tab.label}
+                  aria-label={tab.label}
+                >
+                  <tab.icon size={18} strokeWidth={1.5} />
+                </button>
+              ))}
+            </div>
+
+            {/* Platform Nav Items (between main sections and settings) */}
+            {platformNavItems.length > 0 && (
+              <>
+                <div className="sidebar-icon-rail-divider" role="separator" />
+                {[...platformNavItems]
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                  .map((item) => {
+                    const IconComponent = item.icon ? (PLATFORM_ICON_MAP[item.icon] ?? ExternalLink) : ExternalLink;
+                    return (
+                      <a
+                        key={item.id}
+                        href={item.href}
+                        className="rail-icon rail-icon-link"
+                        title={item.label}
+                        aria-label={item.label}
+                      >
+                        <IconComponent size={18} strokeWidth={1.5} />
+                      </a>
+                    );
+                  })}
+              </>
+            )}
+
+            {/* Settings & Logs tabs */}
+            <div role="tablist" aria-orientation="vertical">
+              {supportsSettings && (
+                <button
+                  role="tab"
+                  aria-selected={selectedSection === 'settings'}
+                  aria-controls="sidebar-tabpanel"
+                  className={`rail-icon ${selectedSection === 'settings' ? 'active' : ''}`}
+                  onClick={() => handleSectionTabClick('settings')}
+                  title="Settings"
+                  aria-label="Settings"
+                >
+                  <Settings size={18} strokeWidth={1.5} />
+                </button>
+              )}
               <button
-                key={tab.id}
                 role="tab"
-                aria-selected={selectedSection === tab.id}
+                aria-selected={selectedSection === 'logs'}
                 aria-controls="sidebar-tabpanel"
-                className={`rail-icon ${selectedSection === tab.id ? 'active' : ''}`}
-                onClick={() => handleSectionTabClick(tab.id)}
-                title={tab.label}
-                aria-label={tab.label}
+                className={`rail-icon ${selectedSection === 'logs' ? 'active' : ''}`}
+                onClick={() => handleSectionTabClick('logs')}
+                title="Logs"
+                aria-label="Logs"
               >
-                <tab.icon size={18} strokeWidth={1.5} />
+                <ScrollText size={18} strokeWidth={1.5} />
               </button>
-            ))}
+            </div>
           </div>
 
           {/* Content Pane (only when expanded) */}

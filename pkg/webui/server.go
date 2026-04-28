@@ -305,6 +305,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
 	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
+	mux.HandleFunc("/api/proxy/stats", ws.handleAPIProxyStats)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/costs/summary", ws.handleCostsSummary)
 	mux.HandleFunc("/api/costs/history", ws.handleCostsHistory)

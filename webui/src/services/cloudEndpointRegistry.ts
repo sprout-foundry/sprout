@@ -491,10 +491,10 @@ export const CLOUD_ENDPOINTS: CloudEndpoint[] = [
   },
   {
     path: '/api/settings/credentials/',
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['GET', 'PUT', 'DELETE', 'POST'],
     category: 'foundry-backend',
     isPrefix: true,
-    description: 'Credential CRUD',
+    description: 'Credential CRUD (includes pool and test sub-paths)',
   },
   {
     path: '/api/settings/providers',

@@ -76,6 +76,12 @@ func (ws *ReactWebServer) hasActiveQuery() bool {
 }
 
 func (ws *ReactWebServer) publishClientEvent(clientID, eventType string, data map[string]interface{}) {
+	ws.publishClientEventWithChat(clientID, "", eventType, data)
+}
+
+// publishClientEventWithChat publishes an event to the event bus with client_id and optional chat_id.
+// The chat_id is included in the event data so that WebSocket connections can filter events by chat session.
+func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType string, data map[string]interface{}) {
 	if ws.eventBus == nil {
 		return
 	}
@@ -84,6 +90,9 @@ func (ws *ReactWebServer) publishClientEvent(clientID, eventType string, data ma
 	}
 	if strings.TrimSpace(clientID) != "" {
 		data["client_id"] = clientID
+	}
+	if strings.TrimSpace(chatID) != "" {
+		data["chat_id"] = chatID
 	}
 	ws.eventBus.Publish(eventType, data)
 }
@@ -99,6 +108,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var query struct {
 		Query         string `json:"query"`
+		ChatID        string `json:"chat_id,omitempty"`
 		Provider      string `json:"provider,omitempty"`
 		Model         string `json:"model,omitempty"`
 		WorkspaceRoot string `json:"workspace_root,omitempty"`
@@ -119,7 +129,12 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 	clientID := ws.resolveClientID(r)
-	chatID := ws.resolveChatID(r, clientID)
+	
+	// Resolve chat_id: prefer body parameter, fall back to query parameter
+	chatID := strings.TrimSpace(query.ChatID)
+	if chatID == "" {
+		chatID = ws.resolveChatID(r, clientID)
+	}
 
 	// Resolve workspace root with worktree awareness - check if chat has a worktree path
 	workspaceRoot := ws.resolveWorkspaceRootForChat(clientID, chatID)
@@ -212,20 +227,19 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 				clientAgent.GetProvider(),
 				clientAgent.GetModel(),
 			)
-			queryEventData["chat_id"] = chatID
-			ws.publishClientEvent(clientID, events.EventTypeQueryStarted, queryEventData)
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryStarted, queryEventData)
 
 			clientAgent.SetWorkspaceRoot(workspaceRoot)
 			err := registry.Execute(query.Query, clientAgent)
 			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 			if err != nil {
 				log.Printf("handleAPIQuery: slash command error: %v", err)
-				ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
+				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
 				return
 			}
 
 			trimmed := strings.TrimSpace(query.Query)
-			ws.publishClientEvent(clientID, events.EventTypeStreamChunk, events.StreamChunkEvent(
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
 				fmt.Sprintf("Executed command: `%s`\n", trimmed),
 				"assistant_text",
 			))
@@ -236,8 +250,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 				0,
 				time.Since(startedAt),
 			)
-			queryCompletedData["chat_id"] = chatID
-			ws.publishClientEvent(clientID, events.EventTypeQueryCompleted, queryCompletedData)
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryCompleted, queryCompletedData)
 			return
 		}
 
@@ -261,7 +274,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error: %v", err)
-			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
+			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))
 		}
 	}()
 

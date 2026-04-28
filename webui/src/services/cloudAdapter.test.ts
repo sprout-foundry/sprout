@@ -388,7 +388,9 @@ describe('CloudAdapter', () => {
       expect(call[0]).toBe('https://api.sprout.dev/api/stats');
     });
 
-    it('should proxy settings endpoint to Foundry', async () => {
+    it('should proxy settings endpoint to Foundry (deprecated - now handled by settings proxy)', async () => {
+      // This test is deprecated since /api/settings is now rewritten to /api/proxy/settings
+      // See the "fetch - settings endpoint translation" describe block for the actual behavior
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ settings: {} }), { status: 200 })
       );
@@ -397,7 +399,8 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/settings');
+      // Now rewritten to /api/proxy/settings
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
     });
 
     it('should proxy chat-sessions endpoint to Foundry', async () => {
@@ -426,7 +429,8 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/settings');
+      // Now /api/settings is rewritten to /api/proxy/settings
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
       const sentBody = JSON.parse(call[1]?.body as string);
       expect(sentBody).toEqual({ theme: 'dark' });
     });
@@ -637,7 +641,8 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/settings?layer=provenance');
+      // Now /api/settings is rewritten to /api/proxy/settings
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings?layer=provenance');
     });
 
     it('should preserve query parameters in proxied requests', async () => {
@@ -1129,7 +1134,7 @@ describe('CloudAdapter', () => {
       expect(call[0]).not.toContain('/api/proxy/');
     });
 
-    it('should NOT affect settings endpoints', async () => {
+    it('should NOT affect settings endpoints (they use settings proxy)', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ settings: {} }), { status: 200 })
       );
@@ -1138,7 +1143,8 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/settings');
+      // Settings endpoints are handled by settings proxy, not git proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
     });
 
     it('should NOT affect chat endpoints', async () => {
@@ -1268,6 +1274,340 @@ describe('CloudAdapter', () => {
       // Body from Request object should be preserved
       const sentBody = JSON.parse(call[1]?.body as string);
       expect(sentBody).toEqual({ message: 'test commit', files: ['a.ts'] });
+    });
+  });
+
+  describe('fetch - settings endpoint translation', () => {
+    it('should translate GET /api/settings to /api/proxy/settings', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
+    });
+
+    it('should translate GET /api/settings with query params and preserve them', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings?layer=provenance', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings?layer=provenance');
+    });
+
+    it('should translate PUT /api/settings with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: 'dark' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ theme: 'dark' });
+    });
+
+    it('should translate GET /api/settings/credentials to /api/proxy/settings/credentials', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ credentials: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials');
+    });
+
+    it('should translate PUT /api/settings/credentials/openai/ with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'sk-...' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ api_key: 'sk-...' });
+    });
+
+    it('should translate DELETE /api/settings/credentials/openai/', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/', {
+        method: 'DELETE',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/');
+    });
+
+    it('should translate POST /api/settings/credentials/openai/test with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ valid: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'sk-...' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/test');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ api_key: 'sk-...' });
+    });
+
+    it('should translate GET /api/settings/providers to /api/proxy/settings/providers', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ providers: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/providers', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/providers');
+    });
+
+    it('should translate PUT /api/settings/providers/openai/ with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/providers/openai/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-3' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/providers/openai/');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ model: 'claude-3' });
+    });
+
+    it('should translate GET /api/settings/mcp to /api/proxy/settings/mcp', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ servers: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/mcp', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/mcp');
+    });
+
+    it('should translate GET /api/settings/mcp/servers/ to /api/proxy/settings/mcp/servers/', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ servers: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/mcp/servers/', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/mcp/servers/');
+    });
+
+    it('should translate GET /api/settings/skills to /api/proxy/settings/skills', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ skills: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/skills', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/skills');
+    });
+
+    it('should translate GET /api/settings/subagent-types to /api/proxy/settings/subagent-types', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ types: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/subagent-types', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/subagent-types');
+    });
+
+    it('should include WebUI client ID header in settings requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+    });
+
+    it('should include credentials in settings requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.credentials).toBe('include');
+    });
+
+    it('should preserve existing headers in settings requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const customHeaders = new Headers({
+        'Content-Type': 'application/json',
+        'X-Custom-Header': 'custom-value',
+      });
+
+      await adapter.fetch('/api/settings/credentials', {
+        method: 'GET',
+        headers: customHeaders,
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('Content-Type')).toBe('application/json');
+      expect(call[1]?.headers?.get('X-Custom-Header')).toBe('custom-value');
+      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+    });
+
+    it('should translate settings endpoint with Request object', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      const request = new Request('/api/settings', { method: 'GET' });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
+    });
+
+    it('should translate settings endpoint with absolute URL string to Foundry backend', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ credentials: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('https://other-host.example.com/api/settings/credentials', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should proxy to Foundry backend, NOT the other-host URL
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials');
+      expect(call[0]).not.toContain('other-host.example.com');
+    });
+
+    it('should translate settings endpoint with URL object to Foundry backend', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ providers: [] }), { status: 200 })
+      );
+
+      await adapter.fetch(new URL('/api/settings/providers', 'https://other-host.example.com'));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should proxy to Foundry backend with path preserved
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/providers');
+      expect(call[0]).not.toContain('other-host.example.com');
+    });
+
+    it('should NOT affect chat endpoints (should still use chat proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use chat proxy, NOT settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+    });
+
+    it('should NOT affect git endpoints (should still use git proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use git proxy, NOT settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+    });
+
+    it('should NOT affect non-settings endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use standard proxy, not settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
+      expect(call[0]).not.toContain('/api/proxy/settings');
+    });
+
+    it('should preserve body when Request object with POST is used for settings endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const request = new Request('/api/settings/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'openai', value: 'sk-...' }),
+      });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials');
+      // Body from Request object should be preserved
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ name: 'openai', value: 'sk-...' });
     });
   });
 

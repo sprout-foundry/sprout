@@ -96,6 +96,15 @@ export class CloudAdapter implements APIAdapter {
       return this.proxyGitRequest(url, method, init, requestBody);
     }
 
+    // ── Settings endpoint translation ───────────────────────────────
+    // Rewrite /api/settings and /api/settings/* paths to /api/proxy/settings/*
+    // Settings endpoints don't need body translation — only URL rewriting.
+    if (urlPath === '/api/settings' || urlPath.startsWith('/api/settings/')) {
+      // When input is a Request object, pre-read the body for forwarding
+      const requestBody = await this.extractRequestBody(input);
+      return this.proxySettingsRequest(url, method, init, requestBody);
+    }
+
     // ── Synthetic response interception ────────────────────────────
     if (urlPath.startsWith('/api/')) {
       const synthetic = getSyntheticResponse(urlPath, method);
@@ -240,6 +249,38 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
+   * Proxy a request to the Foundry backend with a pre-rewritten path.
+   * Handles target path extraction (relative or absolute), header injection,
+   * and the actual fetch() call with credentials.
+   */
+  private proxyToFoundry(
+    rewrittenPath: string, method: string, init?: RequestInit, requestBody?: string | null,
+  ): Promise<Response> {
+    let targetPath: string;
+    if (rewrittenPath.startsWith('/')) {
+      targetPath = rewrittenPath;
+    } else {
+      try {
+        const parsed = new URL(rewrittenPath);
+        targetPath = parsed.pathname;
+        if (parsed.search) targetPath += parsed.search;
+      } catch {
+        targetPath = rewrittenPath;
+      }
+    }
+    const targetUrl = `${this.config.apiBase}${targetPath}`;
+    const headers = new Headers(init?.headers);
+    headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
+    return fetch(targetUrl, {
+      ...init,
+      method,
+      body: init?.body ?? requestBody ?? undefined,
+      headers,
+      credentials: 'include',
+    });
+  }
+
+  /**
    * Proxy a git request to the Foundry backend with URL path rewriting.
    * Git endpoints don't need body translation — only URL rewriting.
    *
@@ -248,39 +289,33 @@ export class CloudAdapter implements APIAdapter {
   private proxyGitRequest(
     url: string, method: string, init?: RequestInit, requestBody?: string | null,
   ): Promise<Response> {
-    // Rewrite /api/git/* to /api/proxy/git/*
     const rewrittenPath = url.replace('/api/git/', '/api/proxy/git/');
+    return this.proxyToFoundry(rewrittenPath, method, init, requestBody);
+  }
 
-    // Build the target URL: always use apiBase + the rewritten path
-    // (handles both relative and absolute input URLs)
-    let targetPath: string;
-    if (rewrittenPath.startsWith('/')) {
-      targetPath = rewrittenPath;
+  /**
+   * Proxy a settings request to the Foundry backend with URL path rewriting.
+   * Settings endpoints don't need body translation — only URL rewriting.
+   *
+   * Example: /api/settings → /api/proxy/settings
+   *          /api/settings/credentials → /api/proxy/settings/credentials
+   */
+  private proxySettingsRequest(
+    url: string, method: string, init?: RequestInit, requestBody?: string | null,
+  ): Promise<Response> {
+    let rewrittenPath: string;
+    if (url.startsWith('/api/settings')) {
+      rewrittenPath = url.replace('/api/settings', '/api/proxy/settings');
     } else {
-      // Absolute URL — extract just the path portion
       try {
-        const parsed = new URL(rewrittenPath);
-        targetPath = parsed.pathname;
-        // Preserve query parameters if present
-        if (parsed.search) {
-          targetPath += parsed.search;
-        }
+        const parsed = new URL(url);
+        const pathname = parsed.pathname.replace('/api/settings', '/api/proxy/settings');
+        rewrittenPath = pathname + (parsed.search || '');
       } catch {
-        targetPath = rewrittenPath;
+        rewrittenPath = url;
       }
     }
-    const targetUrl = `${this.config.apiBase}${targetPath}`;
-
-    const headers = new Headers(init?.headers);
-    headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
-
-    return fetch(targetUrl, {
-      ...init,
-      method,
-      body: init?.body ?? requestBody ?? undefined,
-      headers,
-      credentials: 'include',
-    });
+    return this.proxyToFoundry(rewrittenPath, method, init, requestBody);
   }
 
   // ──────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { debugLog } from '../utils/log';
 import { appendClientIdToUrl } from './clientSession';
 import { notificationBus } from './notificationBus';
+import { getAdapter } from './apiAdapter';
 
 /** Shape of a WebSocket event coming from / going to the server. */
 export interface WsEvent {
@@ -109,8 +110,12 @@ class WebSocketService {
     // Use environment variable if provided, otherwise use relative URL.
     // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
+    // In cloud mode with an adapter, prefer the adapter's WebSocket URL.
+    const adapter = getAdapter();
+    const adapterWsUrl = adapter?.getWebSocketURL();
     const wsUrl =
       process.env.REACT_APP_WS_URL ||
+      adapterWsUrl ||
       (() => {
         const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

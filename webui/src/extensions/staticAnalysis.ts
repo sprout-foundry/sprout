@@ -230,7 +230,7 @@ export function isNearImportLine(
   for (let i = start; i <= end; i++) {
     const lineText = doc.line(i).text.trim();
     // Check for JS/TS imports (including type imports)
-    if (/^import\s+(type\s+)?[\{'"]./.test(lineText)) return true;
+    if (/^import\s+(type\s+)?[{'"]./.test(lineText)) return true;
     // Check for Go imports
     if (/^import\s+["(]/.test(lineText)) return true;
   }

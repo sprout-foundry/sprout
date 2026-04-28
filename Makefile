@@ -207,11 +207,11 @@ deploy-ui:
 		cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true; \
 		cd webui && DISABLE_ESLINT_PLUGIN=true npm run build; \
 		echo "React web UI build completed in webui/build/"; \
-		node scripts/build-webui-embed.mjs; \
+		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs; \
 	else \
 		echo "React UI is up-to-date, skipping rebuild"; \
 		echo "Deploying existing React build to Go static directory..."; \
-		node scripts/build-webui-embed.mjs --no-build; \
+		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs --no-build; \
 	fi
 	@echo "React web UI deployed to pkg/webui/static/"
 	@echo "Build artifacts in pkg/webui/static/ are now embedded at compile time."
@@ -274,7 +274,7 @@ build-fast:
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "  Building React UI..."; \
 		cd webui && DISABLE_ESLINT_PLUGIN=true npm run build || exit 1; \
-		node scripts/build-webui-embed.mjs || exit 1; \
+		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs || exit 1; \
 	else \
 		echo "  React UI up-to-date (skipped)"; \
 	fi

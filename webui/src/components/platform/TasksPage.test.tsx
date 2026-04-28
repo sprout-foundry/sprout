@@ -1,0 +1,130 @@
+// @ts-nocheck
+
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import TasksPage from './TasksPage';
+import { getAdapter } from '../../services/apiAdapter';
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+jest.mock('../../services/apiAdapter', () => ({
+  getAdapter: jest.fn(),
+}));
+
+jest.mock('../../utils/log', () => ({
+  useLog: () => ({
+    error: jest.fn(),
+    warn: jest.fn(),
+    info: jest.fn(),
+    debug: jest.fn(),
+  }),
+}));
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+let container: HTMLDivElement;
+let root: Root;
+let mockFetch: jest.Mock;
+
+beforeAll(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  jest.clearAllMocks();
+  mockFetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ tasks: [] }),
+  });
+  getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
+});
+
+afterEach(() => {
+  act(() => {
+    root?.unmount();
+  });
+  container?.remove();
+});
+
+function renderSync() {
+  act(() => {
+    root.render(createElement(TasksPage));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Tests — synchronous rendering
+// ---------------------------------------------------------------------------
+
+describe('TasksPage', () => {
+  it('renders without crashing', () => {
+    renderSync();
+    expect(container.querySelector('.platform-page')).not.toBeNull();
+  });
+
+  it('displays page title and description', () => {
+    renderSync();
+    expect(container.querySelector('.platform-page-header')).not.toBeNull();
+    expect(container.textContent).toContain('Tasks');
+    expect(container.textContent).toContain('View and manage your background tasks');
+  });
+
+  it('shows loading state on initial render', () => {
+    getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
+    renderSync();
+    expect(container.querySelector('.platform-page-loading')).not.toBeNull();
+    expect(container.textContent).toContain('Loading tasks...');
+  });
+
+  it('shows local mode error when no adapter is installed', () => {
+    getAdapter.mockReturnValue(null);
+    renderSync();
+
+    expect(container.querySelector('.platform-page-error')).not.toBeNull();
+    expect(container.textContent).toContain('Not available - running in local mode');
+    expect(container.querySelector('.platform-page-loading')).toBeNull();
+  });
+
+  it('calls getAdapter to check for cloud adapter', () => {
+    renderSync();
+    expect(getAdapter).toHaveBeenCalled();
+  });
+
+  it('calls adapter.fetch with the correct endpoint on mount', () => {
+    renderSync();
+    // The fetch is initiated inside useEffect but may not have completed yet.
+    // Verify the call was initiated.
+    expect(mockFetch).toHaveBeenCalledWith('/api/foundry/tasks');
+  });
+
+  it('fetches tasks only once on mount', () => {
+    renderSync();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows loading spinner when adapter is present', () => {
+    getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
+    renderSync();
+    // Loading state should be visible before the fetch completes
+    expect(container.querySelector('.platform-page-loading')).not.toBeNull();
+  });
+
+  it('does not show error state on initial render with adapter', () => {
+    getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
+    renderSync();
+    expect(container.querySelector('.platform-page-error')).toBeNull();
+  });
+
+  it('does not show empty state on initial render', () => {
+    getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
+    renderSync();
+    expect(container.querySelector('.platform-page-empty')).toBeNull();
+  });
+});

@@ -27,6 +27,18 @@ export interface APIAdapter {
   /** Whether onboarding flow should be shown */
   readonly showOnboarding: boolean;
 
+  /** Whether SSH connections are supported */
+  readonly supportsSSH: boolean;
+
+  /** Whether instance management is supported */
+  readonly supportsInstances: boolean;
+
+  /** Whether local PTY terminal is supported */
+  readonly supportsLocalTerminal: boolean;
+
+  /** Whether settings panel should be shown */
+  readonly supportsSettings: boolean;
+
   /** Platform-specific routes to inject into the sidebar (e.g., billing, tasks) */
   readonly platformNavItems?: PlatformNavItem[];
 }

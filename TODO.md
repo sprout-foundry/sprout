@@ -559,6 +559,68 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ---
 
+## Cloud APIAdapter — Platform Backend Abstraction
+
+The webui now uses an `APIAdapter` interface to decouple API communication from the UI. In local mode, `clientFetch` talks directly to the Go backend on localhost. In cloud mode, a `CloudAdapter` routes all API calls to the Foundry platform backend. This is Option B (adapter pattern) — a stepping stone toward Option A (shared component library).
+
+### What's Done
+
+[x] - CLOUD-ADAPTER: Create `services/apiAdapter.ts` with `APIAdapter` interface (`fetch`, `getWebSocketURL`, feature flags, `platformNavItems`) and singleton `installAdapter()`/`getAdapter()` functions
+[x] - CLOUD-ADAPTER: Create `services/cloudAdapter.ts` with `CloudAdapter` class — routes `/api/*` calls to Foundry backend with `credentials: include`, returns Foundry WS URL
+[x] - CLOUD-ADAPTER: Modify `services/clientSession.ts` — `clientFetch()` checks for installed adapter first, delegates if present, falls back to existing local behavior unchanged
+[x] - CLOUD-ADAPTER: Modify `services/websocket.ts` — WS URL resolution checks adapter before falling back to localhost
+[x] - CLOUD-ADAPTER: Wire cloud adapter installation in `index.tsx` — installs `CloudAdapter` when `REACT_APP_SPROUT_MODE=cloud`
+[x] - CLOUD-ADAPTER: Verify both local and cloud builds compile clean with adapter pattern in place
+[x] - CLOUD-ADAPTER: Verify zero impact on local mode — adapter is only active when `installAdapter()` is called
+
+### Phase 1: Clean Up Dead Cloud Code in Webui
+
+[x] - CLOUD-ADAPTER: Audit all `isCloud` conditionals in the webui and ensure they work correctly with the adapter pattern. Key files: `App.tsx`, `Sidebar.tsx`, `BackendConnectionBanner.tsx`, `useBackendReachable.ts`, `useHotkeyCommandHandler.ts`, `MenuBar.tsx`
+[x] - CLOUD-ADAPTER: The `BackendConnectionBanner` shows "Unable to connect to server" when the Go backend is unreachable. In cloud mode with `requiresBackendHealthCheck=true`, verify this checks the Foundry backend (not localhost). Adapt the health check URL to use the adapter.
+[x] - CLOUD-ADAPTER: The webui tries to register `/sw.js` on startup (in `App.tsx`). In cloud mode this file does not exist and the registration fails silently. Either skip SW registration in cloud mode or provide a no-op SW.
+[x] - CLOUD-ADAPTER: The webui `useBackendReachable` hook starts as `false` when `isCloud=true` and polls `/health`. Verify the adapter routes this to the Foundry `/health` endpoint. If Foundry does not have `/health` at the same path, add a Foundry-side adapter or have the `CloudAdapter` map health check paths.
+
+### Phase 2: Foundry Backend API Compatibility
+
+The sprout webui calls ~100 distinct `/api/*` endpoints. In cloud mode, many of these are handled locally by the WASM shell (files, terminal) or do not apply (SSH, instances). But the webui still makes the calls. The Foundry backend needs to serve the ones that matter, and the `CloudAdapter` needs to handle the ones that do not.
+
+[] - CLOUD-ADAPTER: Inventory all `/api/*` endpoints the webui calls and classify each as: (a) handled by WASM locally in cloud mode, (b) needs Foundry backend implementation, (c) should return synthetic/empty response in cloud mode, (d) not applicable in cloud mode and should be no-oped
+[] - CLOUD-ADAPTER: Add response interception to `CloudAdapter.fetch()` for endpoints that should return synthetic responses in cloud mode (e.g., `/api/onboarding/status` returns `{ setup_required: false }`, `/api/instances` returns `{ instances: [] }`, `/api/instances/ssh-hosts` returns `{ hosts: [] }`)
+[] - CLOUD-ADAPTER: Map webui chat endpoints to Foundry proxy format. The webui sends `POST /api/query` with `{ query, chat_id }`. Foundry expects `POST /api/proxy/chat` with `{ provider, model, messages, stream }`. Add translation in the `CloudAdapter` or add a Foundry endpoint that accepts the webui format directly.
+[] - CLOUD-ADAPTER: Map webui git endpoints to Foundry git API. The webui calls `/api/git/status`, `/api/git/stage`, `/api/git/commit`, etc. Verify Foundry serves these or adapt the paths.
+[] - CLOUD-ADAPTER: Map webui settings/credentials endpoints to Foundry user settings API. The webui calls `/api/settings/credentials`, `/api/settings/providers`, etc. Map to Foundry user credential storage.
+[] - CLOUD-ADAPTER: Map webui workspace endpoints. The webui calls `GET /api/workspace` expecting `{ workspace_root, daemon_root }`. In cloud mode, the WASM shell owns the workspace — return a synthetic response pointing to the virtual FS root.
+[] - CLOUD-ADAPTER: Map webui stats endpoint. `GET /api/stats` returns provider, model, tokens, cost, etc. In cloud mode, Foundry tracks this — add a Foundry endpoint or return synthetic stats.
+[] - CLOUD-ADAPTER: Test the full cloud-mode webui against the Foundry backend with all endpoint mappings in place. Verify no 404s or broken flows.
+
+### Phase 3: Platform Nav Integration
+
+The `CloudAdapter` defines `platformNavItems` (tasks, billing, team) but the webui does not render them yet. These need to become actual routes in the webui.
+
+[] - CLOUD-ADAPTER: Add a `PlatformNav` context/provider that reads `platformNavItems` from the active adapter and makes them available to the Sidebar component
+[] - CLOUD-ADAPTER: Modify `Sidebar.tsx` to render platform nav items from the adapter in a dedicated section (between existing sections and settings). Each item renders as a nav link to its `href`.
+[] - CLOUD-ADAPTER: Add client-side route handling for `/tasks`, `/billing`, `/team` in the webui when in cloud mode. These routes can either (a) render iframe embeds of Foundry pages, (b) render React components that fetch from Foundry API, or (c) redirect to Foundry pages. Start with (b) — simple data-fetching pages.
+[] - CLOUD-ADAPTER: Create a `TasksPage` component that fetches `GET /api/foundry/tasks` via the adapter and renders the task list with status, creation date, and click-through to detail.
+[] - CLOUD-ADAPTER: Create a `BillingPage` component that shows current tier, usage, and overage via `GET /api/foundry/billing`.
+[] - CLOUD-ADAPTER: Create a `TeamPage` component that shows team members and invites via `GET /api/foundry/team`.
+
+### Phase 4: Option A — Shared Component Library (`@sprout/ui`)
+
+This is the full extraction that makes the webui components reusable by any project. Each component stops calling `clientFetch`/`ApiService` directly and instead accepts data and callbacks via props or an adapter context.
+
+[] - CLOUD-ADAPTER: Create `@sprout/ui` package with React components extracted from the webui. Start with leaf components that have no API dependencies: `Editor`, `Terminal`, `FileTree`, `GitPanel`, `ChatPanel`, `Sidebar`, `StatusBar`, `NotificationStack`, `ContextMenu`, `CommandPalette`
+[] - CLOUD-ADAPTER: Define a `SproutProvider` React context that wraps the `APIAdapter` and provides it to all `@sprout/ui` components. Components call `useSproutAdapter()` instead of importing `clientFetch`.
+[] - CLOUD-ADAPTER: Extract `EditorManagerContext` into `@sprout/ui` — it manages editor buffers, panes, split layouts. Make it adapter-agnostic by having it call `adapter.fetch()` instead of `clientFetch()`.
+[] - CLOUD-ADAPTER: Extract `WebSocketService` into an adapter-provided interface. The webui `WebSocketService` class becomes the local implementation. `@sprout/ui` components consume a `useEvents()` hook that abstracts over the transport.
+[] - CLOUD-ADAPTER: Refactor `ApiService` (the ~2000-line service class in `api.ts`) to be a thin wrapper over the adapter. Move all endpoint-specific methods into adapter-aware hooks: `useFiles(adapter)`, `useGit(adapter)`, `useChat(adapter)`, etc.
+[] - CLOUD-ADAPTER: Refactor `FileTree` to accept `onFileSelect`, `onFileDelete`, `onFileCreate`, `onFileRename` callbacks and `files` data prop instead of calling `clientFetch` internally
+[] - CLOUD-ADAPTER: Refactor `GitSidebarPanel`/`GitHistoryPanel` to accept git state and action callbacks via props/context instead of calling `apiService` directly
+[] - CLOUD-ADAPTER: Refactor `Chat`/`ContextPanel` to accept message state and send-message callback via props instead of managing its own WebSocket and API calls
+[] - CLOUD-ADAPTER: Publish `@sprout/ui` as an npm package. The sprout webui becomes a thin shell that imports components and wires the local adapter. Foundry imports the same components and wires the cloud adapter.
+[] - CLOUD-ADAPTER: Add Storybook for `@sprout/ui` components with mock adapter for development and documentation
+
+---
+
 ## Core Architecture & Engineering Improvements
 
 These are high-impact structural improvements identified through code evaluation. They address fundamental architectural concerns that will improve maintainability, testability, and reliability as the project scales.

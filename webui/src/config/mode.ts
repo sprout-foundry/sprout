@@ -5,6 +5,8 @@
  * Controlled via REACT_APP_SPROUT_MODE environment variable at build time.
  */
 
+import { getAdapter } from '../services/apiAdapter';
+
 export type SproutMode = 'local' | 'cloud';
 
 /**
@@ -26,21 +28,25 @@ export const mode: SproutMode =
 export const isCloud: boolean = mode === 'cloud';
 
 /**
- * SSH access support - available in cloud mode only
+ * SSH access support - available in cloud mode only.
+ * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsSSH: boolean = isCloud;
+export const supportsSSH: boolean = getAdapter()?.supportsSSH ?? isCloud;
 
 /**
- * Instance management support - available in cloud mode only
+ * Instance management support - available in cloud mode only.
+ * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsInstances: boolean = isCloud;
+export const supportsInstances: boolean = getAdapter()?.supportsInstances ?? isCloud;
 
 /**
- * Local PTY terminal support - available in local mode only
+ * Local PTY terminal support - available in local mode only.
+ * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsLocalTerminal: boolean = !isCloud;
+export const supportsLocalTerminal: boolean = getAdapter()?.supportsLocalTerminal ?? !isCloud;
 
 /**
- * Local settings management support - available in local mode only
+ * Local settings management support - available in local mode only.
+ * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsSettings: boolean = !isCloud;
+export const supportsSettings: boolean = getAdapter()?.supportsSettings ?? !isCloud;

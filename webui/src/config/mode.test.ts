@@ -245,3 +245,107 @@ describe('mode config flag invariants', () => {
     });
   });
 });
+
+describe('with CloudAdapter installed', () => {
+  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.REACT_APP_SPROUT_MODE = 'local';
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.REACT_APP_SPROUT_MODE;
+    } else {
+      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+    }
+    jest.resetModules();
+  });
+
+  it('adapter flags override build-time isCloud=false', async () => {
+    // Install CloudAdapter on the fresh apiAdapter module instance
+    const { installAdapter } = await import('../services/apiAdapter');
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+    installAdapter(
+      new CloudAdapter({
+        apiBase: 'https://api.test.sprout.dev',
+        wsUrl: 'wss://api.test.sprout.dev/ws',
+      }),
+    );
+
+    // Import mode.ts — it evaluates getAdapter() at load time and sees the CloudAdapter
+    const modeModule = await import('./mode');
+
+    // Build-time says isCloud=false, but adapter flags win
+    expect(modeModule.supportsSSH).toBe(true);
+    expect(modeModule.supportsInstances).toBe(true);
+    expect(modeModule.supportsLocalTerminal).toBe(false);
+    expect(modeModule.supportsSettings).toBe(false);
+  });
+
+  it('mode and isCloud remain based on env var, not adapter', async () => {
+    const { installAdapter } = await import('../services/apiAdapter');
+    const { CloudAdapter } = await import('../services/cloudAdapter');
+    installAdapter(
+      new CloudAdapter({
+        apiBase: 'https://api.test.sprout.dev',
+        wsUrl: 'wss://api.test.sprout.dev/ws',
+      }),
+    );
+
+    const modeModule = await import('./mode');
+
+    // mode and isCloud are determined by env var alone, not by the adapter
+    expect(modeModule.mode).toBe('local');
+    expect(modeModule.isCloud).toBe(false);
+  });
+});
+
+describe('with custom adapter installed', () => {
+  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.REACT_APP_SPROUT_MODE = 'local';
+  });
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.REACT_APP_SPROUT_MODE;
+    } else {
+      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+    }
+    jest.resetModules();
+  });
+
+  it('custom adapter flags are read exactly as provided', async () => {
+    const { installAdapter } = await import('../services/apiAdapter');
+
+    // Install a mock adapter with non-standard flag combination that
+    // differs from both local and cloud defaults — this proves the
+    // adapter path is truly exercised (not just matching defaults).
+    installAdapter({
+      name: 'custom-test-adapter',
+      fetch: async () => new Response(),
+      getWebSocketURL: () => null,
+      requiresBackendHealthCheck: false,
+      fileOpsViaAPI: true,
+      showOnboarding: true,
+      supportsSSH: false,
+      supportsInstances: true,
+      supportsLocalTerminal: true,
+      supportsSettings: false,
+    });
+
+    const modeModule = await import('./mode');
+
+    // mode.ts reads from the adapter, not build-time constants
+    expect(modeModule.mode).toBe('local');
+    expect(modeModule.isCloud).toBe(false);
+    expect(modeModule.supportsSSH).toBe(false);
+    expect(modeModule.supportsInstances).toBe(true);
+    expect(modeModule.supportsLocalTerminal).toBe(true);
+    expect(modeModule.supportsSettings).toBe(false);
+  });
+});

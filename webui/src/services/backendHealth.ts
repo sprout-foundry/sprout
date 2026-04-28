@@ -2,10 +2,11 @@
  * backendHealth.ts — Health check polling service for backend reachability.
  *
  * Polls GET /health to detect backend availability.
- * Used in cloud mode to provide graceful degradation when backend is unreachable.
+ * Used when adapter requires health checks to provide graceful degradation when backend is unreachable.
  */
 
 import { clientFetch } from './clientSession';
+import { getAdapter } from './apiAdapter';
 import { debugLog } from '../utils/log';
 
 const DEFAULT_INTERVAL_MS = 5000; /* Poll every 5 seconds */
@@ -19,8 +20,10 @@ let callbacks: Array<(isReachable: boolean) => void> = [];
 /* Perform a single health check against the backend */
 async function checkBackendHealth(): Promise<boolean> {
   try {
-    /* Use clientFetch to respect proxy base and client ID headers */
-    const response = await clientFetch(HEALTH_ENDPOINT);
+    /* Use adapter's fetch if installed, otherwise use clientFetch */
+    const adapter = getAdapter();
+    const fetchFn = adapter ? (input: RequestInfo | URL, init?: RequestInit) => adapter.fetch(input, init) : clientFetch;
+    const response = await fetchFn(HEALTH_ENDPOINT);
 
     /* Consider backend reachable if it responds with any 2xx status */
     const isOk = response.ok;

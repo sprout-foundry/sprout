@@ -16,7 +16,7 @@ import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
-import { isCloud } from './config/mode';
+import { requiresBackendHealthCheck } from './services/apiAdapter';
 import BackendConnectionBanner from './components/BackendConnectionBanner';
 import { useBackendReachable } from './hooks/useBackendReachable';
 import { triggerHealthCheck } from './services/backendHealth';
@@ -29,7 +29,7 @@ import {
   switchChatSession,
 } from './services/chatSessions';
 import { debugLog } from './utils/log';
-
+import { registerServiceWorker } from './services/serviceWorkerRegistration';
 /**
  * Generate a unique message ID with browser compatibility fallback.
  * Uses crypto.randomUUID() if available (modern browsers), otherwise falls back
@@ -45,61 +45,6 @@ const generateMessageId = (): string => {
   }
   // Fallback for older browsers: timestamp + random suffix
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-};
-
-// Service Worker Registration
-const registerServiceWorker = async () => {
-  if (!('serviceWorker' in navigator)) {
-    return null;
-  }
-
-  if (process.env.NODE_ENV !== 'production') {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.all(registrations.map((registration) => registration.unregister()));
-    return null;
-  }
-
-  try {
-    const swUrl = `${process.env.PUBLIC_URL || ''}/sw.js`;
-    const registration = await navigator.serviceWorker.register(swUrl);
-    await registration.update();
-    debugLog('SW registered:', registration);
-
-    // If an update is already waiting, activate it immediately.
-    if (registration.waiting) {
-      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    }
-
-    // Ensure we pick up new SW/controller as soon as it activates.
-    let hasReloadedForController = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hasReloadedForController) {
-        return;
-      }
-      hasReloadedForController = true;
-      window.location.reload();
-    });
-
-    registration.addEventListener('updatefound', () => {
-      const newWorker = registration.installing;
-      if (newWorker) {
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed') {
-            newWorker.postMessage({ type: 'SKIP_WAITING' });
-          }
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            debugLog('New service worker available');
-          }
-        });
-      }
-    });
-
-    return registration;
-  } catch (error) {
-    debugLog('SW registration failed:', error);
-  }
-
-  return null;
 };
 
 interface AppState {
@@ -1538,8 +1483,9 @@ function App() {
   }, [apiService]);
 
   useEffect(() => {
-    /* Skip onboarding if backend is unreachable in cloud mode */
-    if (isCloud && !backendReachable) {
+    /* Skip onboarding if backend is unreachable when adapter requires health checks */
+    const needsHealthCheck = requiresBackendHealthCheck();
+    if (needsHealthCheck && !backendReachable) {
       debugLog('[onboarding] Backend unreachable, skipping onboarding check');
       setOnboarding((prev) => ({ ...prev, checking: false }));
       return;
@@ -1636,20 +1582,21 @@ function App() {
     };
 
     // Load initial stats/files/sessions and then reconcile workspace/session startup.
-    /* In cloud mode, only call backend if reachable */
-    if (backendReachable || !isCloud) {
+    /* When adapter requires health checks, only call backend if reachable */
+    const needsHealthCheck = requiresBackendHealthCheck();
+    if (backendReachable || !needsHealthCheck) {
       loadStats();
       loadFiles();
       loadChatSessions();
       restoreStartupState().catch(() => {});
     } else {
-      /* In cloud mode when backend is unreachable, set defaults */
-      debugLog('[startup] Backend unreachable in cloud mode, skipping initialization');
+      /* When backend is unreachable, set defaults */
+      debugLog('[startup] Backend unreachable, skipping initialization');
     }
 
-    // Set up periodic stats updates (only if backend is reachable in cloud mode)
+    // Set up periodic stats updates (only if backend is reachable when adapter requires health checks)
     const statsInterval = setInterval(() => {
-      if (backendReachableRef.current || !isCloud) {
+      if (backendReachableRef.current || !needsHealthCheck) {
         loadStats();
       }
     }, 5000); /* Update every 5 seconds */
@@ -1680,11 +1627,12 @@ function App() {
     };
   }, [handleEvent, handleReconnect, wsService, apiService, loadChatSessions]);
 
-  // When backend becomes reachable in cloud mode (after being unreachable),
+  // When backend becomes reachable (after being unreachable when adapter requires health checks),
   // re-run initialization that was skipped.
   const prevBackendReachableRef = useRef(backendReachable);
   useEffect(() => {
-    if (!isCloud) return;
+    const needsHealthCheck = requiresBackendHealthCheck();
+    if (!needsHealthCheck) return;
     const wasReachable = prevBackendReachableRef.current;
     prevBackendReachableRef.current = backendReachable;
     if (!wasReachable && backendReachable) {

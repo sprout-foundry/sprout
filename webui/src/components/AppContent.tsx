@@ -12,6 +12,7 @@ import Status from './Status';
 import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
+import { TasksPage, BillingPage, TeamPage } from './platform';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
@@ -21,6 +22,8 @@ import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
 const CONTEXT_PANEL_COLLAPSED_KEY = 'ledit.contextPanel.collapsed';
+
+const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 
 const toPaneFlex = (weight: number): React.CSSProperties => ({
   flexGrow: weight,
@@ -71,7 +74,7 @@ interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any;
@@ -118,7 +121,7 @@ interface AppContentProps {
   onSidebarToggle: () => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git') => void;
+  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
@@ -448,7 +451,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [instances, selectedInstancePID]);
 
-  const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
+  const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     if (view === 'chat') {
       openWorkspaceBuffer({
         kind: 'chat',
@@ -1130,24 +1133,33 @@ const AppContent: React.FC<AppContentProps> = ({
               </div>
             )}
 
-            <EditorWithOutline
-              content={currentBuffer?.content || ''}
-              fileExtension={currentBuffer?.file?.ext}
-              cursorLine={currentBuffer?.cursorPosition?.line || 0}
-              isFileOpen={currentBuffer?.kind === 'file'}
-              onNavigateToSymbol={handleOutlineNavigateToSymbol}
-            >
-              <div className={`editor-workspace ${paneLayout}`}>
-                <div
-                  ref={containerRef}
-                  className={`panes-container layout-${paneLayout}`}
-                >
-                  {renderPaneLayout()}
+            {/* Render platform pages or editor workspace */}
+            {state.currentView === 'tasks' ? (
+              <TasksPage />
+            ) : state.currentView === 'billing' ? (
+              <BillingPage />
+            ) : state.currentView === 'team' ? (
+              <TeamPage />
+            ) : (
+              <EditorWithOutline
+                content={currentBuffer?.content || ''}
+                fileExtension={currentBuffer?.file?.ext}
+                cursorLine={currentBuffer?.cursorPosition?.line || 0}
+                isFileOpen={currentBuffer?.kind === 'file'}
+                onNavigateToSymbol={handleOutlineNavigateToSymbol}
+              >
+                <div className={`editor-workspace ${paneLayout}`}>
+                  <div
+                    ref={containerRef}
+                    className={`panes-container layout-${paneLayout}`}
+                  >
+                    {renderPaneLayout()}
+                  </div>
                 </div>
-              </div>
-            </EditorWithOutline>
+              </EditorWithOutline>
+            )}
           </div>
-          {showContextSidebar && (
+          {showContextSidebar && !PLATFORM_VIEWS.has(state.currentView) && (
             <ContextPanel
               ref={contextPanelRef}
               context="chat"

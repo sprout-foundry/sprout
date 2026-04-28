@@ -50,17 +50,41 @@ if (typeof Request === 'undefined') {
     url: string;
     method: string;
     headers: Headers | Map<string, string>;
+    private _body: string | null;
 
     constructor(input: string | Request, init?: RequestInit | { method?: string }) {
       if (typeof input === 'string') {
         this.url = input;
         this.method = init?.method ?? 'GET';
         this.headers = new Headers(init?.headers);
+        // Store body for testing
+        if (init?.body) {
+          this._body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
+        } else {
+          this._body = null;
+        }
       } else {
         this.url = input.url;
         this.method = input.method;
         this.headers = input.headers;
+        // Copy body from existing Request
+        this._body = (input as Request & { _body: string | null })._body || null;
       }
+    }
+
+    // Support body cloning and reading for chat endpoint tests
+    clone(): Request {
+      const cloned = new Request(this.url, {
+        method: this.method,
+        headers: this.headers,
+        body: this._body || undefined,
+      });
+      (cloned as unknown as { _body: string | null })._body = this._body;
+      return cloned;
+    }
+
+    async text(): Promise<string> {
+      return this._body || '';
     }
   } as unknown as typeof Request;
 }
@@ -825,7 +849,7 @@ describe('CloudAdapter', () => {
       expect(call[1]?.headers?.get('Content-Type')).toBe('application/json');
     });
 
-    it('should throw error when query is empty', async () => {
+    it('should pass through empty query for backend validation', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ success: true }), { status: 200 })
       );
@@ -837,7 +861,7 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const sentBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
-      // Adapter constructs messages array with empty content (Go backend validates)
+      // Adapter constructs messages array with empty content (Foundry backend validates)
       expect(sentBody.messages).toEqual([{ role: 'user', content: '' }]);
     });
 
@@ -854,6 +878,51 @@ describe('CloudAdapter', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+    });
+
+    it('should translate body when Request object is used for chat endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const request = new Request('/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'test from request object' }),
+      });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({
+        messages: [{ role: 'user', content: 'test from request object' }],
+        stream: true,
+      });
+    });
+
+    it('should translate body with steer flag when Request object is used', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const request = new Request('/api/query/steer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: 'adjust tone' }),
+      });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({
+        messages: [{ role: 'user', content: 'adjust tone' }],
+        stream: true,
+        steer: true,
+      });
     });
   });
 

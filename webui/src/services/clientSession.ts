@@ -136,10 +136,11 @@ export function getSSHProxyContext(): { hostAlias: string; remotePath: string } 
 export async function clientFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   // If a cloud adapter is installed, delegate all requests through it.
   // The adapter handles URL rewriting, synthetic responses, and credentials.
+  // clientFetch sets the client ID header; the adapter also sets it internally
+  // (double-set is intentional for safety — same value, Headers.set overwrites).
   const adapter = getAdapter();
   if (adapter) {
-    // Merge headers — adapter will add its own headers too.
-    // We still set the client ID header here for safety and consistency.
+    debugLog('[clientFetch] routing through adapter:', adapter.name);
     const headers = new Headers(init?.headers || {});
     headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
     return adapter.fetch(input, { ...init, headers });

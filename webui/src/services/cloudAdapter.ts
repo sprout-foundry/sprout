@@ -76,11 +76,24 @@ export class CloudAdapter implements APIAdapter {
     const urlPath = this.extractPathname(url);
 
     // ── Chat endpoint translation ──────────────────────────────────
+    // NOTE: Chat endpoint mapping takes priority over the synthetic response
+    // registry. No chat-mapped path should be added to the synthetic registry.
     // The webui sends POST /api/query with { query, chat_id }.
     // Foundry expects POST /api/proxy/chat with { provider, model, messages, stream }.
     const foundryPath = CHAT_ENDPOINT_MAP[urlPath];
     if (foundryPath) {
-      return this.translateAndProxyChat(urlPath, foundryPath, method, init);
+      // When input is a Request object, pre-read the body for translation
+      let requestBodyText: string | null = null;
+      if (typeof input !== 'string' && !(input instanceof URL)) {
+        // Request object — clone and read body
+        try {
+          const cloned = input.clone();
+          requestBodyText = await cloned.text();
+        } catch {
+          // Body may already be consumed or not readable
+        }
+      }
+      return this.translateAndProxyChat(urlPath, foundryPath, method, init, requestBodyText);
     }
 
     // ── Synthetic response interception ────────────────────────────
@@ -117,6 +130,7 @@ export class CloudAdapter implements APIAdapter {
     foundryPath: string,
     method: string,
     init?: RequestInit,
+    requestBodyText?: string | null,
   ): Promise<Response> {
     const targetUrl = `${this.config.apiBase}${foundryPath}`;
     const headers = new Headers(init?.headers);
@@ -127,7 +141,8 @@ export class CloudAdapter implements APIAdapter {
 
     if (TRANSLATE_BODY_PATHS.has(webuiPath) && method === 'POST') {
       // Parse the webui request body and translate to Foundry format
-      const raw = this.extractBody(init);
+      // Try init body first, fall back to pre-read Request body
+      const raw = this.extractBody(init) ?? requestBodyText ?? null;
       if (raw) {
         try {
           const parsed: Record<string, unknown> = JSON.parse(raw);
@@ -140,7 +155,7 @@ export class CloudAdapter implements APIAdapter {
       }
     } else {
       // For stop/status, forward any existing body unchanged
-      body = this.extractBody(init) || undefined;
+      body = this.extractBody(init) ?? requestBodyText ?? undefined;
     }
 
     return fetch(targetUrl, {
@@ -165,11 +180,18 @@ export class CloudAdapter implements APIAdapter {
     const query = typeof parsed.query === 'string' ? parsed.query : '';
     const isSteer = webuiPath === '/api/query/steer';
 
+    // Empty/missing query is intentionally passed through — the Foundry backend validates.
+
     // Build the Foundry-compatible request body
     const translated: Record<string, unknown> = {
       messages: [{ role: 'user', content: query }],
       stream: true,
     };
+
+    // Warn if we're overwriting an existing messages field
+    if (parsed.messages) {
+      console.warn('[CloudAdapter] Overwriting existing messages field in chat request body');
+    }
 
     // Pass through optional fields if present
     if (parsed.provider) translated.provider = parsed.provider;

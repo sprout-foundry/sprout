@@ -83,17 +83,17 @@ export class CloudAdapter implements APIAdapter {
     const foundryPath = CHAT_ENDPOINT_MAP[urlPath];
     if (foundryPath) {
       // When input is a Request object, pre-read the body for translation
-      let requestBodyText: string | null = null;
-      if (typeof input !== 'string' && !(input instanceof URL)) {
-        // Request object — clone and read body
-        try {
-          const cloned = input.clone();
-          requestBodyText = await cloned.text();
-        } catch {
-          // Body may already be consumed or not readable
-        }
-      }
+      const requestBodyText = await this.extractRequestBody(input);
       return this.translateAndProxyChat(urlPath, foundryPath, method, init, requestBodyText);
+    }
+
+    // ── Git endpoint translation ────────────────────────────────────
+    // Rewrite /api/git/* paths to /api/proxy/git/*
+    // Git endpoints don't need body translation — only URL rewriting.
+    if (urlPath.startsWith('/api/git/')) {
+      // When input is a Request object, pre-read the body for forwarding
+      const requestBody = await this.extractRequestBody(input);
+      return this.proxyGitRequest(url, method, init, requestBody);
     }
 
     // ── Synthetic response interception ────────────────────────────
@@ -110,8 +110,15 @@ export class CloudAdapter implements APIAdapter {
     const headers = new Headers(init?.headers);
     headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
 
+    // Extract body from Request object if init doesn't have one
+    let body: BodyInit | null | undefined = init?.body;
+    if (body == null) {
+      body = await this.extractRequestBody(input);
+    }
+
     return fetch(rewrittenUrl, {
       ...init,
+      body: body ?? undefined,
       headers,
       credentials: 'include',
     });
@@ -213,6 +220,67 @@ export class CloudAdapter implements APIAdapter {
     // ReadableStream or other body types — not supported for translation
     console.warn('[CloudAdapter] Non-string body cannot be translated for chat endpoint');
     return null;
+  }
+
+  /**
+   * Extract the body text from a Request object by cloning it.
+   * Returns null if input is not a Request, body is empty, or clone fails.
+   */
+  private async extractRequestBody(input: RequestInfo | URL): Promise<string | null> {
+    if (typeof input === 'string' || input instanceof URL) {
+      return null;
+    }
+    try {
+      const cloned = input.clone();
+      return await cloned.text();
+    } catch {
+      // Body may already be consumed or not readable
+      return null;
+    }
+  }
+
+  /**
+   * Proxy a git request to the Foundry backend with URL path rewriting.
+   * Git endpoints don't need body translation — only URL rewriting.
+   *
+   * Example: /api/git/status → /api/proxy/git/status
+   */
+  private proxyGitRequest(
+    url: string, method: string, init?: RequestInit, requestBody?: string | null,
+  ): Promise<Response> {
+    // Rewrite /api/git/* to /api/proxy/git/*
+    const rewrittenPath = url.replace('/api/git/', '/api/proxy/git/');
+
+    // Build the target URL: always use apiBase + the rewritten path
+    // (handles both relative and absolute input URLs)
+    let targetPath: string;
+    if (rewrittenPath.startsWith('/')) {
+      targetPath = rewrittenPath;
+    } else {
+      // Absolute URL — extract just the path portion
+      try {
+        const parsed = new URL(rewrittenPath);
+        targetPath = parsed.pathname;
+        // Preserve query parameters if present
+        if (parsed.search) {
+          targetPath += parsed.search;
+        }
+      } catch {
+        targetPath = rewrittenPath;
+      }
+    }
+    const targetUrl = `${this.config.apiBase}${targetPath}`;
+
+    const headers = new Headers(init?.headers);
+    headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
+
+    return fetch(targetUrl, {
+      ...init,
+      method,
+      body: init?.body ?? requestBody ?? undefined,
+      headers,
+      credentials: 'include',
+    });
   }
 
   // ──────────────────────────────────────────────────────────────────

@@ -364,7 +364,7 @@ describe('CloudAdapter', () => {
   });
 
   describe('fetch - Foundry backend proxying', () => {
-    it('should proxy git status endpoint to Foundry', async () => {
+    it('should proxy git status endpoint to Foundry proxy', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ status: {} }), { status: 200 })
       );
@@ -373,7 +373,7 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/git/status');
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
     });
 
     it('should proxy stats endpoint to Foundry', async () => {
@@ -410,6 +410,25 @@ describe('CloudAdapter', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
       expect(call[0]).toBe('https://api.sprout.dev/api/chat-sessions');
+    });
+
+    it('should preserve body from Request object for standard backend proxy', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const request = new Request('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: 'dark' }),
+      });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/settings');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ theme: 'dark' });
     });
   });
 
@@ -923,6 +942,332 @@ describe('CloudAdapter', () => {
         stream: true,
         steer: true,
       });
+    });
+  });
+
+  describe('fetch - git endpoint translation', () => {
+    it('should translate GET /api/git/status to /api/proxy/git/status', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+    });
+
+    it('should translate POST /api/git/stage to /api/proxy/git/stage', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/stage', {
+        method: 'POST',
+        body: JSON.stringify({ files: ['foo.txt'] }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/stage');
+    });
+
+    it('should translate POST /api/git/commit to /api/proxy/git/commit', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/commit', {
+        method: 'POST',
+        body: JSON.stringify({ message: 'test commit' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/commit');
+    });
+
+    it('should translate POST /api/git/branch/create to /api/proxy/git/branch/create', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/branch/create', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'new-branch' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/branch/create');
+    });
+
+    it('should preserve query parameters for git diff', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ diff: '' }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/diff?path=foo.txt&cached=false', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/diff?path=foo.txt&cached=false');
+    });
+
+    it('should preserve query parameters for git log', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ commits: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/log?limit=10&offset=0', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/log?limit=10&offset=0');
+    });
+
+    it('should translate nested git deep-review paths', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/deep-review/fix/start', {
+        method: 'POST',
+        body: JSON.stringify({ review_id: '123' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/deep-review/fix/start');
+    });
+
+    it('should translate git deep-review/fix with POST', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/deep-review/fix', {
+        method: 'POST',
+        body: JSON.stringify({ fixes: [] }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/deep-review/fix');
+    });
+
+    it('should translate git deep-review/fix/status with GET', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'running' }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/deep-review/fix/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/deep-review/fix/status');
+    });
+
+    it('should include WebUI client ID header in git requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+    });
+
+    it('should include credentials in git requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.credentials).toBe('include');
+    });
+
+    it('should pass through POST body unchanged for git endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const requestBody = {
+        files: ['foo.txt', 'bar.txt'],
+        message: 'test commit',
+        author: 'Test User',
+      };
+
+      await adapter.fetch('/api/git/commit', {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual(requestBody);
+    });
+
+    it('should NOT affect non-git endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use standard proxy, not git proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
+      expect(call[0]).not.toContain('/api/proxy/');
+    });
+
+    it('should NOT affect settings endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/settings');
+    });
+
+    it('should NOT affect chat endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use chat proxy, not git proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+    });
+
+    it('should preserve existing headers in git requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const customHeaders = new Headers({
+        'Content-Type': 'application/json',
+        'X-Custom-Header': 'custom-value',
+      });
+
+      await adapter.fetch('/api/git/status', {
+        method: 'GET',
+        headers: customHeaders,
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('Content-Type')).toBe('application/json');
+      expect(call[1]?.headers?.get('X-Custom-Header')).toBe('custom-value');
+      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+    });
+
+    it('should translate git checkout', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ ref: 'main' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/checkout');
+    });
+
+    it('should translate git worktree endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ worktrees: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/worktree/create', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/tmp/worktree' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/worktree/create');
+    });
+
+    it('should translate git endpoint with Request object', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: {} }), { status: 200 })
+      );
+
+      const request = new Request('/api/git/status', { method: 'GET' });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+    });
+
+    it('should translate git endpoint with absolute URL string to Foundry backend', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('https://other-host.example.com/api/git/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should proxy to Foundry backend, NOT the other-host URL
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+      expect(call[0]).not.toContain('other-host.example.com');
+    });
+
+    it('should translate git endpoint with URL object to Foundry backend', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ diff: '' }), { status: 200 })
+      );
+
+      await adapter.fetch(new URL('/api/git/diff?path=foo.txt', 'https://other-host.example.com'));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should proxy to Foundry backend with path and query params preserved
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/diff?path=foo.txt');
+      expect(call[0]).not.toContain('other-host.example.com');
+    });
+
+    it('should preserve body when Request object with POST is used for git endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      const request = new Request('/api/git/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'test commit', files: ['a.ts'] }),
+      });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/commit');
+      // Body from Request object should be preserved
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ message: 'test commit', files: ['a.ts'] });
     });
   });
 

@@ -34,7 +34,7 @@ func (ws *ReactWebServer) handleAPIStats(w http.ResponseWriter, r *http.Request)
 		if cs := ctx.getChatSession(chatID); cs != nil {
 			cs.mu.Lock()
 			stats["chat_id"] = chatID
-			stats["chat_is_processing"] = cs.ActiveQuery
+			stats["is_processing"] = cs.ActiveQuery
 			if cs.ActiveQuery && cs.CurrentQuery != "" {
 				stats["chat_current_query"] = cs.CurrentQuery
 			}

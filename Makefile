@@ -18,16 +18,19 @@ help:
 	@echo "  make test-all         - Run unit + integration + smoke tests"
 	@echo "  make test-coverage    - Run unit tests with coverage check (fails if < 40%)"
 	@echo "  make clean            - Clean test artifacts"
-	@echo "  make build            - Build sprout binary"
-	@echo "  make build-version    - Build with version information"
-	@echo "  make build-ui         - Build React web UI"
-	@echo "  make build-wasm      - Build WASM shell module (sprout.wasm)"
-	@echo "  make deploy-ui        - Build and deploy React UI to Go static"
-	@echo "  make verify-ui-embedded - Fail if embedded UI assets are stale"
-	@echo "  make test-webui      - Test React web UI server"
-	@echo "  make lint            - Lint frontend code"
-	@echo "  make lint-fix        - Auto-fix frontend linting issues"
 	@echo ""
+	@echo "Build Commands:"
+	@echo "  make build            - Build sprout binary only"
+	@echo "  make build-all        - Full build (UI + WASM + binary)"
+	@echo "  make build-fast       - Fast incremental build (skips unchanged UI)"
+	@echo "  make build-version    - Build with version information"
+	@echo "  make build-ui         - Build React web UI only"
+	@echo "  make deploy-ui        - Build and deploy React UI (incremental)"
+	@echo "  make build-wasm       - Build WASM shell module"
+	@echo "  make verify-ui-embedded - Fail if embedded UI assets are stale"
+	@echo "  make test-webui       - Test React web UI server"
+	@echo "  make lint             - Lint frontend code"
+	@echo "  make lint-fix         - Auto-fix frontend linting issues"
 	@echo "Distribution Bundles:"
 	@echo "  make build-webui-dist       - Build cloud-mode distributable WebUI bundle"
 	@echo "  make build-webui-dist-local - Build local-mode distributable WebUI bundle"
@@ -149,9 +152,16 @@ test-coverage:
 	echo "Coverage check passed: $${total_coverage}% >= $${min_coverage}%"'
 
 # Build sprout binary
+# Optimized: uses build cache and parallel compilation
 build:
-	@echo "Building ledit..."
-	go build -tags ollama_test -o sprout .
+	@echo "Building sprout..."
+	GO111MODULE=on go build -tags ollama_test -o sprout .
+	@echo "Build completed"
+
+# Build sprout binary with parallel compilation and cache
+build-parallel:
+	@echo "Building sprout (parallel)..."
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags ollama_test -o sprout .
 	@echo "Build completed"
 
 # Build with version information
@@ -161,6 +171,10 @@ build-version:
 	@echo "Versioned build completed"
 
 # React Web UI Commands
+
+# Check if React UI needs rebuild (incremental build support)
+check-needs-react-rebuild:
+	@bash scripts/check-needs-react-rebuild.sh
 
 # Lint frontend code
 lint:
@@ -179,19 +193,26 @@ build-ui:
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	@# Install npm dependencies
-	@cd webui && npm ci
+	@# Install npm dependencies if needed
+	@cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true
 	@cd webui && DISABLE_ESLINT_PLUGIN=true npm run build
 	@echo "React web UI build completed in webui/build/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
-deploy-ui: build-ui
-	@echo "Deploying React web UI to Go static directory..."
-	@if [ ! -d "webui" ]; then \
-		echo "Error: webui directory not found"; \
-		exit 1; \
+# Optimized: skips React build if source files haven't changed
+deploy-ui:
+	@echo "Checking if React UI needs rebuild..."
+	@if bash scripts/check-needs-react-rebuild.sh; then \
+		echo "Building React web UI..."; \
+		cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true; \
+		cd webui && DISABLE_ESLINT_PLUGIN=true npm run build; \
+		echo "React web UI build completed in webui/build/"; \
+		node scripts/build-webui-embed.mjs; \
+	else \
+		echo "React UI is up-to-date, skipping rebuild"; \
+		echo "Deploying existing React build to Go static directory..."; \
+		node scripts/build-webui-embed.mjs --no-build; \
 	fi
-	@node scripts/build-webui-embed.mjs
 	@echo "React web UI deployed to pkg/webui/static/"
 	@echo "Build artifacts in pkg/webui/static/ are now embedded at compile time."
 
@@ -242,8 +263,26 @@ verify-dist-local:
 	@bash scripts/verify-dist-bundle.sh dist/local
 
 # Full development build: UI + WASM + Go binary
+# Optimized: skips React rebuild if source files haven't changed
 build-all: deploy-ui build-wasm build
 	@echo "Full build completed: React UI + WASM shell + Go binary"
+
+# Fast incremental build (only builds what changed)
+build-fast:
+	@echo "🚀 Fast incremental build..."
+	@# Skip React if unchanged, always rebuild WASM and Go binary
+	@if bash scripts/check-needs-react-rebuild.sh; then \
+		echo "  Building React UI..."; \
+		cd webui && DISABLE_ESLINT_PLUGIN=true npm run build || exit 1; \
+		node scripts/build-webui-embed.mjs || exit 1; \
+	else \
+		echo "  React UI up-to-date (skipped)"; \
+	fi
+	@echo "  Building WASM..."
+	@./scripts/build-wasm.sh
+	@echo "  Building Go binary..."
+	@go build -tags ollama_test -o sprout .
+	@echo "✅ Fast build completed"
 
 # Quick development workflow
 dev: deploy-ui

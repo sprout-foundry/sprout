@@ -606,7 +606,7 @@ The sprout webui calls ~100 distinct `/api/*` endpoints. In cloud mode, many of 
 The `CloudAdapter` defines `platformNavItems` (tasks, billing, team) but the webui does not render them yet. These need to become actual routes in the webui.
 
 [x] - CLOUD-ADAPTER: Add a `PlatformNav` context/provider that reads `platformNavItems` from the active adapter and makes them available to the Sidebar component
-[] - CLOUD-ADAPTER: Modify `Sidebar.tsx` to render platform nav items from the adapter in a dedicated section (between existing sections and settings). Each item renders as a nav link to its `href`.
+[x] - CLOUD-ADAPTER: Modify `Sidebar.tsx` to render platform nav items from the adapter in a dedicated section (between existing sections and settings). Each item renders as a nav link to its `href`.
 [] - CLOUD-ADAPTER: Add client-side route handling for `/tasks`, `/billing`, `/team` in the webui when in cloud mode. These routes can either (a) render iframe embeds of Foundry pages, (b) render React components that fetch from Foundry API, or (c) redirect to Foundry pages. Start with (b) — simple data-fetching pages.
 [] - CLOUD-ADAPTER: Create a `TasksPage` component that fetches `GET /api/foundry/tasks` via the adapter and renders the task list with status, creation date, and click-through to detail.
 [] - CLOUD-ADAPTER: Create a `BillingPage` component that shows current tier, usage, and overage via `GET /api/foundry/billing`.

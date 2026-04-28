@@ -418,8 +418,8 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of synthetic endpoints', () => {
       const synthetic = getEndpointsByCategory('synthetic');
-      // Should have 13 synthetic endpoints
-      expect(synthetic.length).toBe(13);
+      // Should have 14 synthetic endpoints
+      expect(synthetic.length).toBe(14);
     });
 
     it('should have expected number of no-op endpoints', () => {
@@ -438,7 +438,7 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of foundry-backend endpoints', () => {
       const foundryBackend = getEndpointsByCategory('foundry-backend');
-      expect(foundryBackend.length).toBe(74);
+      expect(foundryBackend.length).toBe(73);
     });
   });
 
@@ -567,6 +567,24 @@ describe('cloudEndpointRegistry', () => {
         if (getResult) expect(getResult.category).toBe('wasm-local');
         if (postResult) expect(postResult.category).toBe('wasm-local');
       }
+    });
+
+    it('should classify /api/workspace as synthetic in cloud mode', () => {
+      const getResult = classifyEndpoint('/api/workspace', 'GET');
+      expect(getResult).not.toBeNull();
+      expect(getResult?.category).toBe('synthetic');
+      expect(getResult?.syntheticResponse).toEqual({ workspace_root: '/', daemon_root: '/' });
+
+      const postResult = classifyEndpoint('/api/workspace', 'POST');
+      expect(postResult).not.toBeNull();
+      expect(postResult?.category).toBe('synthetic');
+      expect(postResult?.syntheticResponse).toEqual({ workspace_root: '/', daemon_root: '/' });
+    });
+
+    it('should classify /api/workspace/symbols as foundry-backend (not synthetic)', () => {
+      const result = classifyEndpoint('/api/workspace/symbols', 'GET');
+      expect(result).not.toBeNull();
+      expect(result?.category).toBe('foundry-backend');
     });
   });
 });

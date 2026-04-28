@@ -301,6 +301,10 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
 	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
+	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
+	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
+	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
+	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/costs/summary", ws.handleCostsSummary)
 	mux.HandleFunc("/api/costs/history", ws.handleCostsHistory)

@@ -437,7 +437,7 @@ describe('CloudAdapter', () => {
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
     });
 
-    it('should proxy stats endpoint to Foundry', async () => {
+    it('should proxy stats endpoint to Foundry proxy', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ stats: {} }), { status: 200 })
       );
@@ -446,7 +446,7 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
     });
 
     it('should proxy settings endpoint to Foundry (deprecated - now handled by settings proxy)', async () => {
@@ -877,7 +877,7 @@ describe('CloudAdapter', () => {
       expect(sentBody.system_prompt).toBe('You are helpful.');
     });
 
-    it('should NOT translate non-chat endpoints', async () => {
+    it('should NOT translate non-chat endpoints (stats uses stats proxy)', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ stats: {} }), { status: 200 })
       );
@@ -886,7 +886,8 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
+      // Stats now uses stats proxy with URL rewriting
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
     });
 
     it('should include WebUI client ID header in translated requests', async () => {
@@ -1181,7 +1182,7 @@ describe('CloudAdapter', () => {
       expect(sentBody).toEqual(requestBody);
     });
 
-    it('should NOT affect non-git endpoints', async () => {
+    it('should NOT affect non-git endpoints (stats uses stats proxy)', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ stats: {} }), { status: 200 })
       );
@@ -1190,9 +1191,9 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      // Should use standard proxy, not git proxy
-      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
-      expect(call[0]).not.toContain('/api/proxy/');
+      // Should use stats proxy, not git proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
+      expect(call[0]).not.toContain('/api/proxy/git');
     });
 
     it('should NOT affect settings endpoints (they use settings proxy)', async () => {
@@ -1637,7 +1638,7 @@ describe('CloudAdapter', () => {
       expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
     });
 
-    it('should NOT affect non-settings endpoints', async () => {
+    it('should NOT affect non-settings endpoints (stats uses stats proxy)', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ stats: {} }), { status: 200 })
       );
@@ -1646,8 +1647,8 @@ describe('CloudAdapter', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      // Should use standard proxy, not settings proxy
-      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
+      // Should use stats proxy, not settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
       expect(call[0]).not.toContain('/api/proxy/settings');
     });
 
@@ -1969,6 +1970,124 @@ describe('CloudAdapter', () => {
       // Should use standard proxy, not settings proxy
       expect(call[0]).toBe('https://api.sprout.dev/api/hotkeys/preset');
       expect(call[0]).not.toContain('/api/proxy/settings');
+    });
+  });
+
+  describe('fetch - stats endpoint translation', () => {
+    it('should translate GET /api/stats to /api/proxy/stats', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
+    });
+
+    it('should include WebUI client ID header in stats requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+    });
+
+    it('should include credentials in stats requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.credentials).toBe('include');
+    });
+
+    it('should translate stats endpoint with Request object', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      const request = new Request('/api/stats', { method: 'GET' });
+      await adapter.fetch(request);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
+    });
+
+    it('should translate stats endpoint with absolute URL string to Foundry backend', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('https://other-host.example.com/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should proxy to Foundry backend, NOT the other-host URL
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
+      expect(call[0]).not.toContain('other-host.example.com');
+    });
+
+    it('should translate stats endpoint with URL object to Foundry backend', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch(new URL('/api/stats', 'https://other-host.example.com'));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should proxy to Foundry backend
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/stats');
+      expect(call[0]).not.toContain('other-host.example.com');
+    });
+
+    it('should NOT affect chat endpoints (should still use chat proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+    });
+
+    it('should NOT affect git endpoints (should still use git proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/git/status', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/git/status');
+    });
+
+    it('should NOT affect settings endpoints (should still use settings proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ settings: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings');
     });
   });
 

@@ -56,8 +56,8 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git';
-  onViewChange?: (view: 'chat' | 'editor' | 'git') => void;
+  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -115,6 +115,9 @@ const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] =
   { id: 'search', icon: Search, label: 'Search' },
 ];
 
+/** Valid platform view IDs for type-safe navigation */
+const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
+
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   'credit-card': CreditCard,
@@ -160,6 +163,7 @@ function Sidebar({
   isMobile = false,
   gitPanel,
   onRequestProviderSetup,
+  onViewChange,
 }: SidebarProps): JSX.Element {
   const log = useLog();
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
@@ -1138,18 +1142,23 @@ function Sidebar({
                 <nav aria-label="Platform navigation">
                   {sortedPlatformNavItems.map((item) => {
                     const IconComponent = item.icon ? (PLATFORM_ICON_MAP[item.icon] ?? ExternalLink) : ExternalLink;
+                    const isActive = currentView === item.id;
                     return (
-                      <a
+                      <button
                         key={item.id}
-                        href={item.href}
-                        className="rail-icon rail-icon-link"
+                        role="tab"
+                        aria-selected={isActive}
+                        className={`rail-icon ${isActive ? 'active' : ''}`}
+                        onClick={() => {
+                          if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
+                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team');
+                          }
+                        }}
                         title={item.label}
                         aria-label={item.label}
-                        target="_blank"
-                        rel="noopener noreferrer"
                       >
                         <IconComponent size={18} strokeWidth={1.5} />
-                      </a>
+                      </button>
                     );
                   })}
                 </nav>

@@ -58,7 +58,7 @@ interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
   toolExecutions: ToolExecution[];
   queryProgress: any;
   stats: any; // Enhanced stats from API
@@ -310,7 +310,7 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
       model: typeof parsed.model === 'string' ? parsed.model : 'unknown',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
-      currentView: ['chat', 'editor', 'git'].includes(parsed.currentView) ? parsed.currentView : 'chat',
+      currentView: ['chat', 'editor', 'git', 'tasks', 'billing', 'team'].includes(parsed.currentView) ? parsed.currentView : 'chat',
       messages: [],
       fileEdits: Array.isArray(parsed.fileEdits)
         ? parsed.fileEdits.map((edit: any) => ({
@@ -1975,7 +1975,7 @@ function App() {
     });
   }, [wsService]);
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     setState(prev => ({
       ...prev,
       currentView: view

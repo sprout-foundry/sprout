@@ -597,6 +597,7 @@ The sprout webui calls ~100 distinct `/api/*` endpoints. In cloud mode, many of 
 [x] - CLOUD-ADAPTER: Map webui settings/credentials endpoints to Foundry user settings API. The webui calls `/api/settings/credentials`, `/api/settings/providers`, etc. Map to Foundry user credential storage.
 [x] - CLOUD-ADAPTER: Map webui workspace endpoints. The webui calls `GET /api/workspace` expecting `{ workspace_root, daemon_root }`. In cloud mode, the WASM shell owns the workspace — return a synthetic response pointing to the virtual FS root.
 [x] - CLOUD-ADAPTER: Map webui stats endpoint. `GET /api/stats` returns provider, model, tokens, cost, etc. In cloud mode, Foundry tracks this — add a Foundry endpoint or return synthetic stats. (Implemented: Go handler at /api/proxy/stats, CloudAdapter rewrites /api/stats → /api/proxy/stats, 12 new tests)
+[x] - CLOUD-ADAPTER: Test the full cloud-mode webui against the Foundry backend with all endpoint mappings in place. Verify no 404s or broken flows.
 [] - CLOUD-ADAPTER: Test the full cloud-mode webui against the Foundry backend with all endpoint mappings in place. Verify no 404s or broken flows.
 
 ### Phase 3: Platform Nav Integration

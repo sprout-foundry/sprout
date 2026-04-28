@@ -522,6 +522,17 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
+    it('should correctly classify POST on credentials prefix for pool and test sub-paths', () => {
+      // Verify POST method was added to credentials prefix entry
+      const poolResult = classifyEndpoint('/api/settings/credentials/openai/pool', 'POST');
+      expect(poolResult).not.toBeNull();
+      expect(poolResult?.category).toBe('foundry-backend');
+
+      const testResult = classifyEndpoint('/api/settings/credentials/openai/test', 'POST');
+      expect(testResult).not.toBeNull();
+      expect(testResult?.category).toBe('foundry-backend');
+    });
+
     it('should correctly classify all hotkey endpoints', () => {
       const hotkeyEndpoints = [
         '/api/hotkeys',

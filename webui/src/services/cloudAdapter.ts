@@ -96,6 +96,15 @@ export class CloudAdapter implements APIAdapter {
       return this.proxyGitRequest(url, method, init, requestBody);
     }
 
+    // ── Stats endpoint translation ────────────────────────────────────
+    // Rewrite /api/stats to /api/proxy/stats
+    // Stats endpoints don't need body translation — only URL rewriting.
+    if (urlPath === '/api/stats') {
+      // When input is a Request object, pre-read the body for forwarding
+      const requestBody = await this.extractRequestBody(input);
+      return this.proxyStatsRequest(url, method, init, requestBody);
+    }
+
     // ── Settings endpoint translation ───────────────────────────────
     // Rewrite /api/settings and /api/settings/* paths to /api/proxy/settings/*
     // Settings endpoints don't need body translation — only URL rewriting.
@@ -310,6 +319,30 @@ export class CloudAdapter implements APIAdapter {
       try {
         const parsed = new URL(url);
         const pathname = parsed.pathname.replace('/api/settings', '/api/proxy/settings');
+        rewrittenPath = pathname + (parsed.search || '');
+      } catch {
+        rewrittenPath = url;
+      }
+    }
+    return this.proxyToFoundry(rewrittenPath, method, init, requestBody);
+  }
+
+  /**
+   * Proxy a stats request to the Foundry backend with URL path rewriting.
+   * Stats endpoints don't need body translation — only URL rewriting.
+   *
+   * Example: /api/stats → /api/proxy/stats
+   */
+  private proxyStatsRequest(
+    url: string, method: string, init?: RequestInit, requestBody?: string | null,
+  ): Promise<Response> {
+    let rewrittenPath: string;
+    if (url.startsWith('/api/stats')) {
+      rewrittenPath = url.replace('/api/stats', '/api/proxy/stats');
+    } else {
+      try {
+        const parsed = new URL(url);
+        const pathname = parsed.pathname.replace('/api/stats', '/api/proxy/stats');
         rewrittenPath = pathname + (parsed.search || '');
       } catch {
         rewrittenPath = url;

@@ -166,6 +166,10 @@ function Sidebar({
   const { applyPreset } = useHotkeys();
   const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled, whitespaceRenderingMode, setWhitespaceRenderingMode, isFormatOnSaveEnabled: formatOnSaveEnabled, setFormatOnSaveEnabled } = useEditorManager();
   const { platformNavItems } = usePlatformNav();
+  const sortedPlatformNavItems = useMemo(
+    () => [...platformNavItems].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
+    [platformNavItems],
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileTreeRef = useRef<{
     refresh: () => void;
@@ -1128,12 +1132,11 @@ function Sidebar({
             </div>
 
             {/* Platform Nav Items (between main sections and settings) */}
-            {platformNavItems.length > 0 && (
+            {sortedPlatformNavItems.length > 0 && (
               <>
                 <div className="sidebar-icon-rail-divider" role="separator" />
-                {[...platformNavItems]
-                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-                  .map((item) => {
+                <nav aria-label="Platform navigation">
+                  {sortedPlatformNavItems.map((item) => {
                     const IconComponent = item.icon ? (PLATFORM_ICON_MAP[item.icon] ?? ExternalLink) : ExternalLink;
                     return (
                       <a
@@ -1142,11 +1145,14 @@ function Sidebar({
                         className="rail-icon rail-icon-link"
                         title={item.label}
                         aria-label={item.label}
+                        target="_blank"
+                        rel="noopener noreferrer"
                       >
                         <IconComponent size={18} strokeWidth={1.5} />
                       </a>
                     );
                   })}
+                </nav>
               </>
             )}
 

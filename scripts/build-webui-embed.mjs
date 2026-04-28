@@ -74,16 +74,23 @@ function copyBuildOutput() {
 
 console.log('🏗️  Building React Web UI...');
 
-if (!existsSync(join(webuiDir, 'node_modules'))) {
-  console.log('📦 Installing dependencies...');
-  run('npm', ['install'], webuiDir);
-}
+// Check for --no-build flag
+const noBuild = process.argv.includes('--no-build');
 
-console.log('🔨 Building React app...');
-// Pass DISABLE_ESLINT_PLUGIN=true so react-scripts build skips the bundled
-// ESLint pass. Lint is run separately via `npm run lint:ci` in CI, and the
-// react-scripts ESLint pass treats all warnings as errors when CI=true.
-run('npm', ['run', 'build'], webuiDir, { DISABLE_ESLINT_PLUGIN: 'true' });
+if (!noBuild) {
+  if (!existsSync(join(webuiDir, 'node_modules'))) {
+    console.log('📦 Installing dependencies...');
+    run('npm', ['install'], webuiDir);
+  }
+
+  console.log('🔨 Building React app...');
+  // Pass DISABLE_ESLINT_PLUGIN=true so react-scripts build skips the bundled
+  // ESLint pass. Lint is run separately via `npm run lint:ci` in CI, and the
+  // react-scripts ESLint pass treats all warnings as errors when CI=true.
+  run('npm', ['run', 'build'], webuiDir, { DISABLE_ESLINT_PLUGIN: 'true' });
+} else {
+  console.log('⏭️  Skipping React build (--no-build flag)');
+}
 
 console.log('📁 Copying build assets to Go package...');
 copyBuildOutput();

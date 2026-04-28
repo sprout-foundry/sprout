@@ -54,6 +54,23 @@ func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Re
 	}
 
 	// Default: return effective merged config (current behavior)
+	// But avoid blocking if no client context exists
+	clientID := ws.resolveClientID(r)
+	
+	// Check if client context exists without creating it
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+	
+	if ctx == nil {
+		// No client context exists - return global config instead of blocking
+		// trying to create an agent. This fixes the hang when GET /api/settings
+		// is called before any client has connected.
+		ws.handleGetGlobalSettings(w, r)
+		return
+	}
+
+	// Client context exists, try to get the config manager
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
 		return

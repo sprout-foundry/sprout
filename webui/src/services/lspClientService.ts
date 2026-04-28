@@ -6,6 +6,7 @@
  */
 
 import { ApiService } from './api';
+import { clientFetch } from './clientSession';
 
 // Types from @codemirror/lsp-client
 import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-client';
@@ -424,7 +425,7 @@ class LSPClientService {
    */
   private async fetchAndCacheStatus(): Promise<void> {
     try {
-      const response = await fetch('/api/lsp/status');
+      const response = await clientFetch('/api/lsp/status');
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }

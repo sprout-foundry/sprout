@@ -299,6 +299,67 @@ describe('CloudAdapter', () => {
     });
   });
 
+  describe('fetch - workspace endpoint synthetic response', () => {
+    it('should return synthetic response for GET /api/workspace', async () => {
+      const response = await adapter.fetch('/api/workspace', {
+        method: 'GET',
+      });
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+
+      // Should NOT call the actual fetch
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should return synthetic response for POST /api/workspace', async () => {
+      const response = await adapter.fetch('/api/workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_root: '/new/path' }),
+      });
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+
+      // Should NOT call the actual fetch
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should set correct Content-Type header for workspace synthetic response', async () => {
+      const response = await adapter.fetch('/api/workspace', {
+        method: 'GET',
+      });
+
+      expect(response.headers.get('Content-Type')).toBe('application/json');
+    });
+
+    it('should return synthetic workspace response when URL object is used', async () => {
+      const response = await adapter.fetch(new URL('/api/workspace', 'https://api.sprout.dev'));
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+
+      // Should NOT call the actual fetch
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should return synthetic workspace response when Request object is used', async () => {
+      const request = new Request('/api/workspace', { method: 'GET' });
+      const response = await adapter.fetch(request);
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+
+      // Should NOT call the actual fetch
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('fetch - WASM-local endpoint passthrough', () => {
     it('should NOT intercept WASM-local file endpoints', async () => {
       mockFetch.mockResolvedValueOnce(

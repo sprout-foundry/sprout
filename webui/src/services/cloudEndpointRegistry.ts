@@ -577,12 +577,6 @@ export const CLOUD_ENDPOINTS: CloudEndpoint[] = [
     description: 'Execution stats',
   },
   {
-    path: '/api/workspace',
-    methods: ['GET', 'POST'],
-    category: 'foundry-backend',
-    description: 'Workspace info',
-  },
-  {
     path: '/api/workspace/symbols',
     methods: ['GET'],
     category: 'foundry-backend',
@@ -686,6 +680,13 @@ export const CLOUD_ENDPOINTS: CloudEndpoint[] = [
     category: 'synthetic',
     syntheticResponse: {},
     description: 'App config (empty in cloud mode)',
+  },
+  {
+    path: '/api/workspace',
+    methods: ['GET', 'POST'],
+    category: 'synthetic',
+    syntheticResponse: { workspace_root: '/', daemon_root: '/' },
+    description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
   },
 
   // ==================== CATEGORY (d): NO-OP ====================

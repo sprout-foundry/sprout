@@ -240,7 +240,10 @@ describe('usePlatformNav inside provider', () => {
 
     const secondCtx = ctx();
 
-    // The platformNavItems array reference should be stable
+    // The context value object itself should be stable (useMemo with [])
+    expect(secondCtx).toBe(firstCtx);
+
+    // The platformNavItems array reference should also be stable
     expect(secondCtx.platformNavItems).toBe(firstCtx.platformNavItems);
   });
 });

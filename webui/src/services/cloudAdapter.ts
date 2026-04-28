@@ -9,6 +9,7 @@
  */
 
 import type { APIAdapter, PlatformNavItem } from './apiAdapter';
+import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 
 export interface CloudAdapterConfig {
   /** Base URL for the Foundry API (e.g., 'https://api.sprout.dev') */
@@ -24,6 +25,10 @@ export class CloudAdapter implements APIAdapter {
   readonly requiresBackendHealthCheck = true;
   readonly fileOpsViaAPI = false; // WASM handles files locally
   readonly showOnboarding = false; // Cloud is pre-configured
+  readonly supportsSSH = true;
+  readonly supportsInstances = true;
+  readonly supportsLocalTerminal = false;
+  readonly supportsSettings = false;
   readonly platformNavItems?: PlatformNavItem[];
 
   private config: CloudAdapterConfig;
@@ -44,8 +49,12 @@ export class CloudAdapter implements APIAdapter {
       url = input.url.startsWith('/') ? `${this.config.apiBase}${input.url}` : input.url;
     }
 
+    const headers = new Headers(init?.headers);
+    headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
+
     return fetch(url, {
       ...init,
+      headers,
       credentials: 'include', // Send cookies for auth
     });
   }

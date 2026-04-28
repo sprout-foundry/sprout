@@ -22,7 +22,8 @@ import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
 import LiveLog from './LiveLog';
 import './Chat.css';
-import { supportsSSH, isCloud } from '../config/mode';
+import { supportsSSH } from '../config/mode';
+import { requiresBackendHealthCheck } from '../services/apiAdapter';
 
 interface Message {
   id: string;
@@ -452,6 +453,7 @@ function Chat({
   inputValueRef.current = inputValue;
 
   const hasSubagentActivity = subagentActivities.length > 0;
+  const needsHealthCheck = requiresBackendHealthCheck();
 
   // Filter tool executions to show only those for the current chat session
   // Tools with queryId matching the current stats.queryCount are from the current query
@@ -627,8 +629,8 @@ function Chat({
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
-        {/* In cloud mode with unreachable backend, show offline panel */}
-        {isCloud && backendReachable === false && !isProcessing && messages.length === 0 ? (
+        {/* When backend requires health checks and is unreachable, show offline panel */}
+        {needsHealthCheck && backendReachable === false && !isProcessing && messages.length === 0 ? (
           <div className="chat-container chat-container--empty" ref={chatContainerRef}>
             <div className="chat-offline-panel" role="status">
               <CloudOff size={48} className="chat-offline-icon" aria-hidden="true" />
@@ -732,15 +734,15 @@ function Chat({
           placeholder={
             providerAvailable === false
               ? 'Configure a provider to start chatting...'
-              : isCloud && backendReachable === false
+              : needsHealthCheck && backendReachable === false
                 ? 'Waiting for server connection...'
                 : 'Ask me anything about your code...'
           }
           multiline={true}
-          autoFocus={providerAvailable !== false && !(isCloud && backendReachable === false)}
+          autoFocus={providerAvailable !== false && !(needsHealthCheck && backendReachable === false)}
           isProcessing={isProcessing}
           isConnected={isConnected}
-          disabled={providerAvailable === false || (isCloud && backendReachable === false)}
+          disabled={providerAvailable === false || (needsHealthCheck && backendReachable === false)}
           queuedCount={queuedMessagesCount}
           queuedMessages={queuedMessages}
           onQueueMessageRemove={onQueueMessageRemove}

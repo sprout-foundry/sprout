@@ -1609,6 +1609,306 @@ describe('CloudAdapter', () => {
       const sentBody = JSON.parse(call[1]?.body as string);
       expect(sentBody).toEqual({ name: 'openai', value: 'sk-...' });
     });
+
+    // ==================== Credential Pool Endpoints ====================
+    it('should translate GET /api/settings/credentials/{provider}/pool to /api/proxy/settings/credentials/{provider}/pool', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ keys: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/pool', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/pool');
+    });
+
+    it('should translate POST /api/settings/credentials/{provider}/pool with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/anthropic/pool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'sk-ant-...', label: 'production' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/anthropic/pool');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ api_key: 'sk-ant-...', label: 'production' });
+    });
+
+    it('should translate DELETE /api/settings/credentials/{provider}/pool', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/pool', {
+        method: 'DELETE',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/pool');
+    });
+
+    it('should translate DELETE /api/settings/credentials/{provider}/pool with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/pool', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ index: 2 }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/pool');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ index: 2 });
+    });
+
+    it('should preserve query params in credential pool endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ keys: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/credentials/openai/pool?limit=10&offset=0', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/credentials/openai/pool?limit=10&offset=0');
+    });
+
+    // ==================== MCP Server Credentials Endpoints ====================
+    it('should translate GET /api/settings/mcp/servers/{name}/credentials to /api/proxy/settings/mcp/servers/{name}/credentials', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ credentials: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/mcp/servers/my-server/credentials', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/mcp/servers/my-server/credentials');
+    });
+
+    it('should translate PUT /api/settings/mcp/servers/{name}/credentials with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/mcp/servers/my-server/credentials', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: 'secret-123', environment: 'production' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/mcp/servers/my-server/credentials');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ api_key: 'secret-123', environment: 'production' });
+    });
+
+    it('should translate DELETE /api/settings/mcp/servers/{name}/credentials', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/mcp/servers/my-server/credentials', {
+        method: 'DELETE',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/mcp/servers/my-server/credentials');
+    });
+
+    it('should translate DELETE /api/settings/mcp/servers/{name}/credentials with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/mcp/servers/my-server/credentials', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential_name: 'api_key' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/mcp/servers/my-server/credentials');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ credential_name: 'api_key' });
+    });
+
+    // ==================== Provider-Specific Endpoints ====================
+    it('should translate GET /api/settings/providers/{provider}/ to /api/proxy/settings/providers/{provider}/', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ provider: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/providers/openai/', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/providers/openai/');
+    });
+
+    it('should translate DELETE /api/settings/providers/{provider}/', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/providers/openai/', {
+        method: 'DELETE',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/providers/openai/');
+    });
+
+    // ==================== Subagent Type Endpoints ====================
+    it('should translate GET /api/settings/subagent-types/{type}/ to /api/proxy/settings/subagent-types/{type}/', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ type: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/subagent-types/coder/', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/subagent-types/coder/');
+    });
+
+    it('should translate PUT /api/settings/subagent-types/{type}/ with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/subagent-types/coder/', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true, config: { timeout: 60 } }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/subagent-types/coder/');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ enabled: true, config: { timeout: 60 } });
+    });
+
+    it('should translate DELETE /api/settings/subagent-types/{type}/', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/subagent-types/coder/', {
+        method: 'DELETE',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/subagent-types/coder/');
+    });
+
+    // ==================== Skills Endpoints ====================
+    it('should translate PUT /api/settings/skills with body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/settings/skills', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skills: ['typescript', 'go'] }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/settings/skills');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ skills: ['typescript', 'go'] });
+    });
+
+    // ==================== Hotkey Endpoints (NOT settings proxy) ====================
+    it('should NOT translate /api/hotkeys to /api/proxy/settings/hotkeys (use standard proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ hotkeys: [] }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/hotkeys', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use standard proxy, not settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/hotkeys');
+      expect(call[0]).not.toContain('/api/proxy/settings');
+    });
+
+    it('should NOT translate PUT /api/hotkeys to /api/proxy/settings/hotkeys (use standard proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/hotkeys', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bindings: { 'Ctrl+S': 'save' } }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use standard proxy, not settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/hotkeys');
+      expect(call[0]).not.toContain('/api/proxy/settings');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ bindings: { 'Ctrl+S': 'save' } });
+    });
+
+    it('should NOT translate POST /api/hotkeys/validate to /api/proxy/settings/hotkeys/validate (use standard proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ valid: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/hotkeys/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ binding: 'Ctrl+K' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use standard proxy, not settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/hotkeys/validate');
+      expect(call[0]).not.toContain('/api/proxy/settings');
+    });
+
+    it('should NOT translate POST /api/hotkeys/preset to /api/proxy/settings/hotkeys/preset (use standard proxy)', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/hotkeys/preset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset: 'vim' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      // Should use standard proxy, not settings proxy
+      expect(call[0]).toBe('https://api.sprout.dev/api/hotkeys/preset');
+      expect(call[0]).not.toContain('/api/proxy/settings');
+    });
   });
 
   describe('error handling', () => {

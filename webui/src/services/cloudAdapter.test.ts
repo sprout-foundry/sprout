@@ -522,6 +522,50 @@ describe('CloudAdapter', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
+    it('should intercept synthetic responses when URL object input is used', async () => {
+      const response = await adapter.fetch(new URL('/api/onboarding/status', 'https://api.sprout.dev'));
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({ setup_required: false });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should intercept synthetic responses when URL object with query params is used', async () => {
+      const response = await adapter.fetch(new URL('/api/instances?foo=bar', 'https://api.sprout.dev'));
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({
+        instances: [],
+        current_pid: 0,
+        active_host_pid: 0,
+        active_host_port: 0,
+        desired_host_pid: 0,
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should intercept synthetic responses when Request object input is used', async () => {
+      const request = new Request('/api/onboarding/status', { method: 'GET' });
+      const response = await adapter.fetch(request);
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toEqual({ setup_required: false });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('should NOT intercept synthetic response for non-api URL object', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch(new URL('/health', 'https://api.sprout.dev'));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle Request object input', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ success: true }), { status: 200 })

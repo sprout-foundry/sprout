@@ -340,22 +340,6 @@ describe('CloudAdapter', () => {
   });
 
   describe('fetch - Foundry backend proxying', () => {
-    it('should proxy query endpoint to Foundry', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
-
-      await adapter.fetch('/api/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: 'test' }),
-      });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe('https://api.sprout.dev/api/query');
-    });
-
     it('should proxy git status endpoint to Foundry', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ status: {} }), { status: 200 })
@@ -646,6 +630,230 @@ describe('CloudAdapter', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
       expect(call[0]).toBe('https://api.sprout.dev/api/unknown/endpoint');
+    });
+  });
+
+  describe('fetch - chat endpoint translation', () => {
+    it('should translate POST /api/query URL to /api/proxy/chat', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'hello' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+    });
+
+    it('should translate POST /api/query body from webui format to Foundry format', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'hello' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({
+        messages: [{ role: 'user', content: 'hello' }],
+        stream: true,
+      });
+    });
+
+    it('should translate POST /api/query/steer URL to /api/proxy/chat with steer flag', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query/steer', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'adjust tone' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody.steer).toBe(true);
+    });
+
+    it('should translate POST /api/query/stop URL to /api/proxy/chat/stop', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query/stop', {
+        method: 'POST',
+        body: JSON.stringify({ chat_id: 'chat-123' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat/stop');
+      // Body should be passed through unchanged (no translation for stop)
+      const sentBody = JSON.parse(call[1]?.body as string);
+      expect(sentBody).toEqual({ chat_id: 'chat-123' });
+    });
+
+    it('should translate GET /api/query/status URL to /api/proxy/chat/status', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'idle' }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query/status', {
+        method: 'GET',
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat/status');
+    });
+
+    it('should preserve chat_id in translated body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'test', chat_id: 'chat-123' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const sentBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(sentBody.chat_id).toBe('chat-123');
+    });
+
+    it('should preserve provider and model if present', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'test', provider: 'anthropic', model: 'claude-3' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const sentBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(sentBody.provider).toBe('anthropic');
+      expect(sentBody.model).toBe('claude-3');
+    });
+
+    it('should preserve workspace_root and system_prompt if present', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'test',
+          workspace_root: '/home/user/project',
+          system_prompt: 'You are helpful.',
+        }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const sentBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(sentBody.workspace_root).toBe('/home/user/project');
+      expect(sentBody.system_prompt).toBe('You are helpful.');
+    });
+
+    it('should NOT translate non-chat endpoints', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ stats: {} }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/stats', { method: 'GET' });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/stats');
+    });
+
+    it('should include WebUI client ID header in translated requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'hello' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('x-webui-client-id')).toBe('test-client-id-123');
+    });
+
+    it('should include credentials in translated requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'hello' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.credentials).toBe('include');
+    });
+
+    it('should set Content-Type to application/json for chat requests', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'hello' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[1]?.headers?.get('Content-Type')).toBe('application/json');
+    });
+
+    it('should throw error when query is empty', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query', {
+        method: 'POST',
+        body: JSON.stringify({ query: '' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const sentBody = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      // Adapter constructs messages array with empty content (Go backend validates)
+      expect(sentBody.messages).toEqual([{ role: 'user', content: '' }]);
+    });
+
+    it('should handle query with query parameters in URL', async () => {
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), { status: 200 })
+      );
+
+      await adapter.fetch('/api/query?chat_id=abc', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'test' }),
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/proxy/chat');
     });
   });
 

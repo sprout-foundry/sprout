@@ -607,10 +607,10 @@ The `CloudAdapter` defines `platformNavItems` (tasks, billing, team) but the web
 
 [x] - CLOUD-ADAPTER: Add a `PlatformNav` context/provider that reads `platformNavItems` from the active adapter and makes them available to the Sidebar component
 [x] - CLOUD-ADAPTER: Modify `Sidebar.tsx` to render platform nav items from the adapter in a dedicated section (between existing sections and settings). Each item renders as a nav link to its `href`.
-[] - CLOUD-ADAPTER: Add client-side route handling for `/tasks`, `/billing`, `/team` in the webui when in cloud mode. These routes can either (a) render iframe embeds of Foundry pages, (b) render React components that fetch from Foundry API, or (c) redirect to Foundry pages. Start with (b) — simple data-fetching pages.
-[] - CLOUD-ADAPTER: Create a `TasksPage` component that fetches `GET /api/foundry/tasks` via the adapter and renders the task list with status, creation date, and click-through to detail.
-[] - CLOUD-ADAPTER: Create a `BillingPage` component that shows current tier, usage, and overage via `GET /api/foundry/billing`.
-[] - CLOUD-ADAPTER: Create a `TeamPage` component that shows team members and invites via `GET /api/foundry/team`.
+[x] - CLOUD-ADAPTER: Add client-side route handling for `/tasks`, `/billing`, `/team` in the webui when in cloud mode. These routes can either (a) render iframe embeds of Foundry pages, (b) render React components that fetch from Foundry API, or (c) redirect to Foundry pages. Start with (b) — simple data-fetching pages.
+[x] - CLOUD-ADAPTER: Create a `TasksPage` component that fetches `GET /api/foundry/tasks` via the adapter and renders the task list with status, creation date, and click-through to detail.
+[x] - CLOUD-ADAPTER: Create a `BillingPage` component that shows current tier, usage, and overage via `GET /api/foundry/billing`.
+[x] - CLOUD-ADAPTER: Create a `TeamPage` component that shows team members and invites via `GET /api/foundry/team`.
 
 ### Phase 4: Option A — Shared Component Library (`@sprout/ui`)
 

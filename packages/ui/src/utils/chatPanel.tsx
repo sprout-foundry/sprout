@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 /**
  * Escape HTML special characters to prevent XSS.
  */
@@ -31,10 +33,16 @@ export function formatTimestamp(timestamp?: Date | number): string {
 /**
  * Simple markdown-like parser for basic formatting.
  * Handles code blocks, bold, and italic.
+ *
+ * SAFETY: This function is XSS-safe because:
+ * 1. All user input is first run through escapeHtml(), which converts <, >, &, ", ' to HTML entities
+ * 2. The regex replacements then only add <strong>, <em>, <code> tags around already-escaped text
+ * 3. No user-provided HTML can survive step 1, so dangerous tags/scripts are neutralized before any formatting
+ * 4. The resulting HTML contains only our safe formatting tags wrapped around escaped content
  */
-export function parseMarkdown(text: string): React.ReactNode {
+export function parseMarkdown(text: string): ReactNode {
   const lines = text.split('\n');
-  const result: React.ReactNode[] = [];
+  const result: ReactNode[] = [];
   let inCodeBlock = false;
   let codeBlockContent: string[] = [];
   let blockStartLine = 0;

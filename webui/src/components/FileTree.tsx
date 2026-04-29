@@ -58,6 +58,9 @@ interface FileTreeProps {
   onItemCreated?: () => void;
   onDeleteItem?: (path: string) => void;
   workspaceRoot?: string;
+  /** Optional pre-loaded file tree data. When provided, this takes priority over internal fetch for initial load.
+   *  Consumers should memoize this prop (e.g., with useMemo) to avoid unnecessary re-renders. */
+  files?: FileInfo[];
   /** Optional callback for fetching files from a given path */
   onFetchFiles?: (path: string) => Promise<FileInfo[]>;
   /** Optional callback for creating a file */
@@ -92,7 +95,7 @@ export interface FileTreeHandle {
 }
 
 const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
-  ({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem, workspaceRoot,
+  ({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem, workspaceRoot, files: filesProp,
      onFetchFiles, onCreateFile, onCreateFolder, onDeletePath, onRenamePath, onOpenInFileBrowser }, ref) => {
     const [files, setFiles] = useState<FileInfo[]>([]);
     const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
@@ -104,6 +107,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [bgContextMenu, setBgContextMenu] = useState<{ x: number; y: number } | null>(null);
     const filesRef = useRef<FileInfo[]>([]);
+    const filesPropRef = useRef(filesProp);
     const inputRef = useRef<HTMLInputElement>(null);
     const fileListRef = useRef<HTMLDivElement>(null);
     const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
@@ -179,7 +183,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       setError(null);
 
       try {
-        let nextFiles = await fetchFiles(rootPath);
+        let nextFiles = filesPropRef.current;
+
+        // If files prop is provided, use it; otherwise fetch
+        if (nextFiles === undefined) {
+          nextFiles = await fetchFiles(rootPath);
+        }
+
         const expanded = Array.from(expandedDirs)
           .filter((dirPath) => dirPath !== rootPath)
           .sort((a, b) => a.split('/').length - b.split('/').length);
@@ -251,7 +261,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
           for (const dirPath of sortedAncestors) {
             const dir = findFileByPath(filesRef.current, dirPath);
-            if (!dir || dir.isDir) {
+            if (!dir || !dir.children) {
               const children = await fetchFiles(dirPath);
               setFiles((prev) => updateFileChildren(prev, dirPath, children));
             }
@@ -288,12 +298,21 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
     useEffect(() => {
       filesRef.current = files;
-    }, [files]);
+      filesPropRef.current = filesProp;
+    }, [files, filesProp]);
 
     useEffect(() => {
-      refreshTree();
+      // If files prop is provided, sync it to state
+      // Otherwise, fetch via onFetchFiles
+      if (filesProp !== undefined) {
+        setFiles(filesProp);
+        setError(null);
+      } else {
+        refreshTree();
+      }
+      // Only re-run when rootPath or filesProp changes (not refreshTree)
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rootPath]);
+    }, [rootPath, filesProp]);
 
     useEffect(() => {
       if (!draft) {

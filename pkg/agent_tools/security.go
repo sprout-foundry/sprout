@@ -70,9 +70,11 @@ var readonlyTools = map[string]bool{
 	"fetch_url": true, "browse_url": true,
 	"analyze_ui_screenshot": true, "analyze_image_content": true,
 	"view_history": true, "TodoRead": true, "TodoWrite": true,
-	"list_skills": true, "run_subagent": true, "run_parallel_subagents": true,
+	"list_skills": true, "activate_skill": true, "run_subagent": true, "run_parallel_subagents": true,
 	"glob": true, "list_directory": true, "get_file_info": true,
 	"list_processes": true, "self_review": true,
+	"mcp_tools": true,
+	"add_memory": true, "read_memory": true, "list_memories": true, "delete_memory": true,
 }
 
 // ClassifyToolCall classifies a tool call for security purposes based on the
@@ -89,6 +91,12 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 	switch toolName {
 	case "shell_command":
 		return classifyShellCommand(args)
+	case "commit":
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Structured commit tool with built-in validation"}
+	case "rollback_changes":
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Structured rollback tool with revision tracking"}
+	case "revision_id":
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only revision ID lookup"}
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		return classifyWriteOperation(args)
 	case "git":

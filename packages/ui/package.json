@@ -54,6 +54,17 @@
     "vite": "^5.0.0",
     "vite-plugin-dts": "^3.0.0"
   },
+  "exports": {
+    ".": {
+      "default": "./dist/index.esm.js",
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./dist/style.css": {
+      "default": "./dist/style.css"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -74,6 +85,7 @@
   },
   "scripts": {
     "build": "vite build",
+    "prepublishOnly": "npm run build",
     "test": "jest --config jest.config.js",
     "type-check": "tsc --noEmit"
   },

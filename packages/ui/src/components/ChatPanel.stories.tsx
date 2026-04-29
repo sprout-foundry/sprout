@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof ChatPanel>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof ChatPanel>;
 
 const baseMessages = [
   {

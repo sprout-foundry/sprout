@@ -111,6 +111,12 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 		srv.handleStaticFiles(w, r)
 		r.URL.Path = original
 		return
+	case strings.HasPrefix(rest, "/assets/"):
+		original := r.URL.Path
+		r.URL.Path = rest
+		srv.handleAssets(w, r)
+		r.URL.Path = original
+		return
 	case rest == "/sw.js":
 		original := r.URL.Path
 		r.URL.Path = rest

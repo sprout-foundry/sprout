@@ -1,0 +1,192 @@
+/* FileTree Container */
+.filetree {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* Node Container */
+.filetree-node {
+  user-select: none;
+}
+
+/* Node Row */
+.filetree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.08s ease;
+  height: 28px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.filetree-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.filetree-row-selected {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+}
+
+.filetree-row-editing {
+  background: var(--bg-tertiary);
+}
+
+/* Expand/Collapse Arrow */
+.filetree-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 8px;
+  color: var(--text-tertiary);
+  transition: transform 0.1s ease;
+  margin-left: -2px;
+}
+
+.filetree-arrow-expanded {
+  transform: rotate(90deg);
+}
+
+.filetree-row:hover .filetree-arrow {
+  color: var(--text-secondary);
+}
+
+.filetree-row-selected .filetree-arrow {
+  color: var(--bg-primary);
+}
+
+/* Icon */
+.filetree-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.filetree-row:hover .filetree-icon {
+  color: var(--text-primary);
+}
+
+.filetree-row-selected .filetree-icon {
+  color: var(--bg-primary);
+}
+
+/* Name */
+.filetree-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Highlight matched text in search */
+.filetree-highlight {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 500;
+}
+
+/* Edit Input */
+.filetree-edit-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  outline: none;
+  min-width: 0;
+}
+
+.filetree-edit-input:focus {
+  border-color: var(--accent-primary);
+}
+
+/* Git Status Indicator */
+.filetree-git-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  margin-left: auto;
+}
+
+.filetree-git-modified {
+  color: var(--accent-warning);
+}
+
+.filetree-git-untracked {
+  color: var(--accent-primary);
+}
+
+.filetree-git-ignored {
+  color: var(--text-tertiary);
+}
+
+.filetree-git-added {
+  color: var(--accent-success);
+}
+
+/* Children Container */
+.filetree-children {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar Styling */
+.filetree::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.filetree::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.filetree::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 5px;
+}
+
+.filetree::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .filetree-row {
+    transition: none;
+  }
+
+  .filetree-arrow {
+    transition: none;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .filetree {
+    font-size: 12px;
+  }
+
+  .filetree-row {
+    height: 26px;
+    padding: 3px 6px 3px 6px;
+  }
+}

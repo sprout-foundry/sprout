@@ -1,0 +1,119 @@
+/* Editor Container */
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+/* Language indicator */
+.editor-language {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-secondary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Editor wrapper - holds line numbers and textarea together */
+.editor-wrapper {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Line numbers gutter */
+.editor-line-numbers {
+  flex-shrink: 0;
+  width: 48px;
+  padding: 12px 8px;
+  text-align: right;
+  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-subtle);
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Textarea for editing */
+.editor-textarea {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: none;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.editor-textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.editor-textarea:disabled,
+.editor-textarea[readonly] {
+  cursor: default;
+}
+
+/* Scrollbar styling */
+.editor-textarea::-webkit-scrollbar,
+.editor-line-numbers::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.editor-textarea::-webkit-scrollbar-track,
+.editor-line-numbers::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-textarea::-webkit-scrollbar-thumb,
+.editor-line-numbers::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 5px;
+}
+
+.editor-textarea::-webkit-scrollbar-thumb:hover,
+.editor-line-numbers::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
+}
+
+/* Selection styling */
+.editor-textarea::selection {
+  background: var(--accent-primary);
+  color: var(--bg-primary);
+}
+
+/* Focus state */
+.editor-textarea:focus {
+  outline: none;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .editor-textarea {
+    scroll-behavior: auto;
+  }
+}

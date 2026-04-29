@@ -1,4 +1,6 @@
-export type NotificationType = 'info' | 'success' | 'warning' | 'error';
+import type { NotificationType } from '../types/notification';
+
+export type { NotificationType };
 
 export interface NotificationEvent {
   type: NotificationType;

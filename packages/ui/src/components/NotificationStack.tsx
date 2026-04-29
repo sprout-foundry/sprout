@@ -3,13 +3,7 @@ import type { NotificationType } from '../contexts/NotificationContext';
 import NotificationItem from './NotificationItem';
 import './NotificationStack.css';
 
-export interface NotificationData {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  duration?: number;
-}
+import type { NotificationData } from '../types/notification';
 
 export interface NotificationStackProps {
   notifications: NotificationData[];

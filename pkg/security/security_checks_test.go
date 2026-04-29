@@ -774,7 +774,7 @@ func TestDetectSecurityConcerns_SortedConcerns(t *testing.T) {
 
 func TestSecurityPromptManager_Timeout(t *testing.T) {
 	eb := events.NewEventBus()
-	mgr := NewSecurityPromptManager()
+	mgr := NewApprovalManager()
 
 	// Set a very short timeout so the test doesn't wait 5 minutes
 	mgr.SetPromptTimeout(50 * time.Millisecond)
@@ -808,7 +808,7 @@ func TestSecurityPromptManager_Timeout(t *testing.T) {
 func TestSecurityPromptManager_TimeoutWithDefaultTrue(t *testing.T) {
 	// When defaultResponse is true, timeout should return true (the safe default)
 	eb := events.NewEventBus()
-	mgr := NewSecurityPromptManager()
+	mgr := NewApprovalManager()
 
 	mgr.SetPromptTimeout(50 * time.Millisecond)
 
@@ -838,7 +838,7 @@ func TestSecurityPromptManager_TimeoutWithDefaultTrue(t *testing.T) {
 
 func TestSecurityPromptManager_SetPromptTimeout(t *testing.T) {
 	eb := events.NewEventBus()
-	mgr := NewSecurityPromptManager()
+	mgr := NewApprovalManager()
 
 	// Set a short custom timeout and verify it takes effect
 	mgr.SetPromptTimeout(30 * time.Millisecond)
@@ -885,7 +885,7 @@ func TestSecurityPromptManager_SetPromptTimeout(t *testing.T) {
 
 func TestSecurityPromptManager_TimeoutDoesNotBlockIfResponseArrives(t *testing.T) {
 	eb := events.NewEventBus()
-	mgr := NewSecurityPromptManager()
+	mgr := NewApprovalManager()
 
 	// Set a long timeout (10 seconds) but respond immediately
 	mgr.SetPromptTimeout(10 * time.Second)

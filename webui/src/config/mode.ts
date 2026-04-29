@@ -2,7 +2,7 @@
  * Sprout Mode Configuration
  *
  * Feature flags for Cloud vs Local mode in the Sprout webui.
- * Controlled via REACT_APP_SPROUT_MODE environment variable at build time.
+ * Controlled via VITE_SPROUT_MODE environment variable at build time.
  */
 
 import { getAdapter } from '../services/apiAdapter';
@@ -20,7 +20,7 @@ export type SproutMode = 'local' | 'cloud';
  * defaults to local mode.
  */
 export const mode: SproutMode =
-  process.env.REACT_APP_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';
+  import.meta.env.VITE_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';
 
 /**
  * Cloud mode flag - true when running in cloud environment

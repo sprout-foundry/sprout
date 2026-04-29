@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const webuiDir = join(repoRoot, 'webui');
-const buildDir = join(webuiDir, 'build');
+const buildDir = join(webuiDir, 'dist'); // Vite output directory
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -31,9 +31,9 @@ for (let i = 0; i < args.length; i++) {
     console.log('  --help, -h             Show this help message');
     console.log('');
     console.log('Modes:');
-    console.log('  cloud   - Sets REACT_APP_SPROUT_MODE=cloud during build');
+    console.log('  cloud   - Sets VITE_SPROUT_MODE=cloud during build');
     console.log('            Produces cloud-mode bundle (remote terminal/SSH enabled)');
-    console.log('  local   - Omits REACT_APP_SPROUT_MODE during build');
+    console.log('  local   - Sets VITE_SPROUT_MODE=local during build');
     console.log('            Produces local-mode bundle (local terminal enabled)');
     console.log('');
     console.log('Examples:');
@@ -298,23 +298,10 @@ function postProcessIndexHtml(targetDir, buildMode) {
 
   let html = readFileSync(indexHtmlPath, 'utf-8');
 
-  // In cloud mode, remove the preconnect link to localhost:54421
-  // Handle both minified (no space) and unminified (with space) versions
-  if (buildMode === 'cloud') {
-    const preconnectPattern = /<link rel="preconnect" href="http:\/\/localhost:54421" ?\/>\s*/;
-    const beforeLength = html.length;
-    html = html.replace(preconnectPattern, '');
-    const afterLength = html.length;
-
-    if (beforeLength !== afterLength) {
-      console.log('  ✓ Removed localhost:54421 preconnect link');
-    } else {
-      console.log('  ℹ No localhost:54421 preconnect link found (already removed)');
-    }
-  }
+  // Vite builds don't have %PUBLIC_URL% placeholders, so no processing needed
+  console.log('  ✓ index.html requires no post-processing (Vite build)');
 
   writeFileSync(indexHtmlPath, html, 'utf-8');
-  console.log('  ✓ index.html updated');
 }
 
 function main() {
@@ -331,20 +318,18 @@ function main() {
   console.log('');
 
   // Set build environment variables
-  const buildEnv = {
-    DISABLE_ESLINT_PLUGIN: 'true',
-  };
+  const buildEnv = {};
 
   if (mode === 'cloud') {
-    buildEnv.REACT_APP_SPROUT_MODE = 'cloud';
-    console.log('🔨 Building React app in cloud mode (REACT_APP_SPROUT_MODE=cloud)...');
+    buildEnv.VITE_SPROUT_MODE = 'cloud';
+    console.log('🔨 Building React app with Vite in cloud mode (VITE_SPROUT_MODE=cloud)...');
   } else {
     // Explicitly override to prevent env var leak from the shell
-    buildEnv.REACT_APP_SPROUT_MODE = '';
-    console.log('🔨 Building React app in local mode (no REACT_APP_SPROUT_MODE)...');
+    buildEnv.VITE_SPROUT_MODE = 'local';
+    console.log('🔨 Building React app with Vite in local mode (VITE_SPROUT_MODE=local)...');
   }
 
-  // Build React app
+  // Build React app with Vite
   run('npm', ['run', 'build'], webuiDir, buildEnv);
   console.log('');
 

@@ -42,6 +42,7 @@
     "@lezer/go": "^1.0.1",
     "@replit/codemirror-minimap": "^0.5.2",
     "@sprout/events": "file:../packages/events",
+    "@sprout/ui": "file:../packages/ui",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@uiw/codemirror-extensions-color": "^4.25.9",
@@ -86,7 +87,10 @@
   },
   "jest": {
     "moduleNameMapper": {
-      "^@marijn/find-cluster-break$": "<rootDir>/node_modules/@marijn/find-cluster-break/dist/index.cjs"
+      "^@marijn/find-cluster-break$": "<rootDir>/node_modules/@marijn/find-cluster-break/dist/index.cjs",
+      "^@sprout/ui$": "<rootDir>/../packages/ui/src/index.ts",
+      "^@sprout/ui/(.*)$": "<rootDir>/../packages/ui/src/$1",
+      "^@sprout/events$": "<rootDir>/../packages/events/src/index.ts"
     }
   },
   "name": "sprout-webui",

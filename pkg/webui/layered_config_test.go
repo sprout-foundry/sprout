@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -311,7 +312,10 @@ func TestHandlePutGlobalSettings(t *testing.T) {
 		t.Fatalf("expected 200, got %d: body=%s", rec.Code, rec.Body.String())
 	}
 
-	configPath := filepath.Join(isolatedHome, ".sprout", "config.json")
+	configPath, err := configuration.GetConfigPath()
+	if err != nil {
+		t.Fatalf("failed to get config path: %v", err)
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

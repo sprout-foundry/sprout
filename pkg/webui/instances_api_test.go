@@ -12,7 +12,9 @@ import (
 )
 
 func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	now := time.Now()
 	currentPID := os.Getpid()
@@ -88,7 +90,9 @@ func TestHandleAPIInstancesFiltersStaleAndReturnsHostMetadata(t *testing.T) {
 }
 
 func TestHandleAPIInstanceSelectWritesDesiredHost(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 	pid := os.Getpid()
 
 	payload := []byte(`{"pid":` + itoaForTest(pid) + `}`)
@@ -116,7 +120,9 @@ func TestHandleAPIInstanceSelectWritesDesiredHost(t *testing.T) {
 }
 
 func TestHandleAPIInstanceSelectRejectsInvalidPID(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/instances/select", bytes.NewReader([]byte(`{"pid":0}`)))
 	w := httptest.NewRecorder()
@@ -130,7 +136,9 @@ func TestHandleAPIInstanceSelectRejectsInvalidPID(t *testing.T) {
 }
 
 func TestHandleAPIInstancesRejectsInvalidMethod(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/instances", nil)
 	w := httptest.NewRecorder()
@@ -224,7 +232,9 @@ func TestHandleAPISSHOpenRejectsMissingAlias(t *testing.T) {
 }
 
 func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	session := &sshWorkspaceSession{
 		Key:                 "devbox::$HOME",
@@ -264,7 +274,9 @@ func TestPersistedSSHSessionRegistryRoundTrip(t *testing.T) {
 }
 
 func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
 		"devbox::$HOME": {
@@ -304,7 +316,9 @@ func TestHandleAPISSHSessionsReturnsPersistedEntries(t *testing.T) {
 }
 
 func TestHandleAPISSHSessionDeleteRemovesPersistedEntry(t *testing.T) {
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	_tmpCfg := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", _tmpCfg)
+	t.Setenv("SPROUT_CONFIG", _tmpCfg)
 
 	if err := writePersistedSSHSessionRegistry(map[string]persistedSSHWorkspaceSession{
 		"devbox::$HOME": {

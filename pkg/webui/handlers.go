@@ -82,6 +82,28 @@ go install .</pre>
 </html>
 `
 
+// handleAssets serves Vite-bundled assets from static/assets/ with proper MIME types
+func (ws *ReactWebServer) handleAssets(w http.ResponseWriter, r *http.Request) {
+	filePath := strings.TrimPrefix(r.URL.Path, "/assets/")
+	if filePath == "" || strings.Contains(filePath, "..") || strings.HasPrefix(filePath, "/") || strings.HasPrefix(filePath, "\\") {
+		http.NotFound(w, r)
+		return
+	}
+
+	data, err := readStaticFile("assets/" + filePath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if contentType := mime.TypeByExtension(path.Ext(filePath)); contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+	// Vite hashes filenames, so these are immutable — cache aggressively
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Write(data)
+}
+
 // handleStaticFiles serves static files with proper MIME types
 func (ws *ReactWebServer) handleStaticFiles(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(r.URL.Path, "/static/") {

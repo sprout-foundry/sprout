@@ -792,16 +792,18 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Co
 }
 
 func customProviderFilePath(providerName string) string {
-	configRoot := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
-	if configRoot == "" {
-		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
-		if xdgConfigHome != "" {
-			configRoot = filepath.Join(xdgConfigHome, "sprout")
-		} else if homeDir, err := os.UserHomeDir(); err == nil {
-			configRoot = filepath.Join(homeDir, ".sprout")
+	configDir, err := envutil.GetConfigDir()
+	if err != nil {
+		// Fallback to env-based resolution if GetConfigDir fails
+		configRoot := strings.TrimSpace(envutil.GetEnvSimple("CONFIG"))
+		if configRoot == "" {
+			if homeDir, homeErr := os.UserHomeDir(); homeErr == nil {
+				configRoot = filepath.Join(homeDir, ".config", "sprout")
+			}
 		}
+		return filepath.Join(configRoot, "providers", providerName+".json")
 	}
-	return filepath.Join(configRoot, "providers", providerName+".json")
+	return filepath.Join(configDir, "providers", providerName+".json")
 }
 
 func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint string) ([]ModelInfo, error) {

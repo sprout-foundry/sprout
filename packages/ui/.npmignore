@@ -1,9 +1,26 @@
+# Source code
 src/
-node_modules/
+
+# Tests
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Config files
+vite.config.ts
 tsconfig.json
 tsconfig.build.json
-vite.config.ts
 jest.config.js
-package-lock.json
-*.test.tsx
-*.test.ts
+jest.config.ts
+
+# Development files
+.eslintrc*
+.prettierrc*
+.editorconfig
+.DS_Store
+*.tsbuildinfo
+
+# Build tooling
+scripts/

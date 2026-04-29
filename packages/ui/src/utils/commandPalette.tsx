@@ -1,4 +1,4 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 
 export interface FuzzyMatchResult {
   score: number;
@@ -49,10 +49,10 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatchResult {
 /**
  * Highlight matched text in the search query.
  */
-export function highlightMatch(text: string, indices: number[]): React.ReactNode {
+export function highlightMatch(text: string, indices: number[]): ReactNode {
   if (indices.length === 0) return text;
 
-  const result: React.ReactNode[] = [];
+  const result: ReactNode[] = [];
   let lastIndex = 0;
 
   indices.forEach((idx, i) => {

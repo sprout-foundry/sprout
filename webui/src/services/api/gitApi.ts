@@ -118,11 +118,15 @@ export async function unstageAll(fetchFn: typeof fetch): Promise<any> {
   return response.json();
 }
 
-export async function createCommit(fetchFn: typeof fetch, message: string): Promise<any> {
+export async function createCommit(fetchFn: typeof fetch, message: string, files?: string[]): Promise<any> {
+  const body: Record<string, unknown> = { message };
+  if (files && files.length > 0) {
+    body.files = files;
+  }
   const response = await fetchFn('/api/git/commit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Commit failed' }));

@@ -3,24 +3,14 @@
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { Simulate } from 'react-dom/test-utils';
-import FileTree from './FileTree';
-import { ApiService } from '../services/api';
-
-import { clientFetch } from '../services/clientSession';
+import FileTree, { type FileInfo } from './FileTree';
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/clientSession', () => ({
-  clientFetch: jest.fn(),
-}));
-
-jest.mock('../services/api', () => ({
-  ApiService: {
-    getInstance: jest.fn(),
-  },
-}));
+// clientFetch and ApiService are no longer used by FileTree
+// (removed during refactoring to callback-props pattern)
 
 jest.mock('./ThemedDialog', () => ({
   showThemedConfirm: jest.fn().mockResolvedValue(false),
@@ -37,39 +27,20 @@ Object.assign(navigator, {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MOCK_FILES = [
-  { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
-  { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
-  { name: 'README.md', path: 'README.md', is_dir: false, size: 200, mod_time: 2000 },
-  {
-    name: 'node_modules',
-    path: 'node_modules',
-    is_dir: true,
-    size: 0,
-    mod_time: 0,
-    git_status: 'ignored',
-  },
-  { name: 'dist', path: 'dist', is_dir: true, size: 0, mod_time: 0, git_status: 'ignored' },
-  { name: '.env', path: '.env', is_dir: false, size: 50, mod_time: 500, git_status: 'ignored' },
+// Parsed FileInfo versions (what onFetchFiles callback returns)
+const MOCK_FILES_PARSED: FileInfo[] = [
+  { name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' },
+  { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+  { name: 'README.md', path: 'README.md', isDir: false, size: 200, modified: 2000, ext: '.md' },
+  { name: 'node_modules', path: 'node_modules', isDir: true, size: 0, modified: 0, ext: '', gitStatus: 'ignored' },
+  { name: 'dist', path: 'dist', isDir: true, size: 0, modified: 0, ext: '', gitStatus: 'ignored' },
+  { name: '.env', path: '.env', isDir: false, size: 50, modified: 500, ext: '', gitStatus: 'ignored' },
 ];
 
-const MOCK_DIR_CHILDREN = [
-  { name: 'app.tsx', path: 'src/app.tsx', is_dir: false, size: 50, mod_time: 500 },
-  { name: 'utils', path: 'src/utils', is_dir: true, size: 0, mod_time: 300 },
+const MOCK_DIR_CHILDREN_PARSED: FileInfo[] = [
+  { name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' },
+  { name: 'utils', path: 'src/utils', isDir: true, size: 0, modified: 300, ext: '' },
 ];
-
-function mockFetchResponse(files: any[] = MOCK_FILES) {
-  return {
-    ok: true,
-    status: 200,
-    json: () =>
-      Promise.resolve({
-        message: 'success',
-        path: '.',
-        files,
-      }),
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -95,19 +66,20 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
 
-  // Default: API call succeeds
-  (ApiService.getInstance as jest.Mock).mockReturnValue({
-    createItem: jest.fn().mockResolvedValue({}),
-    deleteItem: jest.fn().mockResolvedValue({}),
-    renameItem: jest.fn().mockResolvedValue({}),
+  // Reset the default onFetchFiles mock
+  defaultOnFetchFiles.mockClear();
+  defaultOnFetchFiles.mockImplementation(async (path: string): Promise<FileInfo[]> => {
+    if (path === '.') return MOCK_FILES_PARSED;
+    if (path === 'src') return MOCK_DIR_CHILDREN_PARSED;
+    return [];
   });
 
-  // Default: clientFetch returns a file listing with files & dirs
-  (clientFetch as jest.Mock).mockImplementation((url: string) => {
-    if (url.includes('path=.')) return Promise.resolve(mockFetchResponse());
-    if (url.includes('path=src')) return Promise.resolve(mockFetchResponse(MOCK_DIR_CHILDREN));
-    return Promise.resolve(mockFetchResponse([]));
-  });
+  // Reset other default mocks
+  defaultOnOpenInFileBrowser.mockClear().mockResolvedValue(undefined);
+  defaultOnRenamePath.mockClear().mockResolvedValue(undefined);
+  defaultOnDeletePath.mockClear().mockResolvedValue(undefined);
+  defaultOnCreateFile.mockClear().mockResolvedValue(undefined);
+  defaultOnCreateFolder.mockClear().mockResolvedValue(undefined);
 
   // Prevent confirm() from blocking tests
   window.confirm = jest.fn(() => false);
@@ -130,6 +102,18 @@ const flushPromises = async () => {
 };
 
 const defaultOnFileSelect = jest.fn();
+const defaultOnOpenInFileBrowser = jest.fn().mockResolvedValue(undefined);
+const defaultOnRenamePath = jest.fn().mockResolvedValue(undefined);
+const defaultOnDeletePath = jest.fn().mockResolvedValue(undefined);
+const defaultOnCreateFile = jest.fn().mockResolvedValue(undefined);
+const defaultOnCreateFolder = jest.fn().mockResolvedValue(undefined);
+
+/** Default onFetchFiles that returns parsed mock data. */
+const defaultOnFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+  if (path === '.') return MOCK_FILES_PARSED;
+  if (path === 'src') return MOCK_DIR_CHILDREN_PARSED;
+  return [];
+});
 
 /** Render FileTree and wait for initial data to load. */
 async function renderTree(props: Partial<React.ComponentProps<typeof FileTree>> = {}) {
@@ -144,10 +128,16 @@ async function renderTree(props: Partial<React.ComponentProps<typeof FileTree>> 
         onRefresh={props.onRefresh}
         onItemCreated={props.onItemCreated}
         onDeleteItem={props.onDeleteItem}
+        onFetchFiles={props.onFetchFiles ?? defaultOnFetchFiles}
+        onCreateFile={props.onCreateFile ?? defaultOnCreateFile}
+        onCreateFolder={props.onCreateFolder ?? defaultOnCreateFolder}
+        onDeletePath={props.onDeletePath ?? defaultOnDeletePath}
+        onRenamePath={props.onRenamePath ?? defaultOnRenamePath}
+        onOpenInFileBrowser={props.onOpenInFileBrowser ?? defaultOnOpenInFileBrowser}
       />,
     );
   });
-  // Wait for clientFetch to resolve + state updates
+  // Wait for onFetchFiles to resolve + state updates
   await flushPromises();
 }
 
@@ -782,34 +772,22 @@ describe('FileTree ignored files toggle', () => {
   });
 
   it('keeps a non-ignored directory visible when it contains only ignored children', async () => {
-    // Override clientFetch to return a directory with only ignored children
-    (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) {
-        return Promise.resolve(
-          mockFetchResponse([
-            { name: 'output', path: 'output', is_dir: true, size: 0, mod_time: 0 },
-            { name: 'main.go', path: 'main.go', is_dir: false, size: 100, mod_time: 1000 },
-          ]),
-        );
+    const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === '.') {
+        return [
+          { name: 'output', path: 'output', isDir: true, size: 0, modified: 0, ext: '' },
+          { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+        ];
       }
-      if (url.includes('path=output')) {
-        return Promise.resolve(
-          mockFetchResponse([
-            {
-              name: 'build.log',
-              path: 'output/build.log',
-              is_dir: false,
-              size: 50,
-              mod_time: 500,
-              git_status: 'ignored',
-            },
-          ]),
-        );
+      if (path === 'output') {
+        return [
+          { name: 'build.log', path: 'output/build.log', isDir: false, size: 50, modified: 500, ext: '.log', gitStatus: 'ignored' },
+        ];
       }
-      return Promise.resolve(mockFetchResponse([]));
+      return [];
     });
 
-    await renderTree();
+    await renderTree({ onFetchFiles: customFetchFiles });
 
     // Expand the output directory
     const outputItem = document.querySelector('.file-tree-item.directory');
@@ -1029,9 +1007,9 @@ describe('FileTree drag-and-drop', () => {
     expect(mainGoItem?.classList.contains('drop-target')).toBe(false);
   });
 
-  it('calls renameItem when dropping a file onto a directory', async () => {
-    const apiMock = ApiService.getInstance();
-    await renderTree();
+  it('calls onRenamePath when dropping a file onto a directory', async () => {
+    const onRenamePath = jest.fn().mockResolvedValue(undefined);
+    await renderTree({ onRenamePath });
 
     const dt = fireDragStart('main.go')!;
     await flushPromises();
@@ -1041,12 +1019,12 @@ describe('FileTree drag-and-drop', () => {
 
     await fireDropOnItem('src', dt);
 
-    expect(apiMock.renameItem).toHaveBeenCalledWith('main.go', 'src/main.go');
+    expect(onRenamePath).toHaveBeenCalledWith('main.go', 'src/main.go');
   });
 
-  it('does NOT call renameItem when dropping onto self', async () => {
-    const apiMock = ApiService.getInstance();
-    await renderTree();
+  it('does NOT call onRenamePath when dropping onto self', async () => {
+    const onRenamePath = jest.fn().mockResolvedValue(undefined);
+    await renderTree({ onRenamePath });
 
     // Try to drop src onto itself
     const dt = fireDragStart('src')!;
@@ -1060,24 +1038,17 @@ describe('FileTree drag-and-drop', () => {
     expect(srcItem?.classList.contains('drop-target')).toBe(false);
 
     await fireDropOnItem('src', dt);
-    expect(apiMock.renameItem).not.toHaveBeenCalled();
+    expect(onRenamePath).not.toHaveBeenCalled();
   });
 
   it('shows drop-on-root class when dragging over file-list background with a nested file', async () => {
-    // Mock files with a nested item so we can drag it to root
-    (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) {
-        return Promise.resolve(mockFetchResponse([{ name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 }]));
-      }
-      if (url.includes('path=src')) {
-        return Promise.resolve(
-          mockFetchResponse([{ name: 'utils.go', path: 'src/utils.go', is_dir: false, size: 50, mod_time: 500 }]),
-        );
-      }
-      return Promise.resolve(mockFetchResponse([]));
+    const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === '.') return [{ name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' }];
+      if (path === 'src') return [{ name: 'utils.go', path: 'src/utils.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
+      return [];
     });
 
-    await renderTree();
+    await renderTree({ onFetchFiles: customFetchFiles });
 
     // Expand src to see its children
     const srcItem = getFileItem('src');
@@ -1114,23 +1085,15 @@ describe('FileTree drag-and-drop', () => {
     expect(fileList?.classList.contains('drop-on-root')).toBe(false);
   });
 
-  it('calls renameItem when dropping a nested file on the background (root)', async () => {
-    const apiMock = ApiService.getInstance();
-
-    // Mock nested structure
-    (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) {
-        return Promise.resolve(mockFetchResponse([{ name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 }]));
-      }
-      if (url.includes('path=src')) {
-        return Promise.resolve(
-          mockFetchResponse([{ name: 'helper.go', path: 'src/helper.go', is_dir: false, size: 50, mod_time: 500 }]),
-        );
-      }
-      return Promise.resolve(mockFetchResponse([]));
+  it('calls onRenamePath when dropping a nested file on the background (root)', async () => {
+    const onRenamePath = jest.fn().mockResolvedValue(undefined);
+    const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === '.') return [{ name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' }];
+      if (path === 'src') return [{ name: 'helper.go', path: 'src/helper.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
+      return [];
     });
 
-    await renderTree();
+    await renderTree({ onFetchFiles: customFetchFiles, onRenamePath });
 
     // Expand src to see children
     const srcItem = getFileItem('src');
@@ -1149,29 +1112,22 @@ describe('FileTree drag-and-drop', () => {
 
     await fireDropOnBackground(dt);
 
-    expect(apiMock.renameItem).toHaveBeenCalledWith('src/helper.go', 'helper.go');
+    expect(onRenamePath).toHaveBeenCalledWith('src/helper.go', 'helper.go');
   });
 
   it('clears drop-on-root class when hovering over a specific directory', async () => {
-    // Mock nested structure
-    (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) {
-        return Promise.resolve(
-          mockFetchResponse([
-            { name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 },
-            { name: 'lib', path: 'lib', is_dir: true, size: 0, mod_time: 0 },
-          ]),
-        );
+    const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === '.') {
+        return [
+          { name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' },
+          { name: 'lib', path: 'lib', isDir: true, size: 0, modified: 0, ext: '' },
+        ];
       }
-      if (url.includes('path=src')) {
-        return Promise.resolve(
-          mockFetchResponse([{ name: 'app.tsx', path: 'src/app.tsx', is_dir: false, size: 50, mod_time: 500 }]),
-        );
-      }
-      return Promise.resolve(mockFetchResponse([]));
+      if (path === 'src') return [{ name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' }];
+      return [];
     });
 
-    await renderTree();
+    await renderTree({ onFetchFiles: customFetchFiles });
 
     // Expand src
     const srcItem = getFileItem('src');
@@ -1201,20 +1157,13 @@ describe('FileTree drag-and-drop', () => {
   });
 
   it('clears drop-on-root on drag end', async () => {
-    // Mock nested structure
-    (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) {
-        return Promise.resolve(mockFetchResponse([{ name: 'src', path: 'src', is_dir: true, size: 0, mod_time: 0 }]));
-      }
-      if (url.includes('path=src')) {
-        return Promise.resolve(
-          mockFetchResponse([{ name: 'nested.go', path: 'src/nested.go', is_dir: false, size: 50, mod_time: 500 }]),
-        );
-      }
-      return Promise.resolve(mockFetchResponse([]));
+    const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === '.') return [{ name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' }];
+      if (path === 'src') return [{ name: 'nested.go', path: 'src/nested.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
+      return [];
     });
 
-    await renderTree();
+    await renderTree({ onFetchFiles: customFetchFiles });
 
     // Expand src
     const srcItem = getFileItem('src');
@@ -1295,25 +1244,21 @@ describe('FileTree callback props – onFetchFiles', () => {
     expect(nameTexts).toContain('index.ts');
   });
 
-  it('does NOT call clientFetch when onFetchFiles is provided', async () => {
-    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+  it('does NOT call default onFetchFiles when custom one is provided', async () => {
+    const customFetchFiles = jest.fn().mockResolvedValue(mockFiles);
 
     await act(async () => {
       root.render(
-        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />,
+        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={customFetchFiles} />,
       );
     });
     await flushPromises();
 
-    expect(clientFetch).not.toHaveBeenCalled();
+    expect(customFetchFiles).toHaveBeenCalledWith('.');
+    expect(defaultOnFetchFiles).not.toHaveBeenCalled();
   });
 
-  it('uses clientFetch fallback when onFetchFiles is NOT provided', async () => {
-    (clientFetch as jest.Mock).mockImplementation((url: string) => {
-      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse());
-      return Promise.resolve(mockFetchResponse([]));
-    });
-
+  it('renders empty tree when onFetchFiles is NOT provided', async () => {
     await act(async () => {
       root.render(
         <FileTree onFileSelect={jest.fn()} rootPath="." />,
@@ -1321,7 +1266,10 @@ describe('FileTree callback props – onFetchFiles', () => {
     });
     await flushPromises();
 
-    expect(clientFetch).toHaveBeenCalled();
+    // With no onFetchFiles, the tree should render empty
+    const names = document.querySelectorAll('.file-tree-item .file-tree-name');
+    const nameTexts = Array.from(names).map((el) => el.textContent ?? '');
+    expect(nameTexts).toEqual([]);
   });
 });
 
@@ -1369,10 +1317,7 @@ describe('FileTree callback props – onDeletePath', () => {
     expect(onDeletePath).toHaveBeenCalledWith('main.go', false);
   });
 
-  it('does NOT call apiService.deleteItem when onDeletePath is provided', async () => {
-    const apiMock = { createItem: jest.fn(), deleteItem: jest.fn(), renameItem: jest.fn() };
-    (ApiService.getInstance as jest.Mock).mockReturnValue(apiMock);
-
+  it('calls onDeletePath with correct arguments when deleting a file', async () => {
     const onDeletePath = jest.fn().mockResolvedValue(undefined);
     await renderWithCallbacks({ onDeletePath });
 
@@ -1388,7 +1333,9 @@ describe('FileTree callback props – onDeletePath', () => {
     });
     await flushPromises();
 
-    expect(apiMock.deleteItem).not.toHaveBeenCalled();
+    // When onDeletePath is provided, the component uses it directly
+    // (no more apiService fallback)
+    expect(onDeletePath).toHaveBeenCalledWith('main.go', false);
   });
 });
 
@@ -1451,10 +1398,7 @@ describe('FileTree callback props – onRenamePath', () => {
     expect(onRenamePath).toHaveBeenCalledWith('main.go', 'main_renamed.go');
   });
 
-  it('does NOT call apiService.renameItem when onRenamePath is provided', async () => {
-    const apiMock = { createItem: jest.fn(), deleteItem: jest.fn(), renameItem: jest.fn() };
-    (ApiService.getInstance as jest.Mock).mockReturnValue(apiMock);
-
+  it('calls onRenamePath for rename (no ApiService fallback)', async () => {
     const onRenamePath = jest.fn().mockResolvedValue(undefined);
     await renderWithCallbacks({ onRenamePath });
 
@@ -1481,7 +1425,8 @@ describe('FileTree callback props – onRenamePath', () => {
     await act(async () => { await Promise.resolve(); });
     await flushPromises();
 
-    expect(apiMock.renameItem).not.toHaveBeenCalled();
+    // onRenamePath was called (no ApiService fallback used)
+    expect(onRenamePath).toHaveBeenCalledWith('main.go', 'renamed.go');
   });
 });
 
@@ -1571,10 +1516,7 @@ describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
     expect(onCreateFolder).toHaveBeenCalledWith('.', 'myfolder');
   });
 
-  it('does NOT call apiService.createItem when onCreateFile is provided', async () => {
-    const apiMock = { createItem: jest.fn(), deleteItem: jest.fn(), renameItem: jest.fn() };
-    (ApiService.getInstance as jest.Mock).mockReturnValue(apiMock);
-
+  it('calls onCreateFile for file creation (no ApiService fallback)', async () => {
     const onCreateFile = jest.fn().mockResolvedValue(undefined);
     await renderWithCallbacks({ onCreateFile });
 
@@ -1601,7 +1543,8 @@ describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
     await act(async () => { await Promise.resolve(); });
     await flushPromises();
 
-    expect(apiMock.createItem).not.toHaveBeenCalled();
+    // onCreateFile was called (no ApiService fallback used)
+    expect(onCreateFile).toHaveBeenCalledWith('.', 'test.ts');
   });
 });
 
@@ -1643,16 +1586,14 @@ describe('FileTree callback props – onOpenInFileBrowser', () => {
     expect(onOpenInFileBrowser).toHaveBeenCalledWith('main.go');
   });
 
-  it('does NOT show "Open in file browser" when callback is not provided and apiService.openInFileBrowser is not available', async () => {
-    // When onOpenInFileBrowser is not provided, the fallback apiService.openInFileBrowser
-    // is used, so the button IS shown. This test verifies the fallback behavior.
+  it('does NOT show "Open in file browser" when callback is not provided', async () => {
+    // When onOpenInFileBrowser is not provided, the button should NOT appear
     await renderWithCallbacks({});
 
     fireContextMenuOnFile('main.go');
     await flushPromises();
 
     const texts = getContextMenuTexts();
-    // The fallback path shows "Open in file browser" via apiService.openInFileBrowser
-    expect(texts).toContain('Open in file browser');
+    expect(texts).not.toContain('Open in file browser');
   });
 });

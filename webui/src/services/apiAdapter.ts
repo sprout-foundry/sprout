@@ -44,15 +44,15 @@ export interface APIAdapter {
   readonly supportsSettings: boolean;
 
   /** Platform-specific routes to inject into the sidebar (e.g., billing, tasks) */
-  readonly platformNavItems?: PlatformNavItem[];
+  readonly platformNavItems?: readonly PlatformNavItem[];
 }
 
 export interface PlatformNavItem {
-  id: string;
-  label: string;
-  href: string;
-  icon?: string;
-  order?: number;
+  readonly id: string;
+  readonly label: string;
+  readonly href: string;
+  readonly icon?: string;
+  readonly order?: number;
 }
 
 // Singleton adapter instance

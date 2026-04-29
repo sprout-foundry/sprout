@@ -2,31 +2,24 @@
 
 // ── Types ────────────────────────────────────────────────────────────
 export type { NotificationType } from './services/notificationBus';
+export { notificationBus } from './services/notificationBus';
+export type { NotificationEvent, Listener } from './services/notificationBus';
 export type { NotificationData } from './types/notification';
+export type { Notification } from './contexts/NotificationContext';
 export type { CursorPosition, StatusBarProps } from './components/StatusBar';
 export type { ContextMenuProps } from './components/ContextMenu';
 export type { FileInfo } from './types/file-tree';
 export type { FileTreeHandle, FileTreeProps } from './components/FileTree';
-export type {
-  GitStatusData,
-  GitFile,
-  FileSection,
-  GitCommitSummary,
-  GitCommitDetail,
-  GitCommitFileEntry,
-} from './types/git-types';
+export type { GitStatusData, GitFile, FileSection, GitCommitSummary, GitCommitDetail, GitCommitFileEntry, } from './types/git-types';
 export type { GitSidebarPanelProps, GitBranchesState } from './components/GitPanel';
 export type { CommandPaletteProps, PaletteMode, CommandDef, FileResult, SymbolResult } from './components/CommandPalette';
 export type { TerminalProps, ShellInfo } from './components/Terminal';
 export type { TerminalThemePack, CreateTerminalConnection } from './components/TerminalPane';
-
+export type { TerminalSession } from './components/TerminalTabBar';
 export type { EditorProps, EditorTheme, CursorPosition as EditorCursorPosition } from './components/Editor';
 export type { SidebarProps } from './components/Sidebar';
-
 export type { APIAdapter, PlatformNavItem } from './types/adapter';
-
 export type { SproutEvent, SproutEventCallback, EventsProvider } from './types/events';
-
 export type {
   EditorBuffer,
   EditorBufferKind,
@@ -83,6 +76,11 @@ export { detectLineEnding } from './utils/lineEndingDetect';
 export { copyToClipboard } from './utils/clipboard';
 export { fuzzyScore, fuzzyFilter, highlightMatches } from './utils/fuzzyMatch';
 export { debugLog } from './utils/log';
-
-// ── Services ──────────────────────────────────────────────────────────
-export { notificationBus } from './services/notificationBus';
+export type { CommandHistoryState, CommandHistoryApi } from './components/command_input_history';
+export {
+  createEmptyState,
+  dedupeCommands,
+  loadCommandHistory,
+  persistCommandHistory
+} from './components/command_input_history';
+export { FONT_SIZE_DEFAULT } from './components/terminalConstants';

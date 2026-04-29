@@ -2,7 +2,7 @@
 
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
-import TerminalTabBar from './TerminalTabBar';
+import { TerminalTabBar } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Mock ContextMenu: renders children into a simple div when isOpen

@@ -64,14 +64,18 @@ func (fw *fileWatcher) start(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	fw.cancel = cancel
 
+	// Capture channels before starting goroutines to avoid race with stop().
+	eventsCh := w.Events
+	errorsCh := w.Errors
+
 	// Drain the fsnotify error channel so it doesn't block.
 	go func() {
-		for err := range w.Errors {
+		for err := range errorsCh {
 			log.Printf("[filewatcher] fsnotify error: %v", err)
 		}
 	}()
 
-	go fw.eventLoop(ctx)
+	go fw.eventLoopWith(ctx, eventsCh)
 	go fw.cleanupLoop(ctx)
 }
 
@@ -122,10 +126,10 @@ func (fw *fileWatcher) watchedCount() int {
 	return len(fw.watches)
 }
 
-// eventLoop reads fsnotify events, deduplicates them, and publishes
+// eventLoopWith reads fsnotify events, deduplicates them, and publishes
 // file_content_changed events via the event bus.
-func (fw *fileWatcher) eventLoop(ctx context.Context) {
-	eventsCh := fw.fsWatcher.Events // captured before any potential close
+// The events channel is passed directly to avoid a race with stop() setting fw.fsWatcher = nil.
+func (fw *fileWatcher) eventLoopWith(ctx context.Context, eventsCh <-chan fsnotify.Event) {
 
 	for {
 		select {

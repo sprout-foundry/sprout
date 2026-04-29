@@ -9,6 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
+import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import './App.css';
 import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
@@ -2095,6 +2096,7 @@ function App() {
       }}
     >
       <BackendConnectionBanner isReachable={backendReachable} />
+      <SproutAdapterProvider>
       <ThemeProvider>
         <NotificationProvider>
         <PlatformNavProvider>
@@ -2361,6 +2363,7 @@ function App() {
         </PlatformNavProvider>
         </NotificationProvider>
       </ThemeProvider>
+      </SproutAdapterProvider>
     </ErrorBoundary>
   );
 }

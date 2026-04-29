@@ -8,7 +8,7 @@ export interface NotificationEvent {
   id: string;
 }
 
-type Listener = (event: NotificationEvent) => void;
+export type Listener = (event: NotificationEvent) => void;
 
 class NotificationBus {
   private listeners: Listener[] = [];

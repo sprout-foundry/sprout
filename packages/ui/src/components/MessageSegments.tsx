@@ -4,7 +4,7 @@ import { parseMessageSegments, type MessageSegment } from '../utils/messageSegme
 import { stripAnsiCodes } from '../utils/ansi';
 import MessageContent from './MessageContent';
 
-interface MessageSegmentsProps {
+export interface MessageSegmentsProps {
   content: string;
   toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
   onToolClick?: (toolName: string) => void;

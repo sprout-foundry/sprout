@@ -17,7 +17,7 @@ const meta = {
 } satisfies Meta<typeof FileTree>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof FileTree>;
 
 export const Default: Story = {
   args: {
@@ -49,7 +49,14 @@ export const WithSelectedFile: Story = {
           workspaceRoot="/home/user/demo"
           selectedFile={selectedFile}
           onFileSelect={(file) => setSelectedFile(file.path)}
-          {...mockFileHandlers}
+          onRefresh={mockFileHandlers.onRefresh}
+          onItemCreated={mockFileHandlers.onItemCreated}
+          onDeleteItem={mockFileHandlers.onDeleteItem}
+          onCreateFile={mockFileHandlers.onCreateFile}
+          onCreateFolder={mockFileHandlers.onCreateFolder}
+          onDeletePath={mockFileHandlers.onDeletePath}
+          onRenamePath={mockFileHandlers.onRenamePath}
+          onOpenInFileBrowser={mockFileHandlers.onOpenInFileBrowser}
         />
       </div>
     );
@@ -74,15 +81,21 @@ export const WithFilter: Story = {
             files={mockFileTree}
             rootPath="."
             workspaceRoot="/home/user/demo"
-            {...mockFileHandlers}
-          >
-            {/* Note: Filter is internal to FileTree, this is a demo of how it works */}
-            {filterQuery && <p style={{ padding: '10px', color: '#666' }}>
-              In a real scenario, FileTree has an internal filter input.
-              This demo shows the tree with various files.
-            </p>}
-          </FileTree>
+            onFileSelect={mockFileHandlers.onFileSelect}
+            onRefresh={mockFileHandlers.onRefresh}
+            onItemCreated={mockFileHandlers.onItemCreated}
+            onDeleteItem={mockFileHandlers.onDeleteItem}
+            onCreateFile={mockFileHandlers.onCreateFile}
+            onCreateFolder={mockFileHandlers.onCreateFolder}
+            onDeletePath={mockFileHandlers.onDeletePath}
+            onRenamePath={mockFileHandlers.onRenamePath}
+            onOpenInFileBrowser={mockFileHandlers.onOpenInFileBrowser}
+          />
         </div>
+        <p style={{ padding: '10px', color: '#666' }}>
+          In a real scenario, FileTree has an internal filter input.
+          This demo shows the tree with various files.
+        </p>
       </div>
     );
   },
@@ -120,7 +133,14 @@ export const InteractiveDemo: Story = {
             workspaceRoot="/home/user/demo"
             selectedFile={selectedFile}
             onFileSelect={(file) => setSelectedFile(file.path)}
-            {...mockFileHandlers}
+            onRefresh={mockFileHandlers.onRefresh}
+            onItemCreated={mockFileHandlers.onItemCreated}
+            onDeleteItem={mockFileHandlers.onDeleteItem}
+            onCreateFile={mockFileHandlers.onCreateFile}
+            onCreateFolder={mockFileHandlers.onCreateFolder}
+            onDeletePath={mockFileHandlers.onDeletePath}
+            onRenamePath={mockFileHandlers.onRenamePath}
+            onOpenInFileBrowser={mockFileHandlers.onOpenInFileBrowser}
           />
         </div>
       </div>

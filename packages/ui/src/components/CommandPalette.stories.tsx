@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof CommandPalette>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof CommandPalette>;
 
 // Mock data
 const mockCommands: CommandDef[] = [

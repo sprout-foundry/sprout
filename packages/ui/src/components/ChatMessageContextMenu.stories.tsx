@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof ChatMessageContextMenu>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof ChatMessageContextMenu>;
 
 export const Default: Story = {
   render: () => {

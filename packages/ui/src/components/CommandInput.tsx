@@ -18,7 +18,7 @@ import {
 } from './command_input_history';
 import QueuedMessagesPanel from './QueuedMessagesPanel';
 
-interface CommandInputProps {
+export interface CommandInputProps {
   value?: string;
   onChange?: (value: string) => void;
   onSend?: (command: string) => void;

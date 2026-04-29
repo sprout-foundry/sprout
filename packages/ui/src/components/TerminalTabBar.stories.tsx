@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof TerminalTabBar>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof TerminalTabBar>;
 
 const mockSessions: TerminalSession[] = [
   { id: '1', name: 'bash', is_pinned: false },

@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof QueuedMessagesPanel>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof QueuedMessagesPanel>;
 
 const mockMessages = [
   'Show me the project structure',

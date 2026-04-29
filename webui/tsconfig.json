@@ -29,7 +29,8 @@
     "dist",
     "build",
     "**/*.test.ts",
-    "**/*.test.tsx"
+    "**/*.test.tsx",
+    "src/vitest.setup.ts"
   ],
   "include": [
     "src",

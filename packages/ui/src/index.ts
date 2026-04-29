@@ -23,12 +23,15 @@ export type { TerminalThemePack, CreateTerminalConnection } from './components/T
 export type { EditorProps, EditorTheme, CursorPosition as EditorCursorPosition } from './components/Editor';
 export type { SidebarProps } from './components/Sidebar';
 
+export type { APIAdapter, PlatformNavItem } from './types/adapter';
+
 // ── Git types and utilities ───────────────────────────────────────────
 export { FILE_SECTIONS, selectionKey, parseSelectionKey } from './types/git-types';
 export { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from './constants/git-constants';
 
 // ── Contexts ──────────────────────────────────────────────────────────
 export { NotificationProvider, useNotifications } from './contexts/NotificationContext';
+export { SproutProvider, useSproutAdapter } from './contexts/SproutAdapterContext';
 
 // ── Hooks ─────────────────────────────────────────────────────────────
 export { useMultiSelect, flattenVisibleFiles } from './hooks/useMultiSelect';

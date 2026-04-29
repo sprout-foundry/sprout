@@ -7,6 +7,10 @@ __tests__/
 *.test.tsx
 *.spec.ts
 *.spec.tsx
+*.test.d.ts
+*.test.d.mts
+*.spec.d.ts
+*.spec.d.mts
 
 # Config files
 vite.config.ts

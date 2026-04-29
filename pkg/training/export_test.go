@@ -608,8 +608,8 @@ func TestBuildShareGPT(t *testing.T) {
 	if convos[0].ID != "s1" {
 		t.Errorf("ID = %q, want %q", convos[0].ID, "s1")
 	}
-	if convos[0].Metadata.Source != "ledit" {
-		t.Error("metadata source should be 'ledit'")
+	if convos[0].Metadata.Source != "sprout" {
+		t.Error("metadata source should be 'sprout'")
 	}
 	if convos[0].Metadata.SessionName != "test session" {
 		t.Errorf("session name = %q, want %q", convos[0].Metadata.SessionName, "test session")

@@ -9,6 +9,7 @@ export default defineConfig({
     dts({
       include: ['src/**/*'],
       outDir: 'dist',
+      tsconfigPath: './tsconfig.build.json',
     }),
   ],
   build: {
@@ -29,10 +30,5 @@ export default defineConfig({
       },
     },
     cssCodeSplit: false,
-  },
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    },
   },
 });

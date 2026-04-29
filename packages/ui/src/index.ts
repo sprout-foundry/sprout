@@ -21,6 +21,8 @@ export type { FileTreeProps, TreeNode, GitStatus as FileTreeGitStatus } from './
 export { default as GitPanel } from './components/GitPanel';
 export type { GitPanelProps, GitStatus } from './components/GitPanel';
 
+export { GitFileSection } from './components/GitFileSection';
+
 export { default as ChatPanel } from './components/ChatPanel';
 export type { ChatPanelProps, ChatMessage, ChatMessageType } from './components/ChatPanel';
 

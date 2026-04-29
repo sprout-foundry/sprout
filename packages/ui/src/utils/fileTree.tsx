@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { ReactNode } from 'react';
 import { FileCode, FileText, Image, Music, Video, Archive, FileJson, FileSpreadsheet } from 'lucide-react';
 
 /**
@@ -68,7 +69,7 @@ export function getFileIcon(name: string): ComponentType<{ size?: number | strin
 /**
  * Highlight search query match in text.
  */
-export function highlightMatch(text: string, query: string): React.ReactNode {
+export function highlightMatch(text: string, query: string): ReactNode {
   if (!query) return text;
 
   const q = query.toLowerCase();

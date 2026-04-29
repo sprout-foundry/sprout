@@ -306,6 +306,34 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath string) (*Confi
 		}
 	}
 
+	// 4. Load custom providers from individual files.
+	// Custom providers are never persisted to config.json (CustomProviders is set
+	// to nil before saving), so they must be loaded from the provider directory.
+	// Always load from the global config directory, not from the (possibly
+	// overridden) SPROUT_CONFIG env var — custom providers are a global resource.
+	if result.CustomProviders == nil {
+		result.CustomProviders = make(map[string]CustomProviderConfig)
+	}
+	var globalProvidersDir string
+	if globalPath != "" {
+		globalProvidersDir = filepath.Join(filepath.Dir(globalPath), ProvidersDirName)
+	} else {
+		// Fallback: use the default global config dir's providers subdirectory.
+		if configDir, dirErr := getDefaultConfigDir(); dirErr == nil {
+			globalProvidersDir = filepath.Join(configDir, ProvidersDirName)
+		}
+	}
+	if globalProvidersDir != "" {
+		fileProviders, err := LoadCustomProvidersFromDir(globalProvidersDir)
+		if err != nil {
+			log.Printf("[config] warning: failed to load custom provider files from %s: %v", globalProvidersDir, err)
+		} else {
+			for name, provider := range fileProviders {
+				result.CustomProviders[name] = provider
+			}
+		}
+	}
+
 	return result, nil
 }
 

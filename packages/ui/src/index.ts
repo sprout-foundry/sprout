@@ -32,6 +32,7 @@ export { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '.
 // ── Contexts ──────────────────────────────────────────────────────────
 export { NotificationProvider, useNotifications } from './contexts/NotificationContext';
 export { SproutProvider, useSproutAdapter } from './contexts/SproutAdapterContext';
+export type { SproutProviderProps } from './contexts/SproutAdapterContext';
 
 // ── Hooks ─────────────────────────────────────────────────────────────
 export { useMultiSelect, flattenVisibleFiles } from './hooks/useMultiSelect';

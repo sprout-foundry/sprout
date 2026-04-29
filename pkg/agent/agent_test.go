@@ -39,12 +39,12 @@ func TestNewAgent(t *testing.T) {
 		t.Errorf("Expected currentIteration to be 0, got %d", agent.currentIteration)
 	}
 
-	if agent.totalCost != 0.0 {
-		t.Errorf("Expected totalCost to be 0.0, got %f", agent.totalCost)
+	if agent.state.GetTotalCost() != 0.0 {
+		t.Errorf("Expected totalCost to be 0.0, got %f", agent.state.GetTotalCost())
 	}
 
-	if len(agent.messages) != 0 {
-		t.Errorf("Expected messages to be empty, got %d messages", len(agent.messages))
+	if len(agent.state.GetMessages()) != 0 {
+		t.Errorf("Expected messages to be empty, got %d messages", len(agent.state.GetMessages()))
 	}
 
 	if agent.shellCommandHistory == nil {
@@ -176,7 +176,7 @@ func TestAgentStructFields(t *testing.T) {
 		t.Error("Expected systemPrompt to be set")
 	}
 
-	if agent.optimizer == nil {
+	if agent.state.GetOptimizer() == nil {
 		t.Error("Expected optimizer to be initialized")
 	}
 

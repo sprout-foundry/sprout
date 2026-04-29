@@ -30,11 +30,11 @@ func TestExportImportState(t *testing.T) {
 	agent.AddTaskAction("file_created", "Created test file", "test.go")
 	agent.SetPreviousSummary("Test summary")
 	agent.SetSessionID("test-session-123")
-	agent.turnCheckpoints = []TurnCheckpoint{{
+	agent.state.SetTurnCheckpoints([]TurnCheckpoint{{
 		StartIndex: 0,
 		EndIndex:   1,
 		Summary:    "Compacted earlier conversation state:\n- Latest compacted user request: test",
-	}}
+	}})
 
 	// Export state
 	stateData, err := agent.ExportState()
@@ -85,8 +85,8 @@ func TestExportImportState(t *testing.T) {
 	if agent2.GetSessionID() != "test-session-123" {
 		t.Errorf("Expected session ID 'test-session-123' after import, got %q", agent2.GetSessionID())
 	}
-	if len(agent2.turnCheckpoints) != 1 {
-		t.Errorf("Expected 1 turn checkpoint after import, got %d", len(agent2.turnCheckpoints))
+	if len(agent2.state.GetTurnCheckpoints()) != 1 {
+		t.Errorf("Expected 1 turn checkpoint after import, got %d", len(agent2.state.GetTurnCheckpoints()))
 	}
 }
 

@@ -120,10 +120,11 @@ func TestTriggerCompactionWithCheckpoints(t *testing.T) {
 	}}
 
 	a := &Agent{
-		messages:        messages,
-		turnCheckpoints: checkpoints,
-		debug:           false,
+		debug: false,
+		state: NewAgentStateManager(false),
 	}
+	a.state.SetMessages(messages)
+	a.ReplaceTurnCheckpoints(checkpoints)
 
 	result := a.TriggerCompaction()
 	if result != true {
@@ -131,8 +132,8 @@ func TestTriggerCompactionWithCheckpoints(t *testing.T) {
 	}
 
 	// Verify messages were compacted
-	if len(a.messages) >= len(messages) {
-		t.Errorf("messages not compacted: before=%d, after=%d", len(messages), len(a.messages))
+	if len(a.state.GetMessages()) >= len(messages) {
+		t.Errorf("messages not compacted: before=%d, after=%d", len(messages), len(a.state.GetMessages()))
 	}
 }
 
@@ -149,10 +150,11 @@ func TestTriggerCompactionEmergencyTruncation(t *testing.T) {
 	}
 
 	a := &Agent{
-		messages: messages,
-		debug:    false,
+		debug: false,
+		state: NewAgentStateManager(false),
 		// No checkpoints, no optimizer - should trigger emergency truncation
 	}
+	a.state.SetMessages(messages)
 
 	result := a.TriggerCompaction()
 	if result != true {
@@ -160,8 +162,8 @@ func TestTriggerCompactionEmergencyTruncation(t *testing.T) {
 	}
 
 	// Verify messages were truncated (should keep system + last 2)
-	if len(a.messages) > 3 {
-		t.Errorf("messages not truncated: got %d, want <=3", len(a.messages))
+	if len(a.state.GetMessages()) > 3 {
+		t.Errorf("messages not truncated: got %d, want <=3", len(a.state.GetMessages()))
 	}
 }
 

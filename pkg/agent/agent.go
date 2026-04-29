@@ -14,7 +14,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/factory"
-	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/prompts"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -36,150 +35,73 @@ type PauseState struct {
 	MessagesBefore []api.Message `json:"messages_before"`
 }
 
+// initSubManagers ensures all sub-managers are initialized.
+// This is called lazily to support tests that create bare Agent structs
+// with &Agent{} and then call methods that depend on sub-managers.
+func (a *Agent) initSubManagers() {
+	if a.state == nil {
+		a.state = NewAgentStateManager(false)
+	}
+	if a.output == nil {
+		a.output = NewAgentOutputManager()
+	}
+	if a.security == nil {
+		a.security = NewAgentSecurityManager()
+	}
+	if a.mcpSub == nil {
+		a.mcpSub = NewAgentMCPManager()
+	}
+}
+
 type Agent struct {
-	client                  api.ClientInterface
-	messages                []api.Message
-	systemPrompt            string
-	baseSystemPrompt        string // Base prompt restored when persona is cleared
-	maxIterations           int
-	currentIteration        int
-	totalCost               float64
-	clientType              api.ClientType
-	taskActions             []TaskAction                   // Track what was accomplished
-	taskActionsMu           sync.RWMutex                   // Protects taskActions during parallel tool execution
-	debug                   bool                           // Enable debug logging
-	totalTokens             int                            // Track total tokens used across all requests
-	promptTokens            int                            // Track total prompt tokens
-	completionTokens        int                            // Track total completion tokens
-	llmCallCount            int                            // Track number of LLM API calls made
-	estimatedTokenResponses int                            // Number of responses where token usage was estimated
-	cachedTokens            int                            // Track tokens that were cached/reused
-	cachedCostSavings       float64                        // Track cost savings from cached tokens
-	previousSummary         string                         // Summary of previous actions for continuity
-	sessionID               string                         // Unique session identifier
-	turnCheckpoints         []TurnCheckpoint               // Completed-turn summaries used when context gets tight
-	checkpointMu            sync.RWMutex                   // Protects background checkpoint compaction
-	optimizer               *ConversationOptimizer         // Conversation optimization
-	configManager           *configuration.Manager         // Configuration management
-	currentContextTokens    int                            // Current context size being sent to model
-	maxContextTokens        int                            // Model's maximum context window
-	contextWarningIssued    bool                           // Whether we've warned about approaching context limit
-	shellCommandHistory     map[string]*ShellCommandResult // Track shell commands for deduplication
-	changeTracker           *ChangeTracker                 // Track file changes for rollback support
-	mcpManager              mcp.MCPManager                 // MCP server management
-	mcpToolsCache           []api.Tool                     // Cached MCP tools to avoid reloading
-	mcpInitialized          bool                           // Track whether MCP has been initialized
-	mcpInitErr              error                          // Store initialization error
-	mcpInitMu               sync.Mutex                     // Protect concurrent initialization
-	circuitBreaker          *CircuitBreakerState           // Track repetitive actions
-	conversationPruner      *ConversationPruner            // Automatic conversation pruning
-	toolCallGuidanceAdded   bool                           // Prevent repeating tool call guidance
-	activeSkills            []string                       // Currently activated skills (by ID)
-	activePersona           string                         // Currently active persona ID (direct agent or subagent env)
-	workspaceRoot           string                         // Explicit workspace root for this agent instance
+	// Core LLM coordination
+	client           api.ClientInterface
+	clientType       api.ClientType
+	systemPrompt     string
+	baseSystemPrompt string // Base prompt restored when persona is cleared
+	maxIterations    int
+	currentIteration int
 
-	// Session-scoped provider/model overrides (webui sessions)
-	// When set, these take precedence over config values and don't persist
-	sessionProvider api.ClientType // Session-scoped provider override
-	sessionModel    string         // Session-scoped model override
+	// Configuration
+	configManager *configuration.Manager
+	workspaceRoot string
+	debug         bool
 
-	// configOverrides stores additional session-scoped config overrides
-	// (e.g., subagent_provider, reasoning_effort) that are applied in-memory.
-	// These come from chatSession.ConfigOverrides and are saved with the session.
-	configOverrides map[string]interface{}
+	// Input handling
+	inputInjectionChan  chan string
+	inputInjectionMutex sync.Mutex
+	interruptCtx        context.Context
+	interruptCancel     context.CancelFunc
 
-	// Input injection handling
-	inputInjectionChan  chan string        // Channel for injecting new user input
-	inputInjectionMutex sync.Mutex         // Mutex for input injection operations
-	interruptCtx        context.Context    // Context for interrupt handling
-	interruptCancel     context.CancelFunc // Cancel function for interrupt context
-	outputMutex         *sync.Mutex        // Mutex for synchronized output
-	streamingEnabled    bool               // Whether streaming is enabled
-	streamingCallback   func(string)       // Custom streaming callback
-	reasoningCallback   func(string)       // Custom reasoning/thinking callback
-	streamingBuffer     strings.Builder    // Buffer for streaming content
-	reasoningBuffer     strings.Builder    // Buffer for reasoning content
-	flushCallback       func()             // Callback to flush buffered output
-	asyncOutput         chan string        // Buffered channel for async PrintLine calls
+	// Sub-managers — Agent coordinates through these interfaces
+	state    StateManager    // Conversation history, checkpoints, tokens, cost, persona, etc.
+	output   OutputManager   // Streaming, async output, event metadata, output routing
+	security SecurityManager // Approvals, redaction, elevation, bypass
+	mcpSub   MCPSubManager   // MCP server lifecycle and tool caching
 
-	// Command history for interactive mode
-	historyMu       sync.Mutex // Protects commandHistory and historyIndex
-	commandHistory  []string   // History of entered commands
-	historyIndex    int        // Current position in history for navigation
-	asyncOutputOnce sync.Once  // Ensure async worker initializes once
-	asyncBufferSize int        // Optional override for async output buffer (tests)
+	// Event system (bridges output and core)
+	eventBus  *events.EventBus
+	validator *validation.Validator
 
-	// Pause/resume state management
-	pauseState *PauseState // Current pause state and context
-	pauseMutex sync.Mutex  // Mutex for pause state operations
-
-	// Trace session for dataset collection
-	traceSession interface{} // Using interface{} to avoid circular dependency
-
-	// Feature flags
-	falseStopDetectionEnabled bool
-	statsUpdateCallback       func(int, float64) // Callback for token/cost updates
-	lastRunTerminationReason  string
-	enablePreWriteValidation  bool // Enable syntax validation before writes
+	// Tool execution support
+	shellCommandHistory map[string]*ShellCommandResult
+	changeTracker       *ChangeTracker
+	preparedTools       sync.RWMutex
+	lastToolNames       []string
 
 	// UI integration
-	ui UI // UI provider for dropdowns, etc.
+	ui UI
 
-	// Event system
-	eventBus *events.EventBus // Event bus for real-time UI updates
-
-	outputRouter *OutputRouter // Single routing layer for all output (terminal + webui)
-
-	// Security approval system (webui fallback when stdin unavailable)
-	securityApprovalMgr *SecurityApprovalManager
-
-	// Validation system
-	validator *validation.Validator // Syntax validation and async diagnostics
+	// Stats callback
+	statsUpdateCallback func(int, float64)
 
 	// Debug logging
-	debugLogFile  *os.File   // File handle for debug logs
-	debugLogPath  string     // Path to the debug log file
-	debugLogMutex sync.Mutex // Mutex for safe writes to debug log
-	preparedTools sync.RWMutex
-	lastToolNames []string
+	debugLogFile  *os.File
+	debugLogPath  string
+	debugLogMutex sync.Mutex
 
-	// One-shot context note injected after provider/model switches that require syntax normalization.
-	pendingSwitchContextRefresh string
-	// One-shot user-facing status notice for slash commands after strict-syntax switch normalization.
-	pendingStrictSwitchNotice string
-	// One-shot system-level supplement appended to the system prompt for a single API call (e.g. continuity context).
-	pendingSystemSupplement string
-
-	// Unsafe mode - bypass most security checks
-	unsafeMode bool // Allow operations without security prompting
-
-	// Filesystem security bypass approval - once user approves access outside CWD,
-	// all subsequent requests in the session are allowed without re-prompting
-	securityBypassApproved bool
-	securityBypassMu       sync.RWMutex
-
-	// Security concern tracking - track ignored concerns per file to avoid re-prompting
-	ignoredSecurityConcerns map[string]map[string]bool // filePath -> set of concern types that have been ignored
-	ignoredSecurityMu       sync.RWMutex
-
-	// Secret detection and elevation
-	outputRedactor *security.OutputRedactor // Scans tool output for secrets
-	elevationGate  *security.ElevationGate  // Manages user elevation decisions
-
-	// WebUI client status callback. When non-nil, the security routing
-	// logic calls this to determine whether to send prompts through the
-	// WebUI event-bus path or fall back to the CLI. This avoids 5-minute
-	// timeouts when the WebUI is enabled but no browser tabs are open.
-	hasActiveWebUIClients func() bool
-
-	// Subagent output batching - buffer events to reduce event bus traffic
-	subagentBatchBuffer     []string            // Buffered subagent output lines
-	subagentBatchCount      int                 // Number of lines in buffer
-	subagentBatchMutex      sync.Mutex          // Protect batch buffer
-	subagentBatchSize       int                 // Flush threshold (default 50)
-	subagentBatchMilestones map[string]struct{} // Milestone phases that force immediate flush
-	eventMetadataMu         sync.RWMutex
-	eventMetadata           map[string]interface{}
+	// Trace session for dataset collection
+	traceSession interface{}
 }
 
 func isDebugEnvEnabled() bool {
@@ -201,17 +123,17 @@ func (a *Agent) Shutdown() {
 	if a == nil {
 		return
 	}
+	a.initSubManagers()
 
 	// Save command history to configuration before shutdown.
-	// Lock historyMu to avoid racing with concurrent AddToHistory calls.
-	a.historyMu.Lock()
+	a.state.GetHistoryMutex().Lock()
 	a.saveHistoryToConfig()
-	a.historyMu.Unlock()
+	a.state.GetHistoryMutex().Unlock()
 
 	// Stop MCP servers (best-effort)
-	if a.mcpManager != nil {
+	if mgr := a.mcpSub.GetManager(); mgr != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = a.mcpManager.StopAll(ctx)
+		_ = mgr.StopAll(ctx)
 		cancel()
 	}
 
@@ -221,10 +143,9 @@ func (a *Agent) Shutdown() {
 	}
 
 	// Close async output worker
-	if a.asyncOutput != nil {
-		// Close channel to stop background worker started in ensureAsyncOutputWorker
-		close(a.asyncOutput)
-		a.asyncOutput = nil
+	if ch := a.output.GetAsyncOutput(); ch != nil {
+		close(ch)
+		a.output.SetAsyncOutput(nil)
 	}
 
 	// Close debug log file
@@ -308,41 +229,36 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		}
 		systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
-		// Create agent with minimal initialization using test client
-		agent := &Agent{
-			client:                    client,
-			messages:                  []api.Message{},
-			systemPrompt:              systemPrompt,
-			baseSystemPrompt:          systemPrompt,
-			maxIterations:             0, // 0 means unlimited
-			totalCost:                 0.0,
-			clientType:                clientType,
-			debug:                     isDebugEnvEnabled(),
-			optimizer:                 NewConversationOptimizer(true, false),
-			configManager:             configManager,
-			shellCommandHistory:       make(map[string]*ShellCommandResult),
-			inputInjectionChan:        make(chan string, inputInjectionBufferSize),
-			interruptCtx:              context.Background(),
-			interruptCancel:           func() { /* no-op */ },
-			falseStopDetectionEnabled: true,
-			conversationPruner:        NewConversationPruner(false),
-			activePersona:             "repo_orchestrator",
-			workspaceRoot:             workspaceRoot,
-			securityApprovalMgr:       NewSecurityApprovalManager(),
-			outputRouter:              NewOutputRouter(nil, nil),
-			ignoredSecurityConcerns:   make(map[string]map[string]bool),
-			outputRedactor:            security.NewOutputRedactor(),
-			elevationGate:             security.NewElevationGate(nil),
-		}
+	stateMgr := NewAgentStateManager(isDebugEnvEnabled())
+	outputMgr := NewAgentOutputManager()
+	securityMgr := NewAgentSecurityManager()
+	mcpMgr := NewAgentMCPManager()
 
-		agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-			agent.PrintLineAsync(line)
-		})
+	agent := &Agent{
+		client:              client,
+		systemPrompt:        systemPrompt,
+		baseSystemPrompt:    systemPrompt,
+		maxIterations:       0,
+		clientType:          clientType,
+		debug:               isDebugEnvEnabled(),
+		configManager:       configManager,
+		shellCommandHistory: make(map[string]*ShellCommandResult),
+		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
+		interruptCtx:        context.Background(),
+		interruptCancel:     func() { /* no-op */ },
+		workspaceRoot:       workspaceRoot,
+		state:               stateMgr,
+		output:              outputMgr,
+		security:            securityMgr,
+		mcpSub:              mcpMgr,
+	}
 
-		// Wire output router with the agent reference now that agent exists
-		if agent.outputRouter != nil {
-			agent.outputRouter.agent = agent
-		}
+	router := NewOutputRouter(agent, nil)
+	agent.output.SetOutputRouter(router)
+
+	agent.state.GetOptimizer().SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+		agent.PrintLineAsync(line)
+	})
 
 		// Load command history from configuration
 		agent.loadHistoryFromConfig()
@@ -353,12 +269,9 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 			}
 		}
 
-		// Initialize MCP manager
-		agent.mcpManager = mcp.NewMCPManager(nil)
-
-		if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
-			agent.activePersona = strings.ReplaceAll(strings.ToLower(persona), "-", "_")
-		}
+	if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
+		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
+	}
 
 		// Initialize change tracker
 		agent.changeTracker = NewChangeTracker(agent, "")
@@ -524,49 +437,39 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
 	}
 
-	// Conversation optimization is always enabled
-	optimizationEnabled := true
-
 	// Create interrupt context for the agent
 	interruptCtx, interruptCancel := context.WithCancel(context.Background())
 
-	// Create the agent
+	stateMgr := NewAgentStateManager(debug)
+	outputMgr := NewAgentOutputManager()
+	securityMgr := NewAgentSecurityManager()
+	mcpMgr := NewAgentMCPManager()
+
 	agent := &Agent{
-		client:                    client,
-		messages:                  []api.Message{},
-		systemPrompt:              systemPrompt,
-		baseSystemPrompt:          systemPrompt,
-		maxIterations:             0, // 0 means unlimited
-		totalCost:                 0.0,
-		clientType:                clientType,
-		debug:                     debug,
-		optimizer:                 NewConversationOptimizer(optimizationEnabled, debug),
-		configManager:             configManager,
-		shellCommandHistory:       make(map[string]*ShellCommandResult),
-		inputInjectionChan:        make(chan string, inputInjectionBufferSize),
-		interruptCtx:              interruptCtx,
-		interruptCancel:           interruptCancel,
-		falseStopDetectionEnabled: true,
-		conversationPruner:        NewConversationPruner(debug),
-		commandHistory:            []string{},
-		historyIndex:              -1,
-		activePersona:             "repo_orchestrator",
-		workspaceRoot:             workspaceRoot,
-		securityApprovalMgr:       NewSecurityApprovalManager(),
-		outputRouter:              NewOutputRouter(nil, nil),
-		ignoredSecurityConcerns:   make(map[string]map[string]bool),
-		outputRedactor:            security.NewOutputRedactor(),
-		elevationGate:             security.NewElevationGate(nil),
+		client:              client,
+		systemPrompt:        systemPrompt,
+		baseSystemPrompt:    systemPrompt,
+		maxIterations:       0,
+		clientType:          clientType,
+		debug:               debug,
+		configManager:       configManager,
+		shellCommandHistory: make(map[string]*ShellCommandResult),
+		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
+		interruptCtx:        interruptCtx,
+		interruptCancel:     interruptCancel,
+		workspaceRoot:       workspaceRoot,
+		state:               stateMgr,
+		output:              outputMgr,
+		security:            securityMgr,
+		mcpSub:              mcpMgr,
 	}
 
-	agent.optimizer.SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+	router := NewOutputRouter(agent, nil)
+	agent.output.SetOutputRouter(router)
+
+	agent.state.GetOptimizer().SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
 		agent.PrintLineAsync(line)
 	})
-
-	// Wire output router with the agent reference now that agent exists
-	if agent.outputRouter != nil {
-		agent.outputRouter.agent = agent
-	}
 
 	// Initialize debug log file if debug enabled
 	if debug {
@@ -577,9 +480,9 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	}
 
 	// Initialize context limits based on model
-	agent.maxContextTokens = agent.getModelContextLimit()
-	agent.currentContextTokens = 0
-	agent.contextWarningIssued = false
+	agent.state.SetMaxContextTokens(agent.getModelContextLimit())
+	agent.state.SetCurrentContextTokens(0)
+	agent.state.SetContextWarningIssued(false)
 
 	// Initialize change tracker
 	agent.changeTracker = NewChangeTracker(agent, "")
@@ -594,20 +497,11 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		fmt.Printf("[ok] Tool registry initialized\n")
 	}
 
-	// Initialize MCP manager (but don't start servers yet - lazy load)
-	agent.mcpManager = mcp.NewMCPManager(nil)
-	// MCP servers will be initialized on first use to improve startup performance
-
-	// Initialize circuit breaker
-	agent.circuitBreaker = &CircuitBreakerState{
-		Actions: make(map[string]*CircuitBreakerAction),
-	}
-
 	// Load command history from configuration
 	agent.loadHistoryFromConfig()
 
 	if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
-		agent.activePersona = strings.ReplaceAll(strings.ToLower(persona), "-", "_")
+		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
 	}
 
 	return agent, nil
@@ -617,23 +511,19 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 
 // GetUnsafeMode returns whether unsafe mode is enabled
-func (a *Agent) GetUnsafeMode() bool { return a.unsafeMode }
+func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
 
 // SetUnsafeMode sets the unsafe mode flag
-func (a *Agent) SetUnsafeMode(unsafe bool) { a.unsafeMode = unsafe }
+func (a *Agent) SetUnsafeMode(unsafe bool) { a.security.SetUnsafeMode(unsafe) }
 
 // IsSecurityBypassApproved returns whether the user has approved filesystem access outside CWD
 func (a *Agent) IsSecurityBypassApproved() bool {
-	a.securityBypassMu.RLock()
-	defer a.securityBypassMu.RUnlock()
-	return a.securityBypassApproved
+	return a.security.IsSecurityBypassApproved()
 }
 
 // SetSecurityBypassApproved marks that the user has approved filesystem access outside CWD for this session
 func (a *Agent) SetSecurityBypassApproved() {
-	a.securityBypassMu.Lock()
-	defer a.securityBypassMu.Unlock()
-	a.securityBypassApproved = true
+	a.security.SetSecurityBypassApproved()
 }
 
 // CheckFileContentSecurity runs security concern detection on file content after a write.
@@ -641,40 +531,25 @@ func (a *Agent) SetSecurityBypassApproved() {
 // In CLI mode, it falls back to the interactive logger prompt.
 // Ignored concerns are tracked per-file so they are not re-prompted.
 func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
-	// Get prompt manager and event bus
 	promptManager := security.GetGlobalPromptManager()
 	eventBus := a.GetEventBus()
 
-	// If we don't have a mechanism to prompt, skip
 	if promptManager == nil && eventBus == nil {
 		return
 	}
 
-	// Detect security concerns in the content (pass filePath for test-file filtering)
 	concerns, snippets := security.DetectSecurityConcernsWithContext(content, filePath)
 	if len(concerns) == 0 {
 		return
 	}
 
-	// Get logger for CLI mode (always allow prompts for security checks —
-	// the debug flag controls logging verbosity, not security prompting)
 	logger := utils.GetLogger(false)
 
-	// Check each concern
 	for _, concern := range concerns {
-		// Check if this concern has been ignored for this file
-		isIgnored := false
-		a.ignoredSecurityMu.RLock()
-		if fileConcerns, exists := a.ignoredSecurityConcerns[filePath]; exists {
-			_, isIgnored = fileConcerns[concern]
-		}
-		a.ignoredSecurityMu.RUnlock()
-
-		if isIgnored {
+		if a.security.IsConcernIgnored(filePath, concern) {
 			continue
 		}
 
-		// Build prompt text with a snippet of the matched content
 		snippet := ""
 		if snippets != nil {
 			snippet = snippets[concern]
@@ -683,11 +558,7 @@ func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
 
 		var userResponse bool
 
-		// Use event-based prompting (WebUI) only when there are active WebUI
-		// clients connected. Without connected clients the event will never be
-		// answered and RequestPrompt will block for up to 5 minutes before
-		// timing out.
-		if eventBus != nil && promptManager != nil && a.HasActiveWebUIClients() {
+		if eventBus != nil && promptManager != nil && a.security.HasActiveWebUIClients() {
 			extras := map[string]string{
 				"file_path": filePath,
 				"concern":   concern,
@@ -695,22 +566,14 @@ func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
 			userResponse = promptManager.RequestPrompt(eventBus, prompt, true, extras)
 			logger.Logf("Security concern '%s' in %s user response: %v", concern, filePath, userResponse)
 		} else {
-			// Fall back to CLI-based prompting
 			userResponse = logger.AskForConfirmation(prompt, true, false)
 		}
 
-		// Log and track the result
 		if userResponse {
 			logger.Logf("Security concern '%s' in %s noted as an issue.", concern, filePath)
 		} else {
 			logger.Logf("Security concern '%s' in %s noted as unimportant.", concern, filePath)
-			// Only track as ignored when the user explicitly ignored it
-			a.ignoredSecurityMu.Lock()
-			if _, exists := a.ignoredSecurityConcerns[filePath]; !exists {
-				a.ignoredSecurityConcerns[filePath] = make(map[string]bool)
-			}
-			a.ignoredSecurityConcerns[filePath][concern] = true
-			a.ignoredSecurityMu.Unlock()
+			a.security.SetConcernIgnored(filePath, concern)
 		}
 	}
 }
@@ -724,36 +587,34 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 
 // GetMessages returns the current conversation messages
 func (a *Agent) GetMessages() []api.Message {
-	return a.messages
+	if a.state == nil {
+		return nil
+	}
+	return a.state.GetMessages()
 }
 
 // SetMessages sets the conversation messages (for restore)
 func (a *Agent) SetMessages(messages []api.Message) {
-	a.messages = messages
+	if a.state != nil {
+		a.state.SetMessages(messages)
+	}
 }
 
 // AddMessage adds a single message to the conversation history
 func (a *Agent) AddMessage(message api.Message) {
-	a.messages = append(a.messages, message)
+	if a.state != nil {
+		a.state.AddMessage(message)
+	}
 }
 
 // GetTotalCost returns the total cost of the conversation
 func (a *Agent) GetTotalCost() float64 {
-	return a.totalCost
+	return a.state.GetTotalCost()
 }
 
 // GetTaskActions returns completed task actions
 func (a *Agent) GetTaskActions() []TaskAction {
-	a.taskActionsMu.RLock()
-	defer a.taskActionsMu.RUnlock()
-
-	if len(a.taskActions) == 0 {
-		return nil
-	}
-
-	actions := make([]TaskAction, len(a.taskActions))
-	copy(actions, a.taskActions)
-	return actions
+	return a.state.GetTaskActions()
 }
 
 // IsInteractiveMode returns true if running in interactive mode
@@ -802,12 +663,12 @@ func (a *Agent) GetWorkspaceRoot() string {
 // SetConfigOverrides stores session-scoped config overrides on the agent.
 // These are applied in-memory and persisted with the session state.
 func (a *Agent) SetConfigOverrides(overrides map[string]interface{}) {
-	a.configOverrides = overrides
+	a.state.SetConfigOverrides(overrides)
 }
 
 // GetConfigOverrides returns the session-scoped config overrides.
 func (a *Agent) GetConfigOverrides() map[string]interface{} {
-	return a.configOverrides
+	return a.state.GetConfigOverrides()
 }
 
 // currentWorkspaceRoot resolves the agent workspace, falling back to the process cwd.
@@ -822,41 +683,48 @@ func (a *Agent) currentWorkspaceRoot() string {
 }
 
 // OutputRouter returns the current output router (nil if not initialized)
-func (a *Agent) OutputRouter() *OutputRouter { return a.outputRouter }
+func (a *Agent) OutputRouter() *OutputRouter { return a.output.GetOutputRouter() }
 
 // PrintTerminalOnly writes text to the terminal without publishing to the event bus.
 // Use this for output already published via a more specific event type.
 func (a *Agent) PrintTerminalOnly(text string) {
-	if a == nil || a.outputRouter == nil {
-		// Fallback: just print
+	if a == nil {
+		return
+	}
+	if a.output == nil {
 		if !strings.HasSuffix(text, "\n") {
 			text += "\n"
 		}
 		fmt.Print(text)
 		return
 	}
-	a.outputRouter.RouteTerminalOnly(text)
+	router := a.output.GetOutputRouter()
+	if router == nil {
+		if !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		fmt.Print(text)
+		return
+	}
+	router.RouteTerminalOnly(text)
 }
 
 // GetSecurityApprovalMgr returns the security approval manager
 func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
-	return a.securityApprovalMgr
+	return a.security.GetSecurityApprovalMgr()
 }
 
 // SetHasActiveWebUIClients sets a callback that returns whether any WebUI
 // clients are currently connected. The security prompting logic uses this
 // to decide between WebUI event-bus routing and CLI-based prompting.
 func (a *Agent) SetHasActiveWebUIClients(fn func() bool) {
-	a.hasActiveWebUIClients = fn
+	a.security.SetHasActiveWebUIClients(fn)
 }
 
 // HasActiveWebUIClients calls the registered callback (or returns false if
 // none is set) to check whether WebUI clients are connected.
 func (a *Agent) HasActiveWebUIClients() bool {
-	if a.hasActiveWebUIClients == nil {
-		return false
-	}
-	return a.hasActiveWebUIClients()
+	return a.security.HasActiveWebUIClients()
 }
 
 // SetSystemPrompt sets the system prompt for the agent
@@ -884,5 +752,5 @@ func (a *Agent) GetValidator() *validation.Validator {
 
 // SetTraceSessionsets the trace session for dataset collection
 func (a *Agent) SetTraceSession(traceSession interface{}) {
-	a.traceSession = traceSession
+	a.state.SetTraceSession(traceSession)
 }

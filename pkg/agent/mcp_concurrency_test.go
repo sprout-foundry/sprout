@@ -47,7 +47,7 @@ func TestMCPConcurrency_BasicConcurrentAccess(t *testing.T) {
 	}
 
 	// Verify that the agent is still in a valid state
-	if agent.mcpManager == nil {
+	if agent.mcpSub.GetManager() == nil {
 		t.Error("Expected mcpManager to be initialized")
 	}
 
@@ -71,7 +71,7 @@ func TestMCPConcurrency_InitializedFlag(t *testing.T) {
 	}
 
 	// Verify initial state
-	if agent.mcpInitialized {
+	if agent.mcpSub.IsInitialized() {
 		t.Error("Expected mcpInitialized to be false initially")
 	}
 
@@ -91,7 +91,7 @@ func TestMCPConcurrency_InitializedFlag(t *testing.T) {
 
 			// Capture the mcpInitialized state
 			mu.Lock()
-			results = append(results, agent.mcpInitialized)
+			results = append(results, agent.mcpSub.IsInitialized())
 			mu.Unlock()
 		}()
 	}
@@ -100,7 +100,7 @@ func TestMCPConcurrency_InitializedFlag(t *testing.T) {
 
 	// Verify that all goroutines saw consistent initialization state
 	// (either all true if initialization succeeded, or all false if MCP disabled)
-	finalState := agent.mcpInitialized
+	finalState := agent.mcpSub.IsInitialized()
 	for i, state := range results {
 		if state != finalState {
 			t.Errorf("Goroutine %d saw mcpInitialized=%v, expected %v", i, state, finalState)
@@ -147,7 +147,7 @@ func TestMCPConcurrency_MutexProtection(t *testing.T) {
 
 	// The actual initialization should only happen once due to the mutex and mcpInitialized check
 	// We can't directly count initializations, but we can verify the state is consistent
-	t.Logf("After %d concurrent calls, mcpInitialized=%v", callCount, agent.mcpInitialized)
+	t.Logf("After %d concurrent calls, mcpInitialized=%v", callCount, agent.mcpSub.IsInitialized())
 }
 
 // TestMCPConcurrency_ErrorHandling tests that mcpInitErr is stored correctly on failure
@@ -160,9 +160,9 @@ func TestMCPConcurrency_ErrorHandling(t *testing.T) {
 
 	// Manually set mcpInitErr to simulate a previous initialization failure
 	// This tests that subsequent concurrent calls handle the error state correctly
-	agent.mcpInitialized = false
+	agent.mcpSub.SetInitialized(false)
 	testErr := errors.New("test MCP initialization error")
-	agent.mcpInitErr = testErr
+	agent.mcpSub.SetInitError(testErr)
 
 	const numGoroutines = 30
 	var wg sync.WaitGroup
@@ -177,11 +177,11 @@ func TestMCPConcurrency_ErrorHandling(t *testing.T) {
 			tools := agent.getMCPTools()
 
 			mu.Lock()
-			if agent.mcpInitErr != nil {
+			if agent.mcpSub.GetInitError() != nil {
 				errorCount++
 			}
 			// Tools should be nil if not initialized
-			if !agent.mcpInitialized && tools != nil {
+			if !agent.mcpSub.IsInitialized() && tools != nil {
 				t.Error("Expected tools to be nil when not initialized")
 			}
 			mu.Unlock()
@@ -191,8 +191,8 @@ func TestMCPConcurrency_ErrorHandling(t *testing.T) {
 	wg.Wait()
 
 	// Verify error state was preserved (though mcpInitErr might be reset if init succeeds)
-	if agent.mcpInitErr != nil {
-		t.Logf("Error state preserved: %v", agent.mcpInitErr)
+	if agent.mcpSub.GetInitError() != nil {
+		t.Logf("Error state preserved: %v", agent.mcpSub.GetInitError())
 	}
 }
 
@@ -224,19 +224,18 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 
 			_ = agent.getMCPTools()
 
-			// Lock to capture consistent state
-			agent.mcpInitMu.Lock()
-			obsMu.Lock()
+					// Lock to capture consistent state
+		agent.mcpSub.LockInit()
+		obsMu.Lock()
 
-			observations[idx] = stateObservation{
-				initialized: agent.mcpInitialized,
-				err:         agent.mcpInitErr,
-				hasCache:    agent.mcpToolsCache != nil,
-			}
+		observations[idx] = stateObservation{
+			initialized: agent.mcpSub.IsInitialized(),
+			err:         agent.mcpSub.GetInitError(),
+			hasCache:    agent.mcpSub.GetToolsCache() != nil,
+		}
 
-			obsMu.Unlock()
-			agent.mcpInitMu.Unlock()
-		}(i)
+		obsMu.Unlock()
+		agent.mcpSub.UnlockInit()}(i)
 	}
 
 	wg.Wait()
@@ -245,7 +244,7 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 	// All goroutines should see either:
 	// 1. mcpInitialized=true with mcpInitErr=nil (successful init), OR
 	// 2. (rare after init) mcpInitialized=false with some error state
-	if agent.mcpInitialized {
+	if agent.mcpSub.IsInitialized() {
 		for i, obs := range observations {
 			if !obs.initialized {
 				// Some observations might be from before initialization completed
@@ -257,7 +256,7 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 
 	tools := agent.getMCPTools()
 	t.Logf("Final state: mcpInitialized=%v, mcpInitErr=%v, tools count=%d",
-		agent.mcpInitialized, agent.mcpInitErr, len(tools))
+		agent.mcpSub.IsInitialized(), agent.mcpSub.GetInitError(), len(tools))
 }
 
 // TestMCPConcurrency_StressTest is a stress test with very high concurrency
@@ -287,7 +286,7 @@ func TestMCPConcurrency_StressTest(t *testing.T) {
 	wg.Wait()
 
 	// Verify the agent is still in a valid state
-	if agent.mcpManager == nil {
+	if agent.mcpSub.GetManager() == nil {
 		t.Error("Expected mcpManager to be initialized after stress test")
 	}
 
@@ -323,9 +322,9 @@ func TestMCPConcurrency_InterleavedAccess(t *testing.T) {
 	// Verify consistent final state
 	tools := agent.getMCPTools()
 	t.Logf("After %d phases of %d goroutines each, mcpInitialized=%v",
-		numPhases, goroutinesPerPhase, agent.mcpInitialized)
+		numPhases, goroutinesPerPhase, agent.mcpSub.IsInitialized())
 
-	if agent.mcpInitialized {
+	if agent.mcpSub.IsInitialized() {
 		t.Logf("Final tools count: %d", len(tools))
 	}
 }
@@ -411,9 +410,9 @@ func TestConcurrentRefreshMCPTools(t *testing.T) {
 
 	// After concurrent refreshes, the agent should still be in a valid state
 	// The important thing is there was no race condition or panic
-	_ = agent.mcpToolsCache // Access to verify no data race
-	_ = agent.mcpInitialized
-	_ = agent.mcpInitErr
+	_ = agent.mcpSub.GetToolsCache() // Access to verify no data race
+	_ = agent.mcpSub.IsInitialized()
+	_ = agent.mcpSub.GetInitError()
 
 	t.Logf("All %d concurrent RefreshMCPTools calls succeeded", numGoroutines)
 }

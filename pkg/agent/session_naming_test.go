@@ -60,8 +60,9 @@ func TestGenerateSessionName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			agent := &Agent{
-				messages: tt.messages,
+				state: NewAgentStateManager(false),
 			}
+			agent.state.SetMessages(tt.messages)
 			name := agent.generateSessionName()
 			if name != tt.expectedName {
 				t.Errorf("generateSessionName() = %q, want %q", name, tt.expectedName)
@@ -72,17 +73,18 @@ func TestGenerateSessionName(t *testing.T) {
 
 func TestSetSessionName(t *testing.T) {
 	agent := &Agent{
-		messages: []api.Message{
-			{Role: "user", Content: "Original message"},
-		},
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "Original message"},
+	})
 
 	agent.SetSessionName("Custom Session Name")
 
 	// Check that custom name marker is prepended
 	expectedMarker := "[SESSION_NAME:]Custom Session Name"
 	found := false
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Content == expectedMarker {
 			found = true
 			break
@@ -117,12 +119,13 @@ func TestSessionPersistenceWithName(t *testing.T) {
 	}()
 
 	agent := &Agent{
-		messages: []api.Message{
-			{Role: "user", Content: "Test refactoring session"},
-			{Role: "assistant", Content: "Here's my plan..."},
-		},
-		sessionID: "test_session_123",
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "Test refactoring session"},
+		{Role: "assistant", Content: "Here's my plan..."},
+	})
+	agent.state.SetSessionID("test_session_123")
 
 	workingDir := t.TempDir()
 
@@ -140,8 +143,8 @@ func TestSessionPersistenceWithName(t *testing.T) {
 	}
 
 	state := ConversationState{
-		Messages:         agent.messages,
-		SessionID:        agent.sessionID,
+		Messages:         agent.state.GetMessages(),
+		SessionID:        agent.state.GetSessionID(),
 		Name:             "Test Refactoring Session",
 		LastUpdated:      time.Now(),
 		WorkingDirectory: workingDir,

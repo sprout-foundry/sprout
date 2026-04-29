@@ -19,11 +19,13 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 	agent := &Agent{
 		client:          NewScriptedClient(),
 		systemPrompt:    "system",
-		messages:        []api.Message{{Role: "user", Content: "Show the first line of README.md"}},
 		interruptCtx:    ctx,
 		interruptCancel: cancel,
-		outputMutex:     &sync.Mutex{},
+		state:           NewAgentStateManager(false),
+		output:          NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "Show the first line of README.md"}})
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	handler := NewConversationHandler(agent)
 
@@ -62,13 +64,13 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 		t.Fatalf("expected conversation to continue after tool call execution")
 	}
 
-	if len(agent.messages) < 3 {
-		t.Fatalf("expected at least user, assistant, and tool messages, got %d", len(agent.messages))
+	if len(agent.state.GetMessages()) < 3 {
+		t.Fatalf("expected at least user, assistant, and tool messages, got %d", len(agent.state.GetMessages()))
 	}
 
 	// Debug: Print all messages to understand the structure
-	t.Logf("All messages (%d):", len(agent.messages))
-	for i, msg := range agent.messages {
+	t.Logf("All messages (%d):", len(agent.state.GetMessages()))
+	for i, msg := range agent.state.GetMessages() {
 		t.Logf("  [%d] Role: %s, ToolCalls: %d", i, msg.Role, len(msg.ToolCalls))
 		if len(msg.ToolCalls) > 0 {
 			for j, tc := range msg.ToolCalls {
@@ -79,9 +81,9 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 
 	// Find the assistant message with tool calls (it should be before the tool result and summary)
 	var assistantMsg *api.Message
-	for i := len(agent.messages) - 1; i >= 0; i-- {
-		if agent.messages[i].Role == "assistant" && len(agent.messages[i].ToolCalls) > 0 {
-			assistantMsg = &agent.messages[i]
+	for i := len(agent.state.GetMessages()) - 1; i >= 0; i-- {
+		if agent.state.GetMessages()[i].Role == "assistant" && len(agent.state.GetMessages()[i].ToolCalls) > 0 {
+			assistantMsg = &agent.state.GetMessages()[i]
 			break
 		}
 	}
@@ -119,11 +121,13 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 	agent := &Agent{
 		client:          NewScriptedClient(),
 		systemPrompt:    "system",
-		messages:        []api.Message{{Role: "user", Content: "Read a sample file"}},
 		interruptCtx:    ctx,
 		interruptCancel: cancel,
-		outputMutex:     &sync.Mutex{},
+		state:           NewAgentStateManager(false),
+		output:          NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "Read a sample file"}})
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	handler := NewConversationHandler(agent)
 
@@ -167,7 +171,7 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 
 	// Ensure only one tool message was added
 	toolMessages := 0
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "tool" {
 			toolMessages++
 		}
@@ -178,9 +182,9 @@ func TestProcessResponseDeduplicatesDuplicateToolCalls(t *testing.T) {
 
 	// Find the assistant message with tool calls (it should be before the tool result and summary)
 	var assistantMsg *api.Message
-	for i := len(agent.messages) - 1; i >= 0; i-- {
-		if agent.messages[i].Role == "assistant" && len(agent.messages[i].ToolCalls) > 0 {
-			assistantMsg = &agent.messages[i]
+	for i := len(agent.state.GetMessages()) - 1; i >= 0; i-- {
+		if agent.state.GetMessages()[i].Role == "assistant" && len(agent.state.GetMessages()[i].ToolCalls) > 0 {
+			assistantMsg = &agent.state.GetMessages()[i]
 			break
 		}
 	}
@@ -199,11 +203,13 @@ func TestProcessResponseDoesNotExecuteIrreparableStructuredToolCall(t *testing.T
 	agent := &Agent{
 		client:          NewScriptedClient(),
 		systemPrompt:    "system",
-		messages:        []api.Message{{Role: "user", Content: "Delegate this to a subagent"}},
 		interruptCtx:    ctx,
 		interruptCancel: cancel,
-		outputMutex:     &sync.Mutex{},
+		state:           NewAgentStateManager(false),
+		output:          NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "Delegate this to a subagent"}})
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	handler := NewConversationHandler(agent)
 
@@ -225,13 +231,13 @@ func TestProcessResponseDoesNotExecuteIrreparableStructuredToolCall(t *testing.T
 		t.Fatalf("expected conversation to continue so the model can re-emit the tool call")
 	}
 
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "tool" {
 			t.Fatalf("expected malformed structured tool call not to execute, found tool result: %#v", msg)
 		}
 	}
 
-	last := agent.messages[len(agent.messages)-1]
+	last := agent.state.GetMessages()[len(agent.state.GetMessages())-1]
 	if last.Role != "assistant" {
 		t.Fatalf("expected assistant message to remain last, got %s", last.Role)
 	}

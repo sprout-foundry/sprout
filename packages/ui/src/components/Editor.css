@@ -1,119 +1,349 @@
-/* Editor Container */
-.editor-container {
+.editor-pane {
   display: flex;
   flex-direction: column;
-  position: relative;
   width: 100%;
   height: 100%;
+  background: var(--editor-pane-bg);
   overflow: hidden;
-  background: var(--bg-primary);
+  border-radius: 8px;
 }
 
-/* Language indicator */
-.editor-language {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  padding: 2px 8px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--accent-secondary);
-  pointer-events: none;
-  z-index: 1;
+.editor-pane.empty {
+  justify-content: center;
+  align-items: center;
+  background: var(--editor-pane-footer-bg);
 }
 
-/* Editor wrapper - holds line numbers and textarea together */
-.editor-wrapper {
+.pane-header {
+  display: none; /* Hidden since we now have toolbar */
+}
+
+.pane-content {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.pane-content .editor {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.pane-content .editor .cm-editor,
+.pane-content .editor .cm-scroller,
+.pane-content .editor .cm-content {
+  width: 100%;
+  height: 100%;
+}
+
+.pane-footer {
   display: flex;
-  flex: 1;
-  overflow: hidden;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 16px;
+  background: var(--editor-pane-footer-bg);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--editor-pane-footer-fg);
+}
+
+.editor-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.pane-footer .tab-size {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.pane-footer .tab-size:hover {
+  opacity: 1;
+}
+
+.pane-footer .encoding-indicator {
+  font-size: 11px;
+  opacity: 0.7;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.pane-footer .cm-footer-lsp {
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pane-footer .language-switcher-button {
+  flex-shrink: 0;
+}
+
+.no-file-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--editor-empty-fg);
+  font-size: 14px;
+}
+
+.no-file-icon {
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.no-file-text {
+  font-weight: 500;
+}
+
+.loading-indicator,
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.loading-indicator {
+  background: var(--editor-loading-bg);
+  color: var(--editor-loading-fg);
+}
+
+.error-message {
+  background: var(--editor-error-bg);
+  color: var(--editor-error-fg);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  font-size: 14px;
+}
+
+/* ── Diff Gutter Styles ──────────────────────────────────────────── */
+
+/* Diff gutter - narrow bar on the left */
+.cm-diffGutter {
+  width: 4px;
+  margin-right: 0;
+}
+
+.cm-diffGutter .cm-gutterElement {
+  padding: 0 !important;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+/* Diff marker elements in the gutter */
+.cm-diff-marker {
+  width: 100%;
+  border-radius: 0;
+}
+
+.cm-diff-marker-added {
+  background-color: var(--diff-add-color);
+}
+
+.cm-diff-marker-removed {
+  background-color: var(--diff-del-color);
+}
+
+.cm-diff-marker-modified {
+  background-color: var(--diff-mod-color);
+}
+
+/* Subtle background highlighting for changed lines */
+.cm-diffLineAdded {
+  background-color: var(--diff-add-bg) !important;
+}
+
+.cm-diffLineRemoved {
+  background-color: var(--diff-del-bg) !important;
+}
+
+.cm-diffLineModified {
+  background-color: var(--diff-mod-bg) !important;
+}
+
+/* ── Minimap Styles ──────────────────────────────────────────── */
+
+/* Width is set dynamically by @replit/codemirror-minimap based on
+   editor width. This class is kept as a styling hook for overrides. */
+.cm-minimap-container {
+  height: 100%;
+}
+
+/* Click/drag affordance for the minimap.
+   @replit/codemirror-minimap natively supports click-to-scroll
+   (mousedown on canvas scrolls editor to that position) and
+   drag-to-scroll (drag the viewport overlay to scroll).
+   Cursor styles provide visual affordance for these interactions.
+   NOTE: Selectors below target internal package class names
+   (v0.5.x) — verify if upgrading @replit/codemirror-minimap. */
+
+/* Minimap canvas — clickable to jump to a document position */
+.cm-minimap-container canvas {
+  cursor: pointer;
+}
+
+/* Overlay container covers entire minimap area for click dispatch */
+.cm-minimap-overlay-container {
+  cursor: pointer;
+}
+
+/* Viewport indicator overlay — draggable */
+.cm-minimap-overlay {
+  cursor: grab;
+}
+
+/* While dragging the viewport indicator */
+.cm-minimap-overlay-active .cm-minimap-overlay {
+  cursor: grabbing;
+  opacity: 0.4 !important;
+}
+
+/* Whitespace rendering decorations */
+.cm-whitespace-char {
+  color: var(--cm-whitespace-char, rgba(128, 128, 128, 0.4));
+  font-size: 0.85em;
+  line-height: 1;
+}
+
+.cm-whitespace-space {
   position: relative;
 }
 
-/* Line numbers gutter */
-.editor-line-numbers {
-  flex-shrink: 0;
-  width: 48px;
-  padding: 12px 8px;
-  text-align: right;
-  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
+.cm-whitespace-space::after {
+  content: '·';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-align: center;
+  color: var(--cm-whitespace-space, rgba(128, 128, 128, 0.35));
+  font-size: 0.7em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.cm-whitespace-trailing {
+  position: relative;
+}
+
+.cm-whitespace-trailing::after {
+  content: '·';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  text-align: center;
+  color: var(--cm-whitespace-space, rgba(255, 80, 80, 0.5));
+  font-size: 0.7em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.pane-footer .whitespace-mode {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.pane-footer .whitespace-mode:hover {
+  opacity: 1;
+}
+
+/* Hover tooltip styling */
+.cm-hover-tooltip {
+  padding: 6px 10px;
   font-size: 13px;
   line-height: 1.5;
-  color: var(--text-tertiary);
-  background: var(--bg-secondary);
-  border-right: 1px solid var(--border-subtle);
-  user-select: none;
+  max-width: 480px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--cm-fg, #c9d1d9);
+  background: var(--cm-tooltip-bg, #1e1e2e);
+  border: 1px solid var(--cm-tooltip-border, rgba(255, 255, 255, 0.1));
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.cm-hover-tooltip code {
+  font-family: 'Monaco', 'Menlo', 'Fira Code', monospace;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.cm-hover-tooltip pre {
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+.cm-hover-tooltip pre code {
+  background: none;
+  padding: 0;
+}
+
+/* ── Markdown Preview Layout ──────────────────────────────────── */
+
+/* Wrapper around editor + preview content area.
+ * Defaults to column (single child fills space).
+ * In split mode, switches to row so editor and preview sit side-by-side. */
+.pane-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* Textarea for editing */
-.editor-textarea {
+.pane-content-wrapper-md-split {
+  flex-direction: row;
+}
+
+.pane-content-md-editor-side {
   flex: 1;
-  width: 100%;
-  height: 100%;
-  padding: 12px;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--text-primary);
-  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
-  font-size: 13px;
-  line-height: 1.5;
-  resize: none;
-  white-space: pre;
-  overflow: auto;
-  tab-size: 2;
+  border-right: 1px solid var(--border-subtle);
 }
 
-.editor-textarea::placeholder {
-  color: var(--text-tertiary);
+.pane-content-md-preview-full {
+  flex: 1;
+  overflow: hidden;
 }
 
-.editor-textarea:disabled,
-.editor-textarea[readonly] {
-  cursor: default;
-}
-
-/* Scrollbar styling */
-.editor-textarea::-webkit-scrollbar,
-.editor-line-numbers::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-.editor-textarea::-webkit-scrollbar-track,
-.editor-line-numbers::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.editor-textarea::-webkit-scrollbar-thumb,
-.editor-line-numbers::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 5px;
-}
-
-.editor-textarea::-webkit-scrollbar-thumb:hover,
-.editor-line-numbers::-webkit-scrollbar-thumb:hover {
-  background: var(--border-default);
-}
-
-/* Selection styling */
-.editor-textarea::selection {
-  background: var(--accent-primary);
-  color: var(--bg-primary);
-}
-
-/* Focus state */
-.editor-textarea:focus {
-  outline: none;
-}
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .editor-textarea {
-    scroll-behavior: auto;
-  }
+.pane-md-preview-split {
+  flex: 1;
+  border-left: 1px solid var(--border-subtle);
+  overflow: hidden;
+  min-width: 0;
 }

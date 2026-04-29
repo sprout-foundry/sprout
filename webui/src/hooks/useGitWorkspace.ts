@@ -3,6 +3,7 @@ import { type ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
@@ -581,6 +582,67 @@ export const useGitWorkspace = ({
     }, 'Failed to push changes');
   }, [apiService, runGitAction]);
 
+  // Git history callbacks
+  const handleLoadCommits = useCallback(
+    async (limit: number, offset: number, opts?: { signal?: AbortSignal }) => {
+      const res = await apiService.getGitLog(limit, offset, opts);
+      return { commits: res.commits, total: res.total };
+    },
+    [apiService],
+  );
+
+  const handleLoadCommitDetail = useCallback(
+    (hash: string) => apiService.getGitCommitDetail(hash),
+    [apiService],
+  );
+
+  const handleLoadCommitFileDiff = useCallback(
+    (hash: string, path: string) => apiService.getGitCommitFileDiff(hash, path),
+    [apiService],
+  );
+
+  const handleCheckoutCommit = useCallback(
+    async (hash: string): Promise<{ message: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await apiService.checkoutGitCommit(hash);
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+        return result;
+      } catch (error) {
+        warn(`[handleCheckoutCommit] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : `Failed to checkout commit ${hash}`);
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [apiService, loadGitStatus],
+  );
+
+  const handleRevertCommit = useCallback(
+    async (hash: string): Promise<{ message: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await apiService.revertGitCommit(hash);
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+        return result;
+      } catch (error) {
+        warn(`[handleRevertCommit] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : 'Failed to revert commit');
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [apiService, loadGitStatus],
+  );
+
   return {
     gitStatus,
     gitBranches,
@@ -629,6 +691,11 @@ export const useGitWorkspace = ({
     handleCreateBranch,
     handlePull,
     handlePush,
+    handleLoadCommits,
+    handleLoadCommitDetail,
+    handleLoadCommitFileDiff,
+    handleCheckoutCommit,
+    handleRevertCommit,
     refreshGitStatus: loadGitStatus,
   };
 };

@@ -30,6 +30,7 @@ func setupMCPCredTestServer(t *testing.T) (*ReactWebServer, string) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 
 	// Reset the credential backend so the env var takes effect.

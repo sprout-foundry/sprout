@@ -5,6 +5,7 @@ package envutil
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -68,4 +69,41 @@ func HasPrefix(name string) bool {
 // SproutKey returns the SPROUT_* version of a LEDIT_* key.
 func SproutKey(legacyKey string) string {
 	return strings.Replace(legacyKey, "LEDIT_", "SPROUT_", 1)
+}
+
+// GetConfigDir returns the sprout configuration directory path.
+// It mirrors the resolution logic used by the configuration package:
+//  1. SPROUT_CONFIG / LEDIT_CONFIG environment variable (if set)
+//  2. XDG_CONFIG_HOME/sprout
+//  3. HOME/.config/sprout
+//  4. os.UserHomeDir()/.config/sprout
+//
+// This lives in envutil (zero external dependencies) so that low-level packages
+// like agent_api can resolve the config directory without importing the
+// configuration package (which would create an import cycle).
+func GetConfigDir() (string, error) {
+	configDir := strings.TrimSpace(GetEnvSimple("CONFIG"))
+	if configDir == "" {
+		xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+		if xdgConfigHome != "" {
+			configDir = filepath.Join(xdgConfigHome, "sprout")
+		} else {
+			homeEnv := strings.TrimSpace(os.Getenv("HOME"))
+			if homeEnv != "" {
+				configDir = filepath.Join(homeEnv, ".config", "sprout")
+			} else {
+				homeDir, err := os.UserHomeDir()
+				if err != nil {
+					return "", fmt.Errorf("failed to get home directory: %w", err)
+				}
+				configDir = filepath.Join(homeDir, ".config", "sprout")
+			}
+		}
+	}
+
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	return configDir, nil
 }

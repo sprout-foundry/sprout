@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
@@ -249,19 +250,7 @@ func NewConfig() *Config {
 
 // GetConfigDir returns the configuration directory path
 func GetConfigDir() (string, error) {
-	configDir := strings.TrimSpace(GetEnvSimple("CONFIG"))
-	if configDir == "" {
-		var err error
-		configDir, err = getDefaultConfigDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get default config directory: %w", err)
-		}
-	}
-	if err := os.MkdirAll(configDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create config directory: %w", err)
-	}
-
-	return configDir, nil
+	return envutil.GetConfigDir()
 }
 
 func getDefaultConfigDir() (string, error) {

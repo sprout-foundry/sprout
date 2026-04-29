@@ -1,6 +1,12 @@
 /** Which section a git file belongs to */
 export type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
 
+/** Branch state information */
+export interface GitBranchesState {
+  current: string;
+  branches: string[];
+}
+
 /** Standard file sections configuration */
 export const FILE_SECTIONS: Array<{ id: FileSection; title: string }> = [
   { id: 'staged', title: 'Staged' },

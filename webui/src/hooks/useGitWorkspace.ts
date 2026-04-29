@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
+import type { GitBranchesState } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
 import type { SproutEvent } from '../types/events';
+import * as gitApi from '../services/api/gitApi';
+import * as miscApi from '../services/api/miscApi';
+import * as workspaceApi from '../services/api/workspaceApi';
 
 export interface GitDiffResponse {
   message: string;
@@ -30,13 +34,8 @@ export interface DeepReviewResult {
   warnings?: string[];
 }
 
-export interface GitBranchesState {
-  current: string;
-  branches: string[];
-}
-
 interface UseGitWorkspaceOptions {
-  apiService: ApiService;
+  fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   gitRefreshToken: number;
   selectedGitFilePath?: string | null;
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
@@ -58,7 +57,7 @@ interface UseGitWorkspaceOptions {
 }
 
 export const useGitWorkspace = ({
-  apiService,
+  fetchFn,
   gitRefreshToken,
   selectedGitFilePath,
   onViewChange,
@@ -87,6 +86,7 @@ export const useGitWorkspace = ({
   const [gitActionError, setGitActionError] = useState<string | null>(null);
   const [gitActionWarning, setGitActionWarning] = useState<string | null>(null);
   const [gitBranches, setGitBranches] = useState<GitBranchesState>({ current: '', branches: [] });
+  const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [isReviewFixing, setIsReviewFixing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -109,8 +109,8 @@ export const useGitWorkspace = ({
     setIsGitLoading(true);
     try {
       const [data, branchData] = await Promise.all([
-        apiService.getGitStatus(),
-        apiService.getGitBranches().catch((err) => {
+        gitApi.getGitStatus(fetchFn),
+        gitApi.getGitBranches(fetchFn).catch((err) => {
           debugLog('[loadGitStatus] failed to fetch git branches:', err);
           return { current: '', branches: [] };
         }),
@@ -168,11 +168,24 @@ export const useGitWorkspace = ({
     } finally {
       setIsGitLoading(false);
     }
-  }, [apiService, log]);
+  }, [fetchFn, log]);
 
   useEffect(() => {
     loadGitStatus();
   }, [loadGitStatus, gitRefreshToken]);
+
+  // Fetch workspace root once on mount (workspace rarely changes during a session).
+  useEffect(() => {
+    workspaceApi.getWorkspace(fetchFn)
+      .then(ws => {
+        if (ws?.workspace_root) {
+          setWorkspaceRoot(String(ws.workspace_root));
+        }
+      })
+      .catch(err => {
+        debugLog('[useGitWorkspace] failed to fetch workspace root:', err);
+      });
+  }, [fetchFn]);
 
   // Debounced git status refresh on file change WebSocket events.
   // When files are written (editor save, agent edits, search replace), the git
@@ -215,7 +228,7 @@ export const useGitWorkspace = ({
       setIsDiffLoading(true);
       setDiffError(null);
       try {
-        const response = await apiService.getGitDiff(filePath);
+        const response = await gitApi.getGitDiff(fetchFn, filePath);
         setActiveDiff(response);
         const nextMode =
           response.has_staged && !response.has_unstaged
@@ -243,7 +256,7 @@ export const useGitWorkspace = ({
         setIsDiffLoading(false);
       }
     },
-    [apiService, openWorkspaceBuffer, log],
+    [fetchFn, openWorkspaceBuffer, log],
   );
 
   useEffect(() => {
@@ -454,7 +467,7 @@ export const useGitWorkspace = ({
     setReviewFixResult(null);
     setIsReviewLoading(true);
     try {
-      const response = await apiService.generateDeepReview();
+      const response = await miscApi.generateDeepReview(fetchFn);
       setDeepReview(response);
       openWorkspaceBuffer({
         kind: 'review',
@@ -471,7 +484,7 @@ export const useGitWorkspace = ({
     } finally {
       setIsReviewLoading(false);
     }
-  }, [apiService, onViewChange, openWorkspaceBuffer]);
+  }, [fetchFn, onViewChange, openWorkspaceBuffer]);
 
   const handleFixFromReview = useCallback(
     async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
@@ -482,14 +495,14 @@ export const useGitWorkspace = ({
       setReviewFixSessionID(null);
       setIsReviewFixing(true);
       try {
-        const started = await apiService.startFixFromDeepReview(deepReview.review_output, options);
+        const started = await miscApi.startFixFromDeepReview(fetchFn, deepReview.review_output, options);
         setReviewFixSessionID(started.session_id || null);
         fixPollIndexRef.current = 0;
         setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);
 
         const poll = async () => {
           try {
-            const status = await apiService.getFixFromDeepReviewStatus(started.job_id, fixPollIndexRef.current);
+            const status = await miscApi.getFixFromDeepReviewStatus(fetchFn, started.job_id, fixPollIndexRef.current);
             if (status.logs?.length) {
               setReviewFixLogs((prev) => [...prev, ...status.logs]);
             }
@@ -521,7 +534,7 @@ export const useGitWorkspace = ({
         setIsReviewFixing(false);
       }
     },
-    [apiService, deepReview, loadGitStatus],
+    [fetchFn, deepReview, loadGitStatus],
   );
 
   const handleDiffModeChange = useCallback(
@@ -552,10 +565,10 @@ export const useGitWorkspace = ({
     (branch: string) => {
       if (!branch.trim() || branch === currentBranch) return;
       runGitAction(async () => {
-        await apiService.checkoutGitBranch(branch);
+        await gitApi.checkoutGitBranch(fetchFn, branch);
       }, `Failed to checkout ${branch}`);
     },
-    [apiService, currentBranch, runGitAction],
+    [fetchFn, currentBranch, runGitAction],
   );
 
   const handleCreateBranch = useCallback(
@@ -563,27 +576,89 @@ export const useGitWorkspace = ({
       const trimmed = name.trim();
       if (!trimmed) return;
       runGitAction(async () => {
-        await apiService.createGitBranch(trimmed);
+        await gitApi.createGitBranch(fetchFn, trimmed);
       }, `Failed to create branch ${trimmed}`);
     },
-    [apiService, runGitAction],
+    [fetchFn, runGitAction],
   );
 
   const handlePull = useCallback(() => {
     runGitAction(async () => {
-      await apiService.pullGit();
+      await gitApi.pullGit(fetchFn);
     }, 'Failed to pull changes');
-  }, [apiService, runGitAction]);
+  }, [fetchFn, runGitAction]);
 
   const handlePush = useCallback(() => {
     runGitAction(async () => {
-      await apiService.pushGit();
+      await gitApi.pushGit(fetchFn);
     }, 'Failed to push changes');
-  }, [apiService, runGitAction]);
+  }, [fetchFn, runGitAction]);
+
+  // Git history callbacks
+  const handleLoadCommits = useCallback(
+    async (limit: number, offset: number, opts?: { signal?: AbortSignal }) => {
+      const res = await gitApi.getGitLog(fetchFn, limit, offset, opts);
+      return { commits: res.commits, total: res.total };
+    },
+    [fetchFn],
+  );
+
+  const handleLoadCommitDetail = useCallback(
+    (hash: string) => gitApi.getGitCommitDetail(fetchFn, hash),
+    [fetchFn],
+  );
+
+  const handleLoadCommitFileDiff = useCallback(
+    (hash: string, path: string) => gitApi.getGitCommitFileDiff(fetchFn, hash, path),
+    [fetchFn],
+  );
+
+  const handleCheckoutCommit = useCallback(
+    async (hash: string): Promise<{ message: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await gitApi.checkoutGitCommit(fetchFn, hash);
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+        return result;
+      } catch (error) {
+        warn(`[handleCheckoutCommit] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : `Failed to checkout commit ${hash}`);
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [fetchFn, loadGitStatus],
+  );
+
+  const handleRevertCommit = useCallback(
+    async (hash: string): Promise<{ message: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await gitApi.revertGitCommit(fetchFn, hash);
+        await loadGitStatus();
+        setSelectedFiles(new Set());
+        return result;
+      } catch (error) {
+        warn(`[handleRevertCommit] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : 'Failed to revert commit');
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [fetchFn, loadGitStatus],
+  );
 
   return {
     gitStatus,
     gitBranches,
+    workspaceRoot,
     commitMessage,
     setCommitMessage,
     selectedFiles,
@@ -629,6 +704,11 @@ export const useGitWorkspace = ({
     handleCreateBranch,
     handlePull,
     handlePush,
+    handleLoadCommits,
+    handleLoadCommitDetail,
+    handleLoadCommitFileDiff,
+    handleCheckoutCommit,
+    handleRevertCommit,
     refreshGitStatus: loadGitStatus,
   };
 };

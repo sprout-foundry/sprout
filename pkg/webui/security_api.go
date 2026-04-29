@@ -56,7 +56,7 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Try security prompt response
-	if mgr := security.GetGlobalPromptManager(); mgr != nil && mgr.RespondToPrompt(payload.RequestID, payload.Response) {
+	if mgr := security.GetGlobalApprovalManager(); mgr != nil && mgr.RespondToApproval(payload.RequestID, payload.Response) {
 		ws.publishClientEvent(defaultWebClientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
 			"status":    "responded",
 			"request_id": payload.RequestID,

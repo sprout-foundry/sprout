@@ -1,0 +1,215 @@
+/* Terminal Container */
+.terminal {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-default);
+  position: relative;
+  overflow: hidden;
+  transition: height 0.15s ease-out;
+}
+
+.terminal-collapsed {
+  min-height: 32px;
+}
+
+/* Terminal Header */
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.terminal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-header-icon {
+  color: var(--accent-primary);
+}
+
+.terminal-header-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.terminal-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.terminal-header-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.08s ease;
+  padding: 0;
+}
+
+.terminal-header-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.terminal-header-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* Terminal Output */
+.terminal-output {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  min-height: 0;
+}
+
+.terminal-line {
+  word-break: break-all;
+  white-space: pre-wrap;
+  margin-bottom: 2px;
+}
+
+.terminal-line-output {
+  color: var(--text-primary);
+}
+
+.terminal-line-input {
+  color: var(--accent-terminal, var(--accent-primary));
+}
+
+.terminal-line-error {
+  color: var(--accent-error);
+}
+
+.terminal-line-system {
+  color: var(--accent-terminal-system, var(--accent-secondary));
+  opacity: 0.8;
+}
+
+/* Terminal Input */
+.terminal-input-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.terminal-prompt {
+  color: var(--accent-terminal, var(--accent-primary));
+  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
+  font-size: 13px;
+  margin-right: 8px;
+  user-select: none;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono, 'Menlo', 'Monaco', 'Courier New', monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 0;
+  min-width: 0;
+}
+
+.terminal-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Terminal Bold Text */
+.terminal-bold {
+  font-weight: 700;
+}
+
+/* Resize Handle */
+.terminal-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: transparent;
+  cursor: ns-resize;
+  flex-shrink: 0;
+  transition: background 0.08s ease;
+}
+
+.terminal-resize-handle:hover,
+.terminal-resize-handle-active {
+  background: var(--accent-primary);
+  opacity: 0.5;
+}
+
+/* Scrollbar Styling */
+.terminal-output::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.terminal-output::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.terminal-output::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 5px;
+}
+
+.terminal-output::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .terminal {
+    transition: none;
+  }
+
+  .terminal-header-button {
+    transition: none;
+  }
+
+  .terminal-resize-handle {
+    transition: none;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .terminal-header-title {
+    font-size: 11px;
+  }
+
+  .terminal-output,
+  .terminal-input {
+    font-size: 12px;
+  }
+}

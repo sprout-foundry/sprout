@@ -1,79 +1,162 @@
 {
-  "name": "minimax",
-  "endpoint": "https://api.minimax.io/v1/chat/completions",
   "auth": {
-    "type": "bearer",
-    "env_var": "MINIMAX_API_KEY"
+    "env_var": "MINIMAX_API_KEY",
+    "type": "bearer"
   },
-  "headers": {},
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0.15,
+    "output_token_cost": 1.15
+  },
   "defaults": {
     "model": "MiniMax-M2.5",
-    "temperature": 1.0,
-    "max_tokens": 196608,
-    "top_p": 1.0,
     "parameters": {
       "reasoning_split": true
-    }
+    },
+    "temperature": 1,
+    "top_p": 1
   },
+  "endpoint": "https://api.minimax.io/v1/chat/completions",
+  "headers": {},
   "message_conversion": {
-    "include_tool_call_id": true,
+    "arguments_as_json": false,
     "convert_tool_role_to_user": false,
-    "reasoning_content_field": "reasoning_details",
-    "arguments_as_json": false
-  },
-  "streaming": {
-    "format": "sse",
-    "chunk_timeout_ms": 300000,
-    "done_marker": "[DONE]"
+    "include_tool_call_id": true,
+    "reasoning_content_field": "reasoning_details"
   },
   "models": {
-    "default_context_limit": 204800,
-    "default_max_completion_tokens": 196608,
-    "max_completion_overrides": {
-      "MiniMax-M2": 196608,
-      "MiniMax-M2.1": 196608,
-      "MiniMax-M2.5": 196608,
-      "MiniMax-M2-Stable": 196608
-    },
-    "completion_pattern_overrides": [
-      {
-        "pattern": "MiniMax-.*",
-        "context_limit": 196608
-      }
-    ],
-    "model_overrides": {
-      "MiniMax-M2": 204800,
-      "MiniMax-M2.1": 204800,
-      "MiniMax-M2.5": 204800,
-      "MiniMax-M2-Stable": 204800
-    },
-    "pattern_overrides": [
-      {
-        "pattern": "MiniMax-.*",
-        "context_limit": 204800
-      }
-    ],
-    "supports_vision": true,
-    "vision_model": "MiniMax-VL-01",
-    "default_model": "MiniMax-M2.5",
     "available_models": [
       "MiniMax-M2",
       "MiniMax-M2.1",
       "MiniMax-M2.5",
+      "MiniMax-M2.7",
       "MiniMax-M2-Stable",
+      "MiniMax-M2.5-Lightning",
       "MiniMax-VL-01"
+    ],
+    "completion_pattern_overrides": [
+      {
+        "context_limit": 196608,
+        "pattern": "MiniMax-.*"
+      }
+    ],
+    "default_context_limit": 204800,
+    "default_max_completion_tokens": 196608,
+    "default_model": "MiniMax-M2.5",
+    "max_completion_overrides": {
+      "MiniMax-M2": 196608,
+      "MiniMax-M2-Stable": 196608,
+      "MiniMax-M2.1": 196608,
+      "MiniMax-M2.5": 196608,
+      "MiniMax-M2.5-Lightning": 131072,
+      "MiniMax-M2.7": 196608
+    },
+    "model_info": [
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2.5 - SOTA large language model for real-world productivity with 196K context",
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax M2.5",
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2.7 - Enhanced M2.5 with improved reasoning and coding capabilities",
+        "id": "MiniMax-M2.7",
+        "name": "MiniMax M2.7",
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2.5-Lightning - Cost-effective variant with 1M context window",
+        "id": "MiniMax-M2.5-Lightning",
+        "name": "MiniMax M2.5 Lightning",
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2 - Previous generation model",
+        "id": "MiniMax-M2",
+        "name": "MiniMax M2",
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2.1 - Enhanced version of M2",
+        "id": "MiniMax-M2.1",
+        "name": "MiniMax M2.1",
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 196608,
+        "description": "MiniMax-M2-Stable - Stable variant of M2",
+        "id": "MiniMax-M2-Stable",
+        "name": "MiniMax M2 Stable",
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 204800,
+        "description": "MiniMax-VL-01 - Vision language model",
+        "id": "MiniMax-VL-01",
+        "name": "MiniMax VL-01",
+        "tags": [
+          "vision",
+          "multimodal"
+        ]
+      }
+    ],
+    "model_overrides": {
+      "MiniMax-M2": 204800,
+      "MiniMax-M2-Stable": 204800,
+      "MiniMax-M2.1": 204800,
+      "MiniMax-M2.5": 204800,
+      "MiniMax-M2.5-Lightning": 1000000,
+      "MiniMax-M2.7": 204800
+    },
+    "pattern_overrides": [
+      {
+        "context_limit": 204800,
+        "pattern": "MiniMax-.*"
+      }
+    ],
+    "supports_vision": true,
+    "vision_model": "MiniMax-VL-01"
+  },
+  "name": "minimax",
+  "retry": {
+    "backoff_multiplier": 2,
+    "base_delay_ms": 1000,
+    "max_attempts": 3,
+    "max_delay_ms": 30000,
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
     ]
   },
-  "retry": {
-    "max_attempts": 3,
-    "base_delay_ms": 1000,
-    "backoff_multiplier": 2.0,
-    "max_delay_ms": 30000,
-    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
-  },
-  "cost": {
-    "input_token_cost": 0.0,
-    "output_token_cost": 0.0,
-    "currency": "USD"
+  "streaming": {
+    "chunk_timeout_ms": 300000,
+    "done_marker": "[DONE]",
+    "format": "sse"
   }
 }

@@ -8,8 +8,7 @@ import { spawnSync } from 'node:child_process';
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 const webuiDir = join(repoRoot, 'webui');
 const targetDir = join(repoRoot, 'pkg', 'webui', 'static');
-const buildDir = join(webuiDir, 'build');
-const buildStaticDir = join(buildDir, 'static');
+const buildDir = join(webuiDir, 'dist'); // Vite output directory
 const embeddedLogoPath = join(repoRoot, 'pkg', 'webui', 'logo-mark.svg');
 const targetLogoPath = join(targetDir, 'logo-mark.svg');
 
@@ -54,17 +53,9 @@ function copyBuildOutput() {
     rmSync(join(targetDir, entry), { recursive: true, force: true });
   }
 
+  // Copy all files from dist/ to targetDir
   for (const entry of readdirSync(buildDir, { withFileTypes: true })) {
-    if (entry.name === 'static') {
-      continue;
-    }
     cpSync(join(buildDir, entry.name), join(targetDir, entry.name), { recursive: true });
-  }
-
-  if (existsSync(buildStaticDir)) {
-    for (const entry of readdirSync(buildStaticDir, { withFileTypes: true })) {
-      cpSync(join(buildStaticDir, entry.name), join(targetDir, entry.name), { recursive: true });
-    }
   }
 
   if (existsSync(embeddedLogoPath) && !existsSync(targetLogoPath)) {
@@ -72,7 +63,7 @@ function copyBuildOutput() {
   }
 }
 
-console.log('🏗️  Building React Web UI...');
+console.log('🏗️  Building React Web UI with Vite...');
 
 // Check for --no-build flag
 const noBuild = process.argv.includes('--no-build');
@@ -83,11 +74,12 @@ if (!noBuild) {
     run('npm', ['install'], webuiDir);
   }
 
-  console.log('🔨 Building React app...');
-  // Pass DISABLE_ESLINT_PLUGIN=true so react-scripts build skips the bundled
-  // ESLint pass. Lint is run separately via `npm run lint:ci` in CI, and the
-  // react-scripts ESLint pass treats all warnings as errors when CI=true.
-  run('npm', ['run', 'build'], webuiDir, { DISABLE_ESLINT_PLUGIN: 'true' });
+  console.log('🔨 Building React app with Vite...');
+  // Vite doesn't need DISABLE_ESLINT_PLUGIN
+  run('npm', ['run', 'build'], webuiDir, {
+    // Pass mode for cloud/local builds
+    ...(process.env.SPROUT_MODE && { VITE_SPROUT_MODE: process.env.SPROUT_MODE }),
+  });
 } else {
   console.log('⏭️  Skipping React build (--no-build flag)');
 }

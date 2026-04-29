@@ -7,26 +7,32 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "lib": [
-      "dom",
-      "dom.iterable",
-      "es6"
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
     ],
-    "module": "esnext",
+    "module": "ESNext",
     "moduleResolution": "node",
     "noEmit": true,
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "es5"
+    "target": "ES2020",
+    "types": [
+      "vite/client",
+      "vitest/globals"
+    ]
   },
   "exclude": [
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx",
-    "src/**/*.test.js",
-    "src/**/*.test.jsx"
+    "node_modules",
+    "dist",
+    "build",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ],
   "include": [
-    "src"
+    "src",
+    "vite.config.ts"
   ]
 }

@@ -1,0 +1,42 @@
+/// <reference types="vite/client" />
+/// <reference types="vitest/globals" />
+
+interface ImportMetaEnv {
+  readonly VITE_SPROUT_MODE: 'cloud' | 'local' | undefined;
+  readonly VITE_FOUNDRY_API_URL: string | undefined;
+  readonly VITE_FOUNDRY_WS_URL: string | undefined;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
+// CSS modules type declaration
+declare module '*.module.css' {
+  const classes: { readonly [key: string]: string };
+  export default classes;
+}
+
+// CSS type declaration
+declare module '*.css' {
+  const content: string;
+  export default content;
+}
+
+// Asset type declarations
+declare module '*.svg' {
+  import type { FunctionComponent, SVGProps } from 'react';
+  export const ReactComponent: FunctionComponent<SVGProps<SVGSVGElement> & { title?: string }>;
+  const src: string;
+  export default src;
+}
+
+declare module '*.png' {
+  const value: string;
+  export default value;
+}
+
+declare module '*.jpg' {
+  const value: string;
+  export default value;
+}

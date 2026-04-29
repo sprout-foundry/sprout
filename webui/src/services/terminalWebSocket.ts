@@ -142,7 +142,7 @@ class TerminalWebSocketService {
     // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
     let wsUrl =
-      process.env.REACT_APP_TERMINAL_WS_URL ||
+      import.meta.env.VITE_TERMINAL_WS_URL ||
       (() => {
         const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

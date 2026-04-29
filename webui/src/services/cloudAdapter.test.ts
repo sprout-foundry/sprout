@@ -134,8 +134,8 @@ describe('CloudAdapter', () => {
       expect(adapter.showOnboarding).toBe(false);
     });
 
-    it('should support SSH and instances', () => {
-      expect(adapter.supportsSSH).toBe(true);
+    it('should not support SSH (cloud has no access to local network)', () => {
+      expect(adapter.supportsSSH).toBe(false);
       expect(adapter.supportsInstances).toBe(true);
     });
 

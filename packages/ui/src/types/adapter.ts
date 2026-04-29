@@ -7,11 +7,11 @@
 
 /** Platform-specific navigation item */
 export interface PlatformNavItem {
-  id: string;
-  label: string;
-  href: string;
-  icon?: string;
-  order?: number;
+  readonly id: string;
+  readonly label: string;
+  readonly href: string;
+  readonly icon?: string;
+  readonly order?: number;
 }
 
 /** Adapter interface for backend communication */
@@ -37,5 +37,5 @@ export interface APIAdapter {
   /** Whether settings panel should be shown */
   readonly supportsSettings: boolean;
   /** Platform-specific routes to inject into the sidebar (e.g., billing, tasks) */
-  readonly platformNavItems?: PlatformNavItem[];
+  readonly platformNavItems?: readonly PlatformNavItem[];
 }

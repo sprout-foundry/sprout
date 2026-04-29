@@ -6,6 +6,10 @@
  *
  * This is the foundation for Option A (shared component library): components
  * will eventually accept adapters via context instead of calling clientFetch directly.
+ *
+ * NOTE: The APIAdapter and PlatformNavItem interfaces are duplicated in
+ * packages/ui/src/types/adapter.ts for the @sprout/ui component library.
+ * Changes here MUST be mirrored there until the types are extracted to a shared package.
  */
 
 export interface APIAdapter {

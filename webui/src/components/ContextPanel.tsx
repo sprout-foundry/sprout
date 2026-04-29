@@ -46,7 +46,7 @@ import './ContextPanel.css';
 import LiveLog from './LiveLog';
 import { showThemedConfirm } from './ThemedDialog';
 import TodoPanel from './TodoPanel';
-import { ApiService } from '../services/api';
+
 import { stripAnsiCodes } from '../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../utils/resultSummary';
 import RevisionListPanel from './RevisionListPanel';
@@ -238,11 +238,11 @@ interface ChatContextPanelProps extends ContextPanelBaseProps {
   };
   onHandleToolPillClick?: (toolId: string) => void;
   onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
-  // Data-loading callbacks (replace internal ApiService usage)
-  onLoadRevisionHistory?: () => Promise<{ revisions: Revision[] }>;
-  onLoadSessions?: () => Promise<{ sessions: SessionEntry[]; current_session_id: string }>;
-  onRestoreSession?: (sessionId: string) => Promise<{ messages: any[] }>;
-  onLoadRevisionDetails?: (revisionId: string) => Promise<{ revision?: { files: RevisionDetailFile[] } }>;
+  // Data-loading callbacks (adapter-agnostic — no internal API calls)
+  onLoadRevisionHistory: () => Promise<{ revisions: Revision[] }>;
+  onLoadSessions: () => Promise<{ sessions: SessionEntry[]; current_session_id: string }>;
+  onRestoreSession: (sessionId: string) => Promise<{ messages: any[] }>;
+  onLoadRevisionDetails: (revisionId: string) => Promise<{ revision?: { files: RevisionDetailFile[] } }>;
 }
 
 export type ContextPanelProps = ChatContextPanelProps;
@@ -297,20 +297,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const log = useLog();
   const { context, onPanelWidthChange, onMobileOpenChange, onCollapsedChange, panelWidth: requestedPanelWidth } = props;
 
-  // Create refs for the callback props to avoid dependency issues
-  const onLoadRevisionHistoryRef = useRef(props.onLoadRevisionHistory);
-  const onLoadSessionsRef = useRef(props.onLoadSessions);
-  const onRestoreSessionRef = useRef(props.onRestoreSession);
-  const onLoadRevisionDetailsRef = useRef(props.onLoadRevisionDetails);
-
-  // Update refs when props change
-  useEffect(() => {
-    onLoadRevisionHistoryRef.current = props.onLoadRevisionHistory;
-    onLoadSessionsRef.current = props.onLoadSessions;
-    onRestoreSessionRef.current = props.onRestoreSession;
-    onLoadRevisionDetailsRef.current = props.onLoadRevisionDetails;
-  }, [props.onLoadRevisionHistory, props.onLoadSessions, props.onRestoreSession, props.onLoadRevisionDetails]);
-
   // ── Panel infrastructure state ───────────────────────────────────
   const [panelCollapsed, setPanelCollapsed] = useState(() => {
     // On mobile, default to collapsed
@@ -353,9 +339,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     setRevisionDetailsById({});
     setRevisionDetailsLoading({});
     try {
-      const response = onLoadRevisionHistoryRef.current 
-        ? await onLoadRevisionHistoryRef.current() 
-        : await ApiService.getInstance().getChangelog();
+      const response = await props.onLoadRevisionHistory();
       if (requestId !== historyLoadRequestRef.current) return;
       const normalized = (response.revisions || []).map(normalizeRevision).sort((a, b) => {
         return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
@@ -372,14 +356,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         setIsLoadingHistory(false);
       }
     }
-  }, [log]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [log, props.onLoadRevisionHistory]);
 
   const loadSessions = useCallback(async () => {
     setIsLoadingSessions(true);
     try {
-      const response = onLoadSessionsRef.current 
-        ? await onLoadSessionsRef.current() 
-        : await ApiService.getInstance().getSessions();
+      const response = await props.onLoadSessions();
       setSessions(response.sessions || []);
       setCurrentSessionId(response.current_session_id || '');
       setSessionsCount(response.sessions?.length || 0);
@@ -390,7 +372,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [log]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [log, props.onLoadSessions]);
 
   // ── Public API via ref ───────────────────────────────────────────
   useImperativeHandle(
@@ -572,9 +554,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setIsLoadingSessions(true);
       setSessionRestoreError(null);
       try {
-        const response = onRestoreSessionRef.current 
-          ? await onRestoreSessionRef.current(sessionId) 
-          : await ApiService.getInstance().restoreSession(sessionId);
+        const response = await props.onRestoreSession(sessionId);
         if (response.messages?.length) {
           setTimeout(() => {
             window.dispatchEvent(
@@ -591,7 +571,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         setIsLoadingSessions(false);
       }
     },
-    [currentSessionId, isProcessing, loadSessions],
+    [currentSessionId, isProcessing, loadSessions, props.onRestoreSession],
   );
 
   const buildRevisionFileKey = useCallback((file: RevisionFile | RevisionDetailFile, index: number) => {
@@ -605,9 +585,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: true }));
 
       try {
-        const response = onLoadRevisionDetailsRef.current 
-          ? await onLoadRevisionDetailsRef.current(revisionId) 
-          : await ApiService.getInstance().getRevisionDetails(revisionId);
+        const response = await props.onLoadRevisionDetails(revisionId);
         const detailsMap: Record<string, string> = {};
         (response.revision?.files || []).forEach((file: RevisionDetailFile, index: number) => {
           detailsMap[buildRevisionFileKey(file, index)] = file.diff || '';
@@ -621,7 +599,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         setRevisionDetailsLoading((prev) => ({ ...prev, [revisionId]: false }));
       }
     },
-    [buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading, log],
+    [buildRevisionFileKey, revisionDetailsById, revisionDetailsLoading, log, props.onLoadRevisionDetails],
   );
 
   // ── Data loading triggers ────────────────────────────────────────

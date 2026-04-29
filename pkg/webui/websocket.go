@@ -854,7 +854,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 
 	response, _ := data["response"].(bool)
 
-	mgr := security.GetGlobalPromptManager()
+	mgr := security.GetGlobalApprovalManager()
 	if mgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -863,7 +863,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 		return
 	}
 
-	if mgr.RespondToPrompt(requestID, response) {
+	if mgr.RespondToApproval(requestID, response) {
 		ws.publishClientEvent(clientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
 			"status":     "responded",
 			"request_id": requestID,

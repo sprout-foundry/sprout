@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { Plus, X, Pencil, Trash2, GitBranch, Link2, Unlink2, Pin } from 'lucide-react';
 import type { ChatSession } from '../services/chatSessions';
 import ContextMenu from './ContextMenu';
+import { showThemedConfirm } from './ThemedDialog';
 import './ChatTabBar.css';
 
 interface ChatTabBarProps {
@@ -145,17 +146,19 @@ function ChatTabBar({
     closeContextMenu();
   }, [contextMenu.sessionId, contextMenu.canDelete, onDelete, closeContextMenu]);
 
-  const handleMenuDeleteWithWorktree = useCallback(() => {
+  const handleMenuDeleteWithWorktree = useCallback(async () => {
     const id = contextMenu.sessionId;
     if (!id || !contextMenu.canDelete || !onDeleteWithWorktree) return;
-    if (!window.confirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?')) return;
+    const confirmed = await showThemedConfirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?', { type: 'danger' });
+    if (!confirmed) return;
     onDeleteWithWorktree(id);
     closeContextMenu();
   }, [contextMenu.sessionId, contextMenu.canDelete, onDeleteWithWorktree, closeContextMenu]);
 
-  const handleMenuDeleteAll = useCallback(() => {
+  const handleMenuDeleteAll = useCallback(async () => {
     if (!onDeleteAll) return;
-    if (!window.confirm('Close all chat sessions except the active one?')) return;
+    const confirmed = await showThemedConfirm('Close all chat sessions except the active one?', { type: 'warning' });
+    if (!confirmed) return;
     onDeleteAll();
     closeContextMenu();
   }, [onDeleteAll, closeContextMenu]);

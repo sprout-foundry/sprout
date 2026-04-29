@@ -218,7 +218,7 @@ func CheckFileSecurity(
 	logger := utils.GetLogger(false)
 
 	// Get global prompt manager (set by webui in WebUI mode) or nil otherwise
-	promptManager := GetGlobalPromptManager()
+	promptManager := GetGlobalApprovalManager()
 
 	concernsForThisFile := make([]string, 0)
 	ignoredConcernsForThisFile := make([]string, 0)

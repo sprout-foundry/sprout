@@ -8,7 +8,7 @@ import (
 
 // SecurityManager provides an interface for managing all security-related state.
 type SecurityManager interface {
-	GetSecurityApprovalMgr() *SecurityApprovalManager
+	GetSecurityApprovalMgr() *security.ApprovalManager
 	SetUnsafeMode(unsafe bool)
 	GetUnsafeMode() bool
 	IsSecurityBypassApproved() bool
@@ -20,14 +20,12 @@ type SecurityManager interface {
 	SetElevationGate(gate *security.ElevationGate)
 	SetHasActiveWebUIClients(fn func() bool)
 	HasActiveWebUIClients() bool
-	IsPreWriteValidationEnabled() bool
-	SetPreWriteValidation(enabled bool)
 }
 
 // AgentSecurityManager implements SecurityManager, holding all security-related state
 // previously managed directly by the Agent struct.
 type AgentSecurityManager struct {
-	securityApprovalMgr     *SecurityApprovalManager
+	securityApprovalMgr     *security.ApprovalManager
 	unsafeMode              bool
 	securityBypassApproved  bool
 	securityBypassMu        sync.RWMutex
@@ -36,20 +34,19 @@ type AgentSecurityManager struct {
 	outputRedactor          *security.OutputRedactor
 	elevationGate           *security.ElevationGate
 	hasActiveWebUIClients   func() bool
-	enablePreWriteValidation bool
 }
 
 // NewAgentSecurityManager creates a new AgentSecurityManager with all fields initialized.
 func NewAgentSecurityManager() *AgentSecurityManager {
 	return &AgentSecurityManager{
-		securityApprovalMgr:     NewSecurityApprovalManager(),
+		securityApprovalMgr:     security.NewApprovalManager(),
 		outputRedactor:          security.NewOutputRedactor(),
 		ignoredSecurityConcerns: make(map[string]map[string]bool),
 		elevationGate:           security.NewElevationGate(nil),
 	}
 }
 
-func (m *AgentSecurityManager) GetSecurityApprovalMgr() *SecurityApprovalManager {
+func (m *AgentSecurityManager) GetSecurityApprovalMgr() *security.ApprovalManager {
 	return m.securityApprovalMgr
 }
 
@@ -112,12 +109,4 @@ func (m *AgentSecurityManager) HasActiveWebUIClients() bool {
 		return m.hasActiveWebUIClients()
 	}
 	return false
-}
-
-func (m *AgentSecurityManager) IsPreWriteValidationEnabled() bool {
-	return m.enablePreWriteValidation
-}
-
-func (m *AgentSecurityManager) SetPreWriteValidation(enabled bool) {
-	m.enablePreWriteValidation = enabled
 }

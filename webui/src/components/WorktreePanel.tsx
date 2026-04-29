@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useWorktrees } from '../hooks/useWorktrees';
+import { showThemedConfirm } from './ThemedDialog';
 import './WorktreePanel.css';
 
 interface WorktreePanelProps {
@@ -130,7 +131,8 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
   };
 
   const handleRemove = async (path: string) => {
-    if (!window.confirm(`Are you sure you want to remove this worktree?\n\nPath: ${path}`)) {
+    const confirmed = await showThemedConfirm(`Are you sure you want to remove this worktree?\n\nPath: ${path}`, { type: 'danger' });
+    if (!confirmed) {
       return;
     }
     await removeWorktree(path);

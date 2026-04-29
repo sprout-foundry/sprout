@@ -18,7 +18,6 @@ func TestNewConfigDefaults(t *testing.T) {
 	cfg := NewConfig()
 
 	assert.Equal(t, ConfigVersion, cfg.Version)
-	assert.False(t, cfg.EnablePreWriteValidation, "EnablePreWriteValidation is zero-value false when not explicitly set in NewConfig")
 	assert.Equal(t, "project", cfg.HistoryScope, "HistoryScope should default to 'project'")
 	assert.Empty(t, cfg.LastUsedProvider, "LastUsedProvider should default to empty string")
 	assert.Equal(t, SelfReviewGateModeOff, cfg.SelfReviewGateMode, "SelfReviewGateMode should default to 'off'")
@@ -53,7 +52,6 @@ func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	original := NewConfig()
 	original.LastUsedProvider = "deepinfra"
 	original.HistoryScope = "global"
-	original.EnablePreWriteValidation = false
 	original.ReasoningEffort = "high"
 	original.SystemPromptText = "custom prompt"
 	original.SkipPrompt = true
@@ -76,7 +74,6 @@ func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	assert.Equal(t, ConfigVersion, loaded.Version)
 	assert.Equal(t, "deepinfra", loaded.LastUsedProvider)
 	assert.Equal(t, "global", loaded.HistoryScope)
-	assert.False(t, loaded.EnablePreWriteValidation)
 	assert.Equal(t, "high", loaded.ReasoningEffort)
 	assert.Equal(t, "custom prompt", loaded.SystemPromptText)
 	assert.True(t, loaded.SkipPrompt)

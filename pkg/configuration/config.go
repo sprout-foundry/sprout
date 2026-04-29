@@ -44,9 +44,6 @@ type Config struct {
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 
-	// Pre-write Validation Configuration
-	EnablePreWriteValidation bool `json:"enable_pre_write_validation,omitempty"`
-
 	// AllowOrchestratorGitWrite controls whether the orchestrator persona is allowed to execute
 	// writable git operations (commit, push, add, etc.) via shell_command.
 	// When true (default), the orchestrator can use git write commands through shell_command
@@ -365,9 +362,6 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Override simple bool/int/string fields
-	if override.EnablePreWriteValidation {
-		result.EnablePreWriteValidation = override.EnablePreWriteValidation
-	}
 	if override.AllowOrchestratorGitWrite {
 		result.AllowOrchestratorGitWrite = override.AllowOrchestratorGitWrite
 	}

@@ -84,11 +84,11 @@ func TestSecurityCautionClassification(t *testing.T) {
 			wantBlock:  false,
 		},
 		{
-			name:       "unknown tool defaults to caution",
+			name:       "unregistered tool defaults to safe",
 			toolName:   "hypothetical_tool",
 			args:       map[string]interface{}{},
-			wantRisk:   tools.SecurityCaution,
-			wantPrompt: true,
+			wantRisk:   tools.SecuritySafe,
+			wantPrompt: false,
 			wantBlock:  false,
 		},
 		{

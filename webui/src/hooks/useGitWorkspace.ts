@@ -3,12 +3,14 @@ import { notificationBus } from '../services/notificationBus';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
+import type { GitBranchesState } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
 import type { SproutEvent } from '../types/events';
 import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
+import * as workspaceApi from '../services/api/workspaceApi';
 
 export interface GitDiffResponse {
   message: string;
@@ -30,11 +32,6 @@ export interface DeepReviewResult {
   provider?: string;
   model?: string;
   warnings?: string[];
-}
-
-export interface GitBranchesState {
-  current: string;
-  branches: string[];
 }
 
 interface UseGitWorkspaceOptions {
@@ -89,6 +86,7 @@ export const useGitWorkspace = ({
   const [gitActionError, setGitActionError] = useState<string | null>(null);
   const [gitActionWarning, setGitActionWarning] = useState<string | null>(null);
   const [gitBranches, setGitBranches] = useState<GitBranchesState>({ current: '', branches: [] });
+  const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
   const [isReviewLoading, setIsReviewLoading] = useState(false);
   const [isReviewFixing, setIsReviewFixing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -175,6 +173,19 @@ export const useGitWorkspace = ({
   useEffect(() => {
     loadGitStatus();
   }, [loadGitStatus, gitRefreshToken]);
+
+  // Fetch workspace root once on mount (workspace rarely changes during a session).
+  useEffect(() => {
+    workspaceApi.getWorkspace(fetchFn)
+      .then(ws => {
+        if (ws?.workspace_root) {
+          setWorkspaceRoot(String(ws.workspace_root));
+        }
+      })
+      .catch(err => {
+        debugLog('[useGitWorkspace] failed to fetch workspace root:', err);
+      });
+  }, [fetchFn]);
 
   // Debounced git status refresh on file change WebSocket events.
   // When files are written (editor save, agent edits, search replace), the git
@@ -647,6 +658,7 @@ export const useGitWorkspace = ({
   return {
     gitStatus,
     gitBranches,
+    workspaceRoot,
     commitMessage,
     setCommitMessage,
     selectedFiles,

@@ -19,3 +19,4 @@ architectural area, its current state, and open work.
 |------|-------|--------|
 | SP-006 | [Delegate Tool — In-Process Agent Delegation](./SP-006-delegate-tool.md) | 📋 Spec |
 | SP-007 | [Extend Configuration — Role-Based Configs](./SP-007-extend-config.md) | 📋 Spec |
+| SP-008 | [Agent Terminal Sessions — Hidden PTY Routing + Background Mode](./SP-008-agent-terminal-sessions.md) | 📋 Spec |

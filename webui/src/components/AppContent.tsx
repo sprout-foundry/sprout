@@ -1193,6 +1193,10 @@ const AppContent: React.FC<AppContentProps> = ({
               panelWidth={panelWidth}
               onPanelWidthChange={setPanelWidth}
               onOpenRevisionDiff={handleOpenRevisionDiff}
+              onLoadRevisionHistory={() => apiService.getChangelog()}
+              onLoadSessions={() => apiService.getSessions()}
+              onRestoreSession={(sessionId) => apiService.restoreSession(sessionId)}
+              onLoadRevisionDetails={(revisionId) => apiService.getRevisionDetails(revisionId)}
             />
           )}
         </div>

@@ -188,25 +188,25 @@ lint-fix:
 
 # Build React web UI only (doesn't deploy to Go static)
 build-ui:
-	@echo "Building React web UI..."
+	@echo "Building React web UI with Vite..."
 	@if [ ! -d "webui" ]; then \
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
 	@# Install npm dependencies if needed
 	@cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true
-	@cd webui && DISABLE_ESLINT_PLUGIN=true npm run build
-	@echo "React web UI build completed in webui/build/"
+	@cd webui && npm run build
+	@echo "React web UI build completed in webui/dist/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
 # Optimized: skips React build if source files haven't changed
 deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
-		echo "Building React web UI..."; \
+		echo "Building React web UI with Vite..."; \
 		cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true; \
-		cd webui && DISABLE_ESLINT_PLUGIN=true npm run build; \
-		echo "React web UI build completed in webui/build/"; \
+		cd webui && npm run build; \
+		echo "React web UI build completed in webui/dist/"; \
 		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs; \
 	else \
 		echo "React UI is up-to-date, skipping rebuild"; \
@@ -240,13 +240,13 @@ build-wasm:
 	@./scripts/build-wasm.sh
 	@echo "WASM shell module build completed"
 
-# Build cloud-mode distributable WebUI bundle (sets REACT_APP_SPROUT_MODE=cloud)
+# Build cloud-mode distributable WebUI bundle (sets VITE_SPROUT_MODE=cloud)
 build-webui-dist:
 	@echo "Building cloud-mode WebUI distribution..."
 	@node scripts/build-webui-dist.mjs --mode cloud
 	@echo "Cloud-mode distribution ready in dist/cloud/"
 
-# Build local-mode distributable WebUI bundle (omits REACT_APP_SPROUT_MODE)
+# Build local-mode distributable WebUI bundle (sets VITE_SPROUT_MODE=local)
 build-webui-dist-local:
 	@echo "Building local-mode WebUI distribution..."
 	@node scripts/build-webui-dist.mjs --mode local
@@ -272,8 +272,8 @@ build-fast:
 	@echo "🚀 Fast incremental build..."
 	@# Skip React if unchanged, always rebuild WASM and Go binary
 	@if bash scripts/check-needs-react-rebuild.sh; then \
-		echo "  Building React UI..."; \
-		cd webui && DISABLE_ESLINT_PLUGIN=true npm run build || exit 1; \
+		echo "  Building React UI with Vite..."; \
+		cd webui && npm run build || exit 1; \
 		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs || exit 1; \
 	else \
 		echo "  React UI up-to-date (skipped)"; \

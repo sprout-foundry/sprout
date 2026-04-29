@@ -411,6 +411,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
 	mux.HandleFunc("/static/", ws.handleStaticFiles)
+	mux.HandleFunc("/assets/", ws.handleAssets)
 	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
 	mux.HandleFunc("/manifest.json", ws.handleManifest)
 	mux.HandleFunc("/browserconfig.xml", ws.handleBrowserConfig)

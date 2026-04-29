@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
+      // Ensure all imports of react/react-dom resolve to a single copy.
+      // Without this, symlinked workspace packages (e.g. @sprout/events)
+      // that have their own node_modules/react cause a duplicate React
+      // bundle, breaking hooks (useMemo is null at runtime).
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
     },
     
     // Build configuration

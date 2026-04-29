@@ -752,5 +752,6 @@ func (a *Agent) GetValidator() *validation.Validator {
 
 // SetTraceSessionsets the trace session for dataset collection
 func (a *Agent) SetTraceSession(traceSession interface{}) {
+	a.traceSession = traceSession
 	a.state.SetTraceSession(traceSession)
 }

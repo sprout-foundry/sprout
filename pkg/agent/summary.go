@@ -37,6 +37,9 @@ func computeConversationSummaryMetrics(messages []api.Message) conversationSumma
 
 // PrintConversationSummary displays a comprehensive conversation summary with formatting
 func (a *Agent) PrintConversationSummary(forceFull bool) {
+	if a.state == nil {
+		return
+	}
 
 	if !forceFull {
 		fmt.Println("Use /stats command for detailed conversation summary")

@@ -618,6 +618,7 @@ The `CloudAdapter` defines `platformNavItems` (tasks, billing, team) but the web
 
 This is the full extraction that makes the webui components reusable by any project. Each component stops calling `clientFetch`/`ApiService` directly and instead accepts data and callbacks via props or an adapter context.
 
+[x] - CLOUD-ADAPTER: Create `@sprout/ui` package with React components extracted from the webui. Start with leaf components that have no API dependencies: `Editor`, `Terminal`, `FileTree`, `GitPanel`, `ChatPanel`, `Sidebar`, `StatusBar`, `NotificationStack`, `ContextMenu`, `CommandPalette`
 [] - CLOUD-ADAPTER: Create `@sprout/ui` package with React components extracted from the webui. Start with leaf components that have no API dependencies: `Editor`, `Terminal`, `FileTree`, `GitPanel`, `ChatPanel`, `Sidebar`, `StatusBar`, `NotificationStack`, `ContextMenu`, `CommandPalette`
 [] - CLOUD-ADAPTER: Define a `SproutProvider` React context that wraps the `APIAdapter` and provides it to all `@sprout/ui` components. Components call `useSproutAdapter()` instead of importing `clientFetch`.
 [] - CLOUD-ADAPTER: Extract `EditorManagerContext` into `@sprout/ui` — it manages editor buffers, panes, split layouts. Make it adapter-agnostic by having it call `adapter.fetch()` instead of `clientFetch()`.

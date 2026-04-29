@@ -34,8 +34,6 @@ import {
   ClipboardCopy,
 } from 'lucide-react';
 import './FileTree.css';
-import { ApiService } from '../services/api';
-import { clientFetch } from '../services/clientSession';
 import { copyToClipboard } from '../utils/clipboard';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 import { debugLog } from '../utils/log';
@@ -52,18 +50,6 @@ export interface FileInfo {
   children?: FileInfo[];
 }
 
-interface FileTreeResponse {
-  message: string;
-  path: string;
-  files: Array<
-    FileInfo & {
-      is_dir?: boolean;
-      mod_time?: number;
-      git_status?: string;
-    }
-  >;
-}
-
 interface FileTreeProps {
   onFileSelect: (file: FileInfo) => void;
   selectedFile?: string;
@@ -72,6 +58,9 @@ interface FileTreeProps {
   onItemCreated?: () => void;
   onDeleteItem?: (path: string) => void;
   workspaceRoot?: string;
+  /** Optional pre-loaded file tree data. When provided, this takes priority over internal fetch for initial load.
+   *  Consumers should memoize this prop (e.g., with useMemo) to avoid unnecessary re-renders. */
+  files?: FileInfo[];
   /** Optional callback for fetching files from a given path */
   onFetchFiles?: (path: string) => Promise<FileInfo[]>;
   /** Optional callback for creating a file */
@@ -106,10 +95,8 @@ export interface FileTreeHandle {
 }
 
 const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
-  ({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem, workspaceRoot,
+  ({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem, workspaceRoot, files: filesProp,
      onFetchFiles, onCreateFile, onCreateFolder, onDeletePath, onRenamePath, onOpenInFileBrowser }, ref) => {
-    const apiService = ApiService.getInstance();
-
     const [files, setFiles] = useState<FileInfo[]>([]);
     const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set([rootPath]));
     const [loading, setLoading] = useState<boolean>(false);
@@ -120,6 +107,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [bgContextMenu, setBgContextMenu] = useState<{ x: number; y: number } | null>(null);
     const filesRef = useRef<FileInfo[]>([]);
+    const filesPropRef = useRef(filesProp);
     const inputRef = useRef<HTMLInputElement>(null);
     const fileListRef = useRef<HTMLDivElement>(null);
     const [internalSelectedFile, setInternalSelectedFile] = useState<string | null>(null);
@@ -183,45 +171,9 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           }
         }
 
-        // Fallback: use clientFetch directly (backward compatibility)
-        try {
-          const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch files: ${response.statusText}`);
-          }
-
-          const data: FileTreeResponse = await response.json();
-          if (data.message !== 'success') {
-            throw new Error(data.message);
-          }
-
-          return (data.files || [])
-            .map((file) => ({
-              name: file.name,
-              path: file.path,
-              size: file.size || 0,
-              modified: file.modified ?? file.mod_time ?? 0,
-              isDir: Boolean(file.isDir ?? file.is_dir),
-              ext:
-                (file.isDir ?? file.is_dir) ? '' : file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '',
-              gitStatus: (file.git_status as FileInfo['gitStatus']) || undefined,
-            }))
-            .sort((a, b) => {
-              if (a.isDir !== b.isDir) {
-                return a.isDir ? -1 : 1;
-              }
-              if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) {
-                return a.gitStatus === 'ignored' ? 1 : -1;
-              }
-              return a.name.localeCompare(b.name);
-            });
-        } catch (err) {
-          debugLog('[fetchFiles] Failed to fetch file list:', err);
-          if (err instanceof Error && err.message.includes('Unexpected token')) {
-            throw new Error('Backend not connected. Start with: ./ledit agent');
-          }
-          throw err instanceof Error ? err : new Error('Unknown error');
-        }
+        // No fetch callback provided - return empty array (caller must provide one)
+        debugLog('[fetchFiles] No onFetchFiles callback provided');
+        return [];
       },
       [onFetchFiles],
     );
@@ -231,7 +183,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       setError(null);
 
       try {
-        let nextFiles = await fetchFiles(rootPath);
+        let nextFiles = filesPropRef.current;
+
+        // If files prop is provided, use it; otherwise fetch
+        if (nextFiles === undefined) {
+          nextFiles = await fetchFiles(rootPath);
+        }
+
         const expanded = Array.from(expandedDirs)
           .filter((dirPath) => dirPath !== rootPath)
           .sort((a, b) => a.split('/').length - b.split('/').length);
@@ -303,7 +261,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
           for (const dirPath of sortedAncestors) {
             const dir = findFileByPath(filesRef.current, dirPath);
-            if (!dir || dir.isDir) {
+            if (!dir || !dir.children) {
               const children = await fetchFiles(dirPath);
               setFiles((prev) => updateFileChildren(prev, dirPath, children));
             }
@@ -340,12 +298,21 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
     useEffect(() => {
       filesRef.current = files;
-    }, [files]);
+      filesPropRef.current = filesProp;
+    }, [files, filesProp]);
 
     useEffect(() => {
-      refreshTree();
+      // If files prop is provided, sync it to state
+      // Otherwise, fetch via onFetchFiles
+      if (filesProp !== undefined) {
+        setFiles(filesProp);
+        setError(null);
+      } else {
+        refreshTree();
+      }
+      // Only re-run when rootPath or filesProp changes (not refreshTree)
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rootPath]);
+    }, [rootPath, filesProp]);
 
     useEffect(() => {
       if (!draft) {
@@ -434,7 +401,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           if (onRenamePath) {
             await onRenamePath(draft.targetPath, targetPath);
           } else {
-            await apiService.renameItem(draft.targetPath, targetPath);
+            throw new Error('No rename handler provided');
           }
         } else {
           const isFolder = draft.mode === 'create-folder';
@@ -442,13 +409,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             if (onCreateFolder) {
               await onCreateFolder(draft.parentPath, draftValue.trim());
             } else {
-              await apiService.createItem(targetPath, true);
+              throw new Error('No create folder handler provided');
             }
           } else {
             if (onCreateFile) {
               await onCreateFile(draft.parentPath, draftValue.trim());
             } else {
-              await apiService.createItem(targetPath, false);
+              throw new Error('No create file handler provided');
             }
           }
         }
@@ -463,7 +430,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       } finally {
         setLoading(false);
       }
-    }, [apiService, draft, draftValue, onItemCreated, refreshTree, onCreateFile, onCreateFolder, onRenamePath]);
+    }, [draft, draftValue, onItemCreated, refreshTree, onCreateFile, onCreateFolder, onRenamePath]);
 
     const handleDraftKeyDown = useCallback(
       (event: KeyboardEvent<HTMLInputElement>) => {
@@ -498,7 +465,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           if (onDeletePath) {
             await onDeletePath(file.path, file.isDir);
           } else {
-            await apiService.deleteItem(file.path);
+            throw new Error('No delete handler provided');
           }
           await refreshTree();
           onDeleteItem?.(file.path);
@@ -509,7 +476,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           setLoading(false);
         }
       },
-      [apiService, onDeleteItem, refreshTree, onDeletePath],
+      [onDeletePath, onDeleteItem, refreshTree],
     );
 
     const toggleDir = useCallback(
@@ -725,7 +692,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             if (onDeletePath) {
               await onDeletePath(paths[i], file.isDir);
             } else {
-              await apiService.deleteItem(paths[i]);
+              throw new Error('No delete handler provided');
             }
             onDeleteItem?.(paths[i]);
           } else {
@@ -747,7 +714,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       if (failed > 0 && failed < paths.length) {
         debugLog(`[batchDelete] ${failed}/${paths.length} items failed to delete`);
       }
-    }, [multiSelect.selectedPaths, apiService, onDeleteItem, refreshTree, multiActions, onDeletePath, findFileByPath]);
+    }, [multiSelect.selectedPaths, onDeletePath, onDeleteItem, refreshTree, multiActions, filesRef, findFileByPath]);
 
     const handleBatchMove = useCallback(async () => {
       const paths = Array.from(multiSelect.selectedPaths);
@@ -797,7 +764,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           if (onRenamePath) {
             await onRenamePath(paths[i], newPath);
           } else {
-            await apiService.renameItem(paths[i], newPath);
+            throw new Error('No rename handler provided');
           }
         } catch (err) {
           debugLog(`[batchMove] Failed to move "${paths[i]}":`, err);
@@ -813,7 +780,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       }
       multiActions.clearSelection();
       await refreshTree();
-    }, [multiSelect.selectedPaths, apiService, refreshTree, multiActions, rootPath, onRenamePath]);
+    }, [multiSelect.selectedPaths, onRenamePath, refreshTree, multiActions, rootPath]);
 
     const handleCopyPaths = useCallback(
       (absolute = false) => {
@@ -1013,7 +980,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           if (onRenamePath) {
             await onRenamePath(sourcePath, newPath);
           } else {
-            await apiService.renameItem(sourcePath, newPath);
+            throw new Error('No rename handler provided');
           }
 
           setExpandedDirs((prev) => {
@@ -1034,7 +1001,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           setLoading(false);
         }
       },
-      [apiService, refreshTree, onItemCreated, rootPath, onRenamePath],
+      [refreshTree, onItemCreated, rootPath, onRenamePath],
     );
 
     const handleDrop = useCallback(
@@ -1070,6 +1037,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       },
       [draggedPath, findFileByPath, isAncestorOrSelf, getParentPath, executeMove],
     );
+
+    // ── Render helpers ─────────────────────────────────────────────────
 
     const renderDraftRow = (parentPath: string, depth: number): JSX.Element | null => {
       if (!draft || draft.mode === 'rename' || draft.parentPath !== parentPath) {
@@ -1280,6 +1249,8 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         );
       });
 
+    // ── Main render ─────────────────────────────────────────────────────
+
     return (
       <div className="file-tree">
         <div className="file-tree-header">
@@ -1339,7 +1310,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               <FolderPlus size={14} />
             </button>
             <button className="refresh-button" onClick={refreshTree} disabled={loading} aria-label="Refresh">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
                 <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
@@ -1436,10 +1407,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             </div>
           ) : null}
           {multiSelect.selectedPaths.size > 0 && (
-            <SelectionActionBar
-              count={multiSelect.selectedPaths.size}
-              onClear={multiActions.clearSelection}
-            />
+            <SelectionActionBar count={multiSelect.selectedPaths.size} onClear={multiActions.clearSelection} />
           )}
         </div>
 
@@ -1502,108 +1470,102 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             y={contextMenu?.y ?? 0}
             onClose={() => setContextMenu(null)}
           >
-          {contextMenu?.file.isDir ? (
-            <>
-              <button
-                className="context-menu-item"
-                onClick={() => {
-                  if (!contextMenu) return;
-                  setContextMenu(null);
-                  handleCreateItem('file', contextMenu.file.path);
-                }}
-              >
-                Add file
-              </button>
-              <button
-                className="context-menu-item"
-                onClick={() => {
-                  if (!contextMenu) return;
-                  setContextMenu(null);
-                  handleCreateItem('folder', contextMenu.file.path);
-                }}
-              >
-                Add folder
-              </button>
-            </>
-          ) : null}
-          {contextMenu && (
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                setContextMenu(null);
-                handleStartRename(contextMenu.file);
-              }}
-            >
-              Rename
-            </button>
-          )}
-          {contextMenu && (
-            <button
-              className="context-menu-item"
-              onClick={() => {
-                const file = contextMenu.file;
-                setContextMenu(null);
-                if (onOpenInFileBrowser) {
-                  onOpenInFileBrowser(file.path).catch((err) => {
-                    debugLog('[onOpenInFileBrowser] failed:', err);
-                  });
-                } else {
-                  apiService.openInFileBrowser(file.path).catch(() => {});
-                }
-              }}
-            >
-              Open in file browser
-            </button>
-          )}
-          {contextMenu && (
-            <>
-              <div className="context-menu-divider" />
-              <button
-                className="context-menu-item"
-                onClick={() => {
-                  copyToClipboard(contextMenu.file.path);
-                  setContextMenu(null);
-                }}
-              >
-                Copy relative path
-              </button>
-              {workspaceRoot && (
+            {contextMenu?.file.isDir ? (
+              <>
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`);
+                    if (!contextMenu) return;
                     setContextMenu(null);
+                    handleCreateItem('file', contextMenu.file.path);
                   }}
                 >
-                  Copy absolute path
+                  Add file
                 </button>
-              )}
-              {!contextMenu.file.isDir && (
                 <button
                   className="context-menu-item"
                   onClick={() => {
+                    if (!contextMenu) return;
                     setContextMenu(null);
-                    onFileSelect(contextMenu.file);
+                    handleCreateItem('folder', contextMenu.file.path);
                   }}
                 >
-                  Open in editor
+                  Add folder
                 </button>
-              )}
-              <div className="context-menu-divider" />
-            </>
-          )}
-          {contextMenu && (
-            <button
-              className="context-menu-item danger"
-              onClick={() => {
-                setContextMenu(null);
-                handleDeleteTreeItem(contextMenu.file);
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </ContextMenu>
+              </>
+            ) : null}
+            {contextMenu && (
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  setContextMenu(null);
+                  handleStartRename(contextMenu.file);
+                }}
+              >
+                Rename
+              </button>
+            )}
+            {contextMenu && onOpenInFileBrowser && (
+              <button
+                className="context-menu-item"
+                onClick={() => {
+                  const file = contextMenu.file;
+                  setContextMenu(null);
+                  onOpenInFileBrowser(file.path).catch(() => {});
+                }}
+              >
+                Open in file browser
+              </button>
+            )}
+            {contextMenu && (
+              <>
+                <div className="context-menu-divider" />
+                <button
+                  className="context-menu-item"
+                  onClick={() => {
+                    copyToClipboard(contextMenu.file.path);
+                    setContextMenu(null);
+                  }}
+                >
+                  Copy relative path
+                </button>
+                {workspaceRoot && (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => {
+                      copyToClipboard(`${workspaceRoot.replace(/\/+$/, '')}/${contextMenu.file.path}`);
+                      setContextMenu(null);
+                    }}
+                  >
+                    Copy absolute path
+                  </button>
+                )}
+                {!contextMenu.file.isDir && (
+                  <button
+                    className="context-menu-item"
+                    onClick={() => {
+                      setContextMenu(null);
+                      onFileSelect(contextMenu.file);
+                    }}
+                  >
+                    Open in editor
+                  </button>
+                )}
+                <div className="context-menu-divider" />
+              </>
+            )}
+            {contextMenu && (
+              <button
+                className="context-menu-item danger"
+                onClick={() => {
+                  setContextMenu(null);
+                  handleDeleteTreeItem(contextMenu.file);
+                }}
+              >
+                Delete
+              </button>
+            )}
+          </ContextMenu>
         )}
 
         <ContextMenu

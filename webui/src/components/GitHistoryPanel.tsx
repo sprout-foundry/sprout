@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
-import type { ApiService } from '../services/api';
 import { formatRelativeDate, firstLine } from '../utils/format';
 import { debugLog } from '../utils/log';
-import type { GitCommitSummary } from '../types/git-types';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import CommitDetailPanel from './CommitDetailPanel';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
 import './GitHistoryPanel.css';
 
 interface GitHistoryPanelProps {
-  apiService: ApiService;
+  onLoadCommits: (limit: number, offset: number, opts?: { signal?: AbortSignal }) => Promise<{ commits: GitCommitSummary[]; total: number }>;
+  onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
+  onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{ message: string; hash: string; path: string; diff: string }>;
+  onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
+  onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   isActing: boolean;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'compare';
@@ -25,7 +28,15 @@ interface GitHistoryPanelProps {
 
 const PAGE_SIZE = 30;
 
-function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHistoryPanelProps): JSX.Element {
+function GitHistoryPanel({
+  onLoadCommits,
+  onLoadCommitDetail,
+  onLoadCommitFileDiff,
+  onCheckoutCommit,
+  onRevertCommit,
+  isActing,
+  openWorkspaceBuffer,
+}: GitHistoryPanelProps): JSX.Element {
   const [commits, setCommits] = useState<GitCommitSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -44,7 +55,7 @@ function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHisto
       setError(null);
 
       try {
-        const response = await apiService.getGitLog(PAGE_SIZE, offset, { signal });
+        const response = await onLoadCommits(PAGE_SIZE, offset, { signal });
         if (signal?.aborted) return;
         const newCommits = response.commits || [];
         const total = response.total || 0;
@@ -66,7 +77,7 @@ function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHisto
         }
       }
     },
-    [apiService],
+    [onLoadCommits],
   );
 
   // Fetch initial commits on mount; re-fetch when refresh is signaled
@@ -144,9 +155,10 @@ function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHisto
   if (selectedCommit) {
     return (
       <div className="git-history-panel">
-        <GitHistoryContextMenu apiService={apiService} isActing={isActing} />
+        <GitHistoryContextMenu onCheckoutCommit={onCheckoutCommit} onRevertCommit={onRevertCommit} isActing={isActing} />
         <CommitDetailPanel
-          apiService={apiService}
+          onLoadCommitDetail={onLoadCommitDetail}
+          onLoadCommitFileDiff={onLoadCommitFileDiff}
           commit={selectedCommit}
           onBack={() => setSelectedCommit(null)}
           openWorkspaceBuffer={openWorkspaceBuffer}
@@ -157,7 +169,7 @@ function GitHistoryPanel({ apiService, isActing, openWorkspaceBuffer }: GitHisto
 
   return (
     <div className="git-history-panel">
-      <GitHistoryContextMenu apiService={apiService} isActing={isActing} />
+      <GitHistoryContextMenu onCheckoutCommit={onCheckoutCommit} onRevertCommit={onRevertCommit} isActing={isActing} />
       {error && commits.length > 0 && (
         <div className="git-history-error">
           <span>{error}</span>

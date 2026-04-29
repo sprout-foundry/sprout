@@ -17,9 +17,9 @@ import {
 } from 'lucide-react';
 import { showThemedPrompt } from './ThemedDialog';
 import ContextMenu from './ContextMenu';
-import type { GitBranchesState } from '../hooks/useGitWorkspace';
 import { copyToClipboard } from '../utils/clipboard';
 import type { FileSection } from '../types/git-types';
+import type { GitBranchesState } from '../types/git-types';
 import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
 import type { GitFile, GitStatusData } from '../types/git-types';
 import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';

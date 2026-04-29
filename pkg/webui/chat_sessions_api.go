@@ -58,6 +58,7 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 	sessionList := make([]map[string]interface{}, 0, len(sessions))
 	for _, info := range sessions {
 		entry := map[string]interface{}{
+			"chat_id":            info.ID,
 			"id":                 info.ID,
 			"name":               info.Name,
 			"created_at":         info.CreatedAt.UTC().Format(time.RFC3339),

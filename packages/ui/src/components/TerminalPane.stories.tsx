@@ -11,7 +11,7 @@ const meta = {
 } satisfies Meta<typeof TerminalPane>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof TerminalPane>;
 
 // Mock createConnection factory for stories
 const createMockConnection = (sessionId: string) => {

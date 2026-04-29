@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof LiveLog>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof LiveLog>;
 
 export const Empty: Story = {
   args: {

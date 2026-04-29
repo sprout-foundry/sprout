@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof GitFileSection>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof GitFileSection>;
 
 const modifiedFiles = ['src/App.tsx', 'src/utils/api.ts', 'package.json'];
 const untrackedFiles = ['src/components/NewButton.tsx', 'test/new-test.spec.ts'];

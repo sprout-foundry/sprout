@@ -18,7 +18,7 @@ const meta = {
 } satisfies Meta<typeof GitSidebarPanel>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof GitSidebarPanel>;
 
 export const WithChanges: Story = {
   args: {
@@ -142,7 +142,24 @@ export const WithSelectedFiles: Story = {
           workspaceRoot="/home/user/demo"
           onToggleFileSelection={handleToggleFileSelection}
           onClearSelection={() => setSelectedFiles(new Set())}
-          {...mockGitHandlers}
+          onCommitMessageChange={mockGitHandlers.onCommitMessageChange}
+          onGenerateCommitMessage={mockGitHandlers.onGenerateCommitMessage}
+          onCommit={mockGitHandlers.onCommit}
+          onRunReview={mockGitHandlers.onRunReview}
+          onCheckoutBranch={mockGitHandlers.onCheckoutBranch}
+          onCreateBranch={mockGitHandlers.onCreateBranch}
+          onPull={mockGitHandlers.onPull}
+          onPush={mockGitHandlers.onPush}
+          onRefresh={mockGitHandlers.onRefresh}
+          onToggleSectionSelection={mockGitHandlers.onToggleSectionSelection}
+          onPreviewFile={mockGitHandlers.onPreviewFile}
+          onStageSelected={mockGitHandlers.onStageSelected}
+          onUnstageSelected={mockGitHandlers.onUnstageSelected}
+          onDiscardSelected={mockGitHandlers.onDiscardSelected}
+          onStageFile={mockGitHandlers.onStageFile}
+          onUnstageFile={mockGitHandlers.onUnstageFile}
+          onDiscardFile={mockGitHandlers.onDiscardFile}
+          onSectionAction={mockGitHandlers.onSectionAction}
         />
       </div>
     );
@@ -222,7 +239,23 @@ export const InteractiveDemo: Story = {
             onCommitMessageChange={setCommitMessage}
             onToggleFileSelection={handleToggleFileSelection}
             onClearSelection={() => setSelectedFiles(new Set())}
-            {...mockGitHandlers}
+            onGenerateCommitMessage={mockGitHandlers.onGenerateCommitMessage}
+            onCommit={mockGitHandlers.onCommit}
+            onRunReview={mockGitHandlers.onRunReview}
+            onCheckoutBranch={mockGitHandlers.onCheckoutBranch}
+            onCreateBranch={mockGitHandlers.onCreateBranch}
+            onPull={mockGitHandlers.onPull}
+            onPush={mockGitHandlers.onPush}
+            onRefresh={mockGitHandlers.onRefresh}
+            onToggleSectionSelection={mockGitHandlers.onToggleSectionSelection}
+            onPreviewFile={mockGitHandlers.onPreviewFile}
+            onStageSelected={mockGitHandlers.onStageSelected}
+            onUnstageSelected={mockGitHandlers.onUnstageSelected}
+            onDiscardSelected={mockGitHandlers.onDiscardSelected}
+            onStageFile={mockGitHandlers.onStageFile}
+            onUnstageFile={mockGitHandlers.onUnstageFile}
+            onDiscardFile={mockGitHandlers.onDiscardFile}
+            onSectionAction={mockGitHandlers.onSectionAction}
           />
         </div>
       </div>

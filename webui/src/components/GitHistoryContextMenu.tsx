@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, GitBranch, RotateCcw } from 'lucide-react';
-import type { ApiService } from '../services/api';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/log';
 import ContextMenu from './ContextMenu';
@@ -16,7 +15,8 @@ interface GitHistoryMenuState {
 }
 
 interface GitHistoryContextMenuProps {
-  apiService: ApiService;
+  onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
+  onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   isActing?: boolean;
 }
 
@@ -25,7 +25,11 @@ interface GitHistoryContextMenuProps {
  * Listens for `contextmenu` events on the document and shows a menu with
  * copy / checkout / revert actions when a `.git-history-commit-row` is targeted.
  */
-function GitHistoryContextMenu({ apiService, isActing = false }: GitHistoryContextMenuProps): JSX.Element {
+function GitHistoryContextMenu({
+  onCheckoutCommit,
+  onRevertCommit,
+  isActing = false,
+}: GitHistoryContextMenuProps): JSX.Element {
   const timersRef = useRef<number[]>([]);
 
   const clearTimers = useCallback(() => {
@@ -129,7 +133,7 @@ function GitHistoryContextMenu({ apiService, isActing = false }: GitHistoryConte
 
     setIsLoading(true);
     try {
-      await apiService.checkoutGitCommit(menu.commitHash);
+      await onCheckoutCommit(menu.commitHash);
       setActionStatus('Checked out!');
       timersRef.current.push(window.setTimeout(() => close(), 800));
     } catch (err) {
@@ -144,7 +148,7 @@ function GitHistoryContextMenu({ apiService, isActing = false }: GitHistoryConte
     } finally {
       setIsLoading(false);
     }
-  }, [menu.commitHash, menu.commitShortHash, apiService, close, isLoading, isActing]);
+  }, [menu.commitHash, menu.commitShortHash, onCheckoutCommit, close, isLoading, isActing]);
 
   const handleRevert = useCallback(async () => {
     if (!menu.commitHash || isLoading || isActing) return;
@@ -159,7 +163,7 @@ function GitHistoryContextMenu({ apiService, isActing = false }: GitHistoryConte
 
     setIsLoading(true);
     try {
-      await apiService.revertGitCommit(menu.commitHash);
+      await onRevertCommit(menu.commitHash);
       setActionStatus('Reverted!');
       timersRef.current.push(window.setTimeout(() => close(), 800));
     } catch (err) {
@@ -174,7 +178,7 @@ function GitHistoryContextMenu({ apiService, isActing = false }: GitHistoryConte
     } finally {
       setIsLoading(false);
     }
-  }, [menu.commitHash, menu.commitShortHash, apiService, close, isLoading, isActing]);
+  }, [menu.commitHash, menu.commitShortHash, onRevertCommit, close, isLoading, isActing]);
 
   const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
 

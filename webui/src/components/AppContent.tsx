@@ -413,6 +413,11 @@ const AppContent: React.FC<AppContentProps> = ({
     handleCreateBranch,
     handlePull,
     handlePush,
+    handleLoadCommits,
+    handleLoadCommitDetail,
+    handleLoadCommitFileDiff,
+    handleCheckoutCommit,
+    handleRevertCommit,
     refreshGitStatus,
   } = useGitWorkspace({
     apiService,
@@ -1073,6 +1078,12 @@ const AppContent: React.FC<AppContentProps> = ({
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
           onOpenFile: handleFileClick,
+          onLoadCommits: handleLoadCommits,
+          onLoadCommitDetail: handleLoadCommitDetail,
+          onLoadCommitFileDiff: handleLoadCommitFileDiff,
+          onCheckoutCommit: handleCheckoutCommit,
+          onRevertCommit: handleRevertCommit,
+          openWorkspaceBuffer,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}>

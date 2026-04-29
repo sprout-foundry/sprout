@@ -36,6 +36,7 @@ import SearchView from './SearchView';
 import GitSidebarPanel from './GitSidebarPanel';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import GitHistoryPanel from './GitHistoryPanel';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import SproutLogo from './SproutLogo';
 import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
@@ -91,8 +92,7 @@ interface SidebarProps {
   onClose?: () => void;
   isMobile?: boolean;
   gitPanel?: GitSidebarPanelProps & {
-    apiService?: ApiService;
-    openWorkspaceBuffer?: (options: {
+    openWorkspaceBuffer: (options: {
       kind: 'chat' | 'diff' | 'review' | 'compare';
       path: string;
       title: string;
@@ -102,6 +102,12 @@ interface SidebarProps {
       isClosable?: boolean;
       metadata?: Record<string, unknown>;
     }) => string;
+    // Git history callbacks
+    onLoadCommits: (limit: number, offset: number, opts?: { signal?: AbortSignal }) => Promise<{ commits: GitCommitSummary[]; total: number }>;
+    onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
+    onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{ message: string; hash: string; path: string; diff: string }>;
+    onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
+    onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   };
 }
 
@@ -1084,9 +1090,13 @@ function Sidebar({
               >
                 {gitPanel ? (
                   <GitHistoryPanel
-                    apiService={gitPanel.apiService ?? ApiService.getInstance()}
+                    onLoadCommits={gitPanel.onLoadCommits}
+                    onLoadCommitDetail={gitPanel.onLoadCommitDetail}
+                    onLoadCommitFileDiff={gitPanel.onLoadCommitFileDiff}
+                    onCheckoutCommit={gitPanel.onCheckoutCommit}
+                    onRevertCommit={gitPanel.onRevertCommit}
                     isActing={gitPanel.isActing}
-                    openWorkspaceBuffer={gitPanel.openWorkspaceBuffer ?? ((_options) => '')}
+                    openWorkspaceBuffer={gitPanel.openWorkspaceBuffer}
                   />
                 ) : (
                   <div className="empty">Git unavailable</div>

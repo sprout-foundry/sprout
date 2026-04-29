@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, GitBranch, RotateCcw } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/log';
+import { showThemedConfirm } from './ThemedDialog';
 import ContextMenu from './ContextMenu';
 import './GitHistoryPanel.css';
 
@@ -125,7 +126,7 @@ function GitHistoryContextMenu({
   const handleCheckout = useCallback(async () => {
     if (!menu.commitHash || isLoading || isActing) return;
     const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
-    const confirmed = window.confirm(`Checkout commit ${short}?\n\nThis will put you in a detached HEAD state.`);
+    const confirmed = await showThemedConfirm(`Checkout commit ${short}?\n\nThis will put you in a detached HEAD state.`, { type: 'warning' });
     if (!confirmed) {
       close();
       return;
@@ -153,8 +154,9 @@ function GitHistoryContextMenu({
   const handleRevert = useCallback(async () => {
     if (!menu.commitHash || isLoading || isActing) return;
     const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
-    const confirmed = window.confirm(
+    const confirmed = await showThemedConfirm(
       `Revert commit ${short}?\n\nThis will create a new commit that undoes the changes.`,
+      { type: 'warning' },
     );
     if (!confirmed) {
       close();

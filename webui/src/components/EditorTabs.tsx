@@ -34,6 +34,7 @@ import {
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { type EditorBuffer } from '../types/editor';
 import ContextMenu from './ContextMenu';
+import { showThemedConfirm } from './ThemedDialog';
 import './EditorTabs.css';
 
 interface EditorTabsProps {
@@ -554,7 +555,7 @@ function EditorTabs({
   const contextIsDefaultChat = contextChatId ? defaultChatIds?.has(contextChatId) ?? false : false;
   const contextHasWorktree = contextChatId ? chatWorktreePaths?.has(contextChatId) : false;
 
-  const handleContextAction = (action: () => void) => {
+  const handleContextAction = (action: () => void | Promise<void>) => {
     setContextMenu(null);
     action();
   };
@@ -874,8 +875,9 @@ function EditorTabs({
                   <button
                     className="context-menu-item danger"
                     onClick={() =>
-                      handleContextAction(() => {
-                        if (!window.confirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?')) return;
+                      handleContextAction(async () => {
+                        const confirmed = await showThemedConfirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?', { type: 'danger' });
+                        if (!confirmed) return;
                         if (contextChatId) {
                           onDeleteChatWithWorktree(contextChatId);
                         }
@@ -945,9 +947,10 @@ function EditorTabs({
             {onDeleteAllChats && (
               <button
                 className="context-menu-item danger"
-                onClick={() => {
+                onClick={async () => {
                   setEmptyAreaContextMenu(null);
-                  if (window.confirm('Close all chat sessions except the active one?')) {
+                  const confirmed = await showThemedConfirm('Close all chat sessions except the active one?', { type: 'warning' });
+                  if (confirmed) {
                     onDeleteAllChats();
                   }
                 }}

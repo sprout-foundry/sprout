@@ -11,6 +11,7 @@ import {
   SSHWorkspaceOpenError,
 } from '../services/api';
 import { clientFetch, getSSHProxyContext } from '../services/clientSession';
+import { showThemedConfirm } from './ThemedDialog';
 import { supportsSSH, supportsInstances } from '../config/mode';
 
 interface LocationSwitcherProps {
@@ -780,8 +781,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       try {
         const sessionCount = await apiService.current.getTerminalSessionCount();
         if (sessionCount > 0) {
-          const confirmed = window.confirm(
-            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`
+          const confirmed = await showThemedConfirm(
+            `${sessionCount} terminal session${sessionCount === 1 ? ' is' : 's are'} active. Switching workspace will close ${sessionCount === 1 ? 'it' : 'them'}. Continue?`,
+            { type: 'warning' },
           );
           if (!confirmed) {
             setSwitchingState({ isSwitching: false, error: null, status: null });

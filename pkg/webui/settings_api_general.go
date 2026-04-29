@@ -488,7 +488,6 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 		"reasoning_effort":               true,
 		"system_prompt_text":             true,
 		"skip_prompt":                    true,
-		"enable_pre_write_validation":    true,
 		"web_search_enabled":             true,
 		"subagent_provider":              true,
 		"subagent_model":                 true,
@@ -669,10 +668,6 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["skip_prompt"]; ok {
 		knownKeys["skip_prompt"] = true
 		cfg.SkipPrompt, _ = v.(bool)
-	}
-	if v, ok := patch["enable_pre_write_validation"]; ok {
-		knownKeys["enable_pre_write_validation"] = true
-		cfg.EnablePreWriteValidation, _ = v.(bool)
 	}
 	if v, ok := patch["allow_orchestrator_git_write"]; ok {
 		knownKeys["allow_orchestrator_git_write"] = true

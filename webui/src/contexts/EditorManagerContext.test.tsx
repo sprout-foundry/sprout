@@ -14,6 +14,16 @@ jest.mock('../services/fileAccess', () => ({
     json: () => Promise.resolve({ message: 'File saved successfully' }),
   }),
 }));
+
+// Mock SproutAdapterContext to provide useSproutFetch
+jest.mock('./SproutAdapterContext', () => ({
+  ...jest.requireActual('./SproutAdapterContext'),
+  useSproutFetch: () => jest.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ message: 'File saved successfully' }),
+  }),
+}));
+
 // EditorManagerProvider's hooks use useLog() which requires NotificationContext.
 jest.mock('./NotificationContext', () => {
   const noop = () => {};

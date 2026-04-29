@@ -3,6 +3,7 @@ package webui
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -89,6 +90,12 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 		return
 	}
 
+	// Persist the custom provider to its own file (~/.config/sprout/providers/{name}.json)
+	// so it survives config.json saves (which strip CustomProviders).
+	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
+		log.Printf("webui: warning: failed to persist custom provider %q to file: %v", key, saveErr)
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"success":  true,
 		"provider": provider,
@@ -142,6 +149,11 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 		return
 	}
 
+	// Persist the updated custom provider to its own file
+	if saveErr := configuration.SaveCustomProvider(provider); saveErr != nil {
+		log.Printf("webui: warning: failed to persist custom provider %q to file: %v", name, saveErr)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":  true,
 		"provider": provider,
@@ -177,6 +189,11 @@ func (ws *ReactWebServer) handleAPISettingsProvidersDelete(w http.ResponseWriter
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
+	}
+
+	// Remove the provider's individual file
+	if delErr := configuration.DeleteCustomProvider(name); delErr != nil {
+		log.Printf("webui: warning: failed to delete custom provider file %q: %v", name, delErr)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

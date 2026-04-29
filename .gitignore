@@ -5,6 +5,8 @@ sprout-main
 ledit
 ledit-*
 ledit-main
+model_registry_server
+refresh_provider_catalog
 *.exe
 *.exe~
 *.dll
@@ -131,6 +133,7 @@ html_scraped_example_whitespace.txt
 json_output.txt
 output.txt
 e2e_tests/test_results_analysis.txt
+test-dist-output/
 
 
 # Temporary/example files

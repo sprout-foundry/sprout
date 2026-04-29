@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, forwardRef, useImper
 import type { KeyboardEvent, MouseEvent, ReactNode, DragEvent } from 'react';
 import { showThemedConfirm, showThemedPrompt } from './ThemedDialog';
 import ContextMenu from './ContextMenu';
-import SelectionActionBar from './SelectionActionBar';
+import { SelectionActionBar } from '@sprout/ui';
 import {
   FolderOpen,
   Folder,

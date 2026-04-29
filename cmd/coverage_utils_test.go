@@ -339,26 +339,37 @@ func TestExtractDescription(t *testing.T) {
 
 func TestGetConfigDir_LEDIT_CONFIG(t *testing.T) {
 	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", "/custom/config/path")
+	origSprout := os.Getenv("SPROUT_CONFIG")
+	tmpDir := t.TempDir()
+	os.Setenv("LEDIT_CONFIG", tmpDir)
+	os.Unsetenv("SPROUT_CONFIG")
 	defer func() {
 		if orig != "" {
 			os.Setenv("LEDIT_CONFIG", orig)
 		} else {
 			os.Unsetenv("LEDIT_CONFIG")
 		}
+		if origSprout != "" {
+			os.Setenv("SPROUT_CONFIG", origSprout)
+		} else {
+			os.Unsetenv("SPROUT_CONFIG")
+		}
 	}()
 
 	got := getConfigDir()
-	if got != "/custom/config/path" {
-		t.Errorf("getConfigDir() with LEDIT_CONFIG = %q, want %q", got, "/custom/config/path")
+	if got != tmpDir {
+		t.Errorf("getConfigDir() = %q, want %q", got, tmpDir)
 	}
 }
 
 func TestGetConfigDir_XDG_CONFIG_HOME(t *testing.T) {
 	origLedit := os.Getenv("LEDIT_CONFIG")
+	origSprout := os.Getenv("SPROUT_CONFIG")
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
 	os.Unsetenv("LEDIT_CONFIG")
-	os.Setenv("XDG_CONFIG_HOME", "/custom/xdg")
+	os.Unsetenv("SPROUT_CONFIG")
+	tmpXDG := t.TempDir()
+	os.Setenv("XDG_CONFIG_HOME", tmpXDG)
 	defer func() {
 		if origLedit != "" {
 			os.Setenv("LEDIT_CONFIG", origLedit)
@@ -370,10 +381,15 @@ func TestGetConfigDir_XDG_CONFIG_HOME(t *testing.T) {
 		} else {
 			os.Unsetenv("XDG_CONFIG_HOME")
 		}
+		if origSprout != "" {
+			os.Setenv("SPROUT_CONFIG", origSprout)
+		} else {
+			os.Unsetenv("SPROUT_CONFIG")
+		}
 	}()
 
 	got := getConfigDir()
-	want := filepath.Join("/custom/xdg", "ledit")
+	want := filepath.Join(tmpXDG, "sprout")
 	if got != want {
 		t.Errorf("getConfigDir() with XDG_CONFIG_HOME = %q, want %q", got, want)
 	}
@@ -383,9 +399,12 @@ func TestGetConfigDir_HOME(t *testing.T) {
 	origLedit := os.Getenv("LEDIT_CONFIG")
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
 	origHome := os.Getenv("HOME")
+	origSprout := os.Getenv("SPROUT_CONFIG")
 	os.Unsetenv("LEDIT_CONFIG")
 	os.Unsetenv("XDG_CONFIG_HOME")
-	os.Setenv("HOME", "/home/testuser")
+	os.Unsetenv("SPROUT_CONFIG")
+	tmpHome := t.TempDir()
+	os.Setenv("HOME", tmpHome)
 	defer func() {
 		if origLedit != "" {
 			os.Setenv("LEDIT_CONFIG", origLedit)
@@ -405,9 +424,14 @@ func TestGetConfigDir_HOME(t *testing.T) {
 	}()
 
 	got := getConfigDir()
-	want := filepath.Join("/home/testuser", ".config", "sprout")
+	want := filepath.Join(tmpHome, ".config", "sprout")
 	if got != want {
-		t.Errorf("getConfigDir() with HOME = %q, want %q", got, want)
+		t.Errorf("getConfigDir() = %q, want %q", got, want)
+	}
+	if origSprout != "" {
+		os.Setenv("SPROUT_CONFIG", origSprout)
+	} else {
+		os.Unsetenv("SPROUT_CONFIG")
 	}
 }
 
@@ -415,9 +439,11 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 	origLedit := os.Getenv("LEDIT_CONFIG")
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
 	origHome := os.Getenv("HOME")
+	origSprout := os.Getenv("SPROUT_CONFIG")
 	os.Unsetenv("LEDIT_CONFIG")
 	os.Unsetenv("XDG_CONFIG_HOME")
 	os.Unsetenv("HOME")
+	os.Unsetenv("SPROUT_CONFIG")
 	defer func() {
 		if origLedit != "" {
 			os.Setenv("LEDIT_CONFIG", origLedit)
@@ -433,6 +459,11 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 			os.Setenv("HOME", origHome)
 		} else {
 			os.Unsetenv("HOME")
+		}
+		if origSprout != "" {
+			os.Setenv("SPROUT_CONFIG", origSprout)
+		} else {
+			os.Unsetenv("SPROUT_CONFIG")
 		}
 	}()
 

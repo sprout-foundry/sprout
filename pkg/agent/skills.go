@@ -131,7 +131,7 @@ func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}
 	}
 
 	activeSkills := make(map[string]bool)
-	for _, id := range a.activeSkills {
+	for _, id := range a.state.GetActiveSkills() {
 		activeSkills[id] = true
 	}
 
@@ -164,7 +164,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	config := configManager.GetConfig()
 
 	// Check if already active
-	for _, id := range a.activeSkills {
+	for _, id := range a.state.GetActiveSkills() {
 		if id == skillID {
 			return fmt.Sprintf("Skill '%s' is already active.", skillID), nil
 		}
@@ -177,7 +177,11 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	}
 
 	// Add to active skills
-	a.activeSkills = append(a.activeSkills, skillID)
+	currentActive := a.state.GetActiveSkills()
+	newActive := make([]string, len(currentActive)+1)
+	copy(newActive, currentActive)
+	newActive[len(newActive)-1] = skillID
+	a.state.SetActiveSkills(newActive)
 
 	// Fold skill instructions into the active system prompt so they persist across
 	// all subsequent turns without relying on history system-message injection.

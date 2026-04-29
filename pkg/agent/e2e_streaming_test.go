@@ -102,7 +102,7 @@ func TestE2E_StreamingResponses(t *testing.T) {
 	assert.Equal(t, "streaming response with enough words.", callbackChunks[2], "third chunk")
 
 	// --- Assert streaming buffer accumulated correctly ---
-	assert.Equal(t, streamedFull, agent.streamingBuffer.String(),
+	assert.Equal(t, streamedFull, agent.output.GetStreamingBuffer().String(),
 		"streamingBuffer should contain concatenated chunk content")
 
 	// --- Assert termination and iteration ---
@@ -115,12 +115,12 @@ func TestE2E_StreamingResponses(t *testing.T) {
 
 	// --- Assert expected message structure ---
 	// user + assistant = 2 (system prompt is stored in agent.systemPrompt,
-	// not in agent.messages; it gets prepended only during prepareMessages)
-	require.Len(t, agent.messages, 2, "expected user + assistant")
-	assert.Equal(t, "user", agent.messages[0].Role)
-	assert.Equal(t, "assistant", agent.messages[1].Role)
-	assert.Equal(t, streamedFull, agent.messages[1].Content,
+	// not in agent.state.GetMessages(); it gets prepended only during prepareMessages)
+	require.Len(t, agent.state.GetMessages(), 2, "expected user + assistant")
+	assert.Equal(t, "user", agent.state.GetMessages()[0].Role)
+	assert.Equal(t, "assistant", agent.state.GetMessages()[1].Role)
+	assert.Equal(t, streamedFull, agent.state.GetMessages()[1].Content,
 		"last assistant message should use streaming buffer content, not choice content")
-	assert.NotEqual(t, "THIS_SHOULD_NOT_APPEAR", agent.messages[1].Content,
+	assert.NotEqual(t, "THIS_SHOULD_NOT_APPEAR", agent.state.GetMessages()[1].Content,
 		"last assistant message must NOT contain the raw choice content")
 }

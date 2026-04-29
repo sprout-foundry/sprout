@@ -49,6 +49,7 @@ func (a *Agent) PrintLine(text string) {
 	if a == nil {
 		return
 	}
+	a.initSubManagers()
 	a.printLineInternal(text)
 }
 
@@ -61,11 +62,12 @@ func (a *Agent) PrintLineAsync(text string) {
 	if a == nil {
 		return
 	}
-
+	a.initSubManagers()
 	a.ensureAsyncOutputWorker()
 
+	ch := a.output.GetAsyncOutput()
 	select {
-	case a.asyncOutput <- text:
+	case ch <- text:
 		return
 	default:
 	}
@@ -78,7 +80,7 @@ func (a *Agent) PrintLineAsync(text string) {
 	defer cancel()
 
 	select {
-	case a.asyncOutput <- text:
+	case ch <- text:
 	case <-ctx.Done():
 		// Timeout reached, fall back to synchronous printing
 		a.printLineInternal(text)
@@ -86,15 +88,16 @@ func (a *Agent) PrintLineAsync(text string) {
 }
 
 func (a *Agent) ensureAsyncOutputWorker() {
-	a.asyncOutputOnce.Do(func() {
+	a.output.EnsureAsyncOutputWorker(func() {
 		// Generous buffer to absorb bursts without blocking.
-		size := a.asyncBufferSize
+		size := a.output.GetAsyncBufferSize()
 		if size <= 0 {
 			size = asyncOutputBufferSize
 		}
-		a.asyncOutput = make(chan string, size)
+		ch := make(chan string, size)
+		a.output.SetAsyncOutput(ch)
 		go func() {
-			for msg := range a.asyncOutput {
+			for msg := range ch {
 				a.printLineInternal(msg)
 			}
 		}()
@@ -114,23 +117,27 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 	}
 
 	// Route through OutputRouter (single source: publishes event + writes terminal)
-	if a.outputRouter != nil {
-		a.outputRouter.RouteAgentMessage("info", message, nil)
-		return
+	if a.output != nil {
+		if router := a.output.GetOutputRouter(); router != nil {
+			router.RouteAgentMessage("info", message, nil)
+			return
+		}
 	}
 
 	// Fallback for when router isn't initialized yet
 	a.PublishAgentMessage("info", message, nil)
 
 	// Terminal output: if streamingCallback is set, route through it
-	if a.streamingEnabled && a.streamingCallback != nil {
-		a.streamingCallback(message)
+	if a.output != nil && a.output.IsStreamingEnabled() && a.output.GetStreamingCallback() != nil {
+		a.output.GetStreamingCallback()(message)
 		return
 	}
 
-	if manageLock && a.outputMutex != nil {
-		a.outputMutex.Lock()
-		defer a.outputMutex.Unlock()
+	if manageLock && a.output != nil {
+		if mu := a.output.GetOutputMutex(); mu != nil {
+			mu.Lock()
+			defer mu.Unlock()
+		}
 	}
 
 	fmt.Print(message)
@@ -235,7 +242,7 @@ func (a *Agent) suggestCorrectToolName(invalidName string) string {
 }
 
 func (a *Agent) resolveLegacyMCPToolName(toolName string) string {
-	if a == nil || a.mcpManager == nil {
+	if a == nil || a.mcpSub == nil || a.mcpSub.GetManager() == nil {
 		return ""
 	}
 
@@ -303,8 +310,8 @@ func (a *Agent) ToolLog(action string, target string) {
 	}
 
 	// Route through OutputRouter (single source: publishes event + writes terminal)
-	if a.outputRouter != nil {
-		a.outputRouter.RouteToolLog(action, target)
+	if router := a.output.GetOutputRouter(); router != nil {
+		router.RouteToolLog(action, target)
 		return
 	}
 

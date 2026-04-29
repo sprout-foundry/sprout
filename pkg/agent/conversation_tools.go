@@ -19,7 +19,7 @@ func (ch *ConversationHandler) sendMessage() (*api.ChatResponse, error) {
 
 // prepareTools gets the optimized tool definitions for the current context
 func (ch *ConversationHandler) prepareTools() []api.Tool {
-	tools := ch.agent.getOptimizedToolDefinitions(ch.agent.messages)
+	tools := ch.agent.getOptimizedToolDefinitions(ch.agent.state.GetMessages())
 	if len(tools) > 0 {
 		ch.agent.SetLastPreparedToolNames(tools)
 		return tools
@@ -52,7 +52,7 @@ func (ch *ConversationHandler) determineReasoningEffort() string {
 	if ch == nil || ch.agent == nil {
 		return ""
 	}
-	return ch.agent.determineReasoningEffort(ch.agent.messages)
+	return ch.agent.determineReasoningEffort(ch.agent.state.GetMessages())
 }
 
 // sanitizeToolMessages removes orphaned or duplicate tool messages

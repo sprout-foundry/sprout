@@ -30,7 +30,7 @@ func lastUserMessageInHistory(msgs []api.Message) *api.Message {
 //
 //  1. User query contains a pasted-image placeholder.
 //  2. processImagesInQuery reads the file and returns []ImageData + cleaned text.
-//  3. The user message appended to agent.messages has Images populated.
+//  3. The user message appended to agent.state.GetMessages() has Images populated.
 //  4. The message sent to the model (visible via GetSentRequests) contains
 //     the image with Type="image/png" and a valid Base64 payload.
 func TestE2E_MultimodalImage_VisionModel_SendsImageToAPI(t *testing.T) {
@@ -59,9 +59,9 @@ func TestE2E_MultimodalImage_VisionModel_SendsImageToAPI(t *testing.T) {
 	require.NoError(t, err, "ProcessQuery should succeed")
 	assert.Equal(t, "Done.", result)
 
-	// --- Assert: user message in agent.messages has images ---
-	userMsg := lastUserMessageInHistory(agent.messages)
-	require.NotNil(t, userMsg, "expected a user message in agent.messages")
+	// --- Assert: user message in agent.state.GetMessages() has images ---
+	userMsg := lastUserMessageInHistory(agent.state.GetMessages())
+	require.NotNil(t, userMsg, "expected a user message in agent.state.GetMessages()")
 	require.NotEmpty(t, userMsg.Images, "user message should have images attached")
 	assert.Equal(t, "image/png", userMsg.Images[0].Type)
 	assert.NotEmpty(t, userMsg.Images[0].Base64, "image Base64 should be populated")
@@ -110,17 +110,17 @@ func TestE2E_MultimodalImage_NonVisionModel_StripsImages(t *testing.T) {
 	agent := makeAgentWithScriptedClient(10, client)
 	agent.workspaceRoot = t.TempDir()
 
-	// Pre-populate agent.messages with a prior turn that includes image data,
+	// Pre-populate agent.state.GetMessages() with a prior turn that includes image data,
 	// simulating a conversation where a previous vision-capable model turn
 	// already attached images.
-	agent.messages = append(agent.messages, api.Message{
+	agent.state.AddMessage(api.Message{
 		Role:    "user",
 		Content: "Previous question with an image",
 		Images: []api.ImageData{
 			{Type: "image/png", Base64: "iVBORw0KGgoAAAANSUhEUg==", URL: ""},
 		},
 	})
-	agent.messages = append(agent.messages, api.Message{
+	agent.state.AddMessage(api.Message{
 		Role:    "assistant",
 		Content: "Here is my analysis of the image.",
 	})
@@ -141,10 +141,10 @@ func TestE2E_MultimodalImage_NonVisionModel_StripsImages(t *testing.T) {
 		}
 	}
 
-	// The original agent.messages should still contain the image (only prepared
+	// The original agent.state.GetMessages() should still contain the image (only prepared
 	// copies are stripped, not the canonical history).
 	var historicalUser *api.Message
-	for _, m := range agent.messages {
+	for _, m := range agent.state.GetMessages() {
 		if m.Role == "user" && m.Content == "Previous question with an image" {
 			historicalUser = &m
 			break
@@ -152,7 +152,7 @@ func TestE2E_MultimodalImage_NonVisionModel_StripsImages(t *testing.T) {
 	}
 	require.NotNil(t, historicalUser, "historical user message should still exist")
 	assert.NotEmpty(t, historicalUser.Images,
-		"historical messages in agent.messages should retain their images (stripping is only for prepared copies)")
+		"historical messages in agent.state.GetMessages() should retain their images (stripping is only for prepared copies)")
 }
 
 // ---------------------------------------------------------------------------
@@ -190,8 +190,8 @@ func TestE2E_MultimodalImage_MultipleImages(t *testing.T) {
 	assert.Equal(t, "Done.", result)
 
 	// --- Assert: user message has exactly 2 images ---
-	userMsg := lastUserMessageInHistory(agent.messages)
-	require.NotNil(t, userMsg, "expected a user message in agent.messages")
+	userMsg := lastUserMessageInHistory(agent.state.GetMessages())
+	require.NotNil(t, userMsg, "expected a user message in agent.state.GetMessages()")
 	require.Len(t, userMsg.Images, 2, "user message should have exactly 2 images attached")
 	assert.Equal(t, "image/png", userMsg.Images[0].Type)
 	assert.Equal(t, "image/png", userMsg.Images[1].Type)
@@ -252,8 +252,8 @@ func TestE2E_MultimodalImage_OutsideContainmentSkipped(t *testing.T) {
 	assert.Equal(t, "Done.", result)
 
 	// --- Assert: no images in the user message ---
-	userMsg := lastUserMessageInHistory(agent.messages)
-	require.NotNil(t, userMsg, "expected a user message in agent.messages")
+	userMsg := lastUserMessageInHistory(agent.state.GetMessages())
+	require.NotNil(t, userMsg, "expected a user message in agent.state.GetMessages()")
 	assert.Empty(t, userMsg.Images,
 		"images outside the containment directory should be skipped (no images attached)")
 

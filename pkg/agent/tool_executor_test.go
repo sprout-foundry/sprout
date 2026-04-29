@@ -59,10 +59,13 @@ func TestToolExecutorHandlesMCPMetaList(t *testing.T) {
 	}
 
 	agent := &Agent{
-		mcpManager:   manager,
+		mcpSub:       NewAgentMCPManager(),
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output:       NewAgentOutputManager(),
+		security:     NewAgentSecurityManager(),
 	}
+	agent.mcpSub.SetManager(manager)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	executor := NewToolExecutor(agent)
 
@@ -99,10 +102,13 @@ func TestToolExecutorFallbacksToMCPExecution(t *testing.T) {
 	}
 
 	agent := &Agent{
-		mcpManager:   manager,
+		mcpSub:       NewAgentMCPManager(),
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output:       NewAgentOutputManager(),
+		security:     NewAgentSecurityManager(),
 	}
+	agent.mcpSub.SetManager(manager)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	executor := NewToolExecutor(agent)
 
@@ -130,10 +136,13 @@ func TestToolExecutorTranslatesLegacyMCPNames(t *testing.T) {
 	}
 
 	agent := &Agent{
-		mcpManager:   manager,
+		mcpSub:       NewAgentMCPManager(),
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output:       NewAgentOutputManager(),
+		security:     NewAgentSecurityManager(),
 	}
+	agent.mcpSub.SetManager(manager)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	executor := NewToolExecutor(agent)
 
@@ -155,8 +164,12 @@ func TestToolExecutorAppliesOpenFileAlias(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output:       NewAgentOutputManager(),
+		state:        NewAgentStateManager(false),
+		security:     NewAgentSecurityManager(),
+		mcpSub:       NewAgentMCPManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	executor := NewToolExecutor(agent)
 
@@ -233,8 +246,12 @@ func TestExecuteSingleTool_UsesRepairedArguments(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output:       NewAgentOutputManager(),
+		state:        NewAgentStateManager(false),
+		security:     NewAgentSecurityManager(),
+		mcpSub:       NewAgentMCPManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
 
 	tmpDir := t.TempDir()
@@ -266,8 +283,9 @@ func TestCanExecuteInParallelFetchURL(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
 
 	calls := []api.ToolCall{
@@ -288,8 +306,9 @@ func TestCanExecuteInParallelMixedBatchDenied(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
 
 	calls := []api.ToolCall{
@@ -310,8 +329,9 @@ func TestCanExecuteInParallelProviderOrderingRestrictions(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "deepseek"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
 
 	calls := []api.ToolCall{
@@ -382,8 +402,9 @@ func TestCanExecuteInParallelSearchFiles(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
 
 	calls := []api.ToolCall{
@@ -404,8 +425,9 @@ func TestCanExecuteInParallelSearchFilesProviderRestrictions(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "minimax"},
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
 
 	calls := []api.ToolCall{

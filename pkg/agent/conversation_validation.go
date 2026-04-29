@@ -66,8 +66,9 @@ func (ch *ConversationHandler) isRepetitiveContent(content string) bool {
 	}
 
 	// Check if the content is exactly the same as the previous assistant message
-	for idx := len(ch.agent.messages) - 2; idx >= 0; idx-- {
-		prevMsg := ch.agent.messages[idx]
+	messages := ch.agent.state.GetMessages()
+	for idx := len(messages) - 2; idx >= 0; idx-- {
+		prevMsg := messages[idx]
 		if prevMsg.Role != "assistant" {
 			continue
 		}

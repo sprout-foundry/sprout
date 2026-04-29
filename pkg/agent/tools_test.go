@@ -48,7 +48,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	}
 
 	// Get the tools that would be passed to the LLM
-	tools := agent.getOptimizedToolDefinitions(agent.messages)
+	tools := agent.getOptimizedToolDefinitions(agent.state.GetMessages())
 
 	// Debug: check custom provider
 	if customProvider, ok := agent.getCurrentCustomProvider(); ok {
@@ -350,7 +350,7 @@ func TestGetOptimizedToolDefinitions_DeepInfraIncludesAnalyzeUIScreenshot(t *tes
 	}
 
 	agent.clientType = api.DeepInfraClientType
-	agent.activePersona = "orchestrator"
+	agent.state.SetActivePersona("orchestrator")
 
 	tools := agent.getOptimizedToolDefinitions(nil)
 	found := false
@@ -402,7 +402,7 @@ func TestGetOptimizedToolDefinitions_CustomProviderAllowlistCanExcludeAnalyzeUIS
 	}
 
 	agent.clientType = api.DeepInfraClientType
-	agent.activePersona = "orchestrator"
+	agent.state.SetActivePersona("orchestrator")
 
 	tools := agent.getOptimizedToolDefinitions(nil)
 	for _, tool := range tools {

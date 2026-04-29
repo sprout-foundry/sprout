@@ -23,8 +23,9 @@ func TestProcessQuerySetsMaxIterationsTerminationReason(t *testing.T) {
 		inputInjectionChan: make(chan string, inputInjectionBufferSize),
 		interruptCtx:       ctx,
 		interruptCancel:    cancel,
-		outputMutex:        &sync.Mutex{},
+		output:             NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	_, err := agent.ProcessQuery("Investigate the issue")
 	if err != nil {

@@ -95,10 +95,11 @@ func TestZAIConversationHistory(t *testing.T) {
 	// Simulate a scenario where ANSI codes leak into conversation history
 	agent := &Agent{
 		debug: false,
-		messages: []api.Message{
-			{Role: "user", Content: "Help me debug this issue"},
-		},
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "Help me debug this issue"},
+	})
 
 	ch := &ConversationHandler{
 		agent: agent,

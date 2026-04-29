@@ -264,60 +264,60 @@ func (a *Agent) buildSwitchContextRefreshMessage(report strictSyntaxNormalizatio
 }
 
 func (a *Agent) setPendingSwitchContextRefresh(msg string) {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return
 	}
-	a.pendingSwitchContextRefresh = strings.TrimSpace(msg)
+	a.state.SetPendingSwitchContextRefresh(strings.TrimSpace(msg))
 }
 
 func (a *Agent) consumePendingSwitchContextRefresh() string {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return ""
 	}
-	msg := strings.TrimSpace(a.pendingSwitchContextRefresh)
-	a.pendingSwitchContextRefresh = ""
+	msg := strings.TrimSpace(a.state.GetPendingSwitchContextRefresh())
+	a.state.SetPendingSwitchContextRefresh("")
 	return msg
 }
 
 func (a *Agent) setPendingStrictSwitchNotice(msg string) {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return
 	}
-	a.pendingStrictSwitchNotice = strings.TrimSpace(msg)
+	a.state.SetPendingStrictSwitchNotice(strings.TrimSpace(msg))
 }
 
 func (a *Agent) ConsumePendingStrictSwitchNotice() string {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return ""
 	}
-	msg := strings.TrimSpace(a.pendingStrictSwitchNotice)
-	a.pendingStrictSwitchNotice = ""
+	msg := strings.TrimSpace(a.state.GetPendingStrictSwitchNotice())
+	a.state.SetPendingStrictSwitchNotice("")
 	return msg
 }
 
 func (a *Agent) setPendingSystemSupplement(supplement string) {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return
 	}
-	a.pendingSystemSupplement = strings.TrimSpace(supplement)
+	a.state.SetPendingSystemSupplement(strings.TrimSpace(supplement))
 }
 
 func (a *Agent) consumePendingSystemSupplement() string {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return ""
 	}
-	msg := strings.TrimSpace(a.pendingSystemSupplement)
-	a.pendingSystemSupplement = ""
+	msg := strings.TrimSpace(a.state.GetPendingSystemSupplement())
+	a.state.SetPendingSystemSupplement("")
 	return msg
 }
 
 func (a *Agent) normalizeConversationForCurrentModelSyntax(fromProvider, fromModel string) {
-	if a == nil || len(a.messages) == 0 || !a.isStrictToolCallSyntaxModel() {
+	if a == nil || len(a.state.GetMessages()) == 0 || !a.isStrictToolCallSyntaxModel() {
 		return
 	}
 
-	normalized, report := normalizeConversationForStrictToolSyntax(a.messages)
-	a.messages = normalized
+	normalized, report := normalizeConversationForStrictToolSyntax(a.state.GetMessages())
+	a.state.SetMessages(normalized)
 
 	refresh := a.buildSwitchContextRefreshMessage(report, fromProvider, fromModel)
 	a.setPendingSwitchContextRefresh(refresh)

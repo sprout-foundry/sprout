@@ -157,7 +157,7 @@ func TestGetActivePersonaEmpty(t *testing.T) {
 	defer agent.Shutdown()
 
 	// Clear the active persona field directly (same package access).
-	agent.activePersona = ""
+	agent.state.SetActivePersona("")
 	persona := agent.GetActivePersona()
 	if persona != "" {
 		t.Errorf("GetActivePersona = %q, want empty string", persona)

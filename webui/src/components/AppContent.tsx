@@ -16,6 +16,7 @@ import { TasksPage, BillingPage, TeamPage } from './platform';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import type { ChatSession } from '../services/chatSessions';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 
@@ -208,6 +209,7 @@ const AppContent: React.FC<AppContentProps> = ({
     updateBufferTitle,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
+  const sproutFetch = useSproutFetch();
 
   // Compute current todos: prefer state from todo_update events, fall back to parsing from TodoWrite tool executions
   const currentTodos = useMemo(() => {
@@ -420,7 +422,7 @@ const AppContent: React.FC<AppContentProps> = ({
     handleRevertCommit,
     refreshGitStatus,
   } = useGitWorkspace({
-    apiService,
+    fetchFn: sproutFetch,
     gitRefreshToken,
     selectedGitFilePath: null,
     onViewChange,

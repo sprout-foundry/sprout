@@ -33,8 +33,8 @@ describe('mode config (default / local mode)', () => {
     expect(modeModule.isCloud).toBe(false);
   });
 
-  it('exports supportsSSH as false in local mode', () => {
-    expect(modeModule.supportsSSH).toBe(false);
+  it('exports supportsSSH as true in local mode', () => {
+    expect(modeModule.supportsSSH).toBe(true);
   });
 
   it('exports supportsInstances as false in local mode', () => {
@@ -88,7 +88,9 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.isCloud).toBe(true);
   });
 
-  it('exports supportsSSH as true in cloud mode', () => {
+  // In cloud build mode without an adapter installed, supportsSSH uses
+  // the local default (true) because there's no adapter to say otherwise.
+  it('exports supportsSSH as true in cloud build without adapter (local default applies)', () => {
     expect(modeModule.supportsSSH).toBe(true);
   });
 
@@ -143,7 +145,7 @@ describe('mode config (invalid env var value)', () => {
   });
 
   it('all local-mode flags are correct for unrecognized values', () => {
-    expect(modeModule.supportsSSH).toBe(false);
+    expect(modeModule.supportsSSH).toBe(true);
     expect(modeModule.supportsInstances).toBe(false);
     expect(modeModule.supportsLocalTerminal).toBe(true);
     expect(modeModule.supportsSettings).toBe(true);
@@ -195,8 +197,8 @@ describe('mode config flag invariants', () => {
       jest.resetModules();
     });
 
-    it('supportsSSH equals isCloud', () => {
-      expect(modeModule.supportsSSH).toBe(modeModule.isCloud);
+    it('supportsSSH is true without an adapter (local default)', () => {
+      expect(modeModule.supportsSSH).toBe(true);
     });
 
     it('supportsInstances equals isCloud', () => {
@@ -228,8 +230,11 @@ describe('mode config flag invariants', () => {
       jest.resetModules();
     });
 
-    it('supportsSSH equals isCloud', () => {
-      expect(modeModule.supportsSSH).toBe(modeModule.isCloud);
+    // Without an adapter installed, the local default (true) applies even
+    // in cloud build mode. The "with CloudAdapter installed" test suite
+    // covers the case where supportsSSH is explicitly false.
+    it('supportsSSH is true without an adapter (local default applies)', () => {
+      expect(modeModule.supportsSSH).toBe(true);
     });
 
     it('supportsInstances equals isCloud', () => {
@@ -263,8 +268,7 @@ describe('with CloudAdapter installed', () => {
     jest.resetModules();
   });
 
-  it('adapter flags override build-time isCloud=false', async () => {
-    // Install CloudAdapter on the fresh apiAdapter module instance
+      it('adapter flags override build-time defaults', async () => {
     const { installAdapter } = await import('../services/apiAdapter');
     const { CloudAdapter } = await import('../services/cloudAdapter');
     installAdapter(
@@ -277,14 +281,12 @@ describe('with CloudAdapter installed', () => {
     // Import mode.ts — it evaluates getAdapter() at load time and sees the CloudAdapter
     const modeModule = await import('./mode');
 
-    // Build-time says isCloud=false, but adapter flags win
-    expect(modeModule.supportsSSH).toBe(true);
+    // Build-time says local, but CloudAdapter flags win
+    expect(modeModule.supportsSSH).toBe(false);
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(false);
     expect(modeModule.supportsSettings).toBe(false);
-  });
-
-  it('mode and isCloud remain based on env var, not adapter', async () => {
+  });it('mode and isCloud remain based on env var, not adapter', async () => {
     const { installAdapter } = await import('../services/apiAdapter');
     const { CloudAdapter } = await import('../services/cloudAdapter');
     installAdapter(

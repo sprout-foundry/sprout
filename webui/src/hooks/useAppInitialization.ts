@@ -10,13 +10,13 @@
 
 import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { WebSocketService } from '../services/websocket';
-import type { WsEvent } from '../services/websocket';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 import { useLog } from '../utils/log';
+import { useEvents } from '../contexts/EventsContext';
+import type { SproutEvent } from '../types/events';
 
 interface RecentFile {
   path: string;
@@ -24,7 +24,7 @@ interface RecentFile {
 }
 
 export interface UseAppInitializationOptions {
-  handleEvent: (event: WsEvent) => void;
+  handleEvent: (event: SproutEvent) => void;
   connectionTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   loadChatSessions: () => void;
   setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
@@ -44,7 +44,7 @@ export function useAppInitialization({
   handleReconnect,
 }: UseAppInitializationOptions): void {
   const log = useLog();
-  const wsService = WebSocketService.getInstance();
+  const events = useEvents();
   const apiService = ApiService.getInstance();
 
   useEffect(() => {
@@ -52,9 +52,9 @@ export function useAppInitialization({
     registerServiceWorker();
 
     // Initialize WebSocket connection
-    wsService.connect();
-    wsService.onEvent(handleEvent);
-    wsService.onReconnect(handleReconnect);
+    events.connect();
+    events.onEvent(handleEvent);
+    events.onReconnect(handleReconnect);
 
     // Load initial stats
     const loadStats = () => {
@@ -124,12 +124,12 @@ export function useAppInitialization({
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      wsService.removeEvent(handleEvent);
-      wsService.onReconnect(null);
-      wsService.disconnect();
+      events.removeEvent(handleEvent);
+      events.onReconnect(null);
+      events.disconnect();
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; wsService/apiService are stable singletons from getInstance(); loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; events/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
   }, [handleEvent, loadChatSessions]);
 }

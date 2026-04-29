@@ -10,11 +10,12 @@ import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
+import { LocalEventsProvider } from './services/localEventsProvider';
+import { EventsContextProvider } from './contexts/EventsContext';
 import './App.css';
 import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
-import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
@@ -442,27 +443,29 @@ function App() {
     setSidebarCollapsed(prev => !prev);
   }, []);
 
-  const wsService = WebSocketService.getInstance();
+  const eventsProvider = useMemo(() => new LocalEventsProvider(), []);
   const apiService = ApiService.getInstance();
 
-  // Security approval/prompt response handlers
+  // Security approval/prompt response handlers (inline in App.tsx because App is
+  // the component that provides EventsContextProvider, so it can't consume useEvents()).
+  // Child components should use the useSecurityApproval / useSecurityPrompt hooks instead.
   const handleSecurityApprovalResponse = useCallback((requestId: string, approved: boolean) => {
-    if (!wsService.isConnected()) return;
-    wsService.sendEvent({
+    if (!eventsProvider.isConnected()) return;
+    eventsProvider.sendEvent({
       type: 'security_approval_response',
       data: { request_id: requestId, approved },
     });
     setState((prev) => ({ ...prev, securityApprovalRequest: null }));
-  }, [wsService]);
+  }, [eventsProvider, setState]);
 
   const handleSecurityPromptResponse = useCallback((requestId: string, response: boolean) => {
-    if (!wsService.isConnected()) return;
-    wsService.sendEvent({
+    if (!eventsProvider.isConnected()) return;
+    eventsProvider.sendEvent({
       type: 'security_prompt_response',
       data: { request_id: requestId, response },
     });
     setState((prev) => ({ ...prev, securityPromptRequest: null }));
-  }, [wsService]);
+  }, [eventsProvider, setState]);
 
   const selectedOnboardingProvider = useMemo(() => {
     return onboarding.providers.find((p) => p.id === onboarding.provider) || null;
@@ -1500,9 +1503,9 @@ function App() {
     registerServiceWorker();
 
     // Initialize WebSocket connection
-    wsService.connect();
-    wsService.onEvent(handleEvent);
-    wsService.onReconnect(handleReconnect);
+    eventsProvider.connect();
+    eventsProvider.onEvent(handleEvent);
+    eventsProvider.onReconnect(handleReconnect);
 
     // Load initial stats
     const loadStats = () => {
@@ -1621,13 +1624,13 @@ function App() {
       connectionTimeoutRef.current = null;
       pendingProviderChangeRef.current = false;
       pendingProviderChangeValueRef.current = null;
-      wsService.removeEvent(handleEvent);
-      wsService.onReconnect(null);
-      wsService.disconnect();
+      eventsProvider.removeEvent(handleEvent);
+      eventsProvider.onReconnect(null);
+      eventsProvider.disconnect();
       window.removeEventListener('resize', checkMobile);
       clearInterval(statsInterval);
     };
-  }, [handleEvent, handleReconnect, wsService, apiService, loadChatSessions]);
+  }, [handleEvent, handleReconnect, eventsProvider, apiService, loadChatSessions]);
 
   // When backend becomes reachable (after being unreachable when adapter requires health checks),
   // re-run initialization that was skipped.
@@ -1955,11 +1958,11 @@ function App() {
       ...prev,
       model
     }));
-    wsService.sendEvent({
+    eventsProvider.sendEvent({
       type: 'model_change',
       data: { provider, model }
     });
-  }, [state.provider, wsService]);
+  }, [state.provider, eventsProvider]);
 
   const handleProviderChange = useCallback((provider: string) => {
     debugLog('Provider changed to:', provider);
@@ -1970,11 +1973,11 @@ function App() {
       ...prev,
       provider
     }));
-    wsService.sendEvent({
+    eventsProvider.sendEvent({
       type: 'provider_change',
       data: { provider }
     });
-  }, [wsService]);
+  }, [eventsProvider]);
 
   const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     setState(prev => ({
@@ -2097,6 +2100,7 @@ function App() {
     >
       <BackendConnectionBanner isReachable={backendReachable} />
       <SproutAdapterProvider>
+      <EventsContextProvider provider={eventsProvider}>
       <ThemeProvider>
         <NotificationProvider>
         <PlatformNavProvider>
@@ -2363,6 +2367,7 @@ function App() {
         </PlatformNavProvider>
         </NotificationProvider>
       </ThemeProvider>
+      </EventsContextProvider>
       </SproutAdapterProvider>
     </ErrorBoundary>
   );

@@ -11,28 +11,33 @@ func (a *Agent) shiftTurnCheckpoints(delta int) {
 	if a == nil || delta == 0 {
 		return
 	}
-	a.checkpointMu.Lock()
-	defer a.checkpointMu.Unlock()
-	if len(a.turnCheckpoints) == 0 {
+	mu := a.state.GetCheckpointMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	checkpoints := a.state.GetTurnCheckpoints()
+	if len(checkpoints) == 0 {
 		return
 	}
-	for i := range a.turnCheckpoints {
-		a.turnCheckpoints[i].StartIndex += delta
-		a.turnCheckpoints[i].EndIndex += delta
+	for i := range checkpoints {
+		checkpoints[i].StartIndex += delta
+		checkpoints[i].EndIndex += delta
 	}
+	a.state.SetTurnCheckpoints(checkpoints)
 }
 
 func (a *Agent) RecordTurnCheckpoint(startIndex, endIndex int) {
-	if a == nil || startIndex < 0 || endIndex < startIndex || endIndex >= len(a.messages) {
+	msgs := a.state.GetMessages()
+	if a == nil || startIndex < 0 || endIndex < startIndex || endIndex >= len(msgs) {
 		return
 	}
 
-	turnMessages := append([]api.Message(nil), a.messages[startIndex:endIndex+1]...)
+	turnMessages := append([]api.Message(nil), msgs[startIndex:endIndex+1]...)
 	a.recordTurnCheckpointFromMessages(startIndex, endIndex, turnMessages)
 }
 
 func (a *Agent) RecordTurnCheckpointAsync(startIndex, endIndex int) {
-	if a == nil || startIndex < 0 || endIndex < startIndex || endIndex >= len(a.messages) {
+	msgs := a.state.GetMessages()
+	if a == nil || startIndex < 0 || endIndex < startIndex || endIndex >= len(msgs) {
 		return
 	}
 
@@ -41,7 +46,7 @@ func (a *Agent) RecordTurnCheckpointAsync(startIndex, endIndex int) {
 	// indices still refer to the original completed-turn range and are expected to
 	// remain stable because normal post-completion flow only appends newer turns;
 	// disruptive operations such as clear/import replace the checkpoint set.
-	turnMessages := append([]api.Message(nil), a.messages[startIndex:endIndex+1]...)
+	turnMessages := append([]api.Message(nil), msgs[startIndex:endIndex+1]...)
 	go a.recordTurnCheckpointFromMessages(startIndex, endIndex, turnMessages)
 }
 
@@ -64,25 +69,29 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		ActionableSummary: actionableSummary,
 	}
 
-	a.checkpointMu.Lock()
-	defer a.checkpointMu.Unlock()
-	if n := len(a.turnCheckpoints); n > 0 && a.turnCheckpoints[n-1].StartIndex == startIndex {
-		a.turnCheckpoints[n-1] = checkpoint
+	mu := a.state.GetCheckpointMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	checkpoints := a.state.GetTurnCheckpoints()
+	if n := len(checkpoints); n > 0 && checkpoints[n-1].StartIndex == startIndex {
+		checkpoints[n-1] = checkpoint
+		a.state.SetTurnCheckpoints(checkpoints)
 		return
 	}
 
-	a.turnCheckpoints = append(a.turnCheckpoints, checkpoint)
-	sort.Slice(a.turnCheckpoints, func(i, j int) bool {
-		return a.turnCheckpoints[i].StartIndex < a.turnCheckpoints[j].StartIndex
+	checkpoints = append(checkpoints, checkpoint)
+	sort.Slice(checkpoints, func(i, j int) bool {
+		return checkpoints[i].StartIndex < checkpoints[j].StartIndex
 	})
+	a.state.SetTurnCheckpoints(checkpoints)
 }
 
 func (a *Agent) buildTurnCheckpointSummary(messages []api.Message) string {
 	if len(messages) == 0 {
 		return ""
 	}
-	if a != nil && a.optimizer != nil {
-		return a.optimizer.buildGoCompactionSummary(messages)
+	if a != nil && a.state.GetOptimizer() != nil {
+		return a.state.GetOptimizer().buildGoCompactionSummary(messages)
 	}
 	optimizer := NewConversationOptimizer(true, false)
 	return optimizer.buildGoCompactionSummary(messages)
@@ -93,8 +102,8 @@ func (a *Agent) buildActionableTurnCheckpointSummary(messages []api.Message) str
 		return ""
 	}
 	var optimizer *ConversationOptimizer
-	if a != nil && a.optimizer != nil {
-		optimizer = a.optimizer
+	if a != nil && a.state.GetOptimizer() != nil {
+		optimizer = a.state.GetOptimizer()
 	} else {
 		optimizer = NewConversationOptimizer(true, false)
 	}
@@ -105,36 +114,40 @@ func (a *Agent) HasTurnCheckpoints() bool {
 	if a == nil {
 		return false
 	}
-	a.checkpointMu.RLock()
-	defer a.checkpointMu.RUnlock()
-	return len(a.turnCheckpoints) > 0
+	mu := a.state.GetCheckpointMutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	return len(a.state.GetTurnCheckpoints()) > 0
 }
 
 func (a *Agent) copyTurnCheckpoints() []TurnCheckpoint {
 	if a == nil {
 		return nil
 	}
-	a.checkpointMu.RLock()
-	defer a.checkpointMu.RUnlock()
-	return append([]TurnCheckpoint(nil), a.turnCheckpoints...)
+	mu := a.state.GetCheckpointMutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	return append([]TurnCheckpoint(nil), a.state.GetTurnCheckpoints()...)
 }
 
 func (a *Agent) ReplaceTurnCheckpoints(checkpoints []TurnCheckpoint) {
 	if a == nil {
 		return
 	}
-	a.checkpointMu.Lock()
-	defer a.checkpointMu.Unlock()
-	a.turnCheckpoints = append([]TurnCheckpoint(nil), checkpoints...)
+	mu := a.state.GetCheckpointMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	a.state.SetTurnCheckpoints(append([]TurnCheckpoint(nil), checkpoints...))
 }
 
 func (a *Agent) clearTurnCheckpoints() {
 	if a == nil {
 		return
 	}
-	a.checkpointMu.Lock()
-	defer a.checkpointMu.Unlock()
-	a.turnCheckpoints = nil
+	mu := a.state.GetCheckpointMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	a.state.SetTurnCheckpoints(nil)
 }
 
 func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.Message, []TurnCheckpoint) {
@@ -203,17 +216,17 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	}
 
 	compacted = append(compacted, messages[nextIndex:]...)
-	
+
 	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
 	// If the last inserted summary is followed by an assistant message without tool_calls,
 	// remove the following assistant message to avoid llama.cpp error:
 	// "Cannot have 2 or more assistant messages at the end of the list"
-	// 
+	//
 	// Note: lastSummaryIdx is only set if at least one checkpoint was consumed.
 	// If no checkpoints were consumed, lastSummaryIdx remains -1 and this check is skipped.
 	if lastSummaryIdx >= 0 && lastSummaryIdx+1 < len(compacted) {
 		if compacted[lastSummaryIdx].Role == "assistant" && len(compacted[lastSummaryIdx].ToolCalls) == 0 &&
-		   compacted[lastSummaryIdx+1].Role == "assistant" && len(compacted[lastSummaryIdx+1].ToolCalls) == 0 {
+			compacted[lastSummaryIdx+1].Role == "assistant" && len(compacted[lastSummaryIdx+1].ToolCalls) == 0 {
 			// Remove the duplicate assistant message (keep the summary, remove the original)
 			if a.debug {
 				a.debugLog("[clean] Removed consecutive assistant at compaction boundary\n")
@@ -221,7 +234,7 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 			compacted = append(compacted[:lastSummaryIdx+1], compacted[lastSummaryIdx+2:]...)
 		}
 	}
-	
+
 	return compacted, remaining
 }
 
@@ -233,11 +246,13 @@ func (a *Agent) TriggerCompaction() bool {
 		return false
 	}
 
+	msgs := a.state.GetMessages()
+
 	// Try checkpoint compaction first (lighter weight)
 	if a.HasTurnCheckpoints() {
-		checkpointed, remaining := a.BuildCheckpointCompactedMessages(a.messages)
-		if len(checkpointed) < len(a.messages) {
-			a.messages = checkpointed
+		checkpointed, remaining := a.BuildCheckpointCompactedMessages(msgs)
+		if len(checkpointed) < len(msgs) {
+			a.state.SetMessages(checkpointed)
 			a.ReplaceTurnCheckpoints(remaining)
 			if a.debug {
 				a.debugLog("[~] Context limit exceeded - applied checkpoint compaction\n")
@@ -247,10 +262,11 @@ func (a *Agent) TriggerCompaction() bool {
 	}
 
 	// Try structural compaction (LLM-based)
-	if a.optimizer != nil && a.optimizer.IsEnabled() {
-		llmCompacted := a.optimizer.CompactConversation(a.messages)
-		if len(llmCompacted) < len(a.messages) {
-			a.messages = llmCompacted
+	optimizer := a.state.GetOptimizer()
+	if optimizer != nil && optimizer.IsEnabled() {
+		llmCompacted := optimizer.CompactConversation(msgs)
+		if len(llmCompacted) < len(msgs) {
+			a.state.SetMessages(llmCompacted)
 			a.clearTurnCheckpoints()
 			if a.debug {
 				a.debugLog("[~] Context limit exceeded - applied LLM structural compaction\n")
@@ -261,16 +277,16 @@ func (a *Agent) TriggerCompaction() bool {
 
 	// Last resort: emergency truncation
 	// Keep at least 2 non-system messages to preserve the last conversation turn
-	if len(a.messages) > 2 {
+	if len(msgs) > 2 {
 		// Determine where to start (skip system prompt if present)
 		keepStart := 0
-		if len(a.messages) > 0 && a.messages[0].Role == "system" {
+		if len(msgs) > 0 && msgs[0].Role == "system" {
 			keepStart = 1
 		}
 		// Only truncate if we'd still have at least 2 messages after truncation
-		if len(a.messages)-keepStart > 2 {
-			keepEnd := len(a.messages)
-			a.messages = append(a.messages[:keepStart], a.messages[keepEnd-2:]...)
+		if len(msgs)-keepStart > 2 {
+			keepEnd := len(msgs)
+			a.state.SetMessages(append(msgs[:keepStart:keepStart], msgs[keepEnd-2:]...))
 			a.clearTurnCheckpoints()
 			if a.debug {
 				a.debugLog("[~] Context limit exceeded - applied emergency truncation\n")

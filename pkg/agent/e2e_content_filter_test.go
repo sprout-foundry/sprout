@@ -103,7 +103,7 @@ func TestE2E_ContentFilterViaProcessResponse(t *testing.T) {
 	agent, ch := buildE2EAgent(t, 10)
 
 	// Set up minimal conversation state so processResponse can function.
-	agent.messages = append(agent.messages, api.Message{Role: "user", Content: "test query"})
+	agent.state.AddMessage(api.Message{Role: "user", Content: "test query"})
 	ch.pendingUserMessage = "test query"
 
 	// First call: content_filter → should NOT stop the conversation.
@@ -112,7 +112,7 @@ func TestE2E_ContentFilterViaProcessResponse(t *testing.T) {
 	assert.False(t, stopped, "content_filter should not stop the conversation")
 
 	// Verify processResponse appended the assistant message to conversation history.
-	assert.Equal(t, "assistant", ch.agent.messages[len(ch.agent.messages)-1].Role,
+	assert.Equal(t, "assistant", ch.agent.state.GetMessages()[len(ch.agent.state.GetMessages())-1].Role,
 		"expected processResponse to append assistant message to agent.messages")
 
 	// Second call: stop → should stop the conversation.
@@ -136,7 +136,7 @@ func TestE2E_ContentFilterNoTransientMessages(t *testing.T) {
 	agent, ch := buildE2EAgent(t, 10)
 
 	// Set up minimal conversation state.
-	agent.messages = append(agent.messages, api.Message{Role: "user", Content: "test query"})
+	agent.state.AddMessage(api.Message{Role: "user", Content: "test query"})
 	ch.pendingUserMessage = "test query"
 
 	// Call processResponse with a content_filter response.

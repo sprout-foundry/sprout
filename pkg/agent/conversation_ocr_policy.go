@@ -33,7 +33,8 @@ func (ch *ConversationHandler) handleOCRCompletionGate(turn *TurnEvaluation) (ha
 }
 
 func (ch *ConversationHandler) shouldRequireOCRBeforeCompletion() bool {
-	if ch.agent != nil && ch.agent.shouldUseDirectMultimodalImageReasoning(ch.agent.messages) {
+	messages := ch.agent.state.GetMessages()
+	if ch.agent != nil && ch.agent.shouldUseDirectMultimodalImageReasoning(messages) {
 		return false
 	}
 	if !ch.isOCRPolicyRequested() {
@@ -46,7 +47,8 @@ func (ch *ConversationHandler) shouldRequireOCRBeforeCompletion() bool {
 }
 
 func (ch *ConversationHandler) isOCRPolicyRequested() bool {
-	for _, msg := range ch.agent.messages {
+	messages := ch.agent.state.GetMessages()
+	for _, msg := range messages {
 		if msg.Role != "user" {
 			continue
 		}
@@ -63,7 +65,8 @@ func (ch *ConversationHandler) isOCRPolicyRequested() bool {
 }
 
 func (ch *ConversationHandler) hasToolCallInHistory(toolName string) bool {
-	for _, msg := range ch.agent.messages {
+	messages := ch.agent.state.GetMessages()
+	for _, msg := range messages {
 		if msg.Role != "assistant" || len(msg.ToolCalls) == 0 {
 			continue
 		}
@@ -79,7 +82,8 @@ func (ch *ConversationHandler) hasToolCallInHistory(toolName string) bool {
 
 func (ch *ConversationHandler) fetchResultsSuggestImageOrPDFMenu() bool {
 	fetchIDs := make(map[string]struct{})
-	for _, msg := range ch.agent.messages {
+	messages := ch.agent.state.GetMessages()
+	for _, msg := range messages {
 		if msg.Role != "assistant" || len(msg.ToolCalls) == 0 {
 			continue
 		}
@@ -96,7 +100,7 @@ func (ch *ConversationHandler) fetchResultsSuggestImageOrPDFMenu() bool {
 
 	imageHints := []string{".pdf", ".jpg", ".jpeg", ".png", "image 1", "image 2", "image 3", "image 4", "flyer", "images.squarespace-cdn"}
 	contextHints := []string{"menu", "offer", "event", "happy hour", "promotion"}
-	for _, msg := range ch.agent.messages {
+	for _, msg := range messages {
 		if msg.Role != "tool" {
 			continue
 		}

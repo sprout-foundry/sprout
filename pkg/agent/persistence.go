@@ -219,21 +219,21 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	sessionName := a.generateSessionName()
 
 	state := ConversationState{
-		Messages:                a.messages,
+		Messages:                a.state.GetMessages(),
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		TaskActions:             a.GetTaskActions(),
-		TotalCost:               a.totalCost,
-		TotalTokens:             a.totalTokens,
-		PromptTokens:            a.promptTokens,
-		CompletionTokens:        a.completionTokens,
-		EstimatedTokenResponses: a.estimatedTokenResponses,
-		CachedTokens:            a.cachedTokens,
-		CachedCostSavings:       a.cachedCostSavings,
+		TotalCost:               a.state.GetTotalCost(),
+		TotalTokens:             a.state.GetTotalTokens(),
+		PromptTokens:            a.state.GetPromptTokens(),
+		CompletionTokens:        a.state.GetCompletionTokens(),
+		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
+		CachedTokens:            a.state.GetCachedTokens(),
+		CachedCostSavings:       a.state.GetCachedCostSavings(),
 		LastUpdated:             time.Now(),
 		SessionID:               cleanSessionID,
 		Name:                    sessionName,
 		WorkingDirectory:        cleanWorkingDir,
-		ConfigOverrides:         a.configOverrides,
+		ConfigOverrides:         a.state.GetConfigOverrides(),
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -641,8 +641,8 @@ func (a *Agent) GenerateSessionSummary() string {
 	summary.WriteString(fmt.Sprintf("• Files modified: %d\n", fileModifications))
 	summary.WriteString(fmt.Sprintf("• Commands executed: %d\n", commandsExecuted))
 	summary.WriteString(fmt.Sprintf("• Files read: %d\n", filesRead))
-	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.totalCost))
-	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.totalTokens)))
+	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.state.GetTotalCost()))
+	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.state.GetTotalTokens())))
 
 	// Add recent notable actions
 	if len(taskActions) > 0 {
@@ -662,34 +662,34 @@ func (a *Agent) GenerateSessionSummary() string {
 // ApplyState applies a loaded state to the current agent
 func (a *Agent) ApplyState(state *ConversationState) {
 	// Apply saved state
-	a.messages = state.Messages
+	a.state.SetMessages(state.Messages)
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	a.replaceTaskActions(state.TaskActions)
-	a.totalCost = state.TotalCost
-	a.totalTokens = state.TotalTokens
-	a.promptTokens = state.PromptTokens
-	a.completionTokens = state.CompletionTokens
-	a.estimatedTokenResponses = state.EstimatedTokenResponses
-	a.cachedTokens = state.CachedTokens
-	a.cachedCostSavings = state.CachedCostSavings
+	a.state.SetTotalCost(state.TotalCost)
+	a.state.SetTotalTokens(state.TotalTokens)
+	a.state.SetPromptTokens(state.PromptTokens)
+	a.state.SetCompletionTokens(state.CompletionTokens)
+	a.state.SetEstimatedTokenResponses(state.EstimatedTokenResponses)
+	a.state.SetCachedTokens(state.CachedTokens)
+	a.state.SetCachedCostSavings(state.CachedCostSavings)
 
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
 	a.currentIteration = 0
-	a.contextWarningIssued = false
+	a.state.SetContextWarningIssued(false)
 
 	// Reset circuit breaker state to prevent false positives
-	if a.circuitBreaker != nil {
-		a.circuitBreaker.mu.Lock()
+	if a.state.GetCircuitBreaker() != nil {
+		a.state.GetCircuitBreaker().mu.Lock()
 		// Clear entries instead of replacing map to avoid memory churn and reduce lock hold time
-		for key := range a.circuitBreaker.Actions {
-			delete(a.circuitBreaker.Actions, key)
+		for key := range a.state.GetCircuitBreaker().Actions {
+			delete(a.state.GetCircuitBreaker().Actions, key)
 		}
-		a.circuitBreaker.mu.Unlock()
+		a.state.GetCircuitBreaker().mu.Unlock()
 	}
 
 	// Clear streaming buffer to prevent old content from interfering
-	a.streamingBuffer.Reset()
-	a.reasoningBuffer.Reset()
+	a.output.GetStreamingBuffer().Reset()
+	a.output.GetReasoningBuffer().Reset()
 
 	// Reset shell command history to prevent stale cache issues
 	if a.shellCommandHistory == nil {
@@ -704,16 +704,17 @@ func (a *Agent) ApplyState(state *ConversationState) {
 
 // GetLastMessages returns the last N messages for preview
 func (a *Agent) GetLastMessages(n int) []api.Message {
-	if len(a.messages) == 0 {
+	messages := a.state.GetMessages()
+	if len(messages) == 0 {
 		return []api.Message{}
 	}
 
-	start := len(a.messages) - n
+	start := len(messages) - n
 	if start < 0 {
 		start = 0
 	}
 
-	return a.messages[start:]
+	return messages[start:]
 }
 
 // cleanupMemorySessions removes old sessions for the current working directory scope.

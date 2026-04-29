@@ -95,10 +95,10 @@ func (r *OutputRouter) getStreamingCallback() (func(string), *sync.Mutex) {
 	if agent == nil {
 		return nil, nil
 	}
-	if agent.streamingEnabled && agent.streamingCallback != nil {
-		return agent.streamingCallback, agent.outputMutex
+	if agent.output.IsStreamingEnabled() && agent.output.GetStreamingCallback() != nil {
+		return agent.output.GetStreamingCallback(), agent.output.GetOutputMutex()
 	}
-	return nil, agent.outputMutex
+	return nil, agent.output.GetOutputMutex()
 }
 
 // publish publishes an event to the event bus (no-op if nil/bus unavailable)
@@ -197,7 +197,7 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 	agent := r.agent
 	var mu *sync.Mutex
 	if agent != nil {
-		mu = agent.outputMutex
+		mu = agent.output.GetOutputMutex()
 	}
 	if mu != nil {
 		mu.Lock()
@@ -205,8 +205,8 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 	}
 
 	// Route through streamingCallback if available (still under mutex for ordering)
-	if agent != nil && agent.streamingEnabled && agent.streamingCallback != nil {
-		agent.streamingCallback(message)
+	if agent != nil && agent.output.IsStreamingEnabled() && agent.output.GetStreamingCallback() != nil {
+		agent.output.GetStreamingCallback()(message)
 		return
 	}
 
@@ -229,8 +229,8 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	var currentIter int
 	if agent != nil {
 		currentIter = agent.currentIteration
-		if agent.maxContextTokens > 0 && agent.currentContextTokens > 0 {
-			percentage := float64(agent.currentContextTokens) / float64(agent.maxContextTokens) * 100
+		if agent.state.GetMaxContextTokens() > 0 && agent.state.GetCurrentContextTokens() > 0 {
+			percentage := float64(agent.state.GetCurrentContextTokens()) / float64(agent.state.GetMaxContextTokens()) * 100
 			contextPercent = fmt.Sprintf(" - %.0f%%", percentage)
 		}
 	}

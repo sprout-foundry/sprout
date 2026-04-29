@@ -146,14 +146,14 @@ func TestE2E_MalformedToolArgsRejectionAndRecovery(t *testing.T) {
 
 	// -----------------------------------------------------------------------
 	// Verify exactly 1 tool result message exists (only the valid call executed).
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.Equal(t, 1, len(toolMsgs),
 		"expected exactly 1 tool result (only the valid call should execute)")
 	assert.Contains(t, toolMsgs[0].Content, "Hello from malformed args test",
 		"tool result should contain the actual file content")
 
 	// -----------------------------------------------------------------------
-	// Verify message ordering in agent.messages:
+	// Verify message ordering in agent.state.GetMessages():
 	//
 	//   user → assistant(no tools, malformed rejected)
 	//        → assistant(tool_call, valid)
@@ -161,13 +161,13 @@ func TestE2E_MalformedToolArgsRejectionAndRecovery(t *testing.T) {
 	//        → assistant(stop)
 	//
 	// The transient reminder is consumed from the queue by prepareMessages and
-	// appended to the *sent request* but NOT to agent.messages.
-	assertMessageOrdering(t, agent.messages,
+	// appended to the *sent request* but NOT to agent.state.GetMessages().
+	assertMessageOrdering(t, agent.state.GetMessages(),
 		[]string{"user", "assistant", "assistant", "tool", "assistant"})
 
 	// Verify exact non-system message count to catch silent extra messages
 	nonSystemCount := 0
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role != "system" {
 			nonSystemCount++
 		}
@@ -178,20 +178,20 @@ func TestE2E_MalformedToolArgsRejectionAndRecovery(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// Verify the malformed iteration's assistant message has NO tool calls
 	// (they were set to nil by normalizeToolCallsForExecution).
-	malformedAssistantIdx, found := findAssistantByContent(agent.messages,
+	malformedAssistantIdx, found := findAssistantByContent(agent.state.GetMessages(),
 		"Let me read the test file for you to find the information you requested.")
 	require.True(t, found, "should find the assistant message from the malformed iteration")
-	assert.Empty(t, agent.messages[malformedAssistantIdx].ToolCalls,
+	assert.Empty(t, agent.state.GetMessages()[malformedAssistantIdx].ToolCalls,
 		"assistant message from malformed iteration should have nil/empty tool calls")
 
 	// -----------------------------------------------------------------------
 	// Verify that the valid iteration's assistant message HAS tool calls.
-	validAssistantIdx, found := findAssistantByContent(agent.messages,
+	validAssistantIdx, found := findAssistantByContent(agent.state.GetMessages(),
 		"I have corrected the arguments and will read the file now.")
 	require.True(t, found, "should find the assistant message from the valid iteration")
-	require.NotEmpty(t, agent.messages[validAssistantIdx].ToolCalls,
+	require.NotEmpty(t, agent.state.GetMessages()[validAssistantIdx].ToolCalls,
 		"assistant message from valid iteration should have tool calls")
-	assert.Equal(t, "read_file", agent.messages[validAssistantIdx].ToolCalls[0].Function.Name,
+	assert.Equal(t, "read_file", agent.state.GetMessages()[validAssistantIdx].ToolCalls[0].Function.Name,
 		"valid iteration tool call should be read_file")
 
 	// -----------------------------------------------------------------------
@@ -227,16 +227,16 @@ func TestE2E_MalformedToolArgsRejectionAndRecovery(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// Verify ToolCallId linking between the valid assistant tool call and its
 	// tool result message in the conversation history.
-	validAssistantMsg := agent.messages[validAssistantIdx]
+	validAssistantMsg := agent.state.GetMessages()[validAssistantIdx]
 	require.NotEmpty(t, validAssistantMsg.ToolCalls, "valid assistant should have tool calls")
 	validToolCallID := validAssistantMsg.ToolCalls[0].ID
 	require.NotEmpty(t, validToolCallID, "valid tool call should have an ID")
 
 	// Find the tool result that follows the valid assistant message
 	foundLinkedResult := false
-	for i := validAssistantIdx + 1; i < len(agent.messages); i++ {
-		if agent.messages[i].Role == "tool" {
-			assert.Equal(t, validToolCallID, agent.messages[i].ToolCallId,
+	for i := validAssistantIdx + 1; i < len(agent.state.GetMessages()); i++ {
+		if agent.state.GetMessages()[i].Role == "tool" {
+			assert.Equal(t, validToolCallID, agent.state.GetMessages()[i].ToolCallId,
 				"tool result's ToolCallId should match the valid assistant's tool call ID")
 			foundLinkedResult = true
 			break

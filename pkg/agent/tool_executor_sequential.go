@@ -38,8 +38,8 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 
 		// Flush any buffered streaming content before each tool execution
 		// This ensures narrative text appears before each tool call for better flow
-		if te.agent.flushCallback != nil {
-			te.agent.flushCallback()
+		if te.agent.output.GetFlushCallback() != nil {
+			te.agent.output.GetFlushCallback()()
 		}
 
 		// Show progress
@@ -234,9 +234,9 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	}
 
 	// Apply secret redaction to tool output before sending to LLM.
-	if err == nil && modelResult != "" && te.agent.outputRedactor != nil &&
+	if err == nil && modelResult != "" && te.agent.security.GetOutputRedactor() != nil &&
 		isSecretSensitiveTool(normalizedToolName) {
-		redactResult := te.agent.outputRedactor.RedactToolOutput(modelResult, normalizedToolName, args)
+		redactResult := te.agent.security.GetOutputRedactor().RedactToolOutput(modelResult, normalizedToolName, args)
 		if len(redactResult.Secrets) > 0 {
 			modelResult = te.applySecretElevation(modelResult, redactResult, normalizedToolName, args, toolCallID)
 		}
@@ -244,8 +244,8 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	// Also redact fullResult for trace recording to avoid storing secrets.
 	traceResult := fullResult
-	if te.agent.outputRedactor != nil {
-		traceRedactResult := te.agent.outputRedactor.RedactToolOutput(fullResult, normalizedToolName, args)
+	if te.agent.security.GetOutputRedactor() != nil {
+		traceRedactResult := te.agent.security.GetOutputRedactor().RedactToolOutput(fullResult, normalizedToolName, args)
 		traceResult = traceRedactResult.Content
 	}
 
@@ -287,7 +287,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 // applySecretElevation evaluates detected secrets through the elevation gate
 // and returns the appropriate content to send to the LLM (redacted, allowed, or blocked).
 func (te *ToolExecutor) applySecretElevation(originalResult string, redactResult security.RedactionResult, toolName string, args map[string]interface{}, toolCallID string) string {
-	if te.agent.elevationGate == nil {
+	if te.agent.security.GetElevationGate() == nil {
 		return redactResult.Content // no gate — default to redaction
 	}
 
@@ -302,7 +302,7 @@ func (te *ToolExecutor) applySecretElevation(originalResult string, redactResult
 		source = toolName + ": " + cmd
 	}
 
-	action, evalErr := te.agent.elevationGate.Evaluate(redactResult.Secrets, source)
+	action, evalErr := te.agent.security.GetElevationGate().Evaluate(redactResult.Secrets, source)
 	if evalErr != nil {
 		te.agent.debugLog("[security] elevation gate error: %v\n", evalErr)
 	}

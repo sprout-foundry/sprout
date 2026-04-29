@@ -15,8 +15,10 @@ func TestConversationDetermineReasoningEffort_StartsMediumForGptOSS(t *testing.T
 			model:      "gpt-oss:20b",
 		},
 		currentIteration: 0,
-		messages:         []api.Message{{Role: "user", Content: "do task"}},
+		state:            NewAgentStateManager(false),
+		output:           NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "do task"}})
 	ch := NewConversationHandler(agent)
 
 	if got := ch.determineReasoningEffort(); got != "medium" {
@@ -31,8 +33,10 @@ func TestConversationDetermineReasoningEffort_GptOSSModelPolicyAppliesAcrossProv
 			provider:   "ollama",
 			model:      "gpt-oss:20b",
 		},
-		messages: []api.Message{{Role: "user", Content: "do task"}},
+		state:  NewAgentStateManager(false),
+		output: NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "do task"}})
 	ch := NewConversationHandler(agent)
 
 	if got := ch.determineReasoningEffort(); got != "medium" {
@@ -47,8 +51,10 @@ func TestConversationDetermineReasoningEffort_NonGptOSSUsesDefaultHeuristic(t *t
 			provider:   "openai",
 			model:      "gpt-4o-mini",
 		},
-		messages: []api.Message{{Role: "user", Content: "what is this"}},
+		state:  NewAgentStateManager(false),
+		output: NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "what is this"}})
 	ch := NewConversationHandler(agent)
 
 	if got := ch.determineReasoningEffort(); got != "low" {

@@ -164,7 +164,7 @@ func TestE2E_RateLimitExceeded_DuringToolCall(t *testing.T) {
 
 	// Verify tool result is in conversation history (context preserved)
 	var foundToolResult bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "tool" && strings.Contains(msg.Content, "Setting1=value1") {
 			foundToolResult = true
 			break
@@ -380,14 +380,14 @@ func TestE2E_RateLimitExceeded_WithConversationHistory(t *testing.T) {
 	agent, _, _ := buildE2EAgentWithClient(t, 10, responses...)
 
 	// Pre-populate conversation history
-	agent.messages = []api.Message{
+	agent.state.SetMessages([]api.Message{
 		{Role: "user", Content: "First question"},
 		{Role: "assistant", Content: "First answer"},
 		{Role: "user", Content: "Second question"},
 		{Role: "assistant", Content: "Second answer"},
-	}
+	})
 
-	initialMessageCount := len(agent.messages)
+	initialMessageCount := len(agent.state.GetMessages())
 
 	// Trigger rate limit
 	result, err := agent.ProcessQuery("This will trigger rate limit")
@@ -396,12 +396,12 @@ func TestE2E_RateLimitExceeded_WithConversationHistory(t *testing.T) {
 	assert.NotEmpty(t, result, "expected non-empty error message")
 
 	// Verify history is preserved (should have initial messages + new user message)
-	assert.GreaterOrEqual(t, len(agent.messages), initialMessageCount+1,
+	assert.GreaterOrEqual(t, len(agent.state.GetMessages()), initialMessageCount+1,
 		"expected conversation history to be preserved with new message added")
 
 	// Verify original messages are still there
 	var foundFirstMessage bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "user" && msg.Content == "First question" {
 			foundFirstMessage = true
 			break

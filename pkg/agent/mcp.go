@@ -54,7 +54,7 @@ func (a *Agent) initializeMCP() error {
 					AutoStart:   serverConfig.AutoStart,
 					MaxRestarts: serverConfig.MaxRestarts,
 				}
-				if err := a.mcpManager.AddServer(mcpServer); err != nil {
+				if err := a.mcpSub.GetManager().AddServer(mcpServer); err != nil {
 					if a.debug {
 						fmt.Printf("\n[WARN] Warning: Failed to add legacy MCP server %s: %v\n", name, err)
 					}
@@ -90,7 +90,7 @@ func (a *Agent) initializeMCP() error {
 			MaxRestarts: serverConfig.MaxRestarts,
 		}
 
-		if err := a.mcpManager.AddServer(mcpServer); err != nil {
+		if err := a.mcpSub.GetManager().AddServer(mcpServer); err != nil {
 			if a.debug {
 				fmt.Printf("\n[WARN] Warning: Failed to add MCP server %s: %v\n", name, err)
 			}
@@ -102,12 +102,12 @@ func (a *Agent) initializeMCP() error {
 	// If legacy config has enabled servers, start them regardless of main config settings
 	shouldAutoStart := config.MCP.AutoStart || legacyEnabled
 	if shouldAutoStart {
-		if err := a.mcpManager.StartAll(ctx); err != nil {
+		if err := a.mcpSub.GetManager().StartAll(ctx); err != nil {
 			return fmt.Errorf("failed to start MCP servers: %w", err)
 		}
 
 		if a.debug {
-			tools, _ := a.mcpManager.GetAllTools(ctx)
+			tools, _ := a.mcpSub.GetManager().GetAllTools(ctx)
 			fmt.Printf("\n[OK] MCP initialized with %d tools available\n", len(tools))
 		}
 	}
@@ -138,9 +138,9 @@ func (a *Agent) initializeMCP() error {
 					log.Printf("[mcp-secrets] Warning: failed to migrate secrets for auto-discovered GitHub server: %v", err)
 				}
 
-				if err := a.mcpManager.AddServer(githubServer); err == nil {
+				if err := a.mcpSub.GetManager().AddServer(githubServer); err == nil {
 					if config.MCP.AutoStart {
-						if err := a.mcpManager.StartAll(ctx); err != nil {
+						if err := a.mcpSub.GetManager().StartAll(ctx); err != nil {
 							if a.debug {
 								fmt.Printf("\n[WARN] Failed to start GitHub MCP server (npx): %v\n", err)
 							}
@@ -159,10 +159,10 @@ func (a *Agent) initializeMCP() error {
 // RefreshMCPTools refreshes the MCP tools cache
 func (a *Agent) RefreshMCPTools() error {
 	// Clear cache with mutex protection to avoid race conditions
-	a.mcpInitMu.Lock()
-	a.mcpToolsCache = nil    // Clear cache to force reload
-	a.mcpInitialized = false // Mark as needing reinitialization
-	a.mcpInitMu.Unlock()
+	a.mcpSub.LockInit()
+	a.mcpSub.SetToolsCache(nil)    // Clear cache to force reload
+	a.mcpSub.SetInitialized(false) // Mark as needing reinitialization
+	a.mcpSub.UnlockInit()
 
 	tools := a.getMCPTools()
 	if a.debug {
@@ -173,7 +173,7 @@ func (a *Agent) RefreshMCPTools() error {
 
 // getMCPTools retrieves all available MCP tools and converts them to agent tool format (with caching)
 func (a *Agent) getMCPTools() []api.Tool {
-	if a.mcpManager == nil {
+	if a.mcpSub == nil || a.mcpSub.GetManager() == nil {
 		if a.debug {
 			a.debugLog("[WARN] Warning: MCP manager is nil\n")
 		}
@@ -181,25 +181,25 @@ func (a *Agent) getMCPTools() []api.Tool {
 	}
 
 	// Initialize MCP on first use (lazy loading for better startup performance)
-	a.mcpInitMu.Lock()
-	defer a.mcpInitMu.Unlock()
+	a.mcpSub.LockInit()
+	defer a.mcpSub.UnlockInit()
 
-	if !a.mcpInitialized {
+	if !a.mcpSub.IsInitialized() {
 		if a.debug {
 			a.debugLog("[cfg] Initializing MCP (first use)...\n")
 		}
 		if err := a.initializeMCP(); err != nil {
 			// Non-fatal - MCP is optional
-			a.mcpInitErr = err
+			a.mcpSub.SetInitError(err)
 			if a.debug {
 				a.debugLog("[WARN] MCP initialization failed: %v\n", err)
 			}
 			// Don't set mcpInitialized to allow retry
-			a.mcpInitialized = false
+			a.mcpSub.SetInitialized(false)
 		} else {
 			// Success - mark as initialized
-			a.mcpInitialized = true
-			a.mcpInitErr = nil
+			a.mcpSub.SetInitialized(true)
+			a.mcpSub.SetInitError(nil)
 			if a.debug {
 				a.debugLog("[OK] MCP initialized\n")
 			}
@@ -207,20 +207,20 @@ func (a *Agent) getMCPTools() []api.Tool {
 	}
 
 	// Return nil if not initialized
-	if !a.mcpInitialized {
+	if !a.mcpSub.IsInitialized() {
 		return nil
 	}
 
 	// Return cached tools if available
-	if a.mcpToolsCache != nil {
+	if a.mcpSub.GetToolsCache() != nil {
 		if a.debug {
-			a.debugLog("[tool] Using cached MCP tools: %d\n", len(a.mcpToolsCache))
+			a.debugLog("[tool] Using cached MCP tools: %d\n", len(a.mcpSub.GetToolsCache()))
 		}
-		return a.mcpToolsCache
+		return a.mcpSub.GetToolsCache()
 	}
 
 	ctx := context.Background()
-	mcpTools, err := a.mcpManager.GetAllTools(ctx)
+	mcpTools, err := a.mcpSub.GetManager().GetAllTools(ctx)
 	if err != nil {
 		if a.debug {
 			a.debugLog("[WARN] Warning: Failed to get MCP tools: %v\n", err)
@@ -235,7 +235,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 	var agentTools []api.Tool
 	for _, mcpTool := range mcpTools {
 		// Create wrapper and convert to agent tool format
-		wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpManager)
+		wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpSub.GetManager())
 		agentTool := wrapper.ToAgentTool()
 
 		// Convert to api.Tool format
@@ -247,7 +247,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 	}
 
 	// Cache the tools
-	a.mcpToolsCache = agentTools
+	a.mcpSub.SetToolsCache(agentTools)
 
 	return agentTools
 }
@@ -282,7 +282,7 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 	actualToolName := parts[1]
 
 	ctx := context.Background()
-	result, err := a.mcpManager.CallTool(ctx, serverName, actualToolName, args)
+	result, err := a.mcpSub.GetManager().CallTool(ctx, serverName, actualToolName, args)
 	if err != nil {
 		return "", fmt.Errorf("failed to call MCP tool %s/%s: %w", serverName, actualToolName, err)
 	}
@@ -337,12 +337,12 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		return output.String(), nil
 
 	case "refresh":
-		a.mcpToolsCache = nil
+		a.mcpSub.SetToolsCache(nil)
 		tools := a.getMCPTools()
 		return fmt.Sprintf("Refreshed MCP tools. %d tools available.", len(tools)), nil
 
 	case "status":
-		servers := a.mcpManager.ListServers()
+		servers := a.mcpSub.GetManager().ListServers()
 		var output strings.Builder
 		output.WriteString("MCP Server Status:\n")
 		for _, server := range servers {
@@ -356,14 +356,14 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 
 	case "start":
 		// For now, start all servers
-		if err := a.mcpManager.StartAll(ctx); err != nil {
+		if err := a.mcpSub.GetManager().StartAll(ctx); err != nil {
 			return "", fmt.Errorf("failed to start servers: %w", err)
 		}
 		return "Started all MCP servers", nil
 
 	case "stop":
 		// For now, stop all servers
-		if err := a.mcpManager.StopAll(ctx); err != nil {
+		if err := a.mcpSub.GetManager().StopAll(ctx); err != nil {
 			return "", fmt.Errorf("failed to stop servers: %w", err)
 		}
 		return "Stopped all MCP servers", nil

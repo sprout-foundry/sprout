@@ -17,21 +17,23 @@ func TestPrepareMessagesKeepsFullHistoryWhenContextHasHeadroom(t *testing.T) {
 	agent := &Agent{
 		client:          NewScriptedClient(),
 		systemPrompt:    "system",
-		messages: []api.Message{
-			{Role: "user", Content: "First request"},
-			{Role: "assistant", Content: oldTurnContent},
-			{Role: "user", Content: "Current request"},
-		},
-		turnCheckpoints: []TurnCheckpoint{{
-			StartIndex: 0,
-			EndIndex:   1,
-			Summary:    "Compacted earlier conversation state:\n- Latest compacted user request: First request",
-		}},
-		maxContextTokens: 100000,
-		interruptCtx:     ctx,
-		interruptCancel:  cancel,
-		outputMutex:      &sync.Mutex{},
+		state:           NewAgentStateManager(false),
+		interruptCtx:    ctx,
+		interruptCancel: cancel,
+		output:          NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "First request"},
+		{Role: "assistant", Content: oldTurnContent},
+		{Role: "user", Content: "Current request"},
+	})
+	agent.state.SetTurnCheckpoints([]TurnCheckpoint{{
+		StartIndex: 0,
+		EndIndex:   1,
+		Summary:    "Compacted earlier conversation state:\n- Latest compacted user request: First request",
+	}})
+	agent.state.SetMaxContextTokens(100000)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	handler := NewConversationHandler(agent)
 	prepared := handler.prepareMessages(nil)
@@ -65,21 +67,23 @@ func TestPrepareMessagesUsesTurnCheckpointsWhenContextIsTight(t *testing.T) {
 	agent := &Agent{
 		client:          NewScriptedClient(),
 		systemPrompt:    "system",
-		messages: []api.Message{
-			{Role: "user", Content: "First request"},
-			{Role: "assistant", Content: oldTurnContent},
-			{Role: "user", Content: "Current request with enough content to keep active turn live"},
-		},
-		turnCheckpoints: []TurnCheckpoint{{
-			StartIndex: 0,
-			EndIndex:   1,
-			Summary:    checkpointSummary,
-		}},
-		maxContextTokens: 1200,
-		interruptCtx:     ctx,
-		interruptCancel:  cancel,
-		outputMutex:      &sync.Mutex{},
+		state:           NewAgentStateManager(false),
+		interruptCtx:    ctx,
+		interruptCancel: cancel,
+		output:          NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "First request"},
+		{Role: "assistant", Content: oldTurnContent},
+		{Role: "user", Content: "Current request with enough content to keep active turn live"},
+	})
+	agent.state.SetTurnCheckpoints([]TurnCheckpoint{{
+		StartIndex: 0,
+		EndIndex:   1,
+		Summary:    checkpointSummary,
+	}})
+	agent.state.SetMaxContextTokens(1200)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	handler := NewConversationHandler(agent)
 	prepared := handler.prepareMessages(nil)
@@ -112,18 +116,19 @@ func TestPrepareMessagesUsesTurnCheckpointsWhenContextIsTight(t *testing.T) {
 
 func TestRecordTurnCheckpointBuildsSummary(t *testing.T) {
 	agent := &Agent{
-		messages: []api.Message{
-			{Role: "user", Content: "Investigate the isolation issue"},
-			{Role: "assistant", Content: "Verified the first code path."},
-			{Role: "assistant", Content: "Updated the session-selection flow and confirmed the fix."},
-		},
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "Investigate the isolation issue"},
+		{Role: "assistant", Content: "Verified the first code path."},
+		{Role: "assistant", Content: "Updated the session-selection flow and confirmed the fix."},
+	})
 
 	agent.RecordTurnCheckpoint(0, 2)
-	if len(agent.turnCheckpoints) != 1 {
-		t.Fatalf("expected one turn checkpoint, got %d", len(agent.turnCheckpoints))
+	if len(agent.state.GetTurnCheckpoints()) != 1 {
+		t.Fatalf("expected one turn checkpoint, got %d", len(agent.state.GetTurnCheckpoints()))
 	}
-	if !strings.Contains(agent.turnCheckpoints[0].Summary, "Latest compacted user request: Investigate the isolation issue") {
-		t.Fatalf("expected checkpoint summary to preserve the user request, got: %s", agent.turnCheckpoints[0].Summary)
+	if !strings.Contains(agent.state.GetTurnCheckpoints()[0].Summary, "Latest compacted user request: Investigate the isolation issue") {
+		t.Fatalf("expected checkpoint summary to preserve the user request, got: %s", agent.state.GetTurnCheckpoints()[0].Summary)
 	}
 }

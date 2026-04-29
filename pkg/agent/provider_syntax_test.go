@@ -77,7 +77,9 @@ func TestStrictToolCallSyntaxDetectionByModel(t *testing.T) {
 }
 
 func TestPendingSwitchContextRefreshConsumedOnce(t *testing.T) {
-	a := &Agent{}
+	a := &Agent{
+		state: NewAgentStateManager(false),
+	}
 	a.setPendingSwitchContextRefresh("hello")
 	if got := a.consumePendingSwitchContextRefresh(); got != "hello" {
 		t.Fatalf("unexpected first consume: %q", got)
@@ -88,7 +90,9 @@ func TestPendingSwitchContextRefreshConsumedOnce(t *testing.T) {
 }
 
 func TestPendingStrictSwitchNoticeConsumedOnce(t *testing.T) {
-	a := &Agent{}
+	a := &Agent{
+		state: NewAgentStateManager(false),
+	}
 	a.setPendingStrictSwitchNotice("notice")
 	if got := a.ConsumePendingStrictSwitchNotice(); got != "notice" {
 		t.Fatalf("unexpected first consume: %q", got)

@@ -27,7 +27,7 @@ func buildAgentWithConfigManager(t *testing.T, maxIter int, persona string, self
 	client := NewScriptedClient(responses...)
 	agent := makeAgentWithScriptedClient(maxIter, client)
 	agent.configManager = mgr
-	agent.activePersona = persona
+	agent.state.SetActivePersona(persona)
 
 	ch := NewConversationHandler(agent)
 	return agent, ch

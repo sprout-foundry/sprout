@@ -15,109 +15,124 @@ func (a *Agent) AddToHistory(command string) {
 		return
 	}
 
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
+	mu := a.state.GetHistoryMutex()
+	mu.Lock()
+
+	// Get current command history
+	history := a.state.GetCommandHistory()
 
 	// Remove from history if it already exists (to avoid duplicates)
-	for i, cmd := range a.commandHistory {
+	for i, cmd := range history {
 		if cmd == command {
-			a.commandHistory = append(a.commandHistory[:i], a.commandHistory[i+1:]...)
+			history = append(history[:i], history[i+1:]...)
 			break
 		}
 	}
 
 	// Add to history
-	a.commandHistory = append(a.commandHistory, command)
+	history = append(history, command)
 
 	// Limit history size
-	if len(a.commandHistory) > 100 {
-		a.commandHistory = a.commandHistory[1:]
+	if len(history) > 100 {
+		history = history[1:]
 	}
 
-	// Reset history index to end
-	a.historyIndex = -1
+	// Reset history index to end and save
+	a.state.SetHistoryIndex(-1)
+	a.state.SetCommandHistory(history)
+
+	// Release lock before calling saveHistoryToConfig (which expects to hold the lock)
+	mu.Unlock()
 
 	// Save history to configuration for persistence
-	// saveHistoryToConfig reads commandHistory/historyIndex directly;
-	// caller (AddToHistory) already holds historyMu.
 	a.saveHistoryToConfig()
 }
 
 // GetHistoryCommand returns the command at the given index from history
 func (a *Agent) GetHistoryCommand(index int) string {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-	if index < 0 || index >= len(a.commandHistory) {
+	history := a.state.GetCommandHistory()
+	if index < 0 || index >= len(history) {
 		return ""
 	}
-	return a.commandHistory[index]
+	return history[index]
 }
 
 // NavigateHistory navigates through command history
 // direction: 1 for up (older), -1 for down (newer)
 // currentIndex: current position in the input line
 func (a *Agent) NavigateHistory(direction int, currentIndex int) (string, int) {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-	if len(a.commandHistory) == 0 {
+	mu := a.state.GetHistoryMutex()
+	mu.Lock()
+	defer mu.Unlock()
+
+	history := a.state.GetCommandHistory()
+	historyIndex := a.state.GetHistoryIndex()
+
+	if len(history) == 0 {
 		return "", currentIndex
 	}
 
 	switch direction {
 	case 1: // Up arrow - go to older commands
-		if a.historyIndex == -1 {
+		if historyIndex == -1 {
 			// Starting from current input, go to last command
-			a.historyIndex = len(a.commandHistory) - 1
-		} else if a.historyIndex > 0 {
+			historyIndex = len(history) - 1
+		} else if historyIndex > 0 {
 			// Go to older command
-			a.historyIndex--
+			historyIndex--
 		}
 	case -1: // Down arrow - go to newer commands
-		if a.historyIndex == -1 {
+		if historyIndex == -1 {
 			// Already at newest, return empty
 			return "", currentIndex
-		} else if a.historyIndex < len(a.commandHistory)-1 {
+		} else if historyIndex < len(history)-1 {
 			// Go to newer command
-			a.historyIndex++
+			historyIndex++
 		} else {
 			// At the newest command, reset to current input
-			a.historyIndex = -1
+			historyIndex = -1
 			return "", currentIndex
 		}
 	}
 
-	if a.historyIndex == -1 {
+	a.state.SetHistoryIndex(historyIndex)
+	if historyIndex == -1 {
 		return "", currentIndex
 	}
 
-	return a.commandHistory[a.historyIndex], currentIndex
+	return history[historyIndex], currentIndex
 }
 
 // ResetHistoryIndex resets the history navigation index
 func (a *Agent) ResetHistoryIndex() {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-	a.historyIndex = -1
+	mu := a.state.GetHistoryMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	a.state.SetHistoryIndex(-1)
 }
 
 // GetHistorySize returns the number of commands in history
 func (a *Agent) GetHistorySize() int {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-	return len(a.commandHistory)
+	mu := a.state.GetHistoryMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	return len(a.state.GetCommandHistory())
 }
 
 // GetHistory returns a defensive copy of the command history.
 func (a *Agent) GetHistory() []string {
-	a.historyMu.Lock()
-	defer a.historyMu.Unlock()
-	result := make([]string, len(a.commandHistory))
-	copy(result, a.commandHistory)
+	mu := a.state.GetHistoryMutex()
+	mu.Lock()
+	defer mu.Unlock()
+	history := a.state.GetCommandHistory()
+	result := make([]string, len(history))
+	copy(result, history)
 	return result
 }
 
 // loadHistoryFromConfig loads command history from the configuration
 func (a *Agent) loadHistoryFromConfig() {
+	a.initSubManagers()
 	if a.configManager == nil {
 		return
 	}
@@ -130,16 +145,18 @@ func (a *Agent) loadHistoryFromConfig() {
 	pathKey := a.historyPathKey()
 	if len(config.CommandHistoryByPath) > 0 {
 		if history, ok := config.CommandHistoryByPath[pathKey]; ok && len(history) > 0 {
-			a.historyMu.Lock()
-			a.commandHistory = append([]string(nil), history...)
-			a.historyIndex = -1
-			a.historyMu.Unlock()
+			mu := a.state.GetHistoryMutex()
+			mu.Lock()
+			defer mu.Unlock()
+			a.state.SetCommandHistory(append([]string(nil), history...))
+			a.state.SetHistoryIndex(-1)
 			return
 		}
 	}
 }
 
 // saveHistoryToConfig saves command history to the configuration
+// Caller must hold state.GetHistoryMutex() lock.
 func (a *Agent) saveHistoryToConfig() {
 	if a.configManager == nil {
 		return
@@ -154,12 +171,15 @@ func (a *Agent) saveHistoryToConfig() {
 		}
 
 		pathKey := a.historyPathKey()
-		if len(a.commandHistory) == 0 {
+		history := a.state.GetCommandHistory()
+		historyIndex := a.state.GetHistoryIndex()
+
+		if len(history) == 0 {
 			delete(config.CommandHistoryByPath, pathKey)
 			delete(config.HistoryIndexByPath, pathKey)
 		} else {
-			config.CommandHistoryByPath[pathKey] = append([]string(nil), a.commandHistory...)
-			config.HistoryIndexByPath[pathKey] = a.historyIndex
+			config.CommandHistoryByPath[pathKey] = append([]string(nil), history...)
+			config.HistoryIndexByPath[pathKey] = historyIndex
 		}
 		return nil
 	}); err != nil && a.debug {

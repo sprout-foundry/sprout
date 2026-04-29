@@ -17,6 +17,7 @@ import (
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
+	a.initSubManagers()
 	handler := NewConversationHandler(a)
 	return handler.ProcessQuery(userQuery)
 }
@@ -44,12 +45,12 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 	}()
 
 	// Load previous state if available
-	if a.previousSummary != "" {
+	if a.state.GetPreviousSummary() != "" {
 		// Inject the summary as a one-shot system supplement so it is attributed to
 		// the system (not the user) and does not consume the user input budget.
 		a.setPendingSystemSupplement(fmt.Sprintf(
 			"## Context From Previous Session\n\n%s\n\nNote: The user cannot see the previous session's responses. Build upon that work but present your response as if it's the first time addressing this topic.",
-			a.previousSummary))
+			a.state.GetPreviousSummary()))
 	}
 
 	// Process the user's actual query, with or without previous context.
@@ -185,18 +186,18 @@ func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) 
 // ClearConversationHistory clears the conversation history
 func (a *Agent) ClearConversationHistory() {
 	// Keep messages empty; system prompt is added during prepareMessages
-	a.messages = []api.Message{}
+	a.state.SetMessages([]api.Message{})
 	a.clearTurnCheckpoints()
 	a.currentIteration = 0
-	a.previousSummary = ""
+	a.state.SetPreviousSummary("")
 
 	a.debugLog("[clean] Conversation history cleared\n")
 }
 
 // SetConversationOptimization enables or disables conversation optimization
 func (a *Agent) SetConversationOptimization(enabled bool) {
-	if a.optimizer != nil {
-		a.optimizer.SetEnabled(enabled)
+	if a.state.GetOptimizer() != nil {
+		a.state.GetOptimizer().SetEnabled(enabled)
 		if enabled {
 			a.debugLog("[*] Conversation optimization enabled\n")
 		} else {
@@ -207,8 +208,8 @@ func (a *Agent) SetConversationOptimization(enabled bool) {
 
 // GetOptimizationStats returns optimization statistics
 func (a *Agent) GetOptimizationStats() map[string]interface{} {
-	if a.optimizer != nil {
-		return a.optimizer.GetOptimizationStats()
+	if a.state.GetOptimizer() != nil {
+		return a.state.GetOptimizer().GetOptimizationStats()
 	}
 	return map[string]interface{}{
 		"enabled": false,

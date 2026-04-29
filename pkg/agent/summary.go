@@ -46,7 +46,7 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Println("\n[chart] Conversation Summary")
 	fmt.Println("══════════════════════════════")
 
-	metrics := computeConversationSummaryMetrics(a.messages)
+	metrics := computeConversationSummaryMetrics(a.state.GetMessages())
 
 	// Conversation metrics
 	fmt.Printf("[~] Iterations:      %d\n", a.currentIteration)
@@ -54,18 +54,18 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Printf("[bot] Assistant msgs:   %d\n", metrics.assistantMessages)
 	fmt.Printf("[cfg] Tool calls:      %d\n", metrics.toolCalls)
 	fmt.Printf("[tools] Tool results:    %d\n", metrics.toolMessages)
-	fmt.Printf("[msg] Total messages:   %d\n", len(a.messages))
+	fmt.Printf("[msg] Total messages:   %d\n", len(a.state.GetMessages()))
 	fmt.Println()
 
 	// Calculate processed tokens (excluding cached ones)
-	processedPromptTokens := a.promptTokens - a.cachedTokens
+	processedPromptTokens := a.state.GetPromptTokens() - a.state.GetCachedTokens()
 	if processedPromptTokens < 0 {
 		processedPromptTokens = 0
 	}
-	processedTokens := processedPromptTokens + a.completionTokens
+	processedTokens := processedPromptTokens + a.state.GetCompletionTokens()
 
 	// Verify consistency: total - cached should approximately equal prompt-processed + completion
-	expectedProcessed := a.totalTokens - a.cachedTokens
+	expectedProcessed := a.state.GetTotalTokens() - a.state.GetCachedTokens()
 	if expectedProcessed != processedTokens {
 		// Log discrepancy for debugging (only in debug mode)
 		a.debugLog("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
@@ -75,37 +75,37 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Println("[num] Token Usage")
 	fmt.Println("──────────────────────────────")
 	estimateLabel := ""
-	if a.estimatedTokenResponses > 0 {
+	if a.state.GetEstimatedTokenResponses() > 0 {
 		estimateLabel = " (estimated)"
 	}
-	fmt.Printf("[pkg] Total%s:            %s\n", estimateLabel, a.formatTokenCount(a.totalTokens))
+	fmt.Printf("[pkg] Total%s:            %s\n", estimateLabel, a.formatTokenCount(a.state.GetTotalTokens()))
 	fmt.Printf("[edit] Processed%s:        %s (%d prompt + %d completion)\n", estimateLabel,
-		a.formatTokenCount(processedTokens), processedPromptTokens, a.completionTokens)
+		a.formatTokenCount(processedTokens), processedPromptTokens, a.state.GetCompletionTokens())
 
 	// Context window information
-	if a.maxContextTokens > 0 {
-		contextUsage := float64(a.currentContextTokens) / float64(a.maxContextTokens) * 100
+	if a.state.GetMaxContextTokens() > 0 {
+		contextUsage := float64(a.state.GetCurrentContextTokens()) / float64(a.state.GetMaxContextTokens()) * 100
 		fmt.Printf("[win] Context window:     %s/%s (%.1f%% used)\n",
-			a.formatTokenCount(a.currentContextTokens),
-			a.formatTokenCount(a.maxContextTokens),
+			a.formatTokenCount(a.state.GetCurrentContextTokens()),
+			a.formatTokenCount(a.state.GetMaxContextTokens()),
 			contextUsage)
 	} else {
-		fmt.Printf("[win] Context window:     %s (limit unavailable)\n", a.formatTokenCount(a.currentContextTokens))
+		fmt.Printf("[win] Context window:     %s (limit unavailable)\n", a.formatTokenCount(a.state.GetCurrentContextTokens()))
 	}
 
-	if a.estimatedTokenResponses > 0 {
-		fmt.Printf("[info] Token usage includes estimates for %d response(s) where provider usage was unavailable.\n", a.estimatedTokenResponses)
-	} else if a.totalTokens == 0 && a.currentContextTokens > 0 {
+	if a.state.GetEstimatedTokenResponses() > 0 {
+		fmt.Printf("[info] Token usage includes estimates for %d response(s) where provider usage was unavailable.\n", a.state.GetEstimatedTokenResponses())
+	} else if a.state.GetTotalTokens() == 0 && a.state.GetCurrentContextTokens() > 0 {
 		fmt.Println("[info] Token usage from provider was unavailable for this run.")
 	}
 
-	if a.cachedTokens > 0 {
+	if a.state.GetCachedTokens() > 0 {
 		efficiency := 0.0
-		if a.totalTokens > 0 {
-			efficiency = float64(a.cachedTokens) / float64(a.totalTokens) * 100
+		if a.state.GetTotalTokens() > 0 {
+			efficiency = float64(a.state.GetCachedTokens()) / float64(a.state.GetTotalTokens()) * 100
 		}
-		fmt.Printf("[recycle] Cached reused:     %s\n", a.formatTokenCount(a.cachedTokens))
-		fmt.Printf("$ Cost savings:       $%.6f\n", a.cachedCostSavings)
+		fmt.Printf("[recycle] Cached reused:     %s\n", a.formatTokenCount(a.state.GetCachedTokens()))
+		fmt.Printf("$ Cost savings:       $%.6f\n", a.state.GetCachedCostSavings())
 		fmt.Printf("[up] Efficiency:        %.1f%% tokens cached\n", efficiency)
 
 		// Add efficiency rating
@@ -124,11 +124,11 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	}
 
 	fmt.Println()
-	fmt.Printf("$ Total cost:        $%.6f\n", a.totalCost)
+	fmt.Printf("$ Total cost:        $%.6f\n", a.state.GetTotalCost())
 
 	// Add cost per iteration
 	if a.currentIteration > 0 {
-		costPerIteration := a.totalCost / float64(a.currentIteration)
+		costPerIteration := a.state.GetTotalCost() / float64(a.currentIteration)
 		fmt.Printf("[list] Cost per iteration: $%.6f\n", costPerIteration)
 	}
 
@@ -138,32 +138,32 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 
 // PrintConciseSummary displays a single line with essential token and cost information
 func (a *Agent) PrintConciseSummary() {
-	processedPromptTokens := a.promptTokens - a.cachedTokens
+	processedPromptTokens := a.state.GetPromptTokens() - a.state.GetCachedTokens()
 	if processedPromptTokens < 0 {
 		processedPromptTokens = 0
 	}
-	processedTokens := processedPromptTokens + a.completionTokens
+	processedTokens := processedPromptTokens + a.state.GetCompletionTokens()
 
 	// Verify consistency: total - cached should approximately equal prompt-processed + completion
-	expectedProcessed := a.totalTokens - a.cachedTokens
+	expectedProcessed := a.state.GetTotalTokens() - a.state.GetCachedTokens()
 	if expectedProcessed != processedTokens {
 		a.debugLog("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
 	}
 
-	costStr := fmt.Sprintf("$%.6f", a.totalCost)
+	costStr := fmt.Sprintf("$%.6f", a.state.GetTotalCost())
 	fmt.Printf("\n$ Session: %s total (%s processed + %s cached) | %s\n",
-		a.formatTokenCount(a.totalTokens),
+		a.formatTokenCount(a.state.GetTotalTokens()),
 		a.formatTokenCount(processedTokens),
-		a.formatTokenCount(a.cachedTokens),
+		a.formatTokenCount(a.state.GetCachedTokens()),
 		costStr)
 
 	// Output machine-parseable metrics for parent agent extraction
 	fmt.Printf("SUBAGENT_METRICS: total_tokens=%d prompt_tokens=%d completion_tokens=%d total_cost=%.6f cached_tokens=%d processed_prompt_tokens=%d processed_tokens=%d\n",
-		a.totalTokens,
-		a.promptTokens,
-		a.completionTokens,
-		a.totalCost,
-		a.cachedTokens,
+		a.state.GetTotalTokens(),
+		a.state.GetPromptTokens(),
+		a.state.GetCompletionTokens(),
+		a.state.GetTotalCost(),
+		a.state.GetCachedTokens(),
 		processedPromptTokens,
 		processedTokens)
 }
@@ -193,10 +193,10 @@ func (a *Agent) PrintCompactProgress() {
 	// Print the compact progress indicator with total tokens and cost
 	fmt.Printf("[%d:(%s/%s) | %s | %s] ",
 		a.currentIteration,
-		formatTokensCompact(a.currentContextTokens),
-		formatTokensCompact(a.maxContextTokens),
-		formatTokensCompact(a.totalTokens),
-		formatCostCompact(a.totalCost))
+		formatTokensCompact(a.state.GetCurrentContextTokens()),
+		formatTokensCompact(a.state.GetMaxContextTokens()),
+		formatTokensCompact(a.state.GetTotalTokens()),
+		formatCostCompact(a.state.GetTotalCost()))
 }
 
 // calculateCachedCost calculates the cost savings from cached tokens
@@ -309,8 +309,8 @@ func (a *Agent) GenerateConversationSummary() string {
 	}
 
 	// Add key files explored
-	if a.optimizer != nil {
-		stats := a.optimizer.GetOptimizationStats()
+	if a.state.GetOptimizer() != nil {
+		stats := a.state.GetOptimizer().GetOptimizationStats()
 		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
 			summary.WriteString("[dir/] KEY FILES EXPLORED:\n")
 			summary.WriteString("──────────────────────────────\n")
@@ -325,11 +325,11 @@ func (a *Agent) GenerateConversationSummary() string {
 	summary.WriteString("[up] CONVERSATION METRICS:\n")
 	summary.WriteString("──────────────────────────────\n")
 	summary.WriteString(fmt.Sprintf("• Iterations: %d\n", a.currentIteration))
-	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.totalCost))
-	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.totalTokens)))
+	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.state.GetTotalCost()))
+	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.state.GetTotalTokens())))
 
-	if a.cachedTokens > 0 {
-		efficiency := float64(a.cachedTokens) / float64(a.totalTokens) * 100
+	if a.state.GetCachedTokens() > 0 {
+		efficiency := float64(a.state.GetCachedTokens()) / float64(a.state.GetTotalTokens()) * 100
 		summary.WriteString(fmt.Sprintf("• Efficiency: %.1f%% tokens cached\n", efficiency))
 	}
 
@@ -393,8 +393,8 @@ func (a *Agent) GenerateCompactSummary() string {
 	}
 
 	// Add key files touched (limited list)
-	if a.optimizer != nil {
-		stats := a.optimizer.GetOptimizationStats()
+	if a.state.GetOptimizer() != nil {
+		stats := a.state.GetOptimizer().GetOptimizationStats()
 		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
 			summary.WriteString("[doc] KEY FILES:\n")
 			summary.WriteString("─────────────────────────────\n")
@@ -419,9 +419,9 @@ func (a *Agent) GenerateCompactSummary() string {
 	// Add concise session metrics
 	summary.WriteString("[chart] SESSION METRICS:\n")
 	summary.WriteString("─────────────────────────────\n")
-	summary.WriteString(fmt.Sprintf("• Cost: $%.4f", a.totalCost))
-	if a.cachedTokens > 0 {
-		efficiency := float64(a.cachedTokens) / float64(a.totalTokens) * 100
+	summary.WriteString(fmt.Sprintf("• Cost: $%.4f", a.state.GetTotalCost()))
+	if a.state.GetCachedTokens() > 0 {
+		efficiency := float64(a.state.GetCachedTokens()) / float64(a.state.GetTotalTokens()) * 100
 		summary.WriteString(fmt.Sprintf(" (%.0f%% cached)", efficiency))
 	}
 	summary.WriteString("\n")

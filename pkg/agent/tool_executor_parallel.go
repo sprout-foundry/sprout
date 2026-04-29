@@ -89,8 +89,8 @@ func parallelWorkerLimit(toolName string, batchSize int) int {
 func (te *ToolExecutor) executeParallel(toolCalls []api.ToolCall) []api.Message {
 	// Flush any buffered streaming content before parallel tool execution
 	// This ensures narrative text appears before tool calls for better flow
-	if te.agent.flushCallback != nil {
-		te.agent.flushCallback()
+	if te.agent.output.GetFlushCallback() != nil {
+		te.agent.output.GetFlushCallback()()
 	}
 
 	toolName := te.parallelBatchToolName(toolCalls)

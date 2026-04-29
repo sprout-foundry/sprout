@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } from 'lucide-react';
-import type { ApiService } from '../services/api';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, firstLine } from '../utils/format';
 import { getStatusInfo } from '../utils/git';
@@ -9,7 +8,8 @@ import { useLog } from '../utils/log';
 import './CommitDetailPanel.css';
 
 interface CommitDetailPanelProps {
-  apiService: ApiService;
+  onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
+  onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{ message: string; hash: string; path: string; diff: string }>;
   commit: GitCommitSummary;
   onBack: () => void;
   openWorkspaceBuffer: (options: {
@@ -25,7 +25,8 @@ interface CommitDetailPanelProps {
 }
 
 function CommitDetailPanel({
-  apiService,
+  onLoadCommitDetail,
+  onLoadCommitFileDiff,
   commit,
   onBack,
   openWorkspaceBuffer,
@@ -39,8 +40,7 @@ function CommitDetailPanel({
       setIsLoading(true);
       setError(null);
 
-      apiService
-        .getGitCommitDetail(commit.hash)
+      onLoadCommitDetail(commit.hash)
         .then((data) => {
           if (!cancelledRef?.current) {
             setDetail(data);
@@ -57,7 +57,7 @@ function CommitDetailPanel({
           }
         });
     },
-    [apiService, commit.hash],
+    [onLoadCommitDetail, commit.hash],
   );
 
   // Fetch commit detail on mount
@@ -78,7 +78,7 @@ function CommitDetailPanel({
   const handleFileClick = useCallback(
     async (filePath: string) => {
       try {
-        const result = await apiService.getGitCommitFileDiff(commit.hash, filePath);
+        const result = await onLoadCommitFileDiff(commit.hash, filePath);
         if (!result?.diff) {
           log.error(`No diff content returned for file: ${filePath}`, { title: 'Git Error' });
           return;
@@ -99,7 +99,7 @@ function CommitDetailPanel({
         log.error(`Failed to load file diff: ${err instanceof Error ? err.message : 'Unknown error'}`, { title: 'Git Error' });
       }
     },
-    [apiService, commit.hash, commit.short_hash, openWorkspaceBuffer, log],
+    [commit.hash, commit.short_hash, onLoadCommitFileDiff, openWorkspaceBuffer, log],
   );
 
   const handleViewAllDiffs = useCallback(() => {

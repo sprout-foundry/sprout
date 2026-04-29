@@ -12,7 +12,7 @@ const (
 
 // GetTotalTokens returns the total tokens used across all requests
 func (a *Agent) GetTotalTokens() int {
-	return a.totalTokens
+	return a.state.GetTotalTokens()
 }
 
 // GetCurrentIteration returns the current iteration number
@@ -23,7 +23,7 @@ func (a *Agent) GetCurrentIteration() int {
 // GetCurrentContextTokens returns the current context token count
 func (a *Agent) GetCurrentContextTokens() int {
 	// Return the current request context tokens, not cumulative
-	return a.currentContextTokens
+	return a.state.GetCurrentContextTokens()
 }
 
 // GetMaxContextTokens returns the maximum context tokens for the current model
@@ -57,17 +57,17 @@ func (a *Agent) GetLastTPS() float64 {
 
 // GetPromptTokens returns the total prompt tokens used
 func (a *Agent) GetPromptTokens() int {
-	return a.promptTokens
+	return a.state.GetPromptTokens()
 }
 
 // TrackMetricsFromResponse updates agent metrics from API response usage data
 func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens int) {
-	a.llmCallCount++
-	a.totalTokens += totalTokens
-	a.promptTokens += promptTokens
-	a.completionTokens += completionTokens
-	a.totalCost += estimatedCost
-	a.cachedTokens += cachedTokens
+	a.state.IncrementLLMCallCount()
+	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
+	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
+	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + completionTokens)
+	a.state.AddCost(estimatedCost)
+	a.state.SetCachedTokens(a.state.GetCachedTokens() + cachedTokens)
 
 	// Calculate cost savings from cached tokens
 	// Assuming cached tokens save approximately 90% of the cost (since they're reused)
@@ -77,48 +77,48 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		if totalTokens > 0 && estimatedCost > 0 {
 			avgCostPerToken = estimatedCost / float64(totalTokens)
 		}
-		a.cachedCostSavings += float64(cachedTokens) * avgCostPerToken * 0.9
+		a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + float64(cachedTokens)*avgCostPerToken*0.9)
 	}
 
 	// Trigger stats update callback if registered
 	if a.statsUpdateCallback != nil {
-		a.statsUpdateCallback(a.totalTokens, a.totalCost)
+		a.statsUpdateCallback(a.state.GetTotalTokens(), a.state.GetTotalCost())
 	}
 }
 
 // GetCompletionTokens returns the total completion tokens used
 func (a *Agent) GetCompletionTokens() int {
-	return a.completionTokens
+	return a.state.GetCompletionTokens()
 }
 
 // GetLLMCallCount returns the total number of LLM API calls made
 func (a *Agent) GetLLMCallCount() int {
-	return a.llmCallCount
+	return a.state.GetLLMCallCount()
 }
 
 // GetEstimatedTokenResponses returns how many responses used estimated token usage.
 func (a *Agent) GetEstimatedTokenResponses() int {
-	return a.estimatedTokenResponses
+	return a.state.GetEstimatedTokenResponses()
 }
 
 // MarkEstimatedTokenUsageResponse records that token usage for one response was estimated.
 func (a *Agent) MarkEstimatedTokenUsageResponse() {
-	a.estimatedTokenResponses++
+	a.state.SetEstimatedTokenResponses(a.state.GetEstimatedTokenResponses() + 1)
 }
 
 // GetCachedTokens returns the total cached/reused tokens
 func (a *Agent) GetCachedTokens() int {
-	return a.cachedTokens
+	return a.state.GetCachedTokens()
 }
 
 // GetCachedCostSavings returns the cost savings from cached tokens
 func (a *Agent) GetCachedCostSavings() float64 {
-	return a.cachedCostSavings
+	return a.state.GetCachedCostSavings()
 }
 
 // GetContextWarningIssued returns whether a context warning has been issued
 func (a *Agent) GetContextWarningIssued() bool {
-	return a.contextWarningIssued
+	return a.state.IsContextWarningIssued()
 }
 
 // GetMaxIterations returns the maximum iterations allowed (0 means unlimited)
@@ -127,7 +127,7 @@ func (a *Agent) GetMaxIterations() int {
 }
 
 func (a *Agent) GetLastRunTerminationReason() string {
-	return a.lastRunTerminationReason
+	return a.state.GetLastRunTerminationReason()
 }
 
 // IsDebugMode returns whether debug mode is enabled

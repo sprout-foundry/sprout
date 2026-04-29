@@ -69,12 +69,16 @@ func (ch *ConversationHandler) handleFinishReason(finishReason, content string) 
 }
 
 func (ch *ConversationHandler) followsRecentToolResults() bool {
-	if ch == nil || ch.agent == nil || len(ch.agent.messages) == 0 {
+	if ch == nil || ch.agent == nil {
+		return false
+	}
+	messages := ch.agent.state.GetMessages()
+	if len(messages) == 0 {
 		return false
 	}
 
-	i := len(ch.agent.messages) - 1
-	if ch.agent.messages[i].Role == "assistant" {
+	i := len(messages) - 1
+	if messages[i].Role == "assistant" {
 		i--
 	}
 	if i < 0 {
@@ -82,7 +86,7 @@ func (ch *ConversationHandler) followsRecentToolResults() bool {
 	}
 
 	foundTool := false
-	for ; i >= 0 && ch.agent.messages[i].Role == "tool"; i-- {
+	for ; i >= 0 && messages[i].Role == "tool"; i-- {
 		foundTool = true
 	}
 	return foundTool

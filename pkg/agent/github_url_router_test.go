@@ -101,11 +101,14 @@ func (f *routerFakeMCPServer) GetPrompt(_ context.Context, _ string, _ map[strin
 
 // testAgent creates a minimal Agent for testing with the given MCPManager.
 func testAgent(mgr mcp.MCPManager) *Agent {
-	return &Agent{
-		mcpManager:  mgr,
+	agent := &Agent{
 		interruptCtx: context.Background(),
-		outputMutex:  &sync.Mutex{},
+		mcpSub:       NewAgentMCPManager(),
+		output:       NewAgentOutputManager(),
 	}
+	agent.mcpSub.SetManager(mgr)
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	return agent
 }
 
 // --- tryRouteGitHubToMCP tests ---
@@ -198,11 +201,11 @@ func TestTryRouteGitHubToMCP_IssueURL(t *testing.T) {
 	if mgr.lastTool != "get_issue" {
 		t.Errorf("expected tool 'get_issue', got %q", mgr.lastTool)
 	}
-	if mgr.lastArgs["owner"] != "alantheprice" {
-		t.Errorf("expected owner 'alantheprice', got %v", mgr.lastArgs["owner"])
+	if mgr.lastArgs["owner"] != "sprout-foundry" {
+		t.Errorf("expected owner 'sprout-foundry', got %v", mgr.lastArgs["owner"])
 	}
-	if mgr.lastArgs["repo"] != "ledit" {
-		t.Errorf("expected repo 'ledit', got %v", mgr.lastArgs["repo"])
+	if mgr.lastArgs["repo"] != "sprout" {
+		t.Errorf("expected repo 'sprout', got %v", mgr.lastArgs["repo"])
 	}
 	if mgr.lastArgs["issue_number"] != float64(42) {
 		t.Errorf("expected issue_number 42.0, got %v", mgr.lastArgs["issue_number"])
@@ -237,7 +240,7 @@ func TestTryRouteGitHubToMCP_PullRequestURL(t *testing.T) {
 
 func TestTryRouteGitHubToMCP_RepoURL(t *testing.T) {
 	mgr := newGitHubRouterMCPManager().withGitHubServer(true).withCallResult(&mcp.MCPToolCallResult{
-		Content: []mcp.MCPContent{{Type: "text", Text: "Repository: ledit"}},
+		Content: []mcp.MCPContent{{Type: "text", Text: "Repository: sprout"}},
 		IsError: false,
 	})
 	a := testAgent(mgr)
@@ -249,14 +252,14 @@ func TestTryRouteGitHubToMCP_RepoURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if content != "Repository: ledit" {
+	if content != "Repository: sprout" {
 		t.Errorf("unexpected content: %q", content)
 	}
 
 	if mgr.lastTool != "search_repositories" {
 		t.Errorf("expected tool 'search_repositories', got %q", mgr.lastTool)
 	}
-	expectedQ := "repo:alantheprice/ledit"
+	expectedQ := "repo:sprout-foundry/sprout"
 	if mgr.lastArgs["q"] != expectedQ {
 		t.Errorf("expected q %q, got %v", expectedQ, mgr.lastArgs["q"])
 	}

@@ -39,14 +39,18 @@ func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn Tur
 	}
 
 	// Update the assistant message with cleaned content and parsed tool calls
-	if len(ch.agent.messages) > 0 {
-		ch.agent.messages[len(ch.agent.messages)-1].Content = fallbackResult.CleanedContent
-		ch.agent.messages[len(ch.agent.messages)-1].ToolCalls = fallbackResult.ToolCalls
+	messages := ch.agent.state.GetMessages()
+	if len(messages) > 0 {
+		messages[len(messages)-1].Content = fallbackResult.CleanedContent
+		messages[len(messages)-1].ToolCalls = fallbackResult.ToolCalls
+		ch.agent.state.SetMessages(messages)
 	}
 
 	// Execute the parsed tool calls
 	toolResults := ch.toolExecutor.ExecuteTools(fallbackResult.ToolCalls)
-	ch.agent.messages = append(ch.agent.messages, toolResults...)
+	for _, result := range toolResults {
+		ch.agent.state.AddMessage(result)
+	}
 	ch.agent.debugLog("[ok] Executed %d fallback-parsed tool calls\n", len(toolResults))
 
 	// The model made concrete progress by executing tools via fallback, so reset

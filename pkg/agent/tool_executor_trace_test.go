@@ -238,9 +238,9 @@ func TestToolIndex(t *testing.T) {
 func TestExecuteToolsResetsToolIndex(t *testing.T) {
 	// Create a minimal agent with required fields
 	agent := &Agent{
+		state:            NewAgentStateManager(false),
 		currentIteration: 1,
 		interruptCtx:     context.Background(),
-		circuitBreaker:   &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)},
 	}
 
 	te := NewToolExecutor(agent)

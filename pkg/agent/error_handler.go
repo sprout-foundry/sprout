@@ -28,7 +28,7 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	toolsExecuted := eh.countToolsExecuted(messages)
 
 	eh.agent.debugLog("[WARN] API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
-		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
+		toolsExecuted, eh.formatTokenCount(eh.agent.state.GetTotalTokens()))
 
 	// Check if this is a rate limit error - these should never be sent back to the model
 	errorMsg := apiErr.Error()
@@ -50,7 +50,7 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	if !eh.agent.IsInteractiveMode() || ((os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "") && !isRunningUnderTest()) {
 		if toolsExecuted > 0 {
 			return "", fmt.Errorf("non-interactive: API request failed after %d tools executed (progress: %d tools, %s tokens): %w",
-				toolsExecuted, toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens), apiErr)
+				toolsExecuted, toolsExecuted, eh.formatTokenCount(eh.agent.state.GetTotalTokens()), apiErr)
 		}
 		return "", fmt.Errorf("non-interactive: API request failed after %d tools executed: %w",
 			toolsExecuted, apiErr)
@@ -64,7 +64,7 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecuted int) string {
 	// Include the debug message that's currently only in logs
 	response := fmt.Sprintf("[WARN] API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n\n",
-		toolsExecuted, eh.formatTokenCount(eh.agent.totalTokens))
+		toolsExecuted, eh.formatTokenCount(eh.agent.state.GetTotalTokens()))
 
 	response += "[!!] **API Request Failed - Conversation Preserved**\n\n"
 
@@ -74,7 +74,7 @@ func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecute
 	// Add progress information
 	response += "**Progress So Far:**\n"
 	response += fmt.Sprintf("- Tools executed: %d\n", toolsExecuted)
-	response += fmt.Sprintf("- Total tokens used: %s\n", eh.formatTokenCount(eh.agent.totalTokens))
+	response += fmt.Sprintf("- Total tokens used: %s\n", eh.formatTokenCount(eh.agent.state.GetTotalTokens()))
 	if eh.agent.maxIterations == 0 {
 		response += fmt.Sprintf("- Current iteration: %d (unlimited)\n\n", eh.agent.currentIteration)
 	} else {
@@ -209,15 +209,15 @@ func (eh *ErrorHandler) isRateLimitError(err error) bool {
 func (eh *ErrorHandler) logRateLimit(errorMsg string) {
 	logger := utils.GetLogger(false)
 	logger.LogProcessStep(fmt.Sprintf("[!!] RATE LIMIT HIT: %s | Total tokens: %s | Provider: %s | Model: %s",
-		errorMsg, eh.formatTokenCount(eh.agent.totalTokens), eh.agent.GetProvider(), eh.agent.GetModel()))
+		errorMsg, eh.formatTokenCount(eh.agent.state.GetTotalTokens()), eh.agent.GetProvider(), eh.agent.GetModel()))
 
 	if rl := utils.GetRunLogger(); rl != nil {
 		rl.LogEvent("rate_limit_hit", map[string]any{
 			"provider":       eh.agent.GetProvider(),
 			"model":          eh.agent.GetModel(),
-			"total_tokens":   eh.agent.totalTokens,
+			"total_tokens":   eh.agent.state.GetTotalTokens(),
 			"error_message":  errorMsg,
-			"tools_executed": eh.countToolsExecuted(eh.agent.messages),
+			"tools_executed": eh.countToolsExecuted(eh.agent.state.GetMessages()),
 			"timestamp":      time.Now().Format(time.RFC3339),
 		})
 	}

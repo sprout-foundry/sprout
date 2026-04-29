@@ -34,7 +34,7 @@ func newHistoryTestAgent(t *testing.T, workDir string) *Agent {
 		t.Fatalf("failed to initialize config manager: %v", err)
 	}
 
-	return &Agent{configManager: manager}
+	return &Agent{configManager: manager, state: NewAgentStateManager(false)}
 }
 
 func TestLoadHistoryFromConfig_UsesPathScopedHistory(t *testing.T) {
@@ -59,11 +59,11 @@ func TestLoadHistoryFromConfig_UsesPathScopedHistory(t *testing.T) {
 
 	agent.loadHistoryFromConfig()
 
-	if len(agent.commandHistory) != 2 || agent.commandHistory[0] != "status" || agent.commandHistory[1] != "help" {
-		t.Fatalf("expected path-scoped command history, got %#v", agent.commandHistory)
+	if len(agent.state.GetCommandHistory()) != 2 || agent.state.GetCommandHistory()[0] != "status" || agent.state.GetCommandHistory()[1] != "help" {
+		t.Fatalf("expected path-scoped command history, got %#v", agent.state.GetCommandHistory())
 	}
-	if agent.historyIndex != -1 {
-		t.Fatalf("expected history index reset to -1, got %d", agent.historyIndex)
+	if agent.state.GetHistoryIndex() != -1 {
+		t.Fatalf("expected history index reset to -1, got %d", agent.state.GetHistoryIndex())
 	}
 }
 
@@ -74,8 +74,8 @@ func TestSaveHistoryToConfig_WritesPathScopedHistory(t *testing.T) {
 	}
 
 	agent := newHistoryTestAgent(t, workDir)
-	agent.commandHistory = []string{"cmd-a", "cmd-b"}
-	agent.historyIndex = 0
+	agent.state.SetCommandHistory([]string{"cmd-a", "cmd-b"})
+	agent.state.SetHistoryIndex(0)
 
 	agent.saveHistoryToConfig()
 

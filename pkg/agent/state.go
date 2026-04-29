@@ -17,19 +17,19 @@ func (a *Agent) ExportState() ([]byte, error) {
 	taskActions := a.GetTaskActions()
 
 	state := AgentState{
-		Messages:                a.messages,
+		Messages:                a.state.GetMessages(),
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
-		PreviousSummary:         a.previousSummary,
+		PreviousSummary:         a.state.GetPreviousSummary(),
 		CompactSummary:          compactSummary, // Store 5K-limited summary for continuity
 		TaskActions:             taskActions,
-		SessionID:               a.sessionID,
-		TotalTokens:             a.totalTokens,
-		TotalCost:               a.totalCost,
-		PromptTokens:            a.promptTokens,
-		CompletionTokens:        a.completionTokens,
-		EstimatedTokenResponses: a.estimatedTokenResponses,
-		CachedTokens:            a.cachedTokens,
-		CachedCostSavings:       a.cachedCostSavings,
+		SessionID:               a.state.GetSessionID(),
+		TotalTokens:             a.state.GetTotalTokens(),
+		TotalCost:               a.state.GetTotalCost(),
+		PromptTokens:            a.state.GetPromptTokens(),
+		CompletionTokens:        a.state.GetCompletionTokens(),
+		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
+		CachedTokens:            a.state.GetCachedTokens(),
+		CachedCostSavings:       a.state.GetCachedCostSavings(),
 	}
 	return json.Marshal(state)
 }
@@ -40,24 +40,24 @@ func (a *Agent) ImportState(data []byte) error {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return fmt.Errorf("failed to import state: %w", err)
 	}
-	a.messages = state.Messages
+	a.state.SetMessages(state.Messages)
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	// Prefer compact summary for continuity, fallback to legacy summary
 	if state.CompactSummary != "" {
-		a.previousSummary = state.CompactSummary
+		a.state.SetPreviousSummary(state.CompactSummary)
 	} else {
-		a.previousSummary = state.PreviousSummary
+		a.state.SetPreviousSummary(state.PreviousSummary)
 	}
 	a.replaceTaskActions(state.TaskActions)
-	a.sessionID = state.SessionID
+	a.state.SetSessionID(state.SessionID)
 	// Restore metrics
-	a.totalTokens = state.TotalTokens
-	a.totalCost = state.TotalCost
-	a.promptTokens = state.PromptTokens
-	a.completionTokens = state.CompletionTokens
-	a.estimatedTokenResponses = state.EstimatedTokenResponses
-	a.cachedTokens = state.CachedTokens
-	a.cachedCostSavings = state.CachedCostSavings
+	a.state.SetTotalTokens(state.TotalTokens)
+	a.state.SetTotalCost(state.TotalCost)
+	a.state.SetPromptTokens(state.PromptTokens)
+	a.state.SetCompletionTokens(state.CompletionTokens)
+	a.state.SetEstimatedTokenResponses(state.EstimatedTokenResponses)
+	a.state.SetCachedTokens(state.CachedTokens)
+	a.state.SetCachedCostSavings(state.CachedCostSavings)
 	return nil
 }
 
@@ -65,9 +65,10 @@ func (a *Agent) replaceTaskActions(actions []TaskAction) {
 	cloned := make([]TaskAction, len(actions))
 	copy(cloned, actions)
 
-	a.taskActionsMu.Lock()
-	a.taskActions = cloned
-	a.taskActionsMu.Unlock()
+	taskActionsMu := a.state.GetTaskActionsMutex()
+	taskActionsMu.Lock()
+	a.state.SetTaskActions(cloned)
+	taskActionsMu.Unlock()
 }
 
 // SaveStateToFile saves agent state to a file
@@ -102,14 +103,14 @@ func (a *Agent) LoadSummaryFromFile(filename string) error {
 
 	// Only load the compact summary, not the full conversation state
 	if state.CompactSummary != "" {
-		a.previousSummary = state.CompactSummary
+		a.state.SetPreviousSummary(state.CompactSummary)
 		if a.debug {
 			a.debugLog("[doc] Loaded compact summary (%d chars)\n", len(state.CompactSummary))
 		}
 	} else {
 		// Fallback to legacy summary if compact summary not available
 		if state.PreviousSummary != "" {
-			a.previousSummary = state.PreviousSummary
+			a.state.SetPreviousSummary(state.PreviousSummary)
 			if a.debug {
 				a.debugLog("[doc] Loaded legacy summary (%d chars)\n", len(state.PreviousSummary))
 			}
@@ -139,13 +140,18 @@ func (a *Agent) SaveConversationSummary() error {
 
 // AddTaskAction records a completed task action for continuity
 func (a *Agent) AddTaskAction(actionType, description, details string) {
-	a.taskActionsMu.Lock()
-	a.taskActions = append(a.taskActions, TaskAction{
+	taskActionsMu := a.state.GetTaskActionsMutex()
+	taskActionsMu.Lock()
+	currentActions := a.state.GetTaskActions()
+	newActions := make([]TaskAction, len(currentActions)+1)
+	copy(newActions, currentActions)
+	newActions[len(newActions)-1] = TaskAction{
 		Type:        actionType,
 		Description: description,
 		Details:     details,
-	})
-	a.taskActionsMu.Unlock()
+	}
+	a.state.SetTaskActions(newActions)
+	taskActionsMu.Unlock()
 }
 
 // GenerateActionSummary creates a summary of completed actions for continuity
@@ -171,46 +177,51 @@ func (a *Agent) GenerateActionSummary() string {
 
 // SetPreviousSummary sets the summary of previous actions for continuity
 func (a *Agent) SetPreviousSummary(summary string) {
-	a.previousSummary = summary
+	a.state.SetPreviousSummary(summary)
 }
 
 // GetPreviousSummary returns the summary of previous actions
 func (a *Agent) GetPreviousSummary() string {
-	return a.previousSummary
+	return a.state.GetPreviousSummary()
 }
 
 // SetSessionID sets the session identifier for continuity
 func (a *Agent) SetSessionID(sessionID string) {
-	a.sessionID = sessionID
+	a.state.SetSessionID(sessionID)
 }
 
 // SetSessionName explicitly sets a custom name for the current session
 func (a *Agent) SetSessionName(name string) {
 	// Store custom name - will be used on next save
 	pattern := "[SESSION_NAME:]"
-	for i, msg := range a.messages {
+	messages := a.state.GetMessages()
+	for i, msg := range messages {
 		if strings.HasPrefix(msg.Content, pattern) {
-			a.messages[i].Content = pattern + name
+			messages[i].Content = pattern + name
+			a.state.SetMessages(messages)
 			return
 		}
 	}
 	a.shiftTurnCheckpoints(1)
-	a.messages = append([]api.Message{{Role: "system", Content: pattern + name}}, a.messages...)
+	a.state.AddMessage(api.Message{Role: "system", Content: pattern + name})
 }
 
 // GetSessionID returns the session identifier
 func (a *Agent) GetSessionID() string {
-	return a.sessionID
+	if a.state == nil {
+		return ""
+	}
+	return a.state.GetSessionID()
 }
 
 // autoSaveState automatically saves the current conversation state
 func (a *Agent) autoSaveState() {
 	// Generate session ID based on timestamp if not set
-	if a.sessionID == "" {
-		a.sessionID = fmt.Sprintf("session_%d", time.Now().Unix())
+	if a.state.GetSessionID() == "" {
+		a.state.SetSessionID(fmt.Sprintf("session_%d", time.Now().Unix()))
 	}
 
-	if err := a.SaveStateScoped(a.sessionID, a.currentWorkspaceRoot()); err != nil {
+	if err := a.SaveStateScoped(a.state.GetSessionID(), a.currentWorkspaceRoot()); err != nil {
 		if a.debug {
 			a.debugLog("[WARN] Failed to write state file for auto-save: %v\n", err)
 		}
@@ -218,14 +229,15 @@ func (a *Agent) autoSaveState() {
 	}
 
 	if a.debug {
-		a.debugLog("[save] Auto-saved scoped conversation state for session %s\n", a.sessionID)
+		a.debugLog("[save] Auto-saved scoped conversation state for session %s\n", a.state.GetSessionID())
 	}
 }
 
 // generateSessionName generates a readable session name from first user message
 func (a *Agent) generateSessionName() string {
 	// First check if a custom session name is set via SetSessionName
-	for _, msg := range a.messages {
+	messages := a.state.GetMessages()
+	for _, msg := range messages {
 		if msg.Role == "system" && strings.HasPrefix(msg.Content, "[SESSION_NAME:]") {
 			name := strings.TrimPrefix(msg.Content, "[SESSION_NAME:]")
 			if strings.TrimSpace(name) != "" {
@@ -234,7 +246,7 @@ func (a *Agent) generateSessionName() string {
 		}
 	}
 	// Otherwise derive from first user message
-	for _, msg := range a.messages {
+	for _, msg := range messages {
 		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
 			name := strings.TrimSpace(msg.Content)
 			name = strings.Join(strings.Fields(name), " ")

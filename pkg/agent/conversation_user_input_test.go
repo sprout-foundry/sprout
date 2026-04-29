@@ -85,9 +85,9 @@ func TestPrepareUserInputForModel_UseInteractiveLimitWhenInteractive(t *testing.
 	if !strings.Contains(got, "USER INPUT TRUNCATED FOR MODEL CONTEXT") {
 		t.Fatalf("expected truncation for input exceeding interactive limit")
 	}
-	// The returned content should mention LEDIT_INTERACTIVE_INPUT_MAX_CHARS
-	if !strings.Contains(got, "LEDIT_INTERACTIVE_INPUT_MAX_CHARS") {
-		t.Fatalf("expected truncation notice to mention LEDIT_INTERACTIVE_INPUT_MAX_CHARS")
+	// The returned content should mention SPROUT_INTERACTIVE_INPUT_MAX_CHARS
+	if !strings.Contains(got, "SPROUT_INTERACTIVE_INPUT_MAX_CHARS") {
+		t.Fatalf("expected truncation notice to mention SPROUT_INTERACTIVE_INPUT_MAX_CHARS")
 	}
 }
 

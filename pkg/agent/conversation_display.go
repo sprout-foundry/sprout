@@ -12,7 +12,7 @@ import (
 func (ch *ConversationHandler) displayIntermediateResponse(content string) {
 	content = strings.TrimSpace(content)
 	if len(content) > 0 {
-		if !ch.agent.streamingEnabled {
+		if ch.agent.output == nil || !ch.agent.output.IsStreamingEnabled() {
 			// Non-streaming mode: show thought indicator
 			ch.agent.PrintLine(fmt.Sprintf("[thought] %s", content))
 		}
@@ -23,9 +23,11 @@ func (ch *ConversationHandler) displayIntermediateResponse(content string) {
 
 // displayFinalResponse shows the final assistant response
 func (ch *ConversationHandler) displayFinalResponse(content string) {
-	if !ch.agent.streamingEnabled {
-		ch.agent.PrintLine(content)
+	if ch.agent.output != nil && ch.agent.output.IsStreamingEnabled() {
+		// Streaming already showed the response
+		return
 	}
+	ch.agent.PrintLine(content)
 }
 
 // displayUserFriendlyError shows contextual error messages to the user

@@ -63,17 +63,17 @@ func isSecretSensitiveTool(toolName string) bool {
 // SetElevationGatePrompter wires the agent's interactive UI into the elevation gate.
 // Call this after agent.ui is initialized (done automatically by SetUI).
 func (a *Agent) SetElevationGatePrompter() {
-	if a.elevationGate != nil {
-		a.elevationGate = security.NewElevationGate(&secretPrompterAdapter{agent: a})
+	if a.security.GetElevationGate() != nil {
+		a.security.SetElevationGate(security.NewElevationGate(&secretPrompterAdapter{agent: a}))
 	}
 }
 
 // GetElevationGate returns the agent's elevation gate for external use (e.g., commit flows).
 func (a *Agent) GetElevationGate() *security.ElevationGate {
-	return a.elevationGate
+	return a.security.GetElevationGate()
 }
 
 // GetOutputRedactor returns the agent's output redactor for external use.
 func (a *Agent) GetOutputRedactor() *security.OutputRedactor {
-	return a.outputRedactor
+	return a.security.GetOutputRedactor()
 }

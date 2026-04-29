@@ -482,12 +482,12 @@ func localFileExists(path string) bool {
 }
 
 func latestAttachedUserImage(a *Agent) (api.ImageData, bool) {
-	if a == nil {
+	if a == nil || a.state == nil {
 		return api.ImageData{}, false
 	}
 
-	for i := len(a.messages) - 1; i >= 0; i-- {
-		msg := a.messages[i]
+	for i := len(a.state.GetMessages()) - 1; i >= 0; i-- {
+		msg := a.state.GetMessages()[i]
 		if msg.Role != "user" || len(msg.Images) == 0 {
 			continue
 		}

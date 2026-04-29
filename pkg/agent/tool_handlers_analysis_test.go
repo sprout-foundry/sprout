@@ -13,17 +13,18 @@ func TestResolveVisionToolInputPathFallsBackToLatestAttachedUserImage(t *testing
 	t.Parallel()
 
 	agent := &Agent{
-		messages: []api.Message{
-			{
-				Role:    "user",
-				Content: "[image: pasted.png]",
-				Images: []api.ImageData{{
-					Base64: base64.StdEncoding.EncodeToString(validPNGBytesForAnalysisTest()),
-					Type:   "image/png",
-				}},
-			},
-		},
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{
+		{
+			Role:    "user",
+			Content: "[image: pasted.png]",
+			Images: []api.ImageData{{
+				Base64: base64.StdEncoding.EncodeToString(validPNGBytesForAnalysisTest()),
+				Type:   "image/png",
+			}},
+		},
+	})
 
 	resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(agent, "/tmp/paste_20260326_104639_068fa3.png")
 	if !usedFallback {

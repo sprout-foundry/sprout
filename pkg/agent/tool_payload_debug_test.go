@@ -95,8 +95,8 @@ func TestDebugToolPayload_DeepInfraOrchestratorIncludesAnalyzeUIScreenshot(t *te
 	capture := &captureToolsClient{}
 	agent.client = capture
 	agent.clientType = api.DeepInfraClientType
-	agent.activePersona = "orchestrator"
-	agent.messages = []api.Message{{Role: "user", Content: "test"}}
+	agent.state.SetActivePersona("orchestrator")
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "test"}})
 
 	handler := NewConversationHandler(agent)
 	_, err = handler.sendMessage()
@@ -132,8 +132,8 @@ func TestDebugToolPayload_DeepInfraCustomAllowlistExcludesAnalyzeUIScreenshot(t 
 	capture := &captureToolsClient{}
 	agent.client = capture
 	agent.clientType = api.DeepInfraClientType
-	agent.activePersona = "orchestrator"
-	agent.messages = []api.Message{{Role: "user", Content: "test"}}
+	agent.state.SetActivePersona("orchestrator")
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "test"}})
 
 	handler := NewConversationHandler(agent)
 	_, err = handler.sendMessage()

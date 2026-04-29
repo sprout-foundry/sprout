@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -14,18 +13,20 @@ func TestGetOptimizedToolDefinitions_KeepsVisionToolsForDirectMultimodalImages(t
 	// for additional context such as URLs, file paths, or specialized analysis modes.
 	agent := &Agent{
 		client: &visionSupportingClient{supportsVision: true},
-		messages: []api.Message{
-			{
-				Role:    "user",
-				Content: "[image: pasted.png]\nWhat is in this menu? Also check the screenshot at /tmp/screenshot.png",
-				Images: []api.ImageData{
-					{Base64: "ZmFrZQ==", Type: "image/png"},
-				},
+		state:  NewAgentStateManager(false),
+		output: NewAgentOutputManager(),
+	}
+	agent.state.SetMessages([]api.Message{
+		{
+			Role:    "user",
+			Content: "[image: pasted.png]\nWhat is in this menu? Also check the screenshot at /tmp/screenshot.png",
+			Images: []api.ImageData{
+				{Base64: "ZmFrZQ==", Type: "image/png"},
 			},
 		},
-	}
+	})
 
-	tools := agent.getOptimizedToolDefinitions(agent.messages)
+	tools := agent.getOptimizedToolDefinitions(agent.state.GetMessages())
 
 	// Verify that vision tools are still available even with direct multimodal images
 	foundAnalyzeImageContent := false
@@ -50,15 +51,17 @@ func TestGetOptimizedToolDefinitions_KeepsVisionToolsForDirectMultimodalImages(t
 func TestGetOptimizedToolDefinitions_KeepsVisionToolsWithoutAttachedImages(t *testing.T) {
 	agent := &Agent{
 		client: &visionSupportingClient{supportsVision: true},
-		messages: []api.Message{
-			{
-				Role:    "user",
-				Content: "Analyze https://example.com/menu.png",
-			},
-		},
+		state:  NewAgentStateManager(false),
+		output: NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{
+		{
+			Role:    "user",
+			Content: "Analyze https://example.com/menu.png",
+		},
+	})
 
-	tools := agent.getOptimizedToolDefinitions(agent.messages)
+	tools := agent.getOptimizedToolDefinitions(agent.state.GetMessages())
 	foundAnalyzeImageContent := false
 	for _, tool := range tools {
 		if tool.Function.Name == "analyze_image_content" {
@@ -73,37 +76,37 @@ func TestGetOptimizedToolDefinitions_KeepsVisionToolsWithoutAttachedImages(t *te
 
 func TestShouldRequireOCRBeforeCompletion_FalseForDirectMultimodalImages(t *testing.T) {
 	agent := &Agent{
-		client:           &visionSupportingClient{supportsVision: true},
-		streamingEnabled: true,
-		interruptCtx:     context.Background(),
-		outputMutex:      &sync.Mutex{},
-		messages: []api.Message{
-			{
-				Role:    "user",
-				Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs.",
-				Images: []api.ImageData{
-					{Base64: "ZmFrZQ==", Type: "image/png"},
-				},
+		client:       &visionSupportingClient{supportsVision: true},
+		interruptCtx: context.Background(),
+		state:        NewAgentStateManager(false),
+		output:       NewAgentOutputManager(),
+	}
+	agent.state.SetMessages([]api.Message{
+		{
+			Role:    "user",
+			Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs.",
+			Images: []api.ImageData{
+				{Base64: "ZmFrZQ==", Type: "image/png"},
 			},
-			{
-				Role: "assistant",
-				ToolCalls: []api.ToolCall{
-					{
-						ID:   "fetch_1",
-						Type: "function",
-						Function: struct {
-							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
-						}{
-							Name:      "fetch_url",
-							Arguments: `{"url":"https://example.com/menu"}`,
-						},
+		},
+		{
+			Role: "assistant",
+			ToolCalls: []api.ToolCall{
+				{
+					ID:   "fetch_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "fetch_url",
+						Arguments: `{"url":"https://example.com/menu"}`,
 					},
 				},
 			},
-			{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
 		},
-	}
+		{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
+	})
 	ch := NewConversationHandler(agent)
 
 	if ch.shouldRequireOCRBeforeCompletion() {

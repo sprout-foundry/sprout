@@ -3,10 +3,10 @@ import type { PlatformNavItem } from '../services/apiAdapter';
 import { getAdapter } from '../services/apiAdapter';
 
 interface PlatformNavContextValue {
-  platformNavItems: PlatformNavItem[];
+  platformNavItems: readonly PlatformNavItem[];
 }
 
-const EMPTY_NAV_ITEMS: PlatformNavItem[] = [];
+const EMPTY_NAV_ITEMS: readonly PlatformNavItem[] = [];
 
 const PlatformNavContext = createContext<PlatformNavContextValue | null>(null);
 

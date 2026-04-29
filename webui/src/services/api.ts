@@ -605,7 +605,7 @@ class ApiService {
     }
 
     throw new SSHWorkspaceOpenError({
-      error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.ledit/workspace.log for details.',
+      error: 'SSH workspace launch timed out. Check SSH connectivity and ~/.config/sprout/workspace.log for details.',
       step: 'launch-timeout',
       details: `Launch did not complete within ${Math.round(ApiService.SSH_POLL_TIMEOUT_MS / 60_000)} minutes.`,
     });

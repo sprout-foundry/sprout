@@ -35,6 +35,34 @@ func (ws *ReactWebServer) handleAPISettings(w http.ResponseWriter, r *http.Reque
 // GET /api/settings
 // ---------------------------------------------------------------------------
 
+// enrichCustomProviders loads custom provider files from the global providers
+// directory into cfg. Config.json never stores custom providers (they are set
+// to nil before saving), so raw-file reads always miss them. This helper
+// bridges the gap by always reading from the true global location.
+func enrichCustomProviders(cfg *configuration.Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.CustomProviders == nil {
+		cfg.CustomProviders = make(map[string]configuration.CustomProviderConfig)
+	}
+	// Always load from the global providers directory.
+	configDir, err := configuration.GetConfigDir()
+	if err != nil {
+		log.Printf("[settings] warning: failed to resolve config dir: %v", err)
+		return
+	}
+	providersDir := filepath.Join(configDir, configuration.ProvidersDirName)
+	fileProviders, err := configuration.LoadCustomProvidersFromDir(providersDir)
+	if err != nil {
+		log.Printf("[settings] warning: failed to load custom provider files: %v", err)
+		return
+	}
+	for name, provider := range fileProviders {
+		cfg.CustomProviders[name] = provider
+	}
+}
+
 func (ws *ReactWebServer) handleAPISettingsGet(w http.ResponseWriter, r *http.Request) {
 	layer := strings.TrimSpace(r.URL.Query().Get("layer"))
 
@@ -97,6 +125,7 @@ func (ws *ReactWebServer) handleGetGlobalSettings(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusOK, sanitizedConfig(configuration.NewConfig()))
 		return
 	}
+	enrichCustomProviders(&cfg)
 	writeJSON(w, http.StatusOK, sanitizedConfig(&cfg))
 }
 
@@ -118,6 +147,7 @@ func (ws *ReactWebServer) handleGetWorkspaceSettings(w http.ResponseWriter, r *h
 		writeJSON(w, http.StatusOK, map[string]interface{}{})
 		return
 	}
+	enrichCustomProviders(&cfg)
 	writeJSON(w, http.StatusOK, sanitizedConfig(&cfg))
 }
 

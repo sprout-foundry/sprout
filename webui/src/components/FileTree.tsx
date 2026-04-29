@@ -72,11 +72,18 @@ interface FileTreeProps {
   onItemCreated?: () => void;
   onDeleteItem?: (path: string) => void;
   workspaceRoot?: string;
-}
-
-interface FileTreeHandle {
-  refresh: () => void;
-  revealFile: (filePath: string) => void;
+  /** Optional callback for fetching files from a given path */
+  onFetchFiles?: (path: string) => Promise<FileInfo[]>;
+  /** Optional callback for creating a file */
+  onCreateFile?: (parentPath: string, name: string) => Promise<void>;
+  /** Optional callback for creating a folder */
+  onCreateFolder?: (parentPath: string, name: string) => Promise<void>;
+  /** Optional callback for deleting a path */
+  onDeletePath?: (path: string, isDir: boolean) => Promise<void>;
+  /** Optional callback for renaming a path */
+  onRenamePath?: (oldPath: string, newPath: string) => Promise<void>;
+  /** Optional callback for opening path in system file browser */
+  onOpenInFileBrowser?: (path: string) => Promise<void>;
 }
 
 type DraftMode = 'create-file' | 'create-folder' | 'rename';
@@ -93,8 +100,14 @@ interface ContextMenuState {
   file: FileInfo;
 }
 
+export interface FileTreeHandle {
+  refresh: () => void;
+  revealFile: (filePath: string) => void;
+}
+
 const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
-  ({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem, workspaceRoot }, ref) => {
+  ({ onFileSelect, selectedFile, rootPath = '.', onRefresh, onItemCreated, onDeleteItem, workspaceRoot,
+     onFetchFiles, onCreateFile, onCreateFolder, onDeletePath, onRenamePath, onOpenInFileBrowser }, ref) => {
     const apiService = ApiService.getInstance();
 
     const [files, setFiles] = useState<FileInfo[]>([]);
@@ -158,46 +171,60 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       [],
     );
 
-    const fetchFiles = useCallback(async (path: string): Promise<FileInfo[]> => {
-      try {
-        const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch files: ${response.statusText}`);
+    const fetchFiles = useCallback(
+      async (path: string): Promise<FileInfo[]> => {
+        // If a custom fetch callback is provided, use it
+        if (onFetchFiles) {
+          try {
+            return await onFetchFiles(path);
+          } catch (err) {
+            debugLog('[fetchFiles] onFetchFiles failed:', err);
+            throw err instanceof Error ? err : new Error('Failed to fetch files');
+          }
         }
 
-        const data: FileTreeResponse = await response.json();
-        if (data.message !== 'success') {
-          throw new Error(data.message);
-        }
+        // Fallback: use clientFetch directly (backward compatibility)
+        try {
+          const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch files: ${response.statusText}`);
+          }
 
-        return (data.files || [])
-          .map((file) => ({
-            name: file.name,
-            path: file.path,
-            size: file.size || 0,
-            modified: file.modified ?? file.mod_time ?? 0,
-            isDir: Boolean(file.isDir ?? file.is_dir),
-            ext:
-              (file.isDir ?? file.is_dir) ? '' : file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '',
-            gitStatus: (file.git_status as FileInfo['gitStatus']) || undefined,
-          }))
-          .sort((a, b) => {
-            if (a.isDir !== b.isDir) {
-              return a.isDir ? -1 : 1;
-            }
-            if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) {
-              return a.gitStatus === 'ignored' ? 1 : -1;
-            }
-            return a.name.localeCompare(b.name);
-          });
-      } catch (err) {
-        debugLog('[fetchFiles] Failed to fetch file list:', err);
-        if (err instanceof Error && err.message.includes('Unexpected token')) {
-          throw new Error('Backend not connected. Start with: ./ledit agent');
+          const data: FileTreeResponse = await response.json();
+          if (data.message !== 'success') {
+            throw new Error(data.message);
+          }
+
+          return (data.files || [])
+            .map((file) => ({
+              name: file.name,
+              path: file.path,
+              size: file.size || 0,
+              modified: file.modified ?? file.mod_time ?? 0,
+              isDir: Boolean(file.isDir ?? file.is_dir),
+              ext:
+                (file.isDir ?? file.is_dir) ? '' : file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '',
+              gitStatus: (file.git_status as FileInfo['gitStatus']) || undefined,
+            }))
+            .sort((a, b) => {
+              if (a.isDir !== b.isDir) {
+                return a.isDir ? -1 : 1;
+              }
+              if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) {
+                return a.gitStatus === 'ignored' ? 1 : -1;
+              }
+              return a.name.localeCompare(b.name);
+            });
+        } catch (err) {
+          debugLog('[fetchFiles] Failed to fetch file list:', err);
+          if (err instanceof Error && err.message.includes('Unexpected token')) {
+            throw new Error('Backend not connected. Start with: ./ledit agent');
+          }
+          throw err instanceof Error ? err : new Error('Unknown error');
         }
-        throw err instanceof Error ? err : new Error('Unknown error');
-      }
-    }, []);
+      },
+      [onFetchFiles],
+    );
 
     const refreshTree = useCallback(async () => {
       setLoading(true);
@@ -404,9 +431,26 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         const targetPath = `${parentPrefix}${draftValue.trim()}`;
 
         if (draft.mode === 'rename' && draft.targetPath) {
-          await apiService.renameItem(draft.targetPath, targetPath);
+          if (onRenamePath) {
+            await onRenamePath(draft.targetPath, targetPath);
+          } else {
+            await apiService.renameItem(draft.targetPath, targetPath);
+          }
         } else {
-          await apiService.createItem(targetPath, draft.mode === 'create-folder');
+          const isFolder = draft.mode === 'create-folder';
+          if (isFolder) {
+            if (onCreateFolder) {
+              await onCreateFolder(draft.parentPath, draftValue.trim());
+            } else {
+              await apiService.createItem(targetPath, true);
+            }
+          } else {
+            if (onCreateFile) {
+              await onCreateFile(draft.parentPath, draftValue.trim());
+            } else {
+              await apiService.createItem(targetPath, false);
+            }
+          }
         }
 
         await refreshTree();
@@ -419,7 +463,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       } finally {
         setLoading(false);
       }
-    }, [apiService, draft, draftValue, onItemCreated, refreshTree]);
+    }, [apiService, draft, draftValue, onItemCreated, refreshTree, onCreateFile, onCreateFolder, onRenamePath]);
 
     const handleDraftKeyDown = useCallback(
       (event: KeyboardEvent<HTMLInputElement>) => {
@@ -451,7 +495,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         setContextMenu(null);
 
         try {
-          await apiService.deleteItem(file.path);
+          if (onDeletePath) {
+            await onDeletePath(file.path, file.isDir);
+          } else {
+            await apiService.deleteItem(file.path);
+          }
           await refreshTree();
           onDeleteItem?.(file.path);
         } catch (err) {
@@ -461,7 +509,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           setLoading(false);
         }
       },
-      [apiService, onDeleteItem, refreshTree],
+      [apiService, onDeleteItem, refreshTree, onDeletePath],
     );
 
     const toggleDir = useCallback(
@@ -672,8 +720,18 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       for (let i = 0; i < paths.length; i++) {
         multiActions.setBatchProgress(`Deleting ${i + 1}/${paths.length}…`);
         try {
-          await apiService.deleteItem(paths[i]);
-          onDeleteItem?.(paths[i]);
+          const file = findFileByPath(filesRef.current, paths[i]);
+          if (file) {
+            if (onDeletePath) {
+              await onDeletePath(paths[i], file.isDir);
+            } else {
+              await apiService.deleteItem(paths[i]);
+            }
+            onDeleteItem?.(paths[i]);
+          } else {
+            debugLog(`[batchDelete] File not found in tree: "${paths[i]}"`);
+            failed++;
+          }
         } catch (err) {
           debugLog(`[batchDelete] Failed to delete "${paths[i]}":`, err);
           setError(err instanceof Error ? err.message : `Failed to delete ${paths[i]}`);
@@ -689,7 +747,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       if (failed > 0 && failed < paths.length) {
         debugLog(`[batchDelete] ${failed}/${paths.length} items failed to delete`);
       }
-    }, [multiSelect.selectedPaths, apiService, onDeleteItem, refreshTree, multiActions]);
+    }, [multiSelect.selectedPaths, apiService, onDeleteItem, refreshTree, multiActions, onDeletePath, findFileByPath]);
 
     const handleBatchMove = useCallback(async () => {
       const paths = Array.from(multiSelect.selectedPaths);
@@ -736,7 +794,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         const newPath = `${prefix}${sourceName}`;
 
         try {
-          await apiService.renameItem(paths[i], newPath);
+          if (onRenamePath) {
+            await onRenamePath(paths[i], newPath);
+          } else {
+            await apiService.renameItem(paths[i], newPath);
+          }
         } catch (err) {
           debugLog(`[batchMove] Failed to move "${paths[i]}":`, err);
           setError(err instanceof Error ? err.message : `Failed to move ${paths[i]}`);
@@ -751,7 +813,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
       }
       multiActions.clearSelection();
       await refreshTree();
-    }, [multiSelect.selectedPaths, apiService, refreshTree, multiActions, rootPath]);
+    }, [multiSelect.selectedPaths, apiService, refreshTree, multiActions, rootPath, onRenamePath]);
 
     const handleCopyPaths = useCallback(
       (absolute = false) => {
@@ -948,7 +1010,11 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
 
         try {
           setLoading(true);
-          await apiService.renameItem(sourcePath, newPath);
+          if (onRenamePath) {
+            await onRenamePath(sourcePath, newPath);
+          } else {
+            await apiService.renameItem(sourcePath, newPath);
+          }
 
           setExpandedDirs((prev) => {
             const next = new Set(prev);
@@ -968,7 +1034,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           setLoading(false);
         }
       },
-      [apiService, refreshTree, onItemCreated, rootPath],
+      [apiService, refreshTree, onItemCreated, rootPath, onRenamePath],
     );
 
     const handleDrop = useCallback(
@@ -1477,7 +1543,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               onClick={() => {
                 const file = contextMenu.file;
                 setContextMenu(null);
-                apiService.openInFileBrowser(file.path).catch(() => {});
+                if (onOpenInFileBrowser) {
+                  onOpenInFileBrowser(file.path).catch((err) => {
+                    debugLog('[onOpenInFileBrowser] failed:', err);
+                  });
+                } else {
+                  apiService.openInFileBrowser(file.path).catch(() => {});
+                }
               }}
             >
               Open in file browser

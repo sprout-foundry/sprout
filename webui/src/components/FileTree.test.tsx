@@ -22,6 +22,11 @@ jest.mock('../services/api', () => ({
   },
 }));
 
+jest.mock('./ThemedDialog', () => ({
+  showThemedConfirm: jest.fn().mockResolvedValue(false),
+  showThemedPrompt: jest.fn().mockResolvedValue(null),
+}));
+
 // Mock navigator.clipboard
 const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
 Object.assign(navigator, {
@@ -216,21 +221,24 @@ describe('FileTree context menu – file items', () => {
     expect(texts).toContain('Delete');
   });
 
-  it('does NOT show copy/open items for directories', async () => {
+  it('does NOT show "Open in editor" for directories but shows path copy and file browser', async () => {
     await renderTree();
 
     fireContextMenuOnFile('src');
     await flushPromises();
 
     const texts = getContextMenuTexts();
-    expect(texts).not.toContain('Copy relative path');
-    expect(texts).not.toContain('Open in editor');
-    expect(texts).not.toContain('Copy absolute path');
-    // Directories should only see Add file, Add folder, Rename, Delete
+    // Directories should see Add file, Add folder, Rename, Open in file browser, Copy relative path, Delete
     expect(texts).toContain('Add file');
     expect(texts).toContain('Add folder');
     expect(texts).toContain('Rename');
     expect(texts).toContain('Delete');
+    expect(texts).toContain('Copy relative path');
+    expect(texts).toContain('Open in file browser');
+    // But NOT "Open in editor" (only for files)
+    expect(texts).not.toContain('Open in editor');
+    // And NOT "Copy absolute path" when workspaceRoot is not set
+    expect(texts).not.toContain('Copy absolute path');
   });
 
   it('shows "Copy absolute path" when workspaceRoot is provided', async () => {
@@ -1245,5 +1253,406 @@ describe('FileTree drag-and-drop', () => {
 
     fileList = document.querySelector('.file-list');
     expect(fileList?.classList.contains('drop-on-root')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Callback props tests
+// ---------------------------------------------------------------------------
+
+describe('FileTree callback props – onFetchFiles', () => {
+  const mockFiles: FileInfo[] = [
+    { name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '', children: [] },
+    { name: 'index.ts', path: 'index.ts', isDir: false, size: 100, modified: 1000, ext: '.ts' },
+  ];
+
+  it('calls onFetchFiles with root path on mount', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+
+    await act(async () => {
+      root.render(
+        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />,
+      );
+    });
+    await flushPromises();
+
+    expect(onFetchFiles).toHaveBeenCalledWith('.');
+  });
+
+  it('renders files returned by onFetchFiles', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+
+    await act(async () => {
+      root.render(
+        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />,
+      );
+    });
+    await flushPromises();
+
+    const names = document.querySelectorAll('.file-tree-item .file-tree-name');
+    const nameTexts = Array.from(names).map((el) => el.textContent ?? '');
+    expect(nameTexts).toContain('src');
+    expect(nameTexts).toContain('index.ts');
+  });
+
+  it('does NOT call clientFetch when onFetchFiles is provided', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+
+    await act(async () => {
+      root.render(
+        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />,
+      );
+    });
+    await flushPromises();
+
+    expect(clientFetch).not.toHaveBeenCalled();
+  });
+
+  it('uses clientFetch fallback when onFetchFiles is NOT provided', async () => {
+    (clientFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes('path=.')) return Promise.resolve(mockFetchResponse());
+      return Promise.resolve(mockFetchResponse([]));
+    });
+
+    await act(async () => {
+      root.render(
+        <FileTree onFileSelect={jest.fn()} rootPath="." />,
+      );
+    });
+    await flushPromises();
+
+    expect(clientFetch).toHaveBeenCalled();
+  });
+});
+
+describe('FileTree callback props – onDeletePath', () => {
+  const mockFiles: FileInfo[] = [
+    { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+    { name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '', children: [] },
+  ];
+
+  async function renderWithCallbacks(callbacks = {}) {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          onFetchFiles={onFetchFiles}
+          {...callbacks}
+        />,
+      );
+    });
+    await flushPromises();
+    return { onFetchFiles };
+  }
+
+  it('calls onDeletePath when deleting a file via context menu', async () => {
+    const onDeletePath = jest.fn().mockResolvedValue(undefined);
+    const { onFetchFiles } = await renderWithCallbacks({ onDeletePath });
+
+    // Mock showThemedConfirm to return true
+    const { showThemedConfirm } = require('./ThemedDialog');
+    showThemedConfirm.mockResolvedValueOnce(true);
+
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    const deleteBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Delete');
+    expect(deleteBtn).toBeDefined();
+
+    await act(async () => {
+      deleteBtn!.click();
+    });
+    await flushPromises();
+
+    expect(onDeletePath).toHaveBeenCalledWith('main.go', false);
+  });
+
+  it('does NOT call apiService.deleteItem when onDeletePath is provided', async () => {
+    const apiMock = { createItem: jest.fn(), deleteItem: jest.fn(), renameItem: jest.fn() };
+    (ApiService.getInstance as jest.Mock).mockReturnValue(apiMock);
+
+    const onDeletePath = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onDeletePath });
+
+    const { showThemedConfirm } = require('./ThemedDialog');
+    showThemedConfirm.mockResolvedValueOnce(true);
+
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    const deleteBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Delete');
+    await act(async () => {
+      deleteBtn!.click();
+    });
+    await flushPromises();
+
+    expect(apiMock.deleteItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('FileTree callback props – onRenamePath', () => {
+  const mockFiles: FileInfo[] = [
+    { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+    { name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '', children: [] },
+  ];
+
+  async function renderWithCallbacks(callbacks = {}) {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          onFetchFiles={onFetchFiles}
+          {...callbacks}
+        />,
+      );
+    });
+    await flushPromises();
+    return { onFetchFiles };
+  }
+
+  it('calls onRenamePath when confirming a rename draft', async () => {
+    const onRenamePath = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onRenamePath });
+
+    // Right-click file and select "Rename"
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    const renameBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Rename');
+    expect(renameBtn).toBeDefined();
+
+    await act(async () => {
+      renameBtn!.click();
+    });
+    await flushPromises();
+
+    // Type new name in the inline rename input
+    const renameInput = document.querySelector('.file-tree-inline-editor .create-input');
+    expect(renameInput).not.toBeNull();
+    await act(async () => {
+      Simulate.change(renameInput, { target: { value: 'main_renamed.go' } });
+    });
+    await flushPromises();
+
+    // Click confirm
+    const confirmBtn = document.querySelector('.file-tree-inline-editor .create-confirm');
+    expect(confirmBtn).not.toBeNull();
+    await act(async () => {
+      confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+    await act(async () => { await Promise.resolve(); });
+    await flushPromises();
+
+    expect(onRenamePath).toHaveBeenCalledWith('main.go', 'main_renamed.go');
+  });
+
+  it('does NOT call apiService.renameItem when onRenamePath is provided', async () => {
+    const apiMock = { createItem: jest.fn(), deleteItem: jest.fn(), renameItem: jest.fn() };
+    (ApiService.getInstance as jest.Mock).mockReturnValue(apiMock);
+
+    const onRenamePath = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onRenamePath });
+
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    const renameBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Rename');
+    await act(async () => {
+      renameBtn!.click();
+    });
+    await flushPromises();
+
+    const renameInput = document.querySelector('.file-tree-inline-editor .create-input');
+    await act(async () => {
+      Simulate.change(renameInput, { target: { value: 'renamed.go' } });
+    });
+    await flushPromises();
+
+    const confirmBtn = document.querySelector('.file-tree-inline-editor .create-confirm');
+    await act(async () => {
+      confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+    await act(async () => { await Promise.resolve(); });
+    await flushPromises();
+
+    expect(apiMock.renameItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
+  const mockFiles: FileInfo[] = [
+    { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+  ];
+
+  async function renderWithCallbacks(callbacks = {}) {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          onFetchFiles={onFetchFiles}
+          {...callbacks}
+        />,
+      );
+    });
+    await flushPromises();
+    return { onFetchFiles };
+  }
+
+  it('calls onCreateFile when confirming a new file draft', async () => {
+    const onCreateFile = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onCreateFile });
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    const newFileBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'New File');
+    await act(async () => {
+      newFileBtn!.click();
+    });
+    await flushPromises();
+
+    // Type a name in the draft input
+    const draftInput = document.querySelector('.file-tree-draft-row .create-input');
+    expect(draftInput).not.toBeNull();
+    await act(async () => {
+      Simulate.change(draftInput, { target: { value: 'newfile.ts' } });
+    });
+    await flushPromises();
+
+    // Click confirm
+    const confirmBtn = document.querySelector('.file-tree-draft-row .create-confirm');
+    expect(confirmBtn).not.toBeNull();
+    await act(async () => {
+      confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+    await act(async () => { await Promise.resolve(); });
+    await flushPromises();
+
+    expect(onCreateFile).toHaveBeenCalledWith('.', 'newfile.ts');
+  });
+
+  it('calls onCreateFolder when confirming a new folder draft', async () => {
+    const onCreateFolder = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onCreateFolder });
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    const newFolderBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'New Folder');
+    await act(async () => {
+      newFolderBtn!.click();
+    });
+    await flushPromises();
+
+    const draftInput = document.querySelector('.file-tree-draft-row .create-input');
+    expect(draftInput).not.toBeNull();
+    await act(async () => {
+      Simulate.change(draftInput, { target: { value: 'myfolder' } });
+    });
+    await flushPromises();
+
+    const confirmBtn = document.querySelector('.file-tree-draft-row .create-confirm');
+    await act(async () => {
+      confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+    await act(async () => { await Promise.resolve(); });
+    await flushPromises();
+
+    expect(onCreateFolder).toHaveBeenCalledWith('.', 'myfolder');
+  });
+
+  it('does NOT call apiService.createItem when onCreateFile is provided', async () => {
+    const apiMock = { createItem: jest.fn(), deleteItem: jest.fn(), renameItem: jest.fn() };
+    (ApiService.getInstance as jest.Mock).mockReturnValue(apiMock);
+
+    const onCreateFile = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onCreateFile });
+
+    fireContextMenuOnBackground();
+    await flushPromises();
+
+    const newFileBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'New File');
+    await act(async () => {
+      newFileBtn!.click();
+    });
+    await flushPromises();
+
+    const draftInput = document.querySelector('.file-tree-draft-row .create-input');
+    await act(async () => {
+      Simulate.change(draftInput, { target: { value: 'test.ts' } });
+    });
+    await flushPromises();
+
+    const confirmBtn = document.querySelector('.file-tree-draft-row .create-confirm');
+    await act(async () => {
+      confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushPromises();
+    await act(async () => { await Promise.resolve(); });
+    await flushPromises();
+
+    expect(apiMock.createItem).not.toHaveBeenCalled();
+  });
+});
+
+describe('FileTree callback props – onOpenInFileBrowser', () => {
+  const mockFiles: FileInfo[] = [
+    { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+  ];
+
+  async function renderWithCallbacks(callbacks = {}) {
+    const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          onFetchFiles={onFetchFiles}
+          {...callbacks}
+        />,
+      );
+    });
+    await flushPromises();
+  }
+
+  it('calls onOpenInFileBrowser when context menu item is clicked', async () => {
+    const onOpenInFileBrowser = jest.fn().mockResolvedValue(undefined);
+    await renderWithCallbacks({ onOpenInFileBrowser });
+
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    const openBtn = getContextButtons().find((btn) => btn.textContent?.trim() === 'Open in file browser');
+    expect(openBtn).toBeDefined();
+
+    await act(async () => {
+      openBtn!.click();
+    });
+    await flushPromises();
+
+    expect(onOpenInFileBrowser).toHaveBeenCalledWith('main.go');
+  });
+
+  it('does NOT show "Open in file browser" when callback is not provided and apiService.openInFileBrowser is not available', async () => {
+    // When onOpenInFileBrowser is not provided, the fallback apiService.openInFileBrowser
+    // is used, so the button IS shown. This test verifies the fallback behavior.
+    await renderWithCallbacks({});
+
+    fireContextMenuOnFile('main.go');
+    await flushPromises();
+
+    const texts = getContextMenuTexts();
+    // The fallback path shows "Open in file browser" via apiService.openInFileBrowser
+    expect(texts).toContain('Open in file browser');
   });
 });

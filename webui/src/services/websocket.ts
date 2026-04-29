@@ -114,7 +114,7 @@ class WebSocketService {
     const adapter = getAdapter();
     const adapterWsUrl = adapter?.getWebSocketURL();
     const wsUrl =
-      process.env.REACT_APP_WS_URL ||
+      import.meta.env.VITE_WS_URL ||
       adapterWsUrl ||
       (() => {
         const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';

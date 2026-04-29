@@ -1,23 +1,44 @@
-import { useNotifications } from '../contexts/NotificationContext';
+import type { ReactNode } from 'react';
+import type { NotificationType } from '../contexts/NotificationContext';
 import NotificationItem from './NotificationItem';
-import './Notification.css';
+import './NotificationStack.css';
+
+export interface NotificationData {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  duration?: number;
+}
+
+export interface NotificationStackProps {
+  notifications: NotificationData[];
+  onDismiss: (id: string) => void;
+  className?: string;
+}
 
 /**
  * Notification container component that renders all active notifications.
  *
- * Subscribes to the NotificationContext and renders each notification
- * as a NotificationItem component. Notifications are stacked in a fixed
- * position at the bottom-right of the viewport.
+ * Can be used in two ways:
+ * 1. Props-based: Pass notifications array and onDismiss callback
+ * 2. Context-based: Use NotificationProvider and useNotifications hook (imports NotificationStack internally)
+ *
+ * Notifications are stacked in a fixed position at the bottom-right of the viewport.
  */
-function NotificationStack(): JSX.Element | null {
-  const { notifications, removeNotification } = useNotifications();
-
+function NotificationStack({
+  notifications,
+  onDismiss,
+  className,
+}: NotificationStackProps): JSX.Element | null {
   if (notifications.length === 0) {
     return null;
   }
 
+  const containerClassName = className ? `notification-container ${className}` : 'notification-container';
+
   return (
-    <div className="notification-container" role="region" aria-label="Notifications">
+    <div className={containerClassName} role="region" aria-label="Notifications">
       {notifications.map((notification) => (
         <NotificationItem
           key={notification.id}
@@ -26,7 +47,7 @@ function NotificationStack(): JSX.Element | null {
           title={notification.title}
           message={notification.message}
           duration={notification.duration}
-          onClose={removeNotification}
+          onClose={onDismiss}
         />
       ))}
     </div>

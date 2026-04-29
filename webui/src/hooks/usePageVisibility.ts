@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { WebSocketService } from '../services/websocket';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { debugLog } from '../utils/log';
+import { useEvents } from '../contexts/EventsContext';
 
 /** Interval (ms) to debounce rapid visibility toggles and avoid freeze/resume thrashing. */
 const VISIBILITY_DEBOUNCE_MS = 500;
@@ -34,6 +34,7 @@ export function isPageVisible(): boolean {
  */
 export function usePageVisibility(): void {
   const mountedRef = useRef(true);
+  const events = useEvents();
 
   useEffect(() => {
     mountedRef.current = true;
@@ -82,9 +83,9 @@ export function usePageVisibility(): void {
         if (effectiveAction === 'freeze') {
           debugLog('[visibility] executing freeze');
           try {
-            WebSocketService.getInstance().freeze();
+            events.freeze();
           } catch (err) {
-            debugLog('[visibility] WebSocketService.freeze() failed:', err);
+            debugLog('[visibility] events.freeze() failed:', err);
           }
           try {
             TerminalWebSocketService.freezeAll();
@@ -94,9 +95,9 @@ export function usePageVisibility(): void {
         } else {
           debugLog('[visibility] executing resume');
           try {
-            WebSocketService.getInstance().resume();
+            events.resume();
           } catch (err) {
-            debugLog('[visibility] WebSocketService.resume() failed:', err);
+            debugLog('[visibility] events.resume() failed:', err);
           }
           try {
             TerminalWebSocketService.resumeAll();
@@ -118,5 +119,5 @@ export function usePageVisibility(): void {
         debounceTimer = null;
       }
     };
-  }, []);
+  }, [events]);
 }

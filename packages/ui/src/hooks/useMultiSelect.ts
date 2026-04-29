@@ -1,9 +1,28 @@
 import { useState, useCallback, useRef, useMemo } from 'react';
+import type { FileInfo } from '../types/file-tree';
 
 /** Visible file entry used for range selection ordering. */
 export interface VisibleEntry {
   path: string;
   depth: number;
+}
+
+/**
+ * Recursively flatten a FileInfo tree into an ordered array of visible entries.
+ * This matches the render order of `renderFileTree`.
+ */
+export function flattenVisibleFiles(items: FileInfo[]): VisibleEntry[] {
+  const result: VisibleEntry[] = [];
+  const walk = (list: FileInfo[], depth: number) => {
+    for (const item of list) {
+      result.push({ path: item.path, depth });
+      if (item.isDir && item.children) {
+        walk(item.children, depth + 1);
+      }
+    }
+  };
+  walk(items, 0);
+  return result;
 }
 
 export interface MultiSelectState {

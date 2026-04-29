@@ -43,7 +43,7 @@ import {
   FileEdit,
 } from 'lucide-react';
 import './ContextPanel.css';
-import LiveLog from './LiveLog';
+import { LiveLog } from '@sprout/ui';
 import { showThemedConfirm } from './ThemedDialog';
 import TodoPanel from './TodoPanel';
 

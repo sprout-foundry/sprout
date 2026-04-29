@@ -1,8 +1,8 @@
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
-import MessageSegments from './MessageSegments';
-import MessageBubble from './MessageBubble';
-import MessageContent from './MessageContent';
+import { MessageSegments } from '@sprout/ui';
+import { MessageBubble } from '@sprout/ui';
+import { MessageContent } from '@sprout/ui';
 import InlinePillRow, { type InlinePillItem } from './InlinePillRow';
 import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
 import { stripAnsiCodes } from '../utils/ansi';

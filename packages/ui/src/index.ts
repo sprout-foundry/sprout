@@ -25,13 +25,22 @@ export type { SidebarProps } from './components/Sidebar';
 
 export type { APIAdapter, PlatformNavItem } from './types/adapter';
 
+export type {
+  EditorBuffer,
+  EditorBufferKind,
+  EditorPane,
+  PaneLayout,
+  PaneSize,
+  EditorState,
+} from './types/editor';
+
 // ── Git types and utilities ───────────────────────────────────────────
 export { FILE_SECTIONS, selectionKey, parseSelectionKey } from './types/git-types';
 export { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from './constants/git-constants';
 
 // ── Contexts ──────────────────────────────────────────────────────────
 export { NotificationProvider, useNotifications } from './contexts/NotificationContext';
-export { SproutProvider, useSproutAdapter } from './contexts/SproutAdapterContext';
+export { SproutProvider, useSproutAdapter, useSproutFetch } from './contexts/SproutAdapterContext';
 export type { SproutProviderProps } from './contexts/SproutAdapterContext';
 
 // ── Hooks ─────────────────────────────────────────────────────────────

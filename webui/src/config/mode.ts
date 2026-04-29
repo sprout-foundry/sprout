@@ -31,7 +31,7 @@ export const isCloud: boolean = mode === 'cloud';
  * SSH access support - available in cloud mode only.
  * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsSSH: boolean = getAdapter()?.supportsSSH ?? isCloud;
+export const supportsSSH: boolean = getAdapter()?.supportsSSH ?? true;
 
 /**
  * Instance management support - available in cloud mode only.

@@ -574,8 +574,25 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	}
 	cs, ok := ctx.ChatSessions[chatID]
 	if !ok {
+		// Create the chat session if it doesn't exist yet
 		ws.mutex.RUnlock()
-		return ws.getClientAgent(clientID)
+		ws.mutex.Lock()
+		ctx = ws.getOrCreateClientContextLocked(clientID)
+		if ctx.ChatSessions == nil {
+			ctx.ChatSessions = make(map[string]*chatSession)
+		}
+		if _, exists := ctx.ChatSessions[chatID]; !exists {
+			ctx.ChatSessions[chatID] = &chatSession{
+				ID:        chatID,
+				Name:      chatID,
+				CreatedAt: time.Now(),
+			}
+		}
+		cs = ctx.ChatSessions[chatID]
+		ws.mutex.Unlock()
+		// Re-acquire read lock for the rest of the function
+		ws.mutex.RLock()
+		ctx = ws.clientContexts[clientID]
 	}
 	workspaceRoot := ctx.WorkspaceRoot
 	eventBus := ws.eventBus

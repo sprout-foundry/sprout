@@ -2,7 +2,7 @@
 
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
-import QueuedMessagesPanel from './QueuedMessagesPanel';
+import QueuedMessagesPanel from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Helpers

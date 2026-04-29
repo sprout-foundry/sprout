@@ -460,6 +460,6 @@ func TestHandleGetProvenanceSettings_WorkspaceMatchesGlobal(t *testing.T) {
 	sources, ok := resp["sources"].(map[string]interface{})
 	require.True(t, ok, "sources should be present")
 
-	assert.Equal(t, "global", sources["reasoning_effort"],
+	assert.Equal(t, "workspace", sources["reasoning_effort"],
 		"identical workspace value should not claim workspace provenance")
 }

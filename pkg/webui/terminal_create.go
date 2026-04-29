@@ -60,7 +60,6 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 	cmd.Env = append(os.Environ(),
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
-		"FORCE_COLOR=1",
 		"SHELL="+shell,
 		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
 		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),

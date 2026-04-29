@@ -5,7 +5,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { SproutProvider, useSproutAdapter } from './SproutAdapterContext';
-import type { APIAdapter } from '@/types/adapter';
+import type { APIAdapter } from '../types/adapter';
 
 // ---------------------------------------------------------------------------
 // Mock Adapter Helper

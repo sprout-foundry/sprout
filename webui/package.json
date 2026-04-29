@@ -41,6 +41,7 @@
     "@emmetio/codemirror6-plugin": "^0.4.0",
     "@lezer/go": "^1.0.1",
     "@replit/codemirror-minimap": "^0.5.2",
+    "@sprout/events": "file:../packages/events",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@uiw/codemirror-extensions-color": "^4.25.9",

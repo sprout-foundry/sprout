@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { WebSocketService } from '../services/websocket';
+import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
 
 export interface UseSecurityApprovalReturn {
@@ -8,22 +8,23 @@ export interface UseSecurityApprovalReturn {
 }
 
 export function useSecurityApproval(setState: Dispatch<SetStateAction<AppState>>): UseSecurityApprovalReturn {
+  const events = useEvents();
+
   const handleSecurityApprovalResponse = useCallback(
     (requestId: string, approved: boolean) => {
-      const wsService = WebSocketService.getInstance();
-      if (!wsService.isConnected()) {
+      if (!events.isConnected()) {
         // Keep the dialog open — the approval was not delivered.
         // The user can retry once the connection is restored.
         return;
       }
-      wsService.sendEvent({
+      events.sendEvent({
         type: 'security_approval_response',
         data: { request_id: requestId, approved },
       });
       // Only clear the dialog after successfully sending
       setState((prev) => ({ ...prev, securityApprovalRequest: null }));
     },
-    [setState],
+    [events, setState],
   );
 
   return { handleSecurityApprovalResponse };

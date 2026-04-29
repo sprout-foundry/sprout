@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { WebSocketService } from '../services/websocket';
+import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
 
 export interface UseSecurityPromptReturn {
@@ -8,22 +8,23 @@ export interface UseSecurityPromptReturn {
 }
 
 export function useSecurityPrompt(setState: Dispatch<SetStateAction<AppState>>): UseSecurityPromptReturn {
+  const events = useEvents();
+
   const handleSecurityPromptResponse = useCallback(
     (requestId: string, response: boolean) => {
-      const wsService = WebSocketService.getInstance();
-      if (!wsService.isConnected()) {
+      if (!events.isConnected()) {
         // Keep the dialog open — the response was not delivered.
         // The user can retry once the connection is restored.
         return;
       }
-      wsService.sendEvent({
+      events.sendEvent({
         type: 'security_prompt_response',
         data: { request_id: requestId, response },
       });
       // Only clear the dialog after successfully sending
       setState((prev) => ({ ...prev, securityPromptRequest: null }));
     },
-    [setState],
+    [events, setState],
   );
 
   return { handleSecurityPromptResponse };

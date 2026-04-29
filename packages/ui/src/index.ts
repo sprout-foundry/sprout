@@ -25,6 +25,8 @@ export type { SidebarProps } from './components/Sidebar';
 
 export type { APIAdapter, PlatformNavItem } from './types/adapter';
 
+export type { SproutEvent, SproutEventCallback, EventsProvider } from './types/events';
+
 export type {
   EditorBuffer,
   EditorBufferKind,
@@ -42,6 +44,8 @@ export { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '.
 export { NotificationProvider, useNotifications } from './contexts/NotificationContext';
 export { SproutProvider, useSproutAdapter, useSproutFetch } from './contexts/SproutAdapterContext';
 export type { SproutProviderProps } from './contexts/SproutAdapterContext';
+export { EventsContextProvider, useEvents } from './contexts/EventsContext';
+export type { EventsContextProviderProps } from './contexts/EventsContext';
 
 // ── Hooks ─────────────────────────────────────────────────────────────
 export { useMultiSelect, flattenVisibleFiles } from './hooks/useMultiSelect';

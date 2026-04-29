@@ -24,6 +24,23 @@ jest.mock('../services/websocket', () => {
   return { WebSocketService: MockWebSocketService };
 });
 
+jest.mock('../contexts/EventsContext', () => ({
+  useEvents: () => ({
+    freeze: mockFreeze,
+    resume: mockResume,
+    connect: jest.fn(),
+    disconnect: jest.fn(),
+    onEvent: jest.fn(),
+    removeEvent: jest.fn(),
+    sendEvent: jest.fn(),
+    isConnected: jest.fn().mockReturnValue(true),
+    onReconnect: jest.fn(),
+    resetAndReconnect: jest.fn(),
+    getQueuedMessageCount: jest.fn().mockReturnValue(0),
+    flushQueuedMessages: jest.fn().mockReturnValue(0),
+  }),
+}));
+
 jest.mock('../services/terminalWebSocket', () => {
   class MockTerminalWebSocketService {
     static createInstance = jest.fn();

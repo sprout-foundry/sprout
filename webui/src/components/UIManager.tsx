@@ -1,16 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { useEvents } from '../contexts/EventsContext';
 import Dropdown, { type DropdownItem } from './Dropdown';
 import QuickPrompt from './QuickPrompt';
 import Progress from './Progress';
 import FileBrowser, { type FileNode } from './FileBrowser';
-import { uiService, type UIDropdownItem, type UIDropdownOptions, type UIQuickOption } from '../services/ui';
+import { UIService, type UIDropdownItem, type UIDropdownOptions, type UIQuickOption } from '../services/ui';
 
 interface UIManagerProps {
   children: ReactNode;
 }
 
 function UIManager({ children }: UIManagerProps): JSX.Element {
+  const events = useEvents();
+
+  // Lazily initialise UIService once with the events provider.
+  const uiServiceRef = useRef<UIService | null>(null);
+  if (!uiServiceRef.current) {
+    uiServiceRef.current = UIService.getInstance(events);
+  }
+  const uiService = uiServiceRef.current;
+
   const [dropdownState, setDropdownState] = useState<{
     isOpen: boolean;
     items: DropdownItem[];

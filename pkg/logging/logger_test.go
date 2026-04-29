@@ -62,7 +62,7 @@ func TestNewLogger(t *testing.T) {
 	}
 
 	// Verify log file was created
-	logPath := filepath.Join(tmpDir, ".sprout", "ledit.log")
+	logPath := filepath.Join(tmpDir, ".sprout", "sprout.log")
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
 		t.Errorf("Expected log file to be created at %s", logPath)
 	}
@@ -83,15 +83,15 @@ func TestLoggerInit(t *testing.T) {
 	}
 
 	// Verify .sprout directory was created
-	leditDir := filepath.Join(tmpDir, ".sprout")
-	if _, err := os.Stat(leditDir); os.IsNotExist(err) {
+	sproutDir := filepath.Join(tmpDir, ".sprout")
+	if _, err := os.Stat(sproutDir); os.IsNotExist(err) {
 		t.Error("Expected .sprout directory to be created")
 	}
 
 	// Verify log file exists
-	logPath := filepath.Join(leditDir, "ledit.log")
+	logPath := filepath.Join(sproutDir, "sprout.log")
 	if _, err := os.Stat(logPath); os.IsNotExist(err) {
-		t.Error("Expected ledit.log to be created")
+		t.Error("Expected sprout.log to be created")
 	}
 
 	logger.Close()
@@ -117,7 +117,7 @@ func TestLoggerLog(t *testing.T) {
 	}
 
 	// Verify file was written
-	logPath := filepath.Join(tmpDir, ".sprout", "ledit.log")
+	logPath := filepath.Join(tmpDir, ".sprout", "sprout.log")
 	content, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatalf("Failed to read log file: %v", err)
@@ -232,7 +232,7 @@ func TestGetLogPath(t *testing.T) {
 	os.Setenv("HOME", "/home/testuser")
 
 	path := GetLogPath()
-	expected := filepath.Join("/home/testuser", ".sprout", "ledit.log")
+	expected := filepath.Join("/home/testuser", ".sprout", "sprout.log")
 	if path != expected {
 		t.Errorf("Expected path %q, got %q", expected, path)
 	}

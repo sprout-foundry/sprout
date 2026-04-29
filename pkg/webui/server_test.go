@@ -215,7 +215,7 @@ func TestCustomBindAddress(t *testing.T) {
 	}
 
 	// Find an available port to avoid conflicts with running servers
-	port, err := FindAvailablePort(DaemonPort + 100)
+	port, err := FindAvailablePort(DaemonPort + 500)
 	if err != nil {
 		t.Fatalf("FindAvailablePort failed: %v", err)
 	}
@@ -250,7 +250,10 @@ func TestBindAddrStoredCorrectly(t *testing.T) {
 
 	// Use a non-zero port to avoid DaemonPort (56000) conflicts
 	// This test verifies that the bindAddr is correctly stored, not dynamic port allocation
-	port := DaemonPort + 200
+	port, err := FindAvailablePort(DaemonPort + 200)
+	if err != nil {
+		t.Fatalf("FindAvailablePort failed: %v", err)
+	}
 
 	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
 

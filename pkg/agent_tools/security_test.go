@@ -436,7 +436,7 @@ func TestClassifyToolCall(t *testing.T) {
 		{"shell_command dangerous", "shell_command", map[string]interface{}{"command": "rm -rf /"}, SecurityDangerous},
 		{"git commit", "git", map[string]interface{}{"operation": "commit"}, SecuritySafe},
 		{"git push force", "git", map[string]interface{}{"operation": "push --force"}, SecurityDangerous},
-		{"unknown tool", "unknown_tool", map[string]interface{}{}, SecuritySafe},
+		{"unknown tool", "unknown_tool", map[string]interface{}{}, SecurityCaution},
 	}
 
 	for _, tt := range tests {

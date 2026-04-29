@@ -187,6 +187,9 @@ func (a *Agent) GetPreviousSummary() string {
 
 // SetSessionID sets the session identifier for continuity
 func (a *Agent) SetSessionID(sessionID string) {
+	if a.state == nil {
+		a.state = NewAgentStateManager(false)
+	}
 	a.state.SetSessionID(sessionID)
 }
 

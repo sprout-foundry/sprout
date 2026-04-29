@@ -643,3 +643,74 @@ These are high-impact structural improvements identified through code evaluation
 [] - OBSERVABILITY: Implement structured error taxonomy and diagnostic logging — Currently errors use ad-hoc `fmt.Errorf` wrapping without classification, making it hard for the Agent to implement intelligent retry/recovery logic. Create: (1) Error types package (`pkg/errors/types.go`) with categorized errors (`ErrTransientProvider`, `ErrSecurityViolation`, `ErrInvalidInput`, `ErrRateLimited`), (2) Structured logging interface that automatically attaches context (`sessionID`, `iteration`, `provider`, `model`) to all log entries, (3) Replace `fmt.Printf` debug statements with the structured logger. Target: 100% of errors in `pkg/agent/` use typed errors; debug logs include session context; Agent implements retry logic based on error type (transient = retry with backoff, security = stop and prompt).
 
 [] - PERSONA-TOOLS: Audit and extend persona tool access for `view_history`, `revision_id`, `rollback_changes`, and `self_review` — Currently no persona has access to `view_history`, `revision_id`, `rollback_changes`, or `self_review` except repo_orchestrator (history tools only). The `self_review` tool is unavailable to all personas including orchestrator, code_reviewer, and tester despite being relevant to their workflows. The `revision_id` tool is gated behind `rollback_changes` which only repo_orchestrator has. Decide on a per-persona basis: (1) Should orchestrator have `self_review` to validate its own output before presenting to user? (2) Should code_reviewer have `self_review` for secondary review passes? (3) Should tester have `view_history` to inspect what changed before writing tests? (4) Should orchestrator have `view_history` + `revision_id` for rollback awareness when delegating work?
+
+---
+
+## Agent Terminal Sessions — Hidden PTY Routing + Background Mode
+
+> **Status:** Planned. Backend research complete. Implementation awaiting start.
+
+### Problem
+
+Agent `shell_command` tool calls use `os/exec.CommandContext()` — one-shot subprocesses with no PTY. Commands leave no visible trace in the terminal, long-running processes (dev servers, test watchers) have their output lost after completion, and there is no way to re-attach to inspect a running process. The WebUI interactive terminal (`TerminalManager` PTY sessions via WebSocket) and agent command execution are completely independent subsystems that never interact.
+
+### Architecture
+
+Route agent shell commands through **hidden PTY sessions** managed by the existing `TerminalManager`. Hidden sessions are tagged but invisible in the terminal tab bar. A `background` flag enables fire-and-forget execution. Any hidden session can be promoted to visible (attached to a terminal tab) for interactive inspection.
+
+### Current State
+
+```
+Agent shell_command → os/exec.CommandContext() → CombinedOutput() → one-shot, no PTY
+WebUI terminal → TerminalManager PTY sessions → WebSocket → persistent shell (separate)
+```
+
+### Target State
+
+```
+Agent shell_command (foreground) → Hidden PTY session → capture output → return to agent
+Agent shell_command (background) → Hidden PTY session → return session_id immediately
+User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scrollback)
+```
+
+### Implementation Steps
+
+[] - AGENT-TERM: Add hidden session metadata to `TerminalSession` — Add `Hidden bool`, `Owner string`, `ChatID string`, `Name string`, `AutoClose bool` fields to `TerminalSession` in `terminal_types.go`. Add `CreateHiddenSession(id, owner, chatID string, opts ...SessionOption)` method to `TerminalManager`. Exclude hidden sessions from the default session listing returned by `ListSessions()` / `handleAPITerminalSessions`. Hidden sessions still participate in the inactive-session cleanup worker.
+
+[] - AGENT-TERM: Implement synchronous command execution via PTY — Create `terminal_agent_exec.go` with `ExecuteCommandAndWait(ctx context.Context, session *TerminalSession, command string) (output string, exitCode int, err error)`. The function writes the command to the PTY, then uses a sentinel-based output capture pattern: (1) generate a unique marker UUID, (2) write `command && echo "__SPROUT_DONE__:$?" || echo "__SPROUT_DONE__:$?"` to PTY, (3) subscribe a temporary `termSub` to capture output, (4) scan output for the sentinel to detect completion and extract exit code, (5) strip the sentinel line from returned output. Fallback timeout (30s default) if sentinel never appears.
+
+[] - AGENT-TERM: Add `TerminalManager` accessor to agent context — Wire the `TerminalManager` from `webClientContext` into the agent's tool execution context so `ExecuteShellCommandWithSafety` can access it when running in WebUI mode. Add a `GetTerminalManager() *webui.TerminalManager` method or pass via context value. CLI mode continues to use plain `os/exec` (no terminal manager available).
+
+[] - AGENT-TERM: Route agent `shell_command` through hidden PTY sessions — Modify `ExecuteShellCommandWithSafety` in `pkg/agent_tools/shell.go` to check for an available `TerminalManager`. When present (WebUI mode): (1) get or create a hidden session for the current chat, (2) call `ExecuteCommandAndWait` to run the command, (3) return output + exit code. When absent (CLI mode): fall through to existing `os/exec` path unchanged. Session reuse: one hidden session per chat, commands piped sequentially.
+
+[] - AGENT-TERM: Add `background` parameter to `shell_command` tool — Add `background` (bool, default false) parameter to the `shell_command` tool definition in `pkg/agent/tool_definitions.go`. When `background=true`: (1) write command to hidden PTY session, (2) return immediately with `{ session_id, status: "running" }` without waiting for completion. Add a `check_background` parameter or separate retrieval mechanism so the agent can later query accumulated output. Add API endpoint `GET /api/terminal/agent-sessions/{id}/output` for output retrieval. Background sessions get a descriptive name (command prefix) and longer cleanup timeout (2 hours vs 30 minutes).
+
+[] - AGENT-TERM: Add API endpoints for hidden session management — Create `api_agent_sessions.go` with: `GET /api/terminal/agent-sessions` (list hidden sessions with status + last N bytes of output), `POST /api/terminal/agent-sessions/{id}/attach` (promote to visible — clears `Hidden` flag so it appears in terminal tab bar), `GET /api/terminal/agent-sessions/{id}/output` (return accumulated ring buffer output as text). Register routes in `server.go`.
+
+[] - AGENT-TERM: Add frontend Background Tasks panel — Create `BackgroundTasks.tsx` component: collapsible panel (in the terminal area or as a sidebar section) showing running background agent sessions. Each entry displays: session name (command prefix), status (running/exited), duration, last few lines of output preview, "Attach" button (promotes to terminal tab), "Kill" button (closes session). Auto-refreshes via polling or WebSocket events.
+
+[] - AGENT-TERM: Add hidden session attachment in terminal UI — When a hidden session is promoted (via Background Tasks panel or agent-sessions API), it appears as a new tab in `Terminal.tsx` terminal tab bar. Use existing `reattach` flow with scrollback replay. The `TerminalTabBar.tsx` gains an "Agent Sessions" dropdown showing attachable hidden sessions.
+
+### Key Design Decisions
+
+- **Sentinel-based output capture**: Use `echo __SPROUT_DONE__:$?` to detect command completion and extract exit code. Simpler than shell prompt regex parsing. Falls back to timeout (30s) on failure.
+- **Session reuse**: One hidden session per chat (not per command). Commands run sequentially in the same PTY, preserving environment state (cd, exports, etc.) across tool calls.
+- **CLI fallback**: CLI mode uses plain `os/exec` unchanged — no `TerminalManager` dependency.
+- **Cleanup**: Hidden sessions auto-expire via existing 30-minute inactive cleanup (background sessions: 2 hours).
+- **Security**: Hidden sessions use same shell validation as interactive terminals (whitelist of known shells).
+
+### Files Changed (Planned)
+
+| File | Changes |
+|------|---------|
+| `pkg/webui/terminal_types.go` | Add `Hidden`, `Owner`, `ChatID`, `Name` fields to `TerminalSession`; add `CreateHiddenSession()`, `ListHiddenSessions()` methods |
+| `pkg/webui/terminal_agent_exec.go` | **New file.** `ExecuteCommandAndWait()` — sentinel-based synchronous command execution via PTY |
+| `pkg/agent_tools/shell.go` | Add `TerminalManager` check; route through hidden PTY when available |
+| `pkg/agent/shell.go` | Pass through TerminalManager for hidden session creation |
+| `pkg/agent/tool_definitions.go` | Add `background` parameter to `shell_command` tool |
+| `pkg/agent/tool_handlers_shell.go` | Handle `background=true` — fire and return session ID |
+| `pkg/webui/api_agent_sessions.go` | **New file.** REST endpoints for hidden session management |
+| `pkg/webui/server.go` | Register agent session routes |
+| `webui/src/components/BackgroundTasks.tsx` | **New file.** Background tasks panel |
+| `webui/src/components/Terminal.tsx` | Wire background tasks panel, attach flow |
+| `webui/src/components/TerminalTabBar.tsx` | Agent sessions dropdown |

@@ -6,6 +6,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info } from 'lucide-react';
+import { showThemedConfirm } from './ThemedDialog';
 import { useLog, debugLog } from '../utils/log';
 import './CommandInput.css';
 import { ApiService } from '../services/api';
@@ -625,9 +626,10 @@ function CommandInput({
     [onSend, onSendCommand, updateValue],
   );
 
-  const handleNewSession = useCallback(() => {
+  const handleNewSession = useCallback(async () => {
     if (isProcessing) {
-      if (!window.confirm('A request is currently processing. Stop it and start a new session?')) {
+      const confirmed = await showThemedConfirm('A request is currently processing. Stop it and start a new session?', { type: 'warning' });
+      if (!confirmed) {
         return;
       }
       commandRef('/clear');

@@ -1,0 +1,286 @@
+package security
+
+import (
+	"fmt"
+	"log"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
+)
+
+// ApprovalKind distinguishes between the two approval flows that share
+// this manager. The kind determines the event type published, the request
+// ID prefix, and the default response used on timeout / nil event-bus.
+type ApprovalKind int
+
+const (
+	// ApprovalKindTool is used for tool execution approval (shell_command,
+	// write_file, git ops, etc.). Timeout or nil event-bus rejects for safety.
+	ApprovalKindTool ApprovalKind = iota
+
+	// ApprovalKindPrompt is used for file content security prompts (API keys,
+	// passwords found in files). Timeout or nil event-bus returns DefaultResponse.
+	ApprovalKindPrompt
+)
+
+// ApprovalRequest captures all parameters for a single approval request.
+type ApprovalRequest struct {
+	Kind ApprovalKind
+
+	// On timeout / nil event-bus: PromptKind returns DefaultResponse;
+	// ToolKind always returns false (reject for safety).
+	DefaultResponse bool
+
+	// Tool kind fields
+	ToolName  string
+	RiskLevel string
+	Reasoning string
+	ClientID  string
+
+	// Prompt kind fields
+	Prompt string
+
+	// Shared extras forwarded to the event payload.
+	Extras map[string]string
+}
+
+// ApprovalManager coordinates security approval requests between the agent
+// and the webui. It subsumes the former SecurityApprovalManager (tool
+// approvals) and SecurityPromptManager (file security prompts) into a single
+// unified manager, eliminating duplicated infrastructure.
+//
+// The manager is safe for concurrent use. Requests block until a response is
+// received from the webui, a timeout elapses, or the event bus is nil.
+type ApprovalManager struct {
+	mu      sync.Mutex
+	pending map[string]chan bool // requestID -> response channel
+	timeout time.Duration        // per-request timeout; 0 ⇒ DefaultTimeout
+}
+
+// DefaultTimeout is the maximum time a request will block waiting for a
+// webui response before applying the fallback (reject for tool kind,
+// defaultResponse for prompt kind).
+const DefaultTimeout = 5 * time.Minute
+
+// --- Global singleton ---
+
+var (
+	globalApprovalManager   *ApprovalManager
+	globalApprovalManagerMu sync.RWMutex
+)
+
+// SetGlobalApprovalManager sets the global singleton (called by webui setup).
+func SetGlobalApprovalManager(mgr *ApprovalManager) {
+	globalApprovalManagerMu.Lock()
+	globalApprovalManager = mgr
+	globalApprovalManagerMu.Unlock()
+}
+
+// GetGlobalApprovalManager returns the global singleton.
+func GetGlobalApprovalManager() *ApprovalManager {
+	globalApprovalManagerMu.RLock()
+	defer globalApprovalManagerMu.RUnlock()
+	return globalApprovalManager
+}
+
+// Backward-compatible aliases so existing code referencing the old names
+// continues to compile during the migration window.
+var (
+	// SetGlobalPromptManager is a backward-compatible alias for SetGlobalApprovalManager.
+	SetGlobalPromptManager = SetGlobalApprovalManager
+	// GetGlobalPromptManager is a backward-compatible alias for GetGlobalApprovalManager.
+	GetGlobalPromptManager = GetGlobalApprovalManager
+)
+
+// NewApprovalManager creates a new ApprovalManager with the default timeout.
+func NewApprovalManager() *ApprovalManager {
+	return &ApprovalManager{
+		pending: make(map[string]chan bool),
+		timeout: DefaultTimeout,
+	}
+}
+
+// --- Request ID generation ---
+
+var (
+	nextReqID   int64
+	nextReqIDMu sync.Mutex
+)
+
+func generateToolRequestID() string {
+	nextReqIDMu.Lock()
+	defer nextReqIDMu.Unlock()
+	nextReqID++
+	return fmt.Sprintf("sec_%d", nextReqID)
+}
+
+func generatePromptRequestID() string {
+	nextReqIDMu.Lock()
+	defer nextReqIDMu.Unlock()
+	nextReqID++
+	return fmt.Sprintf("sec_prompt_%d", nextReqID)
+}
+
+// --- Core API ---
+
+// RequestApproval publishes a security approval/prompt event to the event
+// bus and blocks until the webui responds, a timeout elapses, or the event
+// bus is nil.
+//
+// For ToolKind: returns true only if explicitly approved; false on rejection,
+// timeout, or nil event-bus.
+// For PromptKind: returns the user response, or DefaultResponse on timeout /
+// nil event-bus.
+func (am *ApprovalManager) RequestApproval(eventBus *events.EventBus, req ApprovalRequest) bool {
+	if eventBus == nil {
+		return am.defaultForKind(req)
+	}
+
+	requestID := am.generateRequestID(req.Kind)
+	responseCh := make(chan bool, 1)
+
+	am.mu.Lock()
+	am.pending[requestID] = responseCh
+	am.mu.Unlock()
+
+	defer func() {
+		am.mu.Lock()
+		delete(am.pending, requestID)
+		am.mu.Unlock()
+	}()
+
+	// Build and publish the appropriate event type.
+	switch req.Kind {
+	case ApprovalKindTool:
+		payload := events.SecurityApprovalRequestEvent(
+			requestID, req.ToolName, req.RiskLevel, req.Reasoning, req.Extras,
+		)
+		if trimmed := strings.TrimSpace(req.ClientID); trimmed != "" {
+			payload["client_id"] = trimmed
+		}
+		eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
+
+	case ApprovalKindPrompt:
+		payload := events.SecurityPromptRequestEvent(requestID, req.Prompt, req.DefaultResponse, req.Extras)
+		eventBus.Publish(events.EventTypeSecurityPromptRequest, payload)
+	}
+
+	timeout := am.timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case result, ok := <-responseCh:
+		if !ok {
+			return am.defaultForKind(req) // channel closed without response
+		}
+		return result
+	case <-timer.C:
+		log.Printf("Security approval request %s timed out after %v — applying default", requestID, timeout)
+		return am.defaultForKind(req)
+	}
+}
+
+// RespondToApproval resolves a pending request. Returns true if the request
+// existed and was responded to, false otherwise.
+//
+// This method handles responses for both ToolKind and PromptKind requests.
+func (am *ApprovalManager) RespondToApproval(requestID string, response bool) bool {
+	am.mu.Lock()
+	ch, exists := am.pending[requestID]
+	am.mu.Unlock()
+
+	if !exists {
+		return false
+	}
+
+	select {
+	case ch <- response:
+		return true
+	default:
+		return false
+	}
+}
+
+// RespondToPrompt is a backward-compatible alias for RespondToApproval.
+func (am *ApprovalManager) RespondToPrompt(requestID string, response bool) bool {
+	return am.RespondToApproval(requestID, response)
+}
+
+// SetTimeout sets the maximum duration requests will block. A zero or
+// negative value resets to the default.
+func (am *ApprovalManager) SetTimeout(d time.Duration) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+	if d <= 0 {
+		am.timeout = DefaultTimeout
+	} else {
+		am.timeout = d
+	}
+}
+
+// --- Convenience wrappers preserving the old call signatures ---
+
+// RequestToolApproval is a convenience wrapper for ApprovalKindTool requests.
+// It preserves the original SecurityApprovalManager.RequestApproval signature.
+func (am *ApprovalManager) RequestToolApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string, extras map[string]string) bool {
+	return am.RequestApproval(eventBus, ApprovalRequest{
+		Kind:           ApprovalKindTool,
+		DefaultResponse: false, // reject for safety
+		ToolName:       toolName,
+		RiskLevel:      riskLevel,
+		Reasoning:      reasoning,
+		ClientID:       clientID,
+		Extras:         extras,
+	})
+}
+
+// RequestPrompt is a convenience wrapper for ApprovalKindPrompt requests.
+// It preserves the original SecurityPromptManager.RequestPrompt signature.
+func (am *ApprovalManager) RequestPrompt(eventBus *events.EventBus, prompt string, defaultResponse bool, extras map[string]string) bool {
+	return am.RequestApproval(eventBus, ApprovalRequest{
+		Kind:            ApprovalKindPrompt,
+		DefaultResponse: defaultResponse,
+		Prompt:          prompt,
+		Extras:          extras,
+	})
+}
+
+// SetApprovalTimeout is a backward-compatible alias for SetTimeout.
+func (am *ApprovalManager) SetApprovalTimeout(d time.Duration) {
+	am.SetTimeout(d)
+}
+
+// SetPromptTimeout is a backward-compatible alias for SetTimeout.
+func (am *ApprovalManager) SetPromptTimeout(d time.Duration) {
+	am.SetTimeout(d)
+}
+
+// --- Internal helpers ---
+
+func (am *ApprovalManager) defaultForKind(req ApprovalRequest) bool {
+	switch req.Kind {
+	case ApprovalKindTool:
+		return false // reject for safety
+	case ApprovalKindPrompt:
+		return req.DefaultResponse
+	default:
+		return false
+	}
+}
+
+func (am *ApprovalManager) generateRequestID(kind ApprovalKind) string {
+	switch kind {
+	case ApprovalKindTool:
+		return generateToolRequestID()
+	case ApprovalKindPrompt:
+		return generatePromptRequestID()
+	default:
+		return generateToolRequestID()
+	}
+}

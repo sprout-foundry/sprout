@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import './Sidebar.css';
 import { ApiService, type ProviderOption, type SproutSettings, type SproutInstance } from '../services/api';
+import { clientFetch } from '../services/clientSession';
 import SettingsPanel from './SettingsPanel';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
@@ -754,6 +755,7 @@ function Sidebar({
 
   /** Files section: unified file tree across all views */
   const renderFilesSection = () => {
+    const api = ApiService.getInstance();
     return (
       <FileTree
         ref={fileTreeRef as React.RefObject<{ refresh: () => void; revealFile: (filePath: string) => void }>}
@@ -766,6 +768,36 @@ function Sidebar({
         onDeleteItem={(_path) => {
           fileTreeRef.current?.refresh();
         }}
+        onFetchFiles={async (path: string) => {
+          const response = await clientFetch(`/api/files?path=${encodeURIComponent(path)}`);
+          if (!response.ok) throw new Error(`Failed to fetch files: ${response.statusText}`);
+          const data = await response.json();
+          if (data.message !== 'success') throw new Error(data.message);
+          return (data.files || []).map((file: any) => ({
+            name: file.name,
+            path: file.path,
+            size: file.size || 0,
+            modified: file.modified ?? file.mod_time ?? 0,
+            isDir: Boolean(file.isDir ?? file.is_dir),
+            ext: (file.isDir ?? file.is_dir) ? '' : file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '',
+            gitStatus: file.git_status || undefined,
+          })).sort((a: any, b: any) => {
+            if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+            if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) return a.gitStatus === 'ignored' ? 1 : -1;
+            return a.name.localeCompare(b.name);
+          });
+        }}
+        onCreateFile={async (parentPath, name) => {
+          const prefix = parentPath === '.' ? '' : `${parentPath}/`;
+          await api.createItem(`${prefix}${name}`, false);
+        }}
+        onCreateFolder={async (parentPath, name) => {
+          const prefix = parentPath === '.' ? '' : `${parentPath}/`;
+          await api.createItem(`${prefix}${name}`, true);
+        }}
+        onDeletePath={async (path, _isDir) => { await api.deleteItem(path); }}
+        onRenamePath={async (oldPath, newPath) => { await api.renameItem(oldPath, newPath); }}
+        onOpenInFileBrowser={async (path) => { await api.openInFileBrowser(path); }}
       />
     );
   };

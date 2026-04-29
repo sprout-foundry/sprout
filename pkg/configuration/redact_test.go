@@ -217,7 +217,6 @@ func TestRedactConfig_PreservesNonSecretFields(t *testing.T) {
 			"theme": "dark",
 			"fontSize": 14,
 		},
-		EnablePreWriteValidation: true,
 		AllowOrchestratorGitWrite: true,
 		ResourceDirectory:         "/tmp/resources",
 		ReasoningEffort:           "high",
@@ -234,9 +233,6 @@ func TestRedactConfig_PreservesNonSecretFields(t *testing.T) {
 	}
 	if len(result.ProviderPriority) != len(config.ProviderPriority) {
 		t.Error("Expected ProviderPriority to be preserved")
-	}
-	if result.EnablePreWriteValidation != config.EnablePreWriteValidation {
-		t.Error("Expected EnablePreWriteValidation to be preserved")
 	}
 	if result.AllowOrchestratorGitWrite != config.AllowOrchestratorGitWrite {
 		t.Error("Expected AllowOrchestratorGitWrite to be preserved")

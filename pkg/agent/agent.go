@@ -527,11 +527,11 @@ func (a *Agent) SetSecurityBypassApproved() {
 }
 
 // CheckFileContentSecurity runs security concern detection on file content after a write.
-// In WebUI mode, it uses the event-bus-based SecurityPromptManager to show a dialog.
+// In WebUI mode, it uses the event-bus-based ApprovalManager to show a dialog.
 // In CLI mode, it falls back to the interactive logger prompt.
 // Ignored concerns are tracked per-file so they are not re-prompted.
 func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
-	promptManager := security.GetGlobalPromptManager()
+	promptManager := security.GetGlobalApprovalManager()
 	eventBus := a.GetEventBus()
 
 	if promptManager == nil && eventBus == nil {
@@ -710,7 +710,7 @@ func (a *Agent) PrintTerminalOnly(text string) {
 }
 
 // GetSecurityApprovalMgr returns the security approval manager
-func (a *Agent) GetSecurityApprovalMgr() *SecurityApprovalManager {
+func (a *Agent) GetSecurityApprovalMgr() *security.ApprovalManager {
 	return a.security.GetSecurityApprovalMgr()
 }
 

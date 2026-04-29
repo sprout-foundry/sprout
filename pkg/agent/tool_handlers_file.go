@@ -360,15 +360,6 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
 	}
 
-	// Pre-write validation: check syntax before writing
-	if a.validator != nil && a.configManager.GetConfig().EnablePreWriteValidation {
-		if err := a.validator.ValidateSyntax(ctx, path, content); err != nil {
-			a.debugLog("Pre-write validation failed: %v\n", err)
-			// Don't fail the write - let it through but log the warning
-			a.debugLog("Proceeding with write despite validation warning\n")
-		}
-	}
-
 	result, err := tools.WriteFile(ctx, path, content)
 
 	if err != nil {

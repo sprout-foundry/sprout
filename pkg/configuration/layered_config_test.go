@@ -14,7 +14,6 @@ func TestMergeConfig_NilBase(t *testing.T) {
 		Version:            "2.0",
 		LastUsedProvider:   "openai",
 		ReasoningEffort:    "high",
-		EnablePreWriteValidation: true,
 	}
 
 	result := MergeConfig(nil, override)
@@ -23,8 +22,7 @@ func TestMergeConfig_NilBase(t *testing.T) {
 	assert.Equal(t, override.Version, result.Version)
 	assert.Equal(t, override.LastUsedProvider, result.LastUsedProvider)
 	assert.Equal(t, override.ReasoningEffort, result.ReasoningEffort)
-	assert.Equal(t, override.EnablePreWriteValidation, result.EnablePreWriteValidation)
-	
+
 	// Verify it's a clone, not the same pointer
 	assert.NotSame(t, override, result)
 }
@@ -133,7 +131,6 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	// Note: The current implementation only overrides booleans when they are true
 	// This test reflects the actual behavior, not necessarily desired behavior
 	base := &Config{
-		EnablePreWriteValidation:     false,
 		AllowOrchestratorGitWrite:   false,
 		DisableThinking:             false,
 		SkipPrompt:                  false,
@@ -141,7 +138,6 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	}
 
 	override := &Config{
-		EnablePreWriteValidation:     true,
 		AllowOrchestratorGitWrite:   true,
 		DisableThinking:             true,
 		SkipPrompt:                  true,
@@ -151,7 +147,6 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	result := MergeConfig(base, override)
 
 	require.NotNil(t, result)
-	assert.Equal(t, true, result.EnablePreWriteValidation)
 	assert.Equal(t, true, result.AllowOrchestratorGitWrite)
 	assert.Equal(t, true, result.DisableThinking)
 	assert.Equal(t, true, result.SkipPrompt)
@@ -263,7 +258,6 @@ func TestMergeConfig_EmptyOverrideNoChange(t *testing.T) {
 		LastUsedProvider:   "anthropic",
 		ReasoningEffort:    "medium",
 		ProviderModels:     map[string]string{"anthropic": "claude-3-sonnet"},
-		EnablePreWriteValidation: true,
 	}
 
 	override := &Config{} // Empty override
@@ -275,7 +269,6 @@ func TestMergeConfig_EmptyOverrideNoChange(t *testing.T) {
 	assert.Equal(t, base.LastUsedProvider, result.LastUsedProvider)
 	assert.Equal(t, base.ReasoningEffort, result.ReasoningEffort)
 	assert.Equal(t, base.ProviderModels, result.ProviderModels)
-	assert.Equal(t, base.EnablePreWriteValidation, result.EnablePreWriteValidation)
 }
 
 func TestLoadConfigWithLayers_GlobalOnly(t *testing.T) {
@@ -287,8 +280,7 @@ func TestLoadConfigWithLayers_GlobalOnly(t *testing.T) {
 		"last_used_provider": "openai",
 		"provider_models": {
 			"openai": "gpt-4"
-		},
-		"enable_pre_write_validation": true
+		}
 	}`
 
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
@@ -301,7 +293,6 @@ func TestLoadConfigWithLayers_GlobalOnly(t *testing.T) {
 	assert.Equal(t, "2.0", result.Version)
 	assert.Equal(t, "openai", result.LastUsedProvider)
 	assert.Equal(t, "gpt-4", result.ProviderModels["openai"])
-	assert.True(t, result.EnablePreWriteValidation)
 }
 
 func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
@@ -390,8 +381,7 @@ func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
 
 	globalCfg := `{
 		"version": "2.0",
-		"last_used_provider": "openai",
-		"enable_pre_write_validation": true
+		"last_used_provider": "openai"
 	}`
 
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
@@ -403,7 +393,6 @@ func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
 
 	assert.Equal(t, "2.0", result.Version)
 	assert.Equal(t, "openai", result.LastUsedProvider)
-	assert.True(t, result.EnablePreWriteValidation)
 }
 
 func TestLoadConfigWithLayers_CorruptFile(t *testing.T) {
@@ -419,7 +408,6 @@ func TestLoadConfigWithLayers_CorruptFile(t *testing.T) {
 	corruptCfg := `{
 		"version": "2.0",
 		"last_used_provider": "anthropic",
-		"enable_pre_write_validation": true,
 		// Missing closing brace - invalid JSON
 	`
 
@@ -449,8 +437,7 @@ func TestNewManagerWithLayers_CreatesManager(t *testing.T) {
 	// Create global config
 	globalCfg := `{
 		"version": "2.0",
-		"last_used_provider": "openai",
-		"enable_pre_write_validation": true
+		"last_used_provider": "openai"
 	}`
 	err = os.WriteFile(filepath.Join(globalDir, ConfigFileName), []byte(globalCfg), 0644)
 	require.NoError(t, err)
@@ -463,7 +450,6 @@ func TestNewManagerWithLayers_CreatesManager(t *testing.T) {
 	require.NotNil(t, config)
 	assert.Equal(t, "2.0", config.Version)
 	assert.Equal(t, "openai", config.LastUsedProvider)
-	assert.True(t, config.EnablePreWriteValidation)
 }
 
 func TestNewManagerWithLayers_SavesToWorkspaceDir(t *testing.T) {

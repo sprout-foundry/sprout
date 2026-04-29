@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
+import { showThemedConfirm } from '../components/ThemedDialog';
 import { supportsLocalTerminal } from '../config/mode';
 
 type ViewMode = 'chat' | 'editor' | 'git';
@@ -74,7 +75,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
   } = options;
 
   useEffect(() => {
-    const handleHotkey = (e: Event) => {
+    const handleHotkey = async (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (!detail?.commandId) return;
 
@@ -259,7 +260,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           document.dispatchEvent(new CustomEvent('editor-format-document'));
           break;
         case 'reset_saved_layout': {
-          if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
+          if (!(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))) break;
           // Match CommandPalette reset logic: clear persisted snapshot + all layout keys
           clearLayoutSnapshot();
           const keys = [

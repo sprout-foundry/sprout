@@ -2,6 +2,7 @@ import './CommandPalette.css';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { showThemedConfirm } from './ThemedDialog';
 import { clientFetch } from '../services/clientSession';
 import { ApiService } from '../services/api';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
@@ -474,7 +475,7 @@ function CommandPalette({
   // ── Execute a command by id ───────────────────────────────────────────
 
   const executeCommand = useCallback(
-    (commandId: string) => {
+    async (commandId: string) => {
       switch (commandId) {
         case 'command_palette':
           break;
@@ -562,7 +563,7 @@ function CommandPalette({
           window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
           break;
         case 'reset_saved_layout': {
-          if (!window.confirm('Reset all saved layout settings? This cannot be undone.')) break;
+          if (!(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))) break;
           clearLayoutSnapshot();
           const keys = [
             'ledit.editor.paneLayout', 'ledit.editor.paneSizes', 'ledit-terminal-height',

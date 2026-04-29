@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type ApiService } from '../services/api';
-import { WebSocketService } from '../services/websocket';
 import { notificationBus } from '../services/notificationBus';
-import type { WsEvent } from '../services/websocket';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
+import { useEvents } from '../contexts/EventsContext';
+import type { SproutEvent } from '../types/events';
 
 export interface GitDiffResponse {
   message: string;
@@ -70,6 +70,7 @@ export const useGitWorkspace = ({
   openWorkspaceBuffer,
 }: UseGitWorkspaceOptions) => {
   const log = useLog();
+  const events = useEvents();
 
   const [gitStatus, setGitStatus] = useState<GitStatusData | null>(null);
   const [commitMessage, setCommitMessage] = useState('');
@@ -179,9 +180,7 @@ export const useGitWorkspace = ({
   // agent edits into a single refresh.
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const wsService = WebSocketService.getInstance();
-
-    const handleFileChanged = (event: WsEvent) => {
+    const handleFileChanged = (event: SproutEvent) => {
       if (event?.type !== 'file_changed') return;
 
       const eventData = event.data as Record<string, unknown> | undefined;
@@ -202,14 +201,14 @@ export const useGitWorkspace = ({
       }, 2000);
     };
 
-    wsService.onEvent(handleFileChanged);
+    events.onEvent(handleFileChanged);
     return () => {
-      wsService.removeEvent(handleFileChanged);
+      events.removeEvent(handleFileChanged);
       if (debounceTimerRef.current !== null) {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [loadGitStatus]);
+  }, [events, loadGitStatus]);
 
   const loadDiff = useCallback(
     async (filePath: string) => {

@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { WebSocketService } from '../services/websocket';
 import { debugLog } from '../utils/log';
+import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
 
 export interface UseModelProviderHandlersOptions {
@@ -29,7 +29,7 @@ export function useModelProviderHandlers({
   state,
   setState,
 }: UseModelProviderHandlersOptions): UseModelProviderHandlersReturn {
-  const wsService = WebSocketService.getInstance();
+  const events = useEvents();
 
   const pendingProviderRef = useRef<string>(state.provider);
   const providerRef = useRef(state.provider);
@@ -48,13 +48,13 @@ export function useModelProviderHandlers({
         ...prev,
         model,
       }));
-      wsService.sendEvent({
+      events.sendEvent({
         type: 'model_change',
         data: { provider, model },
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wsService],
+    [events],
   );
 
   const handleProviderChange = useCallback(
@@ -65,13 +65,13 @@ export function useModelProviderHandlers({
         ...prev,
         provider,
       }));
-      wsService.sendEvent({
+      events.sendEvent({
         type: 'provider_change',
         data: { provider },
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wsService],
+    [events],
   );
 
   const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
@@ -85,13 +85,13 @@ export function useModelProviderHandlers({
   const handlePersonaChange = useCallback(
     (persona: string) => {
       debugLog('Persona changed to:', persona);
-      wsService.sendEvent({
+      events.sendEvent({
         type: 'persona_change',
         data: { persona },
       });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [wsService],
+    [events],
   );
 
   return { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange };

@@ -1971,7 +1971,7 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
         <span className="config-scope-desc">
           {configViewLayer === 'session' && 'Session overrides only'}
           {configViewLayer === 'workspace' && 'Workspace config (shared across sessions)'}
-          {configViewLayer === 'global' && 'Global config (~/.ledit)'}
+          {configViewLayer === 'global' && 'Global config (~/.config/sprout)'}
         </span>
         {layerError && (
           <div className="config-scope-error">{layerError}</div>

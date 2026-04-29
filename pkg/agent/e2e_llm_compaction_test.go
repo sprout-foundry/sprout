@@ -12,14 +12,14 @@ import (
 )
 
 // findCompactionMaxContext iterates threshold candidates and sets
-// agent.maxContextTokens to the first value that triggers compaction.
+// agent.state.GetMaxContextTokens() to the first value that triggers compaction.
 // It fatal-fails the test if no candidate triggers compaction, avoiding
 // confusing downstream assertion failures.
 func findCompactionMaxContext(t *testing.T, agent *Agent, ch *ConversationHandler) {
 	t.Helper()
 	candidates := []int{500, 1000, 2000, 5000, 10000}
 	for _, maxCtx := range candidates {
-		agent.maxContextTokens = maxCtx
+		agent.state.SetMaxContextTokens(maxCtx)
 		compactionThreshold := int(float64(maxCtx) * PruningConfig.Default.StandardPercent)
 
 		// Build the same message list that prepareMessages would build
@@ -27,7 +27,7 @@ func findCompactionMaxContext(t *testing.T, agent *Agent, ch *ConversationHandle
 		// NOTE: This assumes OptimizeConversation is a no-op for the test
 		// messages (no tool results with "Tool call result" prefixes).
 		prep := []api.Message{{Role: "system", Content: agent.systemPrompt}}
-		prep = append(prep, agent.messages...)
+		prep = append(prep, agent.state.GetMessages()...)
 		tokens := ch.apiClient.estimateRequestTokens(prep, nil)
 
 		if tokens > compactionThreshold {
@@ -69,16 +69,16 @@ func TestE2E_LLMCompactionSummaryViaPrepareMessages(t *testing.T) {
 
 	// --- Wire up agent with optimizer and LLM client -----------------------
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
-	agent.optimizer.SetLLMClient(compactionClient, "test-llm", nil)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
+	agent.state.GetOptimizer().SetLLMClient(compactionClient, "test-llm", nil)
 
-	// --- Populate agent.messages with enough messages to trigger compaction -
+	// --- Populate agent.state.GetMessages() with enough messages to trigger compaction -
 	// We need ≥ PruningConfig.Structural.MinMessagesToCompact (30) total
 	// messages after optimization, with a sufficiently large middle segment
 	// (≥ MinMiddleMessages = 6) between the anchor and the recent tail
 	// (RecentMessagesToKeep = 24).
 	//
-	// Layout (no system message in agent.messages — prepareMessages prepends it):
+	// Layout (no system message in agent.state.GetMessages() — prepareMessages prepends it):
 	//   [0]  user    – anchor user query
 	//   [1]  assistant – anchor assistant reply (no tool calls)
 	//   [2..17]  8 user/assistant pairs → middle segment (16 messages)
@@ -126,8 +126,8 @@ func TestE2E_LLMCompactionSummaryViaPrepareMessages(t *testing.T) {
 		})
 	}
 
-	agent.messages = messages
-	originalCount := len(agent.messages)
+	agent.state.SetMessages(messages)
+	originalCount := len(agent.state.GetMessages())
 
 	// --- Find a maxContextTokens that triggers the 87% compaction threshold --
 	// We don't set checkpoints so checkpoint compaction won't fire, forcing
@@ -145,9 +145,9 @@ func TestE2E_LLMCompactionSummaryViaPrepareMessages(t *testing.T) {
 		len(prepared), originalCount+1,
 	)
 
-	// 1b. agent.messages should be updated to the compacted version.
-	assert.Less(t, len(agent.messages), originalCount,
-		"expected agent.messages to be updated to compacted version after LLM compaction")
+	// 1b. agent.state.GetMessages() should be updated to the compacted version.
+	assert.Less(t, len(agent.state.GetMessages()), originalCount,
+		"expected agent.state.GetMessages() to be updated to compacted version after LLM compaction")
 
 	// 2. The compactionClient (LLM) should have been called exactly once.
 	sentRequests := compactionClient.GetSentRequests()
@@ -231,10 +231,10 @@ func TestE2E_LLMCompactionErrorFallsBackToGoSummary(t *testing.T) {
 
 	// --- Wire up agent with optimizer and LLM client -----------------------
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
-	agent.optimizer.SetLLMClient(compactionClient, "test-llm", nil)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
+	agent.state.GetOptimizer().SetLLMClient(compactionClient, "test-llm", nil)
 
-	// --- Populate agent.messages with enough messages to trigger compaction ---
+	// --- Populate agent.state.GetMessages() with enough messages to trigger compaction ---
 	// Layout:
 	//   [0]  user     – anchor (long content for tokens)
 	//   [1]  assistant – anchor (long content for tokens)
@@ -286,8 +286,8 @@ func TestE2E_LLMCompactionErrorFallsBackToGoSummary(t *testing.T) {
 		})
 	}
 
-	agent.messages = messages
-	originalCount := len(agent.messages)
+	agent.state.SetMessages(messages)
+	originalCount := len(agent.state.GetMessages())
 
 	// --- Find a maxContextTokens that triggers the 87% threshold ---------------
 	ch := NewConversationHandler(agent)
@@ -322,9 +322,9 @@ func TestE2E_LLMCompactionErrorFallsBackToGoSummary(t *testing.T) {
 	}
 
 	// 4. Compaction should have reduced message count (Go fallback also compacts).
-	assert.Less(t, len(agent.messages), originalCount,
-		"expected agent.messages to be updated to compacted version: got %d, want < %d",
-		len(agent.messages), originalCount)
+	assert.Less(t, len(agent.state.GetMessages()), originalCount,
+		"expected agent.state.GetMessages() to be updated to compacted version: got %d, want < %d",
+		len(agent.state.GetMessages()), originalCount)
 
 	// 5. A recent message should still be preserved.
 	var foundRecentMsg bool

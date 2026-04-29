@@ -11,12 +11,12 @@ import (
 
 // GetActivePersona returns the currently active persona ID.
 func (a *Agent) GetActivePersona() string {
-	return normalizeAgentPersonaID(a.activePersona)
+	return normalizeAgentPersonaID(a.state.GetActivePersona())
 }
 
 // ClearActivePersona removes any active persona override and restores the base system prompt.
 func (a *Agent) ClearActivePersona() {
-	a.activePersona = ""
+	a.state.SetActivePersona("")
 	if strings.TrimSpace(a.baseSystemPrompt) != "" {
 		a.systemPrompt = a.baseSystemPrompt
 	}
@@ -87,12 +87,12 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		}
 	}
 
-	a.activePersona = personaID
+	a.state.SetActivePersona(personaID)
 	return nil
 }
 
 func (a *Agent) getActivePersonaToolAllowlist() []string {
-	activePersona := normalizeAgentPersonaID(a.activePersona)
+	activePersona := normalizeAgentPersonaID(a.state.GetActivePersona())
 	if activePersona == "" || a.configManager == nil {
 		return nil
 	}

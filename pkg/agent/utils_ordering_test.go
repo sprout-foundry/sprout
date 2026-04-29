@@ -10,9 +10,10 @@ import (
 
 func TestPrintLineAsyncPreservesOrderingUnderBackpressure(t *testing.T) {
 	agent := &Agent{
-		outputMutex: &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
-	agent.asyncBufferSize = 4
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	agent.output.SetAsyncBufferSize(4)
 	agent.SetStreamingEnabled(true)
 
 	const total = 100

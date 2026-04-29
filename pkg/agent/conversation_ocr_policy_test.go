@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"sync"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -10,30 +9,30 @@ import (
 
 func TestShouldRequireOCRBeforeCompletion(t *testing.T) {
 	agent := &Agent{
-		streamingEnabled: true,
-		interruptCtx:     context.Background(),
-		outputMutex:      &sync.Mutex{},
-		messages: []api.Message{
-			{Role: "user", Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs."},
-			{
-				Role: "assistant",
-				ToolCalls: []api.ToolCall{
-					{
-						ID:   "fetch_1",
-						Type: "function",
-						Function: struct {
-							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
-						}{
-							Name:      "fetch_url",
-							Arguments: `{"url":"https://example.com/menu"}`,
-						},
+		interruptCtx: context.Background(),
+		state:        NewAgentStateManager(false),
+		output:       NewAgentOutputManager(),
+	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs."},
+		{
+			Role: "assistant",
+			ToolCalls: []api.ToolCall{
+				{
+					ID:   "fetch_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "fetch_url",
+						Arguments: `{"url":"https://example.com/menu"}`,
 					},
 				},
 			},
-			{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
 		},
-	}
+		{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
+	})
 	ch := NewConversationHandler(agent)
 
 	if !ch.shouldRequireOCRBeforeCompletion() {
@@ -43,29 +42,29 @@ func TestShouldRequireOCRBeforeCompletion(t *testing.T) {
 
 func TestShouldRequireOCRBeforeCompletion_FalseWhenOCRAlreadyAttempted(t *testing.T) {
 	agent := &Agent{
-		streamingEnabled: true,
-		interruptCtx:     context.Background(),
-		outputMutex:      &sync.Mutex{},
-		messages: []api.Message{
-			{Role: "user", Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs."},
-			{
-				Role: "assistant",
-				ToolCalls: []api.ToolCall{
-					{
-						ID:   "ocr_1",
-						Type: "function",
-						Function: struct {
-							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
-						}{
-							Name:      "analyze_image_content",
-							Arguments: `{"image_path":"https://cdn.example.com/menu.jpg"}`,
-						},
+		interruptCtx: context.Background(),
+		state:        NewAgentStateManager(false),
+		output:       NewAgentOutputManager(),
+	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs."},
+		{
+			Role: "assistant",
+			ToolCalls: []api.ToolCall{
+				{
+					ID:   "ocr_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "analyze_image_content",
+						Arguments: `{"image_path":"https://cdn.example.com/menu.jpg"}`,
 					},
 				},
 			},
 		},
-	}
+	})
 	ch := NewConversationHandler(agent)
 
 	if ch.shouldRequireOCRBeforeCompletion() {
@@ -75,30 +74,30 @@ func TestShouldRequireOCRBeforeCompletion_FalseWhenOCRAlreadyAttempted(t *testin
 
 func TestHandleOCRCompletionGate_RemindsThenStops(t *testing.T) {
 	agent := &Agent{
-		streamingEnabled: true,
-		interruptCtx:     context.Background(),
-		outputMutex:      &sync.Mutex{},
-		messages: []api.Message{
-			{Role: "user", Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs."},
-			{
-				Role: "assistant",
-				ToolCalls: []api.ToolCall{
-					{
-						ID:   "fetch_1",
-						Type: "function",
-						Function: struct {
-							Name      string `json:"name"`
-							Arguments string `json:"arguments"`
-						}{
-							Name:      "fetch_url",
-							Arguments: `{"url":"https://example.com/menu"}`,
-						},
+		interruptCtx: context.Background(),
+		state:        NewAgentStateManager(false),
+		output:       NewAgentOutputManager(),
+	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "user", Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs."},
+		{
+			Role: "assistant",
+			ToolCalls: []api.ToolCall{
+				{
+					ID:   "fetch_1",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{
+						Name:      "fetch_url",
+						Arguments: `{"url":"https://example.com/menu"}`,
 					},
 				},
 			},
-			{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 3 and PDF download menu.pdf"},
 		},
-	}
+		{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 3 and PDF download menu.pdf"},
+	})
 	ch := NewConversationHandler(agent)
 	turn := &TurnEvaluation{}
 

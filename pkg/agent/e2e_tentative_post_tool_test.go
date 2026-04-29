@@ -93,11 +93,11 @@ func TestE2E_TentativePostToolRejection(t *testing.T) {
 	assert.Contains(t, result, "architecture discussion",
 		"returned content should contain details from the concrete answer")
 
-	// Verify message ordering in agent.messages:
+	// Verify message ordering in agent.state.GetMessages():
 	// user → assistant(tool_call) → tool → assistant(tentative) → assistant(concrete)
 	// Note: the transient rejection message is injected by prepareMessages into the API
-	// request but is NOT persisted to agent.messages — it is consumed and cleared.
-	assertMessageOrdering(t, agent.messages,
+	// request but is NOT persisted to agent.state.GetMessages() — it is consumed and cleared.
+	assertMessageOrdering(t, agent.state.GetMessages(),
 		[]string{"user", "assistant", "tool", "assistant", "assistant"})
 
 	// Verify the transient rejection message was sent to the model in the 3rd API request.
@@ -118,7 +118,7 @@ func TestE2E_TentativePostToolRejection(t *testing.T) {
 		"expected transient rejection message to be sent to the model in the 3rd API request")
 
 	// Verify that the tool result contains actual file content
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.NotEmpty(t, toolMsgs, "expected at least one tool result message")
 	assert.Contains(t, toolMsgs[0].Content, "Important data for analysis",
 		"tool result should contain actual file content")
@@ -190,7 +190,7 @@ func TestE2E_TentativePostToolRejectionThenConcreteAccepted(t *testing.T) {
 		"should return the concrete answer content")
 
 	// Verify message ordering: user → assistant(tool_call) → tool → assistant(tentative) → assistant(concrete)
-	assertMessageOrdering(t, agent.messages,
+	assertMessageOrdering(t, agent.state.GetMessages(),
 		[]string{"user", "assistant", "tool", "assistant", "assistant"})
 
 	// Verify transient rejection message was sent to the model
@@ -209,7 +209,7 @@ func TestE2E_TentativePostToolRejectionThenConcreteAccepted(t *testing.T) {
 		"expected transient rejection message to be sent to the model in the 3rd API request")
 
 	// Verify tool result
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.NotEmpty(t, toolMsgs, "expected tool result message")
 	assert.Contains(t, toolMsgs[0].Content, "Meeting notes",
 		"tool result should contain the file content")

@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { createRoot, type Root } from 'react-dom/client';
-import { act } from 'react';
+import React, { act } from 'react';
 import { Simulate } from 'react-dom/test-utils';
 import FileTree, { type FileInfo } from './FileTree';
 
@@ -134,6 +134,7 @@ async function renderTree(props: Partial<React.ComponentProps<typeof FileTree>> 
         onDeletePath={props.onDeletePath ?? defaultOnDeletePath}
         onRenamePath={props.onRenamePath ?? defaultOnRenamePath}
         onOpenInFileBrowser={props.onOpenInFileBrowser ?? defaultOnOpenInFileBrowser}
+        files={props.files}
       />,
     );
   });
@@ -1595,5 +1596,247 @@ describe('FileTree callback props – onOpenInFileBrowser', () => {
 
     const texts = getContextMenuTexts();
     expect(texts).not.toContain('Open in file browser');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FileTree data prop – files
+// ---------------------------------------------------------------------------
+
+describe('FileTree data prop – files', () => {
+  /** Helper: return the set of file names currently visible in the tree. */
+  function getVisibleFileNames(): string[] {
+    const items = document.querySelectorAll('.file-tree-item .file-tree-name');
+    return Array.from(items).map((el) => el.textContent ?? '');
+  }
+
+  it('renders files from the files prop without calling onFetchFiles on mount', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue([]);
+    const initialFiles: FileInfo[] = [
+      { name: 'alpha.ts', path: 'alpha.ts', isDir: false, size: 10, modified: 100, ext: '.ts' },
+      { name: 'beta.ts', path: 'beta.ts', isDir: false, size: 20, modified: 200, ext: '.ts' },
+    ];
+
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          files={initialFiles}
+          onFetchFiles={onFetchFiles}
+        />,
+      );
+    });
+    await flushPromises();
+
+    const names = getVisibleFileNames();
+    expect(names).toContain('alpha.ts');
+    expect(names).toContain('beta.ts');
+
+    // onFetchFiles should NOT have been called for the initial load
+    expect(onFetchFiles).not.toHaveBeenCalled();
+  });
+
+  it('updates the tree when the files prop changes', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue([]);
+    const firstFiles: FileInfo[] = [
+      { name: 'alpha.ts', path: 'alpha.ts', isDir: false, size: 10, modified: 100, ext: '.ts' },
+    ];
+    const secondFiles: FileInfo[] = [
+      { name: 'gamma.rs', path: 'gamma.rs', isDir: false, size: 30, modified: 300, ext: '.rs' },
+      { name: 'delta.rs', path: 'delta.rs', isDir: false, size: 40, modified: 400, ext: '.rs' },
+    ];
+
+    // Render with first files
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          files={firstFiles}
+          onFetchFiles={onFetchFiles}
+        />,
+      );
+    });
+    await flushPromises();
+
+    let names = getVisibleFileNames();
+    expect(names).toContain('alpha.ts');
+    expect(names).not.toContain('gamma.rs');
+
+    // Re-render with different files
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          files={secondFiles}
+          onFetchFiles={onFetchFiles}
+        />,
+      );
+    });
+    await flushPromises();
+
+    names = getVisibleFileNames();
+    expect(names).not.toContain('alpha.ts');
+    expect(names).toContain('gamma.rs');
+    expect(names).toContain('delta.rs');
+  });
+
+  it('uses files prop for initial load but onFetchFiles for directory expansion', async () => {
+    const dirChildren: FileInfo[] = [
+      { name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' },
+    ];
+    const onFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === 'src') return dirChildren;
+      return [];
+    });
+
+    const initialFiles: FileInfo[] = [
+      { name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' },
+      { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+    ];
+
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          files={initialFiles}
+          onFetchFiles={onFetchFiles}
+        />,
+      );
+    });
+    await flushPromises();
+
+    // Initial load should use files prop, not call onFetchFiles
+    const names = getVisibleFileNames();
+    expect(names).toContain('src');
+    expect(names).toContain('main.go');
+    expect(onFetchFiles).not.toHaveBeenCalled();
+
+    // Expand the src directory by clicking on it
+    const srcItem = document.querySelector('.file-tree-item.directory');
+    expect(srcItem).not.toBeNull();
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    // onFetchFiles should now have been called for directory expansion
+    expect(onFetchFiles).toHaveBeenCalledWith('src');
+
+    // The children should be visible
+    const namesAfter = getVisibleFileNames();
+    expect(namesAfter).toContain('app.tsx');
+  });
+
+  it('calls onFetchFiles on mount when files prop is not provided', async () => {
+    const onFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
+      if (path === '.') {
+        return [
+          { name: 'hello.go', path: 'hello.go', isDir: false, size: 80, modified: 800, ext: '.go' },
+        ];
+      }
+      return [];
+    });
+
+    await act(async () => {
+      root.render(
+        <FileTree
+          onFileSelect={jest.fn()}
+          rootPath="."
+          onFetchFiles={onFetchFiles}
+        />,
+      );
+    });
+    await flushPromises();
+
+    // onFetchFiles should have been called for the root path on mount
+    expect(onFetchFiles).toHaveBeenCalledWith('.');
+
+    const names = getVisibleFileNames();
+    expect(names).toContain('hello.go');
+  });
+
+  it('does NOT call onFetchFiles when files prop provides pre-loaded children', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue([]);
+    const initialFiles: FileInfo[] = [
+      {
+        name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '',
+        children: [
+          { name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' },
+        ],
+      },
+      { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
+    ];
+
+    await renderTree({ files: initialFiles, onFetchFiles });
+
+    // Verify the tree rendered the files prop data
+    const names = getVisibleFileNames();
+    expect(names).toContain('src');
+    expect(names).toContain('main.go');
+
+    // onFetchFiles should NOT have been called for initial load
+    expect(onFetchFiles).not.toHaveBeenCalled();
+
+    // Expand the src directory by clicking on it — children are already loaded
+    const srcItem = document.querySelector('.file-tree-item.directory');
+    if (srcItem) {
+      await act(async () => {
+        srcItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await flushPromises();
+    }
+
+    // onFetchFiles should STILL not have been called — children were pre-loaded
+    expect(onFetchFiles).not.toHaveBeenCalled();
+
+    // The children should be visible
+    const namesAfterExpand = getVisibleFileNames();
+    expect(namesAfterExpand).toContain('app.tsx');
+  });
+
+  it('imperative refresh() uses files prop as base when provided', async () => {
+    const onFetchFiles = jest.fn().mockResolvedValue([]);
+    const initialFiles: FileInfo[] = [
+      { name: 'alpha.ts', path: 'alpha.ts', isDir: false, size: 10, modified: 100, ext: '.ts' },
+    ];
+
+    const treeRef = React.createRef<{ refresh: () => void; revealFile: (filePath: string) => void }>();
+
+    await act(async () => {
+      root.render(
+        <FileTree
+          ref={treeRef}
+          onFileSelect={jest.fn()}
+          rootPath="."
+          files={initialFiles}
+          onFetchFiles={onFetchFiles}
+        />,
+      );
+    });
+    await flushPromises();
+
+    // Initial render shows alpha.ts from files prop
+    let names = getVisibleFileNames();
+    expect(names).toContain('alpha.ts');
+    expect(onFetchFiles).not.toHaveBeenCalled();
+
+    // Call refresh via imperative handle
+    await act(async () => {
+      treeRef.current?.refresh();
+    });
+    await flushPromises();
+
+    // After refresh, should still show the same data (from filesPropRef)
+    names = getVisibleFileNames();
+    expect(names).toContain('alpha.ts');
+
+    // onFetchFiles should still not be called since files prop was provided
+    expect(onFetchFiles).not.toHaveBeenCalled();
   });
 });

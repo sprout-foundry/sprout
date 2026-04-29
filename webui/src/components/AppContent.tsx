@@ -373,6 +373,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const {
     gitStatus,
     gitBranches,
+    workspaceRoot,
     commitMessage,
     setCommitMessage,
     selectedFiles,
@@ -1049,6 +1050,7 @@ const AppContent: React.FC<AppContentProps> = ({
         gitPanel={{
           gitStatus,
           gitBranches,
+          workspaceRoot,
           selectedFiles,
           activeDiffSelectionKey,
           commitMessage,

@@ -19,7 +19,7 @@ const meta = {
 } satisfies Meta<typeof NotificationStack>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof NotificationStack>;
 
 // Wrapper component to handle dismiss state
 const NotificationWrapper = ({ notifications }: { notifications: typeof mockNotifications }) => {

@@ -27,6 +27,8 @@ these specifications first to ensure alignment with the project direction.
 - **SP-005** Supporting Systems & Infrastructure
 - **SP-006** Delegate Tool (proposed)
 - **SP-007** Extend Configuration (proposed)
+- **SP-008** Reliability Engineering (proposed)
+- **SP-009** Component Library Maturation (proposed)
 
 ## Testing
 

@@ -3,7 +3,7 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
-import TerminalTabBar, { type TerminalSession } from './TerminalTabBar';
+import { TerminalTabBar, type TerminalSession } from '@sprout/ui';
 import { ApiService, type ShellInfo } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';

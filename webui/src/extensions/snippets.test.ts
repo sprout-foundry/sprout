@@ -7,7 +7,15 @@
  * and the `tabExpandSnippets()` factory.
  */
 
-// ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
+// ── Mock CodeMirror modules and ./emmet (ESM internals break Jest 27) ──
+
+// Mock ./emmet first — it imports @emmetio/codemirror6-plugin (ESM-only)
+jest.mock('./emmet', () => ({
+  isEmmetLanguage: jest.fn((lang: string | null) => {
+    if (!lang) return false;
+    return ['html', 'xml', 'css', 'sass', 'scss', 'javascript-jsx'].includes(lang);
+  }),
+}));
 
 // ── Module under test (Jest hoists mocks above imports) ─────────────
 import { getSnippetsForLanguage, setSnippetLanguage, getSnippetLanguage, tabExpandSnippets } from './snippets';

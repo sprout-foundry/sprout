@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import type { GitStatusData } from '../types/git-types';
 import type { FileSection } from '../types/git-types';
@@ -8,6 +7,8 @@ import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
 import type { SproutEvent } from '../types/events';
+import * as gitApi from '../services/api/gitApi';
+import * as miscApi from '../services/api/miscApi';
 
 export interface GitDiffResponse {
   message: string;
@@ -37,7 +38,7 @@ export interface GitBranchesState {
 }
 
 interface UseGitWorkspaceOptions {
-  apiService: ApiService;
+  fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   gitRefreshToken: number;
   selectedGitFilePath?: string | null;
   onViewChange: (view: 'chat' | 'editor' | 'git') => void;
@@ -59,7 +60,7 @@ interface UseGitWorkspaceOptions {
 }
 
 export const useGitWorkspace = ({
-  apiService,
+  fetchFn,
   gitRefreshToken,
   selectedGitFilePath,
   onViewChange,
@@ -110,8 +111,8 @@ export const useGitWorkspace = ({
     setIsGitLoading(true);
     try {
       const [data, branchData] = await Promise.all([
-        apiService.getGitStatus(),
-        apiService.getGitBranches().catch((err) => {
+        gitApi.getGitStatus(fetchFn),
+        gitApi.getGitBranches(fetchFn).catch((err) => {
           debugLog('[loadGitStatus] failed to fetch git branches:', err);
           return { current: '', branches: [] };
         }),
@@ -169,7 +170,7 @@ export const useGitWorkspace = ({
     } finally {
       setIsGitLoading(false);
     }
-  }, [apiService, log]);
+  }, [fetchFn, log]);
 
   useEffect(() => {
     loadGitStatus();
@@ -216,7 +217,7 @@ export const useGitWorkspace = ({
       setIsDiffLoading(true);
       setDiffError(null);
       try {
-        const response = await apiService.getGitDiff(filePath);
+        const response = await gitApi.getGitDiff(fetchFn, filePath);
         setActiveDiff(response);
         const nextMode =
           response.has_staged && !response.has_unstaged
@@ -244,7 +245,7 @@ export const useGitWorkspace = ({
         setIsDiffLoading(false);
       }
     },
-    [apiService, openWorkspaceBuffer, log],
+    [fetchFn, openWorkspaceBuffer, log],
   );
 
   useEffect(() => {
@@ -455,7 +456,7 @@ export const useGitWorkspace = ({
     setReviewFixResult(null);
     setIsReviewLoading(true);
     try {
-      const response = await apiService.generateDeepReview();
+      const response = await miscApi.generateDeepReview(fetchFn);
       setDeepReview(response);
       openWorkspaceBuffer({
         kind: 'review',
@@ -472,7 +473,7 @@ export const useGitWorkspace = ({
     } finally {
       setIsReviewLoading(false);
     }
-  }, [apiService, onViewChange, openWorkspaceBuffer]);
+  }, [fetchFn, onViewChange, openWorkspaceBuffer]);
 
   const handleFixFromReview = useCallback(
     async (options?: { fixPrompt?: string; selectedItems?: string[] }) => {
@@ -483,14 +484,14 @@ export const useGitWorkspace = ({
       setReviewFixSessionID(null);
       setIsReviewFixing(true);
       try {
-        const started = await apiService.startFixFromDeepReview(deepReview.review_output, options);
+        const started = await miscApi.startFixFromDeepReview(fetchFn, deepReview.review_output, options);
         setReviewFixSessionID(started.session_id || null);
         fixPollIndexRef.current = 0;
         setReviewFixLogs((prev) => [...prev, `Started fix session: ${started.session_id}`]);
 
         const poll = async () => {
           try {
-            const status = await apiService.getFixFromDeepReviewStatus(started.job_id, fixPollIndexRef.current);
+            const status = await miscApi.getFixFromDeepReviewStatus(fetchFn, started.job_id, fixPollIndexRef.current);
             if (status.logs?.length) {
               setReviewFixLogs((prev) => [...prev, ...status.logs]);
             }
@@ -522,7 +523,7 @@ export const useGitWorkspace = ({
         setIsReviewFixing(false);
       }
     },
-    [apiService, deepReview, loadGitStatus],
+    [fetchFn, deepReview, loadGitStatus],
   );
 
   const handleDiffModeChange = useCallback(
@@ -553,10 +554,10 @@ export const useGitWorkspace = ({
     (branch: string) => {
       if (!branch.trim() || branch === currentBranch) return;
       runGitAction(async () => {
-        await apiService.checkoutGitBranch(branch);
+        await gitApi.checkoutGitBranch(fetchFn, branch);
       }, `Failed to checkout ${branch}`);
     },
-    [apiService, currentBranch, runGitAction],
+    [fetchFn, currentBranch, runGitAction],
   );
 
   const handleCreateBranch = useCallback(
@@ -564,41 +565,41 @@ export const useGitWorkspace = ({
       const trimmed = name.trim();
       if (!trimmed) return;
       runGitAction(async () => {
-        await apiService.createGitBranch(trimmed);
+        await gitApi.createGitBranch(fetchFn, trimmed);
       }, `Failed to create branch ${trimmed}`);
     },
-    [apiService, runGitAction],
+    [fetchFn, runGitAction],
   );
 
   const handlePull = useCallback(() => {
     runGitAction(async () => {
-      await apiService.pullGit();
+      await gitApi.pullGit(fetchFn);
     }, 'Failed to pull changes');
-  }, [apiService, runGitAction]);
+  }, [fetchFn, runGitAction]);
 
   const handlePush = useCallback(() => {
     runGitAction(async () => {
-      await apiService.pushGit();
+      await gitApi.pushGit(fetchFn);
     }, 'Failed to push changes');
-  }, [apiService, runGitAction]);
+  }, [fetchFn, runGitAction]);
 
   // Git history callbacks
   const handleLoadCommits = useCallback(
     async (limit: number, offset: number, opts?: { signal?: AbortSignal }) => {
-      const res = await apiService.getGitLog(limit, offset, opts);
+      const res = await gitApi.getGitLog(fetchFn, limit, offset, opts);
       return { commits: res.commits, total: res.total };
     },
-    [apiService],
+    [fetchFn],
   );
 
   const handleLoadCommitDetail = useCallback(
-    (hash: string) => apiService.getGitCommitDetail(hash),
-    [apiService],
+    (hash: string) => gitApi.getGitCommitDetail(fetchFn, hash),
+    [fetchFn],
   );
 
   const handleLoadCommitFileDiff = useCallback(
-    (hash: string, path: string) => apiService.getGitCommitFileDiff(hash, path),
-    [apiService],
+    (hash: string, path: string) => gitApi.getGitCommitFileDiff(fetchFn, hash, path),
+    [fetchFn],
   );
 
   const handleCheckoutCommit = useCallback(
@@ -607,7 +608,7 @@ export const useGitWorkspace = ({
       setGitActionWarning(null);
       setIsGitActing(true);
       try {
-        const result = await apiService.checkoutGitCommit(hash);
+        const result = await gitApi.checkoutGitCommit(fetchFn, hash);
         await loadGitStatus();
         setSelectedFiles(new Set());
         return result;
@@ -619,7 +620,7 @@ export const useGitWorkspace = ({
         setIsGitActing(false);
       }
     },
-    [apiService, loadGitStatus],
+    [fetchFn, loadGitStatus],
   );
 
   const handleRevertCommit = useCallback(
@@ -628,7 +629,7 @@ export const useGitWorkspace = ({
       setGitActionWarning(null);
       setIsGitActing(true);
       try {
-        const result = await apiService.revertGitCommit(hash);
+        const result = await gitApi.revertGitCommit(fetchFn, hash);
         await loadGitStatus();
         setSelectedFiles(new Set());
         return result;
@@ -640,7 +641,7 @@ export const useGitWorkspace = ({
         setIsGitActing(false);
       }
     },
-    [apiService, loadGitStatus],
+    [fetchFn, loadGitStatus],
   );
 
   return {

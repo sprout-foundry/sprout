@@ -1,4 +1,4 @@
-import { WebSocketService } from './websocket';
+import type { EventsProvider } from '../types/events';
 
 export interface UIDropdownItem {
   id: string;
@@ -59,7 +59,7 @@ export interface UIProgressUpdate {
 
 class UIService {
   private static instance: UIService;
-  private wsService: WebSocketService;
+  private eventsProvider: EventsProvider;
   private pendingPrompts: Map<
     string,
     {
@@ -69,20 +69,27 @@ class UIService {
     }
   > = new Map();
 
-  private constructor() {
-    this.wsService = WebSocketService.getInstance();
+  private constructor(eventsProvider: EventsProvider) {
+    this.eventsProvider = eventsProvider;
     this.setupEventHandlers();
   }
 
-  static getInstance(): UIService {
+  static getInstance(eventsProvider?: EventsProvider): UIService {
     if (!UIService.instance) {
-      UIService.instance = new UIService();
+      if (!eventsProvider) {
+        throw new Error('UIService.getInstance() requires an EventsProvider on first call');
+      }
+      UIService.instance = new UIService(eventsProvider);
     }
     return UIService.instance;
   }
 
+  static resetInstance(): void {
+    UIService.instance = null as unknown as UIService;
+  }
+
   private setupEventHandlers() {
-    this.wsService.onEvent((event) => {
+    this.eventsProvider.onEvent((event) => {
       if (event.type === 'ui_prompt_response') {
         this.handlePromptResponse(event.data as UIPromptResponse);
       }
@@ -226,12 +233,12 @@ class UIService {
 
   // Method to send response back to pending prompt
   respondToPrompt(response: UIPromptResponse) {
-    // Send response via WebSocket to backend
-    this.wsService.sendEvent({
+    // Send response via events provider to backend
+    this.eventsProvider.sendEvent({
       type: 'ui_prompt_response',
       data: response,
     });
   }
 }
 
-export const uiService = UIService.getInstance();
+export { UIService };

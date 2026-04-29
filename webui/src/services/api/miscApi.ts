@@ -1,0 +1,115 @@
+/**
+ * Stats/Health/Providers/Misc domain API — adapter-aware operations.
+ */
+
+// ── Stats ──────────────────────────────────────────────────────────
+
+export async function getStats(fetchFn: typeof fetch): Promise<any> {
+  const response = await fetchFn('/api/stats');
+  if (!response.ok) throw new Error('Failed to fetch stats');
+  return response.json();
+}
+
+// ── Health ─────────────────────────────────────────────────────────
+
+export async function checkHealth(fetchFn: typeof fetch): Promise<boolean> {
+  try {
+    const response = await fetchFn('/health');
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ── Providers ──────────────────────────────────────────────────────
+
+export async function getProviders(fetchFn: typeof fetch): Promise<any> {
+  const response = await fetchFn('/api/providers');
+  if (!response.ok) throw new Error('Failed to fetch providers');
+  return response.json();
+}
+
+// ── Changelog / Revisions ──────────────────────────────────────────
+
+export async function getChangelog(fetchFn: typeof fetch): Promise<any> {
+  const response = await fetchFn('/api/changelog');
+  if (!response.ok) throw new Error('Failed to fetch changelog');
+  return response.json();
+}
+
+export async function getChanges(fetchFn: typeof fetch): Promise<any> {
+  const response = await fetchFn('/api/changes');
+  if (!response.ok) throw new Error('Failed to fetch changes');
+  return response.json();
+}
+
+export async function getRevisionDetails(fetchFn: typeof fetch, revisionId: string): Promise<any> {
+  const response = await fetchFn(`/api/revisions/${encodeURIComponent(revisionId)}`);
+  if (!response.ok) throw new Error('Failed to fetch revision details');
+  return response.json();
+}
+
+export async function rollbackToRevision(fetchFn: typeof fetch, revisionId: string): Promise<any> {
+  const response = await fetchFn(`/api/revisions/${encodeURIComponent(revisionId)}/rollback`, { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to rollback revision');
+  return response.json();
+}
+
+// ── Review ─────────────────────────────────────────────────────────
+
+export async function generateDeepReview(fetchFn: typeof fetch): Promise<any> {
+  const response = await fetchFn('/api/review/deep', { method: 'POST' });
+  if (!response.ok) throw new Error('Failed to generate deep review');
+  return response.json();
+}
+
+export async function fixFromDeepReview(fetchFn: typeof fetch, reviewOutput: string): Promise<any> {
+  const response = await fetchFn('/api/review/fix', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ review_output: reviewOutput }),
+  });
+  if (!response.ok) throw new Error('Failed to fix from review');
+  return response.json();
+}
+
+export async function startFixFromDeepReview(fetchFn: typeof fetch, reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<any> {
+  const response = await fetchFn('/api/review/fix-async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      review_output: reviewOutput,
+      fix_prompt: options?.fixPrompt,
+      selected_items: options?.selectedItems,
+    }),
+  });
+  if (!response.ok) throw new Error('Failed to start async fix');
+  return response.json();
+}
+
+export async function getFixFromDeepReviewStatus(fetchFn: typeof fetch, jobId: string, since = 0): Promise<any> {
+  const response = await fetchFn(`/api/review/fix-status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
+  if (!response.ok) throw new Error('Failed to get fix status');
+  return response.json();
+}
+
+// ── Support ────────────────────────────────────────────────────────
+
+export async function exportSupportBundle(fetchFn: typeof fetch): Promise<void> {
+  const response = await fetchFn('/api/support-bundle', { method: 'GET' });
+  if (!response.ok) throw new Error(`Support bundle failed: HTTP ${response.status}`);
+
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match ? match[1] : 'ledit-diagnostics.zip';
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}

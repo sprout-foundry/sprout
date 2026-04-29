@@ -9,7 +9,7 @@ import (
 
 // checkCircuitBreaker checks if an action should be blocked
 func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]interface{}) bool {
-	if te.agent.circuitBreaker == nil {
+	if te.agent.state == nil || te.agent.state.GetCircuitBreaker() == nil {
 		return false
 	}
 
@@ -17,9 +17,10 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 
 	// Copy action value outside the lock to reduce critical section hold time
 	action := func() *CircuitBreakerAction {
-		te.agent.circuitBreaker.mu.RLock()
-		defer te.agent.circuitBreaker.mu.RUnlock()
-		return te.agent.circuitBreaker.Actions[key]
+		cb := te.agent.state.GetCircuitBreaker()
+		cb.mu.RLock()
+		defer cb.mu.RUnlock()
+		return cb.Actions[key]
 	}()
 
 	if action == nil {
@@ -53,22 +54,23 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 // updateCircuitBreaker updates the circuit breaker state
 // The caller expects this function to be thread-safe with respect to the circuitBreaker map.
 func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]interface{}) {
-	if te.agent.circuitBreaker == nil {
+	if te.agent.state == nil || te.agent.state.GetCircuitBreaker() == nil {
 		return
 	}
 
 	key := te.generateActionKey(toolName, args)
-	te.agent.circuitBreaker.mu.Lock()
-	defer te.agent.circuitBreaker.mu.Unlock()
+	cb := te.agent.state.GetCircuitBreaker()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 
-	action, exists := te.agent.circuitBreaker.Actions[key]
+	action, exists := cb.Actions[key]
 	if !exists {
 		action = &CircuitBreakerAction{
 			ActionType: toolName,
 			Target:     key,
 			Count:      0,
 		}
-		te.agent.circuitBreaker.Actions[key] = action
+		cb.Actions[key] = action
 	}
 
 	action.Count++
@@ -79,14 +81,15 @@ func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]in
 }
 
 // cleanupOldCircuitBreakerEntriesLocked removes entries older than 5 minutes
-// Precondition: caller must hold te.agent.circuitBreaker.mu.Lock()
+// Precondition: caller must hold te.agent.state.GetCircuitBreaker().mu.Lock()
 func (te *ToolExecutor) cleanupOldCircuitBreakerEntriesLocked() {
 	currentTime := getCurrentTime()
 	fiveMinutesAgo := currentTime - 300 // 5 minutes in seconds
 
-	for key, action := range te.agent.circuitBreaker.Actions {
+	cb := te.agent.state.GetCircuitBreaker()
+	for key, action := range cb.Actions {
 		if action.LastUsed < fiveMinutesAgo {
-			delete(te.agent.circuitBreaker.Actions, key)
+			delete(cb.Actions, key)
 		}
 	}
 }
@@ -94,12 +97,13 @@ func (te *ToolExecutor) cleanupOldCircuitBreakerEntriesLocked() {
 // cleanupOldCircuitBreakerEntries removes entries older than 5 minutes
 // This function handles locking internally and is safe to call from anywhere.
 func (te *ToolExecutor) cleanupOldCircuitBreakerEntries() {
-	if te.agent.circuitBreaker == nil {
+	if te.agent.state.GetCircuitBreaker() == nil {
 		return
 	}
 
-	te.agent.circuitBreaker.mu.Lock()
-	defer te.agent.circuitBreaker.mu.Unlock()
+	cb := te.agent.state.GetCircuitBreaker()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	te.cleanupOldCircuitBreakerEntriesLocked()
 }
 

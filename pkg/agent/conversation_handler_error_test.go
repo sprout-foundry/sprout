@@ -41,8 +41,9 @@ func TestProcessQueryFlushesOnAPIFailure(t *testing.T) {
 		inputInjectionChan: make(chan string, inputInjectionBufferSize),
 		interruptCtx:       ctx,
 		interruptCancel:    cancel,
-		outputMutex:        &sync.Mutex{},
+		output:             NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	var flushed bool
 	agent.SetFlushCallback(func() { flushed = true })
@@ -90,8 +91,9 @@ func TestProcessQueryStreamingErrorReturns(t *testing.T) {
 		inputInjectionChan: make(chan string, inputInjectionBufferSize),
 		interruptCtx:       ctx,
 		interruptCancel:    cancel,
-		outputMutex:        &sync.Mutex{},
+		output:             NewAgentOutputManager(),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	// Enable streaming to exercise streaming error path
 	agent.EnableStreaming(func(string) {})

@@ -222,8 +222,8 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 	retryDelay := ac.baseRetryDelay
 
 	// Reset streaming buffer
-	ac.agent.streamingBuffer.Reset()
-	ac.agent.reasoningBuffer.Reset()
+	ac.agent.output.GetStreamingBuffer().Reset()
+	ac.agent.output.GetReasoningBuffer().Reset()
 
 	for retry := 0; retry <= ac.maxRetries; retry++ {
 		if ac.agent.debug {
@@ -353,14 +353,14 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 // sendRequest sends a single request to the LLM
 func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	// Estimate and store the current request's token count before sending
-	ac.agent.currentContextTokens = ac.estimateRequestTokens(messages, tools)
+	ac.agent.state.SetCurrentContextTokens(ac.estimateRequestTokens(messages, tools))
 
 	// Optional context breakdown diagnostic
 	if configuration.GetEnvSimple("CONTEXT_DIAG") != "" {
 		ac.printContextBreakdown(messages, tools)
 	}
 
-	if ac.agent.streamingEnabled {
+	if ac.agent.output.IsStreamingEnabled() {
 		return ac.sendStreamingRequest(messages, tools, reasoning, disableThinking)
 	}
 	return ac.sendRegularRequest(messages, tools, reasoning, disableThinking)
@@ -451,9 +451,9 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			ac.agent.debugLog("[clean] Sanitized streaming content, removed ANSI codes\n")
 		}
 		if contentType == "reasoning" {
-			ac.agent.reasoningBuffer.WriteString(sanitizedContent)
+			ac.agent.output.GetReasoningBuffer().WriteString(sanitizedContent)
 		} else {
-			ac.agent.streamingBuffer.WriteString(sanitizedContent)
+			ac.agent.output.GetStreamingBuffer().WriteString(sanitizedContent)
 		}
 
 		// Route through OutputRouter (single source: publishes event + writes terminal)
@@ -519,18 +519,18 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 
 		case result := <-resultChan:
 			// Ensure streaming output is flushed
-			if ac.agent.outputMutex != nil {
-				ac.agent.outputMutex.Lock()
+			if mu := ac.agent.output.GetOutputMutex(); mu != nil {
+				mu.Lock()
 				if result.err != nil {
 					fmt.Print("\r\033[K") // Clear line on error
 				}
 				os.Stdout.Sync()
-				ac.agent.outputMutex.Unlock()
+				mu.Unlock()
 			}
 
 			// Log the accumulated streaming response for debugging
-			if ac.agent.streamingEnabled {
-				LogAPIResponse(ac.agent.streamingBuffer.String(), true)
+			if ac.agent.output.IsStreamingEnabled() {
+				LogAPIResponse(ac.agent.output.GetStreamingBuffer().String(), true)
 				logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), true, ac.agent.currentIteration)
 			}
 
@@ -650,7 +650,7 @@ func (ac *APIClient) isRateLimit(err error) bool {
 func (ac *APIClient) handleRateLimit(err error, attempt int) bool {
 	// Log the rate limit
 	ac.rateLimiter.LogRateLimit(ac.agent.GetProvider(), ac.agent.GetModel(),
-		ac.agent.totalTokens, err, nil)
+		ac.agent.state.GetTotalTokens(), err, nil)
 
 	// Check if we should retry
 	if !ac.rateLimiter.ShouldRetry(attempt) {

@@ -66,7 +66,7 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 	agent, _, client := buildE2EAgentWithClient(t, 10, stopResp1, ocrToolResp, stopResp2)
 
 	// -- Pre-populate conversation history to activate OCR policy --
-	agent.messages = []api.Message{
+	agent.state.SetMessages([]api.Message{
 		{
 			Role:    "user",
 			Content: "OCR Trigger Policy (MANDATORY): use analyze_image_content for menu images/PDFs.",
@@ -90,7 +90,7 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 			ToolCallId: "fetch_menu_1",
 			Content:    "Menu page includes image 1: https://cdn.example.com/menu.jpg",
 		},
-	}
+	})
 
 	// -- Execute ProcessQuery --
 	result, err := agent.ProcessQuery("Summarize the menu")
@@ -115,7 +115,7 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 
 	// Verify analyze_image_content tool call appears in conversation history
 	var foundOCRToolCall bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			for _, tc := range msg.ToolCalls {
 				if tc.Function.Name == "analyze_image_content" {
@@ -130,7 +130,7 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 
 	// Verify tool result for analyze_image_content exists
 	var foundOCRToolResult bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "tool" && msg.ToolCallId == "call_ocr_001" {
 			foundOCRToolResult = true
 			break
@@ -143,8 +143,8 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 	// user(query) → assistant(stop, gate caught) → assistant(ocr_tool_call) → tool → assistant(stop)
 	// Note: the "assistant(stop, gate caught)" has no tool calls — it's just text
 	// that the gate intercepted. The transient OCR reminder is injected by
-	// prepareMessages into the API request but NOT persisted to agent.messages.
-	assertMessageOrdering(t, agent.messages,
+	// prepareMessages into the API request but NOT persisted to agent.state.GetMessages().
+	assertMessageOrdering(t, agent.state.GetMessages(),
 		[]string{"user", "assistant", "assistant", "tool", "assistant"})
 
 	// -- Verify the transient OCR reminder was sent to the model --

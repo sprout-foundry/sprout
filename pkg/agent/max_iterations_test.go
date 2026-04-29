@@ -18,16 +18,19 @@ import (
 // scripted client.  This mirrors the setup in termination_reason_test.go.
 func makeAgentWithScriptedClient(maxIter int, client *ScriptedClient) *Agent {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Agent{
+	agent := &Agent{
 		client:                    client,
 		systemPrompt:              "system",
 		maxIterations:             maxIter,
 		inputInjectionChan:        make(chan string, inputInjectionBufferSize),
 		interruptCtx:              ctx,
 		interruptCancel:           cancel,
-		outputMutex:               &sync.Mutex{},
+		output:                    NewAgentOutputManager(),
+		state:                     NewAgentStateManager(false),
 		shellCommandHistory:       make(map[string]*ShellCommandResult),
 	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	return agent
 }
 
 // keepGoingResponse returns a ScriptedResponse whose finish_reason is empty,

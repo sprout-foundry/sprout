@@ -10,20 +10,22 @@ func TestPrepareMessages_StripsHistoricalImagesForNonVision(t *testing.T) {
 	a := &Agent{
 		client:       &visionSupportingClient{supportsVision: false},
 		systemPrompt: "system",
-		messages: []api.Message{
-			{
-				Role:    "user",
-				Content: "old image message",
-				Images: []api.ImageData{
-					{Base64: "ZmFrZQ==", Type: "image/png"},
-				},
-			},
-			{
-				Role:    "assistant",
-				Content: "ok",
+		state:        NewAgentStateManager(false),
+		output:       NewAgentOutputManager(),
+	}
+	a.state.SetMessages([]api.Message{
+		{
+			Role:    "user",
+			Content: "old image message",
+			Images: []api.ImageData{
+				{Base64: "ZmFrZQ==", Type: "image/png"},
 			},
 		},
-	}
+		{
+			Role:    "assistant",
+			Content: "ok",
+		},
+	})
 
 	handler := NewConversationHandler(a)
 	prepared := handler.prepareMessages(nil)

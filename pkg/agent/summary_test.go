@@ -13,57 +13,59 @@ import (
 // TestTokenTrackingAccuracy verifies that token tracking is accurate
 func TestTokenTrackingAccuracy(t *testing.T) {
 	agent := &Agent{
-		totalTokens:      87200,
-		promptTokens:     84750,
-		completionTokens: 2433,
-		cachedTokens:     71400,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetTotalTokens(87200)
+	agent.state.SetPromptTokens(84750)
+	agent.state.SetCompletionTokens(2433)
+	agent.state.SetCachedTokens(71400)
 
 	// Calculate processed prompt (excluding cached)
-	processedPromptTokens := agent.promptTokens - agent.cachedTokens
+	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens()
 	if processedPromptTokens != 13350 {
 		t.Errorf("Expected processedPromptTokens to be 13350, got %d", processedPromptTokens)
 	}
 
 	// Calculate processed: processedPrompt + completion
-	processedTokens := processedPromptTokens + agent.completionTokens
+	processedTokens := processedPromptTokens + agent.state.GetCompletionTokens()
 	if processedTokens != 15783 {
 		t.Errorf("Expected processedTokens to be 15783, got %d", processedTokens)
 	}
 
 	// Verify the math adds up: processedPrompt + completion = processed
-	if processedPromptTokens+agent.completionTokens != processedTokens {
-		t.Errorf("Math doesn't add up: %d + %d != %d", processedPromptTokens, agent.completionTokens, processedTokens)
+	if processedPromptTokens+agent.state.GetCompletionTokens() != processedTokens {
+		t.Errorf("Math doesn't add up: %d + %d != %d", processedPromptTokens, agent.state.GetCompletionTokens(), processedTokens)
 	}
 
 	// TrackMetricsFromResponse should work correctly
 	agent.TrackMetricsFromResponse(1000, 200, 1200, 0.01, 500)
-	if agent.totalTokens != 88400 { // 87200 + 1200
-		t.Errorf("Expected totalTokens to be 88400, got %d", agent.totalTokens)
+	if agent.state.GetTotalTokens() != 88400 { // 87200 + 1200
+		t.Errorf("Expected totalTokens to be 88400, got %d", agent.state.GetTotalTokens())
 	}
-	if agent.cachedTokens != 71900 { // 71400 + 500
-		t.Errorf("Expected cachedTokens to be 71900, got %d", agent.cachedTokens)
+	if agent.state.GetCachedTokens() != 71900 { // 71400 + 500
+		t.Errorf("Expected cachedTokens to be 71900, got %d", agent.state.GetCachedTokens())
 	}
-	if agent.promptTokens != 85750 { // 84750 + 1000
-		t.Errorf("Expected promptTokens to be 85750, got %d", agent.promptTokens)
+	if agent.state.GetPromptTokens() != 85750 { // 84750 + 1000
+		t.Errorf("Expected promptTokens to be 85750, got %d", agent.state.GetPromptTokens())
 	}
 }
 
 // TestEmptyCachedTokens handles edge case where there are no cached tokens
 func TestEmptyCachedTokens(t *testing.T) {
 	agent := &Agent{
-		totalTokens:      5000,
-		promptTokens:     4000,
-		completionTokens: 1000,
-		cachedTokens:     0,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetTotalTokens(5000)
+	agent.state.SetPromptTokens(4000)
+	agent.state.SetCompletionTokens(1000)
+	agent.state.SetCachedTokens(0)
 
-	processedTokens := agent.totalTokens
+	processedTokens := agent.state.GetTotalTokens()
 	if processedTokens != 5000 {
 		t.Errorf("Expected processedTokens to be 5000, got %d", processedTokens)
 	}
 
-	processedPromptTokens := agent.promptTokens
+	processedPromptTokens := agent.state.GetPromptTokens()
 	if processedPromptTokens != 4000 {
 		t.Errorf("Expected processedPromptTokens to be 4000, got %d", processedPromptTokens)
 	}
@@ -72,39 +74,41 @@ func TestEmptyCachedTokens(t *testing.T) {
 // TestNegativeProcessedPromptTokens tests when cachedTokens > promptTokens
 func TestNegativeProcessedPromptTokens(t *testing.T) {
 	agent := &Agent{
-		totalTokens:      1000,
-		promptTokens:     500,
-		completionTokens: 200,
-		cachedTokens:     600, // More than promptTokens!
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetTotalTokens(1500)
+	agent.state.SetPromptTokens(1000)
+	agent.state.SetCompletionTokens(500)
+	agent.state.SetCachedTokens(2000)
 
 	// Should clamp to 0
-	processedPromptTokens := agent.promptTokens - agent.cachedTokens
+	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens()
 	if processedPromptTokens > 0 {
 		t.Errorf("Expected processedPromptTokens to be clamped to 0, got %d", processedPromptTokens)
 	}
 
 	// processedTokens should still be valid (completionTokens only in this case)
-	processedTokens := max(0, processedPromptTokens) + agent.completionTokens
-	if processedTokens != agent.completionTokens {
-		t.Errorf("Expected processedTokens to be %d, got %d", agent.completionTokens, processedTokens)
+	processedTokens := max(0, processedPromptTokens) + agent.state.GetCompletionTokens()
+	if processedTokens != agent.state.GetCompletionTokens() {
+		t.Errorf("Expected processedTokens to be %d, got %d", agent.state.GetCompletionTokens(), processedTokens)
 	}
 }
 
 // TestTokenDiscrepancy tests when totalTokens != promptTokens + completionTokens
 func TestTokenDiscrepancy(t *testing.T) {
 	agent := &Agent{
-		totalTokens:      1000, // Different from 500 + 200 = 700
-		promptTokens:     500,
-		completionTokens: 200,
-		cachedTokens:     0,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetTotalTokens(10000)
+	agent.state.SetPromptTokens(8000)
+	agent.state.SetCompletionTokens(200)
+	agent.state.SetCachedTokens(7500)
 
 	// Simulate the calculation from summary.go
-	processedPromptTokens := agent.promptTokens - agent.cachedTokens  // 500
-	processedTokens := processedPromptTokens + agent.completionTokens // 700
+	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens()  // 500
+	processedTokens := processedPromptTokens + agent.state.GetCompletionTokens() // 700
 
-	expectedProcessed := agent.totalTokens - agent.cachedTokens // 1000
+	expectedProcessed := agent.state.GetTotalTokens() - agent.state.GetCachedTokens() // 1000
 
 	// These should differ due to the discrepancy
 	if processedTokens == expectedProcessed {
@@ -139,8 +143,8 @@ func TestClampingBehavior(t *testing.T) {
 			promptTokens:        500,
 			completionTokens:    200,
 			cachedTokens:        600,
-			totalTokens:         700,
-			wantProcessedPrompt: 0, // clamped
+			totalTokens:         800,
+			wantProcessedPrompt: 0,
 			wantProcessed:       200,
 		},
 		{
@@ -157,17 +161,18 @@ func TestClampingBehavior(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			agent := &Agent{
-				totalTokens:      tt.totalTokens,
-				promptTokens:     tt.promptTokens,
-				completionTokens: tt.completionTokens,
-				cachedTokens:     tt.cachedTokens,
+				state: NewAgentStateManager(false),
 			}
+			agent.state.SetTotalTokens(tt.totalTokens)
+			agent.state.SetPromptTokens(tt.promptTokens)
+			agent.state.SetCompletionTokens(tt.completionTokens)
+			agent.state.SetCachedTokens(tt.cachedTokens)
 
-			processedPromptTokens := agent.promptTokens - agent.cachedTokens
+			processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens()
 			if processedPromptTokens < 0 {
 				processedPromptTokens = 0
 			}
-			processedTokens := processedPromptTokens + agent.completionTokens
+			processedTokens := processedPromptTokens + agent.state.GetCompletionTokens()
 
 			if processedPromptTokens != tt.wantProcessedPrompt {
 				t.Errorf("processedPromptTokens = %d, want %d", processedPromptTokens, tt.wantProcessedPrompt)
@@ -235,9 +240,10 @@ func TestComputeConversationSummaryMetrics(t *testing.T) {
 
 func TestPrintConversationSummaryDoesNotPanicWithSingleMessage(t *testing.T) {
 	agent := &Agent{
-		messages:         []api.Message{{Role: "user", Content: "hello"}},
-		maxContextTokens: 120000,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "hello"}})
+	agent.state.SetMaxContextTokens(120000)
 
 	output := captureStdout(t, func() {
 		agent.PrintConversationSummary(true)
@@ -253,14 +259,14 @@ func TestPrintConversationSummaryDoesNotPanicWithSingleMessage(t *testing.T) {
 
 func TestPrintConversationSummaryShowsEstimatedTokenNote(t *testing.T) {
 	agent := &Agent{
-		messages:                []api.Message{{Role: "user", Content: "hello"}},
-		estimatedTokenResponses: 2,
-		totalTokens:             1234,
-		promptTokens:            1000,
-		completionTokens:        234,
-		maxContextTokens:        120000,
-		currentContextTokens:    5000,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetMessages([]api.Message{{Role: "user", Content: "hello"}})
+	agent.state.SetEstimatedTokenResponses(2)
+	agent.state.SetTotalTokens(87200)
+	agent.state.SetPromptTokens(84750)
+	agent.state.SetCompletionTokens(2433)
+	agent.state.SetCachedTokens(71400)
 
 	output := captureStdout(t, func() {
 		agent.PrintConversationSummary(true)

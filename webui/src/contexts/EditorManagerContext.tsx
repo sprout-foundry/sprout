@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
-import { showThemedPrompt, showThemedConfirm } from '../components/ThemedDialog';
+import { showThemedPrompt, showThemedConfirm } from '@sprout/ui';
 import { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { formatCode, isFormattable } from '../services/formatter';
 import { debugLog } from '../utils/log';

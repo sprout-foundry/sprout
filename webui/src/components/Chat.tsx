@@ -16,11 +16,11 @@ import {
   CloudOff,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
-import MessageSegments from './MessageSegments';
-import MessageContent from './MessageContent';
-import MessageBubble from './MessageBubble';
-import ChatMessageContextMenu from './ChatMessageContextMenu';
-import LiveLog from './LiveLog';
+import { MessageSegments } from '@sprout/ui';
+import { MessageContent } from '@sprout/ui';
+import { MessageBubble } from '@sprout/ui';
+import { ChatMessageContextMenu } from '@sprout/ui';
+import { LiveLog } from '@sprout/ui';
 import './Chat.css';
 import { supportsSSH } from '../config/mode';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';

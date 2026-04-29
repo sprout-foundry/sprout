@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof NotificationItem>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof NotificationItem>;
 
 export const Info: Story = {
   args: {

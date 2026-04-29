@@ -11,7 +11,7 @@ const meta = {
 } satisfies Meta<typeof MessageBubble>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof MessageBubble>;
 
 export const UserMessage: Story = {
   args: {

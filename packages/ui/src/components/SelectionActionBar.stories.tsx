@@ -12,7 +12,7 @@ const meta = {
 } satisfies Meta<typeof SelectionActionBar>;
 
 export default meta;
-type Story = StoryObj<typeof meta>;
+type Story = StoryObj<typeof SelectionActionBar>;
 
 // Wrapper with demo content to show action bar in context
 const SelectionDemo = ({ count }: { count: number }) => {

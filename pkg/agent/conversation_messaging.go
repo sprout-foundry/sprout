@@ -27,10 +27,10 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 	}
 
 	// Use conversation optimizer if enabled
-	if ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
-		optimizedMessages = ch.agent.optimizer.OptimizeConversation(ch.agent.messages)
+	if ch.agent.state.GetOptimizer() != nil && ch.agent.state.GetOptimizer().IsEnabled() {
+		optimizedMessages = ch.agent.state.GetOptimizer().OptimizeConversation(ch.agent.state.GetMessages())
 	} else {
-		optimizedMessages = ch.agent.messages
+		optimizedMessages = ch.agent.state.GetMessages()
 	}
 
 	// One-shot context refresh injected after provider/model switches that required strict syntax normalization.
@@ -69,9 +69,9 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 
 	// Check context limits — compaction-only, no pruning.
 	currentTokens := ch.apiClient.estimateRequestTokens(allMessages, tools)
-	if ch.agent.maxContextTokens > 0 {
+	if ch.agent.state.GetMaxContextTokens() > 0 {
 		// Compaction threshold: trigger at 87% to compact before API errors occur.
-		compactionThreshold := int(float64(ch.agent.maxContextTokens) * PruningConfig.Default.StandardPercent)
+		compactionThreshold := int(float64(ch.agent.state.GetMaxContextTokens()) * PruningConfig.Default.StandardPercent)
 		compactionApplied := false
 
 		if currentTokens > compactionThreshold && ch.agent.HasTurnCheckpoints() {
@@ -79,7 +79,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 			if len(checkpointedMessages) != len(optimizedMessages) {
 				compactionApplied = true
 				// Persist checkpointed messages so future iterations see the compacted history.
-				ch.agent.messages = checkpointedMessages
+				ch.agent.state.SetMessages(checkpointedMessages)
 				// Persist adjusted remaining checkpoints so indices stay valid against the compacted array.
 				ch.agent.ReplaceTurnCheckpoints(remainingCheckpoints)
 
@@ -103,8 +103,8 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 
 		// If checkpoint compaction wasn't enough and an LLM-equipped optimizer is available,
 		// try structural compaction as a second-pass fallback.
-		if currentTokens > compactionThreshold && ch.agent.optimizer != nil && ch.agent.optimizer.IsEnabled() {
-			llmCompacted := ch.agent.optimizer.CompactConversation(optimizedMessages)
+		if currentTokens > compactionThreshold && ch.agent.state.GetOptimizer() != nil && ch.agent.state.GetOptimizer().IsEnabled() {
+			llmCompacted := ch.agent.state.GetOptimizer().CompactConversation(optimizedMessages)
 			if len(llmCompacted) < len(optimizedMessages) {
 				llmHistory := []api.Message{{Role: "system", Content: ch.agent.systemPrompt}}
 				llmHistory = append(llmHistory, llmCompacted...)
@@ -112,7 +112,7 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 				llmTokens := ch.apiClient.estimateRequestTokens(llmHistory, tools)
 				if llmTokens < currentTokens {
 					compactionApplied = true
-					ch.agent.messages = llmCompacted
+					ch.agent.state.SetMessages(llmCompacted)
 					ch.agent.clearTurnCheckpoints()
 					optimizedMessages = llmCompacted
 
@@ -140,10 +140,10 @@ func (ch *ConversationHandler) prepareMessages(tools []api.Tool) []api.Message {
 		// Safety net: also apply truncation if compaction was applied but we're still
 		// dangerously close to the actual context limit (within 500 tokens). This catches
 		// edge cases where token estimation was off and we actually exceeded the limit.
-		tooCloseToLimit := currentTokens > ch.agent.maxContextTokens-500
+		tooCloseToLimit := currentTokens > ch.agent.state.GetMaxContextTokens()-500
 		if (currentTokens > compactionThreshold && !compactionApplied) || (compactionApplied && tooCloseToLimit) {
 			allMessages, currentTokens = ch.emergencyTruncateContext(
-				allMessages, tools, currentTokens, ch.agent.maxContextTokens, compactionThreshold)
+				allMessages, tools, currentTokens, ch.agent.state.GetMaxContextTokens(), compactionThreshold)
 		}
 	}
 

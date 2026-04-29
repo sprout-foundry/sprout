@@ -40,7 +40,7 @@ func TestClearActivePersona(t *testing.T) {
 	agent.baseSystemPrompt = basePrompt
 
 	// Activate a persona by overriding the system prompt.
-	agent.activePersona = "coder"
+	agent.state.SetActivePersona("coder")
 	agent.systemPrompt = "You are a focused coder."
 
 	agent.ClearActivePersona()
@@ -48,8 +48,8 @@ func TestClearActivePersona(t *testing.T) {
 	if got := agent.GetActivePersona(); got != "" {
 		t.Errorf("GetActivePersona after ClearActivePersona = %q, want empty", got)
 	}
-	if agent.activePersona != "" {
-		t.Errorf("activePersona field = %q, want empty", agent.activePersona)
+	if agent.state.GetActivePersona() != "" {
+		t.Errorf("activePersona field = %q, want empty", agent.state.GetActivePersona())
 	}
 
 	// The system prompt should be restored to baseSystemPrompt.
@@ -64,14 +64,14 @@ func TestClearActivePersonaNoBase(t *testing.T) {
 
 	// When baseSystemPrompt is empty/witespace, ClearActivePersona should
 	// not overwrite the system prompt (the field stays unchanged).
-	agent.activePersona = "coder"
+	agent.state.SetActivePersona("coder")
 	agent.baseSystemPrompt = ""
 	existingPrompt := agent.systemPrompt
 
 	agent.ClearActivePersona()
 
-	if agent.activePersona != "" {
-		t.Errorf("activePersona = %q, want empty", agent.activePersona)
+	if agent.state.GetActivePersona() != "" {
+		t.Errorf("activePersona = %q, want empty", agent.state.GetActivePersona())
 	}
 	// systemPrompt should remain unchanged when baseSystemPrompt is empty.
 	if agent.systemPrompt != existingPrompt {

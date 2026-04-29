@@ -16,7 +16,7 @@ import (
 // Helper: assert tool message ordering
 // ---------------------------------------------------------------------------
 
-// assertMessageOrdering verifies that the messages in agent.messages follow
+// assertMessageOrdering verifies that the messages in agent.state.GetMessages() follow
 // the expected role sequence. For example, for a single tool call test:
 //
 //	user → assistant(tool_call) → tool → assistant(stop)
@@ -116,7 +116,7 @@ func TestE2E_ToolCallExecution(t *testing.T) {
 	assert.Equal(t, 2, agent.GetCurrentIteration()+1, "expected 2 iterations (tool call + stop)")
 
 	// Verify tool result contains actual file content
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.NotEmpty(t, toolMsgs, "expected at least one tool result message")
 	assert.Contains(t, toolMsgs[0].Content, "Hello from test.txt",
 		"tool result should contain actual file content")
@@ -124,7 +124,7 @@ func TestE2E_ToolCallExecution(t *testing.T) {
 		"tool result should not contain error")
 
 	// Verify message ordering: user → assistant(tool_call) → tool → assistant(stop)
-	assertMessageOrdering(t, agent.messages, []string{"user", "assistant", "tool", "assistant"})
+	assertMessageOrdering(t, agent.state.GetMessages(), []string{"user", "assistant", "tool", "assistant"})
 
 	// ---- Verify the model actually SAW the tool result in its second call ----
 	// This is the critical end-to-end verification: the tool result message must
@@ -237,7 +237,7 @@ func TestE2E_MultipleToolCalls(t *testing.T) {
 	assert.Equal(t, 3, agent.GetCurrentIteration()+1, "expected 3 iterations (tool calls + continuation + stop)")
 
 	// Verify tool results contain actual file content
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	assert.GreaterOrEqual(t, len(toolMsgs), 2, "expected at least 2 tool result messages")
 	assert.Contains(t, toolMsgs[0].Content, "alpha Bravo",
 		"first tool result should contain file1 content")
@@ -247,7 +247,7 @@ func TestE2E_MultipleToolCalls(t *testing.T) {
 	// Verify message ordering:
 	// user → assistant(tool_calls:2) → tool → tool → assistant(continuation) → assistant(stop)
 	// Note: the two tool results appear for the two parallel tool calls
-	assertMessageOrdering(t, agent.messages, []string{"user", "assistant", "tool", "tool", "assistant", "assistant"})
+	assertMessageOrdering(t, agent.state.GetMessages(), []string{"user", "assistant", "tool", "tool", "assistant", "assistant"})
 
 	// ---- Verify the model SAW both tool results in the second request ----
 	// When multiple tool calls execute in parallel, both tool results must
@@ -329,14 +329,14 @@ func TestE2E_ToolCallContinuationStop(t *testing.T) {
 	assert.Equal(t, 4, agent.GetCurrentIteration()+1, "expected 4 iterations (tool + 2 continuations + stop)")
 
 	// Verify tool result contains actual file content
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.NotEmpty(t, toolMsgs, "expected at least one tool result message")
 	assert.Contains(t, toolMsgs[0].Content, "port: 8080",
 		"tool result should contain config content")
 
 	// Verify message ordering:
 	// user → assistant(tool_call) → tool → assistant(continuation) → assistant(continuation) → assistant(stop)
-	assertMessageOrdering(t, agent.messages, []string{"user", "assistant", "tool", "assistant", "assistant", "assistant"})
+	assertMessageOrdering(t, agent.state.GetMessages(), []string{"user", "assistant", "tool", "assistant", "assistant", "assistant"})
 }
 
 // ---------------------------------------------------------------------------
@@ -376,13 +376,13 @@ func TestE2E_ToolCallEmptyFinishReason(t *testing.T) {
 	assert.Equal(t, 2, agent.GetCurrentIteration()+1, "expected 2 iterations (tool + stop)")
 
 	// Verify tool result contains expected output from echo hello
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.NotEmpty(t, toolMsgs, "expected tool result message")
 	assert.Contains(t, toolMsgs[0].Content, "hello",
 		"shell tool result should contain 'hello' from echo command")
 
 	// Verify message ordering: user → assistant(tool_call) → tool → assistant(stop)
-	assertMessageOrdering(t, agent.messages, []string{"user", "assistant", "tool", "assistant"})
+	assertMessageOrdering(t, agent.state.GetMessages(), []string{"user", "assistant", "tool", "assistant"})
 }
 
 // ---------------------------------------------------------------------------
@@ -441,7 +441,7 @@ func TestE2E_NestedToolCalls(t *testing.T) {
 	assert.Equal(t, 3, agent.GetCurrentIteration()+1, "expected 3 iterations (2 tool calls + stop)")
 
 	// Verify tool results: first is read_file, second is shell_command
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	assert.GreaterOrEqual(t, len(toolMsgs), 2, "expected at least 2 tool result messages")
 
 	// The first tool result should contain file content
@@ -454,7 +454,7 @@ func TestE2E_NestedToolCalls(t *testing.T) {
 
 	// Verify nested message ordering:
 	// user → assistant(tc1) → tool → assistant(tc2) → tool → assistant(stop)
-	assertMessageOrdering(t, agent.messages, []string{"user", "assistant", "tool", "assistant", "tool", "assistant"})
+	assertMessageOrdering(t, agent.state.GetMessages(), []string{"user", "assistant", "tool", "assistant", "tool", "assistant"})
 
 	// ---- Verify the model SAW each tool result in the subsequent request ----
 	sentReqs := client.GetSentRequests()
@@ -524,11 +524,11 @@ func TestE2E_ToolCallWithToolChoice(t *testing.T) {
 	assert.Equal(t, 2, agent.GetCurrentIteration()+1, "expected 2 iterations (search + stop)")
 
 	// Verify tool result message exists with non-empty content
-	toolMsgs := findToolMessages(agent.messages)
+	toolMsgs := findToolMessages(agent.state.GetMessages())
 	require.NotEmpty(t, toolMsgs, "expected tool result message for search_files")
 	assert.NotEmpty(t, toolMsgs[0].Content,
 		"search_files result should have non-empty content")
 
 	// Verify message ordering: user → assistant(tool_call) → tool → assistant(stop)
-	assertMessageOrdering(t, agent.messages, []string{"user", "assistant", "tool", "assistant"})
+	assertMessageOrdering(t, agent.state.GetMessages(), []string{"user", "assistant", "tool", "assistant"})
 }

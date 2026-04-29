@@ -36,6 +36,7 @@ type ConversationHandler struct {
 
 // NewConversationHandler creates a new conversation handler
 func NewConversationHandler(agent *Agent) *ConversationHandler {
+	agent.initSubManagers()
 	now := time.Now()
 	ch := &ConversationHandler{
 		agent:                 agent,
@@ -62,7 +63,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	if ch.agent.debug {
 		ch.agent.debugLog("DEBUG: ProcessQuery called with: %s\n", userQuery)
 	}
-	ch.agent.lastRunTerminationReason = ""
+	ch.agent.state.SetLastRunTerminationReason("")
 
 	// Publish query started event
 	ch.agent.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, ch.agent.GetProvider(), ch.agent.GetModel()))
@@ -72,21 +73,21 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	ch.lastActivityTime = time.Now()
 
 	// Reset streaming buffer for new query
-	ch.agent.streamingBuffer.Reset()
-	ch.agent.reasoningBuffer.Reset()
+	ch.agent.output.GetStreamingBuffer().Reset()
+	ch.agent.output.GetReasoningBuffer().Reset()
 
 	// Enable change tracking
 	ch.agent.EnableChangeTracking(userQuery)
 
 	// Reset circuit breaker history for a fresh query to avoid carrying over
 	// repetitive-tool counts from previous requests.
-	if ch.agent.circuitBreaker != nil {
-		ch.agent.circuitBreaker.mu.Lock()
+	if ch.agent.state.GetCircuitBreaker() != nil {
+		ch.agent.state.GetCircuitBreaker().mu.Lock()
 		// Clear entries instead of replacing map to avoid memory churn and reduce lock hold time
-		for key := range ch.agent.circuitBreaker.Actions {
-			delete(ch.agent.circuitBreaker.Actions, key)
+		for key := range ch.agent.state.GetCircuitBreaker().Actions {
+			delete(ch.agent.state.GetCircuitBreaker().Actions, key)
 		}
-		ch.agent.circuitBreaker.mu.Unlock()
+		ch.agent.state.GetCircuitBreaker().mu.Unlock()
 		if ch.agent.debug {
 			ch.agent.debugLog("DEBUG: Reset circuit breaker for new query\n")
 		}
@@ -100,21 +101,21 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 	}
 
 	// Add user message with optional multimodal images
-	ch.queryStartIndex = len(ch.agent.messages)
+	ch.queryStartIndex = len(ch.agent.state.GetMessages())
 	userMessage := api.Message{
 		Role:    "user",
 		Content: ch.prepareUserInputForModel(processedQuery),
 		Images:  images,
 	}
-	ch.agent.messages = append(ch.agent.messages, userMessage)
+	ch.agent.state.AddMessage(userMessage)
 
 	// Main conversation loop
 	completed := false
 	for ch.agent.currentIteration = 0; ch.agent.maxIterations == 0 || ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
 		if ch.agent.maxIterations > 0 {
-			ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.messages))
+			ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.state.GetMessages()))
 		} else {
-			ch.agent.debugLog("[~] Iteration %d/unlimited - Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
+			ch.agent.debugLog("[~] Iteration %d/unlimited - Messages: %d\n", ch.agent.currentIteration, len(ch.agent.state.GetMessages()))
 		}
 
 		// Record turn data if trace session is enabled
@@ -129,7 +130,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			switch interruptResponse {
 			case "STOP":
 				ch.agent.debugLog("[STOP] Conversation stopped by user\n")
-				ch.agent.lastRunTerminationReason = RunTerminationInterrupted
+				ch.agent.state.SetLastRunTerminationReason(RunTerminationInterrupted)
 				break
 			case "CONTINUE":
 				ch.agent.debugLog("[~] Continuing without changes\n")
@@ -163,7 +164,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 				switch interruptResponse {
 				case "STOP":
 					ch.agent.debugLog("[STOP] Conversation stopped by user\n")
-					ch.agent.lastRunTerminationReason = RunTerminationInterrupted
+					ch.agent.state.SetLastRunTerminationReason(RunTerminationInterrupted)
 					break
 				case "CONTINUE":
 					ch.agent.debugLog("[~] Continuing without changes\n")
@@ -180,14 +181,14 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 			}
 
 			// Ensure any buffered streaming output is flushed before showing the error
-			if ch.agent.flushCallback != nil {
-				ch.agent.flushCallback()
+			if ch.agent.output.GetFlushCallback() != nil {
+				ch.agent.output.GetFlushCallback()()
 			}
 
 			// Display user-friendly error message based on error type
 			ch.displayUserFriendlyError(err)
 
-			return ch.errorHandler.HandleAPIFailure(err, ch.agent.messages)
+			return ch.errorHandler.HandleAPIFailure(err, ch.agent.state.GetMessages())
 		}
 		if ch.agent.debug {
 			ch.agent.debugLog("DEBUG: ConversationHandler received response at %s\n", time.Now().Format("15:04:05.000"))
@@ -200,16 +201,16 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		if shouldStop := ch.processResponse(response); shouldStop {
 			ch.agent.debugLog("[OK] Conversation complete\n")
 			completed = true
-			ch.agent.lastRunTerminationReason = RunTerminationCompleted
+			ch.agent.state.SetLastRunTerminationReason(RunTerminationCompleted)
 			break
 		} else {
 			ch.agent.debugLog("-> Continuing conversation...\n")
 		}
 	}
 
-	ch.agent.debugLog("[GO] Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.messages))
+	ch.agent.debugLog("[GO] Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.state.GetMessages()))
 	if !completed && ch.agent.maxIterations > 0 && ch.agent.currentIteration >= ch.agent.maxIterations {
-		ch.agent.lastRunTerminationReason = RunTerminationMaxIterations
+		ch.agent.state.SetLastRunTerminationReason(RunTerminationMaxIterations)
 		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Reached maximum iterations (%d) before the task completed.", ch.agent.maxIterations))
 	}
 
@@ -227,7 +228,7 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 	case input := <-ch.agent.GetInputInjectionContext():
 		// Input injection detected - inject as new user message
 		ch.agent.debugLog("[>] Input injection detected: %s\n", input)
-		ch.agent.messages = append(ch.agent.messages, api.Message{
+		ch.agent.state.AddMessage(api.Message{
 			Role:    "user",
 			Content: ch.prepareUserInputForModel(input),
 		})
@@ -239,9 +240,10 @@ func (ch *ConversationHandler) checkForInterrupt() bool {
 
 // lastUserMessage gets the last user message from the conversation
 func (ch *ConversationHandler) lastUserMessage() (string, bool) {
-	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
-		if ch.agent.messages[i].Role == "user" {
-			return ch.agent.messages[i].Content, true
+	messages := ch.agent.state.GetMessages()
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" {
+			return messages[i].Content, true
 		}
 	}
 	return "", false
@@ -269,7 +271,7 @@ func (ch *ConversationHandler) recordTurnStart(originalQuery, processedQuery str
 		SystemPrompt:       ch.agent.systemPrompt,
 		UserPrompt:         processedQuery,    // What model sees (after truncation)
 		UserPromptOriginal: originalQuery,     // What user typed (before truncation)
-		MessagesSent:       ch.agent.messages, // Messages array as sent to provider
+		MessagesSent:       ch.agent.state.GetMessages(), // Messages array as sent to provider
 		RawResponse:        "",                // Will be set later
 		ParsedToolCalls:    []api.ToolCall{},  // Will be set later
 		ParserErrors:       []string{},        // Will be set later
@@ -318,9 +320,9 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Determine the content to record and validate. Prefer the streaming buffer if streaming was used
 	contentUsed := choice.Message.Content
-	if ch.agent.streamingEnabled && len(ch.agent.streamingBuffer.String()) > 0 {
+	if ch.agent.output.IsStreamingEnabled() && len(ch.agent.output.GetStreamingBuffer().String()) > 0 {
 		// Use the fully streamed content if available
-		contentUsed = ch.agent.streamingBuffer.String()
+		contentUsed = ch.agent.output.GetStreamingBuffer().String()
 	}
 
 	if ch.agent.debug {
@@ -336,8 +338,8 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	turn.FinishReason = choice.FinishReason
 
 	reasoningContent := choice.Message.ReasoningContent
-	if ch.agent.streamingEnabled && len(ch.agent.reasoningBuffer.String()) > 0 {
-		reasoningContent = ch.agent.reasoningBuffer.String()
+	if ch.agent.output.IsStreamingEnabled() && len(ch.agent.output.GetReasoningBuffer().String()) > 0 {
+		reasoningContent = ch.agent.output.GetReasoningBuffer().String()
 	}
 	turn.ReasoningSnippet = abbreviate(reasoningContent, 280)
 
@@ -442,7 +444,7 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 	// Only append if we have a valid message (not a duplicate)
 	if assistantMsg.Role != "" {
-		ch.agent.messages = append(ch.agent.messages, assistantMsg)
+		ch.agent.state.AddMessage(assistantMsg)
 	}
 
 	// Token tracking is handled by the agent struct fields
@@ -457,15 +459,17 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 
 		// Flush any buffered streaming content before tool execution
 		// This ensures narrative text appears before tool calls for better flow
-		if ch.agent.flushCallback != nil {
-			ch.agent.flushCallback()
+		if ch.agent.output.GetFlushCallback() != nil {
+			ch.agent.output.GetFlushCallback()()
 		}
 
 		ch.displayIntermediateResponse(contentUsed)
 		toolResults := ch.toolExecutor.ExecuteTools(choice.Message.ToolCalls)
 
 		// Add tool results immediately after the assistant message with tool calls
-		ch.agent.messages = append(ch.agent.messages, toolResults...)
+		for _, result := range toolResults {
+			ch.agent.state.AddMessage(result)
+		}
 		ch.agent.debugLog("[ok] Added %d tool results to conversation\n", len(toolResults))
 
 		// The model made concrete progress by executing tools, so reset
@@ -475,7 +479,8 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 		// Additional debugging for DeepSeek tool call format
 		if strings.EqualFold(ch.agent.GetProvider(), "deepseek") {
 			ch.agent.debugLog("[search] DeepSeek conversation flow check:\n")
-			for i, msg := range ch.agent.messages {
+			messages := ch.agent.state.GetMessages()
+			for i, msg := range messages {
 				if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 					ch.agent.debugLog("  [%d] Assistant with %d tool_calls\n", i, len(msg.ToolCalls))
 				} else if msg.Role == "tool" {
@@ -680,9 +685,10 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 
 	// Get the final response content
 	var finalContent string
-	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
-		if ch.agent.messages[i].Role == "assistant" {
-			finalContent = ch.agent.messages[i].Content
+	messages := ch.agent.state.GetMessages()
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" {
+			finalContent = messages[i].Content
 			break
 		}
 	}
@@ -705,25 +711,27 @@ func (ch *ConversationHandler) finalizeConversation() (string, error) {
 
 	// If streaming was enabled and content was streamed, return empty string
 	// to avoid duplicate display in the console
-	if ch.agent.streamingEnabled && len(ch.agent.streamingBuffer.String()) > 0 {
+	if ch.agent.output.IsStreamingEnabled() && len(ch.agent.output.GetStreamingBuffer().String()) > 0 {
 		return "", nil
 	}
 
 	// Get last assistant message
-	for i := len(ch.agent.messages) - 1; i >= 0; i-- {
-		if ch.agent.messages[i].Role == "assistant" {
-			return ch.agent.messages[i].Content, nil
+	messages = ch.agent.state.GetMessages()
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" {
+			return messages[i].Content, nil
 		}
 	}
 
-	return "", fmt.Errorf("no assistant response found in %d messages", len(ch.agent.messages))
+	return "", fmt.Errorf("no assistant response found in %d messages", len(messages))
 }
 
 func (ch *ConversationHandler) maybeCheckpointCompletedTurn() {
 	if ch == nil || ch.agent == nil {
 		return
 	}
-	if ch.queryStartIndex < 0 || ch.queryStartIndex >= len(ch.agent.messages) {
+	messages := ch.agent.state.GetMessages()
+	if ch.queryStartIndex < 0 || ch.queryStartIndex >= len(messages) {
 		return
 	}
 
@@ -732,10 +740,10 @@ func (ch *ConversationHandler) maybeCheckpointCompletedTurn() {
 		return
 	}
 
-	endIndex := len(ch.agent.messages) - 1
+	endIndex := len(messages) - 1
 	hasAssistant := false
 	for i := ch.queryStartIndex; i <= endIndex; i++ {
-		if ch.agent.messages[i].Role == "assistant" {
+		if messages[i].Role == "assistant" {
 			hasAssistant = true
 			break
 		}

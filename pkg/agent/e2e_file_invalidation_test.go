@@ -123,7 +123,7 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	// -----------------------------------------------------------------------
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false) // enabled, not debug
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false)) // enabled, not debug
 
 	const filePath = "config.go"
 	const oldContent = "old content v1"
@@ -155,12 +155,12 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 3. prepareMessages for turn 1 — optimizer tracks the v1 read
 	// -----------------------------------------------------------------------
-	agent.messages = turn1Messages
+	agent.state.SetMessages(turn1Messages)
 	ch := NewConversationHandler(agent)
 	prepared1 := ch.prepareMessages(nil)
 
 	// Verify the v1 read is tracked in the optimizer's stats.
-	stats1 := agent.optimizer.GetOptimizationStats()
+	stats1 := agent.state.GetOptimizer().GetOptimizationStats()
 	assert.Equal(t, 1, stats1["tracked_files"],
 		"expected 1 tracked file after turn 1 prepareMessages")
 	assert.Equal(t, []string{filePath}, stats1["file_paths"],
@@ -178,10 +178,10 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	// In production, tool_handlers_file.go calls InvalidateFile on the
 	// optimizer after a successful edit_file or write_file.
 	// -----------------------------------------------------------------------
-	agent.optimizer.InvalidateFile(filePath)
+	agent.state.GetOptimizer().InvalidateFile(filePath)
 
 	// Verify the cache is cleared.
-	statsAfterInvalidation := agent.optimizer.GetOptimizationStats()
+	statsAfterInvalidation := agent.state.GetOptimizer().GetOptimizationStats()
 	assert.Equal(t, 0, statsAfterInvalidation["tracked_files"],
 		"expected 0 tracked files immediately after InvalidateFile before turn 2")
 
@@ -216,7 +216,7 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	turn2Messages = append(turn2Messages, api.Message{Role: "assistant", Content: "Done."})
 
 	require.Len(t, turn2Messages, 28, "expected exactly 28 turn-2 messages")
-	agent.messages = turn2Messages
+	agent.state.SetMessages(turn2Messages)
 
 	// -----------------------------------------------------------------------
 	// 6. prepareMessages for turn 2 — optimizer re-tracks both reads
@@ -226,14 +226,14 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 7. Assertions
 	// -----------------------------------------------------------------------
-	expectedLen := len(agent.messages) + 1 // +1 for system prompt prepended
+	expectedLen := len(agent.state.GetMessages()) + 1 // +1 for system prompt prepended
 
 	// (a) System prompt is prepended; all messages survive (no compaction
 	//     since maxContextTokens defaults to 0).
 	require.NotEmpty(t, prepared2, "expected non-empty prepared messages")
 	assert.Equal(t, "system", prepared2[0].Role, "first message should be the system prompt")
 	assert.Equal(t, expectedLen, len(prepared2),
-		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.messages))
+		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.state.GetMessages()))
 
 	// (b) Neither file read should be marked [OPTIMIZED] because the content
 	//     hashes differ (v1 vs v2). OptimizeConversation re-tracks from
@@ -282,7 +282,7 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 
 	// (g) The optimizer tracked the file across both reads.
 	//     After re-tracking, the map has one entry (latest read wins).
-	stats2 := agent.optimizer.GetOptimizationStats()
+	stats2 := agent.state.GetOptimizer().GetOptimizationStats()
 	assert.Equal(t, 1, stats2["tracked_files"],
 		"expected 1 tracked file after turn 2 (latest read wins)")
 }
@@ -308,7 +308,7 @@ func TestE2E_FileReadRedundancyWithSameContentControl(t *testing.T) {
 	// -----------------------------------------------------------------------
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
 
 	const filePath = "config.go"
 	const sameContent = "same content line 1"
@@ -328,8 +328,8 @@ func TestE2E_FileReadRedundancyWithSameContentControl(t *testing.T) {
 	//    23    assistant   "Done."
 	//
 	// Total = 24 messages.
-	// Indices are in agent.messages (0-based, no system prompt).
-	// OptimizeConversation runs on agent.messages before system prompt
+	// Indices are in agent.state.GetMessages() (0-based, no system prompt).
+	// OptimizeConversation runs on agent.state.GetMessages() before system prompt
 	// is prepended, so the message gap is 21 - 2 = 19 ≥ 15.
 	// ∴ The older read at index 2 should be [OPTIMIZED].
 	// -----------------------------------------------------------------------
@@ -351,7 +351,7 @@ func TestE2E_FileReadRedundancyWithSameContentControl(t *testing.T) {
 	messages = append(messages, api.Message{Role: "assistant", Content: "Done."})
 
 	require.Len(t, messages, 24, "expected exactly 24 test messages (verify filler count)")
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	// -----------------------------------------------------------------------
 	// 3. Run the full prepareMessages pipeline
@@ -363,13 +363,13 @@ func TestE2E_FileReadRedundancyWithSameContentControl(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 4. Assertions
 	// -----------------------------------------------------------------------
-	expectedLen := len(agent.messages) + 1 // +1 for system prompt prepended
+	expectedLen := len(agent.state.GetMessages()) + 1 // +1 for system prompt prepended
 
 	// (a) System prompt + all messages (no compaction).
 	require.NotEmpty(t, prepared, "expected non-empty prepared messages")
 	assert.Equal(t, "system", prepared[0].Role, "first message should be the system prompt")
 	assert.Equal(t, expectedLen, len(prepared),
-		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.messages))
+		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.state.GetMessages()))
 
 	// (b) The OLDER read (call_read_old) is marked [OPTIMIZED] because:
 	//     - content hashes match (same content)
@@ -455,7 +455,7 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	// -----------------------------------------------------------------------
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false) // enabled, not debug
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false)) // enabled, not debug
 
 	const filePath = "config.go"
 	const sameContent = "same content"
@@ -486,12 +486,12 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 3. prepareMessages for turn 1 — optimizer tracks the read
 	// -----------------------------------------------------------------------
-	agent.messages = turn1Messages
+	agent.state.SetMessages(turn1Messages)
 	ch := NewConversationHandler(agent)
 	prepared1 := ch.prepareMessages(nil)
 
 	// Verify the read is tracked in the optimizer's stats.
-	stats1 := agent.optimizer.GetOptimizationStats()
+	stats1 := agent.state.GetOptimizer().GetOptimizationStats()
 	assert.Equal(t, 1, stats1["tracked_files"],
 		"expected 1 tracked file after turn 1 prepareMessages")
 
@@ -505,9 +505,9 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	// 4. Between turns: InvalidateFile (simulates an "edit" that didn't
 	//    actually change the file content).
 	// -----------------------------------------------------------------------
-	agent.optimizer.InvalidateFile(filePath)
+	agent.state.GetOptimizer().InvalidateFile(filePath)
 
-	statsAfterInvalidation := agent.optimizer.GetOptimizationStats()
+	statsAfterInvalidation := agent.state.GetOptimizer().GetOptimizationStats()
 	assert.Equal(t, 0, statsAfterInvalidation["tracked_files"],
 		"expected 0 tracked files immediately after InvalidateFile")
 
@@ -540,7 +540,7 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	turn2Messages = append(turn2Messages, api.Message{Role: "assistant", Content: "Done."})
 
 	require.Len(t, turn2Messages, 28, "expected exactly 28 turn-2 messages")
-	agent.messages = turn2Messages
+	agent.state.SetMessages(turn2Messages)
 
 	// -----------------------------------------------------------------------
 	// 6. prepareMessages for turn 2 — optimizer re-tracks both reads
@@ -550,13 +550,13 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 7. Assertions
 	// -----------------------------------------------------------------------
-	expectedLen := len(agent.messages) + 1 // +1 for system prompt prepended
+	expectedLen := len(agent.state.GetMessages()) + 1 // +1 for system prompt prepended
 
 	// (a) System prompt is prepended; all messages survive.
 	require.NotEmpty(t, prepared2, "expected non-empty prepared messages")
 	assert.Equal(t, "system", prepared2[0].Role, "first message should be the system prompt")
 	assert.Equal(t, expectedLen, len(prepared2),
-		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.messages))
+		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.state.GetMessages()))
 
 	// (b) The OLDER read (call_read_old) IS marked [OPTIMIZED] because:
 	//     - content hashes match (same content, despite InvalidateFile)
@@ -605,7 +605,7 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 		"expected the newer tool result (call_read_new) to be present with original content")
 
 	// (f) The optimizer tracked the file (latest read wins in the map).
-	stats2 := agent.optimizer.GetOptimizationStats()
+	stats2 := agent.state.GetOptimizer().GetOptimizationStats()
 	assert.Equal(t, 1, stats2["tracked_files"],
 		"expected 1 tracked file after turn 2 (latest read wins)")
 }
@@ -630,7 +630,7 @@ func TestE2E_FileReadRedundancyGapBelowThreshold(t *testing.T) {
 	// -----------------------------------------------------------------------
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
 
 	const filePath = "config.go"
 	const stdContent = "std content"
@@ -672,7 +672,7 @@ func TestE2E_FileReadRedundancyGapBelowThreshold(t *testing.T) {
 	messages = addReadFileTurn(messages, "call_read_new", "Read config again", filePath, stdContent)
 
 	require.Len(t, messages, 10, "expected exactly 10 test messages")
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	// -----------------------------------------------------------------------
 	// 3. Run the full prepareMessages pipeline
@@ -683,13 +683,13 @@ func TestE2E_FileReadRedundancyGapBelowThreshold(t *testing.T) {
 	// -----------------------------------------------------------------------
 	// 4. Assertions
 	// -----------------------------------------------------------------------
-	expectedLen := len(agent.messages) + 1 // +1 for system prompt prepended
+	expectedLen := len(agent.state.GetMessages()) + 1 // +1 for system prompt prepended
 
 	// (a) System prompt + all messages (no compaction).
 	require.NotEmpty(t, prepared, "expected non-empty prepared messages")
 	assert.Equal(t, "system", prepared[0].Role, "first message should be the system prompt")
 	assert.Equal(t, expectedLen, len(prepared),
-		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.messages))
+		"expected system prompt + all %d messages (no compaction, no pruning)", len(agent.state.GetMessages()))
 
 	// (b) NO reads should be [OPTIMIZED] because the gap (7) < 15.
 	assert.Equal(t, 0, countOptimizedFileReads(prepared, filePath),

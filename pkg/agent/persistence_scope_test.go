@@ -89,8 +89,9 @@ func TestSaveStateScoped_WritesScopedPath(t *testing.T) {
 	}
 
 	a := &Agent{
-		messages: []api.Message{{Role: "user", Content: "hello"}},
+		state: NewAgentStateManager(false),
 	}
+	a.state.SetMessages([]api.Message{{Role: "user", Content: "hello"}})
 	if err := a.SaveStateScoped("workflow", workingDir); err != nil {
 		t.Fatalf("SaveStateScoped: %v", err)
 	}

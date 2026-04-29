@@ -16,6 +16,7 @@ import { TasksPage, BillingPage, TeamPage } from './platform';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import type { ChatSession } from '../services/chatSessions';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 
@@ -208,6 +209,7 @@ const AppContent: React.FC<AppContentProps> = ({
     updateBufferTitle,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
+  const sproutFetch = useSproutFetch();
 
   // Compute current todos: prefer state from todo_update events, fall back to parsing from TodoWrite tool executions
   const currentTodos = useMemo(() => {
@@ -371,6 +373,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const {
     gitStatus,
     gitBranches,
+    workspaceRoot,
     commitMessage,
     setCommitMessage,
     selectedFiles,
@@ -413,9 +416,14 @@ const AppContent: React.FC<AppContentProps> = ({
     handleCreateBranch,
     handlePull,
     handlePush,
+    handleLoadCommits,
+    handleLoadCommitDetail,
+    handleLoadCommitFileDiff,
+    handleCheckoutCommit,
+    handleRevertCommit,
     refreshGitStatus,
   } = useGitWorkspace({
-    apiService,
+    fetchFn: sproutFetch,
     gitRefreshToken,
     selectedGitFilePath: null,
     onViewChange,
@@ -1042,6 +1050,7 @@ const AppContent: React.FC<AppContentProps> = ({
         gitPanel={{
           gitStatus,
           gitBranches,
+          workspaceRoot,
           selectedFiles,
           activeDiffSelectionKey,
           commitMessage,
@@ -1073,6 +1082,12 @@ const AppContent: React.FC<AppContentProps> = ({
           onDiscardFile: handleDiscardFile,
           onSectionAction: handleSectionAction,
           onOpenFile: handleFileClick,
+          onLoadCommits: handleLoadCommits,
+          onLoadCommitDetail: handleLoadCommitDetail,
+          onLoadCommitFileDiff: handleLoadCommitFileDiff,
+          onCheckoutCommit: handleCheckoutCommit,
+          onRevertCommit: handleRevertCommit,
+          openWorkspaceBuffer,
         }}
       />
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}>
@@ -1178,6 +1193,10 @@ const AppContent: React.FC<AppContentProps> = ({
               panelWidth={panelWidth}
               onPanelWidthChange={setPanelWidth}
               onOpenRevisionDiff={handleOpenRevisionDiff}
+              onLoadRevisionHistory={() => apiService.getChangelog()}
+              onLoadSessions={() => apiService.getSessions()}
+              onRestoreSession={(sessionId) => apiService.restoreSession(sessionId)}
+              onLoadRevisionDetails={(revisionId) => apiService.getRevisionDetails(revisionId)}
             />
           )}
         </div>

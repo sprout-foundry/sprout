@@ -19,7 +19,7 @@ export function useSproutAdapter(): APIAdapter | null {
   return context.adapter;
 }
 
-interface SproutProviderProps {
+export interface SproutProviderProps {
   adapter: APIAdapter | null;
   children: ReactNode;
 }

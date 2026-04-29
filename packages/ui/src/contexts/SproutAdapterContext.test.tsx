@@ -33,11 +33,15 @@ function createMockAdapter(overrides: Partial<APIAdapter> = {}): APIAdapter {
 
 let container: HTMLDivElement;
 let root: Root;
-let latestContext: any;
+let latestContext: APIAdapter | null | undefined;
 
 beforeAll(() => {
   // @ts-expect-error — assigning to undeclared globalThis property for React act() mode
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(() => {
+  delete (globalThis as any).IS_REACT_ACT_ENVIRONMENT;
 });
 
 beforeEach(() => {
@@ -76,6 +80,18 @@ function renderProvider(adapter: APIAdapter | null = null) {
 
 /** Shorthand to get the current context value from the latest render. */
 const ctx = () => latestContext;
+
+/**
+ * Asserts that the adapter is non-null and returns it.
+ * Throws a clear error if the adapter is null/undefined.
+ */
+function requireCtx(): APIAdapter {
+  const v = latestContext;
+  if (v === null || v === undefined) {
+    throw new Error('Expected adapter to be non-null in test');
+  }
+  return v;
+}
 
 // ---------------------------------------------------------------------------
 // Tests: useSproutAdapter hook
@@ -125,16 +141,16 @@ describe('SproutProvider', () => {
 
     expect(ctx()).toBeDefined();
     expect(ctx()).toBe(adapter);
-    expect(ctx().name).toBe('FullAdapter');
-    expect(ctx().requiresBackendHealthCheck).toBe(true);
-    expect(ctx().fileOpsViaAPI).toBe(false);
-    expect(ctx().showOnboarding).toBe(false);
-    expect(ctx().supportsSSH).toBe(true);
-    expect(ctx().supportsInstances).toBe(true);
-    expect(ctx().supportsLocalTerminal).toBe(false);
-    expect(ctx().supportsSettings).toBe(false);
-    expect(ctx().fetch).toBe(adapter.fetch);
-    expect(ctx().getWebSocketURL).toBe(adapter.getWebSocketURL);
+    expect(requireCtx().name).toBe('FullAdapter');
+    expect(requireCtx().requiresBackendHealthCheck).toBe(true);
+    expect(requireCtx().fileOpsViaAPI).toBe(false);
+    expect(requireCtx().showOnboarding).toBe(false);
+    expect(requireCtx().supportsSSH).toBe(true);
+    expect(requireCtx().supportsInstances).toBe(true);
+    expect(requireCtx().supportsLocalTerminal).toBe(false);
+    expect(requireCtx().supportsSettings).toBe(false);
+    expect(requireCtx().fetch).toBe(adapter.fetch);
+    expect(requireCtx().getWebSocketURL).toBe(adapter.getWebSocketURL);
   });
 
   it('provides adapter with only required fields (no optional fields like platformNavItems)', () => {
@@ -146,8 +162,8 @@ describe('SproutProvider', () => {
     renderProvider(adapter);
 
     expect(ctx()).toBe(adapter);
-    expect(ctx().name).toBe('TestAdapter');
-    expect(ctx().platformNavItems).toBeUndefined();
+    expect(requireCtx().name).toBe('TestAdapter');
+    expect(requireCtx().platformNavItems).toBeUndefined();
   });
 
   it('provides adapter with platformNavItems', () => {
@@ -164,16 +180,16 @@ describe('SproutProvider', () => {
     renderProvider(adapter);
 
     expect(ctx()).toBe(adapter);
-    expect(ctx().platformNavItems).toBe(navItems);
-    expect(ctx().platformNavItems).toHaveLength(2);
-    expect(ctx().platformNavItems[0]).toEqual({
+    expect(requireCtx().platformNavItems).toBe(navItems);
+    expect(requireCtx().platformNavItems).toHaveLength(2);
+    expect(requireCtx().platformNavItems![0]).toEqual({
       id: 'billing',
       label: 'Billing',
       href: '/billing',
       icon: 'credit-card',
       order: 1,
     });
-    expect(ctx().platformNavItems[1]).toEqual({
+    expect(requireCtx().platformNavItems![1]).toEqual({
       id: 'tasks',
       label: 'Tasks',
       href: '/tasks',
@@ -193,13 +209,13 @@ describe('SproutProvider', () => {
 
     renderProvider(adapter);
 
-    expect(ctx().platformNavItems).toEqual(navItems);
-    expect(ctx().platformNavItems[0].id).toBe('settings');
-    expect(ctx().platformNavItems[0].label).toBe('Settings');
-    expect(ctx().platformNavItems[0].href).toBe('/settings');
+    expect(requireCtx().platformNavItems!).toEqual(navItems);
+    expect(requireCtx().platformNavItems![0].id).toBe('settings');
+    expect(requireCtx().platformNavItems![0].label).toBe('Settings');
+    expect(requireCtx().platformNavItems![0].href).toBe('/settings');
     // Optional fields should be undefined
-    expect(ctx().platformNavItems[0].icon).toBeUndefined();
-    expect(ctx().platformNavItems[0].order).toBeUndefined();
+    expect(requireCtx().platformNavItems![0].icon).toBeUndefined();
+    expect(requireCtx().platformNavItems![0].order).toBeUndefined();
   });
 
   it('renders children correctly', () => {
@@ -243,7 +259,7 @@ describe('SproutProvider', () => {
 
     renderProvider(firstAdapter);
     expect(ctx()).toBe(firstAdapter);
-    expect(ctx().name).toBe('FirstAdapter');
+    expect(requireCtx().name).toBe('FirstAdapter');
 
     // Rerender with a different adapter
     act(() => {
@@ -252,7 +268,7 @@ describe('SproutProvider', () => {
     });
 
     expect(ctx()).toBe(secondAdapter);
-    expect(ctx().name).toBe('SecondAdapter');
+    expect(requireCtx().name).toBe('SecondAdapter');
   });
 
   it('useSproutAdapter returns null adapter correctly (not undefined)', () => {
@@ -261,5 +277,39 @@ describe('SproutProvider', () => {
     expect(ctx()).toBeNull();
     // Explicitly check that it's null, not undefined
     expect(ctx()).not.toBeUndefined();
+  });
+
+  it('updates to null when adapter prop changes from adapter to null', () => {
+    const adapter = createMockAdapter({ name: 'FirstAdapter' });
+    renderProvider(adapter);
+    expect(ctx()).toBe(adapter);
+
+    // Rerender with null
+    act(() => {
+      // @ts-expect-error — createElement accepts children as rest args
+      root.render(createElement(SproutProvider, { adapter: null }, createElement(TestConsumer)));
+    });
+
+    expect(ctx()).toBeNull();
+  });
+
+  it('inner SproutProvider overrides outer SproutProvider', () => {
+    const outerAdapter = createMockAdapter({ name: 'Outer' });
+    const innerAdapter = createMockAdapter({ name: 'Inner' });
+
+    act(() => {
+      root.render(
+        // @ts-expect-error — createElement accepts children as rest args
+        createElement(SproutProvider, { adapter: outerAdapter },
+          // @ts-expect-error — createElement accepts children as rest args
+          createElement(SproutProvider, { adapter: innerAdapter },
+            createElement(TestConsumer)
+          )
+        )
+      );
+    });
+
+    expect(ctx()).toBe(innerAdapter);
+    expect(requireCtx().name).toBe('Inner');
   });
 });

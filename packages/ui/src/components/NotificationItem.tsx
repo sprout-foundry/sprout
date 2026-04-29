@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import type { NotificationType } from '../contexts/NotificationContext';
 
 export interface NotificationItemProps {
@@ -28,8 +28,8 @@ function NotificationItem({
   duration = DEFAULT_DURATION,
   onClose,
 }: NotificationItemProps): JSX.Element {
+  const exitAnimationRef = useRef<number | null>(null);
   const autoDismissTimerRef = useRef<number | null>(null);
-  const [isExiting, setIsExiting] = useState(false);
   const isClosingRef = useRef(false);
 
   const handleClose = useCallback(() => {
@@ -45,9 +45,21 @@ function NotificationItem({
       autoDismissTimerRef.current = null;
     }
 
-    // Trigger exit animation via React state, then close after animation
-    setIsExiting(true);
-    setTimeout(() => onClose(id), EXIT_ANIMATION_DURATION);
+    // Clear any existing exit animation timeout
+    if (exitAnimationRef.current) {
+      clearTimeout(exitAnimationRef.current);
+    }
+
+    const element = document.getElementById(`notification-${id}`);
+    if (element && !element.classList.contains('notification-item-exit')) {
+      element.classList.add('notification-item-exit');
+      exitAnimationRef.current = window.setTimeout(() => {
+        onClose(id);
+        exitAnimationRef.current = null;
+      }, EXIT_ANIMATION_DURATION);
+    } else {
+      onClose(id);
+    }
   }, [id, onClose]);
 
   // Auto-dismiss after duration
@@ -66,6 +78,9 @@ function NotificationItem({
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
+      if (exitAnimationRef.current) {
+        clearTimeout(exitAnimationRef.current);
+      }
       if (autoDismissTimerRef.current) {
         clearTimeout(autoDismissTimerRef.current);
       }
@@ -74,8 +89,9 @@ function NotificationItem({
 
   return (
     <div
-      className={`notification-item type-${type}${isExiting ? ' notification-item-exit' : ''}`}
-      role="status"
+      id={`notification-${id}`}
+      className={`notification-item type-${type}`}
+      role="alert"
       aria-live="polite"
       tabIndex={0}
       onKeyDown={(e) => {

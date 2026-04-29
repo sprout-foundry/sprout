@@ -1,17 +1,15 @@
 import { createContext, useContext, useReducer, useCallback, useEffect, type ReactNode } from 'react';
 import { generateUUID } from '../utils/uuid';
-import { notificationBus, type NotificationType } from '../services/notificationBus';
+import {
+  notificationBus,
+  type NotificationEvent,
+  type NotificationType as BusNotificationType,
+} from '../services/notificationBus';
 
-export type { NotificationType };
+// Re-export NotificationType for convenience
+export type NotificationType = BusNotificationType;
 
-/** Maximum notification display duration (60 seconds). */
-const MAX_DURATION_MS = 60_000;
-
-/** Clamp duration between 0 and the maximum. */
-const clampDuration = (d: number | undefined): number | undefined =>
-  d !== undefined ? Math.max(0, Math.min(d, MAX_DURATION_MS)) : undefined;
-
-export interface Notification {
+export type Notification = {
   id: string;
   type: NotificationType;
   title: string;
@@ -99,9 +97,11 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
   const addNotification = useCallback(
     (type: NotificationType, title: string, message: string, duration?: number): string => {
       const id = generateUUID();
+      // Clamp duration between 0 and 60000ms (60 seconds)
+      const clampedDuration = duration !== undefined ? Math.max(0, Math.min(duration, 60000)) : undefined;
       dispatch({
         type: 'ADD_NOTIFICATION',
-        payload: { type, title, message, duration: clampDuration(duration), id },
+        payload: { type, title, message, duration: clampedDuration, id },
       });
       return id;
     },
@@ -118,14 +118,17 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
 
   // Subscribe to external notificationBus events
   useEffect(() => {
-    const unsubscribe = notificationBus.onNotification((event) => {
+    const unsubscribe = notificationBus.onNotification((event: NotificationEvent) => {
+      // Clamp duration between 0 and 60000ms (same as addNotification)
+      const clampedDuration = event.duration !== undefined ? Math.max(0, Math.min(event.duration, 60000)) : undefined;
+
       dispatch({
         type: 'ADD_NOTIFICATION',
         payload: {
           type: event.type,
           title: event.title,
           message: event.message,
-          duration: clampDuration(event.duration),
+          duration: clampedDuration,
           id: event.id,
         },
       });

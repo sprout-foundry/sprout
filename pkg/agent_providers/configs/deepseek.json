@@ -5,8 +5,8 @@
   },
   "cost": {
     "currency": "USD",
-    "input_token_cost": 0.14,
-    "output_token_cost": 0.28
+    "input_token_cost": 0.3,
+    "output_token_cost": 0.5
   },
   "defaults": {
     "max_tokens": 32768,
@@ -22,15 +22,94 @@
     "reasoning_content_field": "reasoning_content"
   },
   "models": {
-    "available_models": [],
+    "available_models": [
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+      "deepseek-v4-flash-max",
+      "deepseek-v3",
+      "deepseek-chat",
+      "deepseek-reasoner",
+      "deepseek-coder"
+    ],
     "default_context_limit": 1000000,
     "default_model": "deepseek-v4-flash",
+    "model_info": [
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek-V4 Flash - Cost-effective model with 1M context, optimized for speed",
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "tags": [
+          "coding",
+          "tools"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek-V4 Pro - 1.6T parameter MoE model with 49B activated parameters",
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek-V4 Flash Max - Maximum reasoning mode of V4 Flash",
+        "id": "deepseek-v4-flash-max",
+        "name": "DeepSeek V4 Flash Max",
+        "tags": [
+          "coding",
+          "tools",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "DeepSeek-V3 - Previous generation model",
+        "id": "deepseek-v3",
+        "name": "DeepSeek V3",
+        "tags": [
+          "coding"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek Chat - General purpose chat model",
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "tags": [
+          "chat"
+        ]
+      },
+      {
+        "context_length": 1000000,
+        "description": "DeepSeek Reasoner - Reasoning optimized model",
+        "id": "deepseek-reasoner",
+        "name": "DeepSeek Reasoner",
+        "tags": [
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "DeepSeek Coder - Coding specialized model",
+        "id": "deepseek-coder",
+        "name": "DeepSeek Coder",
+        "tags": [
+          "coding"
+        ]
+      }
+    ],
     "model_overrides": {
       "deepseek-chat": 1000000,
       "deepseek-coder": 128000,
       "deepseek-reasoner": 1000000,
       "deepseek-v3": 128000,
       "deepseek-v4-flash": 1000000,
+      "deepseek-v4-flash-max": 1000000,
       "deepseek-v4-pro": 1000000
     },
     "pattern_overrides": [

@@ -57,11 +57,21 @@ func GetCustomProviderPath(name string) (string, error) {
 	return filepath.Join(providersDir, normalized+".json"), nil
 }
 
+// LoadCustomProviders loads all custom provider configs from the global
+// providers directory (~/.config/sprout/providers/).
 func LoadCustomProviders() (map[string]CustomProviderConfig, error) {
 	providersDir, err := GetProvidersDir()
 	if err != nil {
 		return nil, fmt.Errorf("get providers directory: %w", err)
 	}
+	return LoadCustomProvidersFromDir(providersDir)
+}
+
+// LoadCustomProvidersFromDir loads all custom provider JSON files from the
+// given directory. Use this when SPROUT_CONFIG is temporarily overridden
+// (e.g. inside NewManagerWithLayers) and custom providers must still be read
+// from the true global location.
+func LoadCustomProvidersFromDir(providersDir string) (map[string]CustomProviderConfig, error) {
 
 	files, err := filepath.Glob(filepath.Join(providersDir, "*.json"))
 	if err != nil {

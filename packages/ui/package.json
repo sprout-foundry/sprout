@@ -1,4 +1,40 @@
 {
+  "name": "@sprout/ui",
+  "version": "0.1.0",
+  "description": "Reusable React UI components for Sprout",
+  "license": "MIT",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs.js",
+      "default": "./dist/index.esm.js"
+    },
+    "./dist/style.css": {
+      "default": "./dist/style.css"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "prepublishOnly": "npm run build",
+    "test": "jest --config jest.config.js",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/commands": "^6.10.0",
@@ -41,7 +77,6 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1"
   },
-  "description": "Reusable React UI components for Sprout",
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/react": "^18.2.0",
@@ -54,44 +89,24 @@
     "vite": "^5.0.0",
     "vite-plugin-dts": "^3.0.0"
   },
-  "exports": {
-    ".": {
-      "default": "./dist/index.esm.js",
-      "import": "./dist/index.esm.js",
-      "require": "./dist/index.cjs.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./dist/style.css": {
-      "default": "./dist/style.css"
-    }
-  },
-  "files": [
-    "dist"
+  "keywords": [
+    "react",
+    "editor",
+    "terminal",
+    "ide",
+    "code-editor",
+    "sprout"
   ],
-  "license": "MIT",
-  "main": "dist/index.cjs.js",
-  "module": "dist/index.esm.js",
-  "name": "@sprout/ui",
-  "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
+  "homepage": "https://github.com/sprout-foundry/sprout/tree/main/packages/ui",
+  "bugs": {
+    "url": "https://github.com/sprout-foundry/sprout/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/sprout-foundry/sprout.git"
+    "url": "https://github.com/sprout-foundry/sprout.git",
+    "directory": "packages/ui"
   },
-  "scripts": {
-    "build": "vite build",
-    "prepublishOnly": "npm run build",
-    "test": "jest --config jest.config.js",
-    "type-check": "tsc --noEmit"
-  },
-  "sideEffects": [
-    "**/*.css"
-  ],
-  "types": "dist/index.d.ts",
-  "version": "0.1.0"
+  "publishConfig": {
+    "access": "public"
+  }
 }

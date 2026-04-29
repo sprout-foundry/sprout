@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useCallback, type ReactNode } from 'react';
-import type { APIAdapter } from '@/types/adapter';
+import type { APIAdapter } from '../types/adapter';
 
 interface SproutAdapterContextValue {
   adapter: APIAdapter | null;

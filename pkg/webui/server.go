@@ -56,7 +56,7 @@ type ReactWebServer struct {
 	connections                     sync.Map // map[*websocket.Conn]*ConnectionInfo
 	fileWatcher                     *fileWatcher
 	terminalManager                 *TerminalManager
-	securityPromptMgr               *security.SecurityPromptManager
+	securityPromptMgr               *security.ApprovalManager
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
@@ -160,8 +160,8 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 
 	providercatalog.RefreshFromRemoteAsync("")
 
-	securityPromptMgr := security.NewSecurityPromptManager()
-	security.SetGlobalPromptManager(securityPromptMgr)
+	securityPromptMgr := security.NewApprovalManager()
+	security.SetGlobalApprovalManager(securityPromptMgr)
 
 	// Run startup permission check
 	if configDir, err := configuration.GetConfigDir(); err == nil {

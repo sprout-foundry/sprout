@@ -567,7 +567,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 					"risk_type": "Subagent External Workspace",
 					"target":    outsidePathsStr,
 				}
-				if !mgr.RequestApproval(a.GetEventBus(), a.GetEventClientID(), "run_subagent", "CAUTION", prompt, extras) {
+				if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), "run_subagent", "CAUTION", prompt, extras) {
 					a.debugLog("User rejected subagent access to external workspace\n")
 					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
 				}

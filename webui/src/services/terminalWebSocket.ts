@@ -151,7 +151,8 @@ class TerminalWebSocketService {
 
     // Build query parameters for the WebSocket URL.
     // On reconnect with a sessionId, pass it so server can reattach to the
-    // existing tmux session (preserving history). This also covers the case
+    // On reconnect with a sessionId, pass it so server can reattach to the
+    // existing PTY session (preserving scrollback via ring buffer). This also covers the case
     // where the sessionId was restored from localStorage after a tab discard.
     // A preferredShell can be set before the first connect to select a specific shell.
     const params = new URLSearchParams();
@@ -238,16 +239,15 @@ class TerminalWebSocketService {
           return;
         }
 
-        // Handle session creation
         if (data.type === 'session_created') {
           this.sessionId = data.data.session_id;
           debugLog('Terminal session created:', this.sessionId);
           this.persistSessionId();
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
+          return;
         }
 
-        // Handle session restored (reattach to existing tmux session)
         if (data.type === 'session_restored') {
           this.sessionId = data.data.session_id;
           debugLog('Terminal session restored:', this.sessionId);
@@ -257,6 +257,7 @@ class TerminalWebSocketService {
           this.notifyCallbacks({ type: 'session_restored', data: { session_id: this.sessionId, scrollback: data.data.scrollback || '' } });
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
+          return;
         }
 
         this.notifyCallbacks(data);
@@ -465,7 +466,7 @@ class TerminalWebSocketService {
   }
 
   /** Proactively disconnect before tab freeze. Sends a clean close frame to
-   *  the server so it can properly detach from the backend session (tmux).
+   *  the server so it can properly detach from the backend PTY session.
    *  Unlike disconnect(), this does NOT clear the persisted sessionId --
    *  resume() will restore it for reattachment.
    *  
@@ -504,7 +505,7 @@ class TerminalWebSocketService {
     }
     this.isConnected = false;
     // NOTE: Do NOT clear persisted sessionId or null the sessionId itself so
-    // that resume() → resetAndReconnect() can reattach to the tmux session.
+    // that resume() → resetAndReconnect() can reattach to the PTY session.
   }
 
   /** Resume after tab unfreeze. Triggers immediate reconnection with session restore.

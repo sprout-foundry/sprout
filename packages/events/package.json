@@ -19,7 +19,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "postinstall": "bash scripts/postinstall.sh",
     "prepare": "npm run build",
     "type-check": "tsc --noEmit"
   },

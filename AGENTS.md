@@ -15,6 +15,21 @@ Run it at the end of every implementation task, before reporting work as complet
 make build-all
 ```
 
+## Roadmap
+
+Detailed roadmap specifications live in the `roadmap/` directory. Always read
+these specifications first to ensure alignment with the project direction.
+
+- **SP-001** Agent Core Architecture
+- **SP-002** Configuration, Credentials & Providers
+- **SP-003** Webui & Frontend Architecture
+- **SP-004** Security, Validation & MCP
+- **SP-005** Supporting Systems & Infrastructure
+- **SP-006** Delegate Tool (proposed)
+- **SP-007** Extend Configuration (proposed)
+- **SP-008** Reliability Engineering (proposed)
+- **SP-009** Component Library Maturation (proposed)
+
 ## Testing
 
 ```bash

@@ -94,11 +94,10 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 	case "git":
 		return classifyGitOperation(args)
 	default:
-		// Tools not explicitly listed are handled by their own tool handlers
-		// which perform their own validation. The security classifier is a
-		// defense-in-depth layer for shell commands and file writes only —
-		// not a gate for every tool call.
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool call"}
+		// Tools not explicitly listed default to CAUTION for safety.
+		// This ensures new or unknown tools require user approval until
+		// they are explicitly classified.
+		return SecurityResult{Risk: SecurityCaution, Reasoning: "Unknown tool - requires approval", ShouldPrompt: true}
 	}
 }
 

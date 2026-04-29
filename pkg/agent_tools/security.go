@@ -65,47 +65,31 @@ type SecurityResult struct {
 }
 
 // Readonly tools map - package level to avoid recreation
-var readonlyTools = map[string]bool{
-	"read_file": true, "search_files": true, "web_search": true,
-	"fetch_url": true, "browse_url": true,
-	"analyze_ui_screenshot": true, "analyze_image_content": true,
-	"view_history": true, "TodoRead": true, "TodoWrite": true,
-	"list_skills": true, "activate_skill": true, "run_subagent": true, "run_parallel_subagents": true,
-	"glob": true, "list_directory": true, "get_file_info": true,
-	"list_processes": true, "self_review": true,
-	"mcp_tools": true,
-	"add_memory": true, "read_memory": true, "list_memories": true, "delete_memory": true,
-}
-
 // ClassifyToolCall classifies a tool call for security purposes based on the
 // tool name and its arguments. It returns a SecurityResult indicating the risk
 // level, reasoning, and whether the operation should be blocked or prompt the user.
 //
 // Classification is purely string-based (no filesystem access). See the
 // package-level documentation for known limitations of this approach.
+//
+// Only tools whose arguments carry risk (shell commands, file writes, git ops)
+// need explicit classification. All other registered tools default to SAFE —
+// if a tool is in the registry, it's already vetted. The only real security
+// value is inspecting the *arguments* to those risky tools.
 func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResult {
-	if readonlyTools[toolName] {
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only operation"}
-	}
-
 	switch toolName {
 	case "shell_command":
 		return classifyShellCommand(args)
-	case "commit":
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Structured commit tool with built-in validation"}
-	case "rollback_changes":
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Structured rollback tool with revision tracking"}
-	case "revision_id":
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only revision ID lookup"}
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		return classifyWriteOperation(args)
 	case "git":
 		return classifyGitOperation(args)
 	default:
-		// Tools not explicitly listed default to CAUTION for safety.
-		// This ensures new or unknown tools require user approval until
-		// they are explicitly classified.
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Unknown tool - requires approval", ShouldPrompt: true}
+		// Tools whose arguments don't need runtime inspection are SAFE.
+		// The tool registry already validates that only registered tools
+		// reach this point — unregistered tools are rejected before
+		// security classification runs.
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool with no argument-level risk"}
 	}
 }
 

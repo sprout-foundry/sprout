@@ -32,7 +32,7 @@ func TestE2E_RedundantShellCommandOptimization(t *testing.T) {
 	// ---------------------------------------------------------------------------
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false) // enabled, not debug
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false)) // enabled, not debug
 
 	const cmd = "go test ./..."
 	const output = "PASS\nok  \tgithub.com/example/pkg\t0.003s"
@@ -127,7 +127,7 @@ func TestE2E_RedundantShellCommandOptimization(t *testing.T) {
 	messages = append(messages, api.Message{Role: "user", Content: "What about error handling?"})
 	messages = append(messages, api.Message{Role: "assistant", Content: "Fixed it."})
 
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	// ---------------------------------------------------------------------------
 	// 3. Call prepareMessages (the full pipeline)
@@ -203,7 +203,7 @@ func TestE2E_RedundantShellCommandWithDifferentOutputs(t *testing.T) {
 
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
 
 	const cmd = "go build ./..."
 
@@ -257,7 +257,7 @@ func TestE2E_RedundantShellCommandWithDifferentOutputs(t *testing.T) {
 	// -- Follow-up --
 	messages = append(messages, api.Message{Role: "assistant", Content: "Build succeeded, ready to test."})
 
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	ch := NewConversationHandler(agent)
 	prepared := ch.prepareMessages(nil)
@@ -299,7 +299,7 @@ func TestE2E_RedundantShellCommandBackToBack(t *testing.T) {
 
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
 
 	const cmd = "go vet ./..."
 
@@ -347,7 +347,7 @@ func TestE2E_RedundantShellCommandBackToBack(t *testing.T) {
 	// -- Follow-up --
 	messages = append(messages, api.Message{Role: "assistant", Content: "All clean."})
 
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	ch := NewConversationHandler(agent)
 	prepared := ch.prepareMessages(nil)
@@ -380,7 +380,7 @@ func TestE2E_RedundantShellCommandBackToBack(t *testing.T) {
 		"expected exactly 1 preserved result for newer back-to-back duplicate, got %d", preservedCount)
 }
 
-// TestE2E_RedundantShellCommandThreeOccurrences verifies that when the same
+// TestE2E_RedundantShellCommandThreeOccurrences verifies that when the same)
 // shell command appears 3+ times, the map-overwrite semantics of trackShellCommand
 // ensure that only the most recent execution survives and all older ones become
 // [STALE]. With 3 occurrences, exactly 2 should be stale and 1 preserved.
@@ -389,7 +389,7 @@ func TestE2E_RedundantShellCommandThreeOccurrences(t *testing.T) {
 
 	mainClient := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, mainClient)
-	agent.optimizer = NewConversationOptimizer(true, false)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
 
 	const cmd = "go build ./..."
 
@@ -458,7 +458,7 @@ func TestE2E_RedundantShellCommandThreeOccurrences(t *testing.T) {
 
 	messages = append(messages, api.Message{Role: "assistant", Content: "Build is clean."})
 
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	ch := NewConversationHandler(agent)
 	prepared := ch.prepareMessages(nil)

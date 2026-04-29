@@ -382,8 +382,8 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 
 	// Invalidate cached file metadata when file is successfully written
 	// This prevents stale line counts from misleading the model
-	if err == nil && a.optimizer != nil {
-		a.optimizer.InvalidateFile(path)
+	if err == nil && a.state.GetOptimizer() != nil {
+		a.state.GetOptimizer().InvalidateFile(path)
 	}
 
 	// Publish file change event for web UI auto-sync
@@ -489,8 +489,8 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	// Invalidate cached file metadata when file is successfully edited
 	// This prevents stale line counts from misleading the model
-	if err == nil && a.optimizer != nil {
-		a.optimizer.InvalidateFile(path)
+	if err == nil && a.state.GetOptimizer() != nil {
+		a.state.GetOptimizer().InvalidateFile(path)
 	}
 
 	// Publish file change event for web UI auto-sync

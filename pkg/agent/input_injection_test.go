@@ -89,9 +89,9 @@ func TestInputInjectionIntegration(t *testing.T) {
 		assert.False(t, interrupted) // Should continue processing with injected input
 
 		// Verify the message was added to the agent's messages
-		assert.Greater(t, len(agent.messages), 0)
-		if len(agent.messages) > 0 {
-			lastMessage := agent.messages[len(agent.messages)-1]
+		assert.Greater(t, len(agent.state.GetMessages()), 0)
+		if len(agent.state.GetMessages()) > 0 {
+			lastMessage := agent.state.GetMessages()[len(agent.state.GetMessages())-1]
 			assert.Equal(t, "user", lastMessage.Role)
 			assert.Contains(t, lastMessage.Content, "Integration test")
 		}

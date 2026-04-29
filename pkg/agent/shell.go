@@ -112,7 +112,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		TruncatedOutput: returnResult,
 		Error:           err,
 		ExecutedAt:      time.Now().Unix(),
-		MessageIndex:    len(a.messages), // Will be the next message index
+		MessageIndex:    len(a.state.GetMessages()), // Will be the next message index
 		WasTruncated:    wasTruncated,
 		FullOutputPath:  fullOutputPath,
 		TruncatedTokens: truncatedTokens,
@@ -175,8 +175,9 @@ func (a *Agent) saveShellOutputToFile(output string) (string, error) {
 // updatePreviousShellCommandMessage updates a previous shell command message to be brief
 func (a *Agent) updatePreviousShellCommandMessage(prevResult *ShellCommandResult) {
 	// Find the message in the conversation history
-	if prevResult.MessageIndex >= 0 && prevResult.MessageIndex < len(a.messages) {
-		msg := &a.messages[prevResult.MessageIndex]
+	messages := a.state.GetMessages()
+	if prevResult.MessageIndex >= 0 && prevResult.MessageIndex < len(messages) {
+		msg := &messages[prevResult.MessageIndex]
 
 		// Update the message content to indicate it's stale
 		staleMessage := fmt.Sprintf("Tool call result for shell_command: %s\n[STALE] This output is from an earlier execution - command was run again with potentially different results", prevResult.Command)

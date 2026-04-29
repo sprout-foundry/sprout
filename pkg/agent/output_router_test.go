@@ -79,10 +79,11 @@ func TestRouteStreamChunk_CallsStreamingCallback(t *testing.T) {
 	}
 
 	agent := &Agent{
-		streamingEnabled:  true,
-		streamingCallback: callback,
-		outputMutex:       &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetStreamingEnabled(true)
+	agent.output.SetStreamingCallback(callback)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, nil)
 
 	router.RouteStreamChunk("test chunk", "assistant_text")
@@ -146,12 +147,13 @@ func TestRouteStreamChunk_SkipsReasoningWithStreamingCallbackByDefault(t *testin
 
 	var callbackCalled bool
 	agent := &Agent{
-		streamingEnabled: true,
-		streamingCallback: func(string) {
-			callbackCalled = true
-		},
-		outputMutex: &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetStreamingEnabled(true)
+	agent.output.SetStreamingCallback(func(string) {
+		callbackCalled = true
+	})
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, bus)
 
 	router.RouteStreamChunk("reasoning content", "reasoning")
@@ -179,13 +181,14 @@ func TestRouteStreamChunk_AllowsReasoningWithOptIn(t *testing.T) {
 	var callbackCalled bool
 	var receivedChunk string
 	agent := &Agent{
-		streamingEnabled: true,
-		streamingCallback: func(chunk string) {
-			callbackCalled = true
-			receivedChunk = chunk
-		},
-		outputMutex: &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetStreamingEnabled(true)
+	agent.output.SetStreamingCallback(func(chunk string) {
+		callbackCalled = true
+		receivedChunk = chunk
+	})
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, bus)
 	router.SetReasoningTerminalEnabled(true)
 
@@ -242,10 +245,11 @@ func TestRouteAgentMessage_CallsStreamingCallback(t *testing.T) {
 	}
 
 	agent := &Agent{
-		streamingEnabled:  true,
-		streamingCallback: callback,
-		outputMutex:       &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetStreamingEnabled(true)
+	agent.output.SetStreamingCallback(callback)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, nil)
 
 	message := "system message"
@@ -263,10 +267,12 @@ func TestRouteToolLog_PublishesCorrectEvent(t *testing.T) {
 	bus := events.NewEventBus()
 	ch := bus.Subscribe("test")
 	agent := &Agent{
-		currentIteration:     3,
-		maxContextTokens:     1000,
-		currentContextTokens: 500,
+		currentIteration: 3,
+		state:            NewAgentStateManager(false),
+		output:           NewAgentOutputManager(),
 	}
+	agent.state.SetMaxContextTokens(1000)
+	agent.state.SetCurrentContextTokens(500)
 	router := NewOutputRouter(agent, bus)
 
 	router.RouteToolLog("read_file", "/path/to/file.go")
@@ -506,10 +512,11 @@ func TestRouteStreamChunk_CallbackWithModeChange(t *testing.T) {
 	}
 
 	agent := &Agent{
-		streamingEnabled:  true,
-		streamingCallback: callback,
-		outputMutex:       &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetStreamingEnabled(true)
+	agent.output.SetStreamingCallback(callback)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 
 	// Start with event bus
 	bus := events.NewEventBus()
@@ -629,10 +636,11 @@ func TestRouteTerminalOnly_DoesNotPublishEvent(t *testing.T) {
 	}
 
 	agent := &Agent{
-		streamingEnabled:  true,
-		streamingCallback: callback,
-		outputMutex:       &sync.Mutex{},
+		output: NewAgentOutputManager(),
 	}
+	agent.output.SetStreamingEnabled(true)
+	agent.output.SetStreamingCallback(callback)
+	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, bus)
 
 	router.RouteTerminalOnly("hello terminal")

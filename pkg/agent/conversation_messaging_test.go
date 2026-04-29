@@ -71,13 +71,13 @@ func TestPrepareMessagesStripsAllSystemFromHistory(t *testing.T) {
 
 	// Seed history with system messages: one matching the current prompt (old exact dup)
 	// and one that was the prior persona's prompt (should also be stripped).
-	agent.messages = []api.Message{
+	agent.state.SetMessages([]api.Message{
 		{Role: "system", Content: "new system prompt"},
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "hi"},
 		{Role: "system", Content: "old persona prompt from a previous session"},
 		{Role: "user", Content: "another message"},
-	}
+	})
 
 	prepared, err := newTestConversationHandler(t, agent).prepareMessagesForTest()
 	if err != nil {
@@ -128,17 +128,17 @@ func TestSkillActivationFoldsIntoSystemPrompt(t *testing.T) {
 	}
 
 	// No system message should be injected into a.messages.
-	for _, m := range agent.messages {
+	for _, m := range agent.state.GetMessages() {
 		if m.Role == "system" {
 			t.Errorf("unexpected system message in a.messages after skill activation: %q", m.Content)
 		}
 	}
 
 	// prepareMessages must emit exactly one system message containing skill content.
-	agent.messages = []api.Message{
+	agent.state.SetMessages([]api.Message{
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "hi"},
-	}
+	})
 	prepared, err := newTestConversationHandler(t, agent).prepareMessagesForTest()
 	if err != nil {
 		t.Fatalf("prepareMessages: %v", err)
@@ -169,7 +169,7 @@ func TestSessionNameSystemMessageIsStrippedFromPrepared(t *testing.T) {
 
 	// Confirm the message is in a.messages for generateSessionName to read.
 	found := false
-	for _, m := range agent.messages {
+	for _, m := range agent.state.GetMessages() {
 		if m.Role == "system" && strings.HasPrefix(m.Content, "[SESSION_NAME:]") {
 			found = true
 		}
@@ -184,7 +184,7 @@ func TestSessionNameSystemMessageIsStrippedFromPrepared(t *testing.T) {
 	}
 
 	// Confirm prepareMessages does NOT forward it to the model.
-	agent.messages = append(agent.messages, api.Message{Role: "user", Content: "hello"})
+	agent.state.AddMessage(api.Message{Role: "user", Content: "hello"})
 	prepared, err := newTestConversationHandler(t, agent).prepareMessagesForTest()
 	if err != nil {
 		t.Fatalf("prepareMessages: %v", err)

@@ -13,8 +13,8 @@ import (
 // GetModel gets the current model being used by the agent
 func (a *Agent) GetModel() string {
 	// Check session override first
-	if a.sessionModel != "" {
-		return a.sessionModel
+	if a.state != nil && a.state.GetSessionModel() != "" {
+		return a.state.GetSessionModel()
 	}
 	// Use the interface method to get the model
 	if a.client == nil {
@@ -26,8 +26,8 @@ func (a *Agent) GetModel() string {
 // GetProvider returns the current provider name
 func (a *Agent) GetProvider() string {
 	// Check session override first
-	if a.sessionProvider != "" {
-		return string(a.sessionProvider)
+	if a.state != nil && a.state.GetSessionProvider() != "" {
+		return string(a.state.GetSessionProvider())
 	}
 	if a.client == nil {
 		return "unknown"
@@ -38,8 +38,8 @@ func (a *Agent) GetProvider() string {
 // GetProviderType returns the current provider type
 func (a *Agent) GetProviderType() api.ClientType {
 	// Check session override first
-	if a.sessionProvider != "" {
-		return a.sessionProvider
+	if a.state != nil && a.state.GetSessionProvider() != "" {
+		return a.state.GetSessionProvider()
 	}
 	return a.clientType
 }
@@ -198,12 +198,12 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 
 	// Store in session fields (not config) - this allows session-scoped changes
 	// without affecting other sessions or persisting to config
-	a.sessionProvider = provider
-	a.sessionModel = actualModel
+	a.state.SetSessionProvider(provider)
+	a.state.SetSessionModel(actualModel)
 
 	// Update context limits for the new model
-	a.maxContextTokens = a.getModelContextLimit()
-	a.currentContextTokens = 0
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
@@ -291,8 +291,8 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	}
 
 	// Update context limits for the new model
-	a.maxContextTokens = a.getModelContextLimit()
-	a.currentContextTokens = 0
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	// Notify user if model was different due to fallback
@@ -367,11 +367,11 @@ func (a *Agent) SetModel(model string) error {
 	// connection check here so model switches feel instant in the UI.
 
 	// Store in session fields (not config) - this allows session-scoped changes
-	a.sessionModel = model
+	a.state.SetSessionModel(model)
 
 	// Update context limits for the new model
-	a.maxContextTokens = a.getModelContextLimit()
-	a.currentContextTokens = 0
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil
@@ -428,8 +428,8 @@ func (a *Agent) SetModelPersisted(model string) error {
 	}
 
 	// Update context limits for the new model
-	a.maxContextTokens = a.getModelContextLimit()
-	a.currentContextTokens = 0
+	a.state.SetMaxContextTokens(a.getModelContextLimit())
+	a.state.SetCurrentContextTokens(0)
 	a.normalizeConversationForCurrentModelSyntax(prevProvider, prevModel)
 
 	return nil
@@ -456,11 +456,11 @@ func (a *Agent) isProviderAvailable(provider api.ClientType) bool {
 // ClearSessionOverrides clears any session-scoped provider/model overrides.
 // This should be called when a webui session ends to restore config-based behavior.
 func (a *Agent) ClearSessionOverrides() {
-	a.sessionProvider = ""
-	a.sessionModel = ""
+	a.state.SetSessionProvider("")
+	a.state.SetSessionModel("")
 }
 
 // HasSessionOverrides returns true if there are session-scoped provider/model overrides
 func (a *Agent) HasSessionOverrides() bool {
-	return a.sessionProvider != "" || a.sessionModel != ""
+	return a.state.GetSessionProvider() != "" || a.state.GetSessionModel() != ""
 }

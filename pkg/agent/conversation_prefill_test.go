@@ -14,9 +14,11 @@ func TestStripLeadingAssistantPrefill(t *testing.T) {
 	// Helper function to create a minimal ConversationHandler for testing
 	createTestHandler := func(messages []api.Message, debug bool) *ConversationHandler {
 		agent := &Agent{
-			messages: messages,
-			debug:    debug,
+			debug: debug,
+			state: NewAgentStateManager(false),
+			output: NewAgentOutputManager(),
 		}
+		agent.state.SetMessages(messages)
 		return NewConversationHandler(agent)
 	}
 
@@ -227,17 +229,19 @@ func TestStripLeadingAssistantPrefill(t *testing.T) {
 // when debug mode is enabled (including debug log emission).
 func TestStripLeadingAssistantPrefill_WithDebugEnabled(t *testing.T) {
 	agent := &Agent{
-		messages: []api.Message{
-			{Role: "system", Content: "System prompt"},
-			{Role: "assistant", Content: "[Summary]"},
-			{Role: "user", Content: "Question?"},
-		},
 		debug: true,
+		state: NewAgentStateManager(false),
+		output: NewAgentOutputManager(),
 	}
+	agent.state.SetMessages([]api.Message{
+		{Role: "system", Content: "System prompt"},
+		{Role: "assistant", Content: "[Summary]"},
+		{Role: "user", Content: "Question?"},
+	})
 
 	handler := NewConversationHandler(agent)
 
-	result := handler.stripLeadingAssistantPrefill(agent.messages)
+	result := handler.stripLeadingAssistantPrefill(agent.state.GetMessages())
 
 	// Verify the result is correct (assistant summary should be stripped)
 	if len(result) != 2 {

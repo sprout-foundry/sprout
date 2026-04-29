@@ -32,28 +32,34 @@ func (a *Agent) HandleInterrupt() string {
 		return ""
 	}
 
-	a.pauseMutex.Lock()
-	defer a.pauseMutex.Unlock()
+	pauseMutex := a.state.GetPauseMutex()
+	pauseMutex.Lock()
+	defer pauseMutex.Unlock()
 
 	// Initialize pause state if needed
-	if a.pauseState == nil {
-		a.pauseState = &PauseState{}
+	pauseState := a.state.GetPauseState()
+	if pauseState == nil {
+		pauseState = &PauseState{}
+		a.state.SetPauseState(pauseState)
 	}
 
 	// Set pause state
-	a.pauseState.IsPaused = true
-	a.pauseState.PausedAt = time.Now()
+	pauseState.IsPaused = true
+	pauseState.PausedAt = time.Now()
 
 	// Store current messages for context restoration
-	a.pauseState.MessagesBefore = make([]api.Message, len(a.messages))
-	copy(a.pauseState.MessagesBefore, a.messages)
+	messages := a.state.GetMessages()
+	pauseState.MessagesBefore = make([]api.Message, len(messages))
+	copy(pauseState.MessagesBefore, messages)
+	a.state.SetPauseState(pauseState)
 
 	// Interrupt handling is deterministic:
 	// any interrupt request stops the current task immediately without prompting.
 	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
 		a.debugLog("Subagent interrupt detected, stopping task\n")
 	}
-	a.pauseState.IsPaused = false
+	pauseState.IsPaused = false
+	a.state.SetPauseState(pauseState)
 	a.ClearInterrupt()
 	a.debugLog("HandleInterrupt: Returning STOP\n")
 	return "STOP"

@@ -21,9 +21,11 @@ func (a *Agent) decorateEventPayload(data interface{}) interface{} {
 		return data
 	}
 
-	a.eventMetadataMu.RLock()
-	defer a.eventMetadataMu.RUnlock()
-	if len(a.eventMetadata) == 0 {
+	mu := a.output.GetEventMetadataMutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	eventMetadata := a.output.GetEventMetadata()
+	if len(eventMetadata) == 0 {
 		return data
 	}
 
@@ -32,13 +34,19 @@ func (a *Agent) decorateEventPayload(data interface{}) interface{} {
 		return data
 	}
 
-	cloned := make(map[string]interface{}, len(payload)+len(a.eventMetadata))
+	cloned := make(map[string]interface{}, len(payload)+len(eventMetadata))
 	for k, v := range payload {
 		cloned[k] = v
 	}
-	for k, v := range a.eventMetadata {
+	for k, v := range eventMetadata {
 		if _, exists := cloned[k]; !exists {
-			cloned[k] = v
+			// Resolve function values to their return value
+			if fn, ok := v.(func() string); ok {
+				resolved := fn()
+				cloned[k] = resolved
+			} else {
+				cloned[k] = v
+			}
 		}
 	}
 	return cloned
@@ -80,19 +88,20 @@ func (a *Agent) PublishAgentMessage(category, message string, extra map[string]i
 // SetEventBus sets the event bus for real-time UI updates and initializes the validator
 func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 	a.eventBus = eventBus
-	if a.outputRouter != nil {
-		a.outputRouter.SetEventBus(eventBus)
+	if a.OutputRouter() != nil {
+		a.OutputRouter().SetEventBus(eventBus)
 	} else {
-		a.outputRouter = NewOutputRouter(a, eventBus)
+		a.output.SetOutputRouter(NewOutputRouter(a, eventBus))
 	}
 	// Initialize validator for syntax checking and async diagnostics
 	a.validator = validation.NewValidator(eventBus)
-	a.eventMetadataMu.RLock()
-	if len(a.eventMetadata) > 0 {
-		a.validator.SetEventMetadata(a.eventMetadata)
+	mu := a.output.GetEventMetadataMutex()
+	mu.RLock()
+	em := a.output.GetEventMetadata()
+	if len(em) > 0 {
+		a.validator.SetEventMetadata(em)
 	}
-	a.eventMetadataMu.RUnlock()
-	a.enablePreWriteValidation = true
+	mu.RUnlock()
 }
 
 // GetEventBus returns the current event bus
@@ -102,10 +111,11 @@ func (a *Agent) GetEventBus() *events.EventBus {
 
 // SetEventMetadata attaches metadata that should be merged into all emitted UI events.
 func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
-	a.eventMetadataMu.Lock()
-	defer a.eventMetadataMu.Unlock()
+	mu := a.output.GetEventMetadataMutex()
+	mu.Lock()
+	defer mu.Unlock()
 	if len(metadata) == 0 {
-		a.eventMetadata = nil
+		a.output.SetEventMetadataUnlocked(nil)
 		if a.validator != nil {
 			a.validator.SetEventMetadata(nil)
 		}
@@ -115,7 +125,7 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 	for k, v := range metadata {
 		cloned[k] = v
 	}
-	a.eventMetadata = cloned
+	a.output.SetEventMetadataUnlocked(cloned)
 	if a.validator != nil {
 		a.validator.SetEventMetadata(cloned)
 	}
@@ -123,12 +133,14 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 
 // GetEventClientID returns the bound client_id from event metadata, if present.
 func (a *Agent) GetEventClientID() string {
-	a.eventMetadataMu.RLock()
-	defer a.eventMetadataMu.RUnlock()
-	if len(a.eventMetadata) == 0 {
+	mu := a.output.GetEventMetadataMutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	eventMetadata := a.output.GetEventMetadata()
+	if len(eventMetadata) == 0 {
 		return ""
 	}
-	if clientID, ok := a.eventMetadata["client_id"].(string); ok {
+	if clientID, ok := eventMetadata["client_id"].(string); ok {
 		return strings.TrimSpace(clientID)
 	}
 	return ""
@@ -136,12 +148,14 @@ func (a *Agent) GetEventClientID() string {
 
 // GetEventChatID returns the bound chat_id from event metadata, if present.
 func (a *Agent) GetEventChatID() string {
-	a.eventMetadataMu.RLock()
-	defer a.eventMetadataMu.RUnlock()
-	if len(a.eventMetadata) == 0 {
+	mu := a.output.GetEventMetadataMutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	eventMetadata := a.output.GetEventMetadata()
+	if len(eventMetadata) == 0 {
 		return ""
 	}
-	if chatID, ok := a.eventMetadata["chat_id"].(string); ok {
+	if chatID, ok := eventMetadata["chat_id"].(string); ok {
 		return strings.TrimSpace(chatID)
 	}
 	return ""

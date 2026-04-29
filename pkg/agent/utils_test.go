@@ -169,14 +169,15 @@ func TestSuggestCorrectToolName(t *testing.T) {
 
 func TestSuggestCorrectToolNameResolvesLegacyMCPName(t *testing.T) {
 	agent := &Agent{
-		mcpManager: &fakeMCPManager{
-			tools: []mcp.MCPTool{{
-				Name:        "search",
-				Description: "search GitHub",
-				ServerName:  "github",
-			}},
-		},
+		mcpSub: NewAgentMCPManager(),
 	}
+	agent.mcpSub.SetManager(&fakeMCPManager{
+		tools: []mcp.MCPTool{{
+			Name:        "search",
+			Description: "search GitHub",
+			ServerName:  "github",
+		}},
+	})
 
 	result := agent.suggestCorrectToolName("github:search")
 	if result != "mcp_github_search" {

@@ -23,7 +23,7 @@ var githubMCPToolMapping = map[string]string{
 // Returns ("", false, nil) if MCP is not available or URL is not a GitHub resource type that MCP handles.
 // Returns ("", false, nil) if MCP routing was attempted but failed (graceful fallback).
 func (a *Agent) tryRouteGitHubToMCP(ctx context.Context, rawURL string) (string, bool, error) {
-	if a.mcpManager == nil {
+	if a.mcpSub == nil || a.mcpSub.GetManager() == nil {
 		return "", false, nil
 	}
 
@@ -47,7 +47,7 @@ func (a *Agent) tryRouteGitHubToMCP(ctx context.Context, rawURL string) (string,
 	}
 
 	// Check if the GitHub MCP server is available and running.
-	server, exists := a.mcpManager.GetServer("github")
+	server, exists := a.mcpSub.GetManager().GetServer("github")
 	if !exists || !server.IsRunning() {
 		a.debugLog("GitHub MCP server not available, falling back to normal fetch\n")
 		return "", false, nil
@@ -61,7 +61,7 @@ func (a *Agent) tryRouteGitHubToMCP(ctx context.Context, rawURL string) (string,
 	}
 
 	// Call the MCP tool.
-	result, callErr := a.mcpManager.CallTool(ctx, "github", mcpTool, args)
+	result, callErr := a.mcpSub.GetManager().CallTool(ctx, "github", mcpTool, args)
 	if callErr != nil {
 		a.debugLog("GitHub MCP CallTool failed: %v, falling back to normal fetch\n", callErr)
 		return "", false, nil

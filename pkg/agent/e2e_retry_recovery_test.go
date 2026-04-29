@@ -177,7 +177,7 @@ func TestE2E_RetryRecovery_TransientErrorDuringToolCall(t *testing.T) {
 
 	// Verify the tool result with actual file content appears in conversation history
 	var foundToolResult bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "tool" && strings.Contains(msg.Content, "retry recovery tests") {
 			foundToolResult = true
 			break

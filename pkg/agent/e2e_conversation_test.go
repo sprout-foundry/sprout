@@ -257,7 +257,7 @@ func TestE2E_BlankIterationRecovery(t *testing.T) {
 	// ProcessQuery (which would also call sendMessage internally and hit
 	// api.GetToolDefinitions), we test processResponse directly to isolate the
 	// blank-iteration logic.
-	agent.messages = append(agent.messages, api.Message{Role: "user", Content: "test query"})
+	agent.state.AddMessage(api.Message{Role: "user", Content: "test query"})
 	ch.pendingUserMessage = "test query"
 
 	// First call: blank response → should NOT stop, should enqueue reminder
@@ -279,7 +279,7 @@ func TestE2E_BlankIterationRecovery(t *testing.T) {
 	assert.True(t, reminderFound, "expected blank-iteration reminder in transient messages")
 
 	// Second call: proper stop → should stop
-	ch.agent.messages = append(ch.agent.messages, api.Message{
+	ch.agent.state.AddMessage(api.Message{
 		Role:    "assistant",
 		Content: "   \n\t  ",
 	})
@@ -301,7 +301,7 @@ func TestE2E_DoubleBlankErrorStop(t *testing.T) {
 	blankResp2 := blankResponseWithContent("  ")
 
 	agent, ch := buildE2EAgent(t, 10)
-	agent.messages = append(agent.messages, api.Message{Role: "user", Content: "test"})
+	agent.state.AddMessage(api.Message{Role: "user", Content: "test"})
 	ch.pendingUserMessage = "test"
 
 	// First blank → continue with reminder
@@ -309,7 +309,7 @@ func TestE2E_DoubleBlankErrorStop(t *testing.T) {
 	assert.False(t, stopped, "first blank should not stop")
 
 	// Append the blank assistant message so the next processResponse sees it in history
-	ch.agent.messages = append(ch.agent.messages, api.Message{
+	ch.agent.state.AddMessage(api.Message{
 		Role:    "assistant",
 		Content: " ",
 	})
@@ -330,7 +330,7 @@ func TestE2E_RepetitiveContentRecovery(t *testing.T) {
 	t.Parallel()
 
 	agent, ch := buildE2EAgent(t, 10)
-	agent.messages = append(agent.messages, api.Message{Role: "user", Content: "do something"})
+	agent.state.AddMessage(api.Message{Role: "user", Content: "do something"})
 	ch.pendingUserMessage = "do something"
 
 	// Use finish_reason="length" so handleFinishReason returns false and
@@ -428,7 +428,7 @@ func TestE2E_CheckpointCompactionOnPrepareMessages(t *testing.T) {
 	// Build an agent with ConversationOptimizer for checkpoint summary generation.
 	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
-	agent.optimizer = NewConversationOptimizer(true, false)
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
 
 	// Create 25 user/assistant message pairs (50 messages total) with substantive content.
 	originalCount := 50
@@ -438,7 +438,7 @@ func TestE2E_CheckpointCompactionOnPrepareMessages(t *testing.T) {
 		messages = append(messages, api.Message{Role: "user", Content: content})
 		messages = append(messages, api.Message{Role: "assistant", Content: "Reply " + content})
 	}
-	agent.messages = messages
+	agent.state.SetMessages(messages)
 
 	// Create a handler to access estimateRequestTokens for dynamic threshold calculation.
 	ch := NewConversationHandler(agent)
@@ -447,14 +447,14 @@ func TestE2E_CheckpointCompactionOnPrepareMessages(t *testing.T) {
 	// Find a maxContextTokens value where the messages exceed 87% of it (with no tools).
 	// This makes the test robust against changes in token estimation constants.
 	for _, maxCtx := range thresholdCandidates {
-		agent.maxContextTokens = maxCtx
+		agent.state.SetMaxContextTokens(maxCtx)
 		compactionThreshold := int(float64(maxCtx) * PruningConfig.Default.StandardPercent)
 
 		// Build a fresh handler for each candidate since we need to reset state.
 		ch = NewConversationHandler(agent)
 		// Build simple message list: system + messages (mimicking what prepareMessages does)
 		prep := []api.Message{{Role: "system", Content: agent.systemPrompt}}
-		prep = append(prep, agent.messages...)
+		prep = append(prep, agent.state.GetMessages()...)
 		tokens := ch.apiClient.estimateRequestTokens(prep, nil)
 
 		if tokens > compactionThreshold {
@@ -462,7 +462,7 @@ func TestE2E_CheckpointCompactionOnPrepareMessages(t *testing.T) {
 			break
 		}
 	}
-	// At this point, agent.maxContextTokens is set to the first value that triggers compaction.
+	// At this point, agent.state.GetMaxContextTokens() is set to the first value that triggers compaction.
 	// If none triggered, the last candidate (10000) is used and the test still validates
 	// the compaction code path, but compaction may not reduce messages.
 
@@ -482,10 +482,10 @@ func TestE2E_CheckpointCompactionOnPrepareMessages(t *testing.T) {
 	assert.Less(t, len(prepared), originalCount+1,
 		"expected compaction to reduce message count: got %d, want < %d", len(prepared), originalCount+1)
 
-	// Verify agent.messages was also updated to the compacted version.
-	assert.Less(t, len(agent.messages), originalCount,
-		"expected agent.messages to be updated to compacted version: got %d, want < %d",
-		len(agent.messages), originalCount)
+	// Verify agent.state.GetMessages() was also updated to the compacted version.
+	assert.Less(t, len(agent.state.GetMessages()), originalCount,
+		"expected agent.state.GetMessages() to be updated to compacted version: got %d, want < %d",
+		len(agent.state.GetMessages()), originalCount)
 }
 
 // ---------------------------------------------------------------------------
@@ -630,7 +630,7 @@ func TestE2E_TransientMessagesConsumedOnce(t *testing.T) {
 	// Set up agent and handler
 	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
-	agent.optimizer = NewConversationOptimizer(false, false) // Disable optimization for simplicity
+	agent.state.SetOptimizer(NewConversationOptimizer(false, false)) // Disable optimization for simplicity
 	ch := NewConversationHandler(agent)
 
 	// Enqueue a transient message (simulating blank iteration behavior)
@@ -819,8 +819,8 @@ func TestE2E_BuildCheckpointCompactedMessages(t *testing.T) {
 	// Create an agent
 	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
-	agent.optimizer = NewConversationOptimizer(true, false)
-	agent.messages = messages
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
+	agent.state.SetMessages(messages)
 
 	// Record checkpoint for first turn (indices 0-1)
 	agent.RecordTurnCheckpoint(0, 1)
@@ -904,8 +904,8 @@ func TestE2E_MultipleCheckpointsCompaction(t *testing.T) {
 
 	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
-	agent.optimizer = NewConversationOptimizer(true, false)
-	agent.messages = messages
+	agent.state.SetOptimizer(NewConversationOptimizer(true, false))
+	agent.state.SetMessages(messages)
 
 	// Record checkpoint for turn 1 (indices 0-1)
 	agent.RecordTurnCheckpoint(0, 1)
@@ -942,14 +942,14 @@ func TestE2E_PrepareMessagesTokenEstimation(t *testing.T) {
 
 	client := NewScriptedClient(stopResponse())
 	agent := makeAgentWithScriptedClient(10, client)
-	agent.maxContextTokens = 100000 // Large enough to not trigger compaction
+	agent.state.SetMaxContextTokens(100000) // Large enough to not trigger compaction
 
 	ch := NewConversationHandler(agent)
 
 	// Add a few messages
-	agent.messages = []api.Message{
+	agent.state.SetMessages([]api.Message{
 		{Role: "user", Content: "Hello world"},
-	}
+	})
 
 	// Call prepareMessages with no tools — should not panic
 	prepared := ch.prepareMessages(nil)
@@ -1038,13 +1038,13 @@ func TestE2E_ToolCallExecutionFlow(t *testing.T) {
 
 	// Verify conversation history has the expected structure
 	// Should have: user message, assistant (tool call), tool result, assistant (stop)
-	assert.GreaterOrEqual(t, len(agent.messages), 4,
+	assert.GreaterOrEqual(t, len(agent.state.GetMessages()), 4,
 		"expected at least 4 messages (user, assistant with tool call, tool result, assistant stop)")
 
 	// Verify the tool call was recorded
 	var foundToolCall bool
 	var foundToolResult bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			foundToolCall = true
 			assert.Equal(t, "read_file", msg.ToolCalls[0].Function.Name,
@@ -1105,14 +1105,14 @@ read_file {
 
 	// Verify the fallback parser was used by checking the conversation history
 	// Should have: user message, assistant (unstructured content), tool result, assistant (stop)
-	assert.GreaterOrEqual(t, len(agent.messages), 4,
+	assert.GreaterOrEqual(t, len(agent.state.GetMessages()), 4,
 		"expected at least 4 messages (user, assistant with unstructured tool, tool result, assistant stop)")
 
 	// Verify the tool call was extracted and executed, and the assistant message was cleaned
 	var foundToolCall bool
 	var foundToolResult bool
 	var cleanedContentVerified bool
-	for _, msg := range agent.messages {
+	for _, msg := range agent.state.GetMessages() {
 		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 			foundToolCall = true
 			assert.Equal(t, "read_file", msg.ToolCalls[0].Function.Name,

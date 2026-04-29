@@ -75,7 +75,12 @@ beforeEach(() => {
 function mountContextMenu() {
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
-    root.render(<GitHistoryContextMenu apiService={mockApiService as any} />);
+    root.render(
+      <GitHistoryContextMenu
+        onCheckoutCommit={mockApiService.checkoutGitCommit}
+        onRevertCommit={mockApiService.revertGitCommit}
+      />,
+    );
   });
 }
 

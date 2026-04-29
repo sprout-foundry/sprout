@@ -9,19 +9,9 @@ import { createRoot } from 'react-dom/client';
 
 jest.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
 jest.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
-jest.mock('../services/api', () => {
-  const mockApi = {
-    getChangelog: jest.fn().mockResolvedValue({ revisions: [] }),
-    getSessions: jest.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
-    getRevisionDetails: jest.fn().mockResolvedValue({ revision: { files: [] } }),
-    restoreSession: jest.fn().mockResolvedValue({ messages: [] }),
-  };
-  return {
-    ApiService: {
-      getInstance: jest.fn(() => mockApi),
-    },
-  };
-});
+jest.mock('../services/api', () => ({
+  // No longer used by ContextPanel — kept for any transitive imports
+}));
 // ContextPanel uses useLog() which requires NotificationContext.
 jest.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
@@ -60,6 +50,10 @@ const MINIMAL_CHAT_PROPS = {
   isProcessing: false,
   lastError: null,
   queryProgress: null,
+  onLoadRevisionHistory: jest.fn().mockResolvedValue({ revisions: [] }),
+  onLoadSessions: jest.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
+  onRestoreSession: jest.fn().mockResolvedValue({ messages: [] }),
+  onLoadRevisionDetails: jest.fn().mockResolvedValue({ revision: { files: [] } }),
 };
 
 function makeChatProps(overrides: Record<string, unknown> = {}) {

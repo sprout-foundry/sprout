@@ -627,7 +627,7 @@ This is the full extraction that makes the webui components reusable by any proj
 [x] - CLOUD-ADAPTER: Refactor `FileTree` to accept `onFileSelect`, `onFileDelete`, `onFileCreate`, `onFileRename` callbacks and `files` data prop instead of calling `clientFetch` internally
 [x] - CLOUD-ADAPTER: Refactor `GitSidebarPanel`/`GitHistoryPanel` to accept git state and action callbacks via props/context instead of calling `apiService` directly
 [x] - CLOUD-ADAPTER: Refactor `Chat`/`ContextPanel` to accept message state and send-message callback via props instead of managing its own WebSocket and API calls
-[] - CLOUD-ADAPTER: Publish `@sprout/ui` as an npm package. The sprout webui becomes a thin shell that imports components and wires the local adapter. Foundry imports the same components and wires the cloud adapter.
+[x] - CLOUD-ADAPTER: Publish `@sprout/ui` as an npm package. The sprout webui becomes a thin shell that imports components and wires the local adapter. Foundry imports the same components and wires the cloud adapter.
 [] - CLOUD-ADAPTER: Add Storybook for `@sprout/ui` components with mock adapter for development and documentation
 
 ---

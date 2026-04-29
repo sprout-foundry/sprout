@@ -59,23 +59,30 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "react-scripts": "^5.0.1",
     "react-virtuoso": "^4.18.5",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "typescript": "^4.9.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^16.18.0",
     "@typescript-eslint/eslint-plugin": "6.21.0",
     "@typescript-eslint/parser": "6.21.0",
+    "@vitejs/plugin-react-swc": "^3.11.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
     "eslint-plugin-jest": "^28.0.0",
     "eslint-plugin-react": "^7.34.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-testing-library": "^6.2.0",
-    "prettier": "^3.8.1"
+    "jsdom": "^25.0.1",
+    "prettier": "^3.8.1",
+    "vite": "^6.4.2",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^2.1.9"
   },
   "jest": {
     "moduleNameMapper": {
@@ -93,15 +100,20 @@
   "private": true,
   "proxy": "http://localhost:56000",
   "scripts": {
-    "build": "react-scripts build",
-    "eject": "react-scripts eject",
+    "build": "tsc && vite build",
+    "build:cloud": "vite build --mode cloud",
+    "build:local": "vite build --mode local",
+    "dev": "vite",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:ci": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
-    "start": "react-scripts start",
-    "test": "react-scripts test",
+    "preview": "vite preview",
+    "start": "vite",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:run": "vitest run",
     "type-check": "npx tsc --noEmit"
   },
   "version": "1.0.0"

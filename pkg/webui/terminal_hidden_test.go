@@ -249,3 +249,30 @@ func TestHasSessionReturnsTrueForHidden(t *testing.T) {
 
 	tm.CloseSession("hidden-has")
 }
+
+func TestCreateHiddenSessionValidation(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	cases := []struct {
+		name   string
+		id     string
+		owner  string
+		chatID string
+	}{
+		{"empty id", "", "agent", "chat-1"},
+		{"empty owner", "session-1", "", "chat-1"},
+		{"empty chatID", "session-1", "agent", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tm.CreateHiddenSession(tc.id, tc.owner, tc.chatID)
+			if err == nil {
+				t.Errorf("expected error for %s", tc.name)
+				// Clean up if unexpectedly created
+				tm.CloseSession(tc.id)
+			}
+		})
+	}
+}

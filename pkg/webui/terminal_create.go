@@ -110,7 +110,15 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 
 	buf := make([]byte, 32768)
 	for {
-		n, err := session.Pty.Read(buf)
+		session.mutex.RLock()
+		pty := session.Pty
+		session.mutex.RUnlock()
+
+		if pty == nil {
+			return
+		}
+
+		n, err := pty.Read(buf)
 		if n > 0 {
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])

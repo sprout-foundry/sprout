@@ -80,6 +80,10 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 		session.mutex.Unlock()
 		return "", fmt.Errorf("session %s is no longer active", sessionID)
 	}
+	if session.Hidden {
+		session.mutex.Unlock()
+		return "", fmt.Errorf("session %s is not accessible", sessionID)
+	}
 	session.LastUsed = time.Now()
 	session.mutex.Unlock()
 

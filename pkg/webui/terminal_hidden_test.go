@@ -189,6 +189,31 @@ func TestCreateHiddenSessionDuplicateID(t *testing.T) {
 	}
 }
 
+func TestReattachSessionRejectsHidden(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session, err := tm.CreateHiddenSession("hidden-reattach", "agent", "chat-1")
+	if err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	// Wait for PTY reader to be running so the session is active.
+	session.mutex.RLock()
+	active := session.Active
+	session.mutex.RUnlock()
+	if !active {
+		t.Fatal("hidden session should be active")
+	}
+
+	_, err = tm.ReattachSession("hidden-reattach")
+	if err == nil {
+		t.Error("ReattachSession should reject hidden sessions")
+	}
+
+	tm.CloseSession("hidden-reattach")
+}
+
 func TestGetSessionReturnsHidden(t *testing.T) {
 	dir := t.TempDir()
 	tm := NewTerminalManager(dir)

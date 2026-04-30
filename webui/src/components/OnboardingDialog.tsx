@@ -145,7 +145,7 @@ function OnboardingDialog({
     : null;
 
   return (
-    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up ledit'}>
+    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up sprout'}>
       <div className="onboarding-card">
         {onboarding.isReonboarding && (
           <button
@@ -158,7 +158,7 @@ function OnboardingDialog({
             <X size={18} />
           </button>
         )}
-        <h2>{onboarding.isReonboarding ? 'Change Provider' : 'Set Up Ledit'}</h2>
+        <h2>{onboarding.isReonboarding ? 'Change Provider' : 'Set Up Sprout'}</h2>
         <p>
           {onboarding.isReonboarding
             ? 'Choose a new provider and model, or update your API key.'

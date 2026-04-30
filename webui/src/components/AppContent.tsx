@@ -20,9 +20,9 @@ import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import type { ChatSession } from '../services/chatSessions';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 
-const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
-const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
-const CONTEXT_PANEL_COLLAPSED_KEY = 'ledit.contextPanel.collapsed';
+const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
+const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
+const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 
 const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 
@@ -252,7 +252,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     if (typeof window === 'undefined') return 360;
-    const storedWidth = Number(window.localStorage.getItem('ledit.contextPanel.width'));
+    const storedWidth = Number(window.localStorage.getItem('sprout.contextPanel.width'));
     if (Number.isFinite(storedWidth) && storedWidth >= 260 && storedWidth <= 600) {
       return storedWidth;
     }
@@ -263,7 +263,7 @@ const AppContent: React.FC<AppContentProps> = ({
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('ledit.contextPanel.width', String(Math.round(panelWidth)));
+    window.localStorage.setItem('sprout.contextPanel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
 
   // Keep a stable ref to the current buffers map to avoid infinite loops in effects
@@ -553,7 +553,7 @@ const AppContent: React.FC<AppContentProps> = ({
             ? activeBuffer.file.path
             : null;
 
-          window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', { detail: { path: filePath ?? '' } }));
+          window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: filePath ?? '' } }));
           break;
         }
         case 'quick_open':
@@ -593,8 +593,8 @@ const AppContent: React.FC<AppContentProps> = ({
       }
     };
     
-    window.addEventListener('ledit:hotkey', handleHotkey);
-    return () => window.removeEventListener('ledit:hotkey', handleHotkey);
+    window.addEventListener('sprout:hotkey', handleHotkey);
+    return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handleFocusPaneIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
 
   // Handler to open hotkeys config in editor
@@ -623,8 +623,8 @@ const AppContent: React.FC<AppContentProps> = ({
     const handleOpenHotkeys = () => {
       handleOpenHotkeysConfig();
     };
-    window.addEventListener('ledit:open-hotkeys-config', handleOpenHotkeys);
-    return () => window.removeEventListener('ledit:open-hotkeys-config', handleOpenHotkeys);
+    window.addEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
+    return () => window.removeEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
   }, [handleOpenHotkeysConfig]);
 
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
@@ -696,8 +696,8 @@ const AppContent: React.FC<AppContentProps> = ({
       const { path, lineNumber } = (e as CustomEvent<{ path: string; lineNumber?: number }>).detail;
       if (path) handleFileClick(path, lineNumber);
     };
-    window.addEventListener('ledit:open-in-editor', handleOpenInEditor);
-    return () => window.removeEventListener('ledit:open-in-editor', handleOpenInEditor);
+    window.addEventListener('sprout:open-in-editor', handleOpenInEditor);
+    return () => window.removeEventListener('sprout:open-in-editor', handleOpenInEditor);
   }, [handleFileClick]);
 
   const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {

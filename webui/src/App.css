@@ -6,7 +6,7 @@
 
 :root {
   color-scheme: dark;
-  --ledit-terminal-reserved-height: 42px;
+  --sprout-terminal-reserved-height: 42px;
   --bg-primary: #282c34;
   --bg-secondary: #21252b;
   --bg-tertiary: #2c313a;
@@ -199,7 +199,7 @@ body {
 .app {
   display: flex;
   height: 100vh;
-  padding-bottom: var(--ledit-terminal-reserved-height);
+  padding-bottom: var(--sprout-terminal-reserved-height);
   box-sizing: border-box;
   background: var(--app-shell-bg);
   overflow: hidden;

@@ -265,8 +265,8 @@ export function useLayoutPersistence({
       clearLayoutSnapshot();
     };
 
-    window.addEventListener('ledit:workspace-changed', handleWorkspaceChanged);
-    return () => window.removeEventListener('ledit:workspace-changed', handleWorkspaceChanged);
+    window.addEventListener('sprout:workspace-changed', handleWorkspaceChanged);
+    return () => window.removeEventListener('sprout:workspace-changed', handleWorkspaceChanged);
   }, [buffersRef, setBuffers, setPanes]);
 
   return { restoreLayout };

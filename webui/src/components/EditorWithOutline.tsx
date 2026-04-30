@@ -35,13 +35,13 @@ function EditorWithOutline({
   // Persist collapsed state to localStorage
   const [isCollapsed, setIsCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem('ledit.outline-panel.collapsed') === '1';
+    return window.localStorage.getItem('sprout.outline-panel.collapsed') === '1';
   });
 
   // Persist panel width to localStorage
   const [panelWidth, setPanelWidth] = useState(() => {
     if (typeof window === 'undefined') return 240;
-    const storedWidth = Number(window.localStorage.getItem('ledit.outline-panel.width'));
+    const storedWidth = Number(window.localStorage.getItem('sprout.outline-panel.width'));
     if (Number.isFinite(storedWidth) && storedWidth >= 180 && storedWidth <= 500) {
       return storedWidth;
     }
@@ -51,13 +51,13 @@ function EditorWithOutline({
   // Sync collapsed state to localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('ledit.outline-panel.collapsed', isCollapsed ? '1' : '0');
+    window.localStorage.setItem('sprout.outline-panel.collapsed', isCollapsed ? '1' : '0');
   }, [isCollapsed]);
 
   // Sync panel width to localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem('ledit.outline-panel.width', String(Math.round(panelWidth)));
+    window.localStorage.setItem('sprout.outline-panel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
 
   // Handle panel resize (use incremental delta, not cumulative totalDelta)

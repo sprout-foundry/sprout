@@ -14,10 +14,10 @@ func TestConversationDetermineReasoningEffort_StartsMediumForGptOSS(t *testing.T
 			provider:   "openai",
 			model:      "gpt-oss:20b",
 		},
-		currentIteration: 0,
 		state:            NewAgentStateManager(false),
 		output:           NewAgentOutputManager(),
 	}
+	agent.state.SetCurrentIteration(0)
 	agent.state.SetMessages([]api.Message{{Role: "user", Content: "do task"}})
 	ch := NewConversationHandler(agent)
 

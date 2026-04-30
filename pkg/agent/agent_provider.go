@@ -22,12 +22,14 @@ func isNonInteractive() bool {
 	return !term.IsTerminal(int(os.Stdin.Fd()))
 }
 
-// isSSHDaemon returns true if running as an SSH daemon.
-// SSH daemons set BROWSER=none to indicate they're running
-// in headless mode and should allow startup even without a provider
+// isSSHDaemon returns true if running as an SSH daemon or regular daemon.
+// SSH daemons set BROWSER=none to indicate they're running in headless mode.
+// Regular daemons set SPROUT_DAEMON=1 when the -d flag is passed.
+// Both cases should allow agent startup even without a provider
 // configured, so that the web UI can handle provider setup.
 func isSSHDaemon() bool {
-	return strings.TrimSpace(os.Getenv("BROWSER")) == "none"
+	return strings.TrimSpace(os.Getenv("BROWSER")) == "none" ||
+		strings.TrimSpace(os.Getenv("SPROUT_DAEMON")) == "1"
 }
 
 // findProviderWithAPIKey searches through available providers and returns the first one

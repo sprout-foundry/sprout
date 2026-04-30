@@ -73,6 +73,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Web UI requires: interactive mode, daemon mode, not disabled, and not in CI/subagent
 	enableWebUI := (isInteractive || daemonMode) && !disableWebUI && !IsCI()
 
+	// Propagate daemon mode to child processes (subagents, agent.NewAgentWithLayers)
+	// so that lazy agent creation in the webui does not fast-fail with
+	// "no provider configured" when the webui can handle provider setup interactively.
+	if daemonMode {
+		os.Setenv("SPROUT_DAEMON", "1")
+	}
+
 	// Create event bus
 	eventBus := events.NewEventBus()
 

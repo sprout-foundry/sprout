@@ -76,9 +76,9 @@ esac
 echo "    remote: ${REMOTE_OS}/${REMOTE_ARCH}"
 
 asset_name="ledit-${REMOTE_OS}-${REMOTE_ARCH}.tar.gz"
-api_url="https://api.github.com/repos/alantheprice/ledit/releases/${RELEASE_TAG}"
+api_url="https://api.github.com/repos/sprout-foundry/sprout/releases/${RELEASE_TAG}"
 if [[ "$RELEASE_TAG" != "latest" ]]; then
-  api_url="https://api.github.com/repos/alantheprice/ledit/releases/tags/${RELEASE_TAG}"
+  api_url="https://api.github.com/repos/sprout-foundry/sprout/releases/tags/${RELEASE_TAG}"
 fi
 
 echo "==> Resolving artifact URL for ${asset_name} (${RELEASE_TAG})"

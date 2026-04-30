@@ -188,7 +188,7 @@ func (a *Agent) ClearConversationHistory() {
 	// Keep messages empty; system prompt is added during prepareMessages
 	a.state.SetMessages([]api.Message{})
 	a.clearTurnCheckpoints()
-	a.currentIteration = 0
+	a.state.SetCurrentIteration(0)
 	a.state.SetPreviousSummary("")
 
 	a.debugLog("[clean] Conversation history cleared\n")

@@ -52,7 +52,7 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	metrics := computeConversationSummaryMetrics(a.state.GetMessages())
 
 	// Conversation metrics
-	fmt.Printf("[~] Iterations:      %d\n", a.currentIteration)
+	fmt.Printf("[~] Iterations:      %d\n", a.state.GetCurrentIteration())
 	fmt.Printf("[you] User msgs:        %d\n", metrics.userMessages)
 	fmt.Printf("[bot] Assistant msgs:   %d\n", metrics.assistantMessages)
 	fmt.Printf("[cfg] Tool calls:      %d\n", metrics.toolCalls)
@@ -130,8 +130,8 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	fmt.Printf("$ Total cost:        $%.6f\n", a.state.GetTotalCost())
 
 	// Add cost per iteration
-	if a.currentIteration > 0 {
-		costPerIteration := a.state.GetTotalCost() / float64(a.currentIteration)
+	if a.state.GetCurrentIteration() > 0 {
+		costPerIteration := a.state.GetTotalCost() / float64(a.state.GetCurrentIteration())
 		fmt.Printf("[list] Cost per iteration: $%.6f\n", costPerIteration)
 	}
 
@@ -195,7 +195,7 @@ func (a *Agent) PrintCompactProgress() {
 
 	// Print the compact progress indicator with total tokens and cost
 	fmt.Printf("[%d:(%s/%s) | %s | %s] ",
-		a.currentIteration,
+		a.state.GetCurrentIteration(),
 		formatTokensCompact(a.state.GetCurrentContextTokens()),
 		formatTokensCompact(a.state.GetMaxContextTokens()),
 		formatTokensCompact(a.state.GetTotalTokens()),
@@ -327,7 +327,7 @@ func (a *Agent) GenerateConversationSummary() string {
 	// Add conversation metrics
 	summary.WriteString("[up] CONVERSATION METRICS:\n")
 	summary.WriteString("──────────────────────────────\n")
-	summary.WriteString(fmt.Sprintf("• Iterations: %d\n", a.currentIteration))
+	summary.WriteString(fmt.Sprintf("• Iterations: %d\n", a.state.GetCurrentIteration()))
 	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.state.GetTotalCost()))
 	summary.WriteString(fmt.Sprintf("• Total tokens: %s\n", a.formatTokenCount(a.state.GetTotalTokens())))
 

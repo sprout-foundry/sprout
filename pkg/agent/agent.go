@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -60,7 +61,6 @@ type Agent struct {
 	systemPrompt     string
 	baseSystemPrompt string // Base prompt restored when persona is cleared
 	maxIterations    int
-	currentIteration int
 
 	// Configuration
 	configManager *configuration.Manager
@@ -84,16 +84,17 @@ type Agent struct {
 	validator *validation.Validator
 
 	// Tool execution support
-	shellCommandHistory map[string]*ShellCommandResult
-	changeTracker       *ChangeTracker
-	preparedTools       sync.RWMutex
-	lastToolNames       []string
+	shellCommandHistory      map[string]*ShellCommandResult
+	shellCommandHistoryMu    sync.RWMutex
+	changeTracker            *ChangeTracker
+	preparedTools            sync.RWMutex
+	lastToolNames            []string
 
 	// UI integration
 	ui UI
 
-	// Stats callback
-	statsUpdateCallback func(int, float64)
+	// Stats callback (protected by atomic access)
+	statsUpdateCallback atomic.Value // func(int, float64)
 
 	// Debug logging
 	debugLogFile  *os.File
@@ -614,6 +615,9 @@ func (a *Agent) GetTotalCost() float64 {
 
 // GetTaskActions returns completed task actions
 func (a *Agent) GetTaskActions() []TaskAction {
+	mu := a.state.GetTaskActionsMutex()
+	mu.RLock()
+	defer mu.RUnlock()
 	return a.state.GetTaskActions()
 }
 
@@ -639,7 +643,7 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 
 // SetStatsUpdateCallback sets a callback for token/cost updates
 func (a *Agent) SetStatsUpdateCallback(callback func(int, float64)) {
-	a.statsUpdateCallback = callback
+	a.statsUpdateCallback.Store(callback)
 }
 
 // GetConfig returns the configuration
@@ -754,4 +758,37 @@ func (a *Agent) GetValidator() *validation.Validator {
 func (a *Agent) SetTraceSession(traceSession interface{}) {
 	a.traceSession = traceSession
 	a.state.SetTraceSession(traceSession)
+}
+
+// GetShellCommandHistoryEntry retrieves a shell command result from history
+func (a *Agent) GetShellCommandHistoryEntry(command string) (*ShellCommandResult, bool) {
+	a.shellCommandHistoryMu.RLock()
+	defer a.shellCommandHistoryMu.RUnlock()
+	result, exists := a.shellCommandHistory[command]
+	return result, exists
+}
+
+// SetShellCommandHistoryEntry stores a shell command result in history
+func (a *Agent) SetShellCommandHistoryEntry(command string, result *ShellCommandResult) {
+	a.shellCommandHistoryMu.Lock()
+	defer a.shellCommandHistoryMu.Unlock()
+	a.shellCommandHistory[command] = result
+}
+
+// ClearShellCommandHistory removes all entries from shell command history
+func (a *Agent) ClearShellCommandHistory() {
+	a.shellCommandHistoryMu.Lock()
+	defer a.shellCommandHistoryMu.Unlock()
+	a.shellCommandHistory = make(map[string]*ShellCommandResult)
+}
+
+// GetAllShellCommandHistory returns a copy of the shell command history
+func (a *Agent) GetAllShellCommandHistory() map[string]*ShellCommandResult {
+	a.shellCommandHistoryMu.RLock()
+	defer a.shellCommandHistoryMu.RUnlock()
+	result := make(map[string]*ShellCommandResult, len(a.shellCommandHistory))
+	for k, v := range a.shellCommandHistory {
+		result[k] = v
+	}
+	return result
 }

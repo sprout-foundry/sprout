@@ -2,9 +2,9 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/spec"
@@ -34,7 +34,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 			return "", fmt.Errorf("failed to get revision history: %w", err)
 		}
 		if len(revisionGroups) == 0 {
-			return "", errors.New("no changes found - agent must make changes and commit them before reviewing")
+			return "", agenterrors.NewInvalidInputError("no changes found - agent must make changes and commit them before reviewing", nil)
 		}
 		revisionID = revisionGroups[0].RevisionID
 	}

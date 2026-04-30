@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -428,7 +429,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent != nil && agent.debug {
 				agent.debugLog("[NO] Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
 			}
-			return nil, "", errors.New(errMsg)
+			return nil, "", agenterrors.NewSecurityError(errMsg, nil)
 		}
 	}
 
@@ -475,7 +476,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					}
 				}
 				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
-					return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
+					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 				}
 			} else {
 				// CLI: prompt user interactively via terminal stdin
@@ -486,15 +487,15 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if canPrompt {
 					prompt := buildSecurityPrompt(toolName, args, secResult)
 					if !logger.AskForConfirmation(prompt, false, false) {
-						return nil, "", fmt.Errorf("security rejected: user rejected %s — %s", toolName, secResult.Reasoning)
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 					}
 				} else if secResult.ShouldBlock {
 					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
-					return nil, "", fmt.Errorf("security block: %s — %s", toolName, secResult.Reasoning)
+					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)
 				} else if secResult.ShouldPrompt && !isSubagent {
 					// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
 					// Return a special error that tells the LLM to re-assert safety before proceeding
-					return nil, "", fmt.Errorf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)", toolName, secResult.Reasoning)
+					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)", toolName, secResult.Reasoning), nil)
 				}
 				// NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
 			}

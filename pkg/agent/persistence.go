@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -61,7 +61,7 @@ func normalizeSessionID(sessionID string) (string, error) {
 	clean := strings.TrimSpace(sessionID)
 	clean = strings.TrimPrefix(clean, legacySessionPrefix)
 	if clean == "" {
-		return "", errors.New("session ID cannot be empty")
+		return "", agenterrors.NewInvalidInputError("session ID cannot be empty", nil)
 	}
 	if strings.Contains(clean, string(os.PathSeparator)) || strings.Contains(clean, "/") {
 		return "", fmt.Errorf("session ID %q cannot contain path separators", sessionID)

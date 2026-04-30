@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 //go:embed prompts/system_prompt.md
@@ -27,7 +29,7 @@ func GetEmbeddedSystemPrompt() (string, error) {
 	// Extract the prompt content from the markdown
 	promptContent, err := extractSystemPrompt()
 	if err != nil {
-		return "", fmt.Errorf("failed to extract system prompt: %w", err)
+		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
 
 	// Add current date and time for temporal context
@@ -96,7 +98,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 	// Extract the prompt content from the markdown
 	promptContent, err := extractPlanningPrompt()
 	if err != nil {
-		return "", fmt.Errorf("failed to extract planning prompt: %w", err)
+		return "", agenterrors.NewPermanentError("failed to extract planning prompt", err)
 	}
 
 	// Add current date and time for temporal context
@@ -183,5 +185,5 @@ func readEmbeddedPromptFile(filePath string) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("failed to find embedded prompt: %s", filePath)
+	return nil, agenterrors.NewPermanentError(fmt.Sprintf("failed to find embedded prompt: %s", filePath), nil)
 }

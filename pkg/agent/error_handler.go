@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -30,6 +31,20 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	eh.agent.debugLog("[WARN] API request failed after %d tools executed (tokens: %s). Preserving conversation context.\n",
 		toolsExecuted, eh.formatTokenCount(eh.agent.state.GetTotalTokens()))
 
+	// Check typed AgentError categories for intelligent handling
+	if cat, ok := agenterrors.GetCategory(apiErr); ok {
+		switch cat {
+		case agenterrors.CategorySecurity:
+			// Security violations: stop and return error immediately, do not retry
+			return "", apiErr
+		case agenterrors.CategoryRateLimited:
+			eh.logRateLimit(apiErr.Error())
+			// Note: RateLimitExceededError is a separate type (not *AgentError),
+			// so it won't reach this branch — it's handled below via direct type assertion.
+			return eh.buildRateLimitMessage(0, apiErr), nil
+		}
+	}
+
 	// Check if this is a rate limit error - these should never be sent back to the model
 	errorMsg := apiErr.Error()
 	if rlErr, ok := apiErr.(*RateLimitExceededError); ok {
@@ -49,11 +64,9 @@ func (eh *ErrorHandler) HandleAPIFailure(apiErr error, messages []api.Message) (
 	// In non-interactive mode, fail fast. For CI/GitHub Actions prefer non-interactive unless running unit tests.
 	if !eh.agent.IsInteractiveMode() || ((os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "") && !isRunningUnderTest()) {
 		if toolsExecuted > 0 {
-			return "", fmt.Errorf("non-interactive: API request failed after %d tools executed (progress: %d tools, %s tokens): %w",
-				toolsExecuted, toolsExecuted, eh.formatTokenCount(eh.agent.state.GetTotalTokens()), apiErr)
+			return "", agenterrors.NewTransientError(fmt.Sprintf("non-interactive: API request failed after %d tools executed (progress: %d tools, %s tokens)", toolsExecuted, toolsExecuted, eh.formatTokenCount(eh.agent.state.GetTotalTokens())), apiErr)
 		}
-		return "", fmt.Errorf("non-interactive: API request failed after %d tools executed: %w",
-			toolsExecuted, apiErr)
+		return "", agenterrors.NewTransientError(fmt.Sprintf("non-interactive: API request failed after %d tools executed", toolsExecuted), apiErr)
 	}
 
 	// In interactive mode, return helpful error message

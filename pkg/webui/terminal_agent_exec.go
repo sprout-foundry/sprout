@@ -14,8 +14,7 @@ import (
 
 // Cached regexes for performance in the hot path.
 var (
-	dollarSignRegex = regexp.MustCompile(`\$\?`)
-	newlineRegex    = regexp.MustCompile(`\r?\n`)
+	newlineRegex = regexp.MustCompile(`\r?\n`)
 )
 
 // ExecuteCommandAndWait executes a command synchronously on a hidden PTY session,
@@ -39,6 +38,10 @@ var (
 //   - exitCode: the command's exit code (or -1 if timeout/cancelled)
 //   - err: any error that occurred during execution
 func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *TerminalSession, command string) (output string, exitCode int, err error) {
+	// Serialize command execution on this session to prevent interleaved output.
+	session.execMu.Lock()
+	defer session.execMu.Unlock()
+
 	// Validate session state.
 	session.mutex.RLock()
 	if !session.Active {
@@ -64,6 +67,11 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// Reject commands with embedded newlines.
 	if strings.Contains(command, "\n") {
 		return "", -1, fmt.Errorf("commands with embedded newlines are not supported; use separate commands")
+	}
+
+	// Validate that the command is not empty or whitespace-only.
+	if strings.TrimSpace(command) == "" {
+		return "", -1, fmt.Errorf("command is empty")
 	}
 
 	// Build the wrapped command with sentinel-based exit code detection.
@@ -106,8 +114,14 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// Buffer to accumulate output from the PTY.
 	var buf bytes.Buffer
 
-	// Create a context with a 30-second timeout if not already set.
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Apply a 30s default timeout only when the caller hasn't set one.
+	// This allows callers to pass longer deadlines for slow commands.
+	var cancel context.CancelFunc
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	} else {
+		cancel = func() {}
+	}
 	defer cancel()
 
 	// Wait for the sentinel line to appear in the output.
@@ -118,7 +132,10 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			// Try to interrupt the running command so the session can be reused.
 			session.mutex.RLock()
 			if session.Pty != nil {
-				session.Pty.Write([]byte{3}) // Ctrl+C
+				// Best-effort Ctrl+C to interrupt any running command so the
+				// session can be reused. Error is ignored — the PTY may already
+				// be closed or the command may have already exited.
+				_, _ = session.Pty.Write([]byte{3})
 			}
 			session.mutex.RUnlock()
 			return stripANSI(buf.String()), -1, ctx.Err()
@@ -145,24 +162,18 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				output := buf.String()[:loc[0]]
 
 				// Strip the command echo from the beginning of the output.
-				// The PTY echoes the wrapped command we sent. We remove everything
-				// up to and including the line(s) containing the echo.
-				//
-				// The echo contains the literal "$?" (which the actual sentinel output
-				// doesn't have - it has a numeric exit code instead).
-				//
-				// We find the first occurrence of "$?" and then strip everything
-				// up to and including the first newline after it.
-				dollarIdx := dollarSignRegex.FindStringIndex(output)
-				if dollarIdx != nil {
-					// Find the first newline after the $? position
-					newlineIdx := newlineRegex.FindStringIndex(output[dollarIdx[1]:])
+				// The PTY echoes the wrapped command we sent ("/bin/sh -c '...'").
+				// We find the echo by looking for the "/bin/sh -c '" prefix and
+				// stripping everything up to and including the first newline after it.
+				echoPrefix := "/bin/sh -c '"
+				echoIdx := strings.Index(output, echoPrefix)
+				if echoIdx != -1 {
+					// Find the first newline after the echo prefix start.
+					restAfterEcho := output[echoIdx:]
+					newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
 					if newlineIdx != nil {
-						// Adjust to absolute position
-						newlineIdx[0] += dollarIdx[1]
-						newlineIdx[1] += dollarIdx[1]
-						// Strip everything up to and including the newline
-						output = output[newlineIdx[1]:]
+						// Strip everything from the echo start through the newline
+						output = output[echoIdx+newlineIdx[1]:]
 					}
 				}
 
@@ -187,7 +198,17 @@ func generateMarker() (string, error) {
 // - CSI sequences: \x1b[<params><letter> (colors, cursor, modes)
 // - CSI private sequences: \x1b[?<params><letter> (bracketed paste, cursor show/hide)
 // - OSC sequences: \x1b]...\x07 (window title, etc.)
-var ansiEscapeRegex = regexp.MustCompile(`\x1b\[\??[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07`)
+// - DCS/PM/APC sequences: \x1b[P^_...\x07 (device control strings, etc.)
+// - Two-character ESC sequences: \x1b[A-Z, etc.
+// - C0 control characters (except \t, \n, \r which are preserved)
+var ansiEscapeRegex = regexp.MustCompile(
+	`\x1b\[\??[0-9;]*[a-zA-Z]` + // CSI sequences (including private ? prefix)
+		`|\x1b\][^\x07]*\x07` + // OSC sequences (terminated by BEL)
+		`|\x1b[P^_][^\x07]*\x07` + // DCS/PM/APC sequences (terminated by BEL)
+		`|\x1b[P^_]` + // Hanging DCS/PM/APC (no terminator)
+		`|\x1b[^[\]P^_]` + // Two-character ESC sequences (e.g., ESC c, ESC 7)
+		`|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]`, // Other C0 controls and DEL (except \t=\x09, \n=\x0a, \r=\x0d)
+)
 
 func stripANSI(s string) string {
 	return ansiEscapeRegex.ReplaceAllString(s, "")

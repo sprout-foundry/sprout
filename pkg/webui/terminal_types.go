@@ -122,6 +122,10 @@ type TerminalSession struct {
 	// subs is the list of active WebSocket subscribers.
 	subsMu sync.Mutex
 	subs   []*termSub
+
+	// execMu serializes ExecuteCommandAndWait calls on the same session to prevent
+	// interleaved sentinel markers and output from concurrent commands.
+	execMu sync.Mutex
 }
 
 // subscribe adds a new WebSocket subscriber and returns its termSub.

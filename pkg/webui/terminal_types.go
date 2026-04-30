@@ -201,6 +201,20 @@ func (tm *TerminalManager) HasSession(sessionID string) bool {
 	return exists
 }
 
+// HasVisibleSession checks if a non-hidden session exists (for user-facing checks).
+func (tm *TerminalManager) HasVisibleSession(sessionID string) bool {
+	tm.mutex.RLock()
+	defer tm.mutex.RUnlock()
+	session, exists := tm.sessions[sessionID]
+	if !exists {
+		return false
+	}
+	session.mutex.RLock()
+	hidden := session.Hidden
+	session.mutex.RUnlock()
+	return !hidden
+}
+
 // GetSession retrieves a terminal session.
 func (tm *TerminalManager) GetSession(sessionID string) (*TerminalSession, bool) {
 	tm.mutex.RLock()

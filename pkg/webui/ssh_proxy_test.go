@@ -52,7 +52,7 @@ const testSessionKey = "test-host::$HOME"
 //   - /api/stats       → {"session_id":"s1"}
 //   - /api/providers   → {"providers":["openai"]}
 //   - /api/files       → {"files":[]}
-//   - /api/echo        → echoes x-ledit-client-id and the raw query string
+//   - /api/echo        → echoes x-sprout-client-id and the raw query string
 //   - /ws              → WebSocket echo server
 func startEchoBackend(t *testing.T) (*httptest.Server, int) {
 	t.Helper()
@@ -83,7 +83,7 @@ func startEchoBackend(t *testing.T) (*httptest.Server, int) {
 	mux.HandleFunc("/api/echo", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck
-			"client_id": r.Header.Get("X-Ledit-Client-ID"),
+			"client_id": r.Header.Get("X-Sprout-Client-ID"),
 			"query":     r.URL.RawQuery,
 		})
 	})
@@ -167,8 +167,8 @@ func TestSSHProxyServesIndexWithInjectedProxyBase(t *testing.T) {
 				t.Fatalf("expected 200 from index, got %d", rec.Code)
 			}
 			body := rec.Body.String()
-			if !strings.Contains(body, "LEDIT_PROXY_BASE") {
-				t.Fatalf("LEDIT_PROXY_BASE not injected; body head:\n%.300s", body)
+			if !strings.Contains(body, "SPROUT_PROXY_BASE") {
+				t.Fatalf("SPROUT_PROXY_BASE not injected; body head:\n%.300s", body)
 			}
 			if !strings.Contains(body, "/ssh/") {
 				t.Fatalf("/ssh/ not present in proxy base injection; body head:\n%.300s", body)
@@ -258,7 +258,7 @@ func TestSSHProxyForwardsRequestHeaders(t *testing.T) {
 	srv := newProxyServer(port, testSessionKey)
 
 	req := httptest.NewRequest(http.MethodGet, sessionProxyPath(testSessionKey, "/api/echo"), nil)
-	req.Header.Set("X-Ledit-Client-ID", "my-client-id-xyz")
+	req.Header.Set("X-Sprout-Client-ID", "my-client-id-xyz")
 	rec := httptest.NewRecorder()
 	srv.handleSSHProxy(rec, req)
 
@@ -270,7 +270,7 @@ func TestSSHProxyForwardsRequestHeaders(t *testing.T) {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 	if body["client_id"] != "my-client-id-xyz" {
-		t.Fatalf("X-Ledit-Client-ID not forwarded; got %q", body["client_id"])
+		t.Fatalf("X-Sprout-Client-ID not forwarded; got %q", body["client_id"])
 	}
 }
 
@@ -382,26 +382,26 @@ func TestSSHServeIndexInjectsBeforeClosingHead(t *testing.T) {
 	}
 	body := rec.Body.String()
 
-	scriptIdx := strings.Index(body, "LEDIT_PROXY_BASE")
+	scriptIdx := strings.Index(body, "SPROUT_PROXY_BASE")
 	headIdx := strings.Index(body, "</head>")
 
 	if scriptIdx < 0 {
-		t.Fatal("LEDIT_PROXY_BASE not injected into index.html")
+		t.Fatal("SPROUT_PROXY_BASE not injected into index.html")
 	}
 	if headIdx < 0 {
 		t.Fatal("</head> not found in index.html")
 	}
 	if scriptIdx > headIdx {
-		t.Fatalf("LEDIT_PROXY_BASE appears after </head> (scriptIdx=%d, headIdx=%d)", scriptIdx, headIdx)
+		t.Fatalf("SPROUT_PROXY_BASE appears after </head> (scriptIdx=%d, headIdx=%d)", scriptIdx, headIdx)
 	}
 	// The injected value must contain the exact proxyBase (JSON-encoded, so quotes preserved).
-	want := fmt.Sprintf(`window.LEDIT_PROXY_BASE="%s"`, proxyBase)
+	want := fmt.Sprintf(`window.SPROUT_PROXY_BASE="%s"`, proxyBase)
 	if !strings.Contains(body, want) {
 		t.Fatalf("expected %q in body; got (head 400 chars):\n%.400s", want, body)
 	}
 	// Verify initial workspace is also injected.
-	if !strings.Contains(body, `window.LEDIT_INITIAL_WORKSPACE="$HOME"`) {
-		t.Fatalf("expected window.LEDIT_INITIAL_WORKSPACE in body; got (head 400 chars):\n%.400s", body)
+	if !strings.Contains(body, `window.SPROUT_INITIAL_WORKSPACE="$HOME"`) {
+		t.Fatalf("expected window.SPROUT_INITIAL_WORKSPACE in body; got (head 400 chars):\n%.400s", body)
 	}
 }
 
@@ -536,7 +536,7 @@ func TestSSHProxyConcurrentRequests(t *testing.T) {
 // The test expects a local sprout process to be running on LEDIT_WEBUI_PORT
 // (defaults to 56000) that has at least one SSH session attached.
 // It verifies:
-//   1. /ssh/{key}/ returns 200 with LEDIT_PROXY_BASE injected.
+//   1. /ssh/{key}/ returns 200 with SPROUT_PROXY_BASE injected.
 //   2. /ssh/{key}/health returns 200 with {"status":"ok"}.
 //   3. /ssh/{key}/api/workspace returns a valid JSON object.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -570,8 +570,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("expected 200, got %d", resp.StatusCode)
 		}
-		if !strings.Contains(string(body), "LEDIT_PROXY_BASE") {
-			t.Fatalf("LEDIT_PROXY_BASE not injected; body head:\n%.400s", body)
+		if !strings.Contains(string(body), "SPROUT_PROXY_BASE") {
+			t.Fatalf("SPROUT_PROXY_BASE not injected; body head:\n%.400s", body)
 		}
 	})
 

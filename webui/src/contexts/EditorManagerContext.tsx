@@ -11,7 +11,7 @@ import { useSproutFetch } from './SproutAdapterContext';
 // These are module-level so they don't get recreated on every render.
 // ---------------------------------------------------------------------------
 
-const consentTokenHeader = 'X-Ledit-Consent-Token';
+const consentTokenHeader = 'X-Sprout-Consent-Token';
 
 interface ConsentRequiredError {
   code: string;

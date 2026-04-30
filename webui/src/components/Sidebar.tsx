@@ -188,7 +188,7 @@ function Sidebar({
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const stored = localStorage.getItem('ledit-sidebar-width');
+    const stored = localStorage.getItem('sprout-sidebar-width');
     return stored ? clampSidebarWidth(Number(stored)) : SIDEBAR_DEFAULT_WIDTH;
   });
   const sidebarWidthRef = useRef(sidebarWidth);
@@ -435,14 +435,14 @@ function Sidebar({
 
   const handleSidebarResizeEnd = useCallback(() => {
     setSidebarWidth((prev) => {
-      localStorage.setItem('ledit-sidebar-width', String(prev));
+      localStorage.setItem('sprout-sidebar-width', String(prev));
       return prev;
     });
   }, []);
 
   const handleSidebarResizeReset = useCallback(() => {
     setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
-    localStorage.setItem('ledit-sidebar-width', String(SIDEBAR_DEFAULT_WIDTH));
+    localStorage.setItem('sprout-sidebar-width', String(SIDEBAR_DEFAULT_WIDTH));
   }, []);
 
   const handleSectionTabClick = (tab: SectionTab) => {
@@ -468,8 +468,8 @@ function Sidebar({
         }
       }
     };
-    window.addEventListener('ledit:hotkey', handleHotkey);
-    return () => window.removeEventListener('ledit:hotkey', handleHotkey);
+    window.addEventListener('sprout:hotkey', handleHotkey);
+    return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [effectiveSidebarCollapsed, onSidebarToggle]);
 
   // Handle reveal-in-explorer event
@@ -496,8 +496,8 @@ function Sidebar({
       }
     };
 
-    window.addEventListener('ledit:reveal-in-explorer', handleReveal);
-    return () => window.removeEventListener('ledit:reveal-in-explorer', handleReveal);
+    window.addEventListener('sprout:reveal-in-explorer', handleReveal);
+    return () => window.removeEventListener('sprout:reveal-in-explorer', handleReveal);
   }, [effectiveSidebarCollapsed, onSidebarToggle]);
 
   interface OpenSettingsFocusEventDetail {
@@ -527,8 +527,8 @@ function Sidebar({
       setSettingsFocusTarget(focusTarget);
     };
 
-    window.addEventListener('ledit:open-settings-focus', handleOpenSettingsFocus);
-    return () => window.removeEventListener('ledit:open-settings-focus', handleOpenSettingsFocus);
+    window.addEventListener('sprout:open-settings-focus', handleOpenSettingsFocus);
+    return () => window.removeEventListener('sprout:open-settings-focus', handleOpenSettingsFocus);
   }, [effectiveSidebarCollapsed, isMobile, onSidebarToggle, finalOnMobileMenuToggle]);
 
   // Focus the targeted settings control once it renders
@@ -700,7 +700,7 @@ function Sidebar({
       const anchor = document.createElement('a');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       anchor.href = url;
-      anchor.download = `ledit-logs-${timestamp}.${format}`;
+      anchor.download = `sprout-logs-${timestamp}.${format}`;
       document.body.appendChild(anchor);
       anchor.click();
       document.body.removeChild(anchor);
@@ -895,7 +895,7 @@ function Sidebar({
               </option>
               <option value="vscode">VS Code</option>
               <option value="webstorm">WebStorm</option>
-              <option value="ledit">Ledit (Legacy)</option>
+              <option value="sprout">Sprout (Legacy)</option>
             </select>
           </div>
           <div className="config-item" style={{ marginTop: 'var(--space-4, 8px)' }}>
@@ -904,7 +904,7 @@ function Sidebar({
               className="settings-link-btn"
               onClick={() => {
                 // Dispatch event to open hotkeys config
-                window.dispatchEvent(new CustomEvent('ledit:open-hotkeys-config'));
+                window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
               }}
               style={{
                 display: 'flex',

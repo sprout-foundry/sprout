@@ -101,7 +101,7 @@ export async function exportSupportBundle(fetchFn: typeof fetch): Promise<void> 
 
   const disposition = response.headers.get('Content-Disposition') ?? '';
   const match = disposition.match(/filename="([^"]+)"/);
-  const filename = match ? match[1] : 'ledit-diagnostics.zip';
+  const filename = match ? match[1] : 'sprout-diagnostics.zip';
 
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);

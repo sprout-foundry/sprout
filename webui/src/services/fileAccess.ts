@@ -2,7 +2,7 @@ import { clientFetch } from './clientSession';
 import { showThemedConfirm } from '../components/ThemedDialog';
 import { debugLog } from '../utils/log';
 
-const consentTokenHeader = 'X-Ledit-Consent-Token';
+const consentTokenHeader = 'X-Sprout-Consent-Token';
 
 interface ConsentRequiredError {
   code: string;

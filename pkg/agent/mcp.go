@@ -2,13 +2,13 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
@@ -317,7 +317,7 @@ func formatMCPResult(result *mcp.MCPToolCallResult) string {
 func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, error) {
 	action, ok := args["action"].(string)
 	if !ok {
-		return "", errors.New("mcp_tools command requires 'action' parameter")
+		return "", agenterrors.NewInvalidInputError("mcp_tools command requires 'action' parameter", nil)
 	}
 
 	ctx := context.Background()

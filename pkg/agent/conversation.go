@@ -2,13 +2,13 @@ package agent
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -430,7 +430,7 @@ func readImageAsImageData(filePath string) (api.ImageData, int, error) {
 	// Validate it is actually an image by checking magic bytes.
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
-		return api.ImageData{}, 0, errors.New("unrecognised image format")
+		return api.ImageData{}, 0, agenterrors.NewInvalidInputError("unrecognised image format", nil)
 	}
 
 	// Optimize to cap dimensions at 4096px and compress for context efficiency.

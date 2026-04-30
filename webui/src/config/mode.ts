@@ -20,7 +20,7 @@ export type SproutMode = 'local' | 'cloud';
  * defaults to local mode.
  */
 export const mode: SproutMode =
-  import.meta.env.VITE_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';
+  process.env.REACT_APP_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';
 
 /**
  * Cloud mode flag - true when running in cloud environment

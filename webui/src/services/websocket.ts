@@ -108,16 +108,16 @@ class WebSocketService {
     }
 
     // Use environment variable if provided, otherwise use relative URL.
-    // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
+    // When running via the SSH proxy the SPROUT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
     // In cloud mode with an adapter, prefer the adapter's WebSocket URL.
     const adapter = getAdapter();
     const adapterWsUrl = adapter?.getWebSocketURL();
     const wsUrl =
-      import.meta.env.VITE_WS_URL ||
+      process.env.REACT_APP_WS_URL ||
       adapterWsUrl ||
       (() => {
-        const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
+        const proxyBase = (window as unknown as Record<string, string>).SPROUT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/ws`;
       })();

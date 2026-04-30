@@ -139,12 +139,12 @@ class TerminalWebSocketService {
     }
 
     // Use environment variable if provided, otherwise use relative URL.
-    // When running via the SSH proxy the LEDIT_PROXY_BASE global is injected
+    // When running via the SSH proxy the SPROUT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
     let wsUrl =
-      import.meta.env.VITE_TERMINAL_WS_URL ||
+      process.env.REACT_APP_TERMINAL_WS_URL ||
       (() => {
-        const proxyBase = (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
+        const proxyBase = (window as unknown as Record<string, string>).SPROUT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/terminal`;
       })();
@@ -415,7 +415,7 @@ class TerminalWebSocketService {
   }
 
   private getPersistedSessionKey(): string {
-    return `ledit.webui.terminalSession.${getWebUIClientId()}.${this.instanceKey}`;
+    return `sprout.webui.terminalSession.${getWebUIClientId()}.${this.instanceKey}`;
   }
 
   /** Persist the current sessionId to localStorage so it survives tab discard. */

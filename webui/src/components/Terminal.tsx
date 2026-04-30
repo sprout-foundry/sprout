@@ -14,12 +14,12 @@ type SplitDirection = 'none' | 'horizontal' | 'vertical';
 const TERMINAL_HEIGHT_MIN = 120;
 const TERMINAL_HEIGHT_DEFAULT = 400;
 const TERMINAL_HEIGHT_MAX_FACTOR = 100; // max = innerHeight - this
-const TERMINAL_HEIGHT_STORAGE_KEY = 'ledit-terminal-height';
+const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
 
 // Font size constants and storage
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
-const FONT_SIZE_STORAGE_KEY = 'ledit-terminal-font-size';
+const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
 
 const clampTerminalHeight = (value: number): number => {
   if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
@@ -126,15 +126,15 @@ function Terminal({
       setHasActivated(true);
       // Dispatch a custom event to trigger terminal resize in all panes
       // This fixes the issue where terminal doesn't fill space after reopening
-      window.dispatchEvent(new CustomEvent('ledit-terminal-expand'));
+      window.dispatchEvent(new CustomEvent('sprout-terminal-expand'));
     }
   }, [externalIsExpanded]);
 
   useEffect(() => {
     const reservedHeight = isExpanded ? terminalHeight : collapsedHeight;
-    document.documentElement.style.setProperty('--ledit-terminal-reserved-height', `${reservedHeight}px`);
+    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${reservedHeight}px`);
     return () => {
-      document.documentElement.style.setProperty('--ledit-terminal-reserved-height', `${collapsedHeight}px`);
+      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
     };
   }, [collapsedHeight, isExpanded, terminalHeight]);
 
@@ -396,8 +396,8 @@ function Terminal({
         }
       }
     };
-    window.addEventListener('ledit:terminal-action', handler as EventListener);
-    return () => window.removeEventListener('ledit:terminal-action', handler as EventListener);
+    window.addEventListener('sprout:terminal-action', handler as EventListener);
+    return () => window.removeEventListener('sprout:terminal-action', handler as EventListener);
   }, [toggleSplit, clearActivePane, closeSession]);
 
   // ── Split divider drag ────────────────────────────────────────────────────

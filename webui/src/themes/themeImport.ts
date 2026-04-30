@@ -2,12 +2,12 @@
  * Theme Import System - Technical Scoping Document
  *
  * This module provides infrastructure for importing standard theme formats
- * (TextMate .tmTheme and VSCode color-theme.json) into the ledit webui's
+ * (TextMate .tmTheme and VSCode color-theme.json) into the sprout webui's
  * custom theme system.
  *
  * ## Overview
  *
- * The ledit webui currently uses a custom `ThemePack` interface that defines
+ * The sprout webui currently uses a custom `ThemePack` interface that defines
  * CSS custom properties for both the editor chrome (panes, toolbar, sidebar)
  * and CodeMirror-specific styling (`--cm-*`, `--editor-*`, etc.). This module
  * enables importing themes from external, widely-used formats.
@@ -134,9 +134,9 @@
  *
  * ### UI Colors to CSS Variables
  *
- * VSCode's `colors` object maps to ledit's `--cm-*` and UI CSS variables:
+ * VSCode's `colors` object maps to sprout's `--cm-*` and UI CSS variables:
  *
- * | VSCode Color Key                      | ledit CSS Variable             |
+ * | VSCode Color Key                      | sprout CSS Variable             |
  * |--------------------------------------|-------------------------------|
  * | `editor.background`                  | `--cm-bg`                     |
  * | `editor.foreground`                  | `--cm-fg`                     |
@@ -164,7 +164,7 @@
  * | `titleBar.activeBackground`           | `--bg-primary`              |
  *
  * Any VSCode color key without a mapping is silently ignored.
- * Missing ledit variables fall back to the `:root` CSS defaults in App.css.
+ * Missing sprout variables fall back to the `:root` CSS defaults in App.css.
  *
  * ## Tradeoffs and Recommendations
  *
@@ -196,7 +196,7 @@
  * - Type definitions for TM and VSCode formats
  * - ThemeImporter class with import methods
  * - Scope-to-tag mapping table
- * - VSCode-colors-to-ledit-CSS mapping table
+ * - VSCode-colors-to-sprout-CSS mapping table
  * - Brightness-based dark/light mode detection
  *
  * ### Phase 2: HighlightStyle Integration
@@ -403,7 +403,7 @@ const SCOPE_TO_TAG_ENTRIES: Array<[string, any[]]> = [
 
 /**
  * Converts standard editor theme formats (VSCode, TextMate) into
- * ledit `ThemePack` objects and CodeMirror `HighlightStyle` instances.
+ * sprout `ThemePack` objects and CodeMirror `HighlightStyle` instances.
  */
 export class ThemeImporter {
   /**
@@ -418,7 +418,7 @@ export class ThemeImporter {
   }
 
   /**
-   * Maps VSCode `colors` keys to ledit CSS custom property names.
+   * Maps VSCode `colors` keys to sprout CSS custom property names.
    */
   private readonly vscodeColorMap: Record<string, string> = {
     // CodeMirror editor core
@@ -552,15 +552,15 @@ export class ThemeImporter {
   }
 
   /**
-   * Maps VSCode `colors` object to ledit CSS custom properties.
+   * Maps VSCode `colors` object to sprout CSS custom properties.
    * Unmapped keys are silently ignored.
    */
   mapUIColors(colors: Record<string, string>): Record<string, string> {
     const vars: Record<string, string> = {};
     for (const [vscodeKey, value] of Object.entries(colors)) {
-      const leditKey = this.vscodeColorMap[vscodeKey];
-      if (leditKey && value) {
-        vars[leditKey] = value;
+      const sproutKey = this.vscodeColorMap[vscodeKey];
+      if (sproutKey && value) {
+        vars[sproutKey] = value;
       }
     }
     return vars;
@@ -602,7 +602,7 @@ export class ThemeImporter {
   }
 
   /**
-   * Imports a VSCode color theme into a ledit `ThemePack`.
+   * Imports a VSCode color theme into a sprout `ThemePack`.
    *
    * @param theme - Parsed VSCode color-theme.json object
    * @returns `ImportResult` with the theme pack and optional highlight style
@@ -638,7 +638,7 @@ export class ThemeImporter {
   }
 
   /**
-   * Imports a TextMate theme into a ledit `ThemePack`.
+   * Imports a TextMate theme into a sprout `ThemePack`.
    *
    * TextMate themes typically only provide editor UI colors (background,
    * foreground, cursor, selection) and syntax token colors. UI chrome colors
@@ -665,7 +665,7 @@ export class ThemeImporter {
 
     const mode = this.detectMode(globalSettings.background);
 
-    // Map TextMate global settings to ledit CSS vars
+    // Map TextMate global settings to sprout CSS vars
     const tmColorMap: Record<string, string> = {};
     if (globalSettings.background) tmColorMap['--cm-bg'] = globalSettings.background;
     if (globalSettings.foreground) tmColorMap['--cm-fg'] = globalSettings.foreground;

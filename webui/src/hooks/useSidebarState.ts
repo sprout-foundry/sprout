@@ -36,16 +36,16 @@ export function useSidebarState(): UseSidebarStateReturn {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [sidebarCollapsed, setSidebarCollapsedRaw] = useState(() =>
-    loadPersistedBoolean('ledit-sidebar-collapsed', false),
+    loadPersistedBoolean('sprout-sidebar-collapsed', false),
   );
 
   const [isTerminalExpanded, setIsTerminalExpandedRaw] = useState(() =>
-    loadPersistedBoolean('ledit-terminal-expanded', false),
+    loadPersistedBoolean('sprout-terminal-expanded', false),
   );
 
   const setSidebarCollapsed = useCallback((collapsed: boolean) => {
     try {
-      window.localStorage.setItem('ledit-sidebar-collapsed', String(collapsed));
+      window.localStorage.setItem('sprout-sidebar-collapsed', String(collapsed));
     } catch (err) {
       debugLog('[useSidebarState] failed to persist sidebar collapsed state:', err);
     }
@@ -54,7 +54,7 @@ export function useSidebarState(): UseSidebarStateReturn {
 
   const setIsTerminalExpanded = useCallback((expanded: boolean) => {
     try {
-      window.localStorage.setItem('ledit-terminal-expanded', String(expanded));
+      window.localStorage.setItem('sprout-terminal-expanded', String(expanded));
     } catch (err) {
       debugLog('[useSidebarState] failed to persist terminal expanded state:', err);
     }

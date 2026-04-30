@@ -143,7 +143,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    bottom: var(--ledit-terminal-reserved-height);
+    bottom: var(--sprout-terminal-reserved-height);
     left: 0;
     width: 100vw !important;
     min-width: 100vw;

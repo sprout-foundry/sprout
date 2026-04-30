@@ -1,4 +1,4 @@
-.ledit-logo {
+.sprout-logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6,11 +6,11 @@
   min-width: 0;
 }
 
-.ledit-logo.compact {
+.sprout-logo.compact {
   gap: 0;
 }
 
-.ledit-logo-mark {
+.sprout-logo-mark {
   width: 36px;
   height: 36px;
   padding: 0;
@@ -22,13 +22,13 @@
   overflow: hidden;
 }
 
-.ledit-logo.compact .ledit-logo-mark {
+.sprout-logo.compact .sprout-logo-mark {
   width: 36px;
   height: 36px;
   padding: 0;
 }
 
-.ledit-logo-mark svg {
+.sprout-logo-mark svg {
   display: block;
   width: 100%;
   height: 100%;
@@ -37,48 +37,48 @@
 /* ── Theme-aware icon colors ──────────────────────────────────── */
 
 /* Dark mode — deep navy + teal frost */
-.ledit-logo-bg {
+.sprout-logo-bg {
   fill: #10212D;
 }
-.ledit-logo-line {
+.sprout-logo-line {
   stroke: #F4FEFF;
 }
-.ledit-logo-accent {
+.sprout-logo-accent {
   stroke: #68E3EE;
 }
-.ledit-logo-accent-fill {
+.sprout-logo-accent-fill {
   fill: #68E3EE;
 }
 
 /* Light mode — subtle tinted background + earth + robust green */
-:root[data-theme='light'] .ledit-logo-bg {
+:root[data-theme='light'] .sprout-logo-bg {
   fill: #F0F4F8;
 }
-:root[data-theme='light'] .ledit-logo-line {
+:root[data-theme='light'] .sprout-logo-line {
   stroke: #6B4C2A;
 }
-:root[data-theme='light'] .ledit-logo-accent {
+:root[data-theme='light'] .sprout-logo-accent {
   stroke: #1BA03D;
 }
-:root[data-theme='light'] .ledit-logo-accent-fill {
+:root[data-theme='light'] .sprout-logo-accent-fill {
   fill: #1BA03D;
 }
 
-.ledit-logo-wordmark {
+.sprout-logo-wordmark {
   min-width: 0;
   display: flex;
   flex-direction: column;
   line-height: 1.05;
 }
 
-.ledit-logo-name {
+.sprout-logo-name {
   color: #d8f7fb;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 
-.ledit-logo-tag {
+.sprout-logo-tag {
   color: rgba(123, 212, 224, 0.78);
   font-size: 10px;
   font-weight: 600;

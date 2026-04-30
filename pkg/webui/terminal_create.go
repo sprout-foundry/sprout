@@ -260,18 +260,19 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 		return nil, err
 	}
 
-	// Mark as hidden with metadata.
+	// Mark as hidden with metadata and apply options under the lock.
 	session.mutex.Lock()
 	session.Hidden = true
 	session.Owner = owner
 	session.ChatID = chatID
 	session.AutoClose = true // default for hidden sessions
-	session.mutex.Unlock()
 
-	// Apply any additional options.
+	// Apply any additional options while still holding the lock so that
+	// SessionOption functions never race with concurrent readers.
 	for _, opt := range opts {
 		opt(session)
 	}
+	session.mutex.Unlock()
 
 	return session, nil
 }

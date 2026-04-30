@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,7 +42,7 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 func resolvePromptPath(filePath string) (string, error) {
 	trimmed := strings.TrimSpace(filePath)
 	if trimmed == "" {
-		return "", errors.New("system prompt file path is empty")
+		return "", agenterrors.NewInvalidInputError("system prompt file path is empty", nil)
 	}
 
 	// Preserve existing behavior first: relative paths resolve from cwd.
@@ -80,7 +79,7 @@ func findRepoRootFromCWD() (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("go.mod not found from cwd")
+			return "", agenterrors.NewInvalidInputError("go.mod not found from cwd", nil)
 		}
 		dir = parent
 	}

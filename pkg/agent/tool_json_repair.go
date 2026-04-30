@@ -2,9 +2,10 @@ package agent
 
 import (
 	"encoding/json"
-	"errors"
 	"regexp"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 var toolFailureDataURLPattern = regexp.MustCompile(`data:[^;\s]+;base64,[A-Za-z0-9+/=]+`)
@@ -35,7 +36,7 @@ func sanitizeToolFailureMessage(msg string) string {
 func parseToolArgumentsWithRepair(raw string) (map[string]interface{}, bool, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil, false, errors.New("empty arguments")
+		return nil, false, agenterrors.NewInvalidInputError("empty arguments", nil)
 	}
 
 	var args map[string]interface{}
@@ -54,7 +55,7 @@ func parseToolArgumentsWithRepair(raw string) (map[string]interface{}, bool, err
 		}
 	}
 
-	return nil, false, errors.New("invalid JSON arguments")
+	return nil, false, agenterrors.NewInvalidInputError("invalid JSON arguments", nil)
 }
 
 func repairJSONArgumentCandidates(raw string) []string {

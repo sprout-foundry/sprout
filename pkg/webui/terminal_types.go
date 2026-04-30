@@ -105,6 +105,13 @@ type TerminalSession struct {
 	LastUsed time.Time
 	Size     *pty.Winsize
 
+	// Hidden session metadata — used for agent background PTY sessions.
+	Hidden    bool   `json:"-"`
+	Owner     string `json:"-"` // "agent" or other entity that created this session
+	ChatID    string `json:"-"` // chat session that owns this terminal
+	Name      string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
+	AutoClose bool   `json:"-"` // reserved for Phase B: close automatically when inactive
+
 	// History for shell command navigation.
 	History      []string
 	HistoryIndex int
@@ -203,14 +210,48 @@ func (tm *TerminalManager) GetSession(sessionID string) (*TerminalSession, bool)
 	return session, exists
 }
 
-// ListSessions returns a list of active session IDs.
+// ListSessions returns a list of active session IDs, excluding hidden sessions.
 func (tm *TerminalManager) ListSessions() []string {
+	tm.mutex.RLock()
+	defer tm.mutex.RUnlock()
+
+	var sessions []string
+	for sessionID, session := range tm.sessions {
+		session.mutex.RLock()
+		hidden := session.Hidden
+		session.mutex.RUnlock()
+		if !hidden {
+			sessions = append(sessions, sessionID)
+		}
+	}
+	return sessions
+}
+
+// ListAllSessions returns all session IDs including hidden ones.
+func (tm *TerminalManager) ListAllSessions() []string {
 	tm.mutex.RLock()
 	defer tm.mutex.RUnlock()
 
 	var sessions []string
 	for sessionID := range tm.sessions {
 		sessions = append(sessions, sessionID)
+	}
+	return sessions
+}
+
+// ListHiddenSessions returns only hidden session IDs.
+func (tm *TerminalManager) ListHiddenSessions() []string {
+	tm.mutex.RLock()
+	defer tm.mutex.RUnlock()
+
+	var sessions []string
+	for sessionID, session := range tm.sessions {
+		session.mutex.RLock()
+		hidden := session.Hidden
+		session.mutex.RUnlock()
+		if hidden {
+			sessions = append(sessions, sessionID)
+		}
 	}
 	return sessions
 }

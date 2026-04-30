@@ -111,6 +111,26 @@ func TestStripANSI(t *testing.T) {
 			input:    "\x1b[?2004l\x1b[31mred\x1b[0m\x1b[?2004h",
 			expected: "red",
 		},
+		{
+			name:     "DCS sequence",
+			input:    "\x1bP1$r\x07data",
+			expected: "data",
+		},
+		{
+			name:     "bare ESC character",
+			input:    "before\x1bafter",
+			expected: "beforefter", // ESC followed by 'a' (not a valid escape prefix) gets stripped as two-character sequence
+		},
+		{
+			name:     "control characters stripped",
+			input:    "a\x00b\x01c\x08d\x7fe",
+			expected: "abcde",
+		},
+		{
+			name:     "tab newline CR preserved",
+			input:    "a\tb\nc\r",
+			expected: "a\tb\nc\r",
+		},
 	}
 
 	for _, tc := range cases {
@@ -515,5 +535,103 @@ func TestExecuteCommandAndWait_MarkerUniqueness(t *testing.T) {
 		if !strings.Contains(output, expected) {
 			t.Errorf("command %d: output should contain %q, got %q", i, expected, output)
 		}
+	}
+}
+
+func TestExecuteCommandAndWait_EmptyCommand(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-empty")
+	defer tm.CloseSession("exec-empty")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "")
+	if err == nil {
+		t.Fatal("expected error for empty command, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected error to mention 'empty', got: %v", err)
+	}
+	if exitCode != -1 {
+		t.Errorf("expected exit code -1, got %d", exitCode)
+	}
+
+	// Also test whitespace-only
+	_, exitCode, err = tm.ExecuteCommandAndWait(ctx, session, "   ")
+	if err == nil {
+		t.Fatal("expected error for whitespace command, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected error to mention 'empty', got: %v", err)
+	}
+}
+
+func TestExecuteCommandAndWait_SingleQuotes(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-quotes")
+	defer tm.CloseSession("exec-quotes")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo \"it's working\"")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "it's working") {
+		t.Errorf("output should contain \"it's working\", got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_CommandSubstitution(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-subst")
+	defer tm.CloseSession("exec-subst")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo $(echo nested)")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "nested") {
+		t.Errorf("output should contain 'nested', got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_OutputContainsDollar(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-dollar")
+	defer tm.CloseSession("exec-dollar")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Command that outputs a literal $? — this used to confuse the echo stripping.
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo '$?'")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "$?") {
+		t.Errorf("output should contain '$?', got %q", output)
 	}
 }

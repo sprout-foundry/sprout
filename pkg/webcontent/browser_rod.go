@@ -35,9 +35,9 @@ const defaultWaitTimeout = 10 * time.Second
 
 const browserInstrumentationScript = `
 (() => {
-  if (window.__leditBrowserCaptureInstalled) return;
-  window.__leditBrowserCaptureInstalled = true;
-  window.__leditBrowserCapture = { console: [], errors: [], network: [] };
+  if (window.__sproutBrowserCaptureInstalled) return;
+  window.__sproutBrowserCaptureInstalled = true;
+  window.__sproutBrowserCapture = { console: [], errors: [], network: [] };
   const limitPush = (list, value) => {
     list.push(value);
     if (list.length > 100) list.shift();
@@ -54,7 +54,7 @@ const browserInstrumentationScript = `
     const original = console[level];
     console[level] = function (...args) {
       try {
-        limitPush(window.__leditBrowserCapture.console, '[' + level + '] ' + args.map(stringify).join(' '));
+        limitPush(window.__sproutBrowserCapture.console, '[' + level + '] ' + args.map(stringify).join(' '));
       } catch (_err) {}
       return original.apply(this, args);
     };
@@ -62,17 +62,17 @@ const browserInstrumentationScript = `
   window.addEventListener('error', (event) => {
     try {
       const location = event.filename ? ' @ ' + event.filename + ':' + event.lineno + ':' + event.colno : '';
-      limitPush(window.__leditBrowserCapture.errors, String(event.message || 'error') + location);
+      limitPush(window.__sproutBrowserCapture.errors, String(event.message || 'error') + location);
     } catch (_err) {}
   });
   window.addEventListener('unhandledrejection', (event) => {
     try {
-      limitPush(window.__leditBrowserCapture.errors, 'Unhandled rejection: ' + stringify(event.reason));
+      limitPush(window.__sproutBrowserCapture.errors, 'Unhandled rejection: ' + stringify(event.reason));
     } catch (_err) {}
   });
   const recordNetwork = (value) => {
     try {
-      limitPush(window.__leditBrowserCapture.network, value);
+      limitPush(window.__sproutBrowserCapture.network, value);
     } catch (_err) {}
   };
   if (typeof window.fetch === 'function') {
@@ -1025,7 +1025,7 @@ func captureStorageMap(page *rod.Page, script string) (map[string]string, error)
 }
 
 func captureBrowserDiagnostics(page *rod.Page) ([]string, []string, []NetworkRequest, error) {
-	res, err := page.Eval(`() => window.__leditBrowserCapture || { console: [], errors: [], network: [] }`)
+	res, err := page.Eval(`() => window.__sproutBrowserCapture || { console: [], errors: [], network: [] }`)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("capture browser diagnostics: %w", err)
 	}

@@ -127,8 +127,8 @@ beforeEach(() => {
 
   // Ensure panel is not collapsed and status tab is active.
   // The component reads these from localStorage in a useEffect on mount.
-  window.localStorage.setItem('ledit.contextPanel.collapsed', '0');
-  window.localStorage.setItem('ledit.contextPanel.tab.chat', 'status');
+  window.localStorage.setItem('sprout.contextPanel.collapsed', '0');
+  window.localStorage.setItem('sprout.contextPanel.tab.chat', 'status');
 
   // Ensure we're not in mobile layout (MOBILE_LAYOUT_MAX_WIDTH = 768)
   Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });

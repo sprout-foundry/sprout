@@ -1,3 +1,4 @@
+jest.mock('./ThemedDialog', () => ({ showThemedConfirm: jest.fn().mockResolvedValue(false), showThemedPrompt: jest.fn().mockResolvedValue(null) }));
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
@@ -345,7 +346,8 @@ describe('GitHistoryContextMenu', () => {
   // 13. Checkout calls apiService.checkoutGitCommit with full hash
   test('checkout calls apiService.checkoutGitCommit and shows Checked out feedback', async () => {
     mountContextMenu();
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const { showThemedConfirm } = require('./ThemedDialog');
+    showThemedConfirm.mockResolvedValueOnce(true);
 
     fireContextMenu(commitRow!);
 
@@ -362,13 +364,13 @@ describe('GitHistoryContextMenu', () => {
     const updatedTexts = getMenuTexts();
     expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Checked out')]));
 
-    (window.confirm as jest.Mock).mockRestore();
   });
 
   // 14. Revert calls apiService.revertGitCommit with full hash
   test('revert calls apiService.revertGitCommit and shows Reverted feedback', async () => {
     mountContextMenu();
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const { showThemedConfirm } = require('./ThemedDialog');
+    showThemedConfirm.mockResolvedValueOnce(true);
 
     fireContextMenu(commitRow!);
 
@@ -385,7 +387,6 @@ describe('GitHistoryContextMenu', () => {
     const updatedTexts = getMenuTexts();
     expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Reverted')]));
 
-    (window.confirm as jest.Mock).mockRestore();
   });
 
   // 15. Checkout cancelled (user clicks Cancel) closes menu without calling API
@@ -404,7 +405,6 @@ describe('GitHistoryContextMenu', () => {
 
     expect(mockApiService.checkoutGitCommit).not.toHaveBeenCalled();
 
-    (window.confirm as jest.Mock).mockRestore();
   });
 
   // 16. Revert cancelled (user clicks Cancel) closes menu without calling API
@@ -423,13 +423,13 @@ describe('GitHistoryContextMenu', () => {
 
     expect(mockApiService.revertGitCommit).not.toHaveBeenCalled();
 
-    (window.confirm as jest.Mock).mockRestore();
   });
 
   // 17. Checkout error shows error message in actionStatus
   test('checkout error shows error message in actionStatus', async () => {
     mountContextMenu();
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const { showThemedConfirm } = require('./ThemedDialog');
+    showThemedConfirm.mockResolvedValueOnce(true);
     mockApiService.checkoutGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 
     fireContextMenu(commitRow!);
@@ -446,13 +446,13 @@ describe('GitHistoryContextMenu', () => {
     expect(statusEl).not.toBeNull();
     expect(statusEl!.textContent).toContain('merge conflict');
 
-    (window.confirm as jest.Mock).mockRestore();
   });
 
   // 18. Revert error shows error message in actionStatus
   test('revert error shows error message in actionStatus', async () => {
     mountContextMenu();
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const { showThemedConfirm } = require('./ThemedDialog');
+    showThemedConfirm.mockResolvedValueOnce(true);
     mockApiService.revertGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 
     fireContextMenu(commitRow!);
@@ -469,6 +469,5 @@ describe('GitHistoryContextMenu', () => {
     expect(statusEl).not.toBeNull();
     expect(statusEl!.textContent).toContain('merge conflict');
 
-    (window.confirm as jest.Mock).mockRestore();
   });
 });

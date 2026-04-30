@@ -319,10 +319,10 @@ describe('MenuBar', () => {
 
     const dd = getDropdown()!;
     const items = getDropdownItems();
-    const aboutItem = items.find((el) => el.textContent?.includes('About ledit'));
+    const aboutItem = items.find((el) => el.textContent?.includes('About sprout'));
     expect(aboutItem).toBeDefined();
 
-    // The "About ledit" item should not have a .menu-item-shortcut
+    // The "About sprout" item should not have a .menu-item-shortcut
     const shortcut = aboutItem!.querySelector('.menu-item-shortcut');
     expect(shortcut).toBeNull();
   });
@@ -377,12 +377,12 @@ describe('MenuBar', () => {
 
   // ─── Clicking menu items dispatches commands ─────────────────────
 
-  test('clicking a menu item dispatches ledit:hotkey custom event with correct commandId', async () => {
+  test('clicking a menu item dispatches sprout:hotkey custom event with correct commandId', async () => {
     await renderMenuBar();
     openMenu(0); // File
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // Click "New File"
     const items = getDropdownItems();
@@ -394,7 +394,7 @@ describe('MenuBar', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail.commandId).toBe('new_file');
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   test('pressing Enter on a highlighted item dispatches the correct command', async () => {
@@ -403,7 +403,7 @@ describe('MenuBar', () => {
 
     // "New File" should be highlighted at index 0
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     act(() => {
       fireKeyDown('Enter');
@@ -413,23 +413,23 @@ describe('MenuBar', () => {
     expect(handler.mock.calls[0][0].detail.commandId).toBe('new_file');
     expect(getDropdown()).toBeNull(); // Menu closes after execution
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
-  test('clicking "About ledit" shows an alert() and closes the menu', async () => {
+  test('clicking "About sprout" shows an alert() and closes the menu', async () => {
     const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
     await renderMenuBar();
     openMenu(4); // Help
 
     const items = getDropdownItems();
-    const aboutItem = items.find((el) => el.textContent?.includes('About ledit'))!;
+    const aboutItem = items.find((el) => el.textContent?.includes('About sprout'))!;
 
     act(() => {
       aboutItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(alertSpy).toHaveBeenCalledTimes(1);
-    expect(alertSpy).toHaveBeenCalledWith('ledit WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
+    expect(alertSpy).toHaveBeenCalledWith('sprout WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
 
     // Menu should be closed after clicking
     expect(getDropdown()).toBeNull();
@@ -650,13 +650,13 @@ describe('MenuBar', () => {
     ]);
   });
 
-  test('Help menu shows "Keyboard Shortcuts", divider, "Report Issue", divider, and "About ledit"', async () => {
+  test('Help menu shows "Keyboard Shortcuts", divider, "Report Issue", divider, and "About sprout"', async () => {
     await renderMenuBar();
     openMenu(4); // Help
 
     const items = getDropdownItems();
     const texts = items.map((el) => el.textContent?.trim());
-    expect(texts).toEqual(['Keyboard Shortcuts', 'Report Issue', 'About ledit']);
+    expect(texts).toEqual(['Keyboard Shortcuts', 'Export Diagnostics', 'Report Issue', 'About sprout']);
 
     const dividers = getDropdownDividers();
     expect(dividers.length).toBe(2);
@@ -686,12 +686,12 @@ describe('MenuBar', () => {
     expect(htmlAfter).not.toContain('<u>');
   });
 
-  test('clicking "Keyboard Shortcuts" dispatches ledit:open-hotkeys-config event', async () => {
+  test('clicking "Keyboard Shortcuts" dispatches sprout:open-hotkeys-config event', async () => {
     await renderMenuBar();
     openMenu(4); // Help
 
     const handler = jest.fn();
-    window.addEventListener('ledit:open-hotkeys-config', handler);
+    window.addEventListener('sprout:open-hotkeys-config', handler);
 
     const items = getDropdownItems();
     const shortcutsItem = items.find((el) => el.textContent?.includes('Keyboard Shortcuts'))!;
@@ -702,7 +702,7 @@ describe('MenuBar', () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
 
-    window.removeEventListener('ledit:open-hotkeys-config', handler);
+    window.removeEventListener('sprout:open-hotkeys-config', handler);
   });
 
   test('clicking "Report Issue" opens the GitHub issues URL', async () => {
@@ -717,7 +717,7 @@ describe('MenuBar', () => {
       reportItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const expectedUrl = 'https://github.com/alantheprice/ledit/issues/new';
+    const expectedUrl = 'https://github.com/alantheprice/sprout/issues/new';
     expect(openSpy).toHaveBeenCalledWith(expectedUrl, '_blank', 'noopener,noreferrer');
 
     openSpy.mockRestore();

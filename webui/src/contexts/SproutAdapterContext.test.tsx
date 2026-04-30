@@ -29,7 +29,7 @@ jest.mock('../services/clientSession', () => {
     ...actual,
     clientFetch: jest.fn(),
     getWebUIClientId: jest.fn(() => 'test-client-id'),
-    WEBUI_CLIENT_ID_HEADER: 'X-Ledit-Client-ID',
+    WEBUI_CLIENT_ID_HEADER: 'X-Sprout-Client-ID',
     __esModule: true,
   };
 });
@@ -262,7 +262,7 @@ describe('useSproutFetch', () => {
     adapterFetchSpy.mockRestore();
   });
 
-  it('always sets the X-Ledit-Client-ID header', async () => {
+  it('always sets the X-Sprout-Client-ID header', async () => {
     const adapter = createMockAdapter({ name: 'HeaderAdapter' });
     const capturedHeaders: Headers[] = [];
     adapter.fetch = jest.fn().mockImplementation(async (input, init) => {

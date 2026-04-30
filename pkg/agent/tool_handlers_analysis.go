@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -26,7 +26,7 @@ import (
 
 func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	if a == nil {
-		return "", errors.New("agent context is required for analyze_ui_screenshot tool")
+		return "", agenterrors.NewInvalidInputError("agent context is required for analyze_ui_screenshot tool", nil)
 	}
 
 	imagePath := args["image_path"].(string)
@@ -204,7 +204,7 @@ func renderHTMLContent(ctx context.Context, a *Agent, htmlPath string, viewportW
 
 func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	if a == nil {
-		return "", errors.New("agent context is required for analyze_image_content tool")
+		return "", agenterrors.NewInvalidInputError("agent context is required for analyze_image_content tool", nil)
 	}
 
 	imagePath := args["image_path"].(string)
@@ -504,7 +504,7 @@ func materializeImageDataForVisionTool(img api.ImageData) (string, func(), error
 
 	encoded := strings.TrimSpace(img.Base64)
 	if encoded == "" {
-		return "", nil, errors.New("attached image has no URL or base64 data")
+		return "", nil, agenterrors.NewInvalidInputError("attached image has no URL or base64 data", nil)
 	}
 
 	data, err := base64.StdEncoding.DecodeString(encoded)
@@ -577,7 +577,7 @@ func normalizeVisionToolOutput(result string, preferPlainText bool) (string, err
 		code := strings.TrimSpace(parsed.ErrorCode)
 		msg := strings.TrimSpace(parsed.ErrorMessage)
 		if code == "" && msg == "" {
-			return "", errors.New("vision analysis failed")
+			return "", agenterrors.NewTransientError("vision analysis failed", nil)
 		}
 		if code == "" {
 			return "", fmt.Errorf("vision analysis failed: %s", msg)

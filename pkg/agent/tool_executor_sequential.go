@@ -3,11 +3,11 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -110,7 +110,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	// Execute with circuit breaker check
 	if te.checkCircuitBreaker(normalizedToolName, args) {
 		// Record failed tool call to trace session
-		err := errors.New("circuit breaker triggered")
+		err := agenterrors.NewTransientError("circuit breaker triggered", nil)
 		te.recordToolExecutionWithIndex(normalizedToolName, toolCall.Function.Arguments, args, "", "", err, toolIndex)
 		return api.Message{
 			Role:       "tool",
@@ -178,9 +178,9 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		fullResult = res.result
 		err = res.err
 	case <-ctx.Done():
-		err = fmt.Errorf("tool execution timed out after %s", toolTimeout)
+		err = agenterrors.NewTransientError(fmt.Sprintf("tool execution timed out after %s", toolTimeout), nil)
 	case <-te.agent.interruptCtx.Done():
-		err = errors.New("tool execution interrupted by user")
+		err = agenterrors.NewTransientError("tool execution interrupted by user", nil)
 	}
 
 	// Capture error for trace recording before modifying result

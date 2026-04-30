@@ -309,6 +309,11 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
+	// NOTE: Session creation (including blocking PTY startup) happens while
+	// holding tm.mutex. This serializes session creation but ensures the PTY
+	// reader goroutine never sees a session with Hidden=false in the map.
+	// For Phase A, this trade-off is acceptable. If creation latency becomes
+	// a concern, consider two-phase creation with a "creating" sentinel state.
 
 	// Check for duplicate session ID while holding the lock.
 	if _, exists := tm.sessions[id]; exists {
@@ -321,18 +326,16 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 		if r := recover(); r != nil {
 			log.Printf("CreateHiddenSession panic for %s: %v", id, r)
 			if session != nil {
-				// NOTE: session.mutex may already be held when the panic
-				// occurs (the lock is acquired below and not yet unlocked).
-				// Closing Pty and calling Cancel are safe without the lock
-				// because no other goroutine mutates these fields until the
-				// session is inserted into tm.sessions (which hasn't happened
-				// yet at this point).
+				session.mutex.Lock()
 				if session.Pty != nil {
 					session.Pty.Close()
+					session.Pty = nil
 				}
 				if session.Cancel != nil {
 					session.Cancel()
+					session.Cancel = nil
 				}
+				session.mutex.Unlock()
 			}
 			session = nil
 			err = fmt.Errorf("CreateHiddenSession panic: %v", r)
@@ -353,18 +356,22 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 
 	// Set hidden metadata before inserting into map.
 	session.mutex.Lock()
-	session.Hidden = true
-	session.Owner = owner
-	session.ChatID = chatID
-	// AutoClose is reserved for SP-008 Phase B — not yet consumed by the
-	// cleanup worker. When consumed, hidden sessions should auto-expire
-	// after N minutes of inactivity.
-	session.AutoClose = true // default for hidden sessions
+	// Unlock in defer so the panic recover below can safely re-acquire the
+	// lock to clean up Pty and Cancel fields.
+	func() {
+		defer session.mutex.Unlock()
+		session.Hidden = true
+		session.Owner = owner
+		session.ChatID = chatID
+		// AutoClose is reserved for SP-008 Phase B — not yet consumed by the
+		// cleanup worker. When consumed, hidden sessions should auto-expire
+		// after N minutes of inactivity.
+		session.AutoClose = true // default for hidden sessions
 
-	for _, opt := range opts {
-		opt(session)
-	}
-	session.mutex.Unlock()
+		for _, opt := range opts {
+			opt(session)
+		}
+	}()
 
 	// Now insert into map with hidden flag already set.
 	tm.sessions[id] = session

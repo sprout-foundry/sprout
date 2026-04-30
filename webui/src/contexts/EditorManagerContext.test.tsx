@@ -56,10 +56,10 @@ beforeEach(() => {
   latestContext = undefined;
   // Ensure the welcome buffer is NOT created in tests so they run
   // against the same initial state (only buffer-chat) as before.
-  localStorage.setItem('ledit-welcome-dismissed', 'true');
+  localStorage.setItem('sprout-welcome-dismissed', 'true');
   // Clear any persisted layout snapshot from previous tests so that
   // restoreLayout() doesn't inject stale file buffers on mount.
-  localStorage.removeItem('ledit.editor.layoutState');
+  localStorage.removeItem('sprout.editor.layoutState');
 });
 
 afterEach(() => {
@@ -780,11 +780,11 @@ describe('paneId preservation fix', () => {
 describe.skip('Welcome buffer behavior', () => {
   afterEach(() => {
     // Restore the dismissed flag so other tests are unaffected
-    localStorage.setItem('ledit-welcome-dismissed', 'true');
+    localStorage.setItem('sprout-welcome-dismissed', 'true');
   });
 
   it('creates welcome buffer when not previously dismissed', () => {
-    localStorage.removeItem('ledit-welcome-dismissed');
+    localStorage.removeItem('sprout-welcome-dismissed');
     renderProvider();
 
     // buffer-welcome should exist in the buffers map
@@ -802,7 +802,7 @@ describe.skip('Welcome buffer behavior', () => {
 
   it('does not create welcome buffer when previously dismissed', () => {
     // The beforeEach already sets this to 'true', but be explicit
-    localStorage.setItem('ledit-welcome-dismissed', 'true');
+    localStorage.setItem('sprout-welcome-dismissed', 'true');
     renderProvider();
 
     // buffer-welcome should NOT exist
@@ -816,7 +816,7 @@ describe.skip('Welcome buffer behavior', () => {
   });
 
   it('dismissWelcomeBuffer removes welcome buffer, sets localStorage flag, and switches to chat', async () => {
-    localStorage.removeItem('ledit-welcome-dismissed');
+    localStorage.removeItem('sprout-welcome-dismissed');
     renderProvider();
 
     // Verify welcome exists initially
@@ -834,7 +834,7 @@ describe.skip('Welcome buffer behavior', () => {
     expect(ctx().hasWelcomeBuffer).toBe(false);
 
     // localStorage flag should be set
-    expect(localStorage.getItem('ledit-welcome-dismissed')).toBe('true');
+    expect(localStorage.getItem('sprout-welcome-dismissed')).toBe('true');
 
     // Active buffer should switch to buffer-chat
     expect(ctx().activeBufferId).toBe('buffer-chat');

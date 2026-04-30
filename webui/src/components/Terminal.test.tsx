@@ -111,7 +111,7 @@ function getSecondaryCloseBtn(container: HTMLElement) {
 }
 
 function dispatchTerminalAction(action: string) {
-  const event = new CustomEvent('ledit:terminal-action', {
+  const event = new CustomEvent('sprout:terminal-action', {
     detail: { action },
   });
   window.dispatchEvent(event);
@@ -137,7 +137,7 @@ describe('Terminal split functionality', () => {
 
   beforeEach(() => {
     // Reset custom CSS variable if set by previous test
-    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
   afterEach(() => {
@@ -149,7 +149,7 @@ describe('Terminal split functionality', () => {
     if (container) {
       container.remove();
     }
-    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
   // ── 1. Initial state: No split active ────────────────────
@@ -257,7 +257,7 @@ describe('Terminal split functionality', () => {
 
   // ── 4. Vertical split via custom event ───────────────────
 
-  it('activates vertical split via ledit:terminal-action custom event', () => {
+  it('activates vertical split via sprout:terminal-action custom event', () => {
     const view = renderTerminal();
     container = view.container;
     root = view.root;
@@ -287,7 +287,7 @@ describe('Terminal split functionality', () => {
 
   // ── 5. Horizontal split via custom event ─────────────────
 
-  it('activates horizontal split via ledit:terminal-action custom event', () => {
+  it('activates horizontal split via sprout:terminal-action custom event', () => {
     const view = renderTerminal();
     container = view.container;
     root = view.root;
@@ -824,7 +824,7 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     act(() => {
-      window.dispatchEvent(new CustomEvent('ledit:terminal-action'));
+      window.dispatchEvent(new CustomEvent('sprout:terminal-action'));
     });
 
     // Should not crash; split state unchanged
@@ -838,7 +838,7 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     act(() => {
-      window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: null }));
+      window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: null }));
     });
 
     const panesContainer = getPanesContainer(container);
@@ -961,7 +961,7 @@ describe('Terminal split lifecycle and edge cases', () => {
   });
 
   beforeEach(() => {
-    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
   afterEach(() => {
@@ -973,7 +973,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     if (container) {
       container.remove();
     }
-    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
   it('can re-split after unsplitting via secondary pane close button', () => {
@@ -1159,7 +1159,7 @@ describe('Terminal height persistence', () => {
   let container: HTMLDivElement;
   let root: any;
 
-  const STORAGE_KEY = 'ledit-terminal-height';
+  const STORAGE_KEY = 'sprout-terminal-height';
 
   beforeAll(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -1167,7 +1167,7 @@ describe('Terminal height persistence', () => {
 
   beforeEach(() => {
     localStorage.removeItem(STORAGE_KEY);
-    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
   afterEach(() => {
@@ -1180,7 +1180,7 @@ describe('Terminal height persistence', () => {
       container.remove();
     }
     localStorage.removeItem(STORAGE_KEY);
-    document.documentElement.style.removeProperty('--ledit-terminal-reserved-height');
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
   it('initializes with default height (400px) when localStorage is empty', () => {
@@ -1279,7 +1279,7 @@ describe('Terminal height persistence', () => {
     container = view.container;
     root = view.root;
 
-    const reservedHeight = document.documentElement.style.getPropertyValue('--ledit-terminal-reserved-height');
+    const reservedHeight = document.documentElement.style.getPropertyValue('--sprout-terminal-reserved-height');
     expect(reservedHeight).toBe('300px');
   });
 
@@ -1290,7 +1290,7 @@ describe('Terminal height persistence', () => {
     container = view.container;
     root = view.root;
 
-    const reservedHeight = document.documentElement.style.getPropertyValue('--ledit-terminal-reserved-height');
+    const reservedHeight = document.documentElement.style.getPropertyValue('--sprout-terminal-reserved-height');
     // When collapsed, should use collapsedHeight (42px on non-mobile), not the persisted height
     expect(reservedHeight).toBe('42px');
   });

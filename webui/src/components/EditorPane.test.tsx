@@ -446,7 +446,7 @@ describe('EditorPane', () => {
     apiServiceMock = {
       getWorkspace: jest.fn().mockResolvedValue({
         workspace_root: '/home/user/project',
-        daemon_root: '/home/user/project/.ledit',
+        daemon_root: '/home/user/project/.sprout',
       }),
       getGitDiff: jest.fn().mockResolvedValue({ diff: '' }),
     };
@@ -529,7 +529,7 @@ describe('EditorPane', () => {
       expect(texts).toContain('Copy absolute path');
     });
 
-    it('"Reveal in File Explorer" dispatches ledit:reveal-in-explorer event', async () => {
+    it('"Reveal in File Explorer" dispatches sprout:reveal-in-explorer event', async () => {
       // eslint-disable-next-line testing-library/no-unnecessary-act
       await act(async () => {
         root.render(<EditorPane paneId="pane-1" />);
@@ -537,7 +537,7 @@ describe('EditorPane', () => {
       await flushPromises();
 
       const listener = jest.fn();
-      window.addEventListener('ledit:reveal-in-explorer', listener);
+      window.addEventListener('sprout:reveal-in-explorer', listener);
 
       const paneContent = container.querySelector('.pane-content');
       fireContextMenu(paneContent);
@@ -560,7 +560,7 @@ describe('EditorPane', () => {
         }),
       );
 
-      window.removeEventListener('ledit:reveal-in-explorer', listener);
+      window.removeEventListener('sprout:reveal-in-explorer', listener);
     });
 
     it('"Copy relative path" calls copyToClipboard with the file path', async () => {
@@ -640,7 +640,7 @@ describe('EditorPane', () => {
     it('"Copy absolute path" item is NOT present when workspace root is empty', async () => {
       apiServiceMock.getWorkspace.mockResolvedValueOnce({
         workspace_root: '',
-        daemon_root: '/home/user/project/.ledit',
+        daemon_root: '/home/user/project/.sprout',
       });
 
       // eslint-disable-next-line testing-library/no-unnecessary-act

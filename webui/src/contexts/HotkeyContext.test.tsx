@@ -239,7 +239,7 @@ describe('HotkeyProvider', () => {
 });
 
 describe('fallback hotkeys are wired to hotkey commands', () => {
-  it('dispatches ledit:hotkey when a fallback hotkey matches', async () => {
+  it('dispatches sprout:hotkey when a fallback hotkey matches', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
       root.render(createElement(HotkeyProvider, null, createElement('div')));
@@ -249,7 +249,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     await flushPromises();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true });
     window.dispatchEvent(ev);
@@ -257,7 +257,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail.commandId).toBe('save_file');
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('does not dispatch hotkey when input is focused and hotkey is not global', async () => {
@@ -269,7 +269,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     await flushPromises();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // Create and focus an input element
     const input = document.createElement('input');
@@ -284,7 +284,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     expect(handler).not.toHaveBeenCalled();
 
     input.remove();
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('dispatches global hotkey even when input is focused', async () => {
@@ -296,7 +296,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     await flushPromises();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // Create and focus an input element
     const input = document.createElement('input');
@@ -311,7 +311,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     expect(handler.mock.calls[0][0].detail.commandId).toBe('save_file');
 
     input.remove();
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('dispatches event with correct detail (commandId and key)', async () => {
@@ -323,7 +323,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     await flushPromises();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true });
     window.dispatchEvent(ev);
@@ -333,7 +333,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     expect(detail.commandId).toBe('save_file');
     expect(detail.key).toBe('Ctrl+S');
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('does not dispatch event for unrecognized key combinations', async () => {
@@ -345,7 +345,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     await flushPromises();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // Ctrl+Z is not in the fallback hotkeys
     const ev = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true });
@@ -353,7 +353,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
     expect(handler).not.toHaveBeenCalled();
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 });
 
@@ -389,7 +389,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     _cleanupFn = undefined;
   });
 
-  it('dispatches ledit:hotkey when onDesktopHotkey fires a global command', async () => {
+  it('dispatches sprout:hotkey when onDesktopHotkey fires a global command', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
       root.render(createElement(HotkeyProvider, null, createElement('div')));
@@ -401,7 +401,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(registeredCallback).not.toBeNull();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // Simulate Electron sending a desktop hotkey for a global command
     registeredCallback!('close_all_editors');
@@ -410,7 +410,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(handler.mock.calls[0][0].detail.commandId).toBe('close_all_editors');
     expect(handler.mock.calls[0][0].detail.key).toBe('(desktop)');
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('does NOT dispatch when input is focused and command is not global', async () => {
@@ -427,7 +427,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     input.focus();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // split_editor_horizontal has global: false in the fallback hotkeys.
     // When an input is focused, the desktop bridge should suppress it.
@@ -436,7 +436,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(handler).not.toHaveBeenCalled();
 
     input.remove();
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('dispatches non-global command when no input is focused', async () => {
@@ -451,14 +451,14 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     document.body.focus();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     registeredCallback!('split_editor_horizontal');
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail.commandId).toBe('split_editor_horizontal');
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('dispatches global command even when contentEditable is focused', async () => {
@@ -476,7 +476,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     editable.focus();
 
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // close_all_editors has global: true, should fire even with contentEditable focused
     registeredCallback!('close_all_editors');
@@ -485,7 +485,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(handler.mock.calls[0][0].detail.commandId).toBe('close_all_editors');
 
     editable.remove();
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 
   it('does not leak IPC listeners on unmount', async () => {
@@ -518,7 +518,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
 
     // No crash — the provider should work fine without the desktop API
     const handler = jest.fn();
-    window.addEventListener('ledit:hotkey', handler);
+    window.addEventListener('sprout:hotkey', handler);
 
     // Web hot keys should still work
     const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true });
@@ -527,6 +527,6 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler.mock.calls[0][0].detail.commandId).toBe('save_file');
 
-    window.removeEventListener('ledit:hotkey', handler);
+    window.removeEventListener('sprout:hotkey', handler);
   });
 });

@@ -85,7 +85,7 @@ describe('clientSession tab isolation', () => {
     Object.defineProperty(global, 'window', { value: win, writable: true });
 
     const idBefore = getWebUIClientId();
-    expect(session['ledit.webuiClientId']).toBe(idBefore);
+    expect(session['sprout.webuiClientId']).toBe(idBefore);
 
     // Simulate page reload: same sessionStorage, different window object
     const reloadedWin = createMockWindow(session, local);
@@ -97,7 +97,7 @@ describe('clientSession tab isolation', () => {
 
   it('clears stale client_id from localStorage to prevent cross-tab leakage', () => {
     const session: Record<string, string> = {};
-    const local: Record<string, string> = { 'ledit.webuiClientId': 'old-shared-id' };
+    const local: Record<string, string> = { 'sprout.webuiClientId': 'old-shared-id' };
     const win = createMockWindow(session, local);
     Object.defineProperty(global, 'window', { value: win, writable: true });
 
@@ -107,9 +107,9 @@ describe('clientSession tab isolation', () => {
     // Should NOT be the old shared ID
     expect(id).not.toBe('old-shared-id');
     // Should have cleaned up localStorage
-    expect(win.localStorage.removeItem).toHaveBeenCalledWith('ledit.webuiClientId');
+    expect(win.localStorage.removeItem).toHaveBeenCalledWith('sprout.webuiClientId');
     // Should have saved new ID to sessionStorage only
-    expect(session['ledit.webuiClientId']).toBe(id);
+    expect(session['sprout.webuiClientId']).toBe(id);
   });
 
   it('persistTabWorkspacePath and getTabWorkspacePath use localStorage', () => {
@@ -121,7 +121,7 @@ describe('clientSession tab isolation', () => {
     expect(getTabWorkspacePath()).toBe('');
 
     persistTabWorkspacePath('/home/user/project-a');
-    expect(win.localStorage.setItem).toHaveBeenCalledWith('ledit.workspaceTabPath', '/home/user/project-a');
+    expect(win.localStorage.setItem).toHaveBeenCalledWith('sprout.workspaceTabPath', '/home/user/project-a');
 
     const retrieved = getTabWorkspacePath();
     expect(retrieved).toBe('/home/user/project-a');

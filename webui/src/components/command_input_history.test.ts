@@ -18,7 +18,7 @@ describe('command_input_history', () => {
   });
 
   it('loads history from localStorage', async () => {
-    localStorage.setItem('ledit:chat-history', JSON.stringify(['cmd1', 'cmd2', 'cmd1', 'cmd3']));
+    localStorage.setItem('sprout:chat-history', JSON.stringify(['cmd1', 'cmd2', 'cmd1', 'cmd3']));
 
     const result = await loadCommandHistory({} as any);
     expect(result).toEqual(['cmd2', 'cmd1', 'cmd3']);
@@ -30,7 +30,7 @@ describe('command_input_history', () => {
   });
 
   it('returns empty history when localStorage is corrupted', async () => {
-    localStorage.setItem('ledit:chat-history', 'not-json');
+    localStorage.setItem('sprout:chat-history', 'not-json');
 
     const result = await loadCommandHistory({} as any);
     expect(result).toEqual([]);
@@ -53,6 +53,6 @@ describe('command_input_history', () => {
       index: -1,
       tempInput: '',
     });
-    expect(JSON.parse(localStorage.getItem('ledit:chat-history'))).toEqual(['old', 'new']);
+    expect(JSON.parse(localStorage.getItem('sprout:chat-history'))).toEqual(['old', 'new']);
   });
 });

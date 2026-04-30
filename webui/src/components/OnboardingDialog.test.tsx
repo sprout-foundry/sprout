@@ -212,7 +212,7 @@ describe('OnboardingDialog', () => {
       renderOnboardingDialog();
 
       expect(container.querySelector('[role="dialog"]')).toBeTruthy();
-      expect(container.textContent).toContain('Set Up Ledit');
+      expect(container.textContent).toContain('Set Up Sprout');
     });
 
     it('does not render when onboarding is closed', () => {
@@ -224,7 +224,7 @@ describe('OnboardingDialog', () => {
     it('displays correct title based on isReonboarding flag', () => {
       // Normal onboarding
       renderOnboardingDialog({ ...mockOnboarding, open: true, isReonboarding: false });
-      expect(container.textContent).toContain('Set Up Ledit');
+      expect(container.textContent).toContain('Set Up Sprout');
 
       // Re-onboarding
       renderOnboardingDialog({ ...mockOnboarding, open: true, isReonboarding: true });

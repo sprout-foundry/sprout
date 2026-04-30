@@ -29,6 +29,9 @@ these specifications first to ensure alignment with the project direction.
 - **SP-007** Extend Configuration (proposed)
 - **SP-008** Reliability Engineering (proposed)
 - **SP-009** Component Library Maturation (proposed)
+- **SP-010** Editor Modernization (proposed)
+- **SP-011** Terminal Parity (proposed)
+- **SP-012** UX Polish (proposed)
 
 ## Testing
 

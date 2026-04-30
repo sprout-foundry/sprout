@@ -593,7 +593,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const handleRevealInExplorer = useCallback(() => {
     if (!buffer || !buffer.file) return;
     window.dispatchEvent(
-      new CustomEvent('ledit:reveal-in-explorer', {
+      new CustomEvent('sprout:reveal-in-explorer', {
         detail: { path: buffer.file.path },
       }),
     );
@@ -1242,7 +1242,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         document.dispatchEvent(event);
       },
       onGoToSymbol: () => {
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
+        window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       },
       onGoToWorkspaceSymbol: () => {
         setShowGoToWorkspaceSymbol(true);
@@ -1691,7 +1691,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         document.dispatchEvent(event);
       },
       onGoToSymbol: () => {
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
+        window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       },
       onGoToWorkspaceSymbol: () => {
         setShowGoToWorkspaceSymbol(true);
@@ -1973,7 +1973,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       } else if (e.type === 'editor-go-to-workspace-symbol') {
         setShowGoToWorkspaceSymbol(true);
       } else if (e.type === 'editor-go-to-symbol') {
-        window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
+        window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       }
     };
 
@@ -2396,7 +2396,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             filePath: buffer.file.path,
             onNavigate: (path) => {
               window.dispatchEvent(
-                new CustomEvent('ledit:reveal-in-explorer', {
+                new CustomEvent('sprout:reveal-in-explorer', {
                   detail: { path },
                 }),
               );

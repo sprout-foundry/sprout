@@ -48,7 +48,7 @@ export interface UseHotkeyCommandHandlerOptions {
 }
 
 /**
- * Installs a global listener for `ledit:hotkey` custom events and dispatches
+ * Installs a global listener for `sprout:hotkey` custom events and dispatches
  * them to the appropriate handler callbacks.
  */
 export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions): void {
@@ -112,7 +112,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
               : null;
 
           if (filePath) {
-            window.dispatchEvent(new CustomEvent('ledit:reveal-in-explorer', { detail: { path: filePath } }));
+            window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: filePath } }));
           } else {
             // No active file — just toggle sidebar to files
             onToggleSidebar();
@@ -207,10 +207,10 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           onSplitRequest('grid');
           break;
         case 'split_terminal_vertical':
-          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'split_vertical' } }));
+          window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: { action: 'split_vertical' } }));
           break;
         case 'split_terminal_horizontal':
-          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'split_horizontal' } }));
+          window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: { action: 'split_horizontal' } }));
           break;
         case 'editor_toggle_word_wrap':
           document.dispatchEvent(new CustomEvent('editor-toggle-word-wrap'));
@@ -247,10 +247,10 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           document.dispatchEvent(new CustomEvent('editor-select-all'));
           break;
         case 'clear_terminal':
-          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'clear' } }));
+          window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: { action: 'clear' } }));
           break;
         case 'kill_terminal':
-          window.dispatchEvent(new CustomEvent('ledit:terminal-action', { detail: { action: 'kill' } }));
+          window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: { action: 'kill' } }));
           break;
         case 'save_file':
           // Dispatch to editor save handler for single-file save
@@ -264,14 +264,14 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           // Match CommandPalette reset logic: clear persisted snapshot + all layout keys
           clearLayoutSnapshot();
           const keys = [
-            'ledit.editor.paneLayout',
-            'ledit.editor.paneSizes',
-            'ledit-terminal-height',
-            'ledit-terminal-expanded',
-            'ledit-sidebar-collapsed',
-            'ledit-sidebar-width',
-            'ledit.contextPanel.width',
-            'ledit.contextPanel.collapsed',
+            'sprout.editor.paneLayout',
+            'sprout.editor.paneSizes',
+            'sprout-terminal-height',
+            'sprout-terminal-expanded',
+            'sprout-sidebar-collapsed',
+            'sprout-sidebar-width',
+            'sprout.contextPanel.width',
+            'sprout.contextPanel.collapsed',
             'editor:minimap-enabled',
             'editor:word-wrap-enabled',
             'editor:linked-scroll-enabled',
@@ -290,8 +290,8 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
       }
     };
 
-    window.addEventListener('ledit:hotkey', handleHotkey);
-    return () => window.removeEventListener('ledit:hotkey', handleHotkey);
+    window.addEventListener('sprout:hotkey', handleHotkey);
+    return () => window.removeEventListener('sprout:hotkey', handleHotkey);
   }, [
     onToggleCommandPalette,
     onOpenCommandPalette,

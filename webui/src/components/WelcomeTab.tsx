@@ -48,8 +48,8 @@ function WelcomeTab({
     {
       icon: <BookOpen size={18} />,
       title: 'Documentation',
-      description: 'Learn how to use ledit',
-      action: () => window.open('https://ledit.dev/docs', '_blank'),
+      description: 'Learn how to use sprout',
+      action: () => window.open('https://sprout.dev/docs', '_blank'),
     },
     {
       icon: <Settings size={18} />,
@@ -69,7 +69,7 @@ function WelcomeTab({
     <div className="welcome-tab">
       <div className="welcome-header">
         <div className="welcome-header-content">
-          <h1>Welcome to ledit</h1>
+          <h1>Welcome to sprout</h1>
           <p>Your AI-powered code editor</p>
         </div>
         {onDismiss && (

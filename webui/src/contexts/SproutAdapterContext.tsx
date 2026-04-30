@@ -27,7 +27,7 @@ export function useSproutAdapter(): APIAdapter | null {
  * This is the preferred way for components to make API calls. It:
  * - Delegates to the adapter's fetch() when an adapter is installed (cloud mode)
  * - Falls back to clientFetch() in local mode
- * - Always sets the X-Ledit-Client-ID header for request routing
+ * - Always sets the X-Sprout-Client-ID header for request routing
  *
  * @returns A fetch function with the same signature as clientFetch
  */
@@ -45,7 +45,7 @@ export function useSproutFetch(): (input: RequestInfo | URL, init?: RequestInit)
       }
 
       // Local mode: fall back to clientFetch.
-      // Note: clientFetch will ALSO set the X-Ledit-Client-ID header — this is
+      // Note: clientFetch will ALSO set the X-Sprout-Client-ID header — this is
       // intentional double-set. Headers.set overwrites with the same value, so
       // the header is set correctly once in the final request.
       return clientFetch(input, { ...init, headers });

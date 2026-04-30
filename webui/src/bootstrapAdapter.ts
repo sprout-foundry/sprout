@@ -15,9 +15,9 @@ const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
 ];
 
-if (import.meta.env.VITE_SPROUT_MODE === 'cloud') {
-  const apiBase = import.meta.env.VITE_FOUNDRY_API_URL || window.location.origin;
-  const wsUrl = import.meta.env.VITE_FOUNDRY_WS_URL ||
+if (process.env.REACT_APP_SPROUT_MODE === 'cloud') {
+  const apiBase = process.env.REACT_APP_FOUNDRY_API_URL || window.location.origin;
+  const wsUrl = process.env.REACT_APP_FOUNDRY_WS_URL ||
     `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
   installAdapter(new CloudAdapter({ apiBase, wsUrl, navItems: CLOUD_NAV_ITEMS }));

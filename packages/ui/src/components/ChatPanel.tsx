@@ -685,7 +685,7 @@ function Chat({
                     <Bot size={32} />
                   </div>
                   <div className="welcome-text">
-                    Welcome to ledit! I&apos;m ready to help you with code analysis, editing, and more.
+                    Welcome to sprout! I&apos;m ready to help you with code analysis, editing, and more.
                   </div>
                   <div className="welcome-hint">
                     Try asking: &quot;Show me the project structure&quot; or &quot;Find the main function&quot;

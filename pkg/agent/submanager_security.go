@@ -51,10 +51,14 @@ func (m *AgentSecurityManager) GetSecurityApprovalMgr() *security.ApprovalManage
 }
 
 func (m *AgentSecurityManager) SetUnsafeMode(unsafe bool) {
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
 	m.unsafeMode = unsafe
 }
 
 func (m *AgentSecurityManager) GetUnsafeMode() bool {
+	m.securityBypassMu.RLock()
+	defer m.securityBypassMu.RUnlock()
 	return m.unsafeMode
 }
 

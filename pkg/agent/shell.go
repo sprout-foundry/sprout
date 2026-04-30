@@ -44,7 +44,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	headTokenLimit, tailTokenLimit := getShellOutputTokenLimits()
 
 	// Check if we've run this exact command before
-	if prevResult, exists := a.shellCommandHistory[command]; exists {
+	if prevResult, exists := a.GetShellCommandHistoryEntry(command); exists {
 		// Command was run before - mark the previous occurrence as stale in conversation
 		a.updatePreviousShellCommandMessage(prevResult)
 	}
@@ -106,7 +106,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	}
 
 	// Store in history for potential deduplication
-	a.shellCommandHistory[command] = &ShellCommandResult{
+	a.SetShellCommandHistoryEntry(command, &ShellCommandResult{
 		Command:         command,
 		FullOutput:      fullResult,
 		TruncatedOutput: returnResult,
@@ -117,7 +117,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		FullOutputPath:  fullOutputPath,
 		TruncatedTokens: truncatedTokens,
 		TruncatedLines:  truncatedLines,
-	}
+	})
 
 	// Also record as a task action for conversation summary
 	a.AddTaskAction("command_executed", fmt.Sprintf("Executed: %s", command), command)

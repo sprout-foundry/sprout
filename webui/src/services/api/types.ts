@@ -155,7 +155,7 @@ export interface SSHOpenResponse {
   message: string;
   url: string;
   port?: number;
-  /** Same-origin proxy URL served by the local ledit server (e.g. http://127.0.0.1:54421/ssh/{key}/).
+  /** Same-origin proxy URL served by the local sprout server (e.g. http://127.0.0.1:54421/ssh/{key}/).
    *  Prefer this over `url` to keep the browser on the same origin for PWA compatibility. */
   proxy_url?: string;
   proxy_base?: string;

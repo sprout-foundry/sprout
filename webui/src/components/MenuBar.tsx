@@ -90,7 +90,7 @@ function getMenus(): MenuDef[] {
         { label: 'Export Diagnostics', commandId: 'export_diagnostics' },
         { label: 'Report Issue', commandId: 'open_report_issue' },
         { divider: true, label: '' },
-        { label: 'About ledit', commandId: 'about' },
+        { label: 'About sprout', commandId: 'about' },
       ],
     },
   ];
@@ -266,11 +266,11 @@ function MenuBar(): JSX.Element | null {
     switch (item.commandId) {
       case 'open_hotkeys_config':
         // Must dispatch to the correct listener in useHotkeysConfig.ts
-        window.dispatchEvent(new CustomEvent('ledit:open-hotkeys-config'));
+        window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
         break;
       case 'about':
         // Use window.alert for now (a proper dialog component is a separate task)
-        window.alert(`ledit WebUI\nVersion ${APP_VERSION}\n\nA modern, keyboard-accessible code editor.`);
+        window.alert(`sprout WebUI\nVersion ${APP_VERSION}\n\nA modern, keyboard-accessible code editor.`);
         break;
       case 'export_diagnostics':
         ApiService.getInstance()
@@ -278,12 +278,12 @@ function MenuBar(): JSX.Element | null {
           .catch((err) => console.error('Export diagnostics failed:', err));
         break;
       case 'open_report_issue':
-        window.open('https://github.com/alantheprice/ledit/issues/new', '_blank', 'noopener,noreferrer');
+        window.open('https://github.com/alantheprice/sprout/issues/new', '_blank', 'noopener,noreferrer');
         break;
       default:
         // Generic hotkey dispatch (handles all editor/terminal/view commands)
         if (item.commandId) {
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: item.commandId } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: item.commandId } }));
         }
         break;
     }

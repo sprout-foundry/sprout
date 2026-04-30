@@ -492,83 +492,83 @@ function CommandPalette({
           onToggleTerminal();
           break;
         case 'new_file':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'new_file' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'new_file' } }));
           break;
         case 'switch_to_chat':
         case 'switch_to_editor':
         case 'switch_to_git':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
           break;
         case 'open_hotkeys_config':
           onOpenHotkeysConfig();
           break;
         case 'split_editor_vertical':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_vertical' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_editor_vertical' } }));
           break;
         case 'split_editor_horizontal':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_editor_horizontal' } }));
           break;
         case 'split_editor_grid':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_editor_grid' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_editor_grid' } }));
           break;
         case 'focus_split_1':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_split_1' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_1' } }));
           break;
         case 'focus_split_2':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_split_2' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_2' } }));
           break;
         case 'focus_split_3':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_split_3' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_3' } }));
           break;
         case 'split_terminal_vertical':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
           break;
         case 'split_terminal_horizontal':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }));
           break;
         case 'editor_toggle_word_wrap':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));
           break;
         case 'toggle_linked_scroll':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_linked_scroll' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_linked_scroll' } }));
           break;
         case 'toggle_minimap':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_minimap' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_minimap' } }));
           break;
         case 'editor_cycle_whitespace_rendering':
           window.dispatchEvent(new CustomEvent('editor-cycle-whitespace-rendering'));
           break;
         case 'close_editor':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_editor' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'close_editor' } }));
           break;
         case 'save_file':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_file' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'save_file' } }));
           break;
         case 'save_all_files':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'save_all_files' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'save_all_files' } }));
           break;
         case 'close_all_editors':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_all_editors' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'close_all_editors' } }));
           break;
         case 'close_other_editors':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'close_other_editors' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'close_other_editors' } }));
           break;
         case 'toggle_pin_tab':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'toggle_pin_tab' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'toggle_pin_tab' } }));
           break;
         case 'focus_next_tab':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_next_tab' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_next_tab' } }));
           break;
         case 'focus_prev_tab':
-          window.dispatchEvent(new CustomEvent('ledit:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
           break;
         case 'reset_saved_layout': {
           if (!(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))) break;
           clearLayoutSnapshot();
           const keys = [
-            'ledit.editor.paneLayout', 'ledit.editor.paneSizes', 'ledit-terminal-height',
-            'ledit-terminal-expanded', 'ledit-sidebar-collapsed', 'ledit-sidebar-width',
-            'ledit.contextPanel.width', 'ledit.contextPanel.collapsed', 'editor:minimap-enabled',
+            'sprout.editor.paneLayout', 'sprout.editor.paneSizes', 'sprout-terminal-height',
+            'sprout-terminal-expanded', 'sprout-sidebar-collapsed', 'sprout-sidebar-width',
+            'sprout.contextPanel.width', 'sprout.contextPanel.collapsed', 'editor:minimap-enabled',
             'filetree-show-ignored',
           ];
           for (const key of keys) {

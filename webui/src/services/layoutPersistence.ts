@@ -5,7 +5,7 @@
  * positions, cursor/scroll positions, active buffer per pane) so that on page
  * reload the user sees the same set of open files in the same panes.
  *
- * Uses localStorage under the key `ledit.editor.layoutState`.
+ * Uses localStorage under the key `sprout.editor.layoutState`.
  * Writes are debounced (1 s) to avoid excessive I/O during rapid tab switching.
  */
 
@@ -52,9 +52,9 @@ export interface LayoutSnapshot {
 // ---------------------------------------------------------------------------
 
 /** The base (unscoped) storage keys — kept for backward-compat reads. */
-export const LAYOUT_STATE_BASE_KEY = 'ledit.editor.layoutState';
-export const PANE_LAYOUT_BASE_KEY = 'ledit.editor.paneLayout';
-export const PANE_SIZES_BASE_KEY = 'ledit.editor.paneSizes';
+export const LAYOUT_STATE_BASE_KEY = 'sprout.editor.layoutState';
+export const PANE_LAYOUT_BASE_KEY = 'sprout.editor.paneLayout';
+export const PANE_SIZES_BASE_KEY = 'sprout.editor.paneSizes';
 
 /** @deprecated Use getLayoutStorageKey() instead */
 export const STORAGE_KEY = LAYOUT_STATE_BASE_KEY;

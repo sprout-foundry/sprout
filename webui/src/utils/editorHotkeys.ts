@@ -665,12 +665,12 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
   // deleteToLineEnd. This custom binding is registered AFTER defaultKeymap
   // in EditorPane.tsx, so it takes priority and replaces the Emacs-style
   // delete-to-end-of-line behavior when the hotkey is configured.
-  // We dispatch a global ledit:hotkey event so AppContent handles the
+  // We dispatch a global sprout:hotkey event so AppContent handles the
   // actual split, and return true to prevent CodeMirror's deleteToLineEnd
   // from also firing.
   const splitHorizBindings = bindingsFor('split_editor_horizontal', () => {
     window.dispatchEvent(
-      new CustomEvent('ledit:hotkey', {
+      new CustomEvent('sprout:hotkey', {
         detail: { commandId: 'split_editor_horizontal' },
       }),
     );
@@ -682,7 +682,7 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
       preventDefault: true,
       run: () => {
         window.dispatchEvent(
-          new CustomEvent('ledit:hotkey', {
+          new CustomEvent('sprout:hotkey', {
             detail: { commandId: 'split_editor_horizontal' },
           }),
         );
@@ -742,7 +742,7 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
   bindings.push(
     ...bindingsFor('toggle_linked_scroll', () => {
       window.dispatchEvent(
-        new CustomEvent('ledit:hotkey', {
+        new CustomEvent('sprout:hotkey', {
           detail: { commandId: 'toggle_linked_scroll' },
         }),
       );
@@ -755,7 +755,7 @@ export function getEditorKeymap(hotkeyEntries: HotkeyEntry[] | null, actions: Ed
   bindings.push(
     ...bindingsFor('toggle_minimap', () => {
       window.dispatchEvent(
-        new CustomEvent('ledit:hotkey', {
+        new CustomEvent('sprout:hotkey', {
           detail: { commandId: 'toggle_minimap' },
         }),
       );

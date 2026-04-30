@@ -1,19 +1,19 @@
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
 
-export const WEBUI_CLIENT_ID_HEADER = 'X-Ledit-Client-ID';
+export const WEBUI_CLIENT_ID_HEADER = 'X-Sprout-Client-ID';
 export const WEBUI_CLIENT_ID_QUERY_PARAM = 'client_id';
-const WEBUI_CLIENT_ID_STORAGE_KEY = 'ledit.webuiClientId';
-const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'ledit.workspaceTabPath';
+const WEBUI_CLIENT_ID_STORAGE_KEY = 'sprout.webuiClientId';
+const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'sprout.workspaceTabPath';
 
 /**
  * When the app is loaded via the SSH proxy path (e.g. /ssh/{key}/) the server
- * injects `window.LEDIT_PROXY_BASE` so that API and WebSocket calls are routed
+ * injects `window.SPROUT_PROXY_BASE` so that API and WebSocket calls are routed
  * through the local server's reverse proxy instead of hitting a different port.
  */
 export function getProxyBase(): string {
   if (typeof window === 'undefined') return '';
-  return (window as unknown as Record<string, string>).LEDIT_PROXY_BASE || '';
+  return (window as unknown as Record<string, string>).SPROUT_PROXY_BASE || '';
 }
 
 /**
@@ -115,7 +115,7 @@ export function appendClientIdToUrl(input: string): string {
 }
 
 /**
- * When running via the SSH proxy, parse the host alias from LEDIT_PROXY_BASE.
+ * When running via the SSH proxy, parse the host alias from SPROUT_PROXY_BASE.
  * The session key embedded in the proxy base has the form "{hostAlias}::{remotePath}".
  * Returns null when not in a proxy session.
  */

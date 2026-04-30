@@ -184,10 +184,10 @@ func generateMarker() (string, error) {
 
 // stripANSI removes ANSI escape sequences from the output string.
 // This handles common escape sequences including:
-// - CSI sequences: \x1b[<n>;<n>m (colors, styles)
+// - CSI sequences: \x1b[<params><letter> (colors, cursor, modes)
+// - CSI private sequences: \x1b[?<params><letter> (bracketed paste, cursor show/hide)
 // - OSC sequences: \x1b]...\x07 (window title, etc.)
-// - Other common terminal escape codes
-var ansiEscapeRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b\[[0-9;]*m|\x1b\[?[0-9]*;?[0-9]*[mKHG]`)
+var ansiEscapeRegex = regexp.MustCompile(`\x1b\[\??[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07`)
 
 func stripANSI(s string) string {
 	return ansiEscapeRegex.ReplaceAllString(s, "")

@@ -254,6 +254,16 @@ func WithAutoClose(autoClose bool) SessionOption {
 // Hidden sessions are excluded from the default ListSessions() output
 // but still participate in inactive-session cleanup.
 func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ...SessionOption) (*TerminalSession, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, fmt.Errorf("hidden session ID is required")
+	}
+	if strings.TrimSpace(owner) == "" {
+		return nil, fmt.Errorf("hidden session owner is required")
+	}
+	if strings.TrimSpace(chatID) == "" {
+		return nil, fmt.Errorf("hidden session chatID is required")
+	}
+
 	// Create the underlying PTY session.
 	session, err := tm.CreateSession(id)
 	if err != nil {

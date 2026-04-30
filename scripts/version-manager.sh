@@ -47,7 +47,7 @@ build_with_version() {
 
     echo -e "${GREEN}Using ldflags: $ldflags${NC}"
 
-    go build -tags ollama_test -ldflags "$ldflags" -o ledit .
+    go build -tags "ollama_test,browser" -ldflags "$ldflags" -o ledit .
 
     echo -e "${GREEN}Build completed successfully!${NC}"
     echo -e "${BLUE}Version information:${NC}"
@@ -94,7 +94,7 @@ usage() {
     echo ""
     echo "For GitHub Actions integration:"
     echo "  LD_FLAGS=\$(./scripts/version-manager.sh ldflags | tr '\\n' ' ')"
-    echo "  go build -tags ollama_test -ldflags \"\$LD_FLAGS\" -o ledit ."
+    echo "  go build -tags \"ollama_test,browser\" -ldflags \"\$LD_FLAGS\" -o ledit ."
 }
 
 # Main execution

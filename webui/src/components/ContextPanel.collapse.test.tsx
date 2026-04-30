@@ -48,8 +48,8 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   jest.clearAllMocks();
-  window.localStorage.setItem('ledit.contextPanel.collapsed', '0');
-  window.localStorage.setItem('ledit.contextPanel.tab.chat', 'subagents');
+  window.localStorage.setItem('sprout.contextPanel.collapsed', '0');
+  window.localStorage.setItem('sprout.contextPanel.tab.chat', 'subagents');
   Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1280 });
 });
 

@@ -19,6 +19,9 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 	if !session.Active {
 		return fmt.Errorf("session %s is not active", sessionID)
 	}
+	if session.Hidden {
+		return fmt.Errorf("session %s is not accessible", sessionID)
+	}
 
 	// Add to history (without the trailing enter key) for normal commands only.
 	cleanCommand := strings.TrimRight(command, "\r\n")
@@ -74,6 +77,9 @@ func (tm *TerminalManager) WriteRawInput(sessionID, input string) error {
 
 	if !session.Active {
 		return fmt.Errorf("session %s is not active", sessionID)
+	}
+	if session.Hidden {
+		return fmt.Errorf("session %s is not accessible", sessionID)
 	}
 
 	if session.Pty == nil {

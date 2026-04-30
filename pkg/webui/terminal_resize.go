@@ -26,6 +26,9 @@ func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) e
 	if !session.Active {
 		return fmt.Errorf("session %s is not active", sessionID)
 	}
+	if session.Hidden {
+		return fmt.Errorf("session %s is not accessible", sessionID)
+	}
 	if session.Pty == nil {
 		return fmt.Errorf("no PTY available for session %s", sessionID)
 	}

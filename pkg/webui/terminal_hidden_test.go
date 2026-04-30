@@ -138,12 +138,13 @@ func TestCleanupInactivePicksUpHiddenSessions(t *testing.T) {
 		t.Fatalf("CreateHiddenSession failed: %v", err)
 	}
 
-	// Force LastUsed to be in the past so it appears inactive.
+	// Force LastUsed to the zero value so it's definitively in the past,
+	// even if the PTY reader goroutine writes a new timestamp concurrently.
 	session.mutex.Lock()
-	session.LastUsed = time.Now().Add(-1 * time.Hour)
+	session.LastUsed = time.Time{}
 	session.mutex.Unlock()
 
-	// Run cleanup with a 1-second timeout — the session is 1 hour old.
+	// Run cleanup with a 1-second timeout — the session is far past due.
 	tm.CleanupInactiveSessions(time.Second)
 
 	_, exists := tm.GetSession("hidden-inactive")
@@ -180,6 +181,7 @@ func TestCreateHiddenSessionDuplicateID(t *testing.T) {
 	if _, err := tm.CreateSession("dup-id"); err != nil {
 		t.Fatalf("CreateSession failed: %v", err)
 	}
+	defer tm.CloseSession("dup-id")
 
 	_, err := tm.CreateHiddenSession("dup-id", "agent", "chat-1")
 	if err == nil {

@@ -174,7 +174,7 @@ func handleGitCommitOperation(a *Agent) (string, error) {
 
 	// For commit operations, we use the dedicated commit tool that handles
 	// the automated commit flow with message generation and security approval.
-	return "", errors.New("git commit operations should use the dedicated 'commit' tool or the '/commit' slash command")
+	return "", agenterrors.NewSecurityError("git commit operations should use the dedicated 'commit' tool or the '/commit' slash command", nil)
 }
 
 // gitApprovalPrompterAdapter implements the GitApprovalPrompter interface using the Agent

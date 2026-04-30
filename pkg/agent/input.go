@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"errors"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // InjectInputContext injects a new user input using context-based interrupt system
@@ -14,7 +14,7 @@ func (a *Agent) InjectInputContext(input string) error {
 	case a.inputInjectionChan <- input:
 		return nil
 	default:
-		return errors.New("failed to inject input: input injection channel is full")
+		return agenterrors.NewTransientError("failed to inject input: input injection channel is full", nil)
 	}
 }
 

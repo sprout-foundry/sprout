@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -967,13 +967,13 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 	if !ok {
-		return "", errors.New("missing tasks, prompts, or subagents argument")
+		return "", agenterrors.NewInvalidInputError("missing tasks, prompts, or subagents argument", nil)
 	}
 
 	// Parse the tasks array
 	tasksSlice, ok := tasksRaw.([]interface{})
 	if !ok {
-		return "", errors.New("tasks/prompts must be an array")
+		return "", agenterrors.NewInvalidInputError("tasks/prompts must be an array", nil)
 	}
 
 	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
@@ -1007,7 +1007,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			// Note: model and provider are set from configuration, not from LLM parameters
 			// This ensures consistent subagent behavior configured by the user
 		} else {
-			return "", errors.New("each task must be a string or an object")
+			return "", agenterrors.NewInvalidInputError("each task must be a string or an object", nil)
 		}
 
 		parallelTasks = append(parallelTasks, task)
@@ -1047,14 +1047,14 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	// Check if parallel subagents are enabled
 	if a.configManager != nil && !a.configManager.GetConfig().GetSubagentParallelEnabled() {
-		return "", fmt.Errorf("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.")
+		return "", agenterrors.NewPermanentError("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.", nil)
 	}
 
 	// Validate number of parallel tasks against configured max
 	if a.configManager != nil {
 		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
 		if len(parallelTasks) > maxParallel {
-			return "", fmt.Errorf("too many parallel tasks: %d exceeds configured max of %d", len(parallelTasks), maxParallel)
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("too many parallel tasks: %d exceeds configured max of %d", len(parallelTasks), maxParallel), nil)
 		}
 	}
 

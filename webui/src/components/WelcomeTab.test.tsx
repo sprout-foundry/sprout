@@ -105,7 +105,7 @@ describe('WelcomeTab', () => {
 
       const heading = container!.querySelector('h1, h2, h3, [role="heading"]');
       expect(heading).not.toBeNull();
-      expect(heading!.textContent).toMatch(/welcome to ledit/i);
+      expect(heading!.textContent).toMatch(/welcome to sprout/i);
 
       const allText = container!.textContent ?? '';
       expect(allText).toContain('Your AI-powered code editor');
@@ -278,7 +278,7 @@ describe('WelcomeTab', () => {
       expect(docButton).not.toBeNull();
 
       act(() => { docButton!.click(); });
-      expect(window.open).toHaveBeenCalledWith('https://ledit.dev/docs', '_blank');
+      expect(window.open).toHaveBeenCalledWith('https://sprout.dev/docs', '_blank');
     });
 
     it('"Settings" button calls onOpenCommandPalette when provided', () => {
@@ -359,7 +359,7 @@ describe('WelcomeTab', () => {
       renderNoProps();
 
       const allText = container!.textContent ?? '';
-      expect(allText).toMatch(/welcome to ledit/i);
+      expect(allText).toMatch(/welcome to sprout/i);
       expect(allText).toMatch(/Quick Actions/i);
       expect(allText).toMatch(/Get Started/i);
       expect(allText).toMatch(/Resources/i);

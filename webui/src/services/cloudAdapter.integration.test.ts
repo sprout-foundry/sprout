@@ -987,7 +987,7 @@ describe('CloudAdapter Integration Tests', () => {
   describe('Header Injection - All Proxied Requests', () => {
     /**
      * Verify that all proxied requests include the required headers:
-     * - X-Ledit-Client-ID (from getWebUIClientId)
+     * - X-Sprout-Client-ID (from getWebUIClientId)
      * - credentials: 'include'
      */
     it('all foundry-backend endpoints include WebUI client ID header', async () => {

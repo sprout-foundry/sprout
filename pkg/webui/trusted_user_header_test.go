@@ -292,7 +292,7 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 			t.Fatalf("Failed to create request: %v", err)
 		}
 		// Use a different client ID to avoid reusing cached context
-		req.Header.Set("X-Ledit-Client-ID", "different-client")
+		req.Header.Set("X-Sprout-Client-ID", "different-client")
 
 		// Get client context
 		clientCtx := server.getClientContextForRequest(req)

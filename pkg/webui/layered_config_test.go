@@ -213,7 +213,7 @@ func TestGetLayeredConfigManager_Isolation(t *testing.T) {
 
 func makeSettingsRequest(ws *ReactWebServer, method, urlPath string, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, urlPath, strings.NewReader(body))
-	req.Header.Set("X-Ledit-Client-ID", "test-client")
+	req.Header.Set("X-Sprout-Client-ID", "test-client")
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	ws.handleAPISettings(rec, req)
@@ -368,7 +368,7 @@ func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 
 	// Step 2: GET global settings (simulates the frontend "getSettingsLayer('global')")
 	req := httptest.NewRequest(http.MethodGet, "/api/settings?layer=global", nil)
-	req.Header.Set("X-Ledit-Client-ID", clientID)
+	req.Header.Set("X-Sprout-Client-ID", clientID)
 	rec = httptest.NewRecorder()
 	ws.handleAPISettings(rec, req)
 	if rec.Code != http.StatusOK {
@@ -383,7 +383,7 @@ func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 
 	// Step 4: GET workspace settings and verify data was preserved
 	req = httptest.NewRequest(http.MethodGet, "/api/settings?layer=workspace", nil)
-	req.Header.Set("X-Ledit-Client-ID", clientID)
+	req.Header.Set("X-Sprout-Client-ID", clientID)
 	rec = httptest.NewRecorder()
 	ws.handleAPISettings(rec, req)
 	if rec.Code != http.StatusOK {

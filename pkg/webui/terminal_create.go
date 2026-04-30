@@ -289,14 +289,20 @@ func WithAutoClose(autoClose bool) SessionOption {
 // CreateHiddenSession creates a hidden PTY session for agent use.
 // Hidden sessions are excluded from the default ListSessions() output
 // but still participate in inactive-session cleanup.
-func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ...SessionOption) (*TerminalSession, error) {
+//
+// NOTE: Session creation runs while holding tm.mutex to prevent the PTY
+// reader goroutine (launched by createUnixSession/createWindowsSession)
+// from being visible to ListSessions() before the Hidden flag is set.
+func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ...SessionOption) (session *TerminalSession, err error) {
 	if err := validateSessionID(id); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(owner) == "" {
+	owner = strings.TrimSpace(owner)
+	chatID = strings.TrimSpace(chatID)
+	if owner == "" {
 		return nil, fmt.Errorf("hidden session owner is required")
 	}
-	if strings.TrimSpace(chatID) == "" {
+	if chatID == "" {
 		return nil, fmt.Errorf("hidden session chatID is required")
 	}
 
@@ -308,10 +314,20 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 		return nil, fmt.Errorf("session %s already exists", id)
 	}
 
-	// Create the underlying PTY session (without inserting into map).
-	var session *TerminalSession
-	var err error
+	// Panic recovery: if option application panics, clean up the PTY goroutine
+	// to prevent a session leak.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("CreateHiddenSession panic for %s: %v", id, r)
+			if session != nil && session.Cancel != nil {
+				session.Cancel()
+			}
+			session = nil
+			err = fmt.Errorf("CreateHiddenSession panic: %v", r)
+		}
+	}()
 
+	// Create the underlying PTY session (without inserting into map).
 	switch runtime.GOOS {
 	case "windows":
 		session, err = tm.createWindowsSession(id)
@@ -328,7 +344,9 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 	session.Hidden = true
 	session.Owner = owner
 	session.ChatID = chatID
-	// TODO: SP-008 Phase B — AutoClose is not yet consumed by the cleanup worker
+	// AutoClose is reserved for SP-008 Phase B — not yet consumed by the
+	// cleanup worker. When consumed, hidden sessions should auto-expire
+	// after N minutes of inactivity.
 	session.AutoClose = true // default for hidden sessions
 
 	for _, opt := range opts {

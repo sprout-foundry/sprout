@@ -2,7 +2,8 @@ package agent
 
 import (
 	"context"
-	"fmt"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ChoiceOption represents a simple label/value option for UI prompts
@@ -40,7 +41,7 @@ func (a *Agent) PromptChoice(prompt string, choices []ChoiceOption) (string, err
 	}
 	selected, err := a.ui.ShowDropdown(context.Background(), items, DropdownOptions{Prompt: prompt})
 	if err != nil {
-		return "", fmt.Errorf("failed to show dropdown: %w", err)
+		return "", agenterrors.NewTransientError("failed to show dropdown", err)
 	}
 	dropdownItem := selected.(DropdownItem)
 	return dropdownItem.Value, nil

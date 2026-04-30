@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -100,6 +101,7 @@ type Agent struct {
 	debugLogFile  *os.File
 	debugLogPath  string
 	debugLogMutex sync.Mutex
+	logger        *AgentLogger
 
 	// Trace session for dataset collection
 	traceSession interface{}
@@ -166,7 +168,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 	// Initialize configuration manager (silent mode for faster startup)
 	configManager, err := configuration.NewManagerSilent()
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize configuration: %w", err)
+		return nil, agenterrors.NewPermanentError("failed to initialize configuration", err)
 	}
 
 	return newAgentWithConfigManager(configManager, model)
@@ -179,7 +181,7 @@ func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 	// Initialize configuration manager with a client-specific directory
 	configManager, err := configuration.NewManagerWithDir(configDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize configuration from %s: %w", configDir, err)
+		return nil, agenterrors.NewPermanentError(fmt.Sprintf("failed to initialize configuration from %s", configDir), err)
 	}
 
 	return newAgentWithConfigManager(configManager, model)
@@ -191,7 +193,7 @@ func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
 	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize layered configuration: %w", err)
+		return nil, agenterrors.NewPermanentError("failed to initialize layered configuration", err)
 	}
 
 	return newAgentWithConfigManager(configManager, model)
@@ -219,14 +221,14 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		// Create the test client immediately to avoid API key checks
 		client, err := factory.CreateProviderClient(clientType, finalModel)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create API client for tests: %w", err)
+			return nil, agenterrors.NewProviderError("failed to create API client for tests", err, "", "")
 		}
 
 		// Load system prompt for test agent
 		providerName := api.GetProviderName(clientType)
 		systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load system prompt: %w", err)
+			return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
 		}
 		systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
@@ -298,17 +300,17 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	if isNonInteractive() && !isRunningUnderTest() && !isSSHDaemon() {
 		resolvedType, _, resolveErr := configManager.ResolveProviderModel("", model)
 		if resolveErr != nil {
-			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", resolveErr)
+			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, resolveErr, "", "")
 		}
 		// Check if editor mode is active
 		if resolvedType == api.EditorClientType {
-			return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
-				"Set up a provider with: sprout agent --provider <provider> " +
-				"or configure via Settings in the webui (sprout agent -d)")
+			return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
+				"Set up a provider with: sprout agent --provider <provider> "+
+				"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
 		}
 		// Provider resolved — ensure API key exists without prompting.
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
-			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint+": %w", keyErr)
+			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, keyErr, "", "")
 		}
 	}
 
@@ -324,13 +326,13 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		if isSSHDaemon() {
 			// Continue with whatever clientType was resolved (may be EditorClientType)
 		} else if isNonInteractive() {
-			return nil, fmt.Errorf("no provider configured. Running in non-interactive mode. " + noninteractive.HelpHint)
+			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, err, "", "")
 		} else {
 			// Interactive mode: offer to select a provider
 			fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
 			clientType, err = configManager.SelectNewProvider()
 			if err != nil {
-				return nil, fmt.Errorf("failed to select provider: %w", err)
+				return nil, agenterrors.NewProviderError("failed to select provider", err, "", "")
 			}
 			finalModel = configManager.GetModelForProvider(clientType)
 			if model != "" && !looksLikeProviderModelSpecifier(configManager, model) {
@@ -348,14 +350,14 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 				clientType = autoProvider
 				finalModel = autoModel
 			} else {
-				return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
-					"Set up a provider with: sprout agent --provider <provider> " +
-					"or configure via Settings in the webui (sprout agent -d)")
+				return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
+					"Set up a provider with: sprout agent --provider <provider> "+
+					"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
 			}
 		} else {
-			return nil, fmt.Errorf("editor mode is active — no AI provider configured. " +
-				"Set up a provider with: sprout agent --provider <provider> " +
-				"or configure via Settings in the webui (sprout agent -d)")
+			return nil, agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
+				"Set up a provider with: sprout agent --provider <provider> "+
+				"or configure via Settings in the webui (sprout agent -d)", nil, "", "")
 		}
 	}
 
@@ -366,7 +368,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 			fmt.Fprintf(os.Stderr, "[WARN] Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
-				return nil, fmt.Errorf("provider recovery failed after ensuring API key: %w", recoverErr)
+				return nil, agenterrors.NewProviderError("provider recovery failed after ensuring API key", recoverErr, "", "")
 			}
 			clientType = nextClientType
 			finalModel = nextModel
@@ -378,7 +380,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		if err != nil {
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
-				return nil, fmt.Errorf("provider recovery failed after creating client: %w", recoverErr)
+				return nil, agenterrors.NewProviderError("provider recovery failed after creating client", recoverErr, "", "")
 			}
 			clientType = nextClientType
 			finalModel = nextModel
@@ -396,7 +398,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 			if err := client.CheckConnection(); err != nil {
 				nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 				if recoverErr != nil {
-					return nil, fmt.Errorf("provider recovery failed after connection check: %w", recoverErr)
+					return nil, agenterrors.NewProviderError("provider recovery failed after connection check", recoverErr, "", "")
 				}
 				clientType = nextClientType
 				finalModel = nextModel
@@ -426,7 +428,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	providerName := api.GetProviderName(clientType)
 	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load system prompt: %w", err)
+		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
 	}
 	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
@@ -491,11 +493,11 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 
 	// Pre-initialize tool registry to avoid first-use overhead
 	if debug {
-		fmt.Printf("\n[cfg] Pre-initializing tool registry...\n")
+		agent.Logger().Info("Pre-initializing tool registry...")
 	}
 	InitializeToolRegistry()
 	if debug {
-		fmt.Printf("[ok] Tool registry initialized\n")
+		agent.Logger().Info("Tool registry initialized")
 	}
 
 	// Load command history from configuration
@@ -510,6 +512,14 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 
 // GetDebugLogPath returns the path to the current debug log file (if any)
 func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
+
+// Logger returns the agent logger, initializing it lazily if needed
+func (a *Agent) Logger() *AgentLogger {
+	if a.logger == nil {
+		a.logger = NewAgentLogger(a)
+	}
+	return a.logger
+}
 
 // GetUnsafeMode returns whether unsafe mode is enabled
 func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
@@ -631,11 +641,11 @@ func (a *Agent) IsInteractiveMode() bool {
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {
-		return "", fmt.Errorf("failed to generate response: %w", err)
+		return "", agenterrors.NewProviderError("failed to generate response", err, a.GetProvider(), a.GetModel())
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no response generated for %d messages", len(messages))
+		return "", agenterrors.NewProviderError(fmt.Sprintf("no response generated for %d messages", len(messages)), nil, a.GetProvider(), a.GetModel())
 	}
 
 	return resp.Choices[0].Message.Content, nil

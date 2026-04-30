@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // tryExecuteMCPTool attempts to execute an MCP tool name using the agent's MCP manager.
@@ -22,7 +24,7 @@ func (te *ToolExecutor) tryExecuteMCPTool(toolName string, args map[string]inter
 	if strings.HasPrefix(toolName, "mcp_") {
 		result, err := te.agent.executeMCPTool(toolName, args)
 		if err != nil {
-			return result, fmt.Errorf("failed to execute MCP tool %s: %w", toolName, err), true
+			return result, agenterrors.NewTransientError(fmt.Sprintf("failed to execute MCP tool %s", toolName), err), true
 		}
 		return result, nil, true
 	}

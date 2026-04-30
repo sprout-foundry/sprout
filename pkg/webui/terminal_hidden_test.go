@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -286,5 +287,103 @@ func TestCreateSessionRejectsExistingHiddenID(t *testing.T) {
 	if err == nil {
 		t.Error("expected error when creating regular session with existing hidden ID")
 		tm.CloseSession("shared-id")
+	}
+}
+
+func TestHasVisibleSession(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	if _, err := tm.CreateSession("visible-1"); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	if _, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-1"); err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	if !tm.HasVisibleSession("visible-1") {
+		t.Error("visible-1 should be a visible session")
+	}
+	if tm.HasVisibleSession("hidden-1") {
+		t.Error("hidden-1 should not be visible")
+	}
+	if tm.HasVisibleSession("nonexistent") {
+		t.Error("nonexistent session should not be visible")
+	}
+
+	tm.CloseSession("visible-1")
+	tm.CloseSession("hidden-1")
+}
+
+func TestListHiddenSessionsIsolation(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	// No hidden sessions initially.
+	hidden := tm.ListHiddenSessions()
+	if len(hidden) != 0 {
+		t.Errorf("expected 0 hidden sessions, got %d", len(hidden))
+	}
+
+	// Add a regular session — should not appear in hidden list.
+	if _, err := tm.CreateSession("regular-1"); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	hidden = tm.ListHiddenSessions()
+	if len(hidden) != 0 {
+		t.Errorf("expected 0 hidden sessions after regular create, got %d", len(hidden))
+	}
+
+	// Add hidden sessions.
+	if _, err := tm.CreateHiddenSession("h-1", "agent", "c-1"); err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+	if _, err := tm.CreateHiddenSession("h-2", "agent", "c-2"); err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	hidden = tm.ListHiddenSessions()
+	if len(hidden) != 2 {
+		t.Errorf("expected 2 hidden sessions, got %d: %v", len(hidden), hidden)
+	}
+
+	tm.CloseSession("regular-1")
+	tm.CloseSession("h-1")
+	tm.CloseSession("h-2")
+}
+
+func TestValidateSessionID(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	cases := []struct {
+		id    string
+		valid bool
+	}{
+		{"session-1", true},
+		{"my_session.2", true},
+		{"abc123", true},
+		{"", false},
+		{"session with spaces", false},
+		{"session/slash", false},
+		{func() string { s := make([]byte, 129); for i := range s { s[i] = 'a' }; return string(s) }(), false},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("id=%q", tc.id), func(t *testing.T) {
+			_, err := tm.CreateSession(tc.id)
+			if tc.valid {
+				if err != nil {
+					t.Errorf("expected id %q to be valid, got error: %v", tc.id, err)
+				} else {
+					tm.CloseSession(tc.id)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("expected id %q to be invalid, but no error", tc.id)
+					tm.CloseSession(tc.id)
+				}
+			}
+		})
 	}
 }

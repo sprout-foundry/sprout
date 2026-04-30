@@ -17,7 +17,7 @@ const (
 	maxQueryBodyBytes    = 1 << 20  // 1 MiB
 	maxFileWriteBodySize = 10 << 20 // 10 MiB
 	maxFileReadSize      = 10 << 20 // 10 MiB
-	consentTokenHeader   = "X-Ledit-Consent-Token"
+	consentTokenHeader   = "X-Sprout-Consent-Token"
 )
 
 // isProviderConfigError reports whether err originated from the agent

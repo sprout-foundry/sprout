@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	webClientIDHeader     = "X-Ledit-Client-ID"
+	webClientIDHeader     = "X-Sprout-Client-ID"
 	webClientIDQueryParam = "client_id"
 	defaultWebClientID    = "default"
 )

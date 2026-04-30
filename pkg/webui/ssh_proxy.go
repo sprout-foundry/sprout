@@ -53,7 +53,7 @@ func resolveInitialWorkspace(path string) string {
 
 // handleSSHProxy is the catch-all handler for /ssh/{encodedKey}/{rest…}.
 // It routes:
-//   - root / index paths → local index.html with LEDIT_PROXY_BASE injected
+//   - root / index paths → local index.html with SPROUT_PROXY_BASE injected
 //   - /static/…, /sw.js, /manifest.json, etc. → local embedded assets
 //   - /ws, /terminal (WebSocket upgrade) → proxied to the SSH tunnel port
 //   - everything else → HTTP-proxied to the SSH tunnel port
@@ -89,7 +89,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Re-encode the session key so LEDIT_PROXY_BASE is consistently
+	// Re-encode the session key so SPROUT_PROXY_BASE is consistently
 	// percent-encoded, matching what launchSSHWorkspace returns as ProxyBase.
 	proxyBase := "/ssh/" + url.PathEscape(sessionKey)
 
@@ -170,7 +170,7 @@ func (srv *ReactWebServer) handleSSHProxy(w http.ResponseWriter, r *http.Request
 }
 
 // sshServeIndexWithBase reads the embedded index.html and injects a small
-// inline script that sets window.LEDIT_PROXY_BASE and window.LEDIT_INITIAL_WORKSPACE
+// inline script that sets window.SPROUT_PROXY_BASE and window.SPROUT_INITIAL_WORKSPACE
 // before the </head> tag.
 func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace string) {
 	data, err := readStaticFile("index.html")
@@ -184,8 +184,8 @@ func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace st
 	proxyBaseJSON, _ := json.Marshal(proxyBase)
 	initialWorkspaceJSON, _ := json.Marshal(initialWorkspace)
 	script := []byte(
-		"<script>window.LEDIT_PROXY_BASE=" + string(proxyBaseJSON) +
-			";window.LEDIT_INITIAL_WORKSPACE=" + string(initialWorkspaceJSON) +
+		"<script>window.SPROUT_PROXY_BASE=" + string(proxyBaseJSON) +
+			";window.SPROUT_INITIAL_WORKSPACE=" + string(initialWorkspaceJSON) +
 			";</script>",
 	)
 	data = bytes.Replace(data, []byte("</head>"), append(script, []byte("</head>")...), 1)
@@ -244,7 +244,7 @@ func sshProxyWebSocket(w http.ResponseWriter, r *http.Request, tunnelPort int, t
 
 	// Forward client-identifying headers to the upstream.
 	forwardHeaders := http.Header{}
-	for _, h := range []string{"X-Ledit-Client-ID", "X-Forwarded-For"} {
+	for _, h := range []string{"X-Sprout-Client-ID", "X-Forwarded-For"} {
 		if v := r.Header.Get(h); v != "" {
 			forwardHeaders.Set(h, v)
 		}

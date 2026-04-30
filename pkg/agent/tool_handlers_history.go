@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
@@ -29,7 +30,7 @@ func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{
 	if raw, ok := args["since"].(string); ok && strings.TrimSpace(raw) != "" {
 		parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(raw))
 		if err != nil {
-			return "", fmt.Errorf("invalid time format for 'since': %s. Use ISO 8601 format like '2024-01-01T10:00:00Z'", raw)
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid time format for 'since': %s. Use ISO 8601 format like '2024-01-01T10:00:00Z'", raw), nil)
 		}
 		sincePtr = &parsed
 		sinceDisplay = parsed.Format(time.RFC3339)
@@ -55,7 +56,7 @@ func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{
 
 	res, err := tools.ViewHistory(limit, fileFilter, sincePtr, showContent)
 	if err != nil {
-		return "", fmt.Errorf("failed to view history: %w", err)
+		return "", agenterrors.NewTransientError("failed to view history", err)
 	}
 
 	a.debugLog("view_history metadata: %+v\n", res.Metadata)
@@ -82,7 +83,7 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 
 	res, err := tools.RollbackChanges(revisionID, filePath, confirm)
 	if err != nil {
-		return "", fmt.Errorf("failed to rollback changes: %w", err)
+		return "", agenterrors.NewTransientError("failed to rollback changes", err)
 	}
 
 	a.debugLog("rollback_changes success=%v metadata=%+v\n", res.Success, res.Metadata)

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
@@ -279,7 +280,7 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 			}
 			compacted := ac.agent.TriggerCompaction()
 			if !compacted && ac.prepareMessagesCallback == nil {
-				return nil, fmt.Errorf("context window exceeded and no compaction strategy was available: %w", err)
+				return nil, agenterrors.NewContextError("context window exceeded and no compaction strategy was available", err)
 			}
 			// Re-prepare messages after compaction
 			if ac.prepareMessagesCallback != nil {
@@ -327,7 +328,11 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 				// so the next call will naturally use a different key.
 				return nil, &RateLimitExceededError{Attempts: retry + 1, LastError: err}
 			}
-			return nil, fmt.Errorf("failed to make API request: %w", err)
+			// Classify the error for better error handling
+			if ac.isContextLimitError(err) {
+				return nil, agenterrors.NewContextError("failed to make API request", err)
+			}
+			return nil, agenterrors.NewTransientError("failed to make API request", err)
 		}
 
 		if ac.agent.debug {
@@ -345,7 +350,11 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("send request: %w", err)
+		// Classify the error for better error handling
+		if ac.isContextLimitError(err) {
+			return nil, agenterrors.NewContextError("send request", err)
+		}
+		return nil, agenterrors.NewTransientError("send request", err)
 	}
 	return resp, nil
 }
@@ -611,6 +620,32 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 func (ac *APIClient) shouldRetry(err error, attempt int) bool {
 	if err == nil {
 		return false
+	}
+
+	// Check typed AgentError categories first — this enables intelligent retry decisions
+	if cat, ok := agenterrors.GetCategory(err); ok {
+		switch cat {
+		case agenterrors.CategoryTransient, agenterrors.CategoryContext:
+			// Transient and context errors are retryable
+			return attempt < ac.maxRetries
+		case agenterrors.CategoryRateLimited:
+			if ac.agent.debug {
+				ac.agent.debugLog("DEBUG: shouldRetry - typed rate limit detected: %v\n", err)
+			}
+			return ac.handleRateLimit(err, attempt)
+		case agenterrors.CategorySecurity, agenterrors.CategoryInvalidInput, agenterrors.CategoryPermanent:
+			// These should never be retried
+			if ac.agent.debug {
+				ac.agent.debugLog("DEBUG: shouldRetry - non-retryable category %s: %v\n", cat, err)
+			}
+			return false
+		case agenterrors.CategoryProvider:
+			// Provider errors: retryable depends on the specific cause
+			if agenterrors.IsRetryable(err) && attempt < ac.maxRetries {
+				return true
+			}
+			return false
+		}
 	}
 
 	if ac.isRateLimit(err) {

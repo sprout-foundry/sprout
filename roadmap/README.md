@@ -19,6 +19,8 @@ architectural area, its current state, and open work.
 |------|-------|--------|
 | SP-006 | [Delegate Tool — In-Process Agent Delegation](./SP-006-delegate-tool.md) | 📋 Spec |
 | SP-007 | [Extend Configuration — Role-Based Configs](./SP-007-extend-config.md) | 📋 Spec |
-<<<<<<< HEAD
-| SP-008 | [Agent Terminal Sessions — Hidden PTY Routing + Background Mode](./SP-008-agent-terminal-sessions.md) | 📋 Spec |
-| SP-009 | [Reliability Engineering — Concurrency & Observability](./SP-008-reliability-engineering.md) | 📋 Spec |
+| SP-008 | [Reliability Engineering — Concurrency & Observability](./SP-008-reliability-engineering.md) | 📋 Spec |
+| SP-009 | [Component Library Maturation — Publish & Storybook](./SP-009-component-library-maturation.md) | 📋 Spec |
+| SP-010 | [Editor Modernization](./SP-010-editor-modernization.md) | 📋 Spec |
+| SP-011 | [Terminal Parity](./SP-011-terminal-parity.md) | 📋 Spec |
+| SP-012 | [UX Polish](./SP-012-ux-polish.md) | 📋 Spec |

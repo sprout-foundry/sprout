@@ -138,10 +138,17 @@ type StateManager interface {
 	// Config overrides
 	GetConfigOverrides() map[string]interface{}
 	SetConfigOverrides(map[string]interface{})
+
+	// Current iteration
+	GetCurrentIteration() int
+	SetCurrentIteration(int)
 }
 
 // AgentStateManager implements StateManager with simple field-backed getters/setters.
 type AgentStateManager struct {
+	// General mutex for protecting most shared state
+	mu sync.RWMutex
+
 	messages                    []api.Message
 	sessionID                   string
 	turnCheckpoints             []TurnCheckpoint
@@ -180,6 +187,7 @@ type AgentStateManager struct {
 	sessionProvider             api.ClientType
 	sessionModel                string
 	configOverrides             map[string]interface{}
+	currentIteration             int
 }
 
 // NewAgentStateManager creates a new AgentStateManager with sensible defaults.
@@ -199,14 +207,20 @@ func NewAgentStateManager(debug bool) *AgentStateManager {
 // --- Messages ---
 
 func (s *AgentStateManager) GetMessages() []api.Message {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.messages
 }
 
 func (s *AgentStateManager) SetMessages(msgs []api.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.messages = msgs
 }
 
 func (s *AgentStateManager) AddMessage(msg api.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.messages = append(s.messages, msg)
 }
 
@@ -263,32 +277,47 @@ func (s *AgentStateManager) SetOptimizer(o *ConversationOptimizer) {
 // --- Context tokens ---
 
 func (s *AgentStateManager) GetCurrentContextTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.currentContextTokens
 }
 
 func (s *AgentStateManager) SetCurrentContextTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.currentContextTokens = n
 }
 
 func (s *AgentStateManager) GetMaxContextTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.maxContextTokens
 }
 
 func (s *AgentStateManager) SetMaxContextTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.maxContextTokens = n
 }
 
 // --- Context warning ---
 
 func (s *AgentStateManager) IsContextWarningIssued() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.contextWarningIssued
 }
 
 func (s *AgentStateManager) SetContextWarningIssued(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.contextWarningIssued = v
 }
 
 // --- Task actions ---
+// NOTE: These methods do NOT acquire taskActionsMu internally. Callers that
+// need thread-safety must acquire a.state.GetTaskActionsMutex() themselves
+// (see state.go:AddTaskAction for the pattern).
 
 func (s *AgentStateManager) GetTaskActions() []TaskAction {
 	return s.taskActions
@@ -311,82 +340,118 @@ func (s *AgentStateManager) GetTaskActionsMutex() *sync.RWMutex {
 // --- Cost ---
 
 func (s *AgentStateManager) GetTotalCost() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.totalCost
 }
 
 func (s *AgentStateManager) SetTotalCost(c float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.totalCost = c
 }
 
 func (s *AgentStateManager) AddCost(c float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.totalCost += c
 }
 
 // --- Token counts ---
 
 func (s *AgentStateManager) GetTotalTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.totalTokens
 }
 
 func (s *AgentStateManager) SetTotalTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.totalTokens = n
 }
 
 func (s *AgentStateManager) GetPromptTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.promptTokens
 }
 
 func (s *AgentStateManager) SetPromptTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.promptTokens = n
 }
 
 func (s *AgentStateManager) GetCompletionTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.completionTokens
 }
 
 func (s *AgentStateManager) SetCompletionTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.completionTokens = n
 }
 
 // --- LLM call tracking ---
 
 func (s *AgentStateManager) GetLLMCallCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.llmCallCount
 }
 
 func (s *AgentStateManager) SetLLMCallCount(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.llmCallCount = n
 }
 
 func (s *AgentStateManager) IncrementLLMCallCount() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.llmCallCount++
 }
 
 // --- Estimated token responses ---
 
 func (s *AgentStateManager) GetEstimatedTokenResponses() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.estimatedTokenResponses
 }
 
 func (s *AgentStateManager) SetEstimatedTokenResponses(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.estimatedTokenResponses = n
 }
 
 // --- Cache stats ---
 
 func (s *AgentStateManager) GetCachedTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.cachedTokens
 }
 
 func (s *AgentStateManager) SetCachedTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.cachedTokens = n
 }
 
 func (s *AgentStateManager) GetCachedCostSavings() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.cachedCostSavings
 }
 
 func (s *AgentStateManager) SetCachedCostSavings(c float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.cachedCostSavings = c
 }
 
@@ -552,4 +617,18 @@ func (s *AgentStateManager) GetConfigOverrides() map[string]interface{} {
 
 func (s *AgentStateManager) SetConfigOverrides(overrides map[string]interface{}) {
 	s.configOverrides = overrides
+}
+
+// --- Current iteration ---
+
+func (s *AgentStateManager) GetCurrentIteration() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.currentIteration
+}
+
+func (s *AgentStateManager) SetCurrentIteration(iter int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.currentIteration = iter
 }

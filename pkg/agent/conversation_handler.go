@@ -111,11 +111,15 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 	// Main conversation loop
 	completed := false
-	for ch.agent.currentIteration = 0; ch.agent.maxIterations == 0 || ch.agent.currentIteration < ch.agent.maxIterations; ch.agent.currentIteration++ {
+	finalIter := 0
+	for iter := 0; ch.agent.maxIterations == 0 || iter < ch.agent.maxIterations; iter++ {
+		finalIter = iter
+		ch.agent.state.SetCurrentIteration(iter)
+
 		if ch.agent.maxIterations > 0 {
-			ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", ch.agent.currentIteration, ch.agent.maxIterations, len(ch.agent.state.GetMessages()))
+			ch.agent.debugLog("[~] Iteration %d/%d - Messages: %d\n", iter, ch.agent.maxIterations, len(ch.agent.state.GetMessages()))
 		} else {
-			ch.agent.debugLog("[~] Iteration %d/unlimited - Messages: %d\n", ch.agent.currentIteration, len(ch.agent.state.GetMessages()))
+			ch.agent.debugLog("[~] Iteration %d/unlimited - Messages: %d\n", iter, len(ch.agent.state.GetMessages()))
 		}
 
 		// Record turn data if trace session is enabled
@@ -153,7 +157,7 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 
 		// Send message to LLM
 		if ch.agent.debug {
-			ch.agent.debugLog("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.currentIteration, time.Now().Format("15:04:05.000"))
+			ch.agent.debugLog("DEBUG: ConversationHandler sending message (iteration %d) at %s\n", ch.agent.state.GetCurrentIteration(), time.Now().Format("15:04:05.000"))
 		}
 		response, err := ch.sendMessage()
 		if err != nil {
@@ -208,8 +212,9 @@ func (ch *ConversationHandler) ProcessQuery(userQuery string) (string, error) {
 		}
 	}
 
-	ch.agent.debugLog("[GO] Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.currentIteration, len(ch.agent.state.GetMessages()))
-	if !completed && ch.agent.maxIterations > 0 && ch.agent.currentIteration >= ch.agent.maxIterations {
+	ch.agent.debugLog("[GO] Exited conversation loop - Iteration: %d, Messages: %d\n", ch.agent.state.GetCurrentIteration(), len(ch.agent.state.GetMessages()))
+	if !completed && ch.agent.maxIterations > 0 && (finalIter+1) >= ch.agent.maxIterations {
+		ch.agent.state.SetCurrentIteration(finalIter + 1)
 		ch.agent.state.SetLastRunTerminationReason(RunTerminationMaxIterations)
 		ch.agent.PrintLineAsync(fmt.Sprintf("[WARN] Reached maximum iterations (%d) before the task completed.", ch.agent.maxIterations))
 	}
@@ -267,7 +272,7 @@ func (ch *ConversationHandler) recordTurnStart(originalQuery, processedQuery str
 	// Create turn record with initial data
 	ch.currentTurnRecord = &trace.TurnRecord{
 		RunID:              traceSession.GetRunID(),
-		TurnIndex:          ch.agent.currentIteration,
+		TurnIndex:          ch.agent.state.GetCurrentIteration(),
 		SystemPrompt:       ch.agent.systemPrompt,
 		UserPrompt:         processedQuery,    // What model sees (after truncation)
 		UserPromptOriginal: originalQuery,     // What user typed (before truncation)
@@ -290,7 +295,7 @@ func (ch *ConversationHandler) recordTurnStart(originalQuery, processedQuery str
 // processResponse handles the LLM response including tool execution
 func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	turn := TurnEvaluation{
-		Iteration: ch.agent.currentIteration,
+		Iteration: ch.agent.state.GetCurrentIteration(),
 		Timestamp: time.Now(),
 		UserInput: ch.pendingUserMessage,
 	}

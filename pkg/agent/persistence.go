@@ -674,7 +674,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
 
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
-	a.currentIteration = 0
+	a.state.SetCurrentIteration(0)
 	a.state.SetContextWarningIssued(false)
 
 	// Reset circuit breaker state to prevent false positives
@@ -692,14 +692,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.output.GetReasoningBuffer().Reset()
 
 	// Reset shell command history to prevent stale cache issues
-	if a.shellCommandHistory == nil {
-		a.shellCommandHistory = make(map[string]*ShellCommandResult)
-	} else {
-		// Clear existing history
-		for k := range a.shellCommandHistory {
-			delete(a.shellCommandHistory, k)
-		}
-	}
+	a.ClearShellCommandHistory()
 }
 
 // GetLastMessages returns the last N messages for preview

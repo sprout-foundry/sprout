@@ -24,6 +24,7 @@ type Logger struct {
 var (
 	globalLogger *Logger
 	once         sync.Once
+	loggerMu     sync.RWMutex
 )
 
 // GetLogger returns the singleton instance of Logger.
@@ -40,11 +41,12 @@ func GetLogger(skipPrompts bool) *Logger {
 			Compress:   true, // disabled by default
 		}
 		globalLogger = &Logger{
-			logger: log.New(logFile, "", log.LstdFlags),
-			// userInteractionEnabled will be set below, after the once.Do block
+			logger:                 log.New(logFile, "", log.LstdFlags),
+			userInteractionEnabled: !skipPrompts,
 		}
 	})
 	// Always update userInteractionEnabled, allowing it to be overridden
+	loggerMu.Lock()
 	globalLogger.userInteractionEnabled = !skipPrompts
 	if envutil.GetEnvSimple("JSON_LOGS") == "1" {
 		globalLogger.jsonMode = true
@@ -52,6 +54,7 @@ func GetLogger(skipPrompts bool) *Logger {
 	if cid := envutil.GetEnvSimple("CORRELATION_ID"); cid != "" {
 		globalLogger.correlationID = cid
 	}
+	loggerMu.Unlock()
 	return globalLogger
 }
 
@@ -88,8 +91,12 @@ func (w *Logger) LogProcessStep(step string) {
 
 // Log logs a general message only to the log file.
 func (w *Logger) Log(message string) {
-	if w.jsonMode {
-		_ = json.NewEncoder(w.logger.Writer()).Encode(map[string]any{"level": "info", "msg": message, "cid": w.correlationID})
+	loggerMu.RLock()
+	jm := w.jsonMode
+	cid := w.correlationID
+	loggerMu.RUnlock()
+	if jm {
+		_ = json.NewEncoder(w.logger.Writer()).Encode(map[string]any{"level": "info", "msg": message, "cid": cid})
 		return
 	}
 	w.logger.Print(message)
@@ -97,7 +104,10 @@ func (w *Logger) Log(message string) {
 
 // Logf logs a formatted general message only to the log file.
 func (w *Logger) Logf(format string, v ...interface{}) {
-	if w.jsonMode {
+	loggerMu.RLock()
+	jm := w.jsonMode
+	loggerMu.RUnlock()
+	if jm {
 		w.Log(fmt.Sprintf(format, v...))
 		return
 	}
@@ -105,8 +115,12 @@ func (w *Logger) Logf(format string, v ...interface{}) {
 }
 
 func (w *Logger) LogError(err error) {
-	if w.jsonMode {
-		_ = json.NewEncoder(w.logger.Writer()).Encode(map[string]any{"level": "error", "error": err.Error(), "cid": w.correlationID})
+	loggerMu.RLock()
+	jm := w.jsonMode
+	cid := w.correlationID
+	loggerMu.RUnlock()
+	if jm {
+		_ = json.NewEncoder(w.logger.Writer()).Encode(map[string]any{"level": "error", "error": err.Error(), "cid": cid})
 		return
 	}
 	w.logger.Printf("Error: %s", err)
@@ -115,13 +129,16 @@ func (w *Logger) LogError(err error) {
 // AskForConfirmation prompts the user with a message and waits for a 'yes' or 'no' response.
 // It returns true for 'yes' and false for 'no'.
 func (w *Logger) AskForConfirmation(prompt string, default_response bool, required bool) bool {
-	if !w.userInteractionEnabled && required {
+	loggerMu.RLock()
+	interactive := w.userInteractionEnabled
+	loggerMu.RUnlock()
+	if !interactive && required {
 		w.Log("User interaction is disabled, but confirmation is required.")
 		w.Log(fmt.Sprintf("We were going to ask the user: '%s'", prompt))
 		w.Log("Exiting due to lack of confirmation in prompt-skipping mode.")
 		os.Exit(1) // Exit if confirmation is required but user interaction is disabled
 	}
-	if !w.userInteractionEnabled {
+	if !interactive {
 		w.Log("Skipping user confirmation in non-interactive mode.")
 		return default_response
 	}
@@ -163,5 +180,7 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 
 // IsInteractive returns true if user interaction is enabled
 func (w *Logger) IsInteractive() bool {
+	loggerMu.RLock()
+	defer loggerMu.RUnlock()
 	return w.userInteractionEnabled
 }

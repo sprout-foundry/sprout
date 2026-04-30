@@ -145,9 +145,6 @@ func TestCleanupInactivePicksUpHiddenSessions(t *testing.T) {
 	// Run cleanup with a 1-second timeout — the session is 1 hour old.
 	tm.CleanupInactiveSessions(time.Second)
 
-	// Wait briefly for the async goroutine to complete.
-	time.Sleep(200 * time.Millisecond)
-
 	_, exists := tm.GetSession("hidden-inactive")
 	if exists {
 		t.Error("hidden session should be cleaned up by inactivity worker")
@@ -274,5 +271,20 @@ func TestCreateHiddenSessionValidation(t *testing.T) {
 				tm.CloseSession(tc.id)
 			}
 		})
+	}
+}
+
+func TestCreateSessionRejectsExistingHiddenID(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	if _, err := tm.CreateHiddenSession("shared-id", "agent", "chat-1"); err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	_, err := tm.CreateSession("shared-id")
+	if err == nil {
+		t.Error("expected error when creating regular session with existing hidden ID")
+		tm.CloseSession("shared-id")
 	}
 }

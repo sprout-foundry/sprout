@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -13,11 +14,30 @@ import (
 	"github.com/creack/pty"
 )
 
+var validSessionID = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
+
+func validateSessionID(id string) error {
+	if id == "" {
+		return fmt.Errorf("session ID is required")
+	}
+	if len(id) > 128 {
+		return fmt.Errorf("session ID too long (max 128 characters)")
+	}
+	if !validSessionID.MatchString(id) {
+		return fmt.Errorf("session ID contains invalid characters (allowed: alphanumeric, hyphens, underscores, dots)")
+	}
+	return nil
+}
+
 // CreateSession creates a new terminal session with PTY support.
 // The shell process runs for the lifetime of the session and persists across
 // WebSocket disconnections. On reconnect, the ring buffer replays recent output.
 // shellOverride, if non-empty, specifies the preferred shell binary (must be in PATH).
 func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...string) (*TerminalSession, error) {
+	if err := validateSessionID(sessionID); err != nil {
+		return nil, err
+	}
+
 	tm.mutex.Lock()
 	defer tm.mutex.Unlock()
 
@@ -270,8 +290,8 @@ func WithAutoClose(autoClose bool) SessionOption {
 // Hidden sessions are excluded from the default ListSessions() output
 // but still participate in inactive-session cleanup.
 func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ...SessionOption) (*TerminalSession, error) {
-	if strings.TrimSpace(id) == "" {
-		return nil, fmt.Errorf("hidden session ID is required")
+	if err := validateSessionID(id); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(owner) == "" {
 		return nil, fmt.Errorf("hidden session owner is required")

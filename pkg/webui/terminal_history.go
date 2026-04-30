@@ -15,6 +15,10 @@ func (tm *TerminalManager) AddToHistory(sessionID, command string) error {
 	session.mutex.Lock()
 	defer session.mutex.Unlock()
 
+	if session.Hidden {
+		return fmt.Errorf("session %s is not accessible", sessionID)
+	}
+
 	// Trim whitespace and skip empty commands
 	command = strings.TrimSpace(command)
 	if command == "" {
@@ -48,6 +52,10 @@ func (tm *TerminalManager) GetHistory(sessionID string) ([]string, error) {
 	session.mutex.RLock()
 	defer session.mutex.RUnlock()
 
+	if session.Hidden {
+		return nil, fmt.Errorf("session %s is not accessible", sessionID)
+	}
+
 	// Return a copy to prevent external modification
 	history := make([]string, len(session.History))
 	copy(history, session.History)
@@ -63,6 +71,10 @@ func (tm *TerminalManager) NavigateHistory(sessionID string, direction string) (
 
 	session.mutex.Lock()
 	defer session.mutex.Unlock()
+
+	if session.Hidden {
+		return "", fmt.Errorf("session %s is not accessible", sessionID)
+	}
 
 	if len(session.History) == 0 {
 		return "", nil
@@ -100,6 +112,10 @@ func (tm *TerminalManager) ResetHistoryIndex(sessionID string) error {
 
 	session.mutex.Lock()
 	defer session.mutex.Unlock()
+
+	if session.Hidden {
+		return fmt.Errorf("session %s is not accessible", sessionID)
+	}
 
 	session.HistoryIndex = len(session.History)
 	return nil

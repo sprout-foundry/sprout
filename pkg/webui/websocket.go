@@ -969,7 +969,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	reattachID := strings.TrimSpace(r.URL.Query().Get("reattach"))
 	var session *TerminalSession
 
-	if reattachID != "" && terminalManager.HasSession(reattachID) {
+	if reattachID != "" && terminalManager.HasVisibleSession(reattachID) {
 		// Reattach: snapshot ring buffer for scrollback replay
 		scrollback, err := terminalManager.ReattachSession(reattachID)
 		if err != nil {

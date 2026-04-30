@@ -166,9 +166,9 @@ interface OnboardingState {
   error: string | null;
 }
 
-const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v2';
-const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
-const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
+const APP_STATE_STORAGE_KEY = 'sprout:webui:state:v2';
+const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
+const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
 const MAX_PERSISTED_LOGS = 1000;
 
 const getUIContextScope = (): string => {
@@ -1553,7 +1553,7 @@ function App() {
           // equals workspaceRoot the user intentionally set their workspace to the
           // daemon root (e.g. home dir) — don't interrupt them with the picker.
           if (!savedWorkspace) {
-            window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+            window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
           }
         }
       } catch (error) {
@@ -1574,7 +1574,7 @@ function App() {
             const restored = await apiService.restoreSession(String(restorable.session_id));
             if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
               window.dispatchEvent(
-                new CustomEvent('ledit:session-restored', {
+                new CustomEvent('sprout:session-restored', {
                   detail: { messages: restored.messages },
                 }),
               );
@@ -1697,8 +1697,8 @@ function App() {
       }
     };
 
-    window.addEventListener('ledit:session-restored', handleSessionRestored);
-    return () => window.removeEventListener('ledit:session-restored', handleSessionRestored);
+    window.addEventListener('sprout:session-restored', handleSessionRestored);
+    return () => window.removeEventListener('sprout:session-restored', handleSessionRestored);
   }, []);
 
   const handleSendMessage = useCallback(async (message: string, options?: { allowConcurrent?: boolean }) => {

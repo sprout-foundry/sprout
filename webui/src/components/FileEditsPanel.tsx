@@ -149,8 +149,8 @@ function FileEditsPanel({ edits, onFileClick }: FileEditsPanelProps): JSX.Elemen
       openHistory();
     };
 
-    window.addEventListener('ledit:open-revision-history', onOpenHistory);
-    return () => window.removeEventListener('ledit:open-revision-history', onOpenHistory);
+    window.addEventListener('sprout:open-revision-history', onOpenHistory);
+    return () => window.removeEventListener('sprout:open-revision-history', onOpenHistory);
   }, [openHistory]);
 
   const handleRollback = async (revisionId: string) => {

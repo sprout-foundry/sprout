@@ -49,7 +49,7 @@ function MarkdownPreview({ content, scrollRef }: MarkdownPreviewProps): JSX.Elem
                     {...props}
                     onClick={(e) => {
                       e.preventDefault();
-                      window.dispatchEvent(new CustomEvent('ledit:open-in-editor', { detail: { path: href } }));
+                      window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path: href } }));
                     }}
                   >
                     {children}

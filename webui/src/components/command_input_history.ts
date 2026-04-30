@@ -2,7 +2,7 @@ import { type ApiService } from '../services/api';
 import { debugLog } from '../utils/log';
 
 const MAX_COMMAND_HISTORY = 100;
-const STORAGE_KEY = 'ledit:chat-history';
+const STORAGE_KEY = 'sprout:chat-history';
 
 export interface CommandHistoryState {
   commands: string[];

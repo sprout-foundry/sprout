@@ -714,7 +714,7 @@ export default function useWebSocketEvents({
               workspaceRoot: String(eventData.workspace_root || ''),
               daemonRoot: String(eventData.daemon_root || ''),
             };
-            window.dispatchEvent(new CustomEvent('ledit:workspace-changed', { detail }));
+            window.dispatchEvent(new CustomEvent('sprout:workspace-changed', { detail }));
           } else {
             // Full workspace change (e.g. switch-to-worktree from the worktree
             // panel, SSH navigation, etc.) — reload to pick up the new root.

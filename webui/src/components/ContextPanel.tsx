@@ -74,11 +74,11 @@ function FilePathPre({ text }: { text: string }): JSX.Element {
         className="tool-output-file-link"
         role="button"
         tabIndex={0}
-        onClick={() => window.dispatchEvent(new CustomEvent('ledit:open-in-editor', { detail: { path: filePath } }))}
+        onClick={() => window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path: filePath } }))}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            window.dispatchEvent(new CustomEvent('ledit:open-in-editor', { detail: { path: filePath } }));
+            window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path: filePath } }));
           }
         }}
       >
@@ -257,8 +257,8 @@ export interface ContextPanelHandle {
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const PANEL_COLLAPSED_KEY = 'ledit.contextPanel.collapsed';
-const PANEL_TAB_KEY = 'ledit.contextPanel.tab';
+const PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
+const PANEL_TAB_KEY = 'sprout.contextPanel.tab';
 const PANEL_MIN = 280;
 const PANEL_MAX = 760;
 const MOBILE_LAYOUT_MAX_WIDTH = 768;
@@ -558,7 +558,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         if (response.messages?.length) {
           setTimeout(() => {
             window.dispatchEvent(
-              new CustomEvent('ledit:session-restored', {
+              new CustomEvent('sprout:session-restored', {
                 detail: { messages: response.messages },
               }),
             );
@@ -636,8 +636,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       loadRevisionHistory();
     };
 
-    window.addEventListener('ledit:open-revision-history', openHistoryPanel);
-    return () => window.removeEventListener('ledit:open-revision-history', openHistoryPanel);
+    window.addEventListener('sprout:open-revision-history', openHistoryPanel);
+    return () => window.removeEventListener('sprout:open-revision-history', openHistoryPanel);
   }, [context, loadRevisionHistory]);
 
   // ── Toggle handlers ──────────────────────────────────────────────

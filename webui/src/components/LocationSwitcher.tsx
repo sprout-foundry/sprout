@@ -52,9 +52,9 @@ interface SSHBrowseQuery {
   prefix: string;
 }
 
-const RECENT_WORKSPACES_KEY = 'ledit.recentWorkspaces';
-const REMOTE_RECENT_WORKSPACES_KEY = 'ledit.remoteRecentWorkspaces';
-const SSH_FAVORITE_WORKSPACES_KEY = 'ledit.sshFavoriteWorkspaces';
+const RECENT_WORKSPACES_KEY = 'sprout.recentWorkspaces';
+const REMOTE_RECENT_WORKSPACES_KEY = 'sprout.remoteRecentWorkspaces';
+const SSH_FAVORITE_WORKSPACES_KEY = 'sprout.sshFavoriteWorkspaces';
 const MAX_RECENT_WORKSPACES = 15;
 const MAX_SUGGESTIONS = 8;
 
@@ -452,16 +452,16 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
   }, [addRecentWorkspace, addRemoteRecentWorkspace, isConnected]);
 
   // Show workspace picker when we just navigated from SSH connect.
-  // If the proxy injected LEDIT_INITIAL_WORKSPACE with a specific path, apply
+  // If the proxy injected SPROUT_INITIAL_WORKSPACE with a specific path, apply
   // it directly and skip the picker entirely. Fall back to picker on error or
   // when the path is unresolved ($HOME / empty).
   useEffect(() => {
-    const hostAlias = window.sessionStorage.getItem('ledit:ssh-just-connected');
+    const hostAlias = window.sessionStorage.getItem('sprout:ssh-just-connected');
     if (!hostAlias) return;
-    window.sessionStorage.removeItem('ledit:ssh-just-connected');
+    window.sessionStorage.removeItem('sprout:ssh-just-connected');
     setSshPickerHostAlias(hostAlias);
 
-    const initialWorkspace = (window as unknown as Record<string, string>).LEDIT_INITIAL_WORKSPACE;
+    const initialWorkspace = (window as unknown as Record<string, string>).SPROUT_INITIAL_WORKSPACE;
     const isSpecificPath =
       initialWorkspace &&
       initialWorkspace !== '$HOME' &&
@@ -492,8 +492,8 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
         setInputValue(workspaceRoot);
       }
     };
-    window.addEventListener('ledit:open-workspace-switcher', openWorkspaceSwitcher);
-    return () => window.removeEventListener('ledit:open-workspace-switcher', openWorkspaceSwitcher);
+    window.addEventListener('sprout:open-workspace-switcher', openWorkspaceSwitcher);
+    return () => window.removeEventListener('sprout:open-workspace-switcher', openWorkspaceSwitcher);
   }, [workspaceRoot]);
 
   useEffect(() => {
@@ -1016,7 +1016,7 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           await new Promise<void>((resolve) => window.setTimeout(resolve, 400));
         }
         // Signal to the proxy page that it should show the workspace picker.
-        window.sessionStorage.setItem('ledit:ssh-just-connected', hostAlias);
+        window.sessionStorage.setItem('sprout:ssh-just-connected', hostAlias);
         // Navigate the current tab to the proxy URL — same origin, no new tab.
         window.location.assign(targetUrl);
       }

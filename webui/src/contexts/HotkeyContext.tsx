@@ -196,7 +196,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
     }
   }, [addNotification]);
 
-  // Apply a named preset (e.g. "vscode", "webstorm", "ledit") by saving it
+  // Apply a named preset (e.g. "vscode", "webstorm", "sprout") by saving it
   // server-side, then reloading.
   const applyPreset = useCallback(
     async (preset: string) => {
@@ -271,7 +271,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
         event.stopPropagation();
 
         window.dispatchEvent(
-          new CustomEvent('ledit:hotkey', {
+          new CustomEvent('sprout:hotkey', {
             detail: {
               commandId: matchingHotkey.command_id,
               key: matchingHotkey.key,
@@ -316,7 +316,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
       }
 
       window.dispatchEvent(
-        new CustomEvent('ledit:hotkey', {
+        new CustomEvent('sprout:hotkey', {
           detail: { commandId, key: '(desktop)' },
           bubbles: true,
           cancelable: true,

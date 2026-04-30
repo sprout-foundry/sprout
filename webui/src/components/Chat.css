@@ -1389,7 +1389,7 @@
     align-items: center;
     justify-content: center;
     position: fixed;
-    bottom: calc(var(--ledit-terminal-reserved-height) + 84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--sprout-terminal-reserved-height) + 84px + env(safe-area-inset-bottom, 0px));
     right: 12px;
     width: 40px;
     height: 40px;

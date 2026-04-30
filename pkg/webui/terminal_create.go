@@ -220,6 +220,7 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 		Cancel:   cancel,
 		Active:   true,
 		LastUsed: time.Now(),
+		Size:     &pty.Winsize{Rows: 24, Cols: 80},
 		ring:     newSessRing(),
 	}
 
@@ -275,7 +276,7 @@ type SessionOption func(*TerminalSession)
 // WithName sets a human-readable name for the session.
 func WithName(name string) SessionOption {
 	return func(s *TerminalSession) {
-		s.Name = name
+		s.Name = strings.TrimSpace(name)
 	}
 }
 
@@ -319,8 +320,19 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("CreateHiddenSession panic for %s: %v", id, r)
-			if session != nil && session.Cancel != nil {
-				session.Cancel()
+			if session != nil {
+				// NOTE: session.mutex may already be held when the panic
+				// occurs (the lock is acquired below and not yet unlocked).
+				// Closing Pty and calling Cancel are safe without the lock
+				// because no other goroutine mutates these fields until the
+				// session is inserted into tm.sessions (which hasn't happened
+				// yet at this point).
+				if session.Pty != nil {
+					session.Pty.Close()
+				}
+				if session.Cancel != nil {
+					session.Cancel()
+				}
 			}
 			session = nil
 			err = fmt.Errorf("CreateHiddenSession panic: %v", r)

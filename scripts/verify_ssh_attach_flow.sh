@@ -33,7 +33,7 @@ for cmd in ssh scp curl tar python3 sha256sum; do
   fi
 done
 
-workdir="$(mktemp -d -t ledit-ssh-verify-XXXXXX)"
+workdir="$(mktemp -d -t sprout-ssh-verify-XXXXXX)"
 cleanup() {
   set +e
   if [[ -n "${TUNNEL_PID:-}" ]]; then
@@ -75,7 +75,7 @@ esac
 
 echo "    remote: ${REMOTE_OS}/${REMOTE_ARCH}"
 
-asset_name="ledit-${REMOTE_OS}-${REMOTE_ARCH}.tar.gz"
+asset_name="sprout-${REMOTE_OS}-${REMOTE_ARCH}.tar.gz"
 api_url="https://api.github.com/repos/sprout-foundry/sprout/releases/${RELEASE_TAG}"
 if [[ "$RELEASE_TAG" != "latest" ]]; then
   api_url="https://api.github.com/repos/sprout-foundry/sprout/releases/tags/${RELEASE_TAG}"
@@ -107,7 +107,7 @@ fi
 
 echo "==> Downloading artifact"
 archive_path="$workdir/$asset_name"
-local_binary="$workdir/ledit-${REMOTE_OS}-${REMOTE_ARCH}"
+local_binary="$workdir/sprout-${REMOTE_OS}-${REMOTE_ARCH}"
 curl -fsSL "$asset_url" -o "$archive_path"
 archive_entry="$(tar -tzf "$archive_path" | head -n 1)"
 if [[ -z "$archive_entry" ]]; then
@@ -126,9 +126,9 @@ chmod +x "$local_binary"
 
 echo "==> Computing backend fingerprint"
 fingerprint="$(sha256sum "$local_binary" | awk '{print $1}' | cut -c1-16)"
-remote_dir="\$HOME/.cache/ledit-webui/backend/${fingerprint}/${REMOTE_OS}-${REMOTE_ARCH}"
-remote_binary="${remote_dir}/ledit"
-upload_tmp=".ledit-ssh-upload-${fingerprint}.tmp"
+remote_dir="\$HOME/.cache/sprout-webui/backend/${fingerprint}/${REMOTE_OS}-${REMOTE_ARCH}"
+remote_binary="${remote_dir}/sprout"
+upload_tmp=".sprout-ssh-upload-${fingerprint}.tmp"
 session_key="${HOST_ALIAS}::\$HOME"
 
 remote_dir_q="$(shq "$remote_dir")"
@@ -177,10 +177,10 @@ PY
   echo \"python3 or python is required on the remote host\" >&2
   exit 1
 }
-mkdir -p \"\$HOME/.cache/ledit-webui/logs\"
+mkdir -p \"\$HOME/.cache/sprout-webui/logs\"
 cd ${workspace_expr}
 REMOTE_PORT=\"\$(choose_port)\"
-LOG_FILE=\"\$HOME/.cache/ledit-webui/logs/${HOST_ALIAS}.log\"
+LOG_FILE=\"\$HOME/.cache/sprout-webui/logs/${HOST_ALIAS}.log\"
 nohup env BROWSER=none LEDIT_SSH_HOST_ALIAS=${host_alias_q} LEDIT_SSH_SESSION_KEY=${session_key_q} LEDIT_SSH_LAUNCHER_URL=${launcher_url_q} LEDIT_SSH_HOME=\"\$HOME\" ${remote_binary_q} --isolated-config agent --daemon --web-port \"\$REMOTE_PORT\" >\"\$LOG_FILE\" 2>&1 < /dev/null &
 REMOTE_PID=\$!
 REMOTE_PORT="$(echo "$REMOTE_INFO" | awk '{print $1}')"
@@ -221,7 +221,7 @@ if [[ "$health_ok" != "1" ]]; then
   echo "--- tunnel stderr ---" >&2
   cat "$workdir/tunnel.err" >&2 || true
   echo "--- remote log tail ---" >&2
-  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$HOST_ALIAS" "bash -lc 'tail -n 120 \"\$HOME/.cache/ledit-webui/logs/${HOST_ALIAS}.log\"'" >&2 || true
+  ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "$HOST_ALIAS" "bash -lc 'tail -n 120 \"\$HOME/.cache/sprout-webui/logs/${HOST_ALIAS}.log\"'" >&2 || true
   exit 1
 fi
 

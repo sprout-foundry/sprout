@@ -2,6 +2,7 @@ package webui
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -387,5 +388,58 @@ func TestValidateSessionID(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCreateHiddenSessionTrimsWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session, err := tm.CreateHiddenSession("trim-1", "  agent  ", "  chat-1  ")
+	if err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	session.mutex.RLock()
+	owner := session.Owner
+	chatID := session.ChatID
+	session.mutex.RUnlock()
+
+	if owner != "agent" {
+		t.Errorf("expected owner 'agent', got %q", owner)
+	}
+	if chatID != "chat-1" {
+		t.Errorf("expected chatID 'chat-1', got %q", chatID)
+	}
+
+	tm.CloseSession("trim-1")
+}
+
+func TestCreateHiddenSessionPanicRecovery(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	panicOpt := func(s *TerminalSession) {
+		panic("intentional test panic")
+	}
+
+	session, err := tm.CreateHiddenSession("panic-1", "agent", "chat-1", panicOpt)
+	if err == nil {
+		t.Fatal("expected non-nil error when option panics")
+	}
+
+	errMsg := err.Error()
+	if errMsg != "" && !strings.Contains(errMsg, "panic") {
+		t.Errorf("expected error message to contain 'panic', got %q", errMsg)
+	}
+
+	// Verify no session was registered — no goroutine leak.
+	_, exists := tm.GetSession("panic-1")
+	if exists {
+		t.Error("session should NOT be in the manager after panic recovery")
+	}
+
+	if session != nil {
+		t.Error("returned session should be nil after panic recovery")
 	}
 }

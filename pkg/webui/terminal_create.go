@@ -29,12 +29,22 @@ func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...stri
 		override = shellOverride[0]
 	}
 
+	var session *TerminalSession
+	var err error
+
 	switch runtime.GOOS {
 	case "windows":
-		return tm.createWindowsSession(sessionID)
+		session, err = tm.createWindowsSession(sessionID)
 	default:
-		return tm.createUnixSession(sessionID, override)
+		session, err = tm.createUnixSession(sessionID, override)
 	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	tm.sessions[sessionID] = session
+	return session, nil
 }
 
 // createUnixSession spawns a raw PTY terminal session. A background goroutine
@@ -83,7 +93,6 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 		ring:     newSessRing(),
 	}
 
-	tm.sessions[sessionID] = session
 	go tm.runPTYReader(session)
 
 	return session, nil
@@ -190,8 +199,6 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 		session.Pty = ptyFile
 	}
 
-	tm.sessions[sessionID] = session
-
 	// Start a reader goroutine for the stdout pipe.
 	go func() {
 		buf := make([]byte, 32768)
@@ -264,27 +271,44 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 		return nil, fmt.Errorf("hidden session chatID is required")
 	}
 
-	// Create the underlying PTY session.
-	session, err := tm.CreateSession(id)
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
+
+	// Check for duplicate session ID while holding the lock.
+	if _, exists := tm.sessions[id]; exists {
+		return nil, fmt.Errorf("session %s already exists", id)
+	}
+
+	// Create the underlying PTY session (without inserting into map).
+	var session *TerminalSession
+	var err error
+
+	switch runtime.GOOS {
+	case "windows":
+		session, err = tm.createWindowsSession(id)
+	default:
+		session, err = tm.createUnixSession(id, "")
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	// Acquire tm.mutex to prevent concurrent ListSessions from seeing
-	// the session in the map before its hidden flag is set.  Lock order:
-	// tm.mutex → session.mutex (consistent with the rest of the codebase).
-	tm.mutex.Lock()
+	// Set hidden metadata before inserting into map.
 	session.mutex.Lock()
 	session.Hidden = true
 	session.Owner = owner
 	session.ChatID = chatID
+	// TODO: SP-008 Phase B — AutoClose is not yet consumed by the cleanup worker
 	session.AutoClose = true // default for hidden sessions
 
 	for _, opt := range opts {
 		opt(session)
 	}
 	session.mutex.Unlock()
-	tm.mutex.Unlock()
+
+	// Now insert into map with hidden flag already set.
+	tm.sessions[id] = session
 
 	return session, nil
 }

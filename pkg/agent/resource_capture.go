@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -130,7 +131,7 @@ func (a *Agent) captureVisionAsset(imagePath, dir string) (string, int64, error)
 
 	info, err := os.Stat(imagePath)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to stat vision asset %s: %w", imagePath, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to stat vision asset %s", imagePath), err)
 	}
 	if info.Size() > resourceCaptureMaxSizeBytes {
 		a.appendResourceCaptureLog("skipped_large", imagePath, "", info.Size(), "asset exceeds 50MB limit")
@@ -139,7 +140,7 @@ func (a *Agent) captureVisionAsset(imagePath, dir string) (string, int64, error)
 
 	data, err := os.ReadFile(imagePath)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to read vision asset %s: %w", imagePath, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to read vision asset %s", imagePath), err)
 	}
 	ext := strings.ToLower(filepath.Ext(imagePath))
 	if ext == "" {
@@ -147,7 +148,7 @@ func (a *Agent) captureVisionAsset(imagePath, dir string) (string, int64, error)
 	}
 	out := filepath.Join(dir, captureBaseName("vision_asset", imagePath)+ext)
 	if err := os.WriteFile(out, data, 0o644); err != nil {
-		return "", 0, fmt.Errorf("failed to write vision asset to %s: %w", out, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to write vision asset to %s", out), err)
 	}
 	return out, int64(len(data)), nil
 }
@@ -156,11 +157,11 @@ func (a *Agent) captureRemoteAsset(source, dir string) (string, int64, error) {
 	client := &http.Client{Timeout: 45 * time.Second}
 	req, err := http.NewRequest("GET", source, nil)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to create HTTP request for %s: %w", source, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to create HTTP request for %s", source), err)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed HTTP request for %s: %w", source, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed HTTP request for %s", source), err)
 	}
 	defer resp.Body.Close()
 
@@ -172,7 +173,7 @@ func (a *Agent) captureRemoteAsset(source, dir string) (string, int64, error) {
 	limited := io.LimitReader(resp.Body, resourceCaptureMaxSizeBytes+1)
 	data, err := io.ReadAll(limited)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to read remote asset from %s: %w", source, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to read remote asset from %s", source), err)
 	}
 	if int64(len(data)) > resourceCaptureMaxSizeBytes {
 		a.appendResourceCaptureLog("skipped_large", source, "", int64(len(data)), "asset exceeds 50MB limit")
@@ -189,7 +190,7 @@ func (a *Agent) captureRemoteAsset(source, dir string) (string, int64, error) {
 
 	out := filepath.Join(dir, captureBaseName("vision_asset", source)+ext)
 	if err := os.WriteFile(out, data, 0o644); err != nil {
-		return "", 0, fmt.Errorf("failed to write remote asset to %s: %w", out, err)
+		return "", 0, agenterrors.NewTransientError(fmt.Sprintf("failed to write remote asset to %s", out), err)
 	}
 	return out, int64(len(data)), nil
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
@@ -227,7 +228,7 @@ func isPythonAvailable() bool {
 func getPythonDiffExecutable() (string, error) {
 	interpreter, err := pythonruntime.FindPython3Interpreter()
 	if err != nil {
-		return "", fmt.Errorf("failed to find Python 3 interpreter: %w", err)
+		return "", agenterrors.NewTransientError("failed to find Python 3 interpreter", err)
 	}
 	return interpreter.Path, nil
 }

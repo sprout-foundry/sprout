@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -14,7 +15,7 @@ import (
 func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 	resolvedPath, err := resolvePromptPath(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to resolve system prompt file: %w", err)
+		return agenterrors.NewPermanentError("failed to resolve system prompt file", err)
 	}
 
 	content, err := os.ReadFile(resolvedPath)
@@ -22,17 +23,17 @@ func (a *Agent) SetSystemPromptFromFile(filePath string) error {
 		if os.IsNotExist(err) {
 			embeddedContent, embeddedErr := readEmbeddedPromptFile(filePath)
 			if embeddedErr != nil {
-				return fmt.Errorf("failed to read system prompt file: %w", err)
+				return agenterrors.NewPermanentError("failed to read system prompt file", err)
 			}
 			content = embeddedContent
 		} else {
-			return fmt.Errorf("failed to read system prompt file: %w", err)
+			return agenterrors.NewPermanentError("failed to read system prompt file", err)
 		}
 	}
 
 	promptContent := strings.TrimSpace(string(content))
 	if promptContent == "" {
-		return fmt.Errorf("system prompt file %q is empty", filePath)
+		return agenterrors.NewInvalidInputError(fmt.Sprintf("system prompt file %q is empty", filePath), nil)
 	}
 
 	a.systemPrompt = a.ensureStopInformation(promptContent)
@@ -70,7 +71,7 @@ func resolvePromptPath(filePath string) (string, error) {
 func findRepoRootFromCWD() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("failed to get current working directory: %w", err)
+		return "", agenterrors.NewPermanentError("failed to get current working directory", err)
 	}
 
 	for {

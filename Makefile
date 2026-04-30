@@ -53,7 +53,7 @@ help:
 test-unit:
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
-	go test -tags ollama_test ./pkg/... ./cmd/... -v -timeout=60s -short -coverprofile=/tmp/ledit-unit-coverage.out 2>&1 | tee /tmp/ledit-test-unit.log; \
+	go test -tags "ollama_test,browser" ./pkg/... ./cmd/... -v -timeout=60s -short -coverprofile=/tmp/ledit-unit-coverage.out 2>&1 | tee /tmp/ledit-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -118,7 +118,7 @@ test-ci: test-unit test-integration
 test-coverage:
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags ollama_test ./pkg/... ./cmd/... -timeout=120s -short -coverprofile=/tmp/ledit-coverage.out 2>&1 | tee /tmp/ledit-test-coverage.log; \
+	go test -race -tags "ollama_test,browser" ./pkg/... ./cmd/... -timeout=120s -short -coverprofile=/tmp/ledit-coverage.out 2>&1 | tee /tmp/ledit-test-coverage.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -155,13 +155,13 @@ test-coverage:
 # Optimized: uses build cache and parallel compilation
 build:
 	@echo "Building sprout..."
-	GO111MODULE=on go build -tags ollama_test -o sprout .
+	GO111MODULE=on go build -tags "ollama_test,browser" -o sprout .
 	@echo "Build completed"
 
 # Build sprout binary with parallel compilation and cache
 build-parallel:
 	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -tags ollama_test -o sprout .
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags "ollama_test,browser" -o sprout .
 	@echo "Build completed"
 
 # Build with version information
@@ -281,7 +281,7 @@ build-fast:
 	@echo "  Building WASM..."
 	@./scripts/build-wasm.sh
 	@echo "  Building Go binary..."
-	@go build -tags ollama_test -o sprout .
+	@go build -tags "ollama_test,browser" -o sprout .
 	@echo "✅ Fast build completed"
 
 # Quick development workflow

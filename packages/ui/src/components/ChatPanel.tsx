@@ -400,6 +400,12 @@ const MessageItem = memo(function MessageItem({
   );
 });
 
+// ── Helper function to detect compaction summary messages ──────────
+
+const isCompactionSummary = (message: Message): boolean => {
+  return message.type === 'assistant' && message.content.startsWith('[Context compaction — layered summary]');
+};
+
 // ── Main Chat Component ───────────────────────────────────────────
 
 function Chat({
@@ -452,6 +458,11 @@ function Chat({
 
   const hasSubagentActivity = subagentActivities.length > 0;
   const needsHealthCheck = false;
+
+  // Filter out compaction summary messages from the chat view
+  const visibleMessages = useMemo(() => {
+    return messages.filter(m => !isCompactionSummary(m));
+  }, [messages]);
 
   // Filter tool executions to show only those for the current chat session
   // Tools with queryId matching the current stats.queryCount are from the current query
@@ -687,9 +698,9 @@ function Chat({
           <div ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
             <Virtuoso
               ref={virtuosoRef}
-              data={messages}
+              data={visibleMessages}
               followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
-              initialTopMostItemIndex={messages.length - 1}
+              initialTopMostItemIndex={visibleMessages.length - 1}
               increaseViewportBy={{ top: 400, bottom: 400 }}
               atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
               itemContent={(index, message) => (

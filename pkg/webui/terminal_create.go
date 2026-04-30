@@ -232,3 +232,46 @@ func resolveShellArgs(shell string) []string {
 		return nil
 	}
 }
+
+// SessionOption is a functional option for configuring a terminal session.
+type SessionOption func(*TerminalSession)
+
+// WithName sets a human-readable name for the session.
+func WithName(name string) SessionOption {
+	return func(s *TerminalSession) {
+		s.Name = name
+	}
+}
+
+// WithAutoClose sets whether the session should be auto-closed when inactive.
+func WithAutoClose(autoClose bool) SessionOption {
+	return func(s *TerminalSession) {
+		s.AutoClose = autoClose
+	}
+}
+
+// CreateHiddenSession creates a hidden PTY session for agent use.
+// Hidden sessions are excluded from the default ListSessions() output
+// but still participate in inactive-session cleanup.
+func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ...SessionOption) (*TerminalSession, error) {
+	// Create the underlying PTY session.
+	session, err := tm.CreateSession(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark as hidden with metadata.
+	session.mutex.Lock()
+	session.Hidden = true
+	session.Owner = owner
+	session.ChatID = chatID
+	session.AutoClose = true // default for hidden sessions
+	session.mutex.Unlock()
+
+	// Apply any additional options.
+	for _, opt := range opts {
+		opt(session)
+	}
+
+	return session, nil
+}

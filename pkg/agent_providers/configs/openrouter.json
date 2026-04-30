@@ -6,7 +6,7 @@
     "env_var": "OPENROUTER_API_KEY"
   },
   "headers": {
-    "HTTP-Referer": "https://github.com/alantheprice/ledit",
+    "HTTP-Referer": "https://github.com/sprout-foundry/sprout",
     "X-Title": "Ledit"
   },
   "defaults": {

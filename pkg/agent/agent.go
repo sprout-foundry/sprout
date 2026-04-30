@@ -175,7 +175,7 @@ func NewAgentWithModel(model string) (*Agent, error) {
 }
 
 // NewAgentWithConfigDir creates a new agent using a per-client config directory.
-// This enables per-client config isolation for the WebUI, where each X-Ledit-Client-ID
+// This enables per-client config isolation for the WebUI, where each X-Sprout-Client-ID
 // can have its own isolated config directory so settings changes by one client don't affect another.
 func NewAgentWithConfigDir(configDir, model string) (*Agent, error) {
 	// Initialize configuration manager with a client-specific directory

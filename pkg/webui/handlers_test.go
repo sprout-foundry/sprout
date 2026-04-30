@@ -144,17 +144,42 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
 	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
 
-	// Discover the hashed index JS bundle name from embedded index.html
+	// Discover hashed bundle names from embedded index.html
 	indexHTML, err := readStaticFile("index.html")
 	if err != nil {
 		t.Fatalf("failed to read embedded index.html: %v", err)
 	}
-	re := regexp.MustCompile(`src="/assets/(index-[^"]+\.js)"`)
-	matches := re.FindSubmatch(indexHTML)
+
+	// Discover index JS bundle: <script type="module" src="/assets/index-xxx.js">
+	reJS := regexp.MustCompile(`src="/assets/(index-[^"]+\.js)"`)
+	matches := reJS.FindSubmatch(indexHTML)
 	if len(matches) < 2 {
 		t.Fatal("could not find index JS bundle reference in index.html")
 	}
 	indexJSBundle := "/assets/" + string(matches[1])
+
+	// Discover index CSS bundle: <link rel="stylesheet" href="/assets/index-xxx.css">
+	reCSS := regexp.MustCompile(`href="/assets/(index-[^"]+\.css)"`)
+	cssMatches := reCSS.FindSubmatch(indexHTML)
+	if len(cssMatches) < 2 {
+		t.Fatal("could not find index CSS bundle reference in index.html")
+	}
+	indexCSSBundle := "/assets/" + string(cssMatches[1])
+
+	// Discover modulepreload JS bundles
+	rePreload := regexp.MustCompile(`href="/assets/(react-[^"]+\.js)"`)
+	reactMatches := rePreload.FindSubmatch(indexHTML)
+	if len(reactMatches) < 2 {
+		t.Fatal("could not find react JS bundle reference in index.html")
+	}
+	reactJSBundle := "/assets/" + string(reactMatches[1])
+
+	reCM := regexp.MustCompile(`href="/assets/(codemirror-[^"]+\.js)"`)
+	cmMatches := reCM.FindSubmatch(indexHTML)
+	if len(cmMatches) < 2 {
+		t.Fatal("could not find codemirror JS bundle reference in index.html")
+	}
+	codemirrorJSBundle := "/assets/" + string(cmMatches[1])
 
 	tests := []struct {
 		name        string
@@ -168,17 +193,17 @@ func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
 		},
 		{
 			name:        "react js bundle",
-			path:        "/assets/react-CRB3T2We.js",
+			path:        reactJSBundle,
 			contentType: "text/javascript",
 		},
 		{
 			name:        "codemirror js bundle",
-			path:        "/assets/codemirror-Cp_jJeyJ.js",
+			path:        codemirrorJSBundle,
 			contentType: "text/javascript",
 		},
 		{
 			name:        "index css bundle",
-			path:        "/assets/index-Bl_vRp-X.css",
+			path:        indexCSSBundle,
 			contentType: "text/css",
 		},
 	}

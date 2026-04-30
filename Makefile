@@ -53,15 +53,15 @@ help:
 test-unit:
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
-	go test -tags "ollama_test,browser" ./pkg/... ./cmd/... -v -timeout=60s -short -coverprofile=/tmp/ledit-unit-coverage.out 2>&1 | tee /tmp/ledit-test-unit.log; \
+	go test -tags "browser" ./pkg/... ./cmd/... -v -timeout=60s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
 		echo "Unit tests failed. Last 200 lines:"; \
-		tail -n 200 /tmp/ledit-test-unit.log || true; \
+		tail -n 200 /tmp/sprout-test-unit.log || true; \
 		echo ""; \
 		echo "Failing packages:"; \
-		grep -nE "^(FAIL|--- FAIL:|panic:)" /tmp/ledit-test-unit.log || true; \
+		grep -nE "^(FAIL|--- FAIL:|panic:)" /tmp/sprout-test-unit.log || true; \
 		exit $$status; \
 	fi'
 
@@ -101,8 +101,8 @@ clean:
 	@echo "Cleaning test artifacts..."
 	rm -rf testing/
 	rm -f e2e_results.csv
-	rm -f /tmp/ledit-coverage.out /tmp/ledit-unit-coverage.out /tmp/ledit-coverage-func.txt
-	rm -f /tmp/ledit-test-coverage.log /tmp/ledit-test-unit.log
+	rm -f /tmp/sprout-coverage.out /tmp/sprout-unit-coverage.out /tmp/sprout-coverage-func.txt
+	rm -f /tmp/sprout-test-coverage.log /tmp/sprout-test-unit.log
 	find . -name "*.test" -delete
 	find . -name "test_failure_*.log" -delete
 
@@ -118,18 +118,18 @@ test-ci: test-unit test-integration
 test-coverage:
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "ollama_test,browser" ./pkg/... ./cmd/... -timeout=120s -short -coverprofile=/tmp/ledit-coverage.out 2>&1 | tee /tmp/ledit-test-coverage.log; \
+	go test -race -tags "browser" ./pkg/... ./cmd/... -timeout=120s -short -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
 		echo "Tests failed with race detection enabled. Last 200 lines:"; \
-		tail -n 200 /tmp/ledit-test-coverage.log || true; \
+		tail -n 200 /tmp/sprout-test-coverage.log || true; \
 		exit $$status; \
 	fi; \
 	echo ""; \
 	echo "Generating coverage report..."; \
-	go tool cover -func=/tmp/ledit-coverage.out > /tmp/ledit-coverage-func.txt; \
-	total_coverage=$$(go tool cover -func=/tmp/ledit-coverage.out | grep "^total:" | awk "{print \$$3}" | sed "s/%//"); \
+	go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt; \
+	total_coverage=$$(go tool cover -func=/tmp/sprout-coverage.out | grep "^total:" | awk "{print \$$3}" | sed "s/%//"); \
 	if [ -z "$${total_coverage}" ]; then \
 		echo "ERROR: Failed to extract coverage information"; \
 		exit 1; \
@@ -145,7 +145,7 @@ test-coverage:
 		echo ""; \
 		echo "ERROR: Coverage ($${total_coverage}%) is below minimum threshold ($${min_coverage}%)"; \
 		echo "Packages with lowest coverage:"; \
-		go tool cover -func=/tmp/ledit-coverage.out | grep -v "^total:" | awk -F" " "{print \$$NF, \$$0}" | sort -n | head -10 | awk "{\$$1=\"\"; print substr(\$$0,2)}"; \
+		go tool cover -func=/tmp/sprout-coverage.out | grep -v "^total:" | awk -F" " "{print \$$NF, \$$0}" | sort -n | head -10 | awk "{\$$1=\"\"; print substr(\$$0,2)}"; \
 		exit 1; \
 	fi; \
 	echo ""; \
@@ -155,13 +155,13 @@ test-coverage:
 # Optimized: uses build cache and parallel compilation
 build:
 	@echo "Building sprout..."
-	GO111MODULE=on go build -tags "ollama_test,browser" -o sprout .
+	GO111MODULE=on go build -tags "browser" -o sprout .
 	@echo "Build completed"
 
 # Build sprout binary with parallel compilation and cache
 build-parallel:
 	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -tags "ollama_test,browser" -o sprout .
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags "browser" -o sprout .
 	@echo "Build completed"
 
 # Build with version information
@@ -281,7 +281,7 @@ build-fast:
 	@echo "  Building WASM..."
 	@./scripts/build-wasm.sh
 	@echo "  Building Go binary..."
-	@go build -tags "ollama_test,browser" -o sprout .
+	@go build -tags "browser" -o sprout .
 	@echo "✅ Fast build completed"
 
 # Quick development workflow

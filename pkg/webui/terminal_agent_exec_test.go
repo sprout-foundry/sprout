@@ -86,6 +86,31 @@ func TestStripANSI(t *testing.T) {
 			input:    "\x1b[1m\x1b[32m\x1b[4mstyled\x1b[0m\x1b[22m text\x1b[0m",
 			expected: "styled text",
 		},
+		{
+			name:     "CSI ? bracketed paste mode OFF",
+			input:    "\x1b[?2004lhello",
+			expected: "hello",
+		},
+		{
+			name:     "CSI ? bracketed paste mode ON",
+			input:    "\x1b[?2004hworld",
+			expected: "world",
+		},
+		{
+			name:     "CSI ? cursor hide and show",
+			input:    "\x1b[?25l\x1b[?25hvisible",
+			expected: "visible",
+		},
+		{
+			name:     "CSI ? alternate screen buffer",
+			input:    "\x1b[?1049hscreen content",
+			expected: "screen content",
+		},
+		{
+			name:     "CSI ? mixed with regular CSI",
+			input:    "\x1b[?2004l\x1b[31mred\x1b[0m\x1b[?2004h",
+			expected: "red",
+		},
 	}
 
 	for _, tc := range cases {
@@ -182,14 +207,24 @@ func TestExecuteCommandAndWait_Success(t *testing.T) {
 		t.Errorf("output should contain 'hello world', got %q", output)
 	}
 
-	// Verify no ANSI escape sequences in output.
-	if regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`).MatchString(output) {
-		t.Errorf("output should have no ANSI sequences, got %q", output)
+	// Verify no ANSI escape sequences in output by comparing against stripANSI.
+	// Using stripANSI itself as the oracle avoids maintaining a parallel regex
+	// in the test that could have the same blind spots as the production code.
+	if stripped := stripANSI(output); stripped != output {
+		t.Errorf("output should have no ANSI sequences, got %q (stripped: %q)", output, stripped)
 	}
 
 	// Verify no sentinel line leaked into output.
 	if strings.Contains(output, "__SPROUT_DONE__") {
 		t.Errorf("output should not contain sentinel, got %q", output)
+	}
+
+	// Verify no command echo leaked into output.
+	if strings.Contains(output, "/bin/sh") {
+		t.Errorf("output should not contain shell wrapper echo, got %q", output)
+	}
+	if strings.Contains(output, "SPROUT_DONE__") && strings.Contains(output, "$?") {
+		t.Errorf("output should not contain echo of sentinel command, got %q", output)
 	}
 }
 

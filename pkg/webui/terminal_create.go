@@ -231,6 +231,15 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 
 	// Start a reader goroutine for the stdout pipe.
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Windows terminal reader panic for session %s: %v", sessionID, r)
+				session.mutex.Lock()
+				session.Active = false
+				session.mutex.Unlock()
+				session.closeAllSubs()
+			}
+		}()
 		buf := make([]byte, 32768)
 		for {
 			n, err := stdout.Read(buf)

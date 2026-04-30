@@ -714,3 +714,53 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 | `webui/src/components/BackgroundTasks.tsx` | **New file.** Background tasks panel |
 | `webui/src/components/Terminal.tsx` | Wire background tasks panel, attach flow |
 | `webui/src/components/TerminalTabBar.tsx` | Agent sessions dropdown |
+
+---
+
+## SP-010: Editor Modernization
+
+[] - SP-010 Phase 1: Extract `useEditorExtensions` hook from EditorPane — Build CodeMirror extension set from buffer config (language, theme, settings). Target ~150 lines. `webui/src/hooks/useEditorExtensions.ts`
+[] - SP-010 Phase 1: Extract `useEditorDiagnostics` hook from EditorPane — Diagnostic fetching, lint gutter updates, debounced 500ms. Target ~120 lines. `webui/src/hooks/useEditorDiagnostics.ts`
+[] - SP-010 Phase 1: Extract `useEditorFileIO` hook from EditorPane — File load/save, external change detection, conflict resolution. Target ~200 lines. `webui/src/hooks/useEditorFileIO.ts`
+[] - SP-010 Phase 1: Extract `useEditorScrollSync` hook from EditorPane — Scroll position persistence, cross-pane linked scrolling. Target ~100 lines. `webui/src/hooks/useEditorScrollSync.ts`
+[] - SP-010 Phase 1: Extract `useEditorSymbols` hook from EditorPane — Symbol extraction, breadcrumb data. Fix: key to content changes, not cursor position. Target ~100 lines. `webui/src/hooks/useEditorSymbols.ts`
+[] - SP-010 Phase 1: Extract `useEditorCursor` hook from EditorPane — Cursor position tracking, selection state. Target ~80 lines. `webui/src/hooks/useEditorCursor.ts`
+[] - SP-010 Phase 1: Create `EditorCore` component — CodeMirror EditorView mount point + extension context. Target ~200 lines. `webui/src/components/EditorCore.tsx`
+[] - SP-010 Phase 1: Create `EditorToolbarActions` component — Toolbar buttons (word wrap, format, etc.). Target ~150 lines. `webui/src/components/EditorToolbarActions.tsx`
+[] - SP-010 Phase 1: Reduce `EditorPane.tsx` to composition root — Wire extracted hooks and sub-components. Target under 400 lines.
+[] - SP-010 Phase 2: Create Error Lens extension — Show diagnostic messages inline at end of line via `Decoration.widget`. Debounced 300ms. `webui/src/extensions/errorLens.ts`
+[] - SP-010 Phase 2: Verify and style word occurrence highlighting — `highlightSelectionMatches()` is imported; confirm it works, add custom highlight styling. `webui/src/extensions/wordHighlights.ts`
+[] - SP-010 Phase 2: Create inlay hints extension — Request LSP inlay hints for TypeScript/Go, show type annotations and parameter names inline. Toggle via editor settings. `webui/src/extensions/inlayHints.ts`
+[] - SP-010 Phase 2: Create signature help extension — Show function signature tooltip when typing `(` or `,` inside a call. Uses LSP capability. `webui/src/extensions/signatureHelp.ts`
+[] - SP-010 Phase 3: Add React.memo to editor child components — Wrap EditorTabs, EditorBreadcrumb, EditorToolbar with React.memo to prevent unnecessary re-renders.
+[] - SP-010 Phase 3: Add tab tooltips — Add `title` attribute to tab name showing full file path on hover. `webui/src/components/EditorTabs.tsx`
+[] - SP-010 Phase 3: Remove 3-pane editor limit — Increase from 3 to 6 panes (configurable). Add minimum pane width enforcement. `webui/src/contexts/EditorManagerContext.tsx`
+[] - SP-010 Phase 3: Add format-on-save option — Wire existing formatter service to save action. Opt-in via editor settings. `webui/src/components/EditorPane.tsx`
+
+---
+
+## SP-011: Terminal Parity
+
+[] - SP-011 Phase 1: Add terminal search via @xterm/addon-search — Ctrl+Shift+F opens search bar above terminal. Text input with next/prev, match counter, case/regex toggles. Close on Escape. `webui/src/components/TerminalSearchBar.tsx`
+[] - SP-011 Phase 1: Add clickable file paths in terminal — Register link provider via `Terminal.registerLinkProvider()` detecting patterns like `./foo.go:12:34`, `foo.go:12`. On click, dispatch event to open file in editor at correct line/col. `webui/src/extensions/terminalFilePaths.ts`
+[] - SP-011 Phase 1: Add copy-on-select preference — When enabled, automatically copy terminal selection to clipboard via `terminal.onSelectionChange()`.
+[] - SP-011 Phase 2: Add right-click context menu for terminal — Paste, Copy Selection (if text selected), Search, Clear Terminal, Split Pane, Select All. Reuses `ContextMenu` from `@sprout/ui`. `webui/src/components/TerminalContextMenu.tsx`
+[] - SP-011 Phase 2: Add reverse-i-search (Ctrl+R) — Passthrough Ctrl+R to PTY shell (bash/zsh handle natively). Client-side display enhancement to show search prompt overlay. Future: client-side history search.
+[] - SP-011 Phase 3: Add scrollback persistence — Serialize terminal buffer on unmount to IndexedDB keyed by session ID. Restore on reconnect. Max 500KB per session, 24h auto-cleanup. `webui/src/services/terminalScrollback.ts`
+[] - SP-011 Phase 3: Add double/triple click selection — Double-click: select word. Triple-click: select line. Configure `wordSeparator` option on xterm.js Terminal.
+
+---
+
+## SP-012: UX Polish
+
+[] - SP-012 Phase 1: Create notification center — History panel accessible from bell icon in StatusBar. Shows timestamp, type, title, message. Actions: dismiss individual, dismiss all, copy message. `webui/src/components/NotificationCenter.tsx`
+[] - SP-012 Phase 1: Add reduced-motion CSS — `@media (prefers-reduced-motion: reduce)` wrapper that disables all animations and transitions. `webui/src/index.css`
+[] - SP-012 Phase 1: Add ARIA tree pattern to FileTree — Add `role="treeitem"`, `aria-expanded` to tree items. `webui/src/components/FileTree.tsx`
+[] - SP-012 Phase 1: Add aria-live to CommandPalette — Results list announced to screen readers. `packages/ui/src/components/CommandPalette.tsx`
+[] - SP-012 Phase 1: Add role="log" to ChatPanel — Messages in a landmark region with aria-label. `packages/ui/src/components/ChatPanel.tsx`
+[] - SP-012 Phase 1: Add global focus indicators — `:focus-visible` outline on all interactive elements. Remove default outline for mouse users. `webui/src/index.css`
+[] - SP-012 Phase 2: Remove 3-pane editor limit — Allow up to 6 panes with minimum width enforcement. Persist pane count preference. `webui/src/contexts/EditorManagerContext.tsx`
+[] - SP-012 Phase 2: Ensure sidebar state persistence — Verify isCollapsed, activeTab, and width all persist to localStorage and survive page reload. `webui/src/hooks/useSidebarState.ts`
+[] - SP-012 Phase 2: Add responsive layout breakpoints — Tablet (768-1024px): sidebar icons-only, stack editor/chat. Mobile (< 768px): single-panel view, full-screen terminal overlay. `webui/src/index.css`, `webui/src/App.css`
+[] - SP-012 Phase 2: Add loading skeletons — Replace loading spinners with skeleton screens for file tree, chat history, editor, and settings panel.
+[] - SP-012 Phase 2: Add panel collapse animations — Smooth 200ms transitions on sidebar collapse, context panel resize, terminal toggle.

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
@@ -62,7 +63,7 @@ func findProviderWithAPIKey(configManager *configuration.Manager) (api.ClientTyp
 func (a *Agent) SelectProvider() error {
 	newProvider, err := a.configManager.SelectNewProvider()
 	if err != nil {
-		return fmt.Errorf("failed to select provider: %w", err)
+		return agenterrors.NewProviderError("failed to select provider", err, "", "")
 	}
 
 	// Update agent's client type
@@ -72,7 +73,7 @@ func (a *Agent) SelectProvider() error {
 	model := a.configManager.GetModelForProvider(newProvider)
 	client, err := factory.CreateProviderClient(newProvider, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client for %s: %w", newProvider, err)
+		return agenterrors.NewProviderError(fmt.Sprintf("failed to create client for %s", newProvider), err, "", "")
 	}
 
 	a.client = client
@@ -99,8 +100,8 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	// Check if editor mode was the "failed" provider — this isn't a real failure
 	// since editor mode has no provider to initialize
 	if failedProvider == api.EditorClientType {
-		return "", "", fmt.Errorf("editor mode is active — no AI provider configured. "+
-			"Set up a provider with: sprout agent --provider <provider> or via webui settings (sprout agent -d)")
+		return "", "", agenterrors.NewProviderError("editor mode is active — no AI provider configured. "+
+			"Set up a provider with: sprout agent --provider <provider> or via webui settings (sprout agent -d)", nil, "", "")
 	}
 
 	failedProviderName := api.GetProviderName(failedProvider)
@@ -108,12 +109,12 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 
 	// Non-interactive mode cannot recover via prompt.
 	if isNonInteractive() {
-		return "", "", fmt.Errorf("failed to initialize provider %s: Running in non-interactive mode. %s: %w", failedProviderName, noninteractive.HelpHint, startupErr)
+		return "", "", agenterrors.NewProviderError(fmt.Sprintf("failed to initialize provider %s: Running in non-interactive mode. %s", failedProviderName, noninteractive.HelpHint), startupErr, "", "")
 	}
 
 	choice, err := promptProviderRecoveryChoice()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to read provider recovery choice: %w", err)
+		return "", "", agenterrors.NewProviderError("failed to read provider recovery choice", err, "", "")
 	}
 
 	if choice == 2 {
@@ -122,7 +123,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 
 	nextProvider, err := configManager.SelectNewProvider()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to select provider: %w", err)
+		return "", "", agenterrors.NewProviderError("failed to select provider", err, "", "")
 	}
 
 	nextModel := configManager.GetModelForProvider(nextProvider)
@@ -143,7 +144,7 @@ func promptProviderRecoveryChoice() (int, error) {
 
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			return 0, fmt.Errorf("read user choice: %w", err)
+			return 0, agenterrors.NewInvalidInputError("read user choice", err)
 		}
 
 		choice, err := strconv.Atoi(strings.TrimSpace(input))

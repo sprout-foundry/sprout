@@ -267,10 +267,10 @@ func TestRouteToolLog_PublishesCorrectEvent(t *testing.T) {
 	bus := events.NewEventBus()
 	ch := bus.Subscribe("test")
 	agent := &Agent{
-		currentIteration: 3,
-		state:            NewAgentStateManager(false),
-		output:           NewAgentOutputManager(),
+		state:  NewAgentStateManager(false),
+		output: NewAgentOutputManager(),
 	}
+	agent.state.SetCurrentIteration(3)
 	agent.state.SetMaxContextTokens(1000)
 	agent.state.SetCurrentContextTokens(500)
 	router := NewOutputRouter(agent, bus)
@@ -536,8 +536,9 @@ func TestRouteStreamChunk_CallbackWithModeChange(t *testing.T) {
 // TestNewOutputRouter_AgentFieldPreserved verifies agent field is correctly set
 func TestNewOutputRouter_AgentFieldPreserved(t *testing.T) {
 	agent := &Agent{
-		currentIteration: 5,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetCurrentIteration(5)
 	router := NewOutputRouter(agent, nil)
 
 	// Access the agent through the router

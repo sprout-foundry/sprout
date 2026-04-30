@@ -17,7 +17,7 @@ func (a *Agent) GetTotalTokens() int {
 
 // GetCurrentIteration returns the current iteration number
 func (a *Agent) GetCurrentIteration() int {
-	return a.currentIteration
+	return a.state.GetCurrentIteration()
 }
 
 // GetCurrentContextTokens returns the current context token count
@@ -81,8 +81,8 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	}
 
 	// Trigger stats update callback if registered
-	if a.statsUpdateCallback != nil {
-		a.statsUpdateCallback(a.state.GetTotalTokens(), a.state.GetTotalCost())
+	if callback, ok := a.statsUpdateCallback.Load().(func(int, float64)); ok && callback != nil {
+		callback(a.state.GetTotalTokens(), a.state.GetTotalCost())
 	}
 }
 

@@ -228,7 +228,7 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	var contextPercent string
 	var currentIter int
 	if agent != nil {
-		currentIter = agent.currentIteration
+		currentIter = agent.state.GetCurrentIteration()
 		if agent.state.GetMaxContextTokens() > 0 && agent.state.GetCurrentContextTokens() > 0 {
 			percentage := float64(agent.state.GetCurrentContextTokens()) / float64(agent.state.GetMaxContextTokens()) * 100
 			contextPercent = fmt.Sprintf(" - %.0f%%", percentage)

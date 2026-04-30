@@ -531,7 +531,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 			// Log the accumulated streaming response for debugging
 			if ac.agent.output.IsStreamingEnabled() {
 				LogAPIResponse(ac.agent.output.GetStreamingBuffer().String(), true)
-				logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), true, ac.agent.currentIteration)
+				logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), true, ac.agent.state.GetCurrentIteration())
 			}
 
 			if result.err != nil {
@@ -552,7 +552,7 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 // sendRegularRequest handles non-streaming API requests with timeout
 func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	// Special case for OpenAI token tracking
-	if ac.agent.GetProvider() == "openai" && ac.agent.currentIteration == 0 {
+	if ac.agent.GetProvider() == "openai" && ac.agent.state.GetCurrentIteration() == 0 {
 		ac.showTokenTrackingMessage()
 	}
 
@@ -596,7 +596,7 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 		return nil, fmt.Errorf("API request timed out after %s", ac.overallTimeout)
 
 	case result := <-resultChan:
-		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.currentIteration)
+		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.state.GetCurrentIteration())
 		if result.err != nil {
 			if !ac.isRateLimit(result.err) && !ac.isContextLimitError(result.err) {
 				ac.displayAPIError(result.err)

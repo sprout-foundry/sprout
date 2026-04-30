@@ -1,11 +1,11 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/spec"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -29,7 +29,7 @@ func (ch *ConversationHandler) runSelfReviewGate() error {
 
 	revisionID := strings.TrimSpace(ch.agent.GetRevisionID())
 	if revisionID == "" {
-		return errors.New("self-review gate blocked completion: no revision ID available for changed task")
+		return agenterrors.NewPermanentError("self-review gate blocked completion: no revision ID available for changed task", nil)
 	}
 
 	var cfgErr error

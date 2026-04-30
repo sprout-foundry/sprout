@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -501,21 +500,21 @@ func (ac *APIClient) sendStreamingRequest(messages []api.Message, tools []api.To
 	for {
 		select {
 		case <-ac.agent.interruptCtx.Done():
-			return nil, errors.New("request interrupted by user")
+			return nil, agenterrors.NewTransientError("request interrupted by user", nil)
 
 		case <-ctx.Done():
 			ac.displayTimeoutError("Request timed out", ac.overallTimeout)
-			return nil, fmt.Errorf("API request timed out after %s", ac.overallTimeout)
+			return nil, agenterrors.NewTransientError(fmt.Sprintf("API request timed out after %s", ac.overallTimeout), nil)
 
 		case <-firstChunkTimer.C:
 			if !firstChunkReceived {
 				ac.displayTimeoutError("No response from API", ac.firstChunkTimeout)
-				return nil, fmt.Errorf("no response received within %s", ac.firstChunkTimeout)
+				return nil, agenterrors.NewTransientError(fmt.Sprintf("no response received within %s", ac.firstChunkTimeout), nil)
 			}
 
 		case <-chunkTimer.C:
 			ac.displayTimeoutError("API stopped responding", ac.chunkTimeout)
-			return nil, fmt.Errorf("no data received for %s", ac.chunkTimeout)
+			return nil, agenterrors.NewTransientError(fmt.Sprintf("no data received for %s", ac.chunkTimeout), nil)
 
 		case <-chunkReceived:
 			if !firstChunkReceived {
@@ -598,11 +597,11 @@ func (ac *APIClient) sendRegularRequest(messages []api.Message, tools []api.Tool
 	// Wait for result or timeout
 	select {
 	case <-ac.agent.interruptCtx.Done():
-		return nil, errors.New("request interrupted by user")
+		return nil, agenterrors.NewTransientError("request interrupted by user", nil)
 
 	case <-ctx.Done():
 		ac.displayTimeoutError("Request timed out", ac.overallTimeout)
-		return nil, fmt.Errorf("API request timed out after %s", ac.overallTimeout)
+		return nil, agenterrors.NewTransientError(fmt.Sprintf("API request timed out after %s", ac.overallTimeout), nil)
 
 	case result := <-resultChan:
 		logChatResponseDetailed(result.resp, ac.agent.client.GetProvider(), false, ac.agent.state.GetCurrentIteration())

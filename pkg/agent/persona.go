@@ -1,11 +1,11 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -148,11 +148,11 @@ func (a *Agent) GetAvailablePersonaIDs() []string {
 func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error) {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
-		return "", "", errors.New("configuration manager is not available")
+		return "", "", agenterrors.NewPermanentError("configuration manager is not available", nil)
 	}
 	config := a.configManager.GetConfig()
 	if config == nil {
-		return "", "", errors.New("configuration is not available")
+		return "", "", agenterrors.NewPermanentError("configuration is not available", nil)
 	}
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {

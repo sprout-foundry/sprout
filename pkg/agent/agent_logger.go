@@ -65,12 +65,13 @@ func (l *AgentLogger) contextFields() map[string]string {
 
 	fields := make(map[string]string)
 
-	if sessionID := l.agent.GetSessionID(); sessionID != "" {
-		fields["session"] = sessionID
-	}
-
-	if iteration := l.agent.GetCurrentIteration(); iteration > 0 {
-		fields["iter"] = fmt.Sprintf("%d", iteration)
+	if l.agent.state != nil {
+		if sessionID := l.agent.GetSessionID(); sessionID != "" {
+			fields["session"] = sessionID
+		}
+		if iteration := l.agent.GetCurrentIteration(); iteration > 0 {
+			fields["iter"] = fmt.Sprintf("%d", iteration)
+		}
 	}
 
 	if provider := l.agent.GetProvider(); provider != "" {
@@ -152,7 +153,16 @@ func (l *AgentLogger) writeEntry(level, message string, extraFields map[string]s
 		}
 	} else {
 		// Human-readable format: [15:04:05.000] [DEBUG] [session=abc123 iter=5 provider=openai model=gpt-4] message
+		// Use deterministic field order for consistent log parsing
+		fieldOrder := []string{"session", "iter", "provider", "model"}
 		var contextParts []string
+		for _, k := range fieldOrder {
+			if v, ok := contextFields[k]; ok {
+				contextParts = append(contextParts, fmt.Sprintf("%s=%s", k, v))
+				delete(contextFields, k)
+			}
+		}
+		// Append any extra fields in map order
 		for k, v := range contextFields {
 			contextParts = append(contextParts, fmt.Sprintf("%s=%s", k, v))
 		}

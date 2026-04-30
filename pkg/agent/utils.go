@@ -12,13 +12,21 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// debugLog logs a message only if debug mode is enabled
+// debugLog logs a message only if debug mode is enabled.
+// It delegates to the structured Logger so all debug output includes session
+// context (sessionID, iteration, provider, model) automatically.
 func (a *Agent) debugLog(format string, args ...interface{}) {
 	if !a.debug {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
-	// Prefer writing to debug log file if available
+	// Use structured logger for session context. Logger() handles lazy init,
+	// writing to the debug log file, stderr fallback, and nil-agent guards.
+	if logger := a.Logger(); logger != nil {
+		logger.Debug("%s", msg)
+		return
+	}
+	// Logger returned nil — fall back to direct file write without context.
 	if a.debugLogFile != nil {
 		a.debugLogMutex.Lock()
 		defer a.debugLogMutex.Unlock()
@@ -26,7 +34,6 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 		_, _ = a.debugLogFile.WriteString(fmt.Sprintf("[%s] %s", timestamp, msg))
 		return
 	}
-	// Fallback to stderr
 	fmt.Fprint(os.Stderr, msg)
 }
 

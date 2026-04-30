@@ -76,9 +76,9 @@ func (eh *ErrorHandler) buildInteractiveErrorResponse(apiErr error, toolsExecute
 	response += fmt.Sprintf("- Tools executed: %d\n", toolsExecuted)
 	response += fmt.Sprintf("- Total tokens used: %s\n", eh.formatTokenCount(eh.agent.state.GetTotalTokens()))
 	if eh.agent.maxIterations == 0 {
-		response += fmt.Sprintf("- Current iteration: %d (unlimited)\n\n", eh.agent.currentIteration)
+		response += fmt.Sprintf("- Current iteration: %d (unlimited)\n\n", eh.agent.state.GetCurrentIteration())
 	} else {
-		response += fmt.Sprintf("- Current iteration: %d/%d\n\n", eh.agent.currentIteration, eh.agent.maxIterations)
+		response += fmt.Sprintf("- Current iteration: %d/%d\n\n", eh.agent.state.GetCurrentIteration(), eh.agent.maxIterations)
 	}
 
 	// Add recovery options

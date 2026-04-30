@@ -263,7 +263,7 @@ func TestE2E_BlankIterationRecovery(t *testing.T) {
 	// First call: blank response → should NOT stop, should enqueue reminder
 	stopped := ch.processResponse(scriptedResponseToChatResponse(blankResp))
 	assert.False(t, stopped, "blank response should not stop the conversation")
-	assert.Equal(t, 0, ch.agent.currentIteration)
+	assert.Equal(t, 0, ch.agent.state.GetCurrentIteration())
 
 	// Verify transient reminder was enqueued
 	ch.transientMessagesMu.Lock()

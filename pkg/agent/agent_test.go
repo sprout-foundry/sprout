@@ -35,8 +35,8 @@ func TestNewAgent(t *testing.T) {
 		t.Errorf("Expected maxIterations to be 0 (unlimited), got %d", agent.maxIterations)
 	}
 
-	if agent.currentIteration != 0 {
-		t.Errorf("Expected currentIteration to be 0, got %d", agent.currentIteration)
+	if agent.state.GetCurrentIteration() != 0 {
+		t.Errorf("Expected currentIteration to be 0, got %d", agent.state.GetCurrentIteration())
 	}
 
 	if agent.state.GetTotalCost() != 0.0 {

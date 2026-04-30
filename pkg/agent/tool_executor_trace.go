@@ -37,7 +37,7 @@ func (te *ToolExecutor) recordToolExecutionWithIndex(toolName string, rawArgs st
 	// Build ToolCallRecord
 	toolCallRecord := trace.ToolCallRecord{
 		RunID:          traceSession.GetRunID(),
-		TurnIndex:      te.agent.currentIteration,
+		TurnIndex:      te.agent.state.GetCurrentIteration(),
 		ToolIndex:      toolIndex,
 		ToolName:       toolName,
 		Args:           args,

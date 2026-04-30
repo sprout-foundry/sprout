@@ -238,8 +238,9 @@ func (a *Agent) buildSwitchContextRefreshMessage(report strictSyntaxNormalizatio
 		}
 	}
 
-	shellArtifacts := make([]string, 0, len(a.shellCommandHistory))
-	for _, h := range a.shellCommandHistory {
+	shellHistory := a.GetAllShellCommandHistory()
+	shellArtifacts := make([]string, 0, len(shellHistory))
+	for _, h := range shellHistory {
 		if h == nil || strings.TrimSpace(h.FullOutputPath) == "" {
 			continue
 		}

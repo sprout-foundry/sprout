@@ -177,7 +177,7 @@ func TestErrorHandlerUnlimitedDisplay(t *testing.T) {
 
 	t.Run("max positive shows fraction", func(t *testing.T) {
 		a := makeAgentWithScriptedClient(50, NewScriptedClient())
-		a.currentIteration = 7
+		a.state.SetCurrentIteration(7)
 		eh := NewErrorHandler(a)
 		result, err := eh.HandleAPIFailure(fmt.Errorf("something went wrong"), []api.Message{})
 		if err != nil {

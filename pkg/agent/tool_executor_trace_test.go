@@ -32,8 +32,9 @@ func (m *MockTraceSession) RecordToolCall(record interface{}) error {
 func TestRecordToolExecution(t *testing.T) {
 	// Create a test agent
 	agent := &Agent{
-		currentIteration: 1,
+		state: NewAgentStateManager(false),
 	}
+	agent.state.SetCurrentIteration(1)
 
 	// Create tool executor
 	te := NewToolExecutor(agent)
@@ -210,7 +211,7 @@ func (e *toolError) Error() string {
 
 func TestToolIndex(t *testing.T) {
 	agent := &Agent{
-		currentIteration: 1,
+		state: NewAgentStateManager(false),
 		traceSession: &MockTraceSession{
 			GetRunIDFunc: func() string {
 				return "test-run"
@@ -238,10 +239,10 @@ func TestToolIndex(t *testing.T) {
 func TestExecuteToolsResetsToolIndex(t *testing.T) {
 	// Create a minimal agent with required fields
 	agent := &Agent{
-		state:            NewAgentStateManager(false),
-		currentIteration: 1,
-		interruptCtx:     context.Background(),
+		state:        NewAgentStateManager(false),
+		interruptCtx: context.Background(),
 	}
+	agent.state.SetCurrentIteration(1)
 
 	te := NewToolExecutor(agent)
 

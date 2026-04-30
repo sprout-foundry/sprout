@@ -3,6 +3,7 @@ package webui
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -104,7 +105,7 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("PTY reader panic for session %s: %v\n", session.ID, r)
+			log.Printf("PTY reader panic for session %s: %v", session.ID, r)
 		}
 	}()
 
@@ -128,7 +129,7 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 			session.broadcast(chunk)
 		}
 		if err != nil {
-			fmt.Printf("Terminal session %s PTY closed: %v\n", session.ID, err)
+			log.Printf("Terminal session %s PTY closed: %v", session.ID, err)
 			session.mutex.Lock()
 			session.Active = false
 			session.mutex.Unlock()

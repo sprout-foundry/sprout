@@ -51,6 +51,10 @@ func (tm *TerminalManager) GetTerminalSize(sessionID string) (*pty.Winsize, erro
 	session.mutex.RLock()
 	defer session.mutex.RUnlock()
 
+	if session.Hidden {
+		return nil, fmt.Errorf("session %s is not accessible", sessionID)
+	}
+
 	if session.Size == nil {
 		return nil, fmt.Errorf("terminal size not set for session %s", sessionID)
 	}

@@ -21,9 +21,9 @@ print(get_greeting() + ' from the main script!')" > main.py
     original_greeter_content=$(cat greeter.py)
     original_main_content=$(cat main.py)
 
-    # Run ledit to analyze these new files and perform an edit that requires context from both.
+    # Run sprout to analyze these new files and perform an edit that requires context from both.
     # Try a simpler, more explicit instruction that might work better across models
-    ../ledit agent "Please make these changes:
+    ../sprout agent "Please make these changes:
 1. In greeter.py: Change the function name from 'get_greeting' to 'create_salutation' and add a 'name' parameter
 2. In main.py: Update the function call to use 'create_salutation' and pass 'World' as the name parameter
 

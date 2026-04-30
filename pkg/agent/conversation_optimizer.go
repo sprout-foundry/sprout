@@ -86,8 +86,8 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			rewritten := msg
 			rewritten.Content = summary
 			optimized = append(optimized, rewritten)
-			if co.debug {
-				fmt.Printf("\n[~] Optimized redundant file read: %s\n", co.extractFilePath(msg.Content))
+			if co.debug && co.printLine != nil {
+				co.printLine(fmt.Sprintf("\n[~] Optimized redundant file read: %s\n", co.extractFilePath(msg.Content)))
 			}
 		} else if co.isRedundantShellCommand(msg, i) {
 			// Replace with summary
@@ -95,8 +95,8 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			rewritten := msg
 			rewritten.Content = summary
 			optimized = append(optimized, rewritten)
-			if co.debug {
-				fmt.Printf("\n[~] Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content))
+			if co.debug && co.printLine != nil {
+				co.printLine(fmt.Sprintf("\n[~] Optimized redundant shell command: %s\n", co.extractShellCommand(msg.Content)))
 			}
 		} else {
 			optimized = append(optimized, msg)
@@ -157,8 +157,8 @@ func (co *ConversationOptimizer) CompactConversation(messages []api.Message) []a
 			// Check if the next message is also an assistant without tool_calls
 			if summaryIdx+1 < len(compacted) && compacted[summaryIdx+1].Role == "assistant" && len(compacted[summaryIdx+1].ToolCalls) == 0 {
 				// Remove the duplicate assistant message (keep the summary, remove the original)
-				if co.debug {
-					fmt.Printf("[clean] Removed consecutive assistant at compaction boundary\n")
+				if co.debug && co.printLine != nil {
+					co.printLine("[clean] Removed consecutive assistant at compaction boundary\n")
 				}
 				compacted = append(compacted[:summaryIdx+1], compacted[summaryIdx+2:]...)
 			}
@@ -220,15 +220,15 @@ func (co *ConversationOptimizer) compactConversationLayered(messages []api.Messa
 	if summaryIdx+1 < len(compacted) {
 		if compacted[summaryIdx].Role == "assistant" && len(compacted[summaryIdx].ToolCalls) == 0 &&
 			compacted[summaryIdx+1].Role == "assistant" && len(compacted[summaryIdx+1].ToolCalls) == 0 {
-			if co.debug {
-				fmt.Printf("[clean] Removed consecutive assistant at layered compaction boundary\n")
+			if co.debug && co.printLine != nil {
+				co.printLine("[clean] Removed consecutive assistant at layered compaction boundary\n")
 			}
 			compacted = append(compacted[:summaryIdx+1], compacted[summaryIdx+2:]...)
 		}
 	}
 
-	if co.debug {
-		fmt.Printf("[layered] Layered compaction: %d messages → 1 merged summary\n", len(middle))
+	if co.debug && co.printLine != nil {
+		co.printLine(fmt.Sprintf("[layered] Layered compaction: %d messages → 1 merged summary\n", len(middle)))
 	}
 
 	return compacted
@@ -353,10 +353,10 @@ func (co *ConversationOptimizer) buildLLMCompactionSummaryWithLimit(messages []a
 		Content: compactText,
 	}
 
-	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "", false)
+		resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "", false)
 	if err != nil {
-		if co.debug {
-			fmt.Printf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err)
+		if co.debug && co.printLine != nil {
+			co.printLine(fmt.Sprintf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err))
 		}
 		if co.printLine != nil {
 			co.printLine(fmt.Sprintf("[WARN] LLM compaction failed (%v), using fallback summary", err))
@@ -365,8 +365,8 @@ func (co *ConversationOptimizer) buildLLMCompactionSummaryWithLimit(messages []a
 	}
 
 	if len(resp.Choices) == 0 || strings.TrimSpace(resp.Choices[0].Message.Content) == "" {
-		if co.debug {
-			fmt.Printf("\n[WARN] LLM compaction returned empty response, falling back to Go summary\n")
+		if co.debug && co.printLine != nil {
+			co.printLine("\n[WARN] LLM compaction returned empty response, falling back to Go summary\n")
 		}
 		return co.buildGoCompactionSummary(messages)
 	}
@@ -693,8 +693,8 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 
 	resp, err := co.client.SendChatRequest([]api.Message{systemMsg, userMsg}, nil, "", false)
 	if err != nil {
-		if co.debug {
-			fmt.Printf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err)
+		if co.debug && co.printLine != nil {
+			co.printLine(fmt.Sprintf("\n[WARN] LLM compaction summary failed: %v, falling back to Go summary\n", err))
 		}
 		if co.printLine != nil {
 			co.printLine(fmt.Sprintf("[WARN] LLM compaction failed (%v), using fallback summary", err))
@@ -703,8 +703,8 @@ func (co *ConversationOptimizer) buildLLMCompactionSummary(messages []api.Messag
 	}
 
 	if len(resp.Choices) == 0 || strings.TrimSpace(resp.Choices[0].Message.Content) == "" {
-		if co.debug {
-			fmt.Printf("\n[WARN] LLM compaction returned empty response, falling back to Go summary\n")
+		if co.debug && co.printLine != nil {
+			co.printLine("\n[WARN] LLM compaction returned empty response, falling back to Go summary\n")
 		}
 		return co.buildGoCompactionSummary(messages)
 	}
@@ -1171,8 +1171,8 @@ func (co *ConversationOptimizer) InvalidateFile(filePath string) {
 	if filePath == "" {
 		return
 	}
-	if co.debug {
-		fmt.Printf("\n[~] Invalidating cached file data: %s\n", filePath)
+	if co.debug && co.printLine != nil {
+		co.printLine(fmt.Sprintf("\n[~] Invalidating cached file data: %s\n", filePath))
 	}
 	delete(co.fileReads, filePath)
 }

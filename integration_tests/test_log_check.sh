@@ -9,7 +9,7 @@ get_test_name() {
 run_test_logic() {
     local model_name=$1 # Capture the model_name passed from test.sh
     echo "--- TEST: Check the log ---"
-    ../ledit log
+    ../sprout log
     echo "----------------------------------------------------"
     echo
 }

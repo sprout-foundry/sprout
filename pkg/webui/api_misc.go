@@ -70,14 +70,9 @@ func (ws *ReactWebServer) handleTerminalHistoryGet(w http.ResponseWriter, r *htt
 	}
 
 	// Reject hidden sessions — they are not user-accessible.
-	if session, exists := terminalManager.GetSession(sessionID); exists {
-		session.mutex.RLock()
-		hidden := session.Hidden
-		session.mutex.RUnlock()
-		if hidden {
-			http.Error(w, "Session not accessible", http.StatusForbidden)
-			return
-		}
+	if !terminalManager.HasVisibleSession(sessionID) {
+		http.Error(w, "Session not accessible", http.StatusForbidden)
+		return
 	}
 
 	// Get history from terminal manager
@@ -125,14 +120,9 @@ func (ws *ReactWebServer) handleTerminalHistoryPost(w http.ResponseWriter, r *ht
 	}
 
 	// Reject hidden sessions — they are not user-accessible.
-	if session, exists := terminalManager.GetSession(req.SessionID); exists {
-		session.mutex.RLock()
-		hidden := session.Hidden
-		session.mutex.RUnlock()
-		if hidden {
-			http.Error(w, "Session not accessible", http.StatusForbidden)
-			return
-		}
+	if !terminalManager.HasVisibleSession(req.SessionID) {
+		http.Error(w, "Session not accessible", http.StatusForbidden)
+		return
 	}
 
 	if err := terminalManager.AddToHistory(req.SessionID, command); err != nil {

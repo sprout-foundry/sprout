@@ -91,7 +91,7 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 	session.mutex.Unlock()
 
 	scrollback := string(session.ring.snapshot())
-	fmt.Printf("TerminalManager: reattached to session %s (scrollback: %d bytes)\n", sessionID, len(scrollback))
+	log.Printf("TerminalManager: reattached to session %s (scrollback: %d bytes)", sessionID, len(scrollback))
 	return scrollback, nil
 }
 
@@ -112,7 +112,7 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration) {
 	tm.mutex.RUnlock()
 
 	for _, sessionID := range toClose {
-		fmt.Printf("Cleaning up inactive terminal session: %s\n", sessionID)
+		log.Printf("Cleaning up inactive terminal session: %s", sessionID)
 		if err := tm.CloseSession(sessionID); err != nil {
 			log.Printf("CleanupInactiveSessions: failed to close %s: %v", sessionID, err)
 		}

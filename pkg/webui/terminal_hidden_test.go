@@ -443,3 +443,49 @@ func TestCreateHiddenSessionPanicRecovery(t *testing.T) {
 		t.Error("returned session should be nil after panic recovery")
 	}
 }
+
+func TestReattachSessionErrorDoesNotLeakHiddenStatus(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	if _, err := tm.CreateHiddenSession("agent-bg-1", "agent", "chat-1"); err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	_, err := tm.ReattachSession("agent-bg-1")
+	if err == nil {
+		t.Fatal("expected error when reattaching to hidden session")
+	}
+
+	errMsg := strings.ToLower(err.Error())
+	if strings.Contains(errMsg, "hidden") {
+		t.Errorf("error message should not reveal hidden status: %q", err.Error())
+	}
+
+	tm.CloseSession("agent-bg-1")
+}
+
+func TestGetVisibleSessionCountExcludesHidden(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	if _, err := tm.CreateSession("regular-1"); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	if _, err := tm.CreateHiddenSession("hidden-1", "agent", "chat-1"); err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	visibleCount := tm.GetVisibleSessionCount()
+	if visibleCount != 1 {
+		t.Errorf("expected 1 visible session, got %d", visibleCount)
+	}
+
+	totalCount := tm.GetSessionCount()
+	if totalCount != 2 {
+		t.Errorf("expected 2 total sessions, got %d", totalCount)
+	}
+
+	tm.CloseSession("regular-1")
+	tm.CloseSession("hidden-1")
+}

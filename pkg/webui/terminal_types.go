@@ -193,7 +193,8 @@ func NewTerminalManager(workspaceRoot string) *TerminalManager {
 	}
 }
 
-// HasSession checks if a session exists (for reattach).
+// HasSession checks if a session exists (for reattach). Returns true for both
+// visible and hidden sessions. Use HasVisibleSession() for user-facing checks.
 func (tm *TerminalManager) HasSession(sessionID string) bool {
 	tm.mutex.RLock()
 	defer tm.mutex.RUnlock()
@@ -216,7 +217,9 @@ func (tm *TerminalManager) HasVisibleSession(sessionID string) bool {
 	return !session.Hidden
 }
 
-// GetSession retrieves a terminal session.
+// GetSession retrieves any terminal session, including hidden ones.
+// Callers that need user-facing access should check session.Hidden before
+// exposing session data, or use HasVisibleSession() first.
 func (tm *TerminalManager) GetSession(sessionID string) (*TerminalSession, bool) {
 	tm.mutex.RLock()
 	defer tm.mutex.RUnlock()
@@ -242,7 +245,9 @@ func (tm *TerminalManager) ListSessions() []string {
 	return sessions
 }
 
-// ListAllSessions returns all session IDs including hidden ones.
+// ListAllSessions returns ALL session IDs, including hidden (agent-owned) sessions.
+// WARNING: Do NOT expose this to user-facing APIs. Use ListSessions() for user-visible
+// session lists. This is intended for server-side operations like CloseAllSessions().
 func (tm *TerminalManager) ListAllSessions() []string {
 	tm.mutex.RLock()
 	defer tm.mutex.RUnlock()
@@ -271,7 +276,8 @@ func (tm *TerminalManager) ListHiddenSessions() []string {
 	return sessions
 }
 
-// GetSessionCount returns the number of active sessions.
+// GetSessionCount returns the number of all active sessions, including hidden ones.
+// For user-facing counts, use GetVisibleSessionCount() instead.
 func (tm *TerminalManager) GetSessionCount() int {
 	tm.mutex.RLock()
 	defer tm.mutex.RUnlock()
@@ -280,6 +286,23 @@ func (tm *TerminalManager) GetSessionCount() int {
 	for _, session := range tm.sessions {
 		session.mutex.RLock()
 		if session.Active {
+			count++
+		}
+		session.mutex.RUnlock()
+	}
+	return count
+}
+
+// GetVisibleSessionCount returns the number of active sessions that are not hidden.
+// Use this for user-facing stats. Use GetSessionCount() for internal/maintenance purposes.
+func (tm *TerminalManager) GetVisibleSessionCount() int {
+	tm.mutex.RLock()
+	defer tm.mutex.RUnlock()
+
+	count := 0
+	for _, session := range tm.sessions {
+		session.mutex.RLock()
+		if session.Active && !session.Hidden {
 			count++
 		}
 		session.mutex.RUnlock()

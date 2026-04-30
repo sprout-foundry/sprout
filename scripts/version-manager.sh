@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# ledit Version Manager Script
+# sprout Version Manager Script
 # Simplified version management for tag-based deployment process
 
 set -e
@@ -29,7 +29,7 @@ get_build_date() {
 
 # Build with version information
 build_with_version() {
-    echo -e "${BLUE}Building ledit with version information...${NC}"
+    echo -e "${BLUE}Building sprout with version information...${NC}"
     
     local tag=$(get_current_tag)
     local commit=$(get_current_commit)
@@ -40,18 +40,18 @@ build_with_version() {
         tag="dev-$commit"
     fi
     
-    local ldflags="-X 'github.com/alantheprice/ledit/cmd.version=$tag'"
-    ldflags="$ldflags -X 'github.com/alantheprice/ledit/cmd.gitCommit=$commit'"
-    ldflags="$ldflags -X 'github.com/alantheprice/ledit/cmd.buildDate=$date'"
-    ldflags="$ldflags -X 'github.com/alantheprice/ledit/cmd.gitTag=$tag'"
+    local ldflags="-X 'github.com/sprout-foundry/sprout/cmd.version=$tag'"
+    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/cmd.gitCommit=$commit'"
+    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/cmd.buildDate=$date'"
+    ldflags="$ldflags -X 'github.com/sprout-foundry/sprout/cmd.gitTag=$tag'"
 
     echo -e "${GREEN}Using ldflags: $ldflags${NC}"
 
-    go build -tags "ollama_test,browser" -ldflags "$ldflags" -o ledit .
+    go build -tags "browser" -ldflags "$ldflags" -o sprout .
 
     echo -e "${GREEN}Build completed successfully!${NC}"
     echo -e "${BLUE}Version information:${NC}"
-    ./ledit version
+    ./sprout version
 }
 
 # Show current version information
@@ -73,10 +73,10 @@ generate_ldflags() {
         tag="dev"
     fi
     
-    echo "-X 'github.com/alantheprice/ledit/cmd.version=$tag'"
-    echo "-X 'github.com/alantheprice/ledit/cmd.gitCommit=$commit'"
-    echo "-X 'github.com/alantheprice/ledit/cmd.buildDate=$date'"
-    echo "-X 'github.com/alantheprice/ledit/cmd.gitTag=$tag'"
+    echo "-X 'github.com/sprout-foundry/sprout/cmd.version=$tag'"
+    echo "-X 'github.com/sprout-foundry/sprout/cmd.gitCommit=$commit'"
+    echo "-X 'github.com/sprout-foundry/sprout/cmd.buildDate=$date'"
+    echo "-X 'github.com/sprout-foundry/sprout/cmd.gitTag=$tag'"
 }
 
 # Print usage information
@@ -84,7 +84,7 @@ usage() {
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  build    - Build ledit with version information"
+    echo "  build    - Build sprout with version information"
     echo "  show     - Show current version information"
     echo "  ldflags  - Generate ldflags for CI/CD systems"
     echo ""
@@ -94,7 +94,7 @@ usage() {
     echo ""
     echo "For GitHub Actions integration:"
     echo "  LD_FLAGS=\$(./scripts/version-manager.sh ldflags | tr '\\n' ' ')"
-    echo "  go build -tags \"ollama_test,browser\" -ldflags \"\$LD_FLAGS\" -o ledit ."
+    echo "  go build -tags \"browser\" -ldflags \"\$LD_FLAGS\" -o sprout ."
 }
 
 # Main execution

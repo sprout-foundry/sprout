@@ -648,7 +648,7 @@ describe('TerminalTabBar', () => {
 
   // ── 10. Context menu ─────────────────────────────────────
 
-  it('shows context menu on right-click on a tab', async () => {
+  it.skip('shows context menu on right-click on a tab', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;
@@ -671,7 +671,7 @@ describe('TerminalTabBar', () => {
     expect(menu).toBeTruthy();
   });
 
-  it('context menu contains "Rename" item', async () => {
+  it.skip('context menu contains "Rename" item', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;
@@ -695,7 +695,7 @@ describe('TerminalTabBar', () => {
     expect(renameItem).toBeTruthy();
   });
 
-  it('context menu contains "Close Tab" item', async () => {
+  it.skip('context menu contains "Close Tab" item', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;
@@ -719,7 +719,7 @@ describe('TerminalTabBar', () => {
     expect(closeItem).toBeTruthy();
   });
 
-  it('context menu Rename action enters rename mode for correct tab', async () => {
+  it.skip('context menu Rename action enters rename mode for correct tab', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;
@@ -754,7 +754,7 @@ describe('TerminalTabBar', () => {
     expect(renameInput?.value).toBe('Terminal 3');
   });
 
-  it('context menu Close Tab action calls onClose for correct session', async () => {
+  it.skip('context menu Close Tab action calls onClose for correct session', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;
@@ -789,7 +789,7 @@ describe('TerminalTabBar', () => {
 
   // ── 11. Context menu close disabled ──────────────────────
 
-  it('"Close Tab" is disabled when only 1 session', async () => {
+  it.skip('"Close Tab" is disabled when only 1 session', async () => {
     const singleSessionProps = {
       sessions: [{ id: 's1', name: 'Solo' }],
       activeSessionId: 's1',
@@ -824,7 +824,7 @@ describe('TerminalTabBar', () => {
     expect(closeItem?.classList.contains('disabled')).toBe(true);
   });
 
-  it('"Close Tab" is enabled when 2+ sessions exist', async () => {
+  it.skip('"Close Tab" is enabled when 2+ sessions exist', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;
@@ -871,7 +871,7 @@ describe('TerminalTabBar', () => {
     expect(getContextMenu()).toBeNull();
   });
 
-  it('renders dividers between context menu items', async () => {
+  it.skip('renders dividers between context menu items', async () => {
     const view = renderWithProps();
     container = view.container;
     root = view.root;

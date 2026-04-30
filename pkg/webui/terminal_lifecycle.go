@@ -56,7 +56,7 @@ func (tm *TerminalManager) DetachFromSession(sessionID string) error {
 
 // CloseAllSessions closes all known terminal sessions and returns the first error encountered.
 func (tm *TerminalManager) CloseAllSessions() error {
-	sessionIDs := tm.ListSessions()
+	sessionIDs := tm.ListAllSessions()
 	var firstErr error
 	for _, sessionID := range sessionIDs {
 		if err := tm.CloseSession(sessionID); err != nil && firstErr == nil {

@@ -916,7 +916,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         if (draft) return;
         setDraggedPath(filePath);
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('application/x-ledit-filepath', filePath);
+        e.dataTransfer.setData('application/x-sprout-filepath', filePath);
         // Set a minimal drag image for better UX
         if (e.currentTarget instanceof HTMLElement) {
           e.dataTransfer.setDragImage(e.currentTarget, 0, 0);
@@ -1028,7 +1028,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         setDropTargetPath(null);
         setIsDropOnRoot(false);
 
-        const sourcePath = draggedPath || e.dataTransfer.getData('application/x-ledit-filepath');
+        const sourcePath = draggedPath || e.dataTransfer.getData('application/x-sprout-filepath');
         if (!sourcePath) {
           setDraggedPath(null);
           return;
@@ -1398,7 +1398,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             setIsDropOnRoot(false);
             setDropTargetPath(null);
 
-            const sourcePath = draggedPath || e.dataTransfer.getData('application/x-ledit-filepath');
+            const sourcePath = draggedPath || e.dataTransfer.getData('application/x-sprout-filepath');
             if (!sourcePath) return;
             setDraggedPath(null);
 

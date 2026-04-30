@@ -14,7 +14,7 @@ import { notificationBus } from '../services/notificationBus';
 
 type Theme = ThemeMode;
 
-const IMPORTED_THEMES_STORAGE_KEY = 'ledit-imported-themes';
+const IMPORTED_THEMES_STORAGE_KEY = 'sprout-imported-themes';
 const importer = new ThemeImporter();
 
 interface ThemeContextValue {
@@ -43,8 +43,8 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
-const THEME_STORAGE_KEY = 'ledit-editor-theme-mode';
-const THEME_PACK_STORAGE_KEY = 'ledit-editor-theme-pack';
+const THEME_STORAGE_KEY = 'sprout-editor-theme-mode';
+const THEME_PACK_STORAGE_KEY = 'sprout-editor-theme-pack';
 
 function loadImportedThemes(): ThemePack[] {
   try {

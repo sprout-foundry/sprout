@@ -1,7 +1,7 @@
 /**
  * Session-restored event listener.
  *
- * Listens for the custom `ledit:session-restored` DOM event (dispatched
+ * Listens for the custom `sprout:session-restored` DOM event (dispatched
  * by the service worker when a previous editor session is recovered)
  * and hydrates the application state with the restored messages.
  */
@@ -47,7 +47,7 @@ export function useSessionRestored({ setState }: UseSessionRestoredOptions): voi
       }
     };
 
-    window.addEventListener('ledit:session-restored', handleSessionRestored);
-    return () => window.removeEventListener('ledit:session-restored', handleSessionRestored);
+    window.addEventListener('sprout:session-restored', handleSessionRestored);
+    return () => window.removeEventListener('sprout:session-restored', handleSessionRestored);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- setState is a stable useState setter
 }

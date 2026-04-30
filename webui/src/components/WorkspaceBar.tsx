@@ -38,7 +38,7 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
         ? `~${path.slice(homePath.length)}`
         : path;
       // Prefer ssh_context from the API; fall back to the proxy base set by the
-      // local server when serving the SSH proxy page (LEDIT_PROXY_BASE).
+      // local server when serving the SSH proxy page (SPROUT_PROXY_BASE).
       const proxyCtx = getSSHProxyContext();
       const isRemote = Boolean(ws.ssh_context?.is_remote) || Boolean(proxyCtx);
       const hostAlias = (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null)
@@ -67,8 +67,8 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({
         setBar({ workspacePath: collapsed, hostAlias, isRemote });
       }).catch(() => {});
     };
-    window.addEventListener('ledit:workspace-changed', onWorkspaceChange);
-    return () => window.removeEventListener('ledit:workspace-changed', onWorkspaceChange);
+    window.addEventListener('sprout:workspace-changed', onWorkspaceChange);
+    return () => window.removeEventListener('sprout:workspace-changed', onWorkspaceChange);
   }, [isConnected]);
 
   // Hide on mobile when the sidebar menu is covering the content

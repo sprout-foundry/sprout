@@ -15,7 +15,7 @@ interface UseHotkeysConfigOptions {
 /**
  * Loads the hotkeys config path from the API and exposes a handler to
  * open the hotkeys config file in the editor. Also listens for
- * `ledit:open-hotkeys-config` custom events.
+ * `sprout:open-hotkeys-config` custom events.
  */
 export function useHotkeysConfig({
   isConnected,
@@ -60,7 +60,7 @@ export function useHotkeysConfig({
     const handler = () => {
       handleOpenHotkeysConfig();
     };
-    window.addEventListener('ledit:open-hotkeys-config', handler);
-    return () => window.removeEventListener('ledit:open-hotkeys-config', handler);
+    window.addEventListener('sprout:open-hotkeys-config', handler);
+    return () => window.removeEventListener('sprout:open-hotkeys-config', handler);
   }, [handleOpenHotkeysConfig]);
 }

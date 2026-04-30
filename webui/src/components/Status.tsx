@@ -40,12 +40,12 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
 
   const handlePersonaClick = () => {
     if (!supportsSettings) return;
-    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('ledit:open-settings-focus', { detail: { focus: 'persona' } }));
+    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('sprout:open-settings-focus', { detail: { focus: 'persona' } }));
   };
 
   const handleProviderModelClick = () => {
     if (!supportsSettings) return;
-    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('ledit:open-settings-focus', { detail: { focus: 'provider' } }));
+    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
   };
 
   /** Format the internal persona ID (e.g. "code_reviewer") into a display label (e.g. "Code Reviewer").

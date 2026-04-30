@@ -94,19 +94,23 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 
 // CleanupInactiveSessions removes sessions that have been inactive for too long.
 func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration) {
-	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
+	var toClose []string
 
+	tm.mutex.RLock()
 	now := time.Now()
 	for sessionID, session := range tm.sessions {
 		session.mutex.RLock()
 		inactive := now.Sub(session.LastUsed) > timeout
 		session.mutex.RUnlock()
-
 		if inactive {
-			fmt.Printf("Cleaning up inactive terminal session: %s\n", sessionID)
-			go tm.CloseSession(sessionID)
+			toClose = append(toClose, sessionID)
 		}
+	}
+	tm.mutex.RUnlock()
+
+	for _, sessionID := range toClose {
+		fmt.Printf("Cleaning up inactive terminal session: %s\n", sessionID)
+		go tm.CloseSession(sessionID)
 	}
 }
 

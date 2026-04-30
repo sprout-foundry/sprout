@@ -85,7 +85,7 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 	}
 	if session.Hidden {
 		session.mutex.Unlock()
-		return "", fmt.Errorf("session %s is not accessible", sessionID)
+		return "", fmt.Errorf("session %s does not exist", sessionID)
 	}
 	session.LastUsed = time.Now()
 	session.mutex.Unlock()
@@ -113,7 +113,9 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration) {
 
 	for _, sessionID := range toClose {
 		fmt.Printf("Cleaning up inactive terminal session: %s\n", sessionID)
-		tm.CloseSession(sessionID)
+		if err := tm.CloseSession(sessionID); err != nil {
+			log.Printf("CleanupInactiveSessions: failed to close %s: %v", sessionID, err)
+		}
 	}
 }
 

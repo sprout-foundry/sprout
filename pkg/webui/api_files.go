@@ -82,11 +82,11 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 	terminalSessions := 0
 	for _, clientCtx := range ws.clientContexts {
 		if clientCtx != nil && clientCtx.Terminal != nil {
-			terminalSessions += clientCtx.Terminal.SessionCount()
+			terminalSessions += clientCtx.Terminal.GetVisibleSessionCount()
 		}
 	}
 	if terminalSessions == 0 && ws.terminalManager != nil {
-		terminalSessions = ws.terminalManager.SessionCount()
+		terminalSessions = ws.terminalManager.GetVisibleSessionCount()
 	}
 
 	// Get agent stats if available

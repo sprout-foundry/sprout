@@ -26,16 +26,19 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 	session.Active = false
 	if session.Cancel != nil {
 		session.Cancel()
+		session.Cancel = nil
 	}
 	// Close the PTY file to unblock the PTY reader goroutine.
 	if session.Pty != nil {
 		session.Pty.Close()
+		session.Pty = nil
 	}
 	// Wait for the shell to exit.
 	if session.Command != nil && session.Command.Process != nil {
 		if _, err := session.Command.Process.Wait(); err != nil {
 			log.Printf("Terminal %s: process wait: %v", sessionID, err)
 		}
+		session.Command = nil
 	}
 	session.mutex.Unlock()
 
@@ -110,7 +113,7 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration) {
 
 	for _, sessionID := range toClose {
 		fmt.Printf("Cleaning up inactive terminal session: %s\n", sessionID)
-		go tm.CloseSession(sessionID)
+		tm.CloseSession(sessionID)
 	}
 }
 

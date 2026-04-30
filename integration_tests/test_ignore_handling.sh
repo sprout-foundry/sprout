@@ -21,7 +21,7 @@ run_test_logic() {
     echo "Using 'ledit ignore' to ignore temp_data.tmp"
 
     # Use the new 'ignore' command
-    ../ledit ignore "temp_data.tmp"
+    ../sprout ignore "temp_data.tmp"
 
     echo
     echo "--- Verifying .ledit/leditignore content for simple ignore ---"
@@ -51,7 +51,7 @@ run_test_logic() {
 
     echo "**/*.log" >> .gitignore
     echo "docs/" >> .gitignore
-    ../ledit ignore "**/ignore_this_dir/"
+    ../sprout ignore "**/ignore_this_dir/"
     echo "Added glob patterns to .gitignore and .leditignore"
     echo "--- .gitignore content: ---"
     cat .gitignore
@@ -61,7 +61,7 @@ run_test_logic() {
     echo "-----------------------------------"
 
     # Trigger a lightweight workspace refresh without asking for code changes
-    ../ledit agent "#WORKSPACE" --skip-prompt -m "$model_name"
+    ../sprout agent "#WORKSPACE" --skip-prompt -m "$model_name"
 
     echo
     echo "--- Verifying Test ---"

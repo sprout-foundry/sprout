@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -269,7 +270,7 @@ func parseStructuredJSONContent(content string, callerTool string) (interface{},
 	case map[string]interface{}, []interface{}:
 		return parsed, nil
 	default:
-		return nil, errors.New("top-level JSON must be an object or array")
+		return nil, agenterrors.NewInvalidInputError("top-level JSON must be an object or array", nil)
 	}
 }
 
@@ -527,7 +528,7 @@ func getFilePath(args map[string]interface{}) (string, error) {
 	if filePath, exists := args["file_path"]; exists {
 		return convertToString(filePath, "file_path")
 	}
-	return "", errors.New("parameter 'path' is required")
+	return "", agenterrors.NewInvalidInputError("parameter 'path' is required", nil)
 }
 
 // getRequiredString extracts a required string parameter

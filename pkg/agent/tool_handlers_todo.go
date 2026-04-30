@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
@@ -14,13 +14,13 @@ import (
 func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	todosRaw, ok := args["todos"]
 	if !ok {
-		return "", errors.New("missing todos argument")
+		return "", agenterrors.NewInvalidInputError("missing todos argument", nil)
 	}
 
 	// Parse the todos array
 	todosSlice, ok := todosRaw.([]interface{})
 	if !ok {
-		return "", errors.New("todos must be an array")
+		return "", agenterrors.NewInvalidInputError("todos must be an array", nil)
 	}
 
 	var todos []tools.TodoItem
@@ -28,7 +28,7 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 	for _, todoRaw := range todosSlice {
 		todoMap, ok := todoRaw.(map[string]interface{})
 		if !ok {
-			return "", errors.New("each todo must be an object")
+			return "", agenterrors.NewInvalidInputError("each todo must be an object", nil)
 		}
 
 		todo := tools.TodoItem{}
@@ -47,10 +47,10 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 		}
 
 		if todo.Content == "" {
-			return "", errors.New("each todo requires content")
+			return "", agenterrors.NewInvalidInputError("each todo requires content", nil)
 		}
 		if todo.Status == "" {
-			return "", errors.New("each todo requires status")
+			return "", agenterrors.NewInvalidInputError("each todo requires status", nil)
 		}
 		todos = append(todos, todo)
 	}

@@ -85,7 +85,9 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 	}
 	if session.Hidden {
 		session.mutex.Unlock()
-		return "", fmt.Errorf("session %s does not exist", sessionID)
+		// Intentionally does not distinguish between "does not exist" and "is hidden"
+		// to prevent information leakage about agent-owned sessions.
+		return "", fmt.Errorf("session %s is not accessible", sessionID)
 	}
 	session.LastUsed = time.Now()
 	session.mutex.Unlock()

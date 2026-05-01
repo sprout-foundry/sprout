@@ -41,7 +41,7 @@ import {
   indentUnit,
 } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
-import { highlightSelectionMatches } from '@codemirror/search';
+import { wordHighlightsExtension } from '../extensions/wordHighlights';
 import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
 import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
 import type { HighlightStyle } from '@codemirror/language';
@@ -210,7 +210,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
 
       // ── Search ──
       customSearchExtension(() => actions.getSaveFn()()),
-      highlightSelectionMatches(),
+      wordHighlightsExtension(),
 
       // ── Edit helpers ──
       renameHighlightField,

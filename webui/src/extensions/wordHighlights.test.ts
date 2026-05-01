@@ -1,43 +1,47 @@
 /**
  * wordHighlights.test.ts — Unit tests for the wordHighlights extension.
  *
- * Since CodeMirror 6 modules use ESM and cannot load in Jest 27.x,
- * the CM imports are mocked. We test the exported factory function and
- * verify the structure of the returned extension array.
+ * CodeMirror 6 modules are mocked to avoid loading their ESM internals
+ * in the test runner. We test the exported factory function and verify
+ * the structure of the returned extension array.
  *
  * Note: EditorView.baseTheme is called at module-load time (not inside the
  * factory), so its mock call data is captured on first import and must not
  * be cleared between tests.
  */
 
-// ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
+import { vi, describe, it, expect } from 'vitest';
 
-jest.mock('@codemirror/view', () => ({
+// ── Mock CodeMirror modules ───────────────────────────────────────
+
+vi.mock('@codemirror/view', () => ({
   Decoration: {
-    mark: jest.fn(() => ({ range: jest.fn() })),
+    mark: vi.fn(() => ({ range: vi.fn() })),
     none: [],
-    set: jest.fn(),
-    widget: jest.fn(),
+    set: vi.fn(),
+    widget: vi.fn(),
   },
-  ViewPlugin: { fromClass: jest.fn() },
+  ViewPlugin: { fromClass: vi.fn() },
   EditorView: {
-    baseTheme: jest.fn(() => []),
+    baseTheme: vi.fn(() => []),
   },
 }));
 
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
-jest.mock('@codemirror/search', () => ({
-  highlightSelectionMatches: jest.fn(() => ({ type: 'highlightSelectionMatches' })),
+vi.mock('@codemirror/search', () => ({
+  highlightSelectionMatches: vi.fn(() => ({ type: 'highlightSelectionMatches' })),
 }));
 
-// ── Module under test (Jest hoists mocks above imports) ─────────────
+// ── Module under test (Vitest hoists vi.mock above imports) ────────
 
 import { wordHighlightsExtension } from './wordHighlights';
+import { EditorView } from '@codemirror/view';
+import { highlightSelectionMatches } from '@codemirror/search';
 
 // Access the mocked EditorView to capture baseTheme calls
-const mockEditorViewBaseTheme = require('@codemirror/view').EditorView.baseTheme;
-const mockHSM = require('@codemirror/search').highlightSelectionMatches;
+const mockEditorViewBaseTheme = vi.mocked(EditorView.baseTheme);
+const mockHSM = vi.mocked(highlightSelectionMatches);
 
 // Captured once from module-load time (before any tests run)
 const themeConfig = mockEditorViewBaseTheme.mock.calls[0]?.[0];
@@ -83,34 +87,6 @@ describe('wordHighlightsExtension', () => {
       maxMatches: 200,
       wholeWords: false,
     });
-  });
-
-  it('configures highlightSelectionMatches with highlightWordAroundCursor: true', () => {
-    wordHighlightsExtension();
-    expect(mockHSM).toHaveBeenCalledWith(
-      expect.objectContaining({ highlightWordAroundCursor: true })
-    );
-  });
-
-  it('configures highlightSelectionMatches with minSelectionLength of 2', () => {
-    wordHighlightsExtension();
-    expect(mockHSM).toHaveBeenCalledWith(
-      expect.objectContaining({ minSelectionLength: 2 })
-    );
-  });
-
-  it('configures highlightSelectionMatches with maxMatches of 200', () => {
-    wordHighlightsExtension();
-    expect(mockHSM).toHaveBeenCalledWith(
-      expect.objectContaining({ maxMatches: 200 })
-    );
-  });
-
-  it('configures highlightSelectionMatches with wholeWords: false', () => {
-    wordHighlightsExtension();
-    expect(mockHSM).toHaveBeenCalledWith(
-      expect.objectContaining({ wholeWords: false })
-    );
   });
 
   // ── Theme selector presence tests ─────────────────────────────

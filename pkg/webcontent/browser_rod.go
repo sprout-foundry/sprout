@@ -158,6 +158,11 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 
 	l := launcher.New().Headless(true).NoSandbox(true).Context(ctx)
 
+	// Disable GPU acceleration. WSL2 and other headless environments
+	// lack a real GPU, causing PageCaptureScreenshot to hang indefinitely.
+	// --disable-gpu forces software rendering which works everywhere.
+	l.Set("disable-gpu")
+
 	// Try common system browser paths before auto-download.
 	// This allows running on systems with pre-installed Chromium/Chrome.
 	for _, bin := range systemBrowserPaths() {
@@ -451,7 +456,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	if persistentSession {
 		session, err := r.acquireSession(ctx, opts.SessionID)
 		if err != nil {
-			return nil, fmt.Errorf("execute step navigate: %w", err)
+			return nil, fmt.Errorf("acquire browser session: %w", err)
 		}
 		page = session.page
 		sessionID = session.id
@@ -465,7 +470,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	} else {
 		incognito, tempPage, err := r.openIncognitoPage(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("execute step back: %w", err)
+			return nil, fmt.Errorf("open browser page: %w", err)
 		}
 		page = tempPage
 		cleanup = func() {
@@ -476,7 +481,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	defer cleanup()
 
 	if err := applyViewportAndUA(page, opts.ViewportWidth, opts.ViewportHeight, opts.UserAgent); err != nil {
-		return nil, fmt.Errorf("execute step reload: %w", err)
+		return nil, fmt.Errorf("apply viewport settings: %w", err)
 	}
 
 	var removeInstrumentation func() error
@@ -501,14 +506,14 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	}
 
 	if err := waitForSelectorIfNeeded(page, opts.WaitForSelector, opts.WaitTimeoutMs); err != nil {
-		return nil, fmt.Errorf("execute step wait_for: %w", err)
+		return nil, fmt.Errorf("wait for selector: %w", err)
 	}
 
 	result := &BrowseResult{SessionID: sessionID}
 
-	for _, step := range opts.Steps {
+	for i, step := range opts.Steps {
 		if err := executeBrowseStep(page, step, opts.WaitTimeoutMs, result); err != nil {
-			return nil, fmt.Errorf("execute step click via JS: %w", err)
+			return nil, fmt.Errorf("step[%d] %s: %w", i, step.Action, err)
 		}
 	}
 
@@ -524,7 +529,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 
 	if opts.ScreenshotPath != "" {
 		if err := r.captureCurrentPageScreenshot(page, opts.ScreenshotPath); err != nil {
-			return nil, fmt.Errorf("execute step select option: %w", err)
+			return nil, fmt.Errorf("capture screenshot: %w", err)
 		}
 		result.ScreenshotPath = opts.ScreenshotPath
 	}
@@ -532,7 +537,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	if len(opts.CaptureSelectors) > 0 {
 		captures, err := captureSelectors(page, opts.CaptureSelectors, opts.ResponseMaxChars)
 		if err != nil {
-			return nil, fmt.Errorf("execute step screenshot: %w", err)
+			return nil, fmt.Errorf("capture selectors: %w", err)
 		}
 		result.SelectorCaptures = captures
 	}
@@ -556,7 +561,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 	if opts.IncludeConsole || opts.CaptureNetwork {
 		consoleMessages, pageErrors, networkRequests, err := captureBrowserDiagnostics(page)
 		if err != nil {
-			return nil, fmt.Errorf("execute step assert_text: %w", err)
+			return nil, fmt.Errorf("capture browser diagnostics: %w", err)
 		}
 		if opts.IncludeConsole {
 			result.ConsoleMessages = truncateStringSlice(consoleMessages, 40, textLimit(opts.ResponseMaxChars))
@@ -581,18 +586,18 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 			return out;
 		}`)
 		if err != nil {
-			return nil, fmt.Errorf("execute step assert_title: %w", err)
+			return nil, fmt.Errorf("capture cookies: %w", err)
 		}
 		result.Cookies = cookies
 	}
 	if opts.CaptureStorage {
 		localStorage, err := captureStorageMap(page, `() => Object.fromEntries(Object.entries(localStorage))`)
 		if err != nil {
-			return nil, fmt.Errorf("execute step assert_url: %w", err)
+			return nil, fmt.Errorf("capture localStorage: %w", err)
 		}
 		sessionStorage, err := captureStorageMap(page, `() => Object.fromEntries(Object.entries(sessionStorage))`)
 		if err != nil {
-			return nil, fmt.Errorf("execute step eval: %w", err)
+			return nil, fmt.Errorf("capture sessionStorage: %w", err)
 		}
 		result.LocalStorage = localStorage
 		result.SessionStorage = sessionStorage

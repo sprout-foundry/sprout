@@ -46,6 +46,29 @@ type APIToolCall struct {
 }
 
 // HasActiveChangesForRevision returns whether a revision ID exists and has any active changes
+// GetFilesForRevision returns the file paths of all active changes in a revision.
+// Returns an empty slice if the revision is not found or has no active changes.
+func GetFilesForRevision(revisionID string) ([]string, error) {
+	changes, err := fetchAllChanges()
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch changes: %w", err)
+	}
+
+	revisionGroups := groupChangesByRevision(changes)
+	for _, group := range revisionGroups {
+		if group.RevisionID == revisionID {
+			active := getActiveChanges(group.Changes)
+			paths := make([]string, 0, len(active))
+			for _, change := range active {
+				paths = append(paths, change.Filename)
+			}
+			return paths, nil
+		}
+	}
+
+	return nil, nil
+}
+
 func HasActiveChangesForRevision(revisionID string) (bool, error) {
 	changes, err := fetchAllChanges()
 	if err != nil {

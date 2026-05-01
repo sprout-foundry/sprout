@@ -723,7 +723,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 [x] - SP-010 Phase 1: Extract `useEditorExtensions` hook from EditorPane — Build CodeMirror extension set from buffer config (language, theme, settings). Target ~150 lines. `webui/src/hooks/useEditorExtensions.ts`
 [x] - SP-010 Phase 1: Extract `useEditorExtensions` hook from EditorPane — Build CodeMirror extension set from buffer config (language, theme, settings). Target ~300 lines. `webui/src/hooks/useEditorExtensions.ts` (duplicate entry — completed above; target raised to ~300 to accommodate compartment management and docs)
-[] - SP-010 Phase 1: Extract `useEditorDiagnostics` hook from EditorPane — Diagnostic fetching, lint gutter updates, debounced 500ms. Target ~120 lines. `webui/src/hooks/useEditorDiagnostics.ts`
+[x] - SP-010 Phase 1: Extract `useEditorDiagnostics` hook from EditorPane — Diagnostic fetching, lint gutter updates, debounced 500ms. Target ~120 lines. `webui/src/hooks/useEditorDiagnostics.ts`
 [] - SP-010 Phase 1: Extract `useEditorFileIO` hook from EditorPane — File load/save, external change detection, conflict resolution. Target ~200 lines. `webui/src/hooks/useEditorFileIO.ts`
 [] - SP-010 Phase 1: Extract `useEditorScrollSync` hook from EditorPane — Scroll position persistence, cross-pane linked scrolling. Target ~100 lines. `webui/src/hooks/useEditorScrollSync.ts`
 [] - SP-010 Phase 1: Extract `useEditorSymbols` hook from EditorPane — Symbol extraction, breadcrumb data. Fix: key to content changes, not cursor position. Target ~100 lines. `webui/src/hooks/useEditorSymbols.ts`

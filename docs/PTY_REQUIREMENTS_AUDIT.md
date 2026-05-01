@@ -1,11 +1,13 @@
-# PTY Terminal System Requirements & Audit
+# PTY Terminal System — Requirements & Implementation Status
 
 ## Requirements
 
 ### REQ-1: Pre-warmed PTY Pool
-A group of hidden PTY sessions that have already booted (sourced .zshrc/.bashrc, etc.) so that all
-shell command execution avoids paying the shell startup cost on every invocation. Sessions must be:
-- Created proactively (one per chat)
+A group of hidden PTY sessions that have already booted (sourced .zshrc/.bashrc, etc.)
+so that all shell command execution avoids paying the shell startup cost on every
+invocation.
+
+- Created proactively (one per chat session)
 - Fully initialized (shell prompt visible, rc files sourced)
 - Reused across multiple commands within the same chat
 
@@ -15,56 +17,51 @@ A `background` mode for `shell_command` that:
 - Returns a session ID immediately
 - Allows checking accumulated output by ID (`check_background=<id>`)
 - Allows stopping the background task by ID (`stop_background=<id>`)
+- Reports whether the process is still running or has exited
 - Useful for running long-lived services (web servers, watchers, etc.)
 
 ### REQ-3: All Commands Through PTY
-In WebUI mode, ALL synchronous shell commands from the agent must route through the pre-warmed
-hidden PTY sessions, not through `os/exec`. This ensures:
+In WebUI mode, ALL synchronous shell commands from the agent must route through
+the pre-warmed hidden PTY sessions, not through `os/exec`. This ensures:
 - Consistent shell environment (aliases, env vars, PATH from .zshrc)
 - No per-command shell startup latency
 - Single code path for shell execution in WebUI mode
 
----
+### REQ-4: UI Attachment for Agent Sessions
+Hidden/background PTY sessions should be "attachable" in the WebUI terminal
+so users can see the output of running agent commands:
+- Background sessions appear as attachable in the terminal tab bar
+- User can click to promote a hidden session to a visible terminal tab
+- User can view accumulated output of background sessions
+- User can kill/stop background sessions from the UI
+- The terminal reuses the existing WebSocket PTY stream (no new PTY needed)
 
-## Audit Findings
+## Implementation Status
 
-### PASS: REQ-3 — All Commands Through PTY
-`ExecuteShellCommandWithSafety` checks for `TerminalManager` in context and routes through hidden
-PTY when available (`streamOutput=false`). Falls back to `os/exec` only when PTY fails or in CLI mode.
-Agent's `executeShellCommandWithTruncation` wires the TerminalManager into context. **Working correctly.**
+### REQ-1: Pre-warmed PTY Pool ✅ COMPLETE
+- `GetOrCreateHiddenSessionForChat` creates one hidden session per chat
+- `waitForShellReady()` waits for 500ms quiet period after shell startup
+- Session reuse works — same chat gets the same session
+- Shell launched with `--login` flag to source rc files
+- Falls back to os/exec if shell fails to initialize
 
-### PARTIAL: REQ-1 — Pre-warmed PTY Pool
-- ✅ `GetOrCreateHiddenSessionForChat` creates one hidden session per chat with deterministic ID
-- ✅ Session reuse works — same chat gets the same session
-- ✅ Shell is launched with `--login` flag to source rc files
-- ❌ **NO readiness wait**: `GetOrCreateHiddenSessionForChat` returns immediately after creating the
-  session, before the shell has finished sourcing .zshrc. The first command sent to a new session
-  may arrive while the shell is still initializing, causing it to be buffered and potentially mixed
-  with startup output.
-- ✅ Tests have `waitForShellReady` but production code does not
+### REQ-2: Background Shell Tasks ✅ COMPLETE
+- `background=true` creates new PTY, writes command, returns session ID
+- `check_background=<id>` returns accumulated output + running/exited status
+- `stop_background=<id>` sends Ctrl+C then closes the session
+- Each background command gets its own session with descriptive name
+- Background sessions get 2-hour cleanup timeout (vs 30-min for regular hidden)
 
-### PARTIAL: REQ-2 — Background Shell Tasks
-- ✅ `background=true` parameter works — creates new PTY, writes command, returns session ID
-- ✅ `check_background=<id>` parameter works — returns accumulated ring buffer output
-- ✅ Background sessions get 2-hour cleanup timeout (vs 30-min for regular hidden)
-- ✅ Each background command gets its own session with descriptive name
-- ❌ **NO `stop_background`**: No mechanism to stop/kill a background task by ID. The
-  `TerminalAccess` interface has no `StopBackground` method. The tool definition has no
-  `stop_background` parameter. Users cannot terminate background services.
-- ❌ **Background output doesn't report process status**: `CheckBackgroundOutput` always reports
-  `status: "running"` — it doesn't check if the process has actually exited.
+### REQ-3: All Commands Through PTY ✅ COMPLETE
+- `ExecuteShellCommandWithSafety` routes through PTY when TerminalManager in context
+- Falls back to os/exec only when PTY fails or in CLI mode
+- Agent wires TerminalManager into context for WebUI mode
 
----
-
-## Gaps to Fix
-
-1. **Shell readiness wait** (REQ-1): Add a readiness wait in `GetOrCreateHiddenSessionForChat`
-   (or in `ExecuteCommandAndWait`) so the first command on a new session doesn't arrive during
-   shell initialization.
-
-2. **Stop background** (REQ-2): Add `stop_background` parameter to `shell_command` tool,
-   `StopBackgroundSession` method to `TerminalAccess` interface and `TerminalManager`, and
-   wire it through the handler.
-
-3. **Background status** (REQ-2): Report whether the background process is still running or
-  has exited in `CheckBackgroundOutput`.
+### REQ-4: UI Attachment ✅ COMPLETE
+- Backend: `GET /api/terminal/agent-sessions` lists background sessions with preview
+- Backend: `POST /api/terminal/agent-sessions/{id}/attach` promotes hidden → visible
+- Backend: `POST /api/terminal/agent-sessions/{id}/kill` terminates background session
+- Backend: `GET /api/terminal/agent-sessions/{id}/output` returns accumulated output
+- Frontend: `TerminalTabBar` component shows `AttachableSession` badges
+- Frontend: Click to attach promotes session to visible terminal tab
+- Frontend: `TerminalPane` supports reattach to existing PTY session

@@ -156,12 +156,37 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 		return r.browser, nil
 	}
 
-	l := launcher.New().Headless(true).NoSandbox(true).Context(ctx)
+	// Attempt launch with retry: first try with GPU enabled; if the GPU probe
+	// (a tiny screenshot) hangs, relaunch with --disable-gpu. This way machines
+	// with a real GPU keep acceleration, while environments like WSL2 or
+	// Docker containers without GPU support fall back gracefully.
+	disableGPU := gpuProbeFailed()
+	for range 2 {
+		browser, needsFallback, err := r.launchAndProbe(ctx, disableGPU)
+		if err != nil {
+			return nil, err
+		}
+		if !needsFallback {
+			r.browser = browser
+			return r.browser, nil
+		}
+		// GPU probe hung — close browser and retry with --disable-gpu.
+		_ = browser.Close()
+		markGPUProbe(false)
+		disableGPU = true
+	}
 
-	// Disable GPU acceleration. WSL2 and other headless environments
-	// lack a real GPU, causing PageCaptureScreenshot to hang indefinitely.
-	// --disable-gpu forces software rendering which works everywhere.
-	l.Set("disable-gpu")
+	return nil, fmt.Errorf("browser launch failed after GPU fallback")
+}
+
+// launchAndProbe launches a browser instance, optionally with --disable-gpu,
+// and probes whether screenshot capture works. Returns the browser, whether
+// a fallback to --disable-gpu is needed, and any error.
+func (r *rodRenderer) launchAndProbe(ctx context.Context, disableGPU bool) (*rod.Browser, bool, error) {
+	l := launcher.New().Headless(true).NoSandbox(true).Context(ctx)
+	if disableGPU {
+		l.Set("disable-gpu")
+	}
 
 	// Try common system browser paths before auto-download.
 	// This allows running on systems with pre-installed Chromium/Chrome.
@@ -174,13 +199,99 @@ func (r *rodRenderer) connect(ctx context.Context) (*rod.Browser, error) {
 
 	u, err := l.Launch()
 	if err != nil {
-		return nil, fmt.Errorf("browser launch: %w", err)
+		return nil, false, fmt.Errorf("browser launch: %w", err)
 	}
-	r.browser = rod.New().ControlURL(u)
-	if err := r.browser.Connect(); err != nil {
-		return nil, fmt.Errorf("browser connect: %w", err)
+	browser := rod.New().ControlURL(u)
+	if err := browser.Connect(); err != nil {
+		return nil, false, fmt.Errorf("browser connect: %w", err)
 	}
-	return r.browser, nil
+
+	// If GPU support hasn't been probed yet, test whether screenshots work.
+	// In environments without a functional GPU (WSL2, some Docker containers),
+	// PageCaptureScreenshot hangs indefinitely. A quick probe lets us detect
+	// this and fall back to --disable-gpu.
+	if !disableGPU && !gpuProbeDone() {
+		if probeGPUSupport(ctx, browser) {
+			markGPUProbe(true)
+		} else {
+			return browser, true, nil // needs fallback
+		}
+	}
+
+	return browser, false, nil
+}
+
+// GPU probe state — persisted across browser reconnects within the same process.
+var (
+	gpuStateMu     sync.RWMutex
+	gpuStateProbed bool
+	gpuStateWorks  bool
+)
+
+func gpuProbeDone() bool {
+	gpuStateMu.RLock()
+	defer gpuStateMu.RUnlock()
+	return gpuStateProbed
+}
+
+func gpuProbeFailed() bool {
+	gpuStateMu.RLock()
+	defer gpuStateMu.RUnlock()
+	return gpuStateProbed && !gpuStateWorks
+}
+
+func markGPUProbe(works bool) {
+	gpuStateMu.Lock()
+	defer gpuStateMu.Unlock()
+	gpuStateProbed = true
+	gpuStateWorks = works
+}
+
+// resetGPUProbe clears the cached GPU probe result. Used for testing.
+func resetGPUProbe() {
+	gpuStateMu.Lock()
+	defer gpuStateMu.Unlock()
+	gpuStateProbed = false
+	gpuStateWorks = false
+}
+
+// probeGPUSupport tests whether screenshot capture works on the given browser.
+// Returns true if the screenshot succeeded, false if it timed out (GPU unavailable).
+// The browser is not closed here — the caller decides what to do.
+func probeGPUSupport(ctx context.Context, browser *rod.Browser) bool {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	page, err := browser.Page(proto.TargetCreateTarget{})
+	if err != nil {
+		return false
+	}
+	defer func() { _ = page.Close() }()
+
+	// Use about:blank — no network needed.
+	if err := page.Navigate("about:blank"); err != nil {
+		return false
+	}
+
+	done := make(chan struct{})
+	var probeErr error
+	go func() {
+		_, probeErr = page.Screenshot(false, &proto.PageCaptureScreenshot{
+			Format: proto.PageCaptureScreenshotFormatPng,
+		})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return probeErr == nil
+	case <-probeCtx.Done():
+		// The screenshot goroutine may still be running (GPU hang).
+		// Wait briefly for it to finish, then abandon it. The browser
+		// will be closed by the caller, which terminates any in-flight
+		// CDP requests and causes the goroutine to exit.
+		return false
+	}
 }
 
 // systemBrowserPaths returns candidate paths for system-installed browsers.

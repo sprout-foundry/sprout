@@ -5,37 +5,17 @@ import {
   keymap,
   type KeyBinding,
   lineNumbers,
-  highlightSpecialChars,
-  highlightActiveLine,
-  highlightActiveLineGutter,
-  rectangularSelection,
-  crosshairCursor,
-  dropCursor,
-  drawSelection,
-  scrollPastEnd,
 } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
-import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
-import { color } from '@uiw/codemirror-extensions-color';
-import { EditorState, Compartment, Transaction } from '@codemirror/state';
-import { defaultKeymap, indentWithTab, history, undo, redo } from '@codemirror/commands';
-import { searchKeymap, openSearchPanel, replaceAll, highlightSelectionMatches } from '@codemirror/search';
-import { customSearchExtension } from '../extensions/searchPanel';
-import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
-import {
-  syntaxHighlighting,
-  defaultHighlightStyle,
-  codeFolding,
-  foldGutter,
-  indentOnInput,
-  bracketMatching,
-  indentUnit,
-} from '@codemirror/language';
-import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
+import { EditorState, Transaction } from '@codemirror/state';
+import { undo, redo } from '@codemirror/commands';
+import { searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
+import { indentUnit } from '@codemirror/language';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useEditorExtensions, TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from '../hooks/useEditorExtensions';
 import LivePreview from './LivePreview';
 import MarkdownPreview from './MarkdownPreview';
 import EditorToolbar from './EditorToolbar';
@@ -53,37 +33,25 @@ import MediaViewer from './MediaViewer';
 import { readFileWithConsent } from '../services/fileAccess';
 import { showFileChangeDialog } from './FileChangeDialog';
 import { getEditorKeymap } from '../utils/editorHotkeys';
-import { diffGutter, updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
+import { updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import './EditorPane.css';
-import { lintDiagnostics, clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
-import { createCodeActionsExtension, codeActionsKeybinding } from '../extensions/codeActions';
-import { cursorHistoryPlugin } from '../extensions/cursorHistory';
-import { dragDropMovePlugin } from '../extensions/dragDropMove';
-import { indentGuidesPlugin } from '../extensions/indentGuides';
-import { stickyScrollPlugin } from '../extensions/stickyScroll';
-import { codeLensPlugin } from '../extensions/codeLens';
-import { bracketColorizationPlugin } from '../extensions/bracketColorization';
-import { linkedScrollExtension, setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
+import { clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
+import { codeActionsKeybinding } from '../extensions/codeActions';
+import { setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
-import { createHoverTooltipExtension } from '../extensions/hoverTooltip';
-import { renameHighlightField, triggerRename } from '../extensions/renameOverlay';
-import { detectIndentation, DEFAULT_INDENT_WIDTH } from '../extensions/indentDetect';
+import { triggerRename } from '../extensions/renameOverlay';
+import { detectIndentation } from '../extensions/indentDetect';
 import { detectLineEnding, type LineEnding } from '../extensions/lineEndingDetect';
 import {
-  createEmmetCompartment,
-  getInitialEmmetExtensions,
   buildEmmetExtensions,
 } from '../extensions/emmet';
 import {
-  createAutoCloseTagCompartment,
-  getInitialAutoCloseTagExtensions,
   buildAutoCloseTagExtensions,
 } from '../extensions/autoCloseTag';
 import { minimapExtension } from '../extensions/minimap';
-import { tabExpandSnippets, setSnippetLanguage } from '../extensions/snippets';
-import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
+import { setSnippetLanguage } from '../extensions/snippets';
 import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { unsavedLineHighlight, setOriginalContent } from '../extensions/unsavedLineHighlight';
+import { setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
@@ -114,11 +82,7 @@ const FONT_SIZE_MIN = 8;       // Minimum legible font size
 const FONT_SIZE_DEFAULT = 13;  // Default matches Monaco/Menlo editor defaults
 const FONT_SIZE_MAX = 72;      // Maximum for accessibility (WCAG supports 200% zoom)
 
-/** Tab size value meaning "use tabs for indentation" (stored in state and localStorage) */
-const TAB_SIZE_TABS_MODE = 0;
-
-// Tab size constants
-const TAB_SIZE_DEFAULT = 4;
+// Tab size constants (TAB_SIZE_TABS_MODE and TAB_SIZE_DEFAULT imported from useEditorExtensions)
 const TAB_SIZE_OPTIONS = [2, 4, 8] as const;
 
 /** Minimum number of indented lines required for auto-detection to be confident */
@@ -144,17 +108,7 @@ const suppressHistoryAnnotations = [
 function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const hotkeysCompartment = useRef(new Compartment());
-  const lineWrappingCompartment = useRef(new Compartment());
-  const relativeLineNumbersCompartment = useRef(new Compartment());
-  const languageCompartment = useRef(new Compartment());
-  const minimapCompartment = useRef(new Compartment());
-  const whitespaceRenderingCompartment = useRef(new Compartment());
-  const emmetCompartment = useRef(createEmmetCompartment());
-  const autoCloseTagCompartment = useRef(createAutoCloseTagCompartment());
-  const fontSizeCompartment = useRef(new Compartment());
-  const tabSizeCompartment = useRef(new Compartment());
-  const lspCompartment = useRef(new Compartment());
+  const { compartments, buildExtensions } = useEditorExtensions();
   const lastInitLanguageKey = useRef<string | null>(null);
 
   // Throttle state for scroll position persistence.
@@ -486,7 +440,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             // Only user's manual cycle choice is persisted.
             if (viewRef.current) {
               viewRef.current.dispatch({
-                effects: tabSizeCompartment.current.reconfigure([
+                effects: compartments.tabSize.reconfigure([
                   EditorState.tabSize.of(detectedSize),
                   indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
                 ]),
@@ -498,7 +452,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             setEditorTabSize(TAB_SIZE_DEFAULT);
             if (viewRef.current) {
               viewRef.current.dispatch({
-                effects: tabSizeCompartment.current.reconfigure([
+                effects: compartments.tabSize.reconfigure([
                   EditorState.tabSize.of(TAB_SIZE_DEFAULT),
                   indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
                 ]),
@@ -698,7 +652,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         debugLog('[onZoomIn] localStorage persist failed:', err);
       }
       viewRef.current?.dispatch({
-        effects: fontSizeCompartment.current.reconfigure([
+        effects: compartments.fontSize.reconfigure([
           EditorView.theme({
             '&': {
               fontSize: `${next}px`,
@@ -719,7 +673,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         debugLog('[onZoomOut] localStorage persist failed:', err);
       }
       viewRef.current?.dispatch({
-        effects: fontSizeCompartment.current.reconfigure([
+        effects: compartments.fontSize.reconfigure([
           EditorView.theme({
             '&': {
               fontSize: `${next}px`,
@@ -739,7 +693,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       debugLog('[onResetZoom] localStorage persist failed:', err);
     }
     viewRef.current?.dispatch({
-      effects: fontSizeCompartment.current.reconfigure([
+      effects: compartments.fontSize.reconfigure([
         EditorView.theme({
           '&': {
             fontSize: `${FONT_SIZE_DEFAULT}px`,
@@ -766,7 +720,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         setEditorUsesTabs(false);
         try { localStorage.setItem('editor:tab-size', '2'); } catch (err) { debugLog('[onCycleTabSize] localStorage persist failed:', err); }
         viewRef.current?.dispatch({
-          effects: tabSizeCompartment.current.reconfigure([
+          effects: compartments.tabSize.reconfigure([
             EditorState.tabSize.of(2),
             indentUnit.of('  '),
           ]),
@@ -779,7 +733,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         setEditorUsesTabs(true);
         try { localStorage.setItem('editor:tab-size', '0'); } catch (err) { debugLog('[onCycleTabSize] localStorage persist failed:', err); }
         viewRef.current?.dispatch({
-          effects: tabSizeCompartment.current.reconfigure([
+          effects: compartments.tabSize.reconfigure([
             EditorState.tabSize.of(TAB_SIZE_DEFAULT),
             indentUnit.of('\t'),
           ]),
@@ -791,7 +745,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       setEditorUsesTabs(false);
       try { localStorage.setItem('editor:tab-size', String(next)); } catch (err) { debugLog('[onCycleTabSize] localStorage persist failed:', err); }
       viewRef.current?.dispatch({
-        effects: tabSizeCompartment.current.reconfigure([
+        effects: compartments.tabSize.reconfigure([
           EditorState.tabSize.of(next),
           indentUnit.of(' '.repeat(next)),
         ]),
@@ -1374,146 +1328,37 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
     const resolvedLanguage = resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name);
 
-    const extensions = [
-      updateListener,
-      EditorState.allowMultipleSelections.of(true),
-      rectangularSelection(),
-      drawSelection(),
-      crosshairCursor(),
-      dropCursor(),
-      dragDropMovePlugin,
-      keymap.of(defaultKeymap),
-      tabExpandSnippets(),
-      keymap.of([indentWithTab]),
-      keymap.of(searchKeymap),
-      hotkeysCompartment.current.of(keymap.of(customKeymap)),
-      keymap.of(replacePanelKeymap),
-      keymap.of(zoomKeymap),
-      keymap.of(semanticKeymap),
-      customSearchExtension(() => saveRef.current()),
-      highlightSelectionMatches(),
-      renameHighlightField,
-      hyperLink,
-      color,
-      autocompletion(),
-      createHoverTooltipExtension(
-        () => buffer?.file?.path,
-        () => localContentRef.current,
-      ),
-      closeBrackets(),
-      history(),
-      cursorHistoryPlugin,
-      indentGuidesPlugin(),
-      stickyScrollPlugin(() => buffer?.file?.ext),
-      codeLensPlugin(() => buffer?.file?.ext),
-      linkedScrollExtension(paneId, () => buffer?.file?.path ?? null),
-      indentOnInput(),
-      highlightSpecialChars(),
-      highlightActiveLine(),
-      highlightActiveLineGutter(),
-      bracketMatching(),
-      bracketColorizationPlugin(),
-      syntaxHighlighting(
-        customHighlightStyle ||
-          (themePack.editorSyntaxStyle === 'one-dark' ? oneDarkHighlightStyle : defaultHighlightStyle),
-      ),
-      diffGutter(),
-      lintDiagnostics(),
-      createCodeActionsExtension(
-        () => buffer?.file?.path,
-        () => localContentRef.current,
-      ),
-      trailingWhitespacePlugin(),
-      unsavedLineHighlight(),
-      whitespaceRenderingCompartment.current.of(whitespaceRenderingPlugin(whitespaceRenderingMode)),
-      relativeLineNumbersCompartment.current.of(relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
-      scrollPastEnd(),
-      foldGutter({
-        openText: '▼',
-        closedText: '▶',
-      }),
-      codeFolding(),
-      minimapCompartment.current.of(minimapEnabled ? minimapExtension() : []),
-      fontSizeCompartment.current.of([
-        EditorView.theme({
-          '&': {
-            fontSize: `${editorFontSize}px`,
-          },
-        }),
-      ]),
-      tabSizeCompartment.current.of([
-        EditorState.tabSize.of(editorTabSize === TAB_SIZE_TABS_MODE ? TAB_SIZE_DEFAULT : editorTabSize),
-        indentUnit.of(editorUsesTabs ? '\t' : ' '.repeat(editorTabSize === TAB_SIZE_TABS_MODE ? TAB_SIZE_DEFAULT : editorTabSize)),
-      ]),
-      EditorView.theme({
-        '&': {
-          height: '100%',
-          fontFamily: "'Monaco', 'Menlo', 'Fira Code', monospace",
-          backgroundColor: 'var(--cm-bg)',
-          color: 'var(--cm-fg)',
-        },
-        '.cm-content': {
-          padding: '16px',
-          caretColor: `var(--cm-cursor, ${themePack.mode === 'dark' ? '#f8f8f2' : '#526fff'})`,
-        },
-        '.cm-focused': {
-          outline: 'none',
-        },
-        '.cm-gutters': {
-          backgroundColor: 'var(--cm-gutter-bg)',
-          border: 'none',
-          color: 'var(--cm-gutter-fg)',
-        },
-        '.cm-scroller': {
-          fontFamily: 'inherit',
-          overflow: 'auto',
-          minHeight: '0',
-          height: '100%',
-        },
-        '.cm-cursor': {
-          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
-          borderLeftWidth: '2px',
-        },
-        '&.cm-focused .cm-cursor': {
-          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
-          borderLeftWidth: '2px',
-        },
-        '.cm-dropCursor': {
-          borderLeftColor: themePack.mode === 'dark' ? 'var(--cm-cursor, #f8f8f2)' : 'var(--cm-cursor, #526fff)',
-        },
-        '.cm-selectionBackground, .cm-content ::selection': {
-          backgroundColor: 'var(--cm-selection) !important',
-        },
-        '&.cm-focused .cm-activeLine': {
-          backgroundColor: 'var(--cm-active-line)',
-        },
-        '.cm-activeLineGutter': {
-          backgroundColor: 'var(--cm-active-line-gutter)',
-          color: 'var(--cm-gutter-fg-active)',
-        },
-        '.cm-foldGutter': {
-          width: '20px',
-        },
-        '.cm-foldGutter .cm-gutterElement': {
-          padding: '0 4px',
-          fontSize: '12px',
-        },
-        '.cm-foldGutter .cm-gutterElement:hover': {
-          color: 'var(--accent-primary, #6366f1)',
-        },
-      }),
-      lineWrappingCompartment.current.of(wordWrapEnabled ? EditorView.lineWrapping : []),
-      emmetCompartment.current.of(
-        getInitialEmmetExtensions(resolvedLanguage.languageId),
-      ),
-      autoCloseTagCompartment.current.of(
-        getInitialAutoCloseTagExtensions(resolvedLanguage.languageId),
-      ),
-      languageCompartment.current.of(
-        getLanguageExtensions(resolvedLanguage.languageId),
-      ),
-      lspCompartment.current.of([]),
-    ];
+    const extensions = buildExtensions({
+      paneId,
+      settings: {
+        wordWrapEnabled,
+        relativeLineNumbersEnabled,
+        minimapEnabled,
+        editorFontSize,
+        editorTabSize,
+        editorUsesTabs,
+        whitespaceRenderingMode,
+      },
+      theme: { themePack, customHighlightStyle },
+      buffer: {
+        languageId: resolvedLanguage.languageId,
+        getFilePath: () => buffer?.file?.path,
+        getFileExt: () => buffer?.file?.ext,
+        getContent: () => localContentRef.current,
+      },
+      actions: { getSaveFn: () => saveRef.current },
+      hotkeysCompartmentExtension: compartments.hotkeys.of(keymap.of(customKeymap)),
+      extraKeymaps: [
+        keymap.of(searchKeymap),
+        keymap.of(replacePanelKeymap),
+        keymap.of(zoomKeymap),
+        keymap.of(semanticKeymap),
+      ],
+    });
+
+    // Prepend the updateListener (not in buildExtensions because it accesses
+    // component-local state setters directly — the hook is stateless).
+    extensions.unshift(updateListener);
 
     const state = EditorState.create({
       doc: localContent,
@@ -1578,7 +1423,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
               ...lspSyncOnDocChange(currentLangId),
             ];
             capturedView.dispatch({
-              effects: lspCompartment.current.reconfigure(lspExtensions),
+              effects: compartments.lsp.reconfigure(lspExtensions),
             });
             debugLog('[LSP] Extensions activated for', currentLangId);
           }
@@ -1646,10 +1491,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
     view.dispatch({
       effects: [
-        languageCompartment.current.reconfigure(getLanguageExtensions(languageId)),
-        emmetCompartment.current.reconfigure(buildEmmetExtensions(languageId)),
-        autoCloseTagCompartment.current.reconfigure(buildAutoCloseTagExtensions(languageId)),
-        lspCompartment.current.reconfigure([]),
+        compartments.language.reconfigure(getLanguageExtensions(languageId)),
+        compartments.emmet.reconfigure(buildEmmetExtensions(languageId)),
+        compartments.autoCloseTag.reconfigure(buildAutoCloseTagExtensions(languageId)),
+        compartments.lsp.reconfigure([]),
       ],
     });
 
@@ -1660,7 +1505,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           const client = await lspService.getClientForLanguage(languageId);
           if (client && viewRef.current === view && view.dom?.isConnected) {
             view.dispatch({
-              effects: lspCompartment.current.reconfigure([
+              effects: compartments.lsp.reconfigure([
                 ...buildLSPPluginExtensions(client, filePath, languageId),
                 ...lspSyncOnDocChange(languageId),
               ]),
@@ -1708,7 +1553,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     hotkeyActionsRef.current = actions;
 
     view.dispatch({
-      effects: hotkeysCompartment.current.reconfigure(
+      effects: compartments.hotkeys.reconfigure(
         keymap.of(getEditorKeymap(hotkeys, actions)),
       ),
     });
@@ -1749,7 +1594,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     wordWrapRef.current = next;
     setWordWrapEnabled(next);
     viewRef.current?.dispatch({
-      effects: lineWrappingCompartment.current.reconfigure(next ? EditorView.lineWrapping : []),
+      effects: compartments.lineWrapping.reconfigure(next ? EditorView.lineWrapping : []),
     });
   }, []);
 
@@ -1770,7 +1615,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       debugLog('[onToggleMinimap] localStorage persist failed:', err);
     }
     viewRef.current?.dispatch({
-      effects: minimapCompartment.current.reconfigure(next ? minimapExtension() : []),
+      effects: compartments.minimap.reconfigure(next ? minimapExtension() : []),
     });
   }, []);
 
@@ -1792,7 +1637,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       debugLog('[onToggleRelativeLineNumbers] localStorage persist failed:', err);
     }
     viewRef.current?.dispatch({
-      effects: relativeLineNumbersCompartment.current.reconfigure(next ? lineNumbersRelative : lineNumbers()),
+      effects: compartments.relativeLineNumbers.reconfigure(next ? lineNumbersRelative : lineNumbers()),
     });
   }, []);
 
@@ -1808,7 +1653,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       whitespaceRenderingModeRef.current === 'boundary' ? 'all' : 'none';
     setWhitespaceRenderingMode(next);
     viewRef.current?.dispatch({
-      effects: whitespaceRenderingCompartment.current.reconfigure(
+      effects: compartments.whitespaceRendering.reconfigure(
         whitespaceRenderingPlugin(next),
       ),
     });
@@ -1819,7 +1664,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   useEffect(() => {
     whitespaceRenderingModeRef.current = whitespaceRenderingMode;
     viewRef.current?.dispatch({
-      effects: whitespaceRenderingCompartment.current.reconfigure(
+      effects: compartments.whitespaceRendering.reconfigure(
         whitespaceRenderingPlugin(whitespaceRenderingMode),
       ),
     });
@@ -2187,7 +2032,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             setEditorUsesTabs(detected.useTabs);
             if (viewRef.current) {
               viewRef.current.dispatch({
-                effects: tabSizeCompartment.current.reconfigure([
+                effects: compartments.tabSize.reconfigure([
                   EditorState.tabSize.of(detectedSize),
                   indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
                 ]),
@@ -2199,7 +2044,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
             setEditorTabSize(TAB_SIZE_DEFAULT);
             if (viewRef.current) {
               viewRef.current.dispatch({
-                effects: tabSizeCompartment.current.reconfigure([
+                effects: compartments.tabSize.reconfigure([
                   EditorState.tabSize.of(TAB_SIZE_DEFAULT),
                   indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
                 ]),

@@ -2,6 +2,7 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -35,7 +36,15 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 	// List all hidden sessions
 	sessionIDs := terminalManager.ListHiddenSessions()
 
-	sessions := []map[string]interface{}{}
+	type sessionEntry struct {
+		ID            string `json:"id"`
+		Name          string `json:"name"`
+		Status        string `json:"status"`
+		ChatID        string `json:"chat_id"`
+		OutputPreview string `json:"output_preview"`
+	}
+
+	sessions := make([]sessionEntry, 0, len(sessionIDs))
 	for _, sessionID := range sessionIDs {
 		session, exists := terminalManager.GetSession(sessionID)
 		if !exists {
@@ -64,12 +73,17 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 
 		session.mutex.RUnlock()
 
-		sessions = append(sessions, map[string]interface{}{
-			"id":             sessionID,
-			"name":           name,
-			"status":         map[bool]string{true: "active", false: "inactive"}[active],
-			"chat_id":        chatID,
-			"output_preview":  preview,
+		status := "inactive"
+		if active {
+			status = "active"
+		}
+
+		sessions = append(sessions, sessionEntry{
+			ID:            sessionID,
+			Name:          name,
+			Status:        status,
+			ChatID:        chatID,
+			OutputPreview: preview,
 		})
 	}
 
@@ -80,25 +94,67 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 	})
 }
 
-// handleAPIAgentSessionOutput returns accumulated output for a specific agent session.
+// maxSessionIDLength limits session IDs from URL paths to prevent abuse.
+const maxSessionIDLength = 128
+
+// handleAPIAgentSessionActions dispatches requests for agent session sub-paths.
+// This handler routes to the appropriate action based on the URL suffix:
+//
+//	GET  /api/terminal/agent-sessions/{id}/output  → returns accumulated output as plain text
+//	POST /api/terminal/agent-sessions/{id}/attach  → promotes hidden session to visible
+//
+// The /output endpoint only works for background sessions (IsBackground=true).
+// The /attach endpoint converts a hidden background session into a visible terminal
+// session that appears in the terminal tab bar.
+//
+// Response format for /output: plain text output (ANSI stripped)
+// Response format for /attach: {"id": "...", "status": "attached"}
+func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r *http.Request) {
+	// Extract the sub-path from the URL
+	// Path format: /api/terminal/agent-sessions/{id}/{action}
+	prefix := "/api/terminal/agent-sessions/"
+	relativePath := strings.TrimPrefix(r.URL.Path, prefix)
+
+	if relativePath == "" || strings.Count(relativePath, "/") != 1 {
+		http.Error(w, "Invalid request path", http.StatusBadRequest)
+		return
+	}
+
+	// Split into session ID and action (guaranteed 2 parts since we verified exactly 1 slash)
+	parts := strings.SplitN(relativePath, "/", 2)
+	sessionID := strings.TrimSpace(parts[0])
+	action := strings.TrimSpace(parts[1])
+
+	if sessionID == "" || action == "" {
+		http.Error(w, "Session ID and action are required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate session ID length (defense-in-depth against pathological inputs)
+	if len(sessionID) > maxSessionIDLength {
+		http.Error(w, "Session ID too long", http.StatusBadRequest)
+		return
+	}
+
+	// Dispatch based on action
+	switch action {
+	case "output":
+		ws.handleAgentSessionOutput(w, r, sessionID)
+	case "attach":
+		ws.handleAgentSessionAttach(w, r, sessionID)
+	default:
+		http.Error(w, fmt.Sprintf("Unknown action: %s", action), http.StatusNotFound)
+	}
+}
+
+// handleAgentSessionOutput returns accumulated output for a specific agent session.
 // This endpoint only works for background sessions (IsBackground=true).
 // GET /api/terminal/agent-sessions/{id}/output
 //
 // Response format: plain text output (ANSI stripped)
-func (ws *ReactWebServer) handleAPIAgentSessionOutput(w http.ResponseWriter, r *http.Request) {
+func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *http.Request, sessionID string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract session ID from URL path
-	// Path format: /api/terminal/agent-sessions/{id}/output
-	path := strings.TrimPrefix(r.URL.Path, "/api/terminal/agent-sessions/")
-	path = strings.TrimSuffix(path, "/output")
-	sessionID := strings.TrimSpace(path)
-
-	if sessionID == "" {
-		http.Error(w, "Session ID is required", http.StatusBadRequest)
 		return
 	}
 
@@ -107,9 +163,7 @@ func (ws *ReactWebServer) handleAPIAgentSessionOutput(w http.ResponseWriter, r *
 	// Get background output (validates session exists and is a background session)
 	output, err := terminalManager.GetBackgroundOutput(sessionID)
 	if err != nil {
-		// Map known errors to appropriate HTTP status codes
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "not found") || strings.Contains(errMsg, "not a background") {
+		if errors.Is(err, ErrSessionNotFound) || errors.Is(err, ErrNotBackgroundSession) {
 			http.Error(w, "Session not found", http.StatusNotFound)
 			return
 		}
@@ -121,4 +175,67 @@ func (ws *ReactWebServer) handleAPIAgentSessionOutput(w http.ResponseWriter, r *
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(output))
+}
+
+// handleAgentSessionAttach promotes a hidden background session to a visible session.
+// This clears the Hidden flag on the session so it appears in the terminal tab bar.
+// POST /api/terminal/agent-sessions/{id}/attach
+//
+// Response format: {"id": "...", "status": "attached"}
+func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	terminalManager := ws.getTerminalManagerForRequest(r)
+
+	// Get the session
+	session, exists := terminalManager.GetSession(sessionID)
+	if !exists {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+
+	// Atomically validate and mutate under a single write lock to prevent TOCTOU.
+	// Without this, the session could become inactive between the validation read
+	// and the Hidden flag write.
+	session.mutex.Lock()
+	isBackground := session.IsBackground
+	active := session.Active
+	isHidden := session.Hidden
+
+	if !isBackground {
+		session.mutex.Unlock()
+		http.Error(w, "Session is not a background session", http.StatusBadRequest)
+		return
+	}
+	if !active {
+		session.mutex.Unlock()
+		http.Error(w, "Session is not active", http.StatusBadRequest)
+		return
+	}
+	if !isHidden {
+		// Already visible — return idempotent success without mutation.
+		session.mutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":     sessionID,
+			"status": "attached",
+		})
+		return
+	}
+
+	// Clear the Hidden flag to make the session visible
+	session.Hidden = false
+	session.mutex.Unlock()
+
+	// Return success
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":     sessionID,
+		"status": "attached",
+	})
 }

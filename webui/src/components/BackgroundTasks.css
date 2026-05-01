@@ -81,9 +81,13 @@
 }
 
 .background-tasks-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 12px;
   color: var(--accent-error);
-  background: rgba(224, 108, 117, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
   border-radius: 4px;
   margin: 8px;
 }
@@ -158,6 +162,35 @@
   font-size: 12px;
 }
 
+.background-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 16px;
+  font-size: 11px;
+}
+
+.background-task-status-text {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.background-task-status-text.active {
+  color: var(--accent-success);
+}
+
+.background-task-status-text.inactive {
+  color: var(--text-muted);
+}
+
+.background-task-duration {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .background-task-preview {
   margin: 0;
   padding: 4px 0 0 16px;
@@ -202,12 +235,12 @@
 }
 
 .background-task-btn-attach:hover {
-  background: rgba(152, 195, 121, 0.15);
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
   color: var(--accent-success);
 }
 
 .background-task-btn-kill:hover {
-  background: rgba(224, 108, 117, 0.15);
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
   color: var(--accent-error);
 }
 

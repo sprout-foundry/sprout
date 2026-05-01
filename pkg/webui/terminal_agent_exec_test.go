@@ -782,3 +782,25 @@ func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
 		t.Errorf("output should contain the injected string, got %q", output)
 	}
 }
+
+func TestExecuteCommandAndWait_EmbeddedNewlines(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-newlines")
+	defer tm.CloseSession("exec-newlines")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo hello\necho world")
+	if err == nil {
+		t.Fatal("expected error for embedded newlines, got nil")
+	}
+	if !strings.Contains(err.Error(), "newline") {
+		t.Errorf("expected error to mention 'newline', got: %v", err)
+	}
+	if exitCode != -1 {
+		t.Errorf("expected exit code -1, got %d", exitCode)
+	}
+}

@@ -56,8 +56,9 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
           try {
             const selection = update.state.selection.main;
             if (selection) {
-              const line = update.state.doc.lineAt(selection.head).number;
-              const column = selection.head - update.state.doc.lineAt(selection.head).from;
+              const lineObj = update.state.doc.lineAt(selection.head);
+              const line = lineObj.number;                    // 1-based line number
+              const column = selection.head - lineObj.from;   // 0-based column offset within line
               updateBufferCursor(buf.id, { line, column });
             }
           } catch (err) {

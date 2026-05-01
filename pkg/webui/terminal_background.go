@@ -4,9 +4,17 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
+)
+
+// Sentinel errors returned by GetBackgroundOutput, used for HTTP status code
+// mapping in the agent sessions API handlers.
+var (
+	ErrSessionNotFound      = errors.New("session not found")
+	ErrNotBackgroundSession = errors.New("not a background session")
 )
 
 // ExecuteCommandInBackground creates a new hidden PTY session for a background command,
@@ -86,7 +94,7 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 func (tm *TerminalManager) GetBackgroundOutput(sessionID string) (string, error) {
 	session, exists := tm.GetSession(sessionID)
 	if !exists {
-		return "", fmt.Errorf("session %s not found", sessionID)
+		return "", fmt.Errorf("session %s not found: %w", sessionID, ErrSessionNotFound)
 	}
 
 	// Verify it's a background session
@@ -95,7 +103,7 @@ func (tm *TerminalManager) GetBackgroundOutput(sessionID string) (string, error)
 	session.mutex.RUnlock()
 
 	if !isBackground {
-		return "", fmt.Errorf("session %s is not a background session", sessionID)
+		return "", fmt.Errorf("session %s is not a background session: %w", sessionID, ErrNotBackgroundSession)
 	}
 
 	// Get the ring buffer snapshot and strip ANSI

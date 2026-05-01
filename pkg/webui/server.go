@@ -390,7 +390,7 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
 	// Agent sessions API (background PTY sessions for long-running commands)
 	mux.HandleFunc("/api/terminal/agent-sessions", ws.handleAPIAgentSessions)
-	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionOutput) // trailing slash for sub-path matching
+	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionActions) // trailing slash for sub-path matching
 	// Session API
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)

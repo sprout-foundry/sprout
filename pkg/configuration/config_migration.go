@@ -363,6 +363,106 @@ func hasRawTool(tools []interface{}, candidate string) bool {
 	return false
 }
 
+// applyDefaultPersonaAllowedTools merges current default tools into default personas'
+// allowed_tools lists. This uses an additive merge strategy: missing default tools are
+// added, but any user-added extras are preserved. Custom personas are left untouched.
+//
+// This ensures that saved configs stay honest about what tools are available when new
+// tools are added to defaults, without silently removing user customizations.
+func applyDefaultPersonaAllowedTools(raw map[string]interface{}) {
+	subagentTypes, ok := raw["subagent_types"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	defaults := defaultSubagentTypes()
+
+	for id, personaRaw := range subagentTypes {
+		persona, ok := personaRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Resolve the persona ID: check both the map key and the "id" field
+		// This matches GetSubagentType()'s lookup behavior.
+		normalizedID := normalizePersonaID(id)
+		if idVal, hasID := persona["id"]; hasID {
+			if idStr, ok := idVal.(string); ok {
+				normalizedIDFromField := normalizePersonaID(idStr)
+				if _, exists := defaults[normalizedIDFromField]; exists {
+					normalizedID = normalizedIDFromField
+				}
+			}
+		}
+
+		defaultPersona, exists := defaults[normalizedID]
+		if !exists {
+			continue // Custom persona — leave untouched
+		}
+
+		// Merge: add any missing default tools, preserve user extras
+		existingTools, hasTools := persona["allowed_tools"]
+		if !hasTools {
+			// No tools at all — set to defaults
+			defaultTools := make([]interface{}, len(defaultPersona.AllowedTools))
+			for i, tool := range defaultPersona.AllowedTools {
+				defaultTools[i] = tool
+			}
+			persona["allowed_tools"] = defaultTools
+			subagentTypes[id] = persona
+			continue
+		}
+
+		toolsSlice, ok := existingTools.([]interface{})
+		if !ok || len(toolsSlice) == 0 {
+			// Malformed or empty — set to defaults
+			defaultTools := make([]interface{}, len(defaultPersona.AllowedTools))
+			for i, tool := range defaultPersona.AllowedTools {
+				defaultTools[i] = tool
+			}
+			persona["allowed_tools"] = defaultTools
+			subagentTypes[id] = persona
+			continue
+		}
+
+		// Build a set of existing tools
+		existingSet := make(map[string]bool, len(toolsSlice))
+		for _, t := range toolsSlice {
+			if s, ok := t.(string); ok {
+				existingSet[s] = true
+			}
+		}
+
+		// Add missing default tools
+		changed := false
+		for _, tool := range defaultPersona.AllowedTools {
+			if !existingSet[tool] {
+				toolsSlice = append(toolsSlice, tool)
+				changed = true
+			}
+		}
+
+		if changed {
+			persona["allowed_tools"] = toolsSlice
+			subagentTypes[id] = persona
+		}
+	}
+}
+
+// applyV3Defaults applies version 3.0 defaults.
+// This syncs default persona allowed_tools with current definitions.
+func applyV3Defaults(raw map[string]interface{}) error {
+	applyDefaultPersonaAllowedTools(raw)
+	return nil
+}
+
+// migrateV2ToV3 handles migration from version 2.0 to version 3.0.
+// It syncs default persona allowed_tools with current defaults so that
+// saved configs stay honest about what tools are actually available.
+func migrateV2ToV3(raw map[string]interface{}) error {
+	return applyV3Defaults(raw)
+}
+
 // applyV2Defaults applies all version 2.0 default values to a config.
 // This function is idempotent and can be called multiple times safely.
 func applyV2Defaults(raw map[string]interface{}) error {
@@ -402,4 +502,6 @@ func init() {
 	RegisterMigration("0.0", "2.0", migrateV0ToV2)
 	// Register the migration from version 1.0 to version 2.0
 	RegisterMigration("1.0", "2.0", migrateV1ToV2)
+	// Register the migration from version 2.0 to version 3.0
+	RegisterMigration("2.0", "3.0", migrateV2ToV3)
 }

@@ -79,9 +79,8 @@ function TerminalTabBar({
         setShowAgentDropdown(false);
       }
     };
-    const handleKeyDown = (e: Event) => {
-      const ke = e as unknown as KeyboardEvent;
-      if (ke.key === 'Escape') {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
         setShowAgentDropdown(false);
       }
     };

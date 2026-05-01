@@ -91,9 +91,28 @@ Skills provide:
 
 ## Web App Verification
 
-- When working on web apps, localhost UIs, or JS-rendered pages, use `browse_url` directly to inspect rendered state.
-- Prefer `browse_url` over guessing from source when hydration, client routing, browser storage, cookies, selectors, or runtime behavior matter.
-- Reuse `browse_url` sessions across calls when iterating on a live app so you can inspect, interact, and verify fixes without restaging the page each time.
+When working on web apps, localhost UIs, or JS-rendered pages, `browse_url` gives you a real browser to inspect and interact with rendered state.
+
+### When to use browse_url vs fetch_url vs analyze_ui_screenshot
+
+- **`fetch_url`** — Fast HTTP GET, static content only. Use for API endpoints and plain HTML pages.
+- **`analyze_ui_screenshot`** — One-shot visual analysis of a screenshot or local HTML file. Use when you already have a screenshot.
+- **`browse_url`** — Full headless browser with JS execution. Use when you need rendered DOM, browser state, or runtime behavior.
+
+### Key scenarios for browse_url
+
+- **JS-rendered pages**: SPAs, React/Vue/Angular apps where the content isn't in the initial HTML.
+- **Runtime state**: Hydration issues, client-side routing, dynamic data loading.
+- **Iterative debugging**: Open a session, make code changes, inspect again without losing state.
+- **Interaction testing**: Click buttons, fill forms, navigate between pages, verify behavior.
+- **Browser diagnostics**: Console errors, network requests, cookies, localStorage.
+
+### Example workflow
+
+1. Browse the page with `action: "inspect"` to see structure, console errors, and network state.
+2. If it's a SPA, use `wait_for_selector` to ensure content is rendered.
+3. For iteration, set `persist_session: true` and reuse the `session_id` across calls.
+4. Use interaction `steps` to click, type, or navigate through flows before capturing output.
 
 ## When You're Unsure
 

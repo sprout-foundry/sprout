@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -395,6 +396,269 @@ func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 	for _, expected := range []string{`"reasoning_effort":"high"`, `"history_scope":"global"`, `"version":"2.0"`, `"last_used_provider":"openai"`} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("workspace config missing %s, got: %s", expected, body)
+		}
+	}
+}
+
+// --- Tests for provider/model mapping in putConfigToFile ---
+
+func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	workspaceRoot := t.TempDir()
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	ctx.WorkspaceRoot = workspaceRoot
+
+	body := `{"provider": "openai", "model": "gpt-4"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	// Should not have unknown field warnings
+	if warnings, ok := resp["warnings"].([]interface{}); ok && len(warnings) > 0 {
+		t.Fatalf("should not have warnings, got: %v", warnings)
+	}
+
+	// Verify workspace config file contains mapped values
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	data, err := os.ReadFile(workspaceConfigPath)
+	if err != nil {
+		t.Fatalf("workspace config file should exist: %v", err)
+	}
+
+	var cfg configuration.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("failed to parse workspace config: %v", err)
+	}
+
+	if cfg.LastUsedProvider != "openai" {
+		t.Errorf("expected last_used_provider=openai, got %q", cfg.LastUsedProvider)
+	}
+	if cfg.ProviderModels == nil || cfg.ProviderModels["openai"] != "gpt-4" {
+		t.Errorf("expected provider_models[openai]=gpt-4, got %v", cfg.ProviderModels)
+	}
+}
+
+func TestHandlePutGlobalSettings_ProviderModel(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	os.Unsetenv("XDG_CONFIG_HOME")
+	os.Unsetenv("LEDIT_CONFIG")
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	clientID := "test-client"
+	ws.getOrCreateClientContext(clientID)
+
+	body := `{"provider": "anthropic", "model": "claude-3-sonnet"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=global", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	// Should not have unknown field warnings
+	if warnings, ok := resp["warnings"].([]interface{}); ok && len(warnings) > 0 {
+		t.Fatalf("should not have warnings, got: %v", warnings)
+	}
+
+	configPath, err := configuration.GetConfigPath()
+	if err != nil {
+		t.Fatalf("failed to get config path: %v", err)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("global config file should exist: %v", err)
+	}
+
+	var cfg configuration.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("failed to parse global config: %v", err)
+	}
+
+	if cfg.LastUsedProvider != "anthropic" {
+		t.Errorf("expected last_used_provider=anthropic, got %q", cfg.LastUsedProvider)
+	}
+	if cfg.ProviderModels == nil || cfg.ProviderModels["anthropic"] != "claude-3-sonnet" {
+		t.Errorf("expected provider_models[anthropic]=claude-3-sonnet, got %v", cfg.ProviderModels)
+	}
+}
+
+func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	workspaceRoot := t.TempDir()
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	ctx.WorkspaceRoot = workspaceRoot
+
+	body := `{"provider": "anthropic"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	// Should not have unknown field warnings
+	if warnings, ok := resp["warnings"].([]interface{}); ok && len(warnings) > 0 {
+		t.Fatalf("should not have warnings, got: %v", warnings)
+	}
+
+	// Verify workspace config file
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	data, err := os.ReadFile(workspaceConfigPath)
+	if err != nil {
+		t.Fatalf("workspace config file should exist: %v", err)
+	}
+
+	var cfg configuration.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("failed to parse workspace config: %v", err)
+	}
+
+	if cfg.LastUsedProvider != "anthropic" {
+		t.Errorf("expected last_used_provider=anthropic, got %q", cfg.LastUsedProvider)
+	}
+}
+
+func TestHandlePutWorkspaceSettings_ModelWithoutProvider(t *testing.T) {
+	isolatedHome := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
+	t.Setenv("USERPROFILE", isolatedHome)
+
+	workspaceRoot := t.TempDir()
+	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	clientID := "test-client"
+	ctx := ws.getOrCreateClientContext(clientID)
+	ctx.WorkspaceRoot = workspaceRoot
+
+	// Pre-populate workspace config with last_used_provider so model mapping has context
+	workspaceConfigPath := filepath.Join(workspaceRoot, ".sprout", "config.json")
+	os.MkdirAll(filepath.Dir(workspaceConfigPath), 0700)
+	existingCfg := configuration.Config{
+		LastUsedProvider: "openai",
+		Version:          "2.0",
+	}
+	existingData, _ := json.MarshalIndent(existingCfg, "", "  ")
+	if err := os.WriteFile(workspaceConfigPath, existingData, 0600); err != nil {
+		t.Fatalf("failed to write pre-existing config: %v", err)
+	}
+
+	body := `{"model": "gpt-4o"}`
+	rec := makeSettingsRequest(ws, http.MethodPut, "/api/settings?layer=workspace", body)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	// Should not have unknown field warnings
+	if warnings, ok := resp["warnings"].([]interface{}); ok && len(warnings) > 0 {
+		t.Fatalf("should not have warnings, got: %v", warnings)
+	}
+
+	// Verify workspace config file now has provider_models updated
+	data, err := os.ReadFile(workspaceConfigPath)
+	if err != nil {
+		t.Fatalf("workspace config file should exist: %v", err)
+	}
+
+	var cfg configuration.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("failed to parse workspace config: %v", err)
+	}
+
+	if cfg.ProviderModels == nil || cfg.ProviderModels["openai"] != "gpt-4o" {
+		t.Errorf("expected provider_models[openai]=gpt-4o, got %v", cfg.ProviderModels)
+	}
+}
+
+func TestApplyPartialSettings_ProviderModelUnknown(t *testing.T) {
+	cfg := configuration.NewConfig()
+
+	// Capture the initial state so we can verify nothing changed
+	initialProvider := cfg.LastUsedProvider
+	initialModels := make(map[string]string)
+	if cfg.ProviderModels != nil {
+		for k, v := range cfg.ProviderModels {
+			initialModels[k] = v
+		}
+	}
+
+	// applyPartialSettings does NOT know about provider/model shortcuts.
+	// They must be mapped by putConfigToFile before calling applyPartialSettings.
+	unknown, err := applyPartialSettings(cfg, map[string]interface{}{
+		"provider": "openai",
+		"model":    "gpt-4",
+	})
+	if err != nil {
+		t.Fatalf("applyPartialSettings returned error: %v", err)
+	}
+
+	// Both provider and model should appear as unknown keys
+	if len(unknown) != 2 {
+		t.Fatalf("expected 2 unknown keys, got %d: %v", len(unknown), unknown)
+	}
+
+	hasProvider := false
+	hasModel := false
+	for _, k := range unknown {
+		if k == "provider" {
+			hasProvider = true
+		}
+		if k == "model" {
+			hasModel = true
+		}
+	}
+	if !hasProvider {
+		t.Error("expected 'provider' in unknown keys")
+	}
+	if !hasModel {
+		t.Error("expected 'model' in unknown keys")
+	}
+
+	// Config should NOT have been modified
+	if cfg.LastUsedProvider != initialProvider {
+		t.Errorf("expected LastUsedProvider unchanged (%q), got %q", initialProvider, cfg.LastUsedProvider)
+	}
+	if len(cfg.ProviderModels) != len(initialModels) {
+		t.Errorf("expected ProviderModels unchanged (size %d), got size %d", len(initialModels), len(cfg.ProviderModels))
+	}
+	for k, v := range initialModels {
+		if cfg.ProviderModels[k] != v {
+			t.Errorf("ProviderModels[%q] changed: expected %q, got %q", k, v, cfg.ProviderModels[k])
 		}
 	}
 }

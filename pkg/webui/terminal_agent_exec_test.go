@@ -783,6 +783,107 @@ func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
 	}
 }
 
+func TestGetOrCreateHiddenSessionForChat_ShellReady(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create a hidden session via the production path (calls waitForShellReady internally).
+	sessionID, err := tm.GetOrCreateHiddenSessionForChat(ctx, "chat-test-ready")
+	if err != nil {
+		t.Skipf("GetOrCreateHiddenSessionForChat failed (PTY unavailable): %v", err)
+		return
+	}
+	defer tm.CloseSession(sessionID)
+
+	// Verify the session exists and is hidden.
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		t.Fatalf("session %q not found after creation", sessionID)
+	}
+	session.mutex.RLock()
+	hidden := session.Hidden
+	session.mutex.RUnlock()
+	if !hidden {
+		t.Error("session should be hidden")
+	}
+
+	// The shell should be ready immediately after GetOrCreateHiddenSessionForChat
+	// returns — execute a simple echo to confirm.
+	output, exitCode, err := tm.ExecuteCommandInHidden(ctx, sessionID, "echo shell_ready_ok")
+	if err != nil {
+		t.Fatalf("echo command failed after waitForShellReady: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "shell_ready_ok") {
+		t.Errorf("output should contain 'shell_ready_ok', got %q", output)
+	}
+}
+
+func TestGetOrCreateHiddenSessionForChat_SessionReuse(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// First call creates a new session.
+	id1, err := tm.GetOrCreateHiddenSessionForChat(ctx, "chat-reuse")
+	if err != nil {
+		t.Skipf("GetOrCreateHiddenSessionForChat failed (PTY unavailable): %v", err)
+		return
+	}
+	defer tm.CloseSession(id1)
+
+	// Second call with same chatID should return the same session.
+	id2, err := tm.GetOrCreateHiddenSessionForChat(ctx, "chat-reuse")
+	if err != nil {
+		t.Fatalf("second GetOrCreateHiddenSessionForChat failed: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("expected same session ID, got %q and %q", id1, id2)
+	}
+
+	// Different chatID should create a different session.
+	id3, err := tm.GetOrCreateHiddenSessionForChat(ctx, "chat-other")
+	if err != nil {
+		t.Fatalf("GetOrCreateHiddenSessionForChat for different chat failed: %v", err)
+	}
+	defer tm.CloseSession(id3)
+	if id1 == id3 {
+		t.Errorf("different chatIDs should produce different session IDs, got %q", id1)
+	}
+}
+
+func TestGetOrCreateHiddenSessionForChat_DeterministicID(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	sessionID, err := tm.GetOrCreateHiddenSessionForChat(ctx, "chat-deterministic")
+	if err != nil {
+		t.Skipf("GetOrCreateHiddenSessionForChat failed (PTY unavailable): %v", err)
+		return
+	}
+	defer tm.CloseSession(sessionID)
+
+	// Session ID should be deterministic based on chatID.
+	expectedPrefix := "agent-hidden-"
+	if !strings.HasPrefix(sessionID, expectedPrefix) {
+		t.Errorf("session ID should start with %q, got %q", expectedPrefix, sessionID)
+	}
+	expectedSuffix := "chat-deterministic"
+	if !strings.HasSuffix(sessionID, expectedSuffix) {
+		t.Errorf("session ID should end with %q, got %q", expectedSuffix, sessionID)
+	}
+}
+
 func TestExecuteCommandAndWait_EmbeddedNewlines(t *testing.T) {
 	dir := t.TempDir()
 	tm := NewTerminalManager(dir)

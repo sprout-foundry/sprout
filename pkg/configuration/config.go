@@ -876,36 +876,118 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 
 	normalizedID := normalizePersonaID(id)
 
-	var resolved SubagentType
-	found := false
+	// Find user override if any and determine the primary ID
+	var userOverride SubagentType
+	userOverrideFound := false
+	var primaryID string
 	for personaID, subagentType := range c.SubagentTypes {
-		if normalizePersonaID(personaID) == normalizedID {
-			resolved = subagentType
-			found = true
+		normalizedPersonaID := normalizePersonaID(personaID)
+		normalizedSubagentTypeID := normalizePersonaID(subagentType.ID)
+		if normalizedPersonaID == normalizedID || normalizedSubagentTypeID == normalizedID {
+			userOverride = subagentType
+			userOverrideFound = true
+			primaryID = normalizedSubagentTypeID // Use the actual persona ID
 			break
 		}
 		for _, alias := range subagentType.Aliases {
 			if normalizePersonaID(alias) == normalizedID {
-				resolved = subagentType
-				found = true
+				userOverride = subagentType
+				userOverrideFound = true
+				primaryID = normalizedSubagentTypeID // This is the primary ID
 				break
 			}
 		}
-		if found {
+		if userOverrideFound {
 			break
 		}
 	}
 
-	if found && resolved.Enabled {
-		if len(resolved.AllowedTools) == 0 {
-			if defaultPersona, ok := defaultSubagentTypes()[normalizePersonaID(resolved.ID)]; ok && len(defaultPersona.AllowedTools) > 0 {
-				resolved.AllowedTools = append([]string{}, defaultPersona.AllowedTools...)
+	// Warn if multiple config entries could match the same normalized ID.
+	// This can happen if two map keys map to the same persona ID, which would
+	// produce non-deterministic results since Go map iteration is unordered.
+	if primaryID != "" && primaryID != normalizedID {
+		// The match was via ID field, not map key — check if the map key also exists
+		for k := range c.SubagentTypes {
+			if normalizePersonaID(k) == normalizedID && normalizePersonaID(k) != primaryID {
+				log.Printf("[config] WARNING: multiple subagent config entries match %q — behavior is non-deterministic due to map iteration order", normalizedID)
+				break
 			}
 		}
-		return &resolved
 	}
 
-	return nil
+	// Get the default persona definition using the primary ID
+	defaultPersonas := defaultSubagentTypes()
+	var defaultPersona SubagentType
+	defaultExists := false
+	if primaryID != "" {
+		defaultPersona, defaultExists = defaultPersonas[primaryID]
+	} else {
+		defaultPersona, defaultExists = defaultPersonas[normalizedID]
+	}
+
+	// If no default exists and no user override, persona doesn't exist
+	if !defaultExists && !userOverrideFound {
+		return nil
+	}
+
+	// Custom persona: only exists in user config, not in defaults
+	if !defaultExists && userOverrideFound {
+		if !userOverride.Enabled {
+			return nil
+		}
+		// Deep copy slices to avoid sharing backing arrays with the config map
+		result := userOverride
+		result.AllowedTools = append([]string{}, userOverride.AllowedTools...)
+		result.Aliases = append([]string{}, userOverride.Aliases...)
+		return &result
+	}
+
+	// Default persona with user override: check if user disabled it
+	if defaultExists {
+		// If user has disabled the persona, return nil
+		if userOverrideFound && !userOverride.Enabled {
+			return nil
+		}
+
+		// Make a deep copy to avoid modifying the original default
+		result := SubagentType{
+			ID:                   defaultPersona.ID,
+			Name:                 defaultPersona.Name,
+			Description:          defaultPersona.Description,
+			Provider:             defaultPersona.Provider,
+			Model:                defaultPersona.Model,
+			SystemPrompt:         defaultPersona.SystemPrompt,
+			SystemPromptText:     defaultPersona.SystemPromptText,
+			SystemPromptAppend:   defaultPersona.SystemPromptAppend,
+			AllowedTools:         make([]string, len(defaultPersona.AllowedTools)),
+			Aliases:              make([]string, len(defaultPersona.Aliases)),
+			Enabled:              defaultPersona.Enabled,
+		}
+		// Copy slices
+		copy(result.AllowedTools, defaultPersona.AllowedTools)
+		copy(result.Aliases, defaultPersona.Aliases)
+		
+		// If user has override, overlay only the user-overridable fields
+		if userOverrideFound {
+			// Provider and model can be overridden
+			if userOverride.Provider != "" {
+				result.Provider = userOverride.Provider
+			}
+			if userOverride.Model != "" {
+				result.Model = userOverride.Model
+			}
+			if userOverride.SystemPromptAppend != "" {
+				result.SystemPromptAppend = userOverride.SystemPromptAppend
+			}
+		}
+
+		if result.Enabled {
+			return &result
+		}
+		return nil
+	}
+	
+	return nil // This should never be reached, but needed for compilation
 }
 
 func mergeMissingDefaultSubagentTypes(config *Config) {

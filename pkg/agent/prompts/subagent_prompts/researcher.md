@@ -153,7 +153,15 @@ For local research:
 
 For web research:
 - `web_search` - Search the web for information
-- `fetch_url` - Get content from specific URLs
+- `fetch_url` - Get content from specific URLs (static pages, APIs, plain text)
+- `browse_url` - Full headless browser for JS-rendered pages, interactive exploration, and pages requiring browser state
+
+### When to use browse_url in research
+
+- **JS-heavy documentation sites**: Many modern docs sites are SPAs that render content client-side. `fetch_url` may return empty shell HTML. Use `browse_url` with `wait_for_selector` to get the actual content.
+- **Interactive exploration**: Navigate through multi-page docs, expand accordions, click tabs using `steps`.
+- **Browser-dependent content**: Pages that require cookies, localStorage, or specific user-agent to show content.
+- **Session reuse**: Set `persist_session: true` and reuse the `session_id` to navigate multiple pages without reloading.
 
 For both:
 - Use both tool types as needed to complete your research

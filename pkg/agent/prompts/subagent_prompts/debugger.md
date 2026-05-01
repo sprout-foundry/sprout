@@ -213,9 +213,38 @@ Fix and test:
 
 ## Browser Debugging
 
-- For localhost apps, browser-only bugs, or JS-rendered pages, use `browse_url` directly.
-- `browse_url` can persist a built-in browser session across calls, inspect selectors, assert rendered text/title/url, and capture console, network, cookies, and storage state.
-- Prefer this tool over reasoning from static source when the bug depends on runtime DOM state or browser behavior.
+For web apps, localhost UIs, or any bug that depends on browser runtime state, `browse_url` provides a persistent headless browser.
+
+### When to use browse_url
+
+- The bug involves DOM state, CSS rendering, or layout — not visible in source alone.
+- The page is JS-rendered (SPA, dynamic content) and the issue is in hydration, routing, or client state.
+- You need console errors, network request details, or browser storage state.
+- You need to interact with the page (click, type, navigate) to reproduce the bug.
+
+### Session-based debugging
+
+Use persistent sessions to iterate without reloading:
+1. First call: `persist_session: true` — opens the page and keeps the browser alive.
+2. Subsequent calls: pass back the `session_id` to inspect changes or run more steps.
+3. Final call: `close_session: true` to clean up.
+
+### Inspect mode for diagnostics
+
+`action: "inspect"` returns structured data:
+- `capture_console: true` — browser console messages and page errors.
+- `capture_network: true` — fetch/XHR network requests (latency, status, CORS issues).
+- `capture_storage: true` — localStorage and sessionStorage snapshots.
+- `capture_cookies: true` — document.cookie-visible cookies.
+- `capture_selectors: [...]` — specific CSS selectors to inspect.
+
+### Interaction steps for reproduction
+
+Use the `steps` parameter to reproduce bugs:
+- `{"action": "click", "selector": "#submit-btn"}` — click an element.
+- `{"action": "fill", "selector": "#email", "value": "test@example.com"}` — fill a form field.
+- `{"action": "assert_text", "selector": ".error-msg", "expect": "Invalid input"}` — verify the bug manifests.
+- `{"action": "wait_for_selector", "selector": ".loaded"}` — wait for dynamic content.
 
 ## Reading Error Messages
 

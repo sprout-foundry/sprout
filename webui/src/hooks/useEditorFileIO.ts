@@ -88,7 +88,7 @@ export interface UseEditorFileIOReturn {
   /** Save the current buffer to disk. */
   handleSave: () => Promise<void>;
   /** Ref mirror for handleSave. */
-  saveRef: React.MutableRefObject<() => void>;
+  saveRef: React.MutableRefObject<() => Promise<void>>;
   /** Ref that tracks whether an external (non-user) content update is in flight. */
   isExternalUpdateRef: React.MutableRefObject<boolean>;
 }
@@ -151,8 +151,11 @@ export function useEditorFileIO(
   // Ref mirror for loadFile — avoids stale closure issues
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
 
+  // Tracks save operations in-flight for identity-based race prevention
+  const saveInFlightRef = useRef<Set<string>>(new Set());
+
   // Ref mirror for handleSave
-  const saveRef = useRef<() => void>(() => {});
+  const saveRef = useRef<() => Promise<void>>(async () => {});
 
   // Deduplication refs for the buffer-load effect
   const lastLoadedRef = useRef<{ bufferId: string; filePath: string } | null>(null);
@@ -220,7 +223,9 @@ export function useEditorFileIO(
           setError(null);
           if (currentBuffer) {
             updateBufferContent(currentBuffer.id, content);
-            setBufferOriginalContent(currentBuffer.id, content);
+            if (currentBuffer.originalContent === undefined) {
+              setBufferOriginalContent(currentBuffer.id, content);
+            }
           }
           if (viewRef.current) {
             viewRef.current.dispatch({
@@ -304,7 +309,7 @@ export function useEditorFileIO(
             }
           } catch (err) {
             debugLog('[useEditorFileIO] Failed to fetch git diff:', err);
-            notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff for diagnostics');
+            notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff');
             if (viewRef.current) clearDiffGutter(viewRef.current);
           }
         }
@@ -351,6 +356,9 @@ export function useEditorFileIO(
     setSaving(true);
     setError(null);
 
+    // Track this save as in-flight to suppress redundant external change events
+    saveInFlightRef.current.add(buf.file.path);
+
     // Notify the external file watcher and auto-reload cooldown *before*
     // the HTTP roundtrip. The server-side fsnotify fires as soon as it
     // writes the file, and the WebSocket "file_content_changed" event can
@@ -365,6 +373,9 @@ export function useEditorFileIO(
       const saveResult = await saveBuffer(buf.id);
       const serverMtime =
         saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
+
+      // Note: originalContent is updated by saveBuffer in EditorManagerContext
+      // (no need to call setBufferOriginalContent here).
 
       // Re-dispatch with the authoritative server mtime
       document.dispatchEvent(
@@ -400,6 +411,7 @@ export function useEditorFileIO(
       setError(errorMessage);
       log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
     } finally {
+      saveInFlightRef.current.delete(buf.file.path);
       setSaving(false);
     }
   }, [saveBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -519,6 +531,9 @@ export function useEditorFileIO(
       if (detail.path !== filePath) return;
 
       // Suppress when the change was caused by the editor's own save.
+      // Primary guard: identity-based check for save operations in-flight.
+      if (saveInFlightRef.current.has(detail.path)) return;
+      // Secondary guard: time-based cooldown for redundancy.
       const justSavedAt = justSavedRef.get(detail.path) ?? 0;
       if (Date.now() - justSavedAt < JUST_SAVED_THRESHOLD_MS) return;
 
@@ -536,6 +551,7 @@ export function useEditorFileIO(
             if (action === 'keep-mine') {
               setBufferExternallyModified(currentBuffer.id, '');
             }
+            // 'ignore': user dismissed the dialog; buffer stays as-is with no action needed.
           })
           .catch((err) => {
             debugLog('[useEditorFileIO] File change dialog error:', err);
@@ -566,7 +582,7 @@ export function useEditorFileIO(
 
           if (action === 'reload') {
             if (loadFileRef.current) {
-              loadFileRef.current(filePath);
+              await loadFileRef.current(filePath);
             }
             clearBufferExternallyModified(currentBuffer.id);
           } else if (action === 'keep-mine') {
@@ -613,7 +629,7 @@ export function useEditorFileIO(
   useEffect(() => {
     if (!buffer) return;
 
-    const handleAutoReloaded = (e: Event) => {
+    const handleAutoReloaded = async (e: Event) => {
       const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
       if (detail.bufferId !== buffer.id) return;
 
@@ -627,6 +643,21 @@ export function useEditorFileIO(
         }
         setLocalContent(detail.content);
         setSelectionInfo(null);
+
+        // Refresh diff gutter after auto-reload
+        if (bufferRef.current && bufferRef.current.file?.path && viewRef.current) {
+          try {
+            const diffResponse = await apiService.getGitDiff(bufferRef.current.file.path);
+            if (diffResponse.diff && diffResponse.diff.trim()) {
+              updateDiffGutter(viewRef.current, diffResponse.diff);
+            } else {
+              clearDiffGutter(viewRef.current);
+            }
+          } catch (err) {
+            debugLog('[useEditorFileIO] Failed to re-fetch git diff after auto-reload:', err);
+            clearDiffGutter(viewRef.current);
+          }
+        }
 
         // Re-detect indentation on auto-reload
         applyIndentDetection(detail.content);

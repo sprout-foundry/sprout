@@ -45,7 +45,14 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [hasActive, setHasActive] = useState(false); // Track hasActive as state for ticker transitions
   const isFetchingRef = useRef(false);
+
+  // Update hasActive state when sessions change
+  useEffect(() => {
+    const newHasActive = sessions.some((s) => s.status === 'active');
+    setHasActive(newHasActive);
+  }, [sessions]);
 
   // Fetch sessions from the API (guarded against concurrent calls)
   const fetchSessions = useCallback(async () => {
@@ -126,6 +133,9 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   useEffect(() => {
     if (!isExpanded) return;
 
+    // Clear stale errors on expand
+    setError(null);
+
     // Initial fetch
     fetchSessions();
 
@@ -142,11 +152,10 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   // Tick every second when expanded and has active sessions
   useEffect(() => {
     if (!isExpanded) return;
-    const hasActive = sessions.some((s) => s.status === 'active');
     if (!hasActive) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [isExpanded, sessions]);
+  }, [isExpanded, hasActive]); // depends on isExpanded and hasActive (state)
 
   // Listen for WebSocket events to auto-refresh on terminal updates
   useEffect(() => {
@@ -194,7 +203,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
       {isExpanded && (
         <div className="background-tasks-body">
           {error && (
-            <div className="background-tasks-error">
+            <div className="background-tasks-error" aria-live="polite">
               <span>{error}</span>
               <button
                 className="background-task-btn background-task-btn-retry"
@@ -245,6 +254,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                       title="Attach to terminal"
                       type="button"
                       disabled={session.status === 'inactive'}
+                      aria-label={`Attach ${session.name || session.id} to terminal`}
                     >
                       <Play size={14} />
                     </button>
@@ -253,6 +263,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                       onClick={() => killSession(session.id)}
                       title="Kill task"
                       type="button"
+                      aria-label={`Kill ${session.name || session.id}`}
                     >
                       <Square size={14} />
                     </button>

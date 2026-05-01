@@ -194,3 +194,26 @@ func (a *Agent) updatePreviousShellCommandMessage(prevResult *ShellCommandResult
 		}
 	}
 }
+
+// executeShellCommandBackground executes a shell command in a background hidden PTY session
+// and returns immediately with the session ID. This is for long-running commands
+// that should not block the agent.
+func (a *Agent) executeShellCommandBackground(ctx context.Context, command string) (string, error) {
+	// Wire TerminalManager into context for WebUI mode
+	if tm := a.terminalManager; tm != nil {
+		ctx = tools.WithTerminalManager(ctx, tm)
+	}
+
+	a.debugLog("Executing shell command in background: %s\n", command)
+
+	result, err := tools.ExecuteShellCommandBackground(ctx, command, a.GetSessionID())
+	a.debugLog("Background shell command result: %s, error: %v\n", result, err)
+
+	// Record as a task action for conversation summary
+	a.AddTaskAction("command_background_executed", fmt.Sprintf("Started background command: %s", command), command)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to execute background shell command: %w", err)
+	}
+	return result, nil
+}

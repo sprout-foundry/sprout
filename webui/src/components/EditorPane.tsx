@@ -17,6 +17,9 @@ import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useEditorExtensions, TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from '../hooks/useEditorExtensions';
 import { useEditorDiagnostics } from '../hooks/useEditorDiagnostics';
+import { useEditorFileIO } from '../hooks/useEditorFileIO';
+import { useEditorScrollSync } from '../hooks/useEditorScrollSync';
+import type { EditorBuffer } from '../types/editor';
 import LivePreview from './LivePreview';
 import MarkdownPreview from './MarkdownPreview';
 import EditorToolbar from './EditorToolbar';
@@ -31,18 +34,12 @@ import type { ReferenceInfo } from './FindAllReferencesOverlay';
 import LanguageSwitcher from './LanguageSwitcher';
 import BinaryFileViewer from './BinaryFileViewer';
 import MediaViewer from './MediaViewer';
-import { readFileWithConsent } from '../services/fileAccess';
-import { showFileChangeDialog } from './FileChangeDialog';
 import { getEditorKeymap } from '../utils/editorHotkeys';
-import { updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import './EditorPane.css';
-import { clearDiagnostics } from '../extensions/lintDiagnostics';
 import { codeActionsKeybinding } from '../extensions/codeActions';
-import { setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
 import { triggerRename } from '../extensions/renameOverlay';
-import { detectIndentation } from '../extensions/indentDetect';
-import { detectLineEnding, type LineEnding } from '../extensions/lineEndingDetect';
+import type { LineEnding } from '../extensions/lineEndingDetect';
 import {
   buildEmmetExtensions,
 } from '../extensions/emmet';
@@ -52,7 +49,6 @@ import {
 import { minimapExtension } from '../extensions/minimap';
 import { setSnippetLanguage } from '../extensions/snippets';
 import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
@@ -64,11 +60,9 @@ import { jumpToDefinition, findReferences, renameSymbol } from '@codemirror/lsp-
 
 import { Loader2, AlertTriangle, Eye, Columns2, Copy, Navigation, FolderOpen, ClipboardCopy, ListOrdered } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
-import { generateUnifiedDiff } from '../utils/simpleDiff';
-import { useLog, debugLog, warn } from '../utils/log';
+import { debugLog, warn } from '../utils/log';
 import ContextMenu from './ContextMenu';
 import WelcomeTab from './WelcomeTab';
-import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from '../hooks/useAutoReloadCleanBuffers';
 
 /** Track if the global displayFile callback has been registered */
 let globalDisplayFileRegistered = false;
@@ -86,29 +80,11 @@ const FONT_SIZE_MAX = 72;      // Maximum for accessibility (WCAG supports 200% 
 // Tab size constants (TAB_SIZE_TABS_MODE and TAB_SIZE_DEFAULT imported from useEditorExtensions)
 const TAB_SIZE_OPTIONS = [2, 4, 8] as const;
 
-/** Minimum number of indented lines required for auto-detection to be confident */
-const MIN_INDENTED_LINES_FOR_DETECTION = 3;
-
-// Transaction annotations for external content replacements (file reloads,
-// initial loads, buffer switches). `Transaction.addToHistory.of(false)`
-// prevents CodeMirror from recording these in the undo/redo stack.
-const suppressHistoryAnnotations = [
-  Transaction.addToHistory.of(false),
-];
-
 function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const { compartments, buildExtensions } = useEditorExtensions();
   const lastInitLanguageKey = useRef<string | null>(null);
-
-  // Throttle state for scroll position persistence.
-  // Without throttling, `updateBufferScroll` fires ~60 times/sec during
-  // scrolling, creating new buffer objects each time and causing the entire
-  // component tree to re-render every frame — which starves the browser paint
-  // cycle and leads to blank editor content in some files.
-  let lastScrollSyncTime = 0;
-  let scrollFlushRafId: number | null = null;
 
   const [wordWrapEnabled, setWordWrapEnabled] = useState(true);
   const [loading, setLoading] = useState<boolean>(false);
@@ -217,19 +193,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean; languageId: string } | null>(null);
   const [workspaceRoot, setWorkspaceRoot] = useState<string>('');
 
-  const log = useLog();
-
   const {
     panes,
     buffers,
     updateBufferContent,
     updateBufferCursor,
     updateBufferScroll,
-    saveBuffer,
     setBufferModified,
-    setBufferOriginalContent,
-    setBufferExternallyModified,
-    clearBufferExternallyModified,
     splitPane,
     openWorkspaceBuffer,
     setBufferLanguageOverride,
@@ -248,6 +218,45 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   // Diagnostics hook — encapsulates diagnostic fetching logic
   const { fetchDiagnostics, fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
+
+  // Ref mirror for buffer (avoids stale closures in hook callbacks)
+  const bufferRef = useRef<EditorBuffer | null | undefined>(buffer);
+  bufferRef.current = buffer;
+
+  // File I/O hook — file load/save, external change detection, conflict resolution
+  const {
+    handleSave,
+    saveRef,
+    isExternalUpdateRef,
+  } = useEditorFileIO(
+    viewRef,
+    buffer,
+    bufferRef,
+    { tabSize: compartments.tabSize },
+    indentManuallySetRef,
+    fetchDiagnosticsRef,
+    paneId,
+    {
+      setLoading,
+      setSaving,
+      setError,
+      setLocalContent,
+      setSelectionInfo,
+      setEditorTabSize,
+      setEditorUsesTabs,
+      setLineEnding,
+    },
+  );
+
+  // Editor scroll sync hook — manages scroll position persistence and cross-pane linked scrolling
+  const { handleScrollUpdate, cancelPendingFlush } = useEditorScrollSync({
+    paneId,
+    viewRef,
+    bufferRef,
+    filePath: buffer?.file?.path,
+    updateBufferScroll,
+    isLinkedScrollEnabled,
+  });
 
   // Reset manual indent override when switching to a different file,
   // so auto-detection runs fresh for each file.
@@ -285,9 +294,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isExternalUpdateRef = useRef<boolean>(false);
-  const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
-
   // Stable action references for hotkey keymap (used in both init and reconfigure effects)
   const hotkeyActionsRef = useRef<{
     onSave: () => void;
@@ -296,181 +302,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onToggleWordWrap: () => void;
     onToggleRelativeLineNumbers: () => void;
   } | null>(null);
-
-  // Stable ref for the save function - used by customSearchExtension
-  // to invoke save from the search panel without requiring handleSave
-  // as a dependency of the editor init effect.
-  const saveRef = useRef<() => void>(() => {});
-
-  // Load file content - updates buffer in context to keep it in sync with editor
-  const loadFile = useCallback(
-    async (filePath: string) => {
-      setError(null);
-      isExternalUpdateRef.current = true;
-
-      try {
-        // Virtual workspace buffers have no on-disk file — handle in-memory only.
-        if (filePath.startsWith('__workspace/')) {
-          const currentBuffer = bufferRef.current;
-          const content = currentBuffer?.content || '';
-          setLocalContent(content);
-          setSelectionInfo(null);
-          setError(null);
-          if (currentBuffer) {
-            updateBufferContent(currentBuffer.id, content);
-            setBufferOriginalContent(currentBuffer.id, content);
-          }
-          if (viewRef.current) {
-            viewRef.current.dispatch({
-              changes: {
-                from: 0,
-                to: viewRef.current.state.doc.length,
-                insert: content,
-              },
-              annotations: suppressHistoryAnnotations,
-              effects: setOriginalContent.of(content),
-            });
-            clearDiffGutter(viewRef.current);
-            clearDiagnostics(viewRef.current);
-          }
-          return; // Skip server fetch
-        }
-
-        setLoading(true);
-        const response = await readFileWithConsent(filePath);
-        if (!response.ok) {
-          throw new Error(`Failed to load file: ${response.statusText}`);
-        }
-
-        // Server returns raw file content as text, not JSON
-        const content = await response.text();
-
-        setLocalContent(content);
-        setSelectionInfo(null);
-
-        // Update buffer in context to keep it in sync with editor.
-        // Set originalContent so the buffer is NOT marked as modified just
-        // because it was loaded from disk (the content matches what's on disk).
-        if (buffer) {
-          updateBufferContent(buffer.id, content);
-          setBufferOriginalContent(buffer.id, content);
-        }
-
-        // Update editor if it exists
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            changes: {
-              from: 0,
-              to: viewRef.current.state.doc.length,
-              insert: content,
-            },
-            annotations: suppressHistoryAnnotations,
-            effects: setOriginalContent.of(content),
-          });
-        }
-
-        // Restore cursor position from buffer state (layout persistence).
-        // Line numbers are 1-based (matching CodeMirror's doc.line().number).
-        // Only restore if non-zero to avoid jarring jumps for files without
-        // saved positions.
-        if (buffer && viewRef.current && (buffer.cursorPosition.line > 0 || buffer.cursorPosition.column > 0)) {
-          const { line, column } = buffer.cursorPosition;
-          const doc = viewRef.current.state.doc;
-          // Skip restoration if document is empty
-          if (doc.lines > 0) {
-            const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
-            const lineInfo = doc.line(targetLine + 1);
-            const pos = lineInfo.from + Math.max(0, Math.min(column, lineInfo.length));
-            viewRef.current.dispatch({
-              selection: { anchor: pos },
-              annotations: suppressHistoryAnnotations,
-            });
-          }
-        }
-
-        // Restore scroll position from buffer state (layout persistence).
-        // Uses rAF so the DOM has rendered the new content before scrolling.
-        if (buffer && viewRef.current && (buffer.scrollPosition.top > 0 || buffer.scrollPosition.left > 0)) {
-          const { top, left } = buffer.scrollPosition;
-          requestAnimationFrame(() => {
-            if (viewRef.current) {
-              viewRef.current.scrollDOM.scrollTop = top;
-              viewRef.current.scrollDOM.scrollLeft = left;
-            }
-          });
-        }
-
-        // Fetch git diff after loading file
-        if (filePath && viewRef.current) {
-          try {
-            const diffResponse = await apiService.getGitDiff(filePath);
-            if (diffResponse.diff && diffResponse.diff.trim()) {
-              updateDiffGutter(viewRef.current, diffResponse.diff);
-            } else {
-              clearDiffGutter(viewRef.current);
-            }
-          } catch (err) {
-            // Graceful degradation - just clear diff if API fails
-            debugLog('[EditorPane] Failed to fetch git diff for diagnostics:', err);
-            notificationBus.notify('warning', 'Git Diff', 'Failed to fetch git diff for diagnostics');
-            clearDiffGutter(viewRef.current);
-          }
-        }
-
-        // Auto-detect indentation from file content (skip if user has manually set their preference)
-        if (!indentManuallySetRef.current) {
-          const detected = detectIndentation(content);
-          if (detected.indentedLineCount >= MIN_INDENTED_LINES_FOR_DETECTION) {
-            const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;
-            setEditorTabSize(detected.useTabs ? TAB_SIZE_TABS_MODE : detectedSize);
-            setEditorUsesTabs(detected.useTabs);
-            // Note: auto-detected settings are NOT persisted to localStorage.
-            // Only user's manual cycle choice is persisted.
-            if (viewRef.current) {
-              viewRef.current.dispatch({
-                effects: compartments.tabSize.reconfigure([
-                  EditorState.tabSize.of(detectedSize),
-                  indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
-                ]),
-              });
-            }
-          } else {
-            // Reset to defaults when detection is inconclusive
-            setEditorUsesTabs(false);
-            setEditorTabSize(TAB_SIZE_DEFAULT);
-            if (viewRef.current) {
-              viewRef.current.dispatch({
-                effects: compartments.tabSize.reconfigure([
-                  EditorState.tabSize.of(TAB_SIZE_DEFAULT),
-                  indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
-                ]),
-              });
-            }
-          }
-        }
-
-        // Detect line ending style
-        const lineEndingResult = detectLineEnding(content);
-        setLineEnding(lineEndingResult.lineEnding);
-
-        // Fetch diagnostics for the loaded file
-        if (viewRef.current) {
-          fetchDiagnosticsRef.current(filePath, content);
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        log.error(`[EditorPane loadFile] Error: ${errorMessage}`, { title: 'File Load Error' });
-        setError(errorMessage);
-      } finally {
-        isExternalUpdateRef.current = false;
-        setLoading(false);
-      }
-    },
-    [apiService, buffer, updateBufferContent, setBufferOriginalContent, log],
-  ); // eslint-disable-line react-hooks/exhaustive-deps -- fetchDiagnostics is accessed via ref to avoid forward-reference issue
-
-  // Keep ref in sync
-  loadFileRef.current = loadFile;
 
   // Go to specific line
   const handleGoToLine = useCallback((lineNum: number) => {
@@ -559,76 +390,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     hideContextMenu();
   }, [buffer, hideContextMenu, workspaceRoot]);
   // ──────────────────────────────────────────────────────────────
-
-  // Save buffer
-  const handleSave = useCallback(async () => {
-    if (!buffer || !viewRef.current) return;
-
-    setSaving(true);
-    setError(null);
-
-    // Notify the external file watcher and auto-reload cooldown *before*
-    // the HTTP roundtrip.  The server-side fsnotify fires as soon as it
-    // writes the file, and the WebSocket "file_content_changed" event can
-    // reach the browser *before* the HTTP save response.  Setting the
-    // cooldown early prevents the echo from popping the "changed on disk"
-    // dialog.
-    document.dispatchEvent(
-      new CustomEvent('file:editor-saved', {
-        detail: {
-          path: buffer.file.path,
-          mtime: Math.floor(Date.now() / 1000),
-        },
-      }),
-    );
-
-    try {
-      const saveResult = await saveBuffer(buffer.id);
-      const serverMtime =
-        saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
-
-      // Re-dispatch with the authoritative server mtime so the watcher
-      // tracks the correct timestamp going forward.
-      document.dispatchEvent(
-        new CustomEvent('file:editor-saved', {
-          detail: {
-            path: buffer.file.path,
-            mtime: serverMtime ?? Math.floor(Date.now() / 1000),
-          },
-        }),
-      );
-
-      // Re-run diagnostics on save so save-only checks (for example go vet)
-      // can run without paying that cost on each keystroke.
-      if (buffer.file.path && viewRef.current) {
-        await fetchDiagnosticsRef.current(buffer.file.path, viewRef.current.state.doc.toString(), 'save');
-      }
-
-      // Re-fetch diff after save
-      if (buffer.file.path && viewRef.current) {
-        try {
-          const diffResponse = await apiService.getGitDiff(buffer.file.path);
-          if (diffResponse.diff && diffResponse.diff.trim()) {
-            updateDiffGutter(viewRef.current, diffResponse.diff);
-          } else {
-            clearDiffGutter(viewRef.current);
-          }
-        } catch (err) {
-          debugLog('[EditorPane] Failed to re-fetch git diff after save:', err);
-          notificationBus.notify('warning', 'Git Diff', 'Failed to re-fetch git diff after save');
-        }
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
-      setError(errorMessage);
-      log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
-    } finally {
-      setSaving(false);
-    }
-  }, [buffer, saveBuffer, apiService]); // eslint-disable-line react-hooks/exhaustive-deps -- updateDiffGutter/clearDiffGutter are module-level functions
-
-  // Keep the saveRef in sync whenever handleSave changes (e.g., buffer changes)
-  saveRef.current = handleSave;
 
   // Zoom in/out: adjust font size and persist to localStorage
   const onZoomIn = useCallback(() => {
@@ -920,130 +681,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
   }, [openWorkspaceBuffer]);
 
-  const lastLoadedRef = useRef<{ bufferId: string; filePath: string } | null>(null);
-  const currentBufferIdRef = useRef<string | null>(null);
-
-  // Sync original content to the unsaved line highlight extension
-  // whenever it changes (e.g., after save completes).
-  useEffect(() => {
-    if (viewRef.current && buffer?.originalContent !== undefined) {
-      viewRef.current.dispatch({
-        effects: setOriginalContent.of(buffer.originalContent),
-      });
-    }
-  }, [buffer?.originalContent]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load file when pane has a buffer assigned
-  useEffect(() => {
-    // Skip if no buffer or no file
-    if (!buffer || !buffer.file || buffer.file.isDir) {
-      setLocalContent('');
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: '',
-          },
-          annotations: suppressHistoryAnnotations,
-          effects: setOriginalContent.of(''),
-        });
-      }
-      setSelectionInfo(null);
-      setError(null);
-      lastLoadedRef.current = null;
-      currentBufferIdRef.current = null;
-      if (viewRef.current) {
-        clearDiffGutter(viewRef.current);
-        clearDiagnostics(viewRef.current);
-      }
-      return;
-    }
-
-    if (buffer.kind !== 'file') {
-      const nextContent = buffer.content || '';
-      setLocalContent(nextContent);
-      setSelectionInfo(null);
-      setError(null);
-      lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: nextContent,
-          },
-          annotations: suppressHistoryAnnotations,
-          effects: setOriginalContent.of(nextContent),
-        });
-        clearDiffGutter(viewRef.current);
-        clearDiagnostics(viewRef.current);
-      }
-      return;
-    }
-
-    // Skip loading virtual workspace buffers — they have no on-disk file.
-    if (buffer.file.path.startsWith('__workspace/')) {
-      const nextContent = buffer.content || '';
-      setLocalContent(nextContent);
-      setSelectionInfo(null);
-      setError(null);
-      lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
-      currentBufferIdRef.current = buffer.id;
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          changes: {
-            from: 0,
-            to: viewRef.current.state.doc.length,
-            insert: nextContent,
-          },
-          annotations: suppressHistoryAnnotations,
-          effects: setOriginalContent.of(nextContent),
-        });
-        clearDiffGutter(viewRef.current);
-        clearDiagnostics(viewRef.current);
-      }
-      return;
-    }
-
-    // Skip if same buffer already tracked
-    if (currentBufferIdRef.current === buffer.id) {
-      return;
-    }
-
-    // Mark new buffer as tracked
-    currentBufferIdRef.current = buffer.id;
-
-    // Skip if same buffer and same file already loaded
-    if (
-      lastLoadedRef.current &&
-      lastLoadedRef.current.bufferId === buffer.id &&
-      lastLoadedRef.current.filePath === buffer.file.path
-    ) {
-      return;
-    }
-
-    // Load file from server
-    lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
-
-    // Skip loading content for binary/media buffers — they are rendered by
-    // dedicated viewers (ImageViewer, MediaViewer, BinaryFileViewer) that
-    // fetch the file themselves as blobs.
-    const fileExt = buffer.file.ext?.toLowerCase();
-    if (
-      fileExt &&
-      (isImageFile(fileExt) || isAudioFile(fileExt) || isVideoFile(fileExt) || isBinaryFile(fileExt))
-    ) {
-      // Still track the buffer so we don't re-process it on re-render
-      return;
-    }
-
-    // Use ref to avoid dependency issues - only pass filePath now
-    if (loadFileRef.current) {
-      loadFileRef.current(buffer.file.path);
-    }
-  }, [buffer, paneId]);
-
   // Initialize CodeMirror editor
   useEffect(() => {
     if (!editorRef.current) return;
@@ -1099,27 +736,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         }
       }
 
-      // Track scroll position changes for layout persistence.
-      // Throttled to ~100ms to avoid excessive React state updates
-      // (~60 unthrottled calls/sec would create new buffer objects every
-      // frame, causing the entire component tree to re-render and starving
-      // the browser paint cycle — leading to blank editor content).
-      if (buffer && update.viewportChanged) {
-        const scrollInfo = update.view.scrollDOM;
-        if (scrollInfo) {
-          const now = performance.now();
-          if (now - lastScrollSyncTime >= 100) {
-            lastScrollSyncTime = now;
-            updateBufferScroll(buffer.id, { top: scrollInfo.scrollTop, left: scrollInfo.scrollLeft });
-            if (scrollFlushRafId != null) cancelAnimationFrame(scrollFlushRafId);
-            scrollFlushRafId = requestAnimationFrame(() => {
-              scrollFlushRafId = null;
-              const sd = update.view.scrollDOM;
-              if (sd) updateBufferScroll(buffer.id, { top: sd.scrollTop, left: sd.scrollLeft });
-            });
-          }
-        }
-      }
+      // Track scroll position changes for layout persistence (delegated to useEditorScrollSync hook)
+      handleScrollUpdate(update);
     });
 
     const customKeymap = getEditorKeymap(hotkeys, {
@@ -1376,7 +994,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     const cleanupFilePath = buffer?.file?.path;
 
     return () => {
-      if (scrollFlushRafId != null) cancelAnimationFrame(scrollFlushRafId);
+      cancelPendingFlush();
       // Unregister the editor view for cross-file LSP navigation
       if (cleanupFilePath && !cleanupFilePath.startsWith('__workspace/')) {
         unregisterEditorView(cleanupFilePath);
@@ -1616,11 +1234,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     relativeLineNumbersEnabledRef.current = relativeLineNumbersEnabled;
   }, [relativeLineNumbersEnabled]);
 
-  // Keep module-level linked scroll state in sync with context.
-  useEffect(() => {
-    setLinkedScrollEnabled(isLinkedScrollEnabled);
-  }, [isLinkedScrollEnabled]);
-
   // Listen for go to line event, global word-wrap toggle, and linked scroll toggle.
   // A small dedup guard prevents double-toggle if the same keyboard event is
   // handled by both the CodeMirror keymap AND the global HotkeyProvider (e.g.
@@ -1789,213 +1402,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       document.removeEventListener('editor-go-to-symbol', handler);
     };
   }, [handleGoToLine, onToggleMinimap, onToggleRelativeLineNumbers, onToggleWordWrap, toggleLinkedScroll, onCycleWhitespaceRendering, handleFindAllReferences]);
-
-  // Listen for scroll sync events from other panes (linked scrolling).
-  useEffect(() => {
-    const handleLinkedScroll = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const { sourcePaneId, filePath, topLine } = customEvent.detail;
-
-      // Skip if same pane or different file
-      if (sourcePaneId === paneId) return;
-      const currentPath = buffer?.file?.path;
-      if (!currentPath || currentPath !== filePath) return;
-      if (!viewRef.current) return;
-
-      const view = viewRef.current;
-
-      // topLine is 1-based; validate bounds.
-      if (topLine < 1 || topLine > view.state.doc.lines) return;
-
-      // Suppress this pane's next viewportChanged dispatch so the
-      // programmatic scroll doesn't cause an echo loop (A → B → A → …).
-      suppressScrollSync(paneId);
-
-      // Get the layout block for the target line and scroll it to the top.
-      const targetPos = view.state.doc.line(topLine).from;
-      const block = view.lineBlockAt(targetPos);
-      view.scrollDOM.scrollTo(0, block.top);
-    };
-
-    document.addEventListener('editor:linked-scroll', handleLinkedScroll);
-    return () => document.removeEventListener('editor:linked-scroll', handleLinkedScroll);
-  }, [paneId, buffer?.file?.path]);
-
-  // Ref to always read current buffer state (avoids stale closures in event listeners)
-  const bufferRef = useRef(buffer);
-  bufferRef.current = buffer;
-
-  // Listen for external file modifications and show dialog to the user.
-  useEffect(() => {
-    if (!buffer || buffer.kind !== 'file' || buffer.file.path.startsWith('__workspace/')) return;
-
-    const filePath = buffer.file.path;
-
-    const handleExternalChange = (e: Event) => {
-      const detail = (e as CustomEvent).detail as {
-        path: string;
-        mtime: number;
-        size: number;
-        deleted: boolean;
-      };
-      if (detail.path !== filePath) return;
-
-      // Suppress the dialog when the change was caused by the editor's own save.
-      const justSavedAt = justSavedRef.get(detail.path) ?? 0;
-      if (Date.now() - justSavedAt < JUST_SAVED_THRESHOLD_MS) return;
-
-      // Read current buffer state via ref to avoid stale closure.
-      const currentBuffer = bufferRef.current;
-      if (!currentBuffer) return;
-
-      // Skip showing dialog if the user has unsaved changes — don't overwrite silently.
-      if (currentBuffer.isModified) {
-        // Fetch the disk content for the conflict dialog, or show deletion alert.
-        if (detail.deleted) {
-          showFileChangeDialog(currentBuffer.file.name, { deleted: true, hasUnsavedChanges: true })
-            .then((action) => {
-              if (action === 'keep-mine') {
-                // User wants to keep their unsaved edits in the editor.
-                // Mark as externally modified so the tab shows the indicator.
-                setBufferExternallyModified(currentBuffer.id, '');
-              }
-              // 'ignore' → dismissed without action (no indicator needed)
-            })
-            .catch((err) => {
-              debugLog('[EditorPane] File change dialog error:', err);
-              notificationBus.notify('error', 'File Change', 'File change dialog error: ' + String(err));
-            });
-          return;
-        }
-
-        readFileWithConsent(filePath)
-          .then((response) => {
-            if (!response.ok) return;
-            return response.text();
-          })
-          .then(async (diskContent) => {
-            if (diskContent === undefined) return;
-            // Get editor content for the dialog (enables inline merge view)
-            const editorContent = bufferRef.current?.content || '';
-            const action = await showFileChangeDialog(currentBuffer.file.name, {
-              deleted: false,
-              hasUnsavedChanges: true,
-              originalContent: editorContent,
-              modifiedContent: diskContent,
-            });
-            if (action === 'reload') {
-              if (loadFileRef.current) {
-                loadFileRef.current(filePath);
-              }
-              clearBufferExternallyModified(currentBuffer.id);
-            } else if (action === 'keep-mine') {
-              setBufferExternallyModified(currentBuffer.id, diskContent);
-            } else if (action === 'show-diff') {
-              // show-diff only fires when inline merge wasn't available
-              // (hasMergeContent was false — content wasn't passed to dialog)
-              try {
-                const diffText = generateUnifiedDiff(editorContent, diskContent, 'Editor', 'Disk');
-                if (!diffText) return;
-
-                openWorkspaceBuffer({
-                  kind: 'diff',
-                  path: `diff:${filePath}`,
-                  title: `Diff: ${currentBuffer.file.name} (editor ↔ disk)`,
-                  content: diffText,
-                  ext: '.diff',
-                  isPinned: false,
-                  isClosable: true,
-                  metadata: { sourcePath: filePath, diffType: 'external-change' },
-                });
-
-                const bufferRefId = bufferRef.current?.id;
-                if (bufferRefId) {
-                  setBufferExternallyModified(bufferRefId, diskContent);
-                }
-              } catch (err) {
-                debugLog('[EditorPane] Failed to generate diff for external changes:', err);
-                notificationBus.notify('warning', 'Diff Generation', 'Failed to generate diff for external changes');
-              }
-            }
-          })
-          .catch((err) => {
-            warn(`Failed to read externally modified file: ${err instanceof Error ? err.message : String(err)}`);
-          });
-        return;
-      }
-
-      // Clean (unmodified) buffers are auto-reloaded by EditorManagerContext.
-      // No dialog needed here.
-    };
-
-    document.addEventListener('file_externally_modified', handleExternalChange);
-    return () => document.removeEventListener('file_externally_modified', handleExternalChange);
-  }, [buffer, clearBufferExternallyModified, setBufferExternallyModified, openWorkspaceBuffer]); // eslint-disable-line react-hooks/exhaustive-deps -- clearBufferExternallyModified/setBufferExternallyModified are stable
-
-  // Listen for auto-reloaded events to sync the CodeMirror editor view.
-  useEffect(() => {
-    if (!buffer) return;
-
-    const handleAutoReloaded = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
-      if (detail.bufferId !== buffer.id) return;
-
-      isExternalUpdateRef.current = true;
-      try {
-        if (viewRef.current) {
-          viewRef.current.dispatch({
-            changes: {
-              from: 0,
-              to: viewRef.current.state.doc.length,
-              insert: detail.content,
-            },
-            annotations: suppressHistoryAnnotations,
-          });
-        }
-        setLocalContent(detail.content);
-        setSelectionInfo(null);
-
-        // Re-detect indentation on auto-reload (skip if user has manually set their preference)
-        if (!indentManuallySetRef.current) {
-          const detected = detectIndentation(detail.content);
-          if (detected.indentedLineCount >= MIN_INDENTED_LINES_FOR_DETECTION) {
-            const detectedSize = detected.useTabs ? TAB_SIZE_DEFAULT : detected.indentWidth;
-            setEditorTabSize(detected.useTabs ? TAB_SIZE_TABS_MODE : detectedSize);
-            setEditorUsesTabs(detected.useTabs);
-            if (viewRef.current) {
-              viewRef.current.dispatch({
-                effects: compartments.tabSize.reconfigure([
-                  EditorState.tabSize.of(detectedSize),
-                  indentUnit.of(detected.useTabs ? '\t' : ' '.repeat(detectedSize)),
-                ]),
-              });
-            }
-          } else {
-            // Reset to defaults when detection is inconclusive
-            setEditorUsesTabs(false);
-            setEditorTabSize(TAB_SIZE_DEFAULT);
-            if (viewRef.current) {
-              viewRef.current.dispatch({
-                effects: compartments.tabSize.reconfigure([
-                  EditorState.tabSize.of(TAB_SIZE_DEFAULT),
-                  indentUnit.of(' '.repeat(TAB_SIZE_DEFAULT)),
-                ]),
-              });
-            }
-          }
-        }
-
-        // Re-detect line ending on auto-reload
-        const lineEndingResult = detectLineEnding(detail.content);
-        setLineEnding(lineEndingResult.lineEnding);
-      } finally {
-        isExternalUpdateRef.current = false;
-      }
-    };
-
-    document.addEventListener('file:auto-reloaded', handleAutoReloaded);
-    return () => document.removeEventListener('file:auto-reloaded', handleAutoReloaded);
-  }, [buffer]);
 
   // Compute effective language info for the LanguageSwitcher
   // (Must be declared before early returns to satisfy React hooks rules)

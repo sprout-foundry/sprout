@@ -41,6 +41,12 @@ func getShellOutputTokenLimits() (head, tail int) {
 
 // executeShellCommandWithTruncation handles shell command execution with smart truncation and deduplication
 func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command string) (string, error) {
+	// Wire TerminalManager into context for WebUI mode
+	// (nil-safe: WithTerminalManager handles nil TerminalAccess)
+	if tm := a.terminalManager; tm != nil {
+		ctx = tools.WithTerminalManager(ctx, tm)
+	}
+
 	headTokenLimit, tailTokenLimit := getShellOutputTokenLimits()
 
 	// Check if we've run this exact command before

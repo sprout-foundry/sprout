@@ -14,6 +14,10 @@ type TerminalAccess interface {
 	// ExecuteCommandInHidden runs a command synchronously on a hidden PTY session
 	// and returns the output and exit code.
 	ExecuteCommandInHidden(ctx context.Context, sessionID string, command string) (output string, exitCode int, err error)
+
+	// GetOrCreateHiddenSessionForChat returns the session ID of an existing hidden session
+	// for the given chat, or creates a new one. Returns the session ID.
+	GetOrCreateHiddenSessionForChat(ctx context.Context, chatID string) (sessionID string, err error)
 }
 
 // contextKey is an unexported type for context keys defined in this package.

@@ -195,10 +195,12 @@ function Terminal({
         throw new Error(`Failed to fetch sessions: ${response.status}`);
       }
       const data = await response.json();
-      const sessions: AttachableSession[] = (data?.sessions || []).map((s: any) => ({
+      interface RawSession { id: string; name?: string; status?: string }
+      const rawSessions: RawSession[] = data?.sessions || [];
+      const sessions: AttachableSession[] = rawSessions.map((s) => ({
         id: s.id,
         name: s.name || s.id,
-        status: s.status || 'inactive',
+        status: s.status === 'active' ? 'active' : 'inactive',
       }));
       setAttachableSessions(sessions);
     } catch (err) {
@@ -357,7 +359,7 @@ function Terminal({
           method: 'POST',
         });
         if (!response.ok) {
-          if (response.status === 404 || response.status === 410) {
+          if (response.status === 400 || response.status === 404 || response.status === 410) {
             notificationBus.notify('info', 'Terminal', `Session '${name}' is no longer available`);
             return;
           }
@@ -375,9 +377,9 @@ function Terminal({
         await fetchAttachableSessions();
       } catch (err) {
         debugLog('[Terminal] Failed to attach agent session:', err);
-        if (err) {
-          notificationBus.notify('warning', 'Terminal', 'Failed to attach session: ' + String(err));
-        }
+        notificationBus.notify('warning', 'Terminal', 'Failed to attach session: ' + String(err));
+        // Rollback: re-fetch to restore the session in the list
+        fetchAttachableSessions();
       }
     },
     [fetchAttachableSessions],

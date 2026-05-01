@@ -234,12 +234,7 @@ func buildShellOutputWithStatus(output, command string, exitCode int, err error)
 	// Build status header
 	header := fmt.Sprintf("%s Command completed with exit code %d (%s)\n", icon, exitCode, status)
 
-	// If there was any output (even whitespace), include it after the header
-	if strings.TrimSpace(output) == "" {
-		return header + "(no output)"
-	}
-
-	return header + output
+	return header + "(no output)"
 }
 
 // ExecuteShellCommandBackground runs a command in a background hidden PTY session

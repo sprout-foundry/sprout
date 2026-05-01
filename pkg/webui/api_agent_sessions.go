@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 )
 
 // handleAPIAgentSessions lists hidden agent sessions with status and output preview.
@@ -77,7 +78,11 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 		snapshot := session.ring.snapshot()
 		preview := ""
 		if len(snapshot) > 500 {
-			preview = stripANSI(string(snapshot[len(snapshot)-500:]))
+			start := len(snapshot) - 500
+			for start < len(snapshot) && !utf8.RuneStart(snapshot[start]) {
+				start++
+			}
+			preview = stripANSI(string(snapshot[start:]))
 		} else {
 			preview = stripANSI(string(snapshot))
 		}

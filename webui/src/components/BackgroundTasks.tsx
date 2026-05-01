@@ -39,20 +39,20 @@ function formatDuration(startTime: number): string {
   return `${hours}h ${mins}m`;
 }
 
+function friendlyStatus(status: number): string {
+  if (status === 404) return 'Not found';
+  if (status === 500) return 'Internal server error';
+  if (status === 503) return 'Service unavailable';
+  return `Error (${status})`;
+}
+
 function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
   const [sessions, setSessions] = useState<BackgroundSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  const [hasActive, setHasActive] = useState(false); // Track hasActive as state for ticker transitions
   const isFetchingRef = useRef(false);
-
-  // Update hasActive state when sessions change
-  useEffect(() => {
-    const newHasActive = sessions.some((s) => s.status === 'active');
-    setHasActive(newHasActive);
-  }, [sessions]);
 
   // Fetch sessions from the API (guarded against concurrent calls)
   const fetchSessions = useCallback(async () => {
@@ -63,7 +63,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     try {
       const response = await clientFetch('/api/terminal/agent-sessions');
       if (!response.ok) {
-        throw new Error(`Failed to fetch sessions: ${response.status}`);
+        throw new Error(`Failed to fetch sessions: ${friendlyStatus(response.status)}`);
       }
       const data: SessionsResponse = await response.json();
       setSessions(data?.sessions || []);
@@ -85,7 +85,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
           method: 'POST',
         });
         if (!response.ok) {
-          throw new Error(`Failed to attach session: ${response.status}`);
+          throw new Error(`Failed to attach session: ${friendlyStatus(response.status)}`);
         }
 
         // Fire a custom event to notify Terminal.tsx
@@ -116,7 +116,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
           method: 'POST',
         });
         if (!response.ok) {
-          throw new Error(`Failed to kill session: ${response.status}`);
+          throw new Error(`Failed to kill session: ${friendlyStatus(response.status)}`);
         }
 
         // Refresh the list (session should be removed)
@@ -152,10 +152,11 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   // Tick every second when expanded and has active sessions
   useEffect(() => {
     if (!isExpanded) return;
+    const hasActive = sessions.some((s) => s.status === 'active');
     if (!hasActive) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [isExpanded, hasActive]); // depends on isExpanded and hasActive (state)
+  }, [isExpanded, sessions]); // depends on isExpanded and sessions (hasActive derived in effect body)
 
   // Listen for WebSocket events to auto-refresh on terminal updates
   useEffect(() => {
@@ -217,6 +218,10 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                 <RefreshCw size={12} />
               </button>
             </div>
+          )}
+
+          {isLoading && count === 0 && !error && (
+            <div className="background-tasks-empty">Loading...</div>
           )}
 
           {!error && count === 0 && !isLoading && (

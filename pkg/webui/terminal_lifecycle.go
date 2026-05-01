@@ -102,15 +102,27 @@ func (tm *TerminalManager) ReattachSession(sessionID string) (string, error) {
 }
 
 // CleanupInactiveSessions removes sessions that have been inactive for too long.
-func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration) {
+// Background sessions (IsBackground=true) use a separate timeout (default 2 hours)
+// vs regular hidden sessions (30 minutes).
+func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration, backgroundTimeout ...time.Duration) {
+	bgTimeout := 2 * time.Hour // default 2 hours for background sessions
+	if len(backgroundTimeout) > 0 {
+		bgTimeout = backgroundTimeout[0]
+	}
+
 	var toClose []string
 
 	tm.mutex.RLock()
 	now := time.Now()
 	for sessionID, session := range tm.sessions {
 		session.mutex.RLock()
-		inactive := now.Sub(session.LastUsed) > timeout
+		sessionTimeout := timeout
+		if session.IsBackground {
+			sessionTimeout = bgTimeout
+		}
+		inactive := now.Sub(session.LastUsed) > sessionTimeout
 		session.mutex.RUnlock()
+
 		if inactive {
 			toClose = append(toClose, sessionID)
 		}
@@ -126,7 +138,8 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration) {
 }
 
 // StartCleanupWorker starts a background worker to clean up inactive sessions.
-func (tm *TerminalManager) StartCleanupWorker(ctx context.Context, interval time.Duration, timeout time.Duration) {
+// Background sessions get a separate timeout (default 2 hours) vs regular sessions (timeout).
+func (tm *TerminalManager) StartCleanupWorker(ctx context.Context, interval time.Duration, timeout time.Duration, backgroundTimeout ...time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -136,7 +149,7 @@ func (tm *TerminalManager) StartCleanupWorker(ctx context.Context, interval time
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				tm.CleanupInactiveSessions(timeout)
+				tm.CleanupInactiveSessions(timeout, backgroundTimeout...)
 			}
 		}
 	}()

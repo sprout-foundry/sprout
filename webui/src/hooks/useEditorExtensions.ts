@@ -9,7 +9,8 @@
  * The hook does NOT own the EditorView lifecycle — the consumer creates and
  * destroys the view. It only provides the extension configuration.
  *
- * Target: ~300 lines (SP-010 Phase 1).
+ * Target: ~300 lines (SP-010 Phase 1; raised from original 150-line estimate to
+ * accommodate compartment management, detailed type definitions, and inline docs).
  */
 
 import { useRef, useCallback } from 'react';
@@ -102,14 +103,28 @@ export interface ThemeConfig {
 export interface BufferInfo {
   /** Language ID (already resolved by `resolveLanguageId`). `null` for unknown/binary. */
   languageId: string | null;
-  /** Dynamic callbacks that read current state — avoids stale closures. */
+  /**
+   * Dynamic callbacks that read current state — avoids stale closures.
+   *
+   * **IMPORTANT:** Callers MUST provide ref-backed functions (e.g. `() => ref.current`),
+   * NOT plain closures over state, because these callbacks are captured once at editor
+   * init time and used for the entire lifetime of the EditorView. Plain values would
+   * become stale after the first render.
+   */
   getFilePath: () => string | undefined;
   getFileExt: () => string | undefined;
   getContent: () => string;
 }
 
 export interface ActionCallbacks {
-  /** Invokes the current save function (avoids stale closures). */
+  /**
+   * Returns the current save function.
+   *
+   * **IMPORTANT:** Callers MUST return a ref-backed function (e.g. `() => saveRef.current`)
+   * so that the save callback remains current across buffer switches and re-renders.
+   * The double-indirection (`getSaveFn()()`) ensures the latest save implementation
+   * is always called, even when invoked asynchronously from search panels.
+   */
   getSaveFn: () => () => void;
 }
 
@@ -231,6 +246,9 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
 
       // ── Compartment-wrapped settings ──
       compartments.whitespaceRendering.of(whitespaceRenderingPlugin(settings.whitespaceRenderingMode)),
+      // Note: `lineNumbersRelative` is a pre-built Extension (not a factory function),
+      // while `lineNumbers()` is a factory that returns an Extension. Both produce
+      // valid Extension values; the difference is the @uiw package pre-bakes the extension.
       compartments.relativeLineNumbers.of(settings.relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
       foldGutter({ openText: '▼', closedText: '▶' }),
@@ -291,6 +309,8 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       compartments.emmet.of(getInitialEmmetExtensions(buffer.languageId)),
       compartments.autoCloseTag.of(getInitialAutoCloseTagExtensions(buffer.languageId)),
       compartments.language.of(getLanguageExtensions(buffer.languageId)),
+      // LSP extensions are injected later via compartment reconfigure once the
+      // language server connects. Empty array = no-op placeholder until then.
       compartments.lsp.of([]),
     ];
   }, []); // compartments is stable via useRef

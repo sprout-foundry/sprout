@@ -18,6 +18,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useEditorExtensions, TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from '../hooks/useEditorExtensions';
 import { useEditorDiagnostics } from '../hooks/useEditorDiagnostics';
 import { useEditorFileIO } from '../hooks/useEditorFileIO';
+import { useEditorCursor } from '../hooks/useEditorCursor';
 import { useEditorScrollSync } from '../hooks/useEditorScrollSync';
 import { useEditorSymbols, type BreadcrumbSymbol } from '../hooks/useEditorSymbols';
 import type { EditorBuffer } from '../types/editor';
@@ -90,7 +91,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [localContent, setLocalContent] = useState<string>('');
-  const [selectionInfo, setSelectionInfo] = useState<{ charCount: number; selectionCount: number } | null>(null);
   const [showGoToWorkspaceSymbol, setShowGoToWorkspaceSymbol] = useState<boolean>(false);
 
   // Find All References state
@@ -221,6 +221,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Ref mirror for buffer (avoids stale closures in hook callbacks)
   const bufferRef = useRef<EditorBuffer | null | undefined>(buffer);
   bufferRef.current = buffer;
+
+  // Cursor position tracking & selection state hook
+  const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({
+    bufferRef,
+    updateBufferCursor,
+  });
 
   // File I/O hook — file load/save, external change detection, conflict resolution
   const {
@@ -685,37 +691,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     if (!editorRef.current) return;
 
     const updateListener = EditorView.updateListener.of((update) => {
-      // Update cursor position on ANY selection change (cursor moves, clicks, typing)
-      if (buffer && update.selectionSet) {
-        try {
-          const selection = update.state.selection.main;
-          if (selection) {
-            const line = update.state.doc.lineAt(selection.head).number;
-            const column = selection.head - update.state.doc.line(selection.head).from;
-            updateBufferCursor(buffer.id, { line, column });
-          }
-        } catch (err) {
-          debugLog('Cursor position update skipped:', err);
-        }
-      }
-
-      // Update selection info on selection change
-      if (update.selectionSet) {
-        const sel = update.state.selection;
-        const ranges = sel.ranges;
-        if (ranges.length > 1) {
-          // Multiple selections — show count and total chars
-          const totalChars = ranges.reduce((sum, range) => sum + (range.to - range.from), 0);
-          setSelectionInfo({ charCount: totalChars, selectionCount: ranges.length });
-        } else if (ranges.length === 1 && !ranges[0].empty) {
-          // Single non-empty selection — show character count
-          const charCount = ranges[0].to - ranges[0].from;
-          setSelectionInfo({ charCount, selectionCount: 1 });
-        } else {
-          // No selection (just a cursor)
-          setSelectionInfo(null);
-        }
-      }
+      // Cursor position tracking & selection state (delegated to useEditorCursor hook)
+      handleCursorUpdate(update);
 
       if (update.docChanged && !isExternalUpdateRef.current) {
         const newContent = update.state.doc.toString();

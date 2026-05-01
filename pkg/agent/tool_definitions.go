@@ -78,6 +78,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Description: "Execute a shell command",
 		Parameters: []ParameterConfig{
 			{"command", "string", true, []string{"cmd"}, "The shell command to execute"},
+			{"background", "bool", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},
 		},
 		Handler: handleShellCommand,
 	})

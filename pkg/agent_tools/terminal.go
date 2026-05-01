@@ -18,6 +18,14 @@ type TerminalAccess interface {
 	// GetOrCreateHiddenSessionForChat returns the session ID of an existing hidden session
 	// for the given chat, or creates a new one. Returns the session ID.
 	GetOrCreateHiddenSessionForChat(ctx context.Context, chatID string) (sessionID string, err error)
+
+	// ExecuteCommandInBackground writes a command to a new hidden PTY session
+	// and returns immediately with the session ID. Does NOT wait for completion.
+	// Background sessions get a descriptive name and longer cleanup timeout.
+	ExecuteCommandInBackground(ctx context.Context, chatID, command string) (sessionID string, err error)
+
+	// GetBackgroundOutput returns accumulated output for a background session.
+	GetBackgroundOutput(sessionID string) (output string, err error)
 }
 
 // contextKey is an unexported type for context keys defined in this package.

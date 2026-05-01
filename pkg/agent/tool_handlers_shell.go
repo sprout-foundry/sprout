@@ -28,6 +28,14 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("failed to convert command parameter", err)
 	}
 
+	// Extract background parameter (optional, defaults to false)
+	background := false
+	if bgParam, exists := args["background"]; exists {
+		if bgBool, ok := bgParam.(bool); ok {
+			background = bgBool
+		}
+	}
+
 	// Block git checkout/switch commands from shell_command for ALL personas.
 	// These must go through the git tool which requires explicit user approval.
 	// This prevents repo_orchestrator and other autonomous personas from
@@ -80,6 +88,12 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
+	// If background mode is requested, use the background execution path
+	if background {
+		return a.executeShellCommandBackground(ctx, command)
+	}
+
+	// Otherwise, use the normal synchronous execution path
 	return a.executeShellCommandWithTruncation(ctx, command)
 }
 

@@ -9,8 +9,10 @@ import (
 
 // mockTerminalManager is a mock implementation of TerminalAccess for testing.
 type mockTerminalManager struct {
-	executeCommandFunc func(ctx context.Context, sessionID, command string) (string, int, error)
-	getOrCreateFunc    func(ctx context.Context, chatID string) (string, error)
+	executeCommandFunc       func(ctx context.Context, sessionID, command string) (string, int, error)
+	getOrCreateFunc          func(ctx context.Context, chatID string) (string, error)
+	executeBackgroundFunc     func(ctx context.Context, chatID, command string) (string, error)
+	getBackgroundOutputFunc   func(sessionID string) (string, error)
 }
 
 func (m *mockTerminalManager) ExecuteCommandInHidden(ctx context.Context, sessionID, command string) (string, int, error) {
@@ -25,6 +27,20 @@ func (m *mockTerminalManager) GetOrCreateHiddenSessionForChat(ctx context.Contex
 		return m.getOrCreateFunc(ctx, chatID)
 	}
 	return "mock-session-" + chatID, nil
+}
+
+func (m *mockTerminalManager) ExecuteCommandInBackground(ctx context.Context, chatID, command string) (string, error) {
+	if m.executeBackgroundFunc != nil {
+		return m.executeBackgroundFunc(ctx, chatID, command)
+	}
+	return "mock-bg-session-" + chatID, nil
+}
+
+func (m *mockTerminalManager) GetBackgroundOutput(sessionID string) (string, error) {
+	if m.getBackgroundOutputFunc != nil {
+		return m.getBackgroundOutputFunc(sessionID)
+	}
+	return "mock background output", nil
 }
 
 func TestWithTerminalManager(t *testing.T) {

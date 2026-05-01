@@ -348,7 +348,7 @@ func (tm *TerminalManager) GetOrCreateHiddenSessionForChat(ctx context.Context, 
 	// No existing session — create one with deterministic ID "agent-hidden-<chatID>"
 	// Sanitize chatID to ensure the resulting session ID is valid.
 	sessionID := "agent-hidden-" + sanitizeChatID(chatID)
-	_, err := tm.CreateHiddenSession(sessionID, "agent", chatID)
+	session, err := tm.CreateHiddenSession(sessionID, "agent", chatID)
 	if err != nil {
 		// Handle TOCTOU race: another goroutine may have created this session
 		// between our RUnlock and the CreateHiddenSession Lock.
@@ -366,7 +366,60 @@ func (tm *TerminalManager) GetOrCreateHiddenSessionForChat(ctx context.Context, 
 		}
 		return "", fmt.Errorf("failed to create hidden session for chat %s: %w", chatID, err)
 	}
+
+	// Wait for the shell to finish initializing (source rc files, print banners)
+	// before returning the session for command execution.
+	if waitErr := tm.waitForShellReady(ctx, session); waitErr != nil {
+		// Shell didn't become ready — close the session and return error.
+		// The caller will fall back to os/exec.
+		_ = tm.CloseSession(sessionID)
+		return "", fmt.Errorf("hidden session created but shell not ready: %w", waitErr)
+	}
+
 	return sessionID, nil
+}
+
+// waitForShellReady waits for the shell in a session to finish initializing
+// (sourcing rc files, printing banners, etc.) before commands can be sent.
+// It subscribes to the session's output and waits for a quiet period of 500ms
+// after the last output chunk, indicating the shell prompt is ready.
+// Returns nil if the shell becomes ready, or an error if the context expires.
+func (tm *TerminalManager) waitForShellReady(ctx context.Context, session *TerminalSession) error {
+	sub := session.subscribe()
+	defer session.unsubscribe(sub)
+
+	// Wait up to 10 seconds for shell readiness. Most shells source rc files
+	// in under 1 second, but complex setups (pyenv, nvm, starship) can take longer.
+	readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	quietPeriod := 500 * time.Millisecond
+	quietTimer := time.NewTimer(quietPeriod)
+	defer quietTimer.Stop()
+
+	for {
+		select {
+		case <-readyCtx.Done():
+			return fmt.Errorf("shell did not become ready within timeout for session %s", session.ID)
+
+		case _, ok := <-sub.ch:
+			if !ok {
+				return fmt.Errorf("PTY channel closed before shell became ready for session %s", session.ID)
+			}
+			// Reset quiet timer on each output chunk (shell still initializing).
+			if !quietTimer.Stop() {
+				select {
+				case <-quietTimer.C:
+				default:
+				}
+			}
+			quietTimer.Reset(quietPeriod)
+
+		case <-quietTimer.C:
+			// Quiet period elapsed — shell is ready.
+			return nil
+		}
+	}
 }
 
 // sanitizeChatID normalizes a chat ID for use in a session identifier.

@@ -44,6 +44,7 @@ export interface UseEditorEventsOptions {
   onCycleWhitespaceRendering: () => void;
   toggleLinkedScroll: () => void;
   handleFindAllReferences: () => void;
+  onGoToWorkspaceSymbol?: () => void;
 }
 
 /**
@@ -65,6 +66,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
     onCycleWhitespaceRendering,
     toggleLinkedScroll,
     handleFindAllReferences,
+    onGoToWorkspaceSymbol,
   } = options;
 
   // ---------------------------------------------------------------------------
@@ -180,8 +182,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       } else if (e.type === 'editor-find-all-references') {
         handleFindAllReferences();
       } else if (e.type === 'editor-go-to-workspace-symbol') {
-        // This event will be handled by EditorPane's state setter
-        window.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol-internal'));
+        onGoToWorkspaceSymbol?.();
       } else if (e.type === 'editor-go-to-symbol') {
         window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       }
@@ -196,6 +197,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       onCycleWhitespaceRendering,
       toggleLinkedScroll,
       handleFindAllReferences,
+      onGoToWorkspaceSymbol,
     ],
   );
 

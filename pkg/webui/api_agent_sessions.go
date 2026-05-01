@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -142,6 +143,8 @@ func (ws *ReactWebServer) handleAPIAgentSessionActions(w http.ResponseWriter, r 
 		ws.handleAgentSessionOutput(w, r, sessionID)
 	case "attach":
 		ws.handleAgentSessionAttach(w, r, sessionID)
+	case "kill":
+		ws.handleAgentSessionKill(w, r, sessionID)
 	default:
 		http.Error(w, fmt.Sprintf("Unknown action: %s", action), http.StatusNotFound)
 	}
@@ -167,7 +170,8 @@ func (ws *ReactWebServer) handleAgentSessionOutput(w http.ResponseWriter, r *htt
 			http.Error(w, "Session not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, fmt.Sprintf("Failed to get output: %v", err), http.StatusInternalServerError)
+		log.Printf("Failed to get background output for session %s: %v", sessionID, err)
+		http.Error(w, "Failed to get output", http.StatusInternalServerError)
 		return
 	}
 
@@ -237,5 +241,47 @@ func (ws *ReactWebServer) handleAgentSessionAttach(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":     sessionID,
 		"status": "attached",
+	})
+}
+
+// handleAgentSessionKill terminates a background agent session.
+// POST /api/terminal/agent-sessions/{id}/kill
+func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	terminalManager := ws.getTerminalManagerForRequest(r)
+
+	// Verify the session exists and is a background session.
+	// Use a write lock to prevent TOCTOU: a concurrent attach could clear
+	// IsBackground between our read and the CloseSession call.
+	session, exists := terminalManager.GetSession(sessionID)
+	if !exists {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+
+	session.mutex.Lock()
+	isBackground := session.IsBackground
+	session.mutex.Unlock()
+
+	if !isBackground {
+		http.Error(w, "Session is not a background session", http.StatusBadRequest)
+		return
+	}
+
+	// Close the session (terminates the PTY process)
+	if err := terminalManager.CloseSession(sessionID); err != nil {
+		log.Printf("Failed to kill background session %s: %v", sessionID, err)
+		http.Error(w, "Failed to kill session", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":     sessionID,
+		"status": "killed",
 	})
 }

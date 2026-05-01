@@ -18,6 +18,10 @@ func (tm *TerminalManager) CloseSession(sessionID string) error {
 		return fmt.Errorf("session %s not found", sessionID)
 	}
 
+	// Ensure no command is in-flight before tearing down.
+	session.execMu.Lock()
+	defer session.execMu.Unlock()
+
 	// Signal all subscribers that the PTY is gone.
 	session.closeAllSubs()
 

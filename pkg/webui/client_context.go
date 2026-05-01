@@ -373,10 +373,15 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	if ctx := ws.clientContexts[clientID]; ctx != nil && ctx.Agent != nil {
 		agentInst := ctx.Agent
 		workspaceRoot := ctx.WorkspaceRoot
+		terminal := ctx.Terminal
 		ws.mutex.RUnlock()
 		agentInst.SetWorkspaceRoot(workspaceRoot)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
 		agentInst.EnableStreaming(func(string) {})
+		// Wire the TerminalManager from the client context into the agent for WebUI mode.
+		if terminal != nil {
+			agentInst.SetTerminalManager(terminal)
+		}
 		return agentInst, nil
 	}
 	// Fallback: check if the active chat session has an agent already.
@@ -385,6 +390,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 			cs.mu.Lock()
 			if cs.Agent != nil {
 				agentInst := cs.Agent
+				terminal := ctx.Terminal
 				cs.mu.Unlock()
 				ctx.Agent = agentInst // cache for next time
 				workspaceRoot := ctx.WorkspaceRoot
@@ -392,6 +398,10 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				agentInst.SetWorkspaceRoot(workspaceRoot)
 				agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
 				agentInst.EnableStreaming(func(string) {})
+				// Wire the TerminalManager from the client context into the agent for WebUI mode.
+				if terminal != nil {
+					agentInst.SetTerminalManager(terminal)
+				}
 				return agentInst, nil
 			}
 			cs.mu.Unlock()
@@ -404,10 +414,15 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	if ctx.Agent != nil {
 		agentInst := ctx.Agent
 		workspaceRoot := ctx.WorkspaceRoot
+		terminal := ctx.Terminal
 		ws.mutex.Unlock()
 		agentInst.SetWorkspaceRoot(workspaceRoot)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
 		agentInst.EnableStreaming(func(string) {})
+		// Wire the TerminalManager from the client context into the agent for WebUI mode.
+		if terminal != nil {
+			agentInst.SetTerminalManager(terminal)
+		}
 		return agentInst, nil
 	}
 	workspaceRoot := ctx.WorkspaceRoot
@@ -460,6 +475,15 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return ""
 	}()})
 	created.EnableStreaming(func(string) {})
+
+	// Wire the TerminalManager from the client context into the agent for WebUI mode.
+	// CLI mode does not set this (agent.terminalManager stays nil).
+	ws.mutex.Lock()
+	if wsCtx := ws.clientContexts[clientID]; wsCtx != nil && wsCtx.Terminal != nil {
+		created.SetTerminalManager(wsCtx.Terminal)
+	}
+	ws.mutex.Unlock()
+
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
 			return nil, fmt.Errorf("import agent state: %w", err)
@@ -596,6 +620,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	}
 	workspaceRoot := ctx.WorkspaceRoot
 	eventBus := ws.eventBus
+	terminal := ctx.Terminal
 	ws.mutex.RUnlock()
 
 	// Compute layered config directories: global + workspace (no session file)
@@ -611,6 +636,12 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, ws.withAgentWorkspace)
 	if err != nil {
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
+	}
+
+	// Wire the TerminalManager from the client context into the agent for WebUI mode.
+	// CLI mode does not set this (agent.terminalManager stays nil).
+	if terminal != nil {
+		agentInst.SetTerminalManager(terminal)
 	}
 
 	// Keep the client-level Agent in sync with the active chat's agent for

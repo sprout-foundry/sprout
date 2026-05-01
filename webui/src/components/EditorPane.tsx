@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useRef, useState } from 'react';
 import { EditorView as CMEditorView } from '@codemirror/view';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -17,6 +17,7 @@ import { useEditorSemantic } from '../hooks/useEditorSemantic';
 import { useEditorContextMenu } from '../hooks/useEditorContextMenu';
 import { useEditorLSP } from '../hooks/useEditorLSP';
 import { useEditorFileType } from '../hooks/useEditorFileType';
+import { useEditorUpdate } from '../hooks/useEditorUpdate';
 import { useLivePreview } from '../hooks/useLivePreview';
 import { useEditorViewInit } from '../hooks/useEditorViewInit';
 
@@ -51,7 +52,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const { compartments, buildExtensions } = useEditorExtensions();
 
   const { panes, buffers, updateBufferContent, updateBufferCursor, updateBufferScroll, setBufferModified, splitPane, openWorkspaceBuffer, setBufferLanguageOverride, isLinkedScrollEnabled, toggleLinkedScroll, whitespaceRenderingMode, setWhitespaceRenderingMode } = useEditorManager();
-  const { theme, themePack, customHighlightStyle } = useTheme();
+  const { themePack, customHighlightStyle } = useTheme();
   const { hotkeys } = useHotkeys();
 
   const pane = panes.find((p) => p.id === paneId);
@@ -65,10 +66,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const [localContent, setLocalContent] = useState<string>('');
   const [markdownPreviewMode, setMarkdownPreviewMode] = useState<'off' | 'split' | 'preview'>('off');
 
-  // Ref to track localContent for use in onUpdate callback without causing dependency changes
-  const localContentRef = useRef<string>(localContent);
-  localContentRef.current = localContent;
-
   const settings = useEditorSettings(compartments, buffer?.id);
 
   // Sync the context's whitespaceRenderingMode into the settings ref so that
@@ -76,7 +73,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // externally (e.g., from the footer or sidebar).
   settings.whitespaceRenderingModeRef.current = whitespaceRenderingMode;
 
-  const { fetchDiagnostics, fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
+  const { fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
 
   const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({ bufferRef, updateBufferCursor });
 
@@ -109,7 +106,19 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     isLinkedScrollEnabled,
   });
 
-  const { hotkeyActionsRef, semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(
+  const { localContentRef, onUpdate } = useEditorUpdate({
+    bufferRef,
+    localContent,
+    setLocalContent,
+    isExternalUpdateRef,
+    fetchDiagnosticsRef,
+    handleCursorUpdate,
+    handleScrollUpdate,
+    updateBufferContent,
+    setBufferModified,
+  });
+
+  const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(
     hotkeys,
     viewRef,
     bufferRef,
@@ -174,27 +183,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     openWorkspaceBuffer,
     paneId,
   );
-
-  const onUpdate = useCallback((update: any) => {
-    handleCursorUpdate(update);
-
-    if (update.docChanged && !isExternalUpdateRef.current) {
-      const newContent = update.state.doc.toString();
-      if (newContent !== localContentRef.current) {
-        setLocalContent(newContent);
-      }
-      const buf = bufferRef.current;
-      if (buf) {
-        updateBufferContent(buf.id, newContent);
-        setBufferModified(buf.id, newContent !== buf.originalContent);
-        if (buf.kind === 'file' && buf.file && !buf.file.path.startsWith('__workspace/')) {
-          fetchDiagnosticsRef.current(buf.file.path, newContent);
-        }
-      }
-    }
-
-    handleScrollUpdate(update);
-  }, [handleCursorUpdate, isExternalUpdateRef, handleScrollUpdate, updateBufferContent, setBufferModified]);
 
   useEditorViewInit({
     paneId,

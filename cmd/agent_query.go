@@ -237,7 +237,7 @@ func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 		{"list files", "ls -la"},
 	}
 	for _, entry := range naturalLanguageMap {
-		if strings.Contains(queryLower, entry.pattern) && len(query) < 60 {
+		if containsWord(queryLower, entry.pattern) && len(query) < 60 {
 			return executeDirectCommand(entry.cmd)
 		}
 	}
@@ -280,6 +280,31 @@ func executeDirectCommand(command string) (bool, error) {
 		)
 	}
 	return true, nil
+}
+
+// containsWord checks whether phrase appears as a whole word (or multi-word phrase)
+// in text, avoiding substring false positives like "iframe" matching "ram".
+func containsWord(text, phrase string) bool {
+	idx := strings.Index(text, phrase)
+	if idx < 0 {
+		return false
+	}
+	// Check character before the match is a word boundary (start of string or non-alphanumeric)
+	if idx > 0 {
+		ch := text[idx-1]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			return false
+		}
+	}
+	// Check character after the match is a word boundary
+	end := idx + len(phrase)
+	if end < len(text) {
+		ch := text[end]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // ProcessQuery processes a single query

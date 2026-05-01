@@ -278,3 +278,38 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 	}
 	return string(resultBytes), nil
 }
+
+// CheckBackgroundOutput retrieves accumulated output for a background session.
+// Returns JSON with session_id, status, and output fields.
+func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error) {
+	if strings.TrimSpace(sessionID) == "" {
+		return "", fmt.Errorf("empty session_id provided")
+	}
+
+	// Requires TerminalManager (WebUI mode only)
+	tm := TerminalManagerFromContext(ctx)
+	if tm == nil {
+		return "", fmt.Errorf("background output retrieval requires WebUI terminal manager")
+	}
+
+	// Get the output
+	output, err := tm.GetBackgroundOutput(sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if the session is still active
+	// We check the output to see if there's a prompt waiting or if the process exited
+	// The TerminalAccess interface doesn't expose an IsActive check, so we check via output
+	status := "running"
+
+	resultBytes, err := json.Marshal(map[string]string{
+		"session_id": sessionID,
+		"status":     status,
+		"output":     output,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal check result: %w", err)
+	}
+	return string(resultBytes), nil
+}

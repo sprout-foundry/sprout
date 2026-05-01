@@ -590,6 +590,27 @@ func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 	return m.config.MCP
 }
 
+// EnrichCustomProviders loads custom provider files from the global providers
+// directory into the config. This is needed before provider name lookups
+// because config.json never stores custom providers directly.
+func (m *Manager) EnrichCustomProviders() {
+	if m.config.CustomProviders == nil {
+		m.config.CustomProviders = make(map[string]CustomProviderConfig)
+	}
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return
+	}
+	providersDir := filepath.Join(configDir, ProvidersDirName)
+	fileProviders, err := LoadCustomProvidersFromDir(providersDir)
+	if err != nil {
+		return
+	}
+	for name, provider := range fileProviders {
+		m.config.CustomProviders[name] = provider
+	}
+}
+
 // SetMCPEnabled enables or disables MCP
 func (m *Manager) SetMCPEnabled(enabled bool) error {
 	m.mu.Lock()

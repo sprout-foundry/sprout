@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const maxCommandLength = 65536 // 64 KB — well below PTY and shell limits
+
 // Cached regexes for performance in the hot path.
 var (
 	newlineRegex = regexp.MustCompile(`\r?\n`)
@@ -74,6 +76,11 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 		return "", -1, fmt.Errorf("command is empty")
 	}
 
+	// Validate command length.
+	if len(command) > maxCommandLength {
+		return "", -1, fmt.Errorf("command too long: %d bytes (max %d)", len(command), maxCommandLength)
+	}
+
 	// Build the wrapped command with sentinel-based exit code detection.
 	// We use a subshell pattern to ensure $? always reflects the command's exit status.
 	// Use /bin/sh to ensure the sentinel command works on all shells.
@@ -82,10 +89,9 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	escapedCmd := strings.ReplaceAll(command, "'", "'\\''")
 	wrappedCmd := fmt.Sprintf("/bin/sh -c '%s && echo \"__SPROUT_DONE__%s:$?\" || echo \"__SPROUT_DONE__%s:$?\"'\n", escapedCmd, marker, marker)
 
-	// Build a sentinel regex that matches the ACTUAL output line, not the PTY echo.
-	// The echo contains the literal "$?" while the output has a real exit code (digits).
-	// The regex captures the exit code in group 1.
-	sentinelRe := regexp.MustCompile(fmt.Sprintf(`__SPROUT_DONE__%s:(\d+)\s*\r?\n`, regexp.QuoteMeta(marker)))
+	// Pre-allocate the sentinel prefix for fast bytes.Index search.
+	// markerStr is constant for the entire call so we allocate once.
+	markerStr := []byte("__SPROUT_DONE__" + marker + ":")
 
 	// Subscribe to the session's output stream.
 	sub := session.subscribe()
@@ -100,16 +106,17 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 
 	// Write the command to the PTY.
 	session.mutex.Lock()
-	if session.Pty == nil || !session.Active {
-		session.mutex.Unlock()
+	pty := session.Pty
+	active := session.Active
+	session.mutex.Unlock()
+
+	if pty == nil || !active {
 		return "", -1, fmt.Errorf("session became inactive before command could be sent")
 	}
-	_, err = session.Pty.Write([]byte(wrappedCmd))
+	_, err = pty.Write([]byte(wrappedCmd))
 	if err != nil {
-		session.mutex.Unlock()
 		return "", -1, fmt.Errorf("failed to write command to PTY: %w", err)
 	}
-	session.mutex.Unlock()
 
 	// Buffer to accumulate output from the PTY.
 	var buf bytes.Buffer
@@ -148,37 +155,69 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			buf.Write(chunk)
 
 			// Only match when the full sentinel (with numeric exit code) appears.
-			// The regex will not match the PTY echo which contains the literal "$?".
-			matches := sentinelRe.FindSubmatch(buf.Bytes())
-			if matches != nil {
-				// Parse exit code from regex capture group 1.
-				code, err := strconv.Atoi(string(matches[1]))
-				if err != nil {
-					return stripANSI(buf.String()), -1, fmt.Errorf("failed to parse exit code from sentinel: %w", err)
-				}
+			// The bytes-based detection will not match the PTY echo which contains the literal "$?".
+			// We use bytes.Index to find the marker prefix, then verify the next char is a digit
+			// (not '$' from the PTY echo which contains <marker>:$?).
+			bufBytes := buf.Bytes()
 
-				// Find the sentinel line position and strip from there.
-				loc := sentinelRe.FindIndex(buf.Bytes())
-				output := buf.String()[:loc[0]]
+			// Use bytes.Index for fast prefix search, then validate digit.
+			idx := bytes.Index(bufBytes, markerStr)
+			for idx >= 0 {
+				afterPrefixStart := idx + len(markerStr)
+				if afterPrefixStart < len(bufBytes) {
+					nextChar := bufBytes[afterPrefixStart]
+					if nextChar >= '0' && nextChar <= '9' {
+						// Found actual sentinel output (not PTY echo). Parse exit code.
+						var codeStr []byte
+						for j := afterPrefixStart; j < len(bufBytes); j++ {
+							b := bufBytes[j]
+							if b >= '0' && b <= '9' {
+								codeStr = append(codeStr, b)
+							} else {
+								break
+							}
+						}
+						if len(codeStr) > 0 {
+							afterDigitsStart := afterPrefixStart + len(codeStr)
+							if afterDigitsStart < len(bufBytes) {
+								afterDigits := bufBytes[afterDigitsStart:]
+								lineEnd := bytes.IndexByte(afterDigits, '\n')
+								if lineEnd >= 0 {
+									code, err := strconv.Atoi(string(codeStr))
+									if err != nil {
+										return stripANSI(buf.String()), -1, fmt.Errorf("failed to parse exit code from sentinel: %w", err)
+									}
 
-				// Strip the command echo from the beginning of the output.
-				// The PTY echoes the wrapped command we sent ("/bin/sh -c '...'").
-				// We find the echo by looking for the "/bin/sh -c '" prefix and
-				// stripping everything up to and including the first newline after it.
-				echoPrefix := "/bin/sh -c '"
-				echoIdx := strings.Index(output, echoPrefix)
-				if echoIdx != -1 {
-					// Find the first newline after the echo prefix start.
-					restAfterEcho := output[echoIdx:]
-					newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
-					if newlineIdx != nil {
-						// Strip everything from the echo start through the newline
-						output = output[echoIdx+newlineIdx[1]:]
+									output := buf.String()[:idx]
+
+									// Strip the command echo from the beginning of the output.
+									// The PTY echoes the wrapped command we sent ("/bin/sh -c '...'").
+									// We find the echo by looking for the "/bin/sh -c '" prefix and
+									// stripping everything up to and including the first newline after it.
+									echoPrefix := "/bin/sh -c '"
+									echoIdx := strings.Index(output, echoPrefix)
+									if echoIdx != -1 {
+										restAfterEcho := output[echoIdx:]
+										newlineIdx := newlineRegex.FindStringIndex(restAfterEcho)
+										if newlineIdx != nil {
+											output = output[echoIdx+newlineIdx[1]:]
+										}
+									}
+
+									return stripANSI(output), code, nil
+								}
+							}
+						}
 					}
 				}
-
-				// Return the stripped output and exit code.
-				return stripANSI(output), code, nil
+				// Skip past this match and look for the next occurrence.
+				remaining := bufBytes[idx+1:]
+				nextIdx := bytes.Index(remaining, markerStr)
+				if nextIdx >= 0 {
+					idx = idx + 1 + nextIdx
+				} else {
+					idx = -1
+				}
 			}
 		}
 	}

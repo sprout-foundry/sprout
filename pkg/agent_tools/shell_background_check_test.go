@@ -153,3 +153,77 @@ func TestClassifyShellCommand_EmptyCommandWithoutCheckBackground(t *testing.T) {
 	}
 }
 
+func TestClassifyShellCommand_StopBackgroundSafe(t *testing.T) {
+	// stop_background is a session management operation — no shell execution.
+	// It should be classified as SAFE, not CAUTION.
+	result := ClassifyToolCall("shell_command", map[string]interface{}{
+		"stop_background": "bg-npm-dev-aabbccdd",
+	})
+	if result.Risk != SecuritySafe {
+		t.Errorf("expected SecuritySafe for stop_background, got %v", result.Risk)
+	}
+	if result.ShouldPrompt {
+		t.Error("stop_background should not prompt")
+	}
+}
+
+func TestCheckBackgroundOutput_StatusExited(t *testing.T) {
+	// When IsSessionActive returns false, CheckBackgroundOutput should report status='exited'
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) {
+			return "hello\n", nil
+		},
+		isSessionActiveFunc: func(sessionID string) bool {
+			return false // Session has finished
+		},
+	}
+	ctx := WithTerminalManager(context.Background(), tm)
+
+	result, err := CheckBackgroundOutput(ctx, "bg-exited-session")
+	if err != nil {
+		t.Fatalf("CheckBackgroundOutput failed: %v", err)
+	}
+
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+
+	if parsed["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %q", parsed["status"])
+	}
+	if parsed["session_id"] != "bg-exited-session" {
+		t.Errorf("expected session_id 'bg-exited-session', got %q", parsed["session_id"])
+	}
+	if parsed["output"] != "hello\n" {
+		t.Errorf("expected output 'hello\\n', got %q", parsed["output"])
+	}
+}
+
+func TestCheckBackgroundOutput_StatusRunning(t *testing.T) {
+	// When IsSessionActive returns true, CheckBackgroundOutput should report status='running'
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) {
+			return "still working...\n", nil
+		},
+		isSessionActiveFunc: func(sessionID string) bool {
+			return true // Session is still running
+		},
+	}
+	ctx := WithTerminalManager(context.Background(), tm)
+
+	result, err := CheckBackgroundOutput(ctx, "bg-running-session")
+	if err != nil {
+		t.Fatalf("CheckBackgroundOutput failed: %v", err)
+	}
+
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+
+	if parsed["status"] != "running" {
+		t.Errorf("expected status 'running', got %q", parsed["status"])
+	}
+}
+

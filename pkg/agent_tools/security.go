@@ -104,6 +104,12 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 		}
 	}
 
+	// stop_background-only calls are session management: sends Ctrl+C and closes the session.
+	// No shell command is executed.
+	if sbRaw, ok := args["stop_background"].(string); ok && sbRaw != "" {
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Background session termination (no shell execution)"}
+	}
+
 	cmdRaw, ok := args["command"].(string)
 	if !ok || cmdRaw == "" {
 		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid command", ShouldPrompt: true}

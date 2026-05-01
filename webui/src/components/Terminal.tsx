@@ -3,9 +3,10 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
-import { TerminalTabBar, type TerminalSession } from '@sprout/ui';
+import { TerminalTabBar, type TerminalSession, type AttachableSession } from '@sprout/ui';
 import { ApiService, type ShellInfo } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
+import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import { FONT_SIZE_DEFAULT } from './terminalConstants';
 import BackgroundTasks from './BackgroundTasks';
@@ -74,6 +75,10 @@ function Terminal({
   const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
   // Track which sessions need reattach to existing PTY (map: sessionId → sessionId)
   const sessionReattachIdsRef = useRef<Map<string, string | null>>(new Map());
+
+  // ── Attachable sessions state ───────────────────────────────────────────────
+  const [attachableSessions, setAttachableSessions] = useState<AttachableSession[]>([]);
+  const isFetchingSessionsRef = useRef(false);
 
   // ── Font size state ───────────────────────────────────────────────────────
   const [fontSize, setFontSize] = useState<number>(() => {
@@ -180,6 +185,64 @@ function Terminal({
     };
   }, []);
 
+  // Fetch attachable agent sessions
+  const fetchAttachableSessions = useCallback(async () => {
+    if (isFetchingSessionsRef.current) return;
+    isFetchingSessionsRef.current = true;
+    try {
+      const response = await clientFetch('/api/terminal/agent-sessions');
+      if (!response.ok) {
+        throw new Error(`Failed to fetch sessions: ${response.status}`);
+      }
+      const data = await response.json();
+      const sessions: AttachableSession[] = (data?.sessions || []).map((s: any) => ({
+        id: s.id,
+        name: s.name || s.id,
+        status: s.status || 'inactive',
+      }));
+      setAttachableSessions(sessions);
+    } catch (err) {
+      debugLog('[Terminal] Failed to fetch attachable sessions:', err);
+      setAttachableSessions([]);
+    } finally {
+      isFetchingSessionsRef.current = false;
+    }
+  }, []);
+
+  // ── Poll for attachable agent sessions ─────────────────────────────────────
+  useEffect(() => {
+    // Initial fetch
+    fetchAttachableSessions();
+
+    // Poll every 5 seconds when terminal is expanded
+    const intervalId = setInterval(() => {
+      if (isExpanded) {
+        fetchAttachableSessions();
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isExpanded, fetchAttachableSessions]);
+
+  // Listen for WebSocket events to refresh attachable sessions
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      // Refresh if it's a terminal-related event
+      if (
+        detail?.type === 'terminal_output' ||
+        detail?.type === 'pty_exit' ||
+        detail?.type === 'agent_session_update'
+      ) {
+        fetchAttachableSessions();
+      }
+    };
+    window.addEventListener('sprout:wsevent', handler as EventListener);
+    return () => window.removeEventListener('sprout:wsevent', handler as EventListener);
+  }, [fetchAttachableSessions]);
+
   // Close shell picker when clicking outside or pressing Escape
   useEffect(() => {
     if (!showShellMenu) return;
@@ -281,6 +344,43 @@ function Terminal({
       addSession(shellName);
     },
     [addSession],
+  );
+
+  // Handle attaching an agent session
+  const handleAttachAgentSession = useCallback(
+    async (sessionId: string, name: string) => {
+      // Optimistically remove from the list to prevent double-clicks
+      setAttachableSessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+      try {
+        const response = await clientFetch(`/api/terminal/agent-sessions/${sessionId}/attach`, {
+          method: 'POST',
+        });
+        if (!response.ok) {
+          if (response.status === 404 || response.status === 410) {
+            notificationBus.notify('info', 'Terminal', `Session '${name}' is no longer available`);
+            return;
+          }
+          throw new Error(`Failed to attach session: ${response.status}`);
+        }
+
+        // Fire a custom event to notify the terminal to create a new tab
+        window.dispatchEvent(
+          new CustomEvent('sprout:terminal-attach-session', {
+            detail: { sessionId, name },
+          }),
+        );
+
+        // Refresh the attachable sessions list
+        await fetchAttachableSessions();
+      } catch (err) {
+        debugLog('[Terminal] Failed to attach agent session:', err);
+        if (err) {
+          notificationBus.notify('warning', 'Terminal', 'Failed to attach session: ' + String(err));
+        }
+      }
+    },
+    [fetchAttachableSessions],
   );
 
   // Clear all split state (used by closeSecondaryPane and closeSession)
@@ -666,6 +766,8 @@ function Terminal({
                 onClose={closeSession}
                 onRename={renameSession}
                 onTogglePin={togglePinSession}
+                attachableSessions={attachableSessions}
+                onAttachSession={handleAttachAgentSession}
               />
             </div>
             <div className="shell-picker-dropdown" ref={shellPickerRef}>

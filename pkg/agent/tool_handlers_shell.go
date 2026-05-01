@@ -23,9 +23,14 @@ type configManagerInterface interface {
 }
 
 func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	command, err := convertToString(args["command"], "command")
-	if err != nil {
-		return "", agenterrors.NewInvalidInputError("failed to convert command parameter", err)
+	// Extract check_background parameter (optional)
+	var checkBackground string
+	if cbParam, exists := args["check_background"]; exists {
+		var err error
+		checkBackground, err = convertToString(cbParam, "check_background")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert check_background parameter", err)
+		}
 	}
 
 	// Extract background parameter (optional, defaults to false)
@@ -34,6 +39,26 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		if bgBool, ok := bgParam.(bool); ok {
 			background = bgBool
 		}
+	}
+
+	// Reject conflicting parameters: check_background + background doesn't make sense
+	if checkBackground != "" && background {
+		return "", agenterrors.NewInvalidInputError("check_background and background=true cannot be used together — check_background retrieves output, background runs a new command", nil)
+	}
+
+	// If check_background is set, return output for that session immediately
+	if checkBackground != "" {
+		return a.checkBackgroundOutput(ctx, checkBackground)
+	}
+
+	command, err := convertToString(args["command"], "command")
+	if err != nil {
+		return "", agenterrors.NewInvalidInputError("failed to convert command parameter", err)
+	}
+
+	// Validate that we have a command to execute (required when not checking background)
+	if command == "" {
+		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
 	// Block git checkout/switch commands from shell_command for ALL personas.

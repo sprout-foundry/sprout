@@ -195,6 +195,20 @@ func (a *Agent) updatePreviousShellCommandMessage(prevResult *ShellCommandResult
 	}
 }
 
+// checkBackgroundOutput retrieves accumulated output for a background shell session.
+func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string) (string, error) {
+	// Wire TerminalManager into context for WebUI mode
+	if tm := a.terminalManager; tm != nil {
+		ctx = tools.WithTerminalManager(ctx, tm)
+	}
+
+	result, err := tools.CheckBackgroundOutput(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to check background session %s: %w", sessionID, err)
+	}
+	return result, nil
+}
+
 // executeShellCommandBackground executes a shell command in a background hidden PTY session
 // and returns immediately with the session ID. This is for long-running commands
 // that should not block the agent.

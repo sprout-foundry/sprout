@@ -21,7 +21,8 @@ import (
 //       "name": "npm install ...",
 //       "status": "active",
 //       "chat_id": "chat-123",
-//       "output_preview": "last 500 bytes of output"
+//       "output_preview": "last 500 bytes of output",
+//       "started_at": 1234567890
 //     }
 //   ],
 //   "count": 1
@@ -43,6 +44,7 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 		Status        string `json:"status"`
 		ChatID        string `json:"chat_id"`
 		OutputPreview string `json:"output_preview"`
+		StartedAt     int64  `json:"started_at"` // Unix timestamp (seconds) when session was created
 	}
 
 	sessions := make([]sessionEntry, 0, len(sessionIDs))
@@ -62,6 +64,14 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 		name := session.Name
 		chatID := session.ChatID
 		active := session.Active
+
+		var startedAt int64
+		if !session.StartedAt.IsZero() {
+			startedAt = session.StartedAt.Unix()
+		} else if !session.LastUsed.IsZero() {
+			// Fallback for sessions created before StartedAt was added.
+			startedAt = session.LastUsed.Unix()
+		}
 
 		// Get output preview (last 500 bytes, stripped of ANSI)
 		snapshot := session.ring.snapshot()
@@ -85,6 +95,7 @@ func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.
 			Status:        status,
 			ChatID:        chatID,
 			OutputPreview: preview,
+			StartedAt:     startedAt,
 		})
 	}
 
@@ -255,8 +266,9 @@ func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.
 	terminalManager := ws.getTerminalManagerForRequest(r)
 
 	// Verify the session exists and is a background session.
-	// Use a write lock to prevent TOCTOU: a concurrent attach could clear
-	// IsBackground between our read and the CloseSession call.
+	// Use a write lock to mark the session inactive atomically, preventing
+	// a concurrent /attach from promoting this session between our check and
+	// the CloseSession call.
 	session, exists := terminalManager.GetSession(sessionID)
 	if !exists {
 		http.Error(w, "Session not found", http.StatusNotFound)
@@ -264,13 +276,14 @@ func (ws *ReactWebServer) handleAgentSessionKill(w http.ResponseWriter, r *http.
 	}
 
 	session.mutex.Lock()
-	isBackground := session.IsBackground
-	session.mutex.Unlock()
-
-	if !isBackground {
+	if !session.IsBackground {
+		session.mutex.Unlock()
 		http.Error(w, "Session is not a background session", http.StatusBadRequest)
 		return
 	}
+	// Mark inactive under the write lock so a concurrent attach sees !Active.
+	session.Active = false
+	session.mutex.Unlock()
 
 	// Close the session (terminates the PTY process)
 	if err := terminalManager.CloseSession(sessionID); err != nil {

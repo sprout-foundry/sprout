@@ -524,7 +524,7 @@ describe('BackgroundTasks', () => {
 
       const errorEl = container.querySelector('.background-tasks-error');
       expect(errorEl).toBeTruthy();
-      expect(errorEl?.textContent).toContain('Failed to fetch sessions: 500');
+      expect(errorEl?.textContent).toContain('Failed to fetch sessions: Internal server error');
     });
 
     it('handles API errors gracefully on mount', async () => {
@@ -782,7 +782,7 @@ describe('BackgroundTasks', () => {
 
       const errorEl = container.querySelector('.background-tasks-error');
       expect(errorEl).toBeTruthy();
-      expect(errorEl?.textContent).toContain('Failed to attach session: 500');
+      expect(errorEl?.textContent).toContain('Failed to attach session: Internal server error');
     });
   });
 
@@ -876,7 +876,7 @@ describe('BackgroundTasks', () => {
 
       const errorEl = container.querySelector('.background-tasks-error');
       expect(errorEl).toBeTruthy();
-      expect(errorEl?.textContent).toContain('Failed to kill session: 500');
+      expect(errorEl?.textContent).toContain('Failed to kill session: Internal server error');
     });
   });
 

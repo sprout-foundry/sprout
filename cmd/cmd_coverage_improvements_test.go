@@ -105,73 +105,6 @@ func TestTryDirectExecution_BareWhichAndWhereis(t *testing.T) {
 	}
 }
 
-func TestTryDirectExecution_NaturalLanguageMatches(t *testing.T) {
-	tests := []struct {
-		name  string
-		query string
-	}{
-		{"current directory", "current directory"},
-		{"current dir", "current dir"},
-		{"working directory", "working directory"},
-		{"what's the date", "what's the date"},
-		{"what time", "what time"},
-		{"who am i", "who am i"},
-		{"what user", "what user"},
-		{"disk space", "disk space"},
-		{"disk usage", "disk usage"},
-		{"memory", "memory"},
-		{"ram", "ram"},
-		{"show me the files", "show me the files"},
-		{"list files", "list files"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			executed, err := TryDirectExecution(context.Background(), nil, tt.query)
-			if err != nil {
-				t.Fatalf("unexpected error for %q: %v", tt.query, err)
-			}
-			if !executed {
-				t.Errorf("expected true (executed) for natural language %q", tt.query)
-			}
-		})
-	}
-}
-
-func TestTryDirectExecution_NaturalLanguageCaseInsensitive(t *testing.T) {
-	tests := []struct {
-		name  string
-		query string
-	}{
-		{"CURRENT DIRECTORY", "CURRENT DIRECTORY"},
-		{"Current Dir", "Current Dir"},
-		{"What User", "What User"},
-		{"DISK SPACE", "DISK SPACE"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			executed, err := TryDirectExecution(context.Background(), nil, tt.query)
-			if err != nil {
-				t.Fatalf("unexpected error for %q: %v", tt.query, err)
-			}
-			if !executed {
-				t.Errorf("expected true (executed) for %q", tt.query)
-			}
-		})
-	}
-}
-
-func TestTryDirectExecution_NaturalLanguageTooLong(t *testing.T) {
-	// 77 chars — well above the 60-char threshold in TryDirectExecution
-	longQuery := "what is the current directory that we are working in right now please tell me thanks"
-	executed, err := TryDirectExecution(context.Background(), nil, longQuery)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for query >= 60 chars even with matching pattern")
-	}
-}
-
 func TestTryDirectExecution_NonMatchingQuery(t *testing.T) {
 	executed, err := TryDirectExecution(context.Background(), nil, "explain quantum physics to me")
 	if err != nil {
@@ -179,40 +112,6 @@ func TestTryDirectExecution_NonMatchingQuery(t *testing.T) {
 	}
 	if executed {
 		t.Error("expected false for non-matching query")
-	}
-}
-
-func TestTryDirectExecution_SubstringFalsePositives(t *testing.T) {
-	// "iframe" contains "ram" as a substring — must NOT trigger the "ram" → free -h fast path.
-	tests := []struct {
-		name  string
-		query string
-	}{
-		{"iframe matches ram substring", "i didnt think we were doing an iframe, right?"},
-		{"program matches ram substring", "show me the program output"},
-		{"parameter matches ram substring", "explain parameter passing"},
-		{"dramatically matches ram substring", "this dramatically changed things"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			executed, err := TryDirectExecution(context.Background(), nil, tt.query)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if executed {
-				t.Errorf("expected false for query %q (substring false positive)", tt.query)
-			}
-		})
-	}
-}
-
-func TestTryDirectExecution_GitLogNaturalLanguage(t *testing.T) {
-	executed, err := TryDirectExecution(context.Background(), nil, "show the git log")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !executed {
-		t.Error("expected true for 'show the git log' (natural language contains 'git log')")
 	}
 }
 

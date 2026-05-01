@@ -15,7 +15,7 @@ export type { GitSidebarPanelProps, GitBranchesState } from './components/GitPan
 export type { CommandPaletteProps, PaletteMode, CommandDef, FileResult, SymbolResult } from './components/CommandPalette';
 export type { TerminalProps, ShellInfo } from './components/Terminal';
 export type { TerminalThemePack, CreateTerminalConnection } from './components/TerminalPane';
-export type { TerminalSession } from './components/TerminalTabBar';
+export type { TerminalSession, AttachableSession } from './components/TerminalTabBar';
 export type { EditorProps, EditorTheme, CursorPosition as EditorCursorPosition } from './components/Editor';
 export type { SidebarProps } from './components/Sidebar';
 export type { APIAdapter, PlatformNavItem } from './types/adapter';

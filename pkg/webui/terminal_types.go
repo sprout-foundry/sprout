@@ -2,10 +2,13 @@ package webui
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -317,6 +320,71 @@ func (tm *TerminalManager) GetVisibleSessionCount() int {
 // SessionCount returns the number of active sessions (alias for GetSessionCount).
 func (tm *TerminalManager) SessionCount() int {
 	return tm.GetSessionCount()
+}
+
+// GetOrCreateHiddenSessionForChat returns the ID of an existing hidden session for the given
+// chat ID, or creates a new one. This enables one-hidden-session-per-chat reuse.
+//
+// The implementation uses a deterministic session ID ("agent-hidden-<chatID>") and handles
+// the TOCTOU race by catching the "already exists" error from CreateHiddenSession and
+// re-looking up the session that was created by the winning goroutine.
+func (tm *TerminalManager) GetOrCreateHiddenSessionForChat(ctx context.Context, chatID string) (string, error) {
+	// First check if we already have a hidden session for this chat (fast path)
+	tm.mutex.RLock()
+	for _, session := range tm.sessions {
+		session.mutex.RLock()
+		if session.Hidden && session.ChatID == chatID && session.Active {
+			id := session.ID
+			session.mutex.RUnlock()
+			tm.mutex.RUnlock()
+			return id, nil
+		}
+		session.mutex.RUnlock()
+	}
+	tm.mutex.RUnlock()
+
+	// No existing session — create one with deterministic ID "agent-hidden-<chatID>"
+	// Sanitize chatID to ensure the resulting session ID is valid.
+	sessionID := "agent-hidden-" + sanitizeChatID(chatID)
+	_, err := tm.CreateHiddenSession(sessionID, "agent", chatID)
+	if err != nil {
+		// Handle TOCTOU race: another goroutine may have created this session
+		// between our RUnlock and the CreateHiddenSession Lock.
+		if errors.Is(err, ErrSessionExists) {
+			// Re-lookup the session created by the other goroutine
+			session, exists := tm.GetSession(sessionID)
+			if exists {
+				session.mutex.RLock()
+				active := session.Active
+				session.mutex.RUnlock()
+				if active {
+					return sessionID, nil
+				}
+			}
+		}
+		return "", fmt.Errorf("failed to create hidden session for chat %s: %w", chatID, err)
+	}
+	return sessionID, nil
+}
+
+// sanitizeChatID normalizes a chat ID for use in a session identifier.
+// Characters outside [a-zA-Z0-9._-] are replaced with hyphens, and the
+// result is truncated to preserve room for the "agent-hidden-" prefix
+// within the 128-character session ID limit.
+func sanitizeChatID(chatID string) string {
+	const maxLen = 128 - len("agent-hidden-") // 115 chars
+	var b strings.Builder
+	for i, r := range chatID {
+		if i >= maxLen {
+			break
+		}
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '.' || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('-')
+		}
+	}
+	return b.String()
 }
 
 // knownUnixShells is the ordered list of shells to scan for on Unix systems.

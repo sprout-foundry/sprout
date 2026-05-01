@@ -732,7 +732,8 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-010 Phase 1: Create `EditorCore` component — CodeMirror EditorView mount point + extension context. Target ~200 lines. `webui/src/components/EditorCore.tsx`
 [x] - SP-010 Phase 1: Create `EditorToolbarActions` component — Toolbar buttons (word wrap, format, etc.). Target ~150 lines. `webui/src/components/EditorToolbarActions.tsx`
 [x] - SP-010 Phase 1: Create `EditorToolbarActions` component — Toolbar buttons (word wrap, format, etc.). Target ~150 lines. `webui/src/components/EditorToolbarActions.tsx`
-[] - SP-010 Phase 1: Reduce `EditorPane.tsx` to composition root — Wire extracted hooks and sub-components. Target under 400 lines.
+[x] - SP-010 Phase 1: Reduce `EditorPane.tsx` to composition root — Wire extracted hooks and sub-components. Target under 400 lines.
+[x] - SP-010 Phase 1: Reduce `EditorPane.tsx` to composition root — Wire extracted hooks and sub-components. Target under 400 lines. (389 lines, dead event dispatches fixed, direct callbacks wired)
 [] - SP-010 Phase 2: Create Error Lens extension — Show diagnostic messages inline at end of line via `Decoration.widget`. Debounced 300ms. `webui/src/extensions/errorLens.ts`
 [] - SP-010 Phase 2: Verify and style word occurrence highlighting — `highlightSelectionMatches()` is imported; confirm it works, add custom highlight styling. `webui/src/extensions/wordHighlights.ts`
 [] - SP-010 Phase 2: Create inlay hints extension — Request LSP inlay hints for TypeScript/Go, show type annotations and parameter names inline. Toggle via editor settings. `webui/src/extensions/inlayHints.ts`

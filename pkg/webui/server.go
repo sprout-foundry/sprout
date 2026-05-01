@@ -388,6 +388,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
 	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
 	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
+	// Agent sessions API (background PTY sessions for long-running commands)
+	mux.HandleFunc("/api/terminal/agent-sessions", ws.handleAPIAgentSessions)
+	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionOutput) // trailing slash for sub-path matching
 	// Session API
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
@@ -481,8 +484,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
 
-	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes)
-	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute)
+	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes, background timeout 2 hours)
+	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
 
 	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.
 	startSemanticEviction(ctx)

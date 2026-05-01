@@ -16,6 +16,7 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useEditorExtensions, TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from '../hooks/useEditorExtensions';
+import { useEditorDiagnostics } from '../hooks/useEditorDiagnostics';
 import LivePreview from './LivePreview';
 import MarkdownPreview from './MarkdownPreview';
 import EditorToolbar from './EditorToolbar';
@@ -35,7 +36,7 @@ import { showFileChangeDialog } from './FileChangeDialog';
 import { getEditorKeymap } from '../utils/editorHotkeys';
 import { updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
 import './EditorPane.css';
-import { clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
+import { clearDiagnostics } from '../extensions/lintDiagnostics';
 import { codeActionsKeybinding } from '../extensions/codeActions';
 import { setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
 import { getLanguageExtensions, resolveLanguageId } from '../extensions/languageRegistry';
@@ -56,7 +57,7 @@ import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { formatCode, formatCodeWithConfigDiscovery, setConfigFetcher } from '../services/formatter';
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES, type LSPConnectionState } from '../services/lspClientService';
-import { buildLSPPluginExtensions, lspSyncOnDocChange, setGlobalDisplayFileCallback, getClientForLanguageSync, type DisplayFileCallback, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
+import { buildLSPPluginExtensions, lspSyncOnDocChange, setGlobalDisplayFileCallback, type DisplayFileCallback, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
 
 // LSP commands from @codemirror/lsp-client for keybinding integration
 import { jumpToDefinition, findReferences, renameSymbol } from '@codemirror/lsp-client';
@@ -87,16 +88,6 @@ const TAB_SIZE_OPTIONS = [2, 4, 8] as const;
 
 /** Minimum number of indented lines required for auto-detection to be confident */
 const MIN_INDENTED_LINES_FOR_DETECTION = 3;
-
-function isSemanticLanguage(languageId: string): boolean {
-  return (
-    languageId === 'typescript' ||
-    languageId === 'typescript-jsx' ||
-    languageId === 'javascript' ||
-    languageId === 'javascript-jsx' ||
-    languageId === 'go'
-  );
-}
 
 // Transaction annotations for external content replacements (file reloads,
 // initial loads, buffer switches). `Transaction.addToHistory.of(false)`
@@ -255,6 +246,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const pane = panes.find((p) => p.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
 
+  // Diagnostics hook — encapsulates diagnostic fetching logic
+  const { fetchDiagnostics, fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
+
   // Reset manual indent override when switching to a different file,
   // so auto-detection runs fresh for each file.
   const prevBufferIdForIndentRef = useRef<string | null>(null);
@@ -273,9 +267,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   // API service instance (singleton)
   const apiService = useRef(ApiService.getInstance()).current;
-
-  // Debounced diagnostics updater — coalesces rapid diagnostic pushes
-  const debouncedDiag = useRef(createDebouncedDiagnosticsUpdater(500));
 
   // Fetch workspace root on mount (for absolute path copy)
   useEffect(() => {
@@ -296,9 +287,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const isExternalUpdateRef = useRef<boolean>(false);
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
-  const fetchDiagnosticsRef = useRef<(filePath: string, content: string, trigger?: 'edit' | 'save') => void>(() => {
-    /* noop */
-  });
 
   // Stable action references for hotkey keymap (used in both init and reconfigure effects)
   const hotkeyActionsRef = useRef<{
@@ -932,59 +920,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     }
   }, [openWorkspaceBuffer]);
 
-  // Fetch diagnostics for the current file and push them into the editor
-  const fetchDiagnostics = useCallback(
-    async (filePath: string, content: string, trigger: 'edit' | 'save' = 'edit') => {
-      if (!viewRef.current) return;
-
-      const languageId = resolveLanguageId(
-        buffer?.languageOverride,
-        buffer?.file?.ext?.replace(/^\./, ''),
-        buffer?.file?.name,
-      ).languageId ?? '';
-
-      // If LSP client is connected, it handles diagnostics via serverDiagnostics() extension
-      // - skip old semantic diagnostics to avoid duplication
-      if (isSemanticLanguage(languageId) && getClientForLanguageSync(languageId)) {
-        debugLog('[fetchDiagnostics] LSP client active, skipping semantic diagnostics');
-        return;
-      }
-
-      try {
-        if (isSemanticLanguage(languageId)) {
-          const semantic = await apiService.getSemanticDiagnostics(filePath, content, languageId, trigger);
-          if (semantic.capabilities?.diagnostics) {
-            debugLog(`[fetchDiagnostics] semantic latency ${semantic.duration_ms ?? -1}ms (${languageId}, trigger=${trigger})`);
-            if (semantic.diagnostics && semantic.diagnostics.length > 0) {
-              debouncedDiag.current.update(viewRef.current, semantic.diagnostics);
-            } else {
-              clearDiagnostics(viewRef.current);
-            }
-            return;
-          }
-        }
-      } catch (err) {
-        debugLog('[fetchDiagnostics] semantic diagnostics unavailable, falling back:', err);
-      }
-
-      try {
-        const result = await apiService.getDiagnostics(filePath, content);
-        if (result.diagnostics && result.diagnostics.length > 0) {
-          debouncedDiag.current.update(viewRef.current, result.diagnostics);
-        } else {
-          clearDiagnostics(viewRef.current);
-        }
-      } catch (err) {
-        debugLog('[fetchDiagnostics] best-effort diagnostic fetch failed:', err);
-        clearDiagnostics(viewRef.current);
-      }
-    },
-    [apiService, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name],
-  );
-
-  // Keep ref in sync so loadFile can call fetchDiagnostics without a forward reference
-  fetchDiagnosticsRef.current = fetchDiagnostics;
-
   const lastLoadedRef = useRef<{ bufferId: string; filePath: string } | null>(null);
   const currentBufferIdRef = useRef<string | null>(null);
 
@@ -1437,13 +1372,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     // can skip a redundant reconfigure on the same buffer/language combo.
     lastInitLanguageKey.current = `${buffer?.id}:${buffer?.languageOverride ?? ''}:${buffer?.file?.ext ?? ''}:${buffer?.file?.name ?? ''}`;
 
-    // Snapshot ref value for cleanup (ref.current in cleanup triggers exhaustive-deps)
-    const debounced = debouncedDiag.current;
     // Capture file path for cleanup
     const cleanupFilePath = buffer?.file?.path;
 
     return () => {
-      debounced.cancel();
       if (scrollFlushRafId != null) cancelAnimationFrame(scrollFlushRafId);
       // Unregister the editor view for cross-file LSP navigation
       if (cleanupFilePath && !cleanupFilePath.startsWith('__workspace/')) {

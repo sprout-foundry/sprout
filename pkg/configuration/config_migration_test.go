@@ -911,3 +911,217 @@ func TestMigration_Idempotent_FullDefaults(t *testing.T) {
 		assert.Equal(t, migrated1[field], migrated2[field], "field %q should be identical", field)
 	}
 }
+
+// TestMigration_V2_to_V3_SyncsDefaultPersonaTools verifies that v2→v3 migration
+// merges missing default tools into default personas while preserving user extras
+// and leaving custom personas untouched.
+func TestMigration_V2_to_V3_SyncsDefaultPersonaTools(t *testing.T) {
+	// Simulate a stale v2 config where the orchestrator has only 6 tools
+	// (missing browse_url, view_history, rollback_changes, self_review, etc.)
+	// but has a user-added custom tool that should be preserved.
+	staleOrchestratorTools := []interface{}{
+		"shell_command", "read_file", "write_file", "edit_file", "TodoWrite", "TodoRead",
+		"my_custom_mcp_tool", // User-added extra — must be preserved
+	}
+
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"orchestrator": map[string]interface{}{
+				"id":             "orchestrator",
+				"name":           "Orchestrator",
+				"description":    "Stale orchestrator",
+				"enabled":        true,
+				"system_prompt":  "subagent_prompts/orchestrator.md",
+				"provider":       "custom-provider",
+				"model":         "custom-model",
+				"allowed_tools":  staleOrchestratorTools,
+				"aliases":       []interface{}{"orch"},
+			},
+			"my_custom_persona": map[string]interface{}{
+				"id":             "my_custom_persona",
+				"name":           "My Custom",
+				"description":    "Custom persona not in defaults",
+				"enabled":        true,
+				"allowed_tools":  []interface{}{"shell_command", "read_file"},
+			},
+		},
+	}
+
+	migrated, err := MigrateConfig(raw, "3.0")
+	require.NoError(t, err)
+
+	subagentTypes, ok := migrated["subagent_types"].(map[string]interface{})
+	require.True(t, ok)
+
+	// Orchestrator allowed_tools should have missing defaults merged in
+	orch, ok := subagentTypes["orchestrator"].(map[string]interface{})
+	require.True(t, ok)
+
+	tools, ok := orch["allowed_tools"].([]interface{})
+	require.True(t, ok)
+
+	toolSet := make(map[string]bool)
+	for _, t := range tools {
+		toolSet[t.(string)] = true
+	}
+
+	// Missing defaults must be added
+	assert.True(t, toolSet["browse_url"], "orchestrator should have browse_url from defaults")
+	assert.True(t, toolSet["view_history"], "orchestrator should have view_history from defaults")
+	assert.True(t, toolSet["rollback_changes"], "orchestrator should have rollback_changes from defaults")
+	assert.True(t, toolSet["self_review"], "orchestrator should have self_review from defaults")
+	assert.True(t, toolSet["shell_command"], "orchestrator should have shell_command from defaults")
+
+	// User-added extras must be preserved
+	assert.True(t, toolSet["my_custom_mcp_tool"], "user-added custom tool should be preserved")
+
+	// User overrides for provider/model should be preserved
+	assert.Equal(t, "custom-provider", orch["provider"])
+	assert.Equal(t, "custom-model", orch["model"])
+
+	// Custom persona should NOT be touched
+	custom, ok := subagentTypes["my_custom_persona"].(map[string]interface{})
+	require.True(t, ok)
+	customTools, ok := custom["allowed_tools"].([]interface{})
+	require.True(t, ok)
+	assert.Equal(t, 2, len(customTools), "custom persona tools should not be touched")
+}
+
+// TestMigration_V2_to_V3_MapKeyMismatch verifies that the migration resolves
+// persona IDs from both the map key and the "id" field inside the persona.
+func TestMigration_V2_to_V3_MapKeyMismatch(t *testing.T) {
+	// Config where the map key differs from the id field
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"Orchestrator": map[string]interface{}{
+				"id":            "orchestrator",
+				"name":          "Orchestrator",
+				"description":   "Stale",
+				"enabled":       true,
+				"allowed_tools": []interface{}{"shell_command"},
+			},
+		},
+	}
+
+	migrated, err := MigrateConfig(raw, "3.0")
+	require.NoError(t, err)
+
+	subagentTypes, ok := migrated["subagent_types"].(map[string]interface{})
+	require.True(t, ok)
+
+	// The map key "Orchestrator" should still be the key
+	orch, ok := subagentTypes["Orchestrator"].(map[string]interface{})
+	require.True(t, ok)
+
+	tools, ok := orch["allowed_tools"].([]interface{})
+	require.True(t, ok)
+
+	// Should have merged in default tools since id field resolves to "orchestrator"
+	toolSet := make(map[string]bool)
+	for _, t := range tools {
+		toolSet[t.(string)] = true
+	}
+	assert.True(t, toolSet["browse_url"], "should have browse_url from defaults via id field lookup")
+}
+
+// TestMigration_V2_to_V3_EmptyAndMissingTools verifies edge cases:
+// nil allowed_tools, empty allowed_tools, and missing allowed_tools.
+func TestMigration_V2_to_V3_EmptyAndMissingTools(t *testing.T) {
+	t.Run("nil_allowed_tools", func(t *testing.T) {
+		raw := map[string]interface{}{
+			"version": "2.0",
+			"subagent_types": map[string]interface{}{
+				"orchestrator": map[string]interface{}{
+					"id":      "orchestrator",
+					"name":    "Orchestrator",
+					"enabled": true,
+				},
+			},
+		}
+		migrated, err := MigrateConfig(raw, "3.0")
+		require.NoError(t, err)
+		orch := migrated["subagent_types"].(map[string]interface{})["orchestrator"].(map[string]interface{})
+		tools, ok := orch["allowed_tools"].([]interface{})
+		require.True(t, ok, "should have allowed_tools set to defaults")
+		assert.True(t, len(tools) > 0, "should not be empty")
+	})
+
+	t.Run("empty_allowed_tools", func(t *testing.T) {
+		raw := map[string]interface{}{
+			"version": "2.0",
+			"subagent_types": map[string]interface{}{
+				"orchestrator": map[string]interface{}{
+					"id":            "orchestrator",
+					"name":          "Orchestrator",
+					"enabled":       true,
+					"allowed_tools": []interface{}{},
+				},
+			},
+		}
+		migrated, err := MigrateConfig(raw, "3.0")
+		require.NoError(t, err)
+		orch := migrated["subagent_types"].(map[string]interface{})["orchestrator"].(map[string]interface{})
+		tools, ok := orch["allowed_tools"].([]interface{})
+		require.True(t, ok, "should have allowed_tools set to defaults")
+		assert.True(t, len(tools) > 0, "should not be empty")
+	})
+}
+
+// TestMigration_V2_to_V3_Idempotent verifies that running v2→v3 migration
+// twice produces identical results.
+func TestMigration_V2_to_V3_Idempotent(t *testing.T) {
+	raw := map[string]interface{}{
+		"version": "2.0",
+		"subagent_types": map[string]interface{}{
+			"orchestrator": map[string]interface{}{
+				"id":            "orchestrator",
+				"name":          "Orchestrator",
+				"description":   "Stale",
+				"enabled":       true,
+				"allowed_tools": []interface{}{"shell_command"},
+			},
+		},
+	}
+
+	migrated1, err := MigrateConfig(raw, "3.0")
+	require.NoError(t, err)
+
+	migrated2, err := MigrateConfig(migrated1, "3.0")
+	require.NoError(t, err)
+
+	assert.Equal(t, migrated1["version"], migrated2["version"])
+	orch1 := migrated1["subagent_types"].(map[string]interface{})["orchestrator"].(map[string]interface{})
+	orch2 := migrated2["subagent_types"].(map[string]interface{})["orchestrator"].(map[string]interface{})
+	assert.Equal(t, orch1["allowed_tools"], orch2["allowed_tools"])
+}
+
+// TestMigration_V0_to_V3_RunsAllSteps verifies that a v0 config migrates
+// through v2 to v3, applying all defaults and tool syncs.
+func TestMigration_V0_to_V3_RunsAllSteps(t *testing.T) {
+	raw := map[string]interface{}{}
+
+	migrated, err := MigrateConfig(raw, "3.0")
+	require.NoError(t, err)
+
+	assert.Equal(t, "3.0", migrated["version"])
+
+	subagentTypes, ok := migrated["subagent_types"].(map[string]interface{})
+	require.True(t, ok)
+
+	// Orchestrator should have full default tools (v2 defaults + v3 tool sync)
+	orch, ok := subagentTypes["orchestrator"].(map[string]interface{})
+	require.True(t, ok)
+
+	tools, ok := orch["allowed_tools"].([]interface{})
+	require.True(t, ok)
+
+	toolSet := make(map[string]bool)
+	for _, t := range tools {
+		toolSet[t.(string)] = true
+	}
+	assert.True(t, toolSet["browse_url"], "orchestrator should have browse_url")
+	assert.True(t, toolSet["view_history"], "orchestrator should have view_history")
+	assert.True(t, toolSet["rollback_changes"], "orchestrator should have rollback_changes")
+}

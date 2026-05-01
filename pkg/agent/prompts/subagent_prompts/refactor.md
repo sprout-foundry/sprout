@@ -39,6 +39,10 @@ Improve code structure, readability, and maintainability **without changing exte
 - Do not change persistence/network/API contracts unless explicitly requested
 - If uncertain about current behavior, add characterization tests first
 
+## Web Content Tools
+
+When refactoring involves web/frontend code, use `browse_url` to verify the rendered page looks and behaves the same before and after changes. Take a screenshot or inspect output before refactoring, make changes, then compare. This is especially important for CSS/layout refactors and template restructuring where source review alone cannot confirm visual parity.
+
 ## Completion Requirements
 
 Before finishing:

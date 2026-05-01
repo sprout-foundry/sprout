@@ -194,7 +194,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"persona", "string", true, []string{}, "REQUIRED: Subagent persona ID or alias (see /persona list)"},
 			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
 			{"files", "string", false, []string{}, "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
-			{"auto_files", "bool", false, []string{}, "Automatically extract file paths mentioned in the prompt and include them in the context (default: true)"},
 		},
 		Handler: handleRunSubagent,
 	})

@@ -175,3 +175,165 @@
   outline: 2px solid #22d3ee;
   outline-offset: -2px;
 }
+
+/* ── Agent Sessions Dropdown ───────────────────────────── */
+
+.agent-sessions-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.agent-sessions-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  min-width: 28px;
+  margin: 1px 0;
+  border-radius: 4px 4px 0 0;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.agent-sessions-btn:hover {
+  background: rgba(30, 41, 59, 0.72);
+  color: #cbd5e1;
+}
+
+.agent-sessions-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  max-width: 280px;
+  max-height: 300px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 200;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: agentSessionsFadeIn 0.1s ease-out;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+}
+
+.agent-sessions-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agent-sessions-menu::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+
+.agent-sessions-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes agentSessionsFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.agent-sessions-header {
+  padding: 6px 8px 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  font-weight: 600;
+}
+
+.agent-sessions-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: background 0.12s;
+  text-align: left;
+}
+
+.agent-sessions-item:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.agent-sessions-item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.agent-sessions-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.agent-sessions-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  flex-shrink: 0;
+}
+
+.agent-sessions-status.active .agent-sessions-status-dot {
+  background: #7ddf97;
+  box-shadow: 0 0 0 4px rgba(125, 223, 151, 0.15);
+}
+
+.agent-sessions-status.inactive .agent-sessions-status-dot {
+  background: #64748b;
+}
+
+.agent-sessions-name {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-sessions-attach-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.agent-sessions-item:hover:not(:disabled) .agent-sessions-attach-icon {
+  opacity: 1;
+  color: #7ddf97;
+}
+
+.agent-sessions-btn:focus-visible,
+.agent-sessions-item:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: -2px;
+}

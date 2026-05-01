@@ -8,6 +8,7 @@ import { ApiService, type ShellInfo } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
 import { FONT_SIZE_DEFAULT } from './terminalConstants';
+import BackgroundTasks from './BackgroundTasks';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
@@ -340,6 +341,33 @@ function Terminal({
 
   const switchSession = useCallback((id: string) => {
     setActiveSessionId(id);
+  }, []);
+
+  // ── Listen for attach-session events from BackgroundTasks ─────────────────────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ sessionId: string; name?: string }>).detail;
+      if (!detail?.sessionId) return;
+      const sessionId = detail.sessionId;
+      const sessionName = detail.name || `Agent: ${sessionId.substring(0, 20)}`;
+
+      // Check if session already exists in tabs
+      if (sessionsRef.current.some((s) => s.id === sessionId)) {
+        setActiveSessionId(sessionId);
+        return;
+      }
+
+      // Add as new session tab
+      const newSession: TerminalSession = {
+        id: sessionId,
+        name: sessionName,
+        is_pinned: false,
+      };
+      setSessions((prev) => [...prev, newSession]);
+      setActiveSessionId(sessionId);
+    };
+    window.addEventListener('sprout:terminal-attach-session', handler as EventListener);
+    return () => window.removeEventListener('sprout:terminal-attach-session', handler as EventListener);
   }, []);
 
   // ── Split management ──────────────────────────────────────────────────────
@@ -679,6 +707,9 @@ function Terminal({
           </div>
         )}
       </div>
+
+      {/* ── Background Tasks ── */}
+      {isExpanded && <BackgroundTasks />}
 
       {/* ── Body ── */}
       <div className="terminal-body">

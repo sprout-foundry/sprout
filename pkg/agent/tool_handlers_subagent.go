@@ -162,61 +162,6 @@ func publishSubagentActivity(ctx context.Context, a *Agent, phase, message strin
 
 // Tool handler implementations for subagent operations
 
-// extractFilePathsFromPrompt uses regex to find file paths mentioned in a prompt.
-// Returns a deduplicated list of file paths that exist in the workspace.
-func extractFilePathsFromPrompt(prompt string) []string {
-	// Common patterns for file paths in prompts:
-	// 1. "modify/create/delete FILE_PATH"
-	// 2. "in FILE_PATH"
-	// 3. "file FILE_PATH"
-	// 4. quoted paths: "path/to/file.go" or 'path/to/file.go'
-	// 5. Backtick paths: `path/to/file.go`
-	// 6. Paths with extensions: .go, .js, .py, .ts, .tsx, .jsx, .md, .json, .yaml, .yml, .txt, etc.
-
-	patterns := []string{
-		`"(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+"`,                                         // Double-quoted paths with extension
-		`'(?:[a-zA-Z]:)?[\w/\-\\.]+\.[\w]+'`,                                         // Single-quoted paths with extension
-		"`(?:[a-zA-Z]:)?[\\w/\\-\\.]+\\.[\\w]+`",                                     // Backtick paths with extension
-		`(?:modify|create|delete|update|edit|write|read)\s+["']?([\w/\-\.]+\.[\w]+)`, // Action words + path
-		`(?:in|file|at)\s+["']?([\w/\-\.]+\.[\w]+)`,                                  // Prepositions + path
-	}
-
-	seen := make(map[string]bool)
-	var filePaths []string
-
-	for _, pattern := range patterns {
-		re := regexp.MustCompile(pattern)
-		matches := re.FindAllStringSubmatch(prompt, -1)
-
-		for _, match := range matches {
-			// Use the last capturing group if available, otherwise use the full match
-			var path string
-			if len(match) > 1 {
-				path = match[len(match)-1]
-			} else {
-				path = match[0]
-			}
-
-			// Clean up the path (remove quotes, backticks)
-			path = strings.Trim(path, "\"'`")
-			path = strings.TrimSpace(path)
-
-			// Validate it looks like a file path (contains extension or slash)
-			if path != "" && (strings.Contains(path, ".") || strings.Contains(path, "/") || strings.Contains(path, "\\")) {
-				// Check if file exists in workspace
-				if _, err := os.Stat(path); err == nil {
-					if !seen[path] {
-						seen[path] = true
-						filePaths = append(filePaths, path)
-					}
-				}
-			}
-		}
-	}
-
-	return filePaths
-}
-
 // extractSubagentSummary parses stdout from a subagent execution to extract key information
 // Optimized to avoid regex compilation in loops and process only relevant lines
 func extractSubagentSummary(stdout string) map[string]string {
@@ -435,15 +380,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	// Parse auto_files parameter (default: true)
-	autoFiles := true // Default to true
-	if autoFilesVal, ok := args["auto_files"]; ok && autoFilesVal != nil {
-		if autoFilesBool, ok := autoFilesVal.(bool); ok {
-			autoFiles = autoFilesBool
-			a.debugLog("Auto files: %v\n", autoFiles)
-		}
-	}
-
 	// Parse persona parameter (required, but default to "general" if not specified)
 	var persona string
 	var systemPromptPath string
@@ -461,34 +397,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.debugLog("No persona specified, using default: general\n")
 	}
 	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
-
-	// Automatically extract file paths from prompt if auto_files is enabled
-	if autoFiles {
-		extractedFiles := extractFilePathsFromPrompt(prompt)
-		if len(extractedFiles) > 0 {
-			a.debugLog("Auto-extracted %d file paths from prompt: %v\n", len(extractedFiles), extractedFiles)
-			// Add extracted files that aren't already in the list
-			for _, extractedFile := range extractedFiles {
-				alreadyIncluded := false
-				for _, existingFile := range files {
-					if existingFile == extractedFile {
-						alreadyIncluded = true
-						break
-					}
-				}
-				if !alreadyIncluded {
-					files = append(files, extractedFile)
-					a.debugLog("Added auto-extracted file: %s\n", extractedFile)
-				}
-			}
-			// Update filesStr to include auto-extracted files
-			if filesStr != "" {
-				filesStr = strings.Join(files, ",")
-			} else {
-				filesStr = strings.Join(files, ",")
-			}
-		}
-	}
 
 	// Resolve workspace root once for all file validations
 	absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
@@ -605,19 +513,6 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		enhancedPrompt.WriteString("# Previous Work Context\n\n")
 		enhancedPrompt.WriteString(context)
 		enhancedPrompt.WriteString("\n\n---\n\n")
-	}
-
-	// Add recent session work summary if available
-	taskActions := a.GetTaskActions()
-	if len(taskActions) > 0 {
-		enhancedPrompt.WriteString("# Recent Work in This Session\n\n")
-		for i, action := range taskActions {
-			// Show last 10 actions to avoid overwhelming the subagent
-			if i >= len(taskActions)-10 {
-				enhancedPrompt.WriteString(fmt.Sprintf("- %s: %s\n", action.Type, action.Description))
-			}
-		}
-		enhancedPrompt.WriteString("\n---\n\n")
 	}
 
 	// Add relevant files section if provided

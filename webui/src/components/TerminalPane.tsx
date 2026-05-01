@@ -39,6 +39,8 @@ interface TerminalPaneProps {
   preferredShell?: string | null;
   /** Font size in pixels (overrides default). */
   fontSize?: number;
+  /** Session ID to reattach to (for promoting background agent sessions to visible tabs). */
+  reattachSessionId?: string | null;
 }
 
 interface TerminalContextMenuState {
@@ -52,7 +54,7 @@ interface TerminalContextMenuState {
 const EXPAND_RESIZE_DELAY_MS = 100; // Delay to allow terminal expand animation to progress before triggering resize
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize }, ref) => {
+  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
     const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
@@ -66,6 +68,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // tear down / reconnect when a parent changes the value.
     const preferredShellRef = useRef(preferredShell);
     preferredShellRef.current = preferredShell;
+
+    // Stabilize reattachSessionId so the WebSocket lifecycle effect doesn't
+    // tear down / reconnect when a parent changes the value.
+    const reattachSessionIdRef = useRef(reattachSessionId);
+    reattachSessionIdRef.current = reattachSessionId;
 
     const paneWrapperRef = useRef<HTMLDivElement>(null);
     const xtermContainerRef = useRef<HTMLDivElement>(null);
@@ -840,6 +847,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       // creates a PTY with the requested shell.
       if (preferredShellRef.current && !service.getSessionId()) {
         service.setPreferredShell(preferredShellRef.current);
+      }
+
+      // If a reattach session ID is provided, restore it so the WebSocket connects
+      // to the existing PTY session instead of creating a new one.
+      if (reattachSessionIdRef.current && !service.getSessionId()) {
+        service.restoreSessionId(reattachSessionIdRef.current);
       }
 
       // Only call connect() if we don't already have a connection.

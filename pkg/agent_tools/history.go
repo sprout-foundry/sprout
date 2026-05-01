@@ -123,8 +123,8 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 		}
 
 		if err := filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode); err != nil {
-			return RollbackResult{}, fmt.Errorf("failed to restore file content: %w", err)
-		}
+		return RollbackResult{}, fmt.Errorf("failed to restore file content: %w", err)
+	}
 
 		return RollbackResult{
 			Output: fmt.Sprintf("Successfully rolled back file '%s' from revision '%s'", filePath, revisionID),
@@ -132,10 +132,10 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 				"action":      "file_rollback",
 				"revision_id": revisionID,
 				"file_path":   filePath,
+				"file_paths":  []string{filePath},
 			},
 			Success: true,
-		}, nil
-	}
+		}, nil}
 
 	if !confirm {
 		return RollbackResult{
@@ -148,17 +148,25 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 		}, nil
 	}
 
+	// Collect the file paths that will be reverted so we can report them
+	revisionFiles, _ := history.GetFilesForRevision(revisionID)
+
 	if err := history.RevertChangeByRevisionID(revisionID); err != nil {
 		return RollbackResult{}, fmt.Errorf("failed to rollback revision: %w", err)
 	}
 
+	metadata := map[string]interface{}{
+		"action":      "revision_rollback",
+		"revision_id": revisionID,
+	}
+	if len(revisionFiles) > 0 {
+		metadata["file_paths"] = revisionFiles
+	}
+
 	return RollbackResult{
-		Output: fmt.Sprintf("Successfully rolled back revision '%s'", revisionID),
-		Metadata: map[string]interface{}{
-			"action":      "revision_rollback",
-			"revision_id": revisionID,
-		},
-		Success: true,
+		Output:   fmt.Sprintf("Successfully rolled back revision '%s'", revisionID),
+		Metadata: metadata,
+		Success:  true,
 	}, nil
 }
 

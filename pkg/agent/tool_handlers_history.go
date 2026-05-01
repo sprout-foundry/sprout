@@ -8,6 +8,7 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // Tool handler implementations for history operations
@@ -87,5 +88,35 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 	}
 
 	a.debugLog("rollback_changes success=%v metadata=%+v\n", res.Success, res.Metadata)
+
+	// Emit file_changed events for restored files so the WebUI stays in sync
+	if res.Success {
+		action, _ := res.Metadata["action"].(string)
+		switch action {
+		case "file_rollback":
+			// Single file rollback — emit event for the restored file
+			if fp, ok := res.Metadata["file_path"].(string); ok && fp != "" {
+				if content, readErr := tools.ReadFile(ctx, fp); readErr == nil {
+					a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(fp, "write", content))
+				} else {
+					a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(fp, "write", ""))
+				}
+				a.debugLog("Published file_changed event: %s (rollback)\n", fp)
+			}
+		case "revision_rollback":
+			// Full revision rollback — emit events for all restored files
+			if paths, ok := res.Metadata["file_paths"].([]string); ok {
+				for _, fp := range paths {
+					if content, readErr := tools.ReadFile(ctx, fp); readErr == nil {
+						a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(fp, "write", content))
+					} else {
+						a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(fp, "write", ""))
+					}
+				}
+				a.debugLog("Published file_changed events for %d files (revision rollback)\n", len(paths))
+			}
+		}
+	}
+
 	return res.Output, nil
 }

@@ -95,6 +95,15 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 
 // classifyShellCommand classifies shell commands by risk level
 func classifyShellCommand(args map[string]interface{}) SecurityResult {
+	// check_background-only calls are read-only: just retrieve output from a PTY session.
+	// No command is needed when checking background output.
+	if cbRaw, ok := args["check_background"].(string); ok && cbRaw != "" {
+		cmdRaw, hasCommand := args["command"].(string)
+		if !hasCommand || cmdRaw == "" {
+			return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only background session output check"}
+		}
+	}
+
 	cmdRaw, ok := args["command"].(string)
 	if !ok || cmdRaw == "" {
 		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid command", ShouldPrompt: true}

@@ -33,6 +33,16 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
+	// Extract stop_background parameter (optional)
+	var stopBackground string
+	if sbParam, exists := args["stop_background"]; exists {
+		var err error
+		stopBackground, err = convertToString(sbParam, "stop_background")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert stop_background parameter", err)
+		}
+	}
+
 	// Extract background parameter (optional, defaults to false)
 	background := false
 	if bgParam, exists := args["background"]; exists {
@@ -41,9 +51,20 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
-	// Reject conflicting parameters: check_background + background doesn't make sense
+	// Reject conflicting parameters
 	if checkBackground != "" && background {
 		return "", agenterrors.NewInvalidInputError("check_background and background=true cannot be used together — check_background retrieves output, background runs a new command", nil)
+	}
+	if stopBackground != "" && background {
+		return "", agenterrors.NewInvalidInputError("stop_background and background=true cannot be used together — stop_background stops a session, background runs a new command", nil)
+	}
+	if stopBackground != "" && checkBackground != "" {
+		return "", agenterrors.NewInvalidInputError("stop_background and check_background cannot be used together", nil)
+	}
+
+	// If stop_background is set, terminate the session and return immediately
+	if stopBackground != "" {
+		return a.stopBackgroundSession(stopBackground)
 	}
 
 	// If check_background is set, return output for that session immediately

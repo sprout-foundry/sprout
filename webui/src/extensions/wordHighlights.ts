@@ -13,7 +13,7 @@
  * The extension uses `highlightSelectionMatches()` from @codemirror/search with
  * sensible defaults (word-around-cursor highlighting, minimum length, etc.) and
  * overrides the default lime-green styling with subtle, mode-aware colors via
- * &dark / &light selectors in `EditorView.baseTheme()`.
+ * CSS variables that are defined in each theme pack.
  *
  * Exported factory: {@link wordHighlightsExtension}
  */
@@ -27,15 +27,15 @@ import { highlightSelectionMatches } from '@codemirror/search';
 const wordHighlightsBaseTheme = EditorView.baseTheme({
   // Default styling for matching occurrences (subtle, visible but not jarring)
   '.cm-selectionMatch': {
-    backgroundColor: 'rgba(97, 175, 239, 0.12)',
-    outline: '1px solid rgba(97, 175, 239, 0.4)',
+    backgroundColor: 'var(--cm-selection-match-bg, rgba(97, 175, 239, 0.12))',
+    outline: '1px solid var(--cm-selection-match-outline, rgba(97, 175, 239, 0.4))',
     borderRadius: '2px',
     boxShadow: '0 0 0 1px transparent', // Prevent box-shadow stacking issues
   },
   // Primary match at cursor position (slightly more prominent)
   '.cm-selectionMatch-main': {
-    backgroundColor: 'rgba(97, 175, 239, 0.22)',
-    outline: '1.5px solid rgba(97, 175, 239, 0.6)',
+    backgroundColor: 'var(--cm-selection-match-main-bg, rgba(97, 175, 239, 0.22))',
+    outline: '1.5px solid var(--cm-selection-match-main-outline, rgba(97, 175, 239, 0.6))',
     borderRadius: '2px',
     boxShadow: '0 0 0 1px transparent',
   },
@@ -43,30 +43,6 @@ const wordHighlightsBaseTheme = EditorView.baseTheme({
   '.cm-searchMatch .cm-selectionMatch': {
     backgroundColor: 'transparent',
     outline: 'none',
-  },
-
-  // Dark mode overrides
-  '&dark .cm-selectionMatch': {
-    backgroundColor: 'rgba(139, 233, 253, 0.15)',
-    outline: '1px solid rgba(139, 233, 253, 0.45)',
-    boxShadow: '0 0 0 1px transparent',
-  },
-  '&dark .cm-selectionMatch-main': {
-    backgroundColor: 'rgba(139, 233, 253, 0.25)',
-    outline: '1.5px solid rgba(139, 233, 253, 0.65)',
-    boxShadow: '0 0 0 1px transparent',
-  },
-
-  // Light mode overrides
-  '&light .cm-selectionMatch': {
-    backgroundColor: 'rgba(64, 120, 242, 0.14)',
-    outline: '1px solid rgba(64, 120, 242, 0.5)',
-    boxShadow: '0 0 0 1px transparent',
-  },
-  '&light .cm-selectionMatch-main': {
-    backgroundColor: 'rgba(64, 120, 242, 0.24)',
-    outline: '1.5px solid rgba(64, 120, 242, 0.7)',
-    boxShadow: '0 0 0 1px transparent',
   },
 });
 

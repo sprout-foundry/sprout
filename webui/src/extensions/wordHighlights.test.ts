@@ -34,14 +34,13 @@ jest.mock('@codemirror/search', () => ({
 // ── Module under test (Jest hoists mocks above imports) ─────────────
 
 import { wordHighlightsExtension } from './wordHighlights';
-import { EditorView } from '@codemirror/view';
-import { highlightSelectionMatches } from '@codemirror/search';
 
-const mockEditorView = EditorView as unknown as { baseTheme: jest.Mock };
-const mockHSM = highlightSelectionMatches as jest.Mock;
+// Access the mocked EditorView to capture baseTheme calls
+const mockEditorViewBaseTheme = require('@codemirror/view').EditorView.baseTheme;
+const mockHSM = require('@codemirror/search').highlightSelectionMatches;
 
 // Captured once from module-load time (before any tests run)
-const themeConfig = mockEditorView.baseTheme.mock.calls[0]?.[0];
+const themeConfig = mockEditorViewBaseTheme.mock.calls[0]?.[0];
 
 // ── Tests ───────────────────────────────────────────────────────────
 
@@ -117,7 +116,6 @@ describe('wordHighlightsExtension', () => {
   // ── Theme selector presence tests ─────────────────────────────
 
   it('defines a theme selector for .cm-selectionMatch', () => {
-    // toHaveProperty interprets dots as nested paths; use direct access instead
     expect(themeConfig['.cm-selectionMatch']).toBeDefined();
   });
 
@@ -129,34 +127,30 @@ describe('wordHighlightsExtension', () => {
     expect(themeConfig['.cm-searchMatch .cm-selectionMatch']).toBeDefined();
   });
 
-  it('defines dark mode overrides for .cm-selectionMatch', () => {
-    expect(themeConfig['&dark .cm-selectionMatch']).toBeDefined();
+  it('does NOT define &dark .cm-selectionMatch selector (removed in refactor)', () => {
+    expect(themeConfig['&dark .cm-selectionMatch']).toBeUndefined();
   });
 
-  it('defines dark mode overrides for .cm-selectionMatch-main', () => {
-    expect(themeConfig['&dark .cm-selectionMatch-main']).toBeDefined();
+  it('does NOT define &light .cm-selectionMatch selector (removed in refactor)', () => {
+    expect(themeConfig['&light .cm-selectionMatch']).toBeUndefined();
   });
 
-  it('defines light mode overrides for .cm-selectionMatch', () => {
-    expect(themeConfig['&light .cm-selectionMatch']).toBeDefined();
+  // ── CSS variable theme style tests ────────────────────────────────
+
+  it('uses CSS variable --cm-selection-match-bg with fallback for .cm-selectionMatch backgroundColor', () => {
+    expect(themeConfig['.cm-selectionMatch'].backgroundColor).toBe('var(--cm-selection-match-bg, rgba(97, 175, 239, 0.12))');
   });
 
-  it('defines light mode overrides for .cm-selectionMatch-main', () => {
-    expect(themeConfig['&light .cm-selectionMatch-main']).toBeDefined();
+  it('uses CSS variable --cm-selection-match-outline with fallback for .cm-selectionMatch outline', () => {
+    expect(themeConfig['.cm-selectionMatch'].outline).toBe('1px solid var(--cm-selection-match-outline, rgba(97, 175, 239, 0.4))');
   });
 
-  // ── Default (base) theme style values ─────────────────────────
-
-  it('uses a custom backgroundColor for .cm-selectionMatch (not the default lime green)', () => {
-    // The CodeMirror default is '#99ff7780' (ugly lime green)
-    // Our custom color should NOT be this
-    expect(themeConfig['.cm-selectionMatch'].backgroundColor).not.toBe('#99ff7780');
-    expect(themeConfig['.cm-selectionMatch'].backgroundColor).toBe('rgba(97, 175, 239, 0.12)');
+  it('uses CSS variable --cm-selection-match-main-bg with fallback for .cm-selectionMatch-main backgroundColor', () => {
+    expect(themeConfig['.cm-selectionMatch-main'].backgroundColor).toBe('var(--cm-selection-match-main-bg, rgba(97, 175, 239, 0.22))');
   });
 
-  it('uses a custom backgroundColor for .cm-selectionMatch-main (not the default lime green)', () => {
-    expect(themeConfig['.cm-selectionMatch-main'].backgroundColor).not.toBe('#99ff7780');
-    expect(themeConfig['.cm-selectionMatch-main'].backgroundColor).toBe('rgba(97, 175, 239, 0.22)');
+  it('uses CSS variable --cm-selection-match-main-outline with fallback for .cm-selectionMatch-main outline', () => {
+    expect(themeConfig['.cm-selectionMatch-main'].outline).toBe('1.5px solid var(--cm-selection-match-main-outline, rgba(97, 175, 239, 0.6))');
   });
 
   it('sets .cm-searchMatch .cm-selectionMatch to transparent to prevent visual conflict', () => {
@@ -178,53 +172,5 @@ describe('wordHighlightsExtension', () => {
 
   it('sets boxShadow on .cm-selectionMatch-main to prevent stacking', () => {
     expect(themeConfig['.cm-selectionMatch-main'].boxShadow).toBe('0 0 0 1px transparent');
-  });
-
-  it('sets outline on .cm-selectionMatch with subtle transparency', () => {
-    expect(themeConfig['.cm-selectionMatch'].outline).toBe('1px solid rgba(97, 175, 239, 0.4)');
-  });
-
-  it('sets outline on .cm-selectionMatch-main with more prominent transparency', () => {
-    expect(themeConfig['.cm-selectionMatch-main'].outline).toBe('1.5px solid rgba(97, 175, 239, 0.6)');
-  });
-
-  // ── Dark mode variant tests ───────────────────────────────────
-
-  it('uses darker variant colors for &dark .cm-selectionMatch', () => {
-    expect(themeConfig['&dark .cm-selectionMatch'].backgroundColor).toBe('rgba(139, 233, 253, 0.15)');
-    expect(themeConfig['&dark .cm-selectionMatch'].outline).toBe('1px solid rgba(139, 233, 253, 0.45)');
-  });
-
-  it('uses darker variant colors for &dark .cm-selectionMatch-main', () => {
-    expect(themeConfig['&dark .cm-selectionMatch-main'].backgroundColor).toBe('rgba(139, 233, 253, 0.25)');
-    expect(themeConfig['&dark .cm-selectionMatch-main'].outline).toBe('1.5px solid rgba(139, 233, 253, 0.65)');
-  });
-
-  it('sets boxShadow on dark mode .cm-selectionMatch', () => {
-    expect(themeConfig['&dark .cm-selectionMatch'].boxShadow).toBe('0 0 0 1px transparent');
-  });
-
-  it('sets boxShadow on dark mode .cm-selectionMatch-main', () => {
-    expect(themeConfig['&dark .cm-selectionMatch-main'].boxShadow).toBe('0 0 0 1px transparent');
-  });
-
-  // ── Light mode variant tests ──────────────────────────────────
-
-  it('uses lighter variant colors for &light .cm-selectionMatch', () => {
-    expect(themeConfig['&light .cm-selectionMatch'].backgroundColor).toBe('rgba(64, 120, 242, 0.14)');
-    expect(themeConfig['&light .cm-selectionMatch'].outline).toBe('1px solid rgba(64, 120, 242, 0.5)');
-  });
-
-  it('uses lighter variant colors for &light .cm-selectionMatch-main', () => {
-    expect(themeConfig['&light .cm-selectionMatch-main'].backgroundColor).toBe('rgba(64, 120, 242, 0.24)');
-    expect(themeConfig['&light .cm-selectionMatch-main'].outline).toBe('1.5px solid rgba(64, 120, 242, 0.7)');
-  });
-
-  it('sets boxShadow on light mode .cm-selectionMatch', () => {
-    expect(themeConfig['&light .cm-selectionMatch'].boxShadow).toBe('0 0 0 1px transparent');
-  });
-
-  it('sets boxShadow on light mode .cm-selectionMatch-main', () => {
-    expect(themeConfig['&light .cm-selectionMatch-main'].boxShadow).toBe('0 0 0 1px transparent');
   });
 });

@@ -170,6 +170,9 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	if query.Provider != "" {
 		cm := ws.getConfigManager(r, w)
 		if cm != nil {
+			// Enrich custom providers from disk before mapping — the config
+			// manager may not have them loaded if it was created via fallback.
+			cm.EnrichCustomProviders()
 			if providerType, err := cm.MapStringToClientType(query.Provider); err == nil {
 				if serr := clientAgent.SetProvider(providerType); serr != nil {
 					log.Printf("handleAPIQuery: failed to set provider %q: %v", query.Provider, serr)

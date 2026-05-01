@@ -19,15 +19,14 @@ import { useEditorExtensions, TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from '../ho
 import { useEditorDiagnostics } from '../hooks/useEditorDiagnostics';
 import { useEditorFileIO } from '../hooks/useEditorFileIO';
 import { useEditorScrollSync } from '../hooks/useEditorScrollSync';
+import { useEditorSymbols, type BreadcrumbSymbol } from '../hooks/useEditorSymbols';
 import type { EditorBuffer } from '../types/editor';
 import LivePreview from './LivePreview';
 import MarkdownPreview from './MarkdownPreview';
 import EditorToolbar from './EditorToolbar';
-import type { BreadcrumbSymbol } from './EditorBreadcrumb';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
 import ImageViewer from './ImageViewer';
 import SvgPreview from './SvgPreview';
-import { getEnclosingSymbols } from '../utils/symbolUtils';
 import GoToWorkspaceSymbolOverlay from './GoToWorkspaceSymbolOverlay';
 import FindAllReferencesOverlay from './FindAllReferencesOverlay';
 import type { ReferenceInfo } from './FindAllReferencesOverlay';
@@ -1445,23 +1444,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     };
   }, [languageInfo.languageId]);
 
-  // Compute enclosing symbols for breadcrumb display (before early returns).
-  // buffer.cursorPosition.line is 0-based; getEnclosingSymbols expects 1-based.
-  // Debounced to avoid running extractSymbols on every cursor move.
-  const [enclosingSymbols, setEnclosingSymbols] = useState<BreadcrumbSymbol[]>([]);
-
-  useEffect(() => {
-    if (!localContent || !buffer?.file?.ext) {
-      setEnclosingSymbols([]);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setEnclosingSymbols(getEnclosingSymbols(localContent, buffer.file.ext, buffer.cursorPosition.line + 1));
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [localContent, buffer?.file?.ext, buffer?.cursorPosition.line]);
+  // Compute enclosing symbols for breadcrumb display.
+  // Optimized: expensive extraction keyed to content changes only, not cursor position.
+  const { enclosingSymbols } = useEditorSymbols(localContent, buffer);
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />;

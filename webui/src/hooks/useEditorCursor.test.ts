@@ -12,10 +12,11 @@
  * - Column calculation (head - line.from)
  * - Error handling: lineAt throws → no crash, updateBufferCursor not called
  */
-// @ts-nocheck
+// @ts-nocheck — mock ViewUpdate/EditorState objects don't fully implement
+// the CodeMirror interfaces; targeted imports are used for vitest globals
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { vi } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before the static import of the module under test
@@ -666,5 +667,29 @@ describe('handleCursorUpdate — edge cases', () => {
 
     // 3 ranges → total chars = 10 + 0 + 5 = 15
     expect(getReturn().selectionInfo).toEqual({ charCount: 15, selectionCount: 3 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: lineAt caching optimization
+// ---------------------------------------------------------------------------
+
+describe('handleCursorUpdate — lineAt call count', () => {
+  it('calls lineAt only once per update (cached in lineObj)', () => {
+    const { getReturn } = renderTestHook({
+      docLines: [{ number: 1, from: 0, to: Infinity }],
+    });
+
+    const update = createMockUpdate({
+      head: 42,
+      ranges: [{ from: 42, to: 42, empty: true }],
+    });
+
+    act(() => {
+      getReturn().handleCursorUpdate(update);
+    });
+
+    // lineAt should be called exactly once (cached in lineObj)
+    expect(update.state.doc.lineAt).toHaveBeenCalledTimes(1);
   });
 });

@@ -105,7 +105,14 @@ func TestShellCommandInvalidBinary(t *testing.T) {
 
 		// Should not return tool error, but should capture the OS error
 		assert.NoError(t, err, "Shell tool should not return error for nonexistent command")
-		assert.Contains(t, output, "not found", "Should contain 'not found' error")
+		// Different shells report missing commands differently:
+		// bash: "not found", zsh: "not found" or "Input/output error", fish: different format
+		outputLower := strings.ToLower(output)
+		assert.True(t,
+			strings.Contains(outputLower, "not found") ||
+				strings.Contains(outputLower, "input/output error") ||
+				strings.Contains(outputLower, "no such file"),
+			"Should contain an error about the missing command, got: %s", output)
 	})
 }
 

@@ -141,6 +141,10 @@ export default function EditorCore(props: EditorCoreProps): JSX.Element | null {
     // Prepend the updateListener so it's first in the extension chain.
     const extensionsWithListener = [updateListener, ...extensions];
 
+    // Clean up any residual DOM from a previous EditorView (destroy may not
+    // fully clear the container in all browsers).
+    container.innerHTML = '';
+
     // Create the EditorState with the provided extensions and initial content.
     const state = EditorState.create({
       doc: initialContent,

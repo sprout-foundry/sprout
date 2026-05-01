@@ -1,6 +1,9 @@
 /**
  * EditorCore — CodeMirror EditorView mount point component.
  *
+ * NOTE: This component is currently not used by EditorPane. It exists for
+ * potential future use and has its own test file (EditorCore.test.tsx).
+ *
  * This is a controlled component that manages the CodeMirror EditorView lifecycle.
  * It does NOT own state for loading, saving, word wrap, etc. — those are owned
  * by the parent component (EditorPane). EditorCore only owns the EditorView

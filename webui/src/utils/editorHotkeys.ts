@@ -5,7 +5,7 @@ import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorH
 import { toggleLineComment, toggleBlockComment } from '@codemirror/commands';
 import type { HotkeyEntry } from '../services/api';
 
-interface EditorHotkeyActions {
+export interface EditorHotkeyActions {
   onSave?: () => void;
   onGoToLine?: () => void;
   onGoToSymbol?: () => void;

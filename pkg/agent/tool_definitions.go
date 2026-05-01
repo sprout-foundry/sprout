@@ -75,10 +75,11 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register shell_command tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "shell_command",
-		Description: "Execute a shell command",
+		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id)",
 		Parameters: []ParameterConfig{
-			{"command", "string", true, []string{"cmd"}, "The shell command to execute"},
+			{"command", "string", false, []string{"cmd"}, "The shell command to execute (required unless check_background is provided)"},
 			{"background", "bool", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},
+			{"check_background", "string", false, []string{}, "Session ID of a background session to check (returns accumulated output)"},
 		},
 		Handler: handleShellCommand,
 	})

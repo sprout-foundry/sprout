@@ -612,30 +612,38 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 	// Map session-style provider/model shortcuts to persisted config fields.
 	// The frontend sends "provider" and "model" regardless of layer, but
 	// applyPartialSettings expects "last_used_provider" and "provider_models".
-	if p, ok := incoming["provider"].(string); ok && p != "" {
-		incoming["last_used_provider"] = p
+	// Always delete these keys from incoming so they're never reported as unknown.
+	if p, ok := incoming["provider"]; ok {
+		if ps, ok := p.(string); ok {
+			if ps != "" {
+				incoming["last_used_provider"] = ps
+			} else {
+				// Empty string means clear the provider
+				incoming["last_used_provider"] = ""
+			}
+		}
 		delete(incoming, "provider")
 	}
-	if m, ok := incoming["model"].(string); ok && m != "" {
-		// Determine which provider this model belongs to.
-		provider := ""
-		if p, ok := incoming["last_used_provider"].(string); ok && p != "" {
-			provider = p
-		} else if cfg.LastUsedProvider != "" {
-			provider = cfg.LastUsedProvider
-		}
-		if provider != "" {
-			if cfg.ProviderModels == nil {
-				cfg.ProviderModels = make(map[string]string)
+	if m, ok := incoming["model"]; ok {
+		if ms, ok := m.(string); ok && ms != "" {
+			// Determine which provider this model belongs to.
+			provider := ""
+			if p, ok := incoming["last_used_provider"].(string); ok && p != "" {
+				provider = p
+			} else if cfg.LastUsedProvider != "" {
+				provider = cfg.LastUsedProvider
 			}
-			// Stash existing provider_models into incoming so applyPartialSettings
-			// preserves all entries (it does a full map replacement).
-			pm := make(map[string]interface{}, len(cfg.ProviderModels))
-			for k, v := range cfg.ProviderModels {
-				pm[k] = v
+			if provider != "" {
+				if cfg.ProviderModels == nil {
+					cfg.ProviderModels = make(map[string]string)
+				}
+				pm := make(map[string]interface{}, len(cfg.ProviderModels))
+				for k, v := range cfg.ProviderModels {
+					pm[k] = v
+				}
+				pm[provider] = ms
+				incoming["provider_models"] = pm
 			}
-			pm[provider] = m
-			incoming["provider_models"] = pm
 		}
 		delete(incoming, "model")
 	}

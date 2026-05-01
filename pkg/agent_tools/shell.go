@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,41 @@ func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
 func ExecuteShellCommandWithSafety(ctx context.Context, command string, interactiveMode bool, sessionID string, streamOutput bool) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("empty command provided")
+	}
+
+	// Check for TerminalManager in context (WebUI mode)
+	if tm := TerminalManagerFromContext(ctx); tm != nil && !streamOutput {
+		// Route through hidden PTY session
+		// Use sessionID as the chat identifier; generate one if not set
+		chatID := sessionID
+		if chatID == "" {
+			chatID = "default"
+		}
+
+		// Get or create a hidden session for this chat
+		hiddenSessionID, err := tm.GetOrCreateHiddenSessionForChat(ctx, chatID)
+		if err != nil {
+			// Fall through to os/exec on failure — don't break agent execution
+			log.Printf("debug: PTY session creation failed for chat %q, falling back to os/exec: %v", chatID, err)
+		} else {
+			// Execute via hidden PTY
+			output, exitCode, err := tm.ExecuteCommandInHidden(ctx, hiddenSessionID, command)
+			if err != nil {
+				// Fall through to os/exec on PTY error
+				log.Printf("debug: PTY command execution failed on session %q, falling back to os/exec: %v", hiddenSessionID, err)
+			} else {
+				// Build final output with status
+				finalOutput := buildShellOutputWithStatus(output, command, exitCode, nil)
+
+				// Print truncated preview unless in tests/CI
+				truncatedOutput := truncateOutput(output, 2)
+				if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
+					fmt.Printf("%s\n", truncatedOutput)
+				}
+
+				return finalOutput, nil
+			}
+		}
 	}
 
 	// NOTE: Security validation is handled by the static classifier in security.go, invoked at the tool registry level

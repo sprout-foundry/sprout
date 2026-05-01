@@ -1,0 +1,232 @@
+.background-tasks-container {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.background-tasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  height: 36px;
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.background-tasks-header:hover {
+  background: var(--bg-elevated);
+}
+
+.background-tasks-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.background-tasks-badge {
+  background: var(--accent-secondary);
+  color: var(--text-primary);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 18px;
+  text-align: center;
+}
+
+.background-tasks-toggle {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+
+.background-tasks-header:hover .background-tasks-toggle {
+  color: var(--text-primary);
+}
+
+.background-tasks-body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  max-height: 300px;
+  min-height: 40px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.background-tasks-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.background-tasks-body::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+.background-tasks-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.background-tasks-error {
+  padding: 12px;
+  color: var(--accent-error);
+  background: rgba(224, 108, 117, 0.1);
+  border-radius: 4px;
+  margin: 8px;
+}
+
+.background-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.background-task-item {
+  display: flex;
+  align-items: stretch;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.15s ease;
+}
+
+.background-task-item:hover {
+  background: var(--bg-elevated);
+}
+
+.background-task-item:last-child {
+  border-bottom: none;
+}
+
+.background-task-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.background-task-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.background-task-status {
+  display: flex;
+  align-items: center;
+  width: 8px;
+  flex-shrink: 0;
+}
+
+.background-task-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.background-task-status.active .background-task-status-dot {
+  background: var(--accent-success);
+  box-shadow: 0 0 0 4px rgba(152, 195, 121, 0.15);
+}
+
+.background-task-status.inactive .background-task-status-dot {
+  background: var(--text-muted);
+}
+
+.background-task-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.background-task-preview {
+  margin: 0;
+  padding: 4px 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+}
+
+.background-task-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.background-task-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.background-task-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.background-task-btn-attach:hover {
+  background: rgba(152, 195, 121, 0.15);
+  color: var(--accent-success);
+}
+
+.background-task-btn-kill:hover {
+  background: rgba(224, 108, 117, 0.15);
+  color: var(--accent-error);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .background-tasks-header {
+    padding: 0 8px;
+    height: 32px;
+  }
+
+  .background-tasks-body {
+    max-height: 250px;
+  }
+
+  .background-task-item {
+    padding: 6px 8px;
+  }
+
+  .background-task-preview {
+    font-size: 10px;
+  }
+}

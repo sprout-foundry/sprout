@@ -52,6 +52,7 @@ import { customSearchExtension } from '../extensions/searchPanel';
 import { tabExpandSnippets } from '../extensions/snippets';
 import { diffGutter } from '../extensions/diffGutter';
 import { lintDiagnostics } from '../extensions/lintDiagnostics';
+import { errorLensPlugin } from '../extensions/errorLens';
 import { createCodeActionsExtension } from '../extensions/codeActions';
 import { cursorHistoryPlugin } from '../extensions/cursorHistory';
 import { dragDropMovePlugin } from '../extensions/dragDropMove';
@@ -240,6 +241,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       // ── Diagnostics & diff ──
       diffGutter(),
       lintDiagnostics(),
+      errorLensPlugin(),
       createCodeActionsExtension(buffer.getFilePath, buffer.getContent),
       trailingWhitespacePlugin(),
       unsavedLineHighlight(),

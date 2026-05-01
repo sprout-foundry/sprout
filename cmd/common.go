@@ -61,22 +61,32 @@ func loadInstances() (map[string]InstanceInfo, error) {
 }
 
 // saveInstances persists running instances to config.
+// Uses a unique temp file per write to avoid race conditions when multiple
+// sprout processes write heartbeats to the same file simultaneously.
 func saveInstances(instances map[string]InstanceInfo) error {
-	if err := os.MkdirAll(getConfigDir(), 0755); err != nil {
+	configDir := getConfigDir()
+	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config dir for instances: %w", err)
 	}
 
-	instancesFile := filepath.Join(getConfigDir(), "instances.json")
+	instancesFile := filepath.Join(configDir, "instances.json")
 	data, err := json.MarshalIndent(instances, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal instances data: %w", err)
 	}
 
-	tmpFile := instancesFile + ".tmp"
+	// Use a process-specific temp file to avoid races with other sprout
+	// instances that are also writing heartbeats concurrently.
+	tmpFile := instancesFile + fmt.Sprintf(".tmp.%d", os.Getpid())
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to write instances temp file: %w", err)
 	}
-	return os.Rename(tmpFile, instancesFile)
+	if err := os.Rename(tmpFile, instancesFile); err != nil {
+		// Clean up orphaned temp file on rename failure.
+		_ = os.Remove(tmpFile)
+		return fmt.Errorf("failed to rename instances temp file: %w", err)
+	}
+	return nil
 }
 
 // cleanStaleInstances removes instances that haven't pinged recently

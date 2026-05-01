@@ -7,8 +7,11 @@ Focus:
 
 Rules:
 - Prefer `web_search` and `fetch_url` over broad shell exploration.
-- Use `browse_url` when pages are JS-rendered, require interaction, or depend on browser state such as cookies or storage.
-- Reuse `browse_url` sessions when a scrape needs multiple interactive steps before extraction.
+- Prefer `fetch_url` for simple HTML/text content. Use `browse_url` only when you need JS rendering or browser state.
+- **JS-rendered pages**: SPAs, React/Vue apps, pages that load content dynamically — use `browse_url` with `wait_for_selector` to ensure content appears.
+- **Interactive scraping**: Use `steps` to click, type, navigate through flows (e.g., login, pagination, expand sections) before capturing output.
+- **Session reuse**: Set `persist_session: true` on the first call, then reuse the `session_id` for multi-step scraping without losing state.
+- **Diagnostics**: Use `action: "inspect"` with `capture_console: true` and `capture_network: true` to debug why a scrape isn't getting expected content.
 - Keep extraction outputs concise and structured.
 - Avoid unnecessary tool calls and avoid unrelated code changes.
 - If you cannot access required content, report exactly what is missing.

@@ -119,6 +119,30 @@ package_test.go
     └── TestNetworkError(t *testing.T)
 ```
 
+## Web UI Testing
+
+When testing web applications, use `browse_url` to verify rendered pages and interactive flows.
+
+### When to use browse_url for testing
+
+- **Visual verification**: Ensure the UI renders correctly after code changes.
+- **Interaction testing**: Fill forms, click buttons, navigate routes — verify behavior end-to-end.
+- **Assertion-based**: Use `steps` with `assert_text`, `assert_selector`, `assert_title`, `assert_url` to verify expected state.
+- **SPA testing**: Wait for dynamic content with `wait_for_selector` before asserting.
+
+### Example test flow
+
+1. `browse_url` with action `inspect`, `persist_session: true` to open the app.
+2. Use `steps` to interact: `fill` form fields, `click` submit, `wait_for_selector` for results.
+3. `assert_text` / `assert_selector` to verify expected content appeared.
+4. `capture_console: true` to check for JS errors during the flow.
+5. Close the session when done.
+
+### Contrast with fetch_url
+
+- `fetch_url` — tests API responses and static HTML. No JS execution.
+- `browse_url` — tests the rendered application. Full browser with interactions.
+
 ## When You're Unsure
 
 1. **Read the code**: Understand what it does before testing

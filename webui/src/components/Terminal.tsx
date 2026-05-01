@@ -72,6 +72,8 @@ function Terminal({
   const shellPickerRef = useRef<HTMLDivElement>(null);
   // Track which shell each session should use (map: sessionId → shell name | null)
   const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
+  // Track which sessions need reattach to existing PTY (map: sessionId → sessionId)
+  const sessionReattachIdsRef = useRef<Map<string, string | null>>(new Map());
 
   // ── Font size state ───────────────────────────────────────────────────────
   const [fontSize, setFontSize] = useState<number>(() => {
@@ -297,6 +299,7 @@ function Terminal({
       handle?.cleanup?.();
       paneHandles.current.delete(secondarySessionIdRef.current);
       sessionShellsRef.current.delete(secondarySessionIdRef.current);
+      sessionReattachIdsRef.current.delete(secondarySessionIdRef.current);
     }
     clearSplitState();
   }, [clearSplitState]);
@@ -312,6 +315,7 @@ function Terminal({
       handle?.cleanup?.();
       paneHandles.current.delete(id);
       sessionShellsRef.current.delete(id);
+      sessionReattachIdsRef.current.delete(id);
 
       // If closing the session that's in the secondary pane, unsplit
       if (secondarySessionIdRef.current === id) {
@@ -363,6 +367,7 @@ function Terminal({
         name: sessionName,
         is_pinned: false,
       };
+      sessionReattachIdsRef.current.set(sessionId, sessionId);
       setSessions((prev) => [...prev, newSession]);
       setActiveSessionId(sessionId);
     };
@@ -560,6 +565,7 @@ function Terminal({
       // Ensure all refs are cleared
       paneHandles.current.clear();
       sessionShellsRef.current.clear();
+      sessionReattachIdsRef.current.clear();
     };
   }, []);
 
@@ -732,6 +738,7 @@ function Terminal({
                 isConnected={isConnected}
                 showCloseButton={false}
                 preferredShell={sessionShellsRef.current.get(activeSessionId) ?? null}
+                reattachSessionId={sessionReattachIdsRef.current.get(activeSessionId) ?? null}
                 fontSize={fontSize}
               />
             </div>
@@ -763,6 +770,7 @@ function Terminal({
                 showCloseButton={true}
                 onClose={closeSecondaryPane}
                 preferredShell={sessionShellsRef.current.get(secondarySessionId) ?? null}
+                reattachSessionId={sessionReattachIdsRef.current.get(secondarySessionId) ?? null}
                 fontSize={fontSize}
               />
             </div>

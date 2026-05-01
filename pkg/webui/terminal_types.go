@@ -105,7 +105,8 @@ type TerminalSession struct {
 	Cancel   context.CancelFunc
 	Active   bool
 	mutex    sync.RWMutex
-	LastUsed time.Time
+	LastUsed  time.Time
+	StartedAt time.Time // When the session was created (for duration display)
 	Size     *pty.Winsize
 
 	// Hidden session metadata — used for agent background PTY sessions.

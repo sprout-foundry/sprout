@@ -62,19 +62,16 @@ export function useEditorSymbols(
   // Stage 2: Filter extracted symbols to find those enclosing the cursor.
   // Cheap O(n) iteration over pre-computed symbols — only re-runs when cursor moves.
   const enclosingSymbols = useMemo(() => {
-    if (!localContent || !buffer) {
+    if (!localContent || !buffer?.cursorPosition) {
       return [];
     }
 
     // Cursor line is 0-based in buffer, convert to 1-based for comparison with symbol lines
     const cursorLine = buffer.cursorPosition.line + 1;
-    if (cursorLine < 1) {
-      return [];
-    }
+    const ext = buffer.file?.ext;
 
     // Split content once for scope checking
     const lines = localContent.split('\n');
-    const ext = buffer.file?.ext;
 
     // Filter to container kinds only; extractSymbols returns in line-ascending order (outermost first)
     const containers = allSymbols
@@ -93,7 +90,7 @@ export function useEditorSymbols(
     }
 
     return result;
-  }, [localContent, buffer, allSymbols]);
+  }, [localContent, buffer?.cursorPosition?.line, buffer?.cursorPosition?.column, buffer?.file?.ext, allSymbols]);
 
   return { enclosingSymbols };
 }

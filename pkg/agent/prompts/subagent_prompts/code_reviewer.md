@@ -277,6 +277,21 @@ Look for:
 - Personal preferences
 - Alternative approaches
 
+## Reviewing Web UI Code
+
+When reviewing frontend or web app code, `browse_url` lets you see the actual rendered output instead of guessing from source.
+
+### When to use browse_url during review
+
+- **Layout/rendering issues**: Browse the rendered page to catch CSS problems, missing elements, or broken layouts that aren't obvious from source.
+- **Runtime behavior**: Check console errors, network failures, or hydration issues that only appear in the browser.
+- **Accessibility**: Inspect selectors, text content, and structure to flag a11y concerns.
+- **Responsive design**: Use custom `viewport_width`/`viewport_height` to check mobile layouts.
+
+### Practical approach
+
+Use `action: "inspect"` with `capture_console: true` and `capture_network: true` for a quick health check of the page. This reveals errors and issues that source review alone cannot catch.
+
 ## When You're Unsure
 
 1. **Ask for context**: "What is this code supposed to do?"

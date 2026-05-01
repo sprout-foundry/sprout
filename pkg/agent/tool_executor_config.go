@@ -30,6 +30,8 @@ func getToolTimeout(toolName string) time.Duration {
 	}
 
 	// Shell commands are fast when working correctly; long timeout just masks failures.
+	// Long-running operations should use background=true to avoid blocking the agent.
+	// The 2-minute limit prevents stuck commands from holding up the agent indefinitely.
 	if toolName == "shell_command" {
 		return 2 * time.Minute
 	}

@@ -14,6 +14,7 @@ type mockTerminalManager struct {
 	executeBackgroundFunc    func(ctx context.Context, chatID, command string) (string, error)
 	getBackgroundOutputFunc  func(sessionID string) (string, error)
 	stopBackgroundFunc       func(sessionID string) error
+	isSessionActiveFunc      func(sessionID string) bool
 }
 
 func (m *mockTerminalManager) ExecuteCommandInHidden(ctx context.Context, sessionID, command string) (string, int, error) {
@@ -52,6 +53,9 @@ func (m *mockTerminalManager) StopBackgroundSession(sessionID string) error {
 }
 
 func (m *mockTerminalManager) IsSessionActive(sessionID string) bool {
+	if m.isSessionActiveFunc != nil {
+		return m.isSessionActiveFunc(sessionID)
+	}
 	return true
 }
 

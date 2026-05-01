@@ -109,11 +109,12 @@ type TerminalSession struct {
 	Size     *pty.Winsize
 
 	// Hidden session metadata — used for agent background PTY sessions.
-	Hidden    bool   `json:"-"`
-	Owner     string `json:"-"` // "agent" or other entity that created this session
-	ChatID    string `json:"-"` // chat session that owns this terminal
-	Name      string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
-	AutoClose bool   `json:"-"` // reserved for Phase B: close automatically when inactive
+	Hidden      bool   `json:"-"`
+	IsBackground bool   `json:"-"` // true for background sessions (2-hour timeout vs 30-min for regular hidden)
+	Owner       string `json:"-"` // "agent" or other entity that created this session
+	ChatID      string `json:"-"` // chat session that owns this terminal
+	Name        string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
+	AutoClose   bool   `json:"-"` // reserved for Phase B: close automatically when inactive
 
 	// History for shell command navigation.
 	History      []string

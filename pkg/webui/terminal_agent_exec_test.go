@@ -635,3 +635,150 @@ func TestExecuteCommandAndWait_OutputContainsDollar(t *testing.T) {
 		t.Errorf("output should contain '$?', got %q", output)
 	}
 }
+
+func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-reuse")
+	defer tm.CloseSession("exec-reuse")
+
+	// First: trigger a timeout with a short-lived command
+	shortCtx, shortCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer shortCancel()
+	_, exitCode, _ := tm.ExecuteCommandAndWait(shortCtx, session, "sleep 10")
+	if exitCode != -1 {
+		t.Errorf("expected exit code -1 for timeout, got %d", exitCode)
+	}
+
+	// Wait a moment for the Ctrl+C to be processed.
+	time.Sleep(500 * time.Millisecond)
+
+	// Second: the session should still be usable
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo recovered")
+	if err != nil {
+		t.Fatalf("command after timeout should succeed, got error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 after recovery, got %d", exitCode)
+	}
+	if !strings.Contains(output, "recovered") {
+		t.Errorf("output should contain 'recovered', got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_Backslashes(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-backslash")
+	defer tm.CloseSession("exec-backslash")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, `echo "back\slash"`)
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "back") {
+		t.Errorf("output should contain 'back', got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_Pipe(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-pipe")
+	defer tm.CloseSession("exec-pipe")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo hello | cat")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "hello") {
+		t.Errorf("output should contain 'hello', got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_Semicolons(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-semi")
+	defer tm.CloseSession("exec-semi")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo alpha; echo beta")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "alpha") {
+		t.Errorf("output should contain 'alpha', got %q", output)
+	}
+	if !strings.Contains(output, "beta") {
+		t.Errorf("output should contain 'beta', got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_Backticks(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-backtick")
+	defer tm.CloseSession("exec-backtick")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo `echo nested_backtick`")
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "nested_backtick") {
+		t.Errorf("output should contain 'nested_backtick', got %q", output)
+	}
+}
+
+func TestExecuteCommandAndWait_OutputContainsEchoPrefix(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-echoprefix")
+	defer tm.CloseSession("exec-echoprefix")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, `echo "/bin/sh -c 'injected'"`)
+	if err != nil {
+		t.Fatalf("ExecuteCommandAndWait failed: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", exitCode)
+	}
+	if !strings.Contains(output, "/bin/sh -c 'injected'") {
+		t.Errorf("output should contain the injected string, got %q", output)
+	}
+}

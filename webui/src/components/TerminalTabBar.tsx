@@ -1,2 +1,3 @@
-import { TerminalTabBar } from '@sprout/ui';
+import { TerminalTabBar, type AttachableSession } from '@sprout/ui';
 export default TerminalTabBar;
+export { type AttachableSession };

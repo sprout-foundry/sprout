@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { Plus, X, Pencil, Pin } from 'lucide-react';
+import { Plus, X, Pencil, Pin, Radio, Play } from 'lucide-react';
 import ContextMenu from './ContextMenu';
 import './TerminalTabBar.css';
 
@@ -8,6 +8,12 @@ export interface TerminalSession {
   id: string;
   name: string;
   is_pinned: boolean;
+}
+
+export interface AttachableSession {
+  id: string;
+  name: string;
+  status: 'active' | 'inactive';
 }
 
 interface TerminalTabBarProps {
@@ -18,6 +24,10 @@ interface TerminalTabBarProps {
   onClose: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onTogglePin?: (id: string) => void;
+  /** List of hidden/agent sessions that can be attached to */
+  attachableSessions?: AttachableSession[];
+  /** Called when user clicks "Attach" on a hidden session */
+  onAttachSession?: (sessionId: string, name: string) => void;
 }
 
 interface ContextMenuState {
@@ -36,6 +46,8 @@ function TerminalTabBar({
   onClose,
   onRename,
   onTogglePin,
+  attachableSessions = [],
+  onAttachSession,
 }: TerminalTabBarProps): JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -46,7 +58,9 @@ function TerminalTabBar({
     sessionId: null,
     canClose: false,
   });
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const agentDropdownRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   // Focus rename input when it appears
@@ -56,6 +70,28 @@ function TerminalTabBar({
       renameInputRef.current.select();
     }
   }, [renamingId]);
+
+  // Close agent dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!showAgentDropdown) return;
+    const handleClick = (e: Event) => {
+      if (agentDropdownRef.current && !agentDropdownRef.current.contains(e.target as Node)) {
+        setShowAgentDropdown(false);
+      }
+    };
+    const handleKeyDown = (e: Event) => {
+      const ke = e as unknown as KeyboardEvent;
+      if (ke.key === 'Escape') {
+        setShowAgentDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showAgentDropdown]);
 
   const handleDoubleClick = useCallback((session: TerminalSession) => {
     setRenamingId(session.id);
@@ -124,6 +160,16 @@ function TerminalTabBar({
     closeContextMenu();
   }, [contextMenu.sessionId, contextMenu.canClose, onClose, closeContextMenu]);
 
+  const handleAttachSession = useCallback(
+    (sessionId: string, name: string) => {
+      if (onAttachSession) {
+        onAttachSession(sessionId, name);
+      }
+      setShowAgentDropdown(false);
+    },
+    [onAttachSession],
+  );
+
   const showCloseButtons = sessions.length > 1;
 
   return (
@@ -178,6 +224,47 @@ function TerminalTabBar({
             </button>
           );
         })}
+        {attachableSessions.length > 0 && (
+          <div className="agent-sessions-dropdown" ref={agentDropdownRef}>
+            <button
+              className="agent-sessions-btn"
+              onClick={() => setShowAgentDropdown((prev) => !prev)}
+              title="Agent sessions"
+              type="button"
+              aria-label="Agent sessions"
+              aria-haspopup="menu"
+              aria-expanded={showAgentDropdown}
+            >
+              <Radio size={14} />
+            </button>
+            {showAgentDropdown && (
+              <div className="agent-sessions-menu" role="menu">
+                <div className="agent-sessions-header">Agent Sessions</div>
+                {attachableSessions.map((session) => (
+                  <button
+                    key={session.id}
+                    className="agent-sessions-item"
+                    role="menuitem"
+                    onClick={() => handleAttachSession(session.id, session.name)}
+                    title="Attach to terminal"
+                    type="button"
+                    disabled={session.status === 'inactive'}
+                    aria-label={`Attach ${session.name} to terminal`}
+                  >
+                    <span
+                      className={`agent-sessions-status ${session.status}`}
+                      aria-label={`Status: ${session.status}`}
+                    >
+                      <span className="agent-sessions-status-dot" />
+                    </span>
+                    <span className="agent-sessions-name">{session.name}</span>
+                    <Play size={12} className="agent-sessions-attach-icon" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {onCreate && (
           <button
             className="terminal-tab-new"

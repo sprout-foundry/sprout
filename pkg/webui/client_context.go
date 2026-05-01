@@ -378,6 +378,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst.SetWorkspaceRoot(workspaceRoot)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
 		agentInst.EnableStreaming(func(string) {})
+		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
@@ -398,6 +399,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				agentInst.SetWorkspaceRoot(workspaceRoot)
 				agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
 				agentInst.EnableStreaming(func(string) {})
+				agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 				// Wire the TerminalManager from the client context into the agent for WebUI mode.
 				if terminal != nil {
 					agentInst.SetTerminalManager(terminal)
@@ -419,6 +421,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst.SetWorkspaceRoot(workspaceRoot)
 		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
 		agentInst.EnableStreaming(func(string) {})
+		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
@@ -475,6 +478,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return ""
 	}()})
 	created.EnableStreaming(func(string) {})
+	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).

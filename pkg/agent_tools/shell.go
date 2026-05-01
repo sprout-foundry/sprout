@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -239,4 +240,41 @@ func buildShellOutputWithStatus(output, command string, exitCode int, err error)
 	}
 
 	return header + output
+}
+
+// ExecuteShellCommandBackground runs a command in a background hidden PTY session
+// and returns a JSON result with the session ID. Only works in WebUI mode (requires TerminalManager).
+// This is for commands that should run asynchronously without waiting for completion.
+func ExecuteShellCommandBackground(ctx context.Context, command string, sessionID string) (string, error) {
+	if strings.TrimSpace(command) == "" {
+		return "", fmt.Errorf("empty command provided")
+	}
+
+	// Background mode requires TerminalManager (WebUI mode only)
+	tm := TerminalManagerFromContext(ctx)
+	if tm == nil {
+		return "", fmt.Errorf("background mode requires WebUI terminal manager")
+	}
+
+	// Use sessionID as the chat identifier; generate one if not set
+	chatID := sessionID
+	if chatID == "" {
+		chatID = "default"
+	}
+
+	// Execute in background
+	bgSessionID, err := tm.ExecuteCommandInBackground(ctx, chatID, command)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute background command: %w", err)
+	}
+
+	// Return JSON result with session ID
+	resultBytes, err := json.Marshal(map[string]string{
+		"session_id": bgSessionID,
+		"status":     "running",
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal background result: %w", err)
+	}
+	return string(resultBytes), nil
 }

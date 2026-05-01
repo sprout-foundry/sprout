@@ -1,0 +1,305 @@
+package webui
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+)
+
+// --- ExecuteCommandInBackground tests ---
+
+func TestExecuteCommandInBackground_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PTY")
+	}
+
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "echo hello")
+	if err != nil {
+		t.Fatalf("ExecuteCommandInBackground failed: %v", err)
+	}
+
+	// Verify the session exists and is marked as background.
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		t.Fatal("background session should exist after ExecuteCommandInBackground")
+	}
+
+	session.mutex.RLock()
+	isBackground := session.IsBackground
+	hidden := session.Hidden
+	owner := session.Owner
+	chatID := session.ChatID
+	active := session.Active
+	session.mutex.RUnlock()
+
+	if !isBackground {
+		t.Error("session should have IsBackground=true")
+	}
+	if !hidden {
+		t.Error("background session should be hidden")
+	}
+	if owner != "agent" {
+		t.Errorf("expected owner 'agent', got %q", owner)
+	}
+	if chatID != "chat-1" {
+		t.Errorf("expected chatID 'chat-1', got %q", chatID)
+	}
+	if !active {
+		t.Error("background session should be active")
+	}
+
+	// Verify session ID starts with "bg-"
+	if !strings.HasPrefix(sessionID, "bg-") {
+		t.Errorf("expected session ID to start with 'bg-', got %q", sessionID)
+	}
+
+	tm.CloseSession(sessionID)
+}
+
+func TestExecuteCommandInBackground_EmptyCommand(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	_, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "")
+	if err == nil {
+		t.Fatal("expected error for empty command")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected error message to mention 'empty', got %q", err.Error())
+	}
+}
+
+func TestExecuteCommandInBackground_EmptyChatID(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	_, err := tm.ExecuteCommandInBackground(context.Background(), "", "echo hello")
+	if err == nil {
+		t.Fatal("expected error for empty chatID")
+	}
+	if !strings.Contains(err.Error(), "chatID") {
+		t.Errorf("expected error message to mention 'chatID', got %q", err.Error())
+	}
+}
+
+func TestExecuteCommandInBackground_CommandTooLong(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	longCommand := strings.Repeat("x", maxCommandLength+1)
+	_, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", longCommand)
+	if err == nil {
+		t.Fatal("expected error for command exceeding max length")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Errorf("expected error message to mention 'too long', got %q", err.Error())
+	}
+}
+
+// --- GetBackgroundOutput tests ---
+
+func TestGetBackgroundOutput_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	_, err := tm.GetBackgroundOutput("nonexistent-session")
+	if err == nil {
+		t.Fatal("expected error for non-existent session")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected error message to mention 'not found', got %q", err.Error())
+	}
+}
+
+func TestGetBackgroundOutput_NotBackgroundSession(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	// Create a regular hidden session (not a background session).
+	session, err := tm.CreateHiddenSession("hidden-regular", "agent", "chat-1")
+	if err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+	defer tm.CloseSession(session.ID)
+
+	_, err = tm.GetBackgroundOutput(session.ID)
+	if err == nil {
+		t.Fatal("expected error when calling GetBackgroundOutput on a non-background session")
+	}
+	if !strings.Contains(err.Error(), "not a background session") {
+		t.Errorf("expected error message to mention 'not a background session', got %q", err.Error())
+	}
+}
+
+func TestGetBackgroundOutput_StripANSI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PTY")
+	}
+
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "echo hello")
+	if err != nil {
+		t.Fatalf("ExecuteCommandInBackground failed: %v", err)
+	}
+	defer tm.CloseSession(sessionID)
+
+	// Give PTY time to capture output.
+	time.Sleep(500 * time.Millisecond)
+
+	output, err := tm.GetBackgroundOutput(sessionID)
+	if err != nil {
+		t.Fatalf("GetBackgroundOutput failed: %v", err)
+	}
+
+	// Output should not contain raw ANSI escape sequences (stripANSI is applied).
+	// The ring buffer captures PTY output which includes shell prompts with ANSI codes.
+	// After stripping, we should not see ESC characters (0x1b).
+	if strings.ContainsRune(output, '\x1b') {
+		t.Errorf("output should have ANSI escapes stripped: %q", output)
+	}
+}
+
+// --- extractCommandPrefix tests ---
+
+func TestExtractCommandPrefix(t *testing.T) {
+	cases := []struct {
+		name    string
+		command string
+		want    string
+	}{
+		{"simple command", "echo hello", "echo"},
+		{"command with flags", "npm install --save", "npm"},
+		{"command with path", "/usr/bin/python3 script.py", "/usr/bin/python3"},
+		{"pipe delimiter", "ls | grep foo", "ls"},
+		{"ampersand delimiter", "sleep 10 &", "sleep"},
+		{"semicolon delimiter", "echo a; echo b", "echo"},
+		{"redirect output", "echo hello > /tmp/out", "echo"},
+		{"redirect input", "sort < file.txt", "sort"},
+		{"parentheses", "echo $(date)", "echo"},
+		{"backtick", "echo `date`", "echo"},
+		{"double quote", "echo \"hello\"", "echo"},
+		{"single quote", "echo 'hello'", "echo"},
+		{"backslash", "echo hello\\", "echo"},
+		{"tab separator", "echo\thello", "echo"},
+		{"newline separator", "echo\nhello", "echo"},
+		{"leading whitespace", "   echo hello", "echo"},
+		{"trailing whitespace", "echo hello   ", "echo"},
+		{"empty string", "", ""},
+		{"only whitespace", "   ", ""},
+		{"single word no args", "python3", "python3"},
+		{"dollar sign in command", "$HOME/bin/tool arg", "$HOME/bin/tool"},
+		{"equals in command", "env KEY=value", "env"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractCommandPrefix(tc.command)
+			if got != tc.want {
+				t.Errorf("extractCommandPrefix(%q) = %q, want %q", tc.command, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- sanitizeSessionIDPart tests ---
+
+func TestSanitizeSessionIDPart(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"alphanumeric", "echo123", "echo123"},
+		{"mixed case", "NodeJS", "NodeJS"},
+		{"with hyphens", "my-tool", "my-tool"},
+		{"with underscores", "my_tool", "my_tool"},
+		{"with dots", "my.tool", "my.tool"},
+		{"spaces replaced", "my tool", "my-tool"},
+		{"special chars replaced", "my@tool#here", "my-tool-here"},
+		{"slashes replaced", "/usr/bin/tool", "-usr-bin-tool"},
+		{"empty string", "", "unknown"},
+		{"only special chars", "!!!", "---"},
+		{"long string truncated to 32", strings.Repeat("a", 50), strings.Repeat("a", 32)},
+		{"exactly 32 chars", strings.Repeat("x", 32), strings.Repeat("x", 32)},
+		{"spaces only", "   ", "---"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizeSessionIDPart(tc.input)
+			if got != tc.want {
+				t.Errorf("sanitizeSessionIDPart(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- Cleanup timeout tests ---
+
+func TestCleanupInactiveSessions_BackgroundTimeout(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	// Create a regular hidden session.
+	regularSession, err := tm.CreateHiddenSession("regular-hidden", "agent", "chat-1")
+	if err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	// Create a background session via ExecuteCommandInBackground.
+	bgSessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-2", "echo bg")
+	if err != nil {
+		// If PTY creation fails (e.g., in some CI environments), skip this test.
+		if strings.Contains(err.Error(), "PTY") || strings.Contains(err.Error(), "failed to create") {
+			t.Skipf("skipping: PTY creation failed: %v", err)
+		}
+		t.Fatalf("ExecuteCommandInBackground failed: %v", err)
+	}
+
+	now := time.Now()
+
+	// Set regular session to be 100ms in the past (> 50ms regular timeout, < 500ms bg timeout).
+	regularSession.mutex.Lock()
+	regularSession.LastUsed = now.Add(-100 * time.Millisecond)
+	regularSession.mutex.Unlock()
+
+	// Set background session to be 100ms in the past (> 50ms regular timeout, < 500ms bg timeout).
+	// But since it's a background session, the 500ms timeout should protect it.
+	bgSession, _ := tm.GetSession(bgSessionID)
+	bgSession.mutex.Lock()
+	bgSession.LastUsed = now.Add(-100 * time.Millisecond)
+	bgSession.mutex.Unlock()
+
+	// Cleanup with 50ms regular timeout and 500ms background timeout.
+	tm.CleanupInactiveSessions(50*time.Millisecond, 500*time.Millisecond)
+
+	// Regular hidden session should be cleaned up (100ms > 50ms).
+	_, exists := tm.GetSession("regular-hidden")
+	if exists {
+		t.Error("regular hidden session should be cleaned up after 50ms timeout (was inactive for 100ms)")
+	}
+
+	// Background session should NOT be cleaned up yet (100ms < 500ms background timeout).
+	_, exists = tm.GetSession(bgSessionID)
+	if !exists {
+		t.Error("background session should NOT be cleaned up before 500ms timeout")
+	}
+
+	// Wait for the longer timeout to elapse (total 100ms + 550ms = 650ms > 500ms).
+	time.Sleep(550 * time.Millisecond)
+
+	// Run cleanup again.
+	tm.CleanupInactiveSessions(50*time.Millisecond, 500*time.Millisecond)
+
+	// Now the background session should be cleaned up.
+	_, exists = tm.GetSession(bgSessionID)
+	if exists {
+		t.Error("background session should be cleaned up after 500ms timeout")
+	}
+}

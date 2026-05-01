@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Play, Square, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Play, Square, Terminal, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import './BackgroundTasks.css';
@@ -12,6 +12,7 @@ interface BackgroundSession {
   status: 'active' | 'inactive';
   chat_id: string;
   output_preview: string;
+  started_at: number; // Unix timestamp (seconds)
 }
 
 interface SessionsResponse {
@@ -19,8 +20,23 @@ interface SessionsResponse {
   count: number;
 }
 
-interface BackgroundTasksProps {
+export interface BackgroundTasksProps {
   onAttachSession?: (sessionId: string) => void;
+}
+
+function formatDuration(startTime: number): string {
+  if (!startTime || startTime === 0) return '';
+  const now = Date.now() / 1000;
+  const elapsed = Math.max(0, Math.floor(now - startTime));
+  if (elapsed < 60) return `${elapsed}s`;
+  if (elapsed < 3600) {
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    return `${mins}m ${secs}s`;
+  }
+  const hours = Math.floor(elapsed / 3600);
+  const mins = Math.floor((elapsed % 3600) / 60);
+  return `${hours}h ${mins}m`;
 }
 
 function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element {
@@ -28,9 +44,13 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   const [sessions, setSessions] = useState<BackgroundSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+  const isFetchingRef = useRef(false);
 
-  // Fetch sessions from the API
+  // Fetch sessions from the API (guarded against concurrent calls)
   const fetchSessions = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setIsLoading(true);
     setError(null);
     try {
@@ -39,13 +59,14 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
         throw new Error(`Failed to fetch sessions: ${response.status}`);
       }
       const data: SessionsResponse = await response.json();
-      setSessions(data.sessions || []);
+      setSessions(data?.sessions || []);
     } catch (err) {
       debugLog('[BackgroundTasks] Failed to fetch sessions:', err);
       setError(err instanceof Error ? err.message : String(err));
       setSessions([]);
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -118,33 +139,44 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     };
   }, [isExpanded, fetchSessions]);
 
-  // Also fetch when the component first mounts (to update the badge)
+  // Tick every second when expanded and has active sessions
   useEffect(() => {
-    // Fetch once on mount, but don't set up polling until expanded
-    let cancelled = false;
-    clientFetch('/api/terminal/agent-sessions')
-      .then((response) => {
-        if (cancelled) return;
-        if (response.ok) {
-          return response.json() as Promise<SessionsResponse>;
-        }
-        throw new Error(`Failed to fetch sessions: ${response.status}`);
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setSessions(data?.sessions || []);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        debugLog('[BackgroundTasks] Failed to fetch sessions on mount:', err);
-      });
+    if (!isExpanded) return;
+    const hasActive = sessions.some((s) => s.status === 'active');
+    if (!hasActive) return;
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [isExpanded, sessions]);
 
-    return () => {
-      cancelled = true;
+  // Listen for WebSocket events to auto-refresh on terminal updates
+  useEffect(() => {
+    if (!isExpanded) return;
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      // Refresh if it's a terminal-related event
+      if (
+        detail?.type === 'terminal_output' ||
+        detail?.type === 'pty_exit' ||
+        detail?.type === 'agent_session_update'
+      ) {
+        fetchSessions();
+      }
     };
-  }, []);
+    window.addEventListener('sprout:wsevent', handler as EventListener);
+    return () => window.removeEventListener('sprout:wsevent', handler as EventListener);
+  }, [isExpanded, fetchSessions]);
+
+  // Also fetch when the component first mounts (to update the badge when collapsed)
+  useEffect(() => {
+    // Skip mount fetch if already expanded (the polling effect handles it)
+    if (isExpanded) return;
+    fetchSessions();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only; isExpanded read at mount time
 
   const count = sessions.length;
+
+  // Tick is used to trigger re-renders for duration updates
+  void tick;
 
   return (
     <div className="background-tasks-container">
@@ -161,7 +193,22 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
 
       {isExpanded && (
         <div className="background-tasks-body">
-          {error && <div className="background-tasks-error">{error}</div>}
+          {error && (
+            <div className="background-tasks-error">
+              <span>{error}</span>
+              <button
+                className="background-task-btn background-task-btn-retry"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fetchSessions();
+                }}
+                title="Retry"
+                type="button"
+              >
+                <RefreshCw size={12} />
+              </button>
+            </div>
+          )}
 
           {!error && count === 0 && !isLoading && (
             <div className="background-tasks-empty">No background tasks running</div>
@@ -173,16 +220,23 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                 <div key={session.id} className="background-task-item">
                   <div className="background-task-info">
                     <div className="background-task-header-row">
-                      <span className={`background-task-status ${session.status}`} aria-label={`Status: ${session.status}`}>
+                      <span
+                        className={`background-task-status ${session.status}`}
+                        aria-label={`Status: ${session.status}`}
+                      >
                         <span className="background-task-status-dot" />
                       </span>
                       <span className="background-task-name">{session.name || session.id}</span>
                     </div>
-                    {session.output_preview && (
-                      <pre className="background-task-preview">
-                        {session.output_preview}
-                      </pre>
-                    )}
+                    <div className="background-task-meta">
+                      <span className={`background-task-status-text ${session.status}`}>
+                        {session.status === 'active' ? 'Running' : 'Exited'}
+                      </span>
+                      {session.started_at > 0 && (
+                        <span className="background-task-duration">{formatDuration(session.started_at)}</span>
+                      )}
+                    </div>
+                    {session.output_preview && <pre className="background-task-preview">{session.output_preview}</pre>}
                   </div>
                   <div className="background-task-actions">
                     <button
@@ -190,6 +244,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
                       onClick={() => attachSession(session.id, session.name)}
                       title="Attach to terminal"
                       type="button"
+                      disabled={session.status === 'inactive'}
                     >
                       <Play size={14} />
                     </button>

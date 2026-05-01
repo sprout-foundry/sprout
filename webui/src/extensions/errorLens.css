@@ -1,0 +1,39 @@
+/**
+ * Error Lens styling for CodeMirror 6.
+ *
+ * Provides additional polish for inline diagnostic message widgets.
+ * Core styles are defined via EditorView.baseTheme() in errorLens.ts;
+ * this file adds smooth transitions, user-select behavior, and print styles.
+ */
+
+/* ── Error Lens inline widgets ───────────────────────────────────── */
+
+.cm-errorLens {
+  font-family: var(--editor-font-family, 'Monaco', 'Menlo', 'Fira Code', monospace);
+  letter-spacing: 0.01em;
+  transition: opacity 0.15s ease;
+}
+
+/* ── Severity-specific border radius ─────────────────────────────── */
+
+.cm-errorLens-error,
+.cm-errorLens-warning,
+.cm-errorLens-info,
+.cm-errorLens-hint {
+  border-radius: 2px;
+}
+
+/* ── Selection behavior ──────────────────────────────────────────── */
+
+.cm-errorLens {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Print styles ────────────────────────────────────────────────── */
+
+@media print {
+  .cm-errorLens {
+    display: none;
+  }
+}

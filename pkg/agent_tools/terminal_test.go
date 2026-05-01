@@ -11,8 +11,9 @@ import (
 type mockTerminalManager struct {
 	executeCommandFunc       func(ctx context.Context, sessionID, command string) (string, int, error)
 	getOrCreateFunc          func(ctx context.Context, chatID string) (string, error)
-	executeBackgroundFunc     func(ctx context.Context, chatID, command string) (string, error)
-	getBackgroundOutputFunc   func(sessionID string) (string, error)
+	executeBackgroundFunc    func(ctx context.Context, chatID, command string) (string, error)
+	getBackgroundOutputFunc  func(sessionID string) (string, error)
+	stopBackgroundFunc       func(sessionID string) error
 }
 
 func (m *mockTerminalManager) ExecuteCommandInHidden(ctx context.Context, sessionID, command string) (string, int, error) {
@@ -41,6 +42,17 @@ func (m *mockTerminalManager) GetBackgroundOutput(sessionID string) (string, err
 		return m.getBackgroundOutputFunc(sessionID)
 	}
 	return "mock background output", nil
+}
+
+func (m *mockTerminalManager) StopBackgroundSession(sessionID string) error {
+	if m.stopBackgroundFunc != nil {
+		return m.stopBackgroundFunc(sessionID)
+	}
+	return nil
+}
+
+func (m *mockTerminalManager) IsSessionActive(sessionID string) bool {
+	return true
 }
 
 func TestWithTerminalManager(t *testing.T) {

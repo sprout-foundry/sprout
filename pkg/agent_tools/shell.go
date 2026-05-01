@@ -298,10 +298,11 @@ func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error
 		return "", err
 	}
 
-	// Check if the session is still active
-	// We check the output to see if there's a prompt waiting or if the process exited
-	// The TerminalAccess interface doesn't expose an IsActive check, so we check via output
+	// Check if the session is still active via the interface
 	status := "running"
+	if !tm.IsSessionActive(sessionID) {
+		status = "exited"
+	}
 
 	resultBytes, err := json.Marshal(map[string]string{
 		"session_id": sessionID,

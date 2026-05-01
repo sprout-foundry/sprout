@@ -26,6 +26,15 @@ type TerminalAccess interface {
 
 	// GetBackgroundOutput returns accumulated output for a background session.
 	GetBackgroundOutput(sessionID string) (output string, err error)
+
+	// StopBackgroundSession terminates a background session by session ID.
+	// Sends Ctrl+C to the PTY and closes the session. Returns an error if the
+	// session is not found or is not a background session.
+	StopBackgroundSession(sessionID string) error
+
+	// IsSessionActive checks whether a session (by ID) is still active.
+	// Returns false if the session doesn't exist or has terminated.
+	IsSessionActive(sessionID string) bool
 }
 
 // contextKey is an unexported type for context keys defined in this package.

@@ -303,3 +303,78 @@ func TestCleanupInactiveSessions_BackgroundTimeout(t *testing.T) {
 		t.Error("background session should be cleaned up after 500ms timeout")
 	}
 }
+
+// --- StopBackgroundSession tests ---
+
+func TestStopBackgroundSession_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PTY")
+	}
+
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	// Start a background session with a long-running command.
+	sessionID, err := tm.ExecuteCommandInBackground(context.Background(), "chat-1", "sleep 300")
+	if err != nil {
+		t.Fatalf("ExecuteCommandInBackground failed: %v", err)
+	}
+
+	// Verify it exists.
+	_, exists := tm.GetSession(sessionID)
+	if !exists {
+		t.Fatal("background session should exist before stopping")
+	}
+
+	// Stop it.
+	err = tm.StopBackgroundSession(sessionID)
+	if err != nil {
+		t.Fatalf("StopBackgroundSession failed: %v", err)
+	}
+
+	// Verify it no longer exists.
+	_, exists = tm.GetSession(sessionID)
+	if exists {
+		t.Error("background session should be removed after StopBackgroundSession")
+	}
+}
+
+func TestStopBackgroundSession_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	err := tm.StopBackgroundSession("nonexistent-session")
+	if err == nil {
+		t.Error("expected error for nonexistent session")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestStopBackgroundSession_NotBackgroundSession(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PTY")
+	}
+
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	// Create a regular (non-background) hidden session.
+	_, err := tm.CreateHiddenSession("regular-hidden", "agent", "chat-1")
+	if err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
+	}
+
+	// Trying to stop it as a background session should fail.
+	err = tm.StopBackgroundSession("regular-hidden")
+	if err == nil {
+		t.Error("expected error when stopping non-background session")
+	}
+	if !strings.Contains(err.Error(), "not a background session") {
+		t.Errorf("expected 'not a background session' error, got: %v", err)
+	}
+
+	// Clean up.
+	_ = tm.CloseSession("regular-hidden")
+}

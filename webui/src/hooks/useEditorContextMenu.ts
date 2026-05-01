@@ -46,16 +46,28 @@ export interface UseEditorContextMenuReturn {
   handleFindAllReferencesFromMenu: () => void;
 }
 
+export interface UseEditorContextMenuCallbacks {
+  onGoToDefinition?: () => void;
+  onFindAllReferences?: () => void;
+}
+
 /**
  * Hook that manages context menu state and handlers.
  *
  * @param buffer - Current buffer
  * @param viewRef - Ref to CodeMirror EditorView
+ * @param callbacks - Optional callbacks for semantic actions
  */
 export function useEditorContextMenu(
   buffer: EditorBuffer | null | undefined,
   viewRef: React.MutableRefObject<EditorView | null>,
+  callbacks?: UseEditorContextMenuCallbacks,
 ): UseEditorContextMenuReturn {
+  // ---------------------------------------------------------------------------
+  // Destructure callbacks for stable dependency arrays
+  // ---------------------------------------------------------------------------
+  const { onGoToDefinition, onFindAllReferences } = callbacks ?? {};
+
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
@@ -140,15 +152,13 @@ export function useEditorContextMenu(
 
   const handleGoToDefinitionFromMenu = useCallback(() => {
     hideContextMenu();
-    // Dispatch event to trigger go-to-definition via EditorPane
-    document.dispatchEvent(new CustomEvent('editor-go-to-definition-from-menu'));
-  }, [hideContextMenu]);
+    onGoToDefinition?.();
+  }, [hideContextMenu, onGoToDefinition]);
 
   const handleFindAllReferencesFromMenu = useCallback(() => {
     hideContextMenu();
-    // Dispatch event to trigger find-all-references via EditorPane
-    document.dispatchEvent(new CustomEvent('editor-find-all-references-from-menu'));
-  }, [hideContextMenu]);
+    onFindAllReferences?.();
+  }, [hideContextMenu, onFindAllReferences]);
 
   // ---------------------------------------------------------------------------
   // Workspace root fetch

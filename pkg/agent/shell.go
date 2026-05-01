@@ -209,6 +209,20 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string) (st
 	return result, nil
 }
 
+// stopBackgroundSession terminates a background shell session by session ID.
+func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
+	tm := a.terminalManager
+	if tm == nil {
+		return "", fmt.Errorf("background session management requires WebUI terminal manager")
+	}
+
+	if err := tm.StopBackgroundSession(sessionID); err != nil {
+		return "", fmt.Errorf("failed to stop background session %s: %w", sessionID, err)
+	}
+
+	return fmt.Sprintf("Background session %s stopped successfully", sessionID), nil
+}
+
 // executeShellCommandBackground executes a shell command in a background hidden PTY session
 // and returns immediately with the session ID. This is for long-running commands
 // that should not block the agent.

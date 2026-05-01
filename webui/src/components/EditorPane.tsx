@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { EditorView as CMEditorView } from '@codemirror/view';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -164,9 +164,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     },
     toggleLinkedScroll,
     handleFindAllReferences: semantic.handleFindAllReferences,
+    onGoToWorkspaceSymbol: () => semantic.setShowGoToWorkspaceSymbol(true),
   });
 
-  const contextMenu = useEditorContextMenu(buffer, viewRef);
+  const contextMenuCallbacks = useMemo(() => ({
+    onGoToDefinition: semantic.handleGoToDefinition,
+    onFindAllReferences: semantic.handleFindAllReferences,
+  }), [semantic.handleGoToDefinition, semantic.handleFindAllReferences]);
+
+  const contextMenu = useEditorContextMenu(buffer, viewRef, contextMenuCallbacks);
 
   const lsp = useEditorLSP(buffer, setBufferLanguageOverride);
 

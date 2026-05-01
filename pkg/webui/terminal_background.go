@@ -115,6 +115,50 @@ func (tm *TerminalManager) GetBackgroundOutput(sessionID string) (string, error)
 	return output, nil
 }
 
+// StopBackgroundSession terminates a background session by sending Ctrl+C to the PTY
+// and then closing the session. Returns an error if the session is not found or is
+// not a background session.
+func (tm *TerminalManager) StopBackgroundSession(sessionID string) error {
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		return fmt.Errorf("session %s not found: %w", sessionID, ErrSessionNotFound)
+	}
+
+	// Verify it's a background session
+	session.mutex.RLock()
+	isBackground := session.IsBackground
+	session.mutex.RUnlock()
+
+	if !isBackground {
+		return fmt.Errorf("session %s is not a background session: %w", sessionID, ErrNotBackgroundSession)
+	}
+
+	// Send Ctrl+C to interrupt any running command (best-effort).
+	session.mutex.RLock()
+	if session.Pty != nil {
+		_, _ = session.Pty.Write([]byte{3}) // Ctrl+C
+	}
+	session.mutex.RUnlock()
+
+	// Brief pause to let the signal propagate before closing.
+	time.Sleep(50 * time.Millisecond)
+
+	// Close the session entirely.
+	return tm.CloseSession(sessionID)
+}
+
+// IsSessionActive checks whether a session is still active.
+func (tm *TerminalManager) IsSessionActive(sessionID string) bool {
+	session, exists := tm.GetSession(sessionID)
+	if !exists {
+		return false
+	}
+	session.mutex.RLock()
+	active := session.Active
+	session.mutex.RUnlock()
+	return active
+}
+
 // extractCommandPrefix extracts the first word from a command (up to the first space or special character).
 // Used for generating readable session IDs for background commands.
 func extractCommandPrefix(command string) string {

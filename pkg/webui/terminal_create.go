@@ -2,6 +2,7 @@ package webui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +16,11 @@ import (
 )
 
 var validSessionID = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
+
+// ErrSessionExists is returned by CreateSession and CreateHiddenSession when a
+// session with the requested ID already exists. Callers can use errors.Is to
+// detect this condition for idempotent get-or-create patterns.
+var ErrSessionExists = errors.New("session already exists")
 
 func validateSessionID(id string) error {
 	if id == "" {
@@ -42,7 +48,7 @@ func (tm *TerminalManager) CreateSession(sessionID string, shellOverride ...stri
 	defer tm.mutex.Unlock()
 
 	if _, exists := tm.sessions[sessionID]; exists {
-		return nil, fmt.Errorf("session %s already exists", sessionID)
+		return nil, fmt.Errorf("%w: %s", ErrSessionExists, sessionID)
 	}
 
 	var override string
@@ -326,7 +332,7 @@ func (tm *TerminalManager) CreateHiddenSession(id, owner, chatID string, opts ..
 
 	// Check for duplicate session ID while holding the lock.
 	if _, exists := tm.sessions[id]; exists {
-		return nil, fmt.Errorf("session %s already exists", id)
+		return nil, fmt.Errorf("%w: %s", ErrSessionExists, id)
 	}
 
 	// Panic recovery: if option application panics, clean up the PTY goroutine

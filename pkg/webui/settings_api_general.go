@@ -609,6 +609,37 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 		cfg = *configuration.NewConfig()
 	}
 
+	// Map session-style provider/model shortcuts to persisted config fields.
+	// The frontend sends "provider" and "model" regardless of layer, but
+	// applyPartialSettings expects "last_used_provider" and "provider_models".
+	if p, ok := incoming["provider"].(string); ok && p != "" {
+		incoming["last_used_provider"] = p
+		delete(incoming, "provider")
+	}
+	if m, ok := incoming["model"].(string); ok && m != "" {
+		// Determine which provider this model belongs to.
+		provider := ""
+		if p, ok := incoming["last_used_provider"].(string); ok && p != "" {
+			provider = p
+		} else if cfg.LastUsedProvider != "" {
+			provider = cfg.LastUsedProvider
+		}
+		if provider != "" {
+			if cfg.ProviderModels == nil {
+				cfg.ProviderModels = make(map[string]string)
+			}
+			// Stash existing provider_models into incoming so applyPartialSettings
+			// preserves all entries (it does a full map replacement).
+			pm := make(map[string]interface{}, len(cfg.ProviderModels))
+			for k, v := range cfg.ProviderModels {
+				pm[k] = v
+			}
+			pm[provider] = m
+			incoming["provider_models"] = pm
+		}
+		delete(incoming, "model")
+	}
+
 	// Apply patch and collect unknown keys
 	unknownKeys, err := applyPartialSettings(&cfg, incoming)
 	if err != nil {

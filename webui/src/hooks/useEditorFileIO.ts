@@ -509,7 +509,7 @@ export function useEditorFileIO(
     if (loadFileRef.current) {
       loadFileRef.current(buffer.file.path);
     }
-  }, [buffer, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buffer?.id, buffer?.file?.path, buffer?.kind, buffer?.content, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── External file change listener ──────────────────────────────
   // Shows conflict dialog when the buffer has unsaved changes and the

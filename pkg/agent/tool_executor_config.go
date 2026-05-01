@@ -25,9 +25,13 @@ func getToolTimeout(toolName string) time.Duration {
 	}
 
 	// Tool-specific defaults
-	// Subagents can take a long time for large file operations
 	if isSubagentTool(toolName) {
 		return 30 * time.Minute
+	}
+
+	// Shell commands are fast when working correctly; long timeout just masks failures.
+	if toolName == "shell_command" {
+		return 2 * time.Minute
 	}
 
 	// Default timeout for regular tools

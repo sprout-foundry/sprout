@@ -167,23 +167,11 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				if afterPrefixStart < len(bufBytes) {
 					nextChar := bufBytes[afterPrefixStart]
 					if nextChar >= '0' && nextChar <= '9' {
-						// Verify sentinel is at the start of a line (defense-in-depth against
-						// coincidental matches in command output that happen to contain the marker
-						// string followed by digits). The sentinel is emitted by our echo command
-						// on its own line, so it must be preceded by \n or be at buffer start.
-						if idx > 0 && bufBytes[idx-1] != '\n' && bufBytes[idx-1] != '\r' {
-							// Not at line start — skip this match and continue searching
-							remaining := bufBytes[idx+1:]
-							nextIdx := bytes.Index(remaining, markerStr)
-							if nextIdx >= 0 {
-								idx = idx + 1 + nextIdx
-							} else {
-								idx = -1
-							}
-							continue
-						}
-
 						// Found actual sentinel output (not PTY echo). Parse exit code.
+						// Note: We do NOT require the sentinel to be at line start because
+						// shells (especially zsh) may emit OSC/title escape sequences right
+						// before the sentinel without a newline separator. The 128-bit random
+						// marker makes false positives astronomically unlikely regardless.
 						var codeStr []byte
 						for j := afterPrefixStart; j < len(bufBytes); j++ {
 							b := bufBytes[j]

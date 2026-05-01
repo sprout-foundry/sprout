@@ -105,6 +105,10 @@ type Agent struct {
 
 	// Trace session for dataset collection
 	traceSession interface{}
+
+	// TerminalManager provides access to hidden PTY sessions for WebUI mode.
+	// When nil (CLI mode), shell commands use os/exec unchanged.
+	terminalManager tools.TerminalAccess
 }
 
 func isDebugEnvEnabled() bool {
@@ -801,4 +805,16 @@ func (a *Agent) GetAllShellCommandHistory() map[string]*ShellCommandResult {
 		result[k] = v
 	}
 	return result
+}
+
+// SetTerminalManager sets the terminal manager for WebUI mode.
+// When set (non-nil), shell commands can access hidden PTY sessions.
+// When nil (CLI mode), shell commands use os/exec unchanged.
+func (a *Agent) SetTerminalManager(tm tools.TerminalAccess) {
+	a.terminalManager = tm
+}
+
+// GetTerminalManager returns the terminal manager (may be nil in CLI mode).
+func (a *Agent) GetTerminalManager() tools.TerminalAccess {
+	return a.terminalManager
 }

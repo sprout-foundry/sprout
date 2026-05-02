@@ -125,10 +125,16 @@ Foundry reverse-proxies to the container's port 56000, including WebSocket upgra
 
 **Problem:** The sprout webui's `CloudEndpointRegistry` and Foundry's Service Worker have **independent route tables** that can drift. Adding an endpoint in one repo doesn't update the other.
 
-**Action:** 
-- Add a test/lint in sprout that catches unclassified API paths
-- Document the sync requirement between repos
-- Consider a shared endpoint classification that both repos consume
+**Solution (implemented):**
+- `make export-endpoint-manifest` generates `dist/endpoint-manifest.json` from the CloudEndpointRegistry
+- This is the single source of truth — 103 endpoints with categories, methods, and synthetic responses
+- Foundry imports this manifest at build time to generate its SW route table
+- Drift is structurally impossible when the import is wired
+
+**Remaining work:**
+- Wire `endpoint-manifest.json` import into Foundry's `sprout-sw.ts` build process
+- Add a CI check that fails if Foundry's SW route table diverges from the manifest
+- Consider a shared npm package (`@sprout/endpoint-registry`) for type-safe imports
 
 ### R5: WebSocket Routing
 

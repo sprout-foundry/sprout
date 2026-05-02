@@ -1,1932 +1,276 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import './SettingsPanel.css';
-import { ApiService, type SproutSettings, type ProviderOption } from '../services/api';
-import { useNotifications } from '../contexts/NotificationContext';
-import { debugLog } from '../utils/log';
-import { Pencil, Plus, Trash2, Lock, Cog } from 'lucide-react';
+import type { SproutSettings } from '../services/api';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
-/* ─── Types ──────────────────────────────────────────────────── */
+// Import from settings/ subdirectory
+import { SUB_TABS, type EditorPreferences, type SettingsPanelProps } from './settings/types';
+import { useSettingsState } from './settings/useSettingsState';
+import { useSettingsMutation } from './settings/useSettingsMutation';
+import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
 
-interface SubagentTypeEntry {
-  id: string;
-  name: string;
-  description: string;
-  provider: string;
-  model: string;
-  system_prompt: string;
-  system_prompt_text?: string;
-  allowed_tools: string[];
-  aliases: string[];
-  enabled: boolean;
-}
-
-type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
-
-interface EditorPreferences {
-  autoSaveEnabled: boolean;
-  whitespaceRenderingMode: 'none' | 'boundary' | 'all';
-  formatOnSaveEnabled?: boolean;
-}
-
-interface SettingsPanelProps {
-  settings: SproutSettings | null;
-  onSettingsChanged: (settings: SproutSettings) => void;
-  /** Callback to open the provider setup/onboarding dialog */
-  onRequestProviderSetup?: () => void;
-  editorPreferences?: EditorPreferences | null;
-  onEditorPreferenceChanged?: (key: string, value: unknown) => void;
-}
-
-/* ─── Sub-tab definitions ────────────────────────────────────── */
-
-const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
-  { id: 'general', label: 'General' },
-  { id: 'security', label: 'Security' },
-  { id: 'credentials', label: 'Credentials' },
-  { id: 'performance', label: 'Perf' },
-  { id: 'subagents', label: 'Subagents' },
-  { id: 'commit-review', label: 'Commit & Review' },
-  { id: 'pdf-ocr', label: 'OCR' },
-  { id: 'mcp', label: 'MCP' },
-  { id: 'providers', label: 'Providers' },
-  { id: 'skills', label: 'Skills' },
-];
-
-/* ─── Helpers ────────────────────────────────────────────────── */
-
-/** Get a nested value from an object using dot-notation key */
-function getNestedValue(obj: Record<string, unknown>, key: string): unknown {
-  return key
-    .split('.')
-    .reduce(
-      (o: unknown, k: string) =>
-        o && typeof o === 'object' && k in (o as Record<string, unknown>) ? (o as Record<string, unknown>)[k] : '',
-      obj,
-    );
-}
-
-/** Set a nested value in an object using dot-notation key (immutable) */
-function setNestedValue(obj: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
-  const parts = key.split('.');
-  const result = { ...obj };
-  let current: Record<string, unknown> = result;
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (current[parts[i]] === undefined || typeof current[parts[i]] !== 'object') {
-      current[parts[i]] = {};
-    } else {
-      current[parts[i]] = { ...(current[parts[i]] as Record<string, unknown>) };
-    }
-    current = current[parts[i]] as Record<string, unknown>;
-  }
-  current[parts[parts.length - 1]] = value;
-  return result;
-}
+// Import tab sub-components
+import GeneralSettingsTab from './settings/GeneralSettingsTab';
+import SecuritySettingsTab from './settings/SecuritySettingsTab';
+import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
+import OcrSettingsTab from './settings/OcrSettingsTab';
+import SkillsSettingsTab from './settings/SkillsSettingsTab';
+import SubagentSettingsTab from './settings/SubagentSettingsTab';
+import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
+import MCPSettingsTab from './settings/MCPSettingsTab';
+import ProviderSettingsTab from './settings/ProviderSettingsTab';
 
 /* ─── Component ──────────────────────────────────────────────── */
 
-function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, editorPreferences, onEditorPreferenceChanged }: SettingsPanelProps): JSX.Element {
-  const [activeSubTab, setActiveSubTab] = useState<SettingsSubTab>('general');
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [textDrafts, setTextDrafts] = useState<Record<string, string>>({});
-
-  // Config view layer: session (default), workspace, global
-  const [configViewLayer, setConfigViewLayer] = useState<'session' | 'workspace' | 'global'>('session');
-  const [layerLoading, setLayerLoading] = useState<string | null>(null);
-  const [layerData, setLayerData] = useState<Record<string, any> | null>(null);
-  const [layerError, setLayerError] = useState<string | null>(null);
-
-  // Ref so render helpers can read the current display settings without prop changes
-  const displaySettingsRef = useRef<SproutSettings | null>(null);
-
-  // State to guard the "Create from global" button from double-clicks
-  const [creatingWorkspaceConfig, setCreatingWorkspaceConfig] = useState(false);
-
-  // Provenance sources: maps setting key → "global"|"workspace"|"session"
-  const [provenanceSources, setProvenanceSources] = useState<Record<string, string>>({});
-
-  // Use the shared notification system instead of local toasts
-  const { addNotification } = useNotifications();
-
-  // MCP / Provider form state
-  const [editingServer, setEditingServer] = useState<{
-    mode: 'add' | 'edit';
-    originalName?: string;
-  } | null>(null);
-  const [serverName, setServerName] = useState('');
-  const [serverCommand, setServerCommand] = useState('');
-  const [serverArgs, setServerArgs] = useState('');
-  const [serverEnvVars, setServerEnvVars] = useState<Array<{ key: string; value: string }>>([]);
-  const [newEnvKey, setNewEnvKey] = useState('');
-  const [newEnvValue, setNewEnvValue] = useState('');
-
-  // Credential management state
-  const [credentialServer, setCredentialServer] = useState<string | null>(null);
-  const [credentialEntries, setCredentialEntries] = useState<Array<{ key: string; value: string; status: string }>>([]);
-  const [credentialLoading, setCredentialLoading] = useState(false);
-  const [newCredentialKey, setNewCredentialKey] = useState('');
-  const [newCredentialValue, setNewCredentialValue] = useState('');
-
-  const [editingProvider, setEditingProvider] = useState<{
-    mode: 'add' | 'edit';
-    originalName?: string;
-  } | null>(null);
-  const [providerName, setProviderName] = useState('');
-  const [providerApiBase, setProviderApiBase] = useState('');
-  const [providerModelName, setProviderModelName] = useState('');
-  const [providerContextSize, setProviderContextSize] = useState(32768);
-  const [providerEnvVar, setProviderEnvVar] = useState('');
-  const [providerSupportsVision, setProviderSupportsVision] = useState(false);
-  const [providerVisionModel, setProviderVisionModel] = useState('');
-  const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
-
-  // Subagent providers/models for dropdowns
-  const [subagentProviders, setSubagentProviders] = useState<ProviderOption[]>([]);
-  const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeEntry>>({});
-  const [subagentSavingPersona, setSubagentSavingPersona] = useState<string | null>(null);
-
-  // Current provider info for the Providers tab
-  const [currentProviderInfo, setCurrentProviderInfo] = useState<{
-    provider: string;
-    model: string;
-    hasCredential: boolean;
-  } | null>(null);
-  const [loadingProviderInfo, setLoadingProviderInfo] = useState(false);
-
-  // Commit & Review providers state
-  const [commitReviewProviders, setCommitReviewProviders] = useState<ProviderOption[]>([]);
-
-  // API service instance
-  const api = ApiService.getInstance();
-
-  // Fetch current provider info on mount
-  const textSaveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  // Keep a ref to settings for async mutation callbacks.
-  const settingsRef = useRef(settings);
+function SettingsPanel({
+  settings,
+  onSettingsChanged,
+  onRequestProviderSetup,
+  editorPreferences,
+  onEditorPreferenceChanged,
+}: SettingsPanelProps): JSX.Element {
+  // Track settings ref for async mutation callbacks
+  const settingsRef = useRef<SproutSettings | null>(settings);
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
 
-  useEffect(() => {
-    if (!settings) return;
+  // Use custom hooks for state and mutations
+  const state = useSettingsState(settings, onSettingsChanged, onRequestProviderSetup);
+  const mutations = useSettingsMutation({
+    settings,
+    onSettingsChanged,
+    addNotification: state.addNotification,
+    configViewLayer: state.configViewLayer,
+    api: state.api,
+    setProvenanceSources: state.setProvenanceSources,
+    // MCP server state
+    editingServer: state.editingServer,
+    setEditingServer: state.setEditingServer,
+    serverName: state.serverName,
+    setServerName: state.setServerName,
+    serverCommand: state.serverCommand,
+    setServerCommand: state.setServerCommand,
+    serverArgs: state.serverArgs,
+    setServerArgs: state.setServerArgs,
+    serverEnvVars: state.serverEnvVars,
+    setServerEnvVars: state.setServerEnvVars,
+    newEnvKey: state.newEnvKey,
+    setNewEnvKey: state.setNewEnvKey,
+    newEnvValue: state.newEnvValue,
+    setNewEnvValue: state.setNewEnvValue,
+    // Credentials
+    credentialServer: state.credentialServer,
+    setCredentialServer: state.setCredentialServer,
+    credentialEntries: state.credentialEntries,
+    setCredentialEntries: state.setCredentialEntries,
+    credentialLoading: state.credentialLoading,
+    setCredentialLoading: state.setCredentialLoading,
+    newCredentialKey: state.newCredentialKey,
+    setNewCredentialKey: state.setNewCredentialKey,
+    newCredentialValue: state.newCredentialValue,
+    setNewCredentialValue: state.setNewCredentialValue,
+    // Provider form
+    editingProvider: state.editingProvider,
+    setEditingProvider: state.setEditingProvider,
+    providerName: state.providerName,
+    setProviderName: state.setProviderName,
+    providerApiBase: state.providerApiBase,
+    setProviderApiBase: state.setProviderApiBase,
+    providerModelName: state.providerModelName,
+    setProviderModelName: state.setProviderModelName,
+    providerContextSize: state.providerContextSize,
+    setProviderContextSize: state.setProviderContextSize,
+    providerEnvVar: state.providerEnvVar,
+    setProviderEnvVar: state.setProviderEnvVar,
+    providerSupportsVision: state.providerSupportsVision,
+    setProviderSupportsVision: state.setProviderSupportsVision,
+    providerVisionModel: state.providerVisionModel,
+    setProviderVisionModel: state.setProviderVisionModel,
+    providerModelContextSizes: state.providerModelContextSizes,
+    setProviderModelContextSizes: state.setProviderModelContextSizes,
+    // Refs and workspace
+    settingsRef,
+    creatingWorkspaceConfig: state.creatingWorkspaceConfig,
+    setCreatingWorkspaceConfig: state.setCreatingWorkspaceConfig,
+    setLayerData: state.setLayerData,
+  });
 
-    setTextDrafts((prev) => {
-      let next = prev;
-      let changed = false;
+  // Use field renderers hook
+  const renderers = useSettingsFieldRenderers({
+    displaySettingsRef: state.displaySettingsRef,
+    settings,
+    textDrafts: state.textDrafts,
+    setTextDrafts: state.setTextDrafts,
+    textSaveTimersRef: state.textSaveTimersRef,
+    updateSetting: mutations.updateSetting,
+    savingKey: mutations.savingKey,
+    provenanceSources: state.provenanceSources,
+    configViewLayer: state.configViewLayer,
+  });
 
-      Object.entries(prev).forEach(([key, draftValue]) => {
-        const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, key) || '');
-        if (draftValue === persistedValue) {
-          if (next === prev) next = { ...prev };
-          delete next[key];
-          changed = true;
-        }
-      });
+  // Determine which settings to display based on layer
+  const activeSettings: SproutSettings | null =
+    state.configViewLayer !== 'session' && state.layerData
+      ? (state.layerData as unknown as SproutSettings)
+      : settings;
 
-      return changed ? next : prev;
-    });
-  }, [settings]);
+  // Update the display ref with active settings
+  state.displaySettingsRef.current = activeSettings;
 
-  // Fetch config layer data when layer changes
-  useEffect(() => {
-    if (configViewLayer !== 'session') {
-      // workspace and global layers are fetched from the backend
-      let cancelled = false;
-      setLayerLoading(configViewLayer);
-      setLayerError(null);
-      api.getSettingsLayer(configViewLayer)
-        .then((data) => {
-          if (cancelled) return;
-          setLayerData(data);
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          console.error(`[SettingsPanel] failed to load ${configViewLayer} config:`, err);
-          setLayerError(`Failed to load ${configViewLayer} config`);
-          setLayerData(null);
-        })
-        .finally(() => {
-          if (!cancelled) setLayerLoading(null);
-        });
-      return () => { cancelled = true; };
-    } else {
-      // Session layer: show overrides from the effective config diff
-      setLayerData(null);
-      setLayerError(null);
-      setLayerLoading(null);
-      // Fetch provenance for badge display (with cancellation guard)
-      let cancelled = false;
-      api.getSettingsProvenance()
-        .then((data) => { if (!cancelled) setProvenanceSources(data.sources || {}); })
-        .catch(() => { if (!cancelled) setProvenanceSources({}); });
-      return () => { cancelled = true; };
-    }
-  }, [activeSubTab, configViewLayer]);
-
-  // Fetch subagent types + providers when subagents tab is activated
-  useEffect(() => {
-    if (activeSubTab !== 'subagents') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await api.getSubagentTypes();
-        if (cancelled) return;
-        setSubagentProviders((data.available_providers || []) as ProviderOption[]);
-        setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeEntry>);
-      } catch (err) {
-        debugLog('[SettingsPanel] failed to load subagent types:', err);
-        // Silently fail — dropdowns will just be empty
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSubTab, api]);
-
-  // Fetch providers for commit & review when tab is activated
-  useEffect(() => {
-    if (activeSubTab !== 'commit-review') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await api.getSubagentTypes();
-        if (cancelled) return;
-        setCommitReviewProviders((data.available_providers || []) as ProviderOption[]);
-      } catch (err) {
-        debugLog('[SettingsPanel] failed to load commit-review providers:', err);
-        // Silently fail — dropdowns will just be empty
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSubTab, api]);
-
-  // Fetch current provider info when providers tab is activated
-  useEffect(() => {
-    if (activeSubTab !== 'providers') return;
-    let cancelled = false;
-    setLoadingProviderInfo(true);
-    (async () => {
-      try {
-        const status = await api.getOnboardingStatus();
-        if (cancelled) return;
-        // Find provider entry to check if credential exists
-        const providerEntry = (status.providers || []).find((p) => p.id === status.current_provider);
-        setCurrentProviderInfo({
-          provider: status.current_provider,
-          model: status.current_model,
-          hasCredential: providerEntry?.has_credential || false,
-        });
-      } catch (err) {
-        debugLog('[SettingsPanel] failed to load provider info:', err);
-        // Keep null on error
-      } finally {
-        if (!cancelled) setLoadingProviderInfo(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSubTab, api]);
-
-  /* ─── Settings mutation helpers ──────────────────────────── */
-
-  /**
-   * Update a top-level or deeply nested setting.
-   * Optimistically updates local state, then persists via API.
-   */
-  const updateSetting = useCallback(
-    async (keyOrPath: string, value: unknown) => {
-      const current = settingsRef.current;
-      if (!current) return;
-
-      const prev = { ...current };
-      setSavingKey(keyOrPath);
-
-      try {
-        const updated = setNestedValue(
-          current as unknown as Record<string, unknown>,
-          keyOrPath,
-          value,
-        ) as unknown as SproutSettings;
-        onSettingsChanged(updated);
-
-        // Use the current configViewLayer when not editing session
-        let layer: 'session' | 'workspace' | 'global' | undefined;
-        if (configViewLayer !== 'session') {
-          layer = configViewLayer;
-        }
-        await api.updateSettings({ [keyOrPath]: value }, layer);
-        addNotification('success', 'Settings', 'Saved', 3000);
-        // Refresh provenance badges after save (they may change due to layer promotion)
-        if (configViewLayer === 'session') {
-          api.getSettingsProvenance()
-            .then((data) => setProvenanceSources(data.sources || {}))
-            .catch(() => { /* keep current badges */ });
-        }
-      } catch (err) {
-        debugLog('[SettingsPanel] failed to save setting:', err);
-        onSettingsChanged(prev);
-        addNotification('error', 'Settings', 'Save failed', 5000);
-      } finally {
-        setSavingKey(null);
-      }
-    },
-    [onSettingsChanged, api, addNotification, configViewLayer],
-  );
-
-  /* ─── Field render helpers ──────────────────────────────── */
-
-  /** Renders a small badge showing which config layer a setting comes from.
-   *  Only shown when viewing the effective (session) config. */
-  const renderProvenanceBadge = (settingKey: string) => {
-    const source = provenanceSources[settingKey];
-    if (!source || configViewLayer !== 'session') return null;
-    const colors: Record<string, string> = {
-      session: 'var(--accent-primary, #4a9eff)',
-      workspace: 'var(--accent-warning, #f0ad4e)',
-      global: 'var(--text-tertiary, #888)',
-    };
-    return (
-      <span
-        title={`This value comes from your ${source} configuration`}
-        style={{
-          fontSize: 9,
-          padding: '1px 4px',
-          borderRadius: 3,
-          marginLeft: 6,
-          backgroundColor: `color-mix(in srgb, ${colors[source] || colors.global} 15%, transparent)`,
-          color: colors[source] || colors.global,
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          verticalAlign: 'middle',
-        }}
-      >
-        {source}
-      </span>
-    );
-  };
-
-  const renderToggle = (settingKey: string, label: string) => {
-    const current = displaySettingsRef.current ?? settings;
-    if (!current) return null;
-    const checked = !!getNestedValue(current as unknown as Record<string, unknown>, settingKey);
-    return (
-      <label className="styled-toggle">
-        <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
-        <span className="toggle-track" />
-        <span className="toggle-label">{label}{renderProvenanceBadge(settingKey)}</span>
-      </label>
-    );
-  };
-
-  const renderSelect = (settingKey: string, label: string, options: string[]) => {
-    const current = displaySettingsRef.current ?? settings;
-    if (!current) return null;
-    const value = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
-    return (
-      <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
-        <select
-          id={`setting-${settingKey}`}
-          value={value}
-          onChange={(e) => updateSetting(settingKey, e.target.value)}
-          className="styled-select"
-        >
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  };
-
-  const renderNumberInput = (settingKey: string, label: string, min?: number, max?: number, step = 1) => {
-    const current = displaySettingsRef.current ?? settings;
-    if (!current) return null;
-    const value = getNestedValue(current as unknown as Record<string, unknown>, settingKey);
-    return (
-      <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
-        <input
-          id={`setting-${settingKey}`}
-          type="number"
-          className="styled-input config-row-input"
-          value={String(value ?? '')}
-          min={min}
-          max={max}
-          step={step}
-          onChange={(e) => {
-            const v = e.target.value === '' ? 0 : Number(e.target.value);
-            updateSetting(settingKey, v);
-          }}
-        />
-      </div>
-    );
-  };
-
-  const renderTextInput = (settingKey: string, label: string, placeholder?: string) => {
-    const current = displaySettingsRef.current ?? settings;
-    if (!current) return null;
-    const persistedValue = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
-    const value = textDrafts[settingKey] ?? persistedValue;
-    return (
-      <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
-        <input
-          id={`setting-${settingKey}`}
-          type="text"
-          className="styled-input"
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => {
-            const nextValue = e.target.value;
-            setTextDrafts((prev) => ({ ...prev, [settingKey]: nextValue }));
-
-            if (textSaveTimersRef.current[settingKey]) {
-              clearTimeout(textSaveTimersRef.current[settingKey]);
-            }
-
-            textSaveTimersRef.current[settingKey] = setTimeout(() => {
-              delete textSaveTimersRef.current[settingKey];
-              void updateSetting(settingKey, nextValue);
-            }, 250);
-          }}
-          onBlur={() => {
-            if (textSaveTimersRef.current[settingKey]) {
-              clearTimeout(textSaveTimersRef.current[settingKey]);
-              delete textSaveTimersRef.current[settingKey];
-            }
-
-            const draftValue = textDrafts[settingKey];
-            if (draftValue !== undefined && draftValue !== persistedValue) {
-              void updateSetting(settingKey, draftValue);
-            }
-          }}
-        />
-      </div>
-    );
-  };
-
-  const renderTextareaInput = (
-    settingKey: string,
-    label: string,
-    placeholder?: string,
-    rows = 10,
-    helpText?: string,
-  ) => {
-    const current = displaySettingsRef.current ?? settings;
-    if (!current) return null;
-    const persistedValue = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
-    const value = textDrafts[settingKey] ?? persistedValue;
-    return (
-      <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
-        <textarea
-          id={`setting-${settingKey}`}
-          className="styled-input styled-textarea"
-          value={value}
-          rows={rows}
-          placeholder={placeholder}
-          onChange={(e) => {
-            const nextValue = e.target.value;
-            setTextDrafts((prev) => ({ ...prev, [settingKey]: nextValue }));
-
-            if (textSaveTimersRef.current[settingKey]) {
-              clearTimeout(textSaveTimersRef.current[settingKey]);
-            }
-
-            textSaveTimersRef.current[settingKey] = setTimeout(() => {
-              delete textSaveTimersRef.current[settingKey];
-              void updateSetting(settingKey, nextValue);
-            }, 400);
-          }}
-          onBlur={() => {
-            if (textSaveTimersRef.current[settingKey]) {
-              clearTimeout(textSaveTimersRef.current[settingKey]);
-              delete textSaveTimersRef.current[settingKey];
-            }
-
-            const draftValue = textDrafts[settingKey];
-            if (draftValue !== undefined && draftValue !== persistedValue) {
-              void updateSetting(settingKey, draftValue);
-            }
-          }}
-        />
-        {helpText && <div className="config-help">{helpText}</div>}
-      </div>
-    );
-  };
-
-  /* ─── Saving indicator ─────────────────────────────────── */
-
-  const renderSaving = () => {
-    if (!savingKey) return null;
-    return (
-      <span className="settings-saving">
-        <span className="saving-dot" />
-        Saving…
-      </span>
-    );
-  };
-
-  /* ─── MCP server CRUD ──────────────────────────────────── */
-
-  const resetServerForm = () => {
-    setEditingServer(null);
-    setServerName('');
-    setServerCommand('');
-    setServerArgs('');
-    setServerEnvVars([]);
-    setNewEnvKey('');
-    setNewEnvValue('');
-  };
-
-  const handleAddServer = async () => {
-    if (!serverName.trim()) return;
-    const server: Record<string, unknown> = { command: serverCommand };
-    if (serverArgs.trim()) {
-      server.args = serverArgs.split(/\s+/).filter(Boolean);
-    }
-    if (serverEnvVars.length > 0) {
-      const env: Record<string, string> = {};
-      for (const ev of serverEnvVars) {
-        if (ev.key.trim() && ev.value !== '{{stored}}') env[ev.key.trim()] = ev.value;
-      }
-      if (Object.keys(env).length > 0) server.env = env;
-    }
-    setSavingKey('mcp-server-add');
-    try {
-      await api.addMCPServer({ name: serverName.trim(), ...server });
-      // Refresh settings
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Server added', 3000);
-      resetServerForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to add MCP server:', err);
-      addNotification('error', 'Settings', 'Failed to add server', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleUpdateServer = async () => {
-    if (!editingServer?.originalName || !serverName.trim()) return;
-    const server: Record<string, unknown> = { command: serverCommand };
-    if (serverArgs.trim()) {
-      server.args = serverArgs.split(/\s+/).filter(Boolean);
-    }
-    if (serverEnvVars.length > 0) {
-      const env: Record<string, string> = {};
-      for (const ev of serverEnvVars) {
-        if (ev.key.trim() && ev.value !== '{{stored}}') env[ev.key.trim()] = ev.value;
-      }
-      if (Object.keys(env).length > 0) server.env = env;
-    }
-    setSavingKey('mcp-server-update');
-    try {
-      await api.updateMCPServer(editingServer.originalName, { name: serverName.trim(), ...server });
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Server updated', 3000);
-      resetServerForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to update MCP server:', err);
-      addNotification('error', 'Settings', 'Failed to update server', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleDeleteServer = async (name: string) => {
-    setSavingKey('mcp-server-delete');
-    try {
-      await api.deleteMCPServer(name);
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Server deleted', 3000);
-      if (editingServer?.originalName === name) resetServerForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to delete MCP server:', err);
-      addNotification('error', 'Settings', 'Failed to delete server', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  /* ─── MCP credential management ───────────────────────── */
-
-  const resetCredentialForm = () => {
-    setCredentialServer(null);
-    setCredentialEntries([]);
-    setCredentialLoading(false);
-    setNewCredentialKey('');
-    setNewCredentialValue('');
-  };
-
-  const handleLoadCredentials = async (credentialServerName: string) => {
-    setCredentialServer(credentialServerName);
-    setCredentialLoading(true);
-    setCredentialEntries([]);
-    setNewCredentialKey('');
-    setNewCredentialValue('');
-    try {
-      const resp = await api.getMCPServerCredentials(credentialServerName);
-      const entries = Object.entries(resp.credentials || {}).map(([key, info]) => ({
-        key,
-        value: '',
-        status: info.status === 'set' ? 'set' : 'missing',
-      }));
-      setCredentialEntries(entries);
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to load credentials:', err);
-      addNotification('error', 'Settings', 'Failed to load credentials', 5000);
-      resetCredentialForm();
-    } finally {
-      setCredentialLoading(false);
-    }
-  };
-
-  const handleSaveCredential = async () => {
-    if (!credentialServer) return;
-    const credentials: Record<string, string> = {};
-    for (const entry of credentialEntries) {
-      if (entry.value.trim()) {
-        credentials[entry.key] = entry.value.trim();
-      }
-    }
-    if (newCredentialKey.trim() && newCredentialValue.trim()) {
-      credentials[newCredentialKey.trim()] = newCredentialValue.trim();
-    }
-    if (Object.keys(credentials).length === 0) {
-      addNotification('info', 'Settings', 'No credentials to save', 3000);
-      return;
-    }
-    setSavingKey('mcp-credential-save');
-    try {
-      await api.updateMCPServerCredentials(credentialServer, credentials);
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Credentials saved', 3000);
-      // Refresh the credential list
-      await handleLoadCredentials(credentialServer);
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to save credentials:', err);
-      addNotification('error', 'Settings', 'Failed to save credentials', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleDeleteCredential = async (credName: string) => {
-    if (!credentialServer) return;
-    setSavingKey('mcp-credential-delete');
-    try {
-      await api.deleteMCPServerCredential(credentialServer, credName);
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Credential deleted', 3000);
-      await handleLoadCredentials(credentialServer);
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to delete credential:', err);
-      addNotification('error', 'Settings', 'Failed to delete credential', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleAddCredentialEntry = () => {
-    if (!newCredentialKey.trim() || !newCredentialValue.trim()) return;
-    setCredentialEntries((prev) => [
-      ...prev,
-      { key: newCredentialKey.trim(), value: newCredentialValue.trim(), status: 'pending' },
-    ]);
-    setNewCredentialKey('');
-    setNewCredentialValue('');
-  };
-
-  const handleCloseCredentials = () => {
-    resetCredentialForm();
-  };
-
-  /* ─── Custom Provider CRUD ─────────────────────────────── */
-
-  const resetProviderForm = () => {
-    setEditingProvider(null);
-    setProviderName('');
-    setProviderApiBase('');
-    setProviderModelName('');
-    setProviderContextSize(32768);
-    setProviderEnvVar('');
-    setProviderSupportsVision(false);
-    setProviderVisionModel('');
-    setProviderModelContextSizes('');
-  };
-
-  const handleAddProvider = async () => {
-    if (!providerName.trim()) return;
-    const modelName = providerModelName.trim();
-    const supportsVision = providerSupportsVision;
-    const visionModel = providerVisionModel.trim() || modelName;
-    const envVar = providerEnvVar.trim();
-
-    // Parse model context sizes from format "model1:8192,model2:131072"
-    const modelContextSizes: Record<string, number> = {};
-    if (providerModelContextSizes.trim()) {
-      const pairs = providerModelContextSizes
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      for (const pair of pairs) {
-        const [model, size] = pair.split(':');
-        if (model && size) {
-          const sizeNum = parseInt(size, 10);
-          if (!isNaN(sizeNum) && sizeNum > 0) {
-            modelContextSizes[model.trim()] = sizeNum;
-          }
-        }
-      }
-    }
-
-    const provider: Record<string, unknown> = {
-      endpoint: providerApiBase.trim(),
-      model_name: modelName,
-      context_size: providerContextSize,
-      model_context_sizes: Object.keys(modelContextSizes).length > 0 ? modelContextSizes : undefined,
-      env_var: envVar,
-      requires_api_key: envVar.length > 0,
-      supports_vision: supportsVision,
-      vision_model: supportsVision ? visionModel : '',
-    };
-    setSavingKey('provider-add');
-    try {
-      await api.addCustomProvider({ name: providerName.trim(), ...provider });
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Provider added', 3000);
-      resetProviderForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to add custom provider:', err);
-      addNotification('error', 'Settings', 'Failed to add provider', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleUpdateProvider = async () => {
-    if (!editingProvider?.originalName || !providerName.trim()) return;
-    const modelName = providerModelName.trim();
-    const supportsVision = providerSupportsVision;
-    const visionModel = providerVisionModel.trim() || modelName;
-    const envVar = providerEnvVar.trim();
-
-    // Parse model context sizes from format "model1:8192,model2:131072"
-    const modelContextSizes: Record<string, number> = {};
-    if (providerModelContextSizes.trim()) {
-      const pairs = providerModelContextSizes
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      for (const pair of pairs) {
-        const [model, size] = pair.split(':');
-        if (model && size) {
-          const sizeNum = parseInt(size, 10);
-          if (!isNaN(sizeNum) && sizeNum > 0) {
-            modelContextSizes[model.trim()] = sizeNum;
-          }
-        }
-      }
-    }
-
-    const provider: Record<string, unknown> = {
-      endpoint: providerApiBase.trim(),
-      model_name: modelName,
-      context_size: providerContextSize,
-      model_context_sizes: Object.keys(modelContextSizes).length > 0 ? modelContextSizes : undefined,
-      env_var: envVar,
-      requires_api_key: envVar.length > 0,
-      supports_vision: supportsVision,
-      vision_model: supportsVision ? visionModel : '',
-    };
-    setSavingKey('provider-update');
-    try {
-      await api.updateCustomProvider(editingProvider.originalName, {
-        name: providerName.trim(),
-        ...provider,
-      });
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Provider updated', 3000);
-      resetProviderForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to update custom provider:', err);
-      addNotification('error', 'Settings', 'Failed to update provider', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const handleDeleteProvider = async (name: string) => {
-    setSavingKey('provider-delete');
-    try {
-      await api.deleteCustomProvider(name);
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Provider deleted', 3000);
-      if (editingProvider?.originalName === name) resetProviderForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to delete custom provider:', err);
-      addNotification('error', 'Settings', 'Failed to delete provider', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  /* ─── Skills toggle ────────────────────────────────────── */
-
-  const toggleSkill = async (skillName: string, enabled: boolean) => {
-    if (!settings) return;
-    setSavingKey(`skill-${skillName}`);
-    try {
-      const updatedSkills = {
-        ...settings.skills,
-        [skillName]: {
-          ...(settings.skills?.[skillName] || {}),
-          enabled,
-        },
-      };
-      await api.updateSkills(updatedSkills);
-      onSettingsChanged({ ...settings, skills: updatedSkills });
-      addNotification('success', 'Settings', `${skillName} ${enabled ? 'enabled' : 'disabled'}`, 3000);
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to update skill:', err);
-      addNotification('error', 'Settings', 'Failed to update skill', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  /* ─── Render sub-tab content ───────────────────────────── */
+  /* ─── Render tab content ───────────────────────────── */
 
   const renderContent = () => {
     if (!settings) {
       return <div className="settings-empty">Loading settings…</div>;
     }
 
-    // When viewing workspace or global layer, use that layer's data
-    // so the user sees and edits only that layer's specific values.
-    const activeSettings: SproutSettings =
-      configViewLayer !== 'session' && layerData
-        ? (layerData as unknown as SproutSettings)
-        : settings;
-    displaySettingsRef.current = activeSettings;
-
-    switch (activeSubTab) {
-      /* ── General ─────────────────────────────────────────── */
+    switch (state.activeSubTab) {
       case 'general':
         return (
-          <>
-            {/* Editor preferences (frontend-only) */}
-            {editorPreferences && onEditorPreferenceChanged && (
-              <div className="section">
-                <h4>Editor</h4>
-                <label className="styled-toggle">
-                  <input
-                    type="checkbox"
-                    checked={!!editorPreferences.autoSaveEnabled}
-                    onChange={() => onEditorPreferenceChanged('autoSaveEnabled', !editorPreferences.autoSaveEnabled)}
-                  />
-                  <span className="toggle-track" />
-                  <span className="toggle-label">Auto-save files (every 30s)</span>
-                </label>
-                <label className="styled-toggle">
-                  <input
-                    type="checkbox"
-                    checked={!!editorPreferences.formatOnSaveEnabled}
-                    onChange={() => onEditorPreferenceChanged('formatOnSaveEnabled', !editorPreferences.formatOnSaveEnabled)}
-                  />
-                  <span className="toggle-track" />
-                  <span className="toggle-label">Format on Save</span>
-                </label>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.3, marginTop: 2 }}>Format files with Prettier before saving</span>
-                <div className="config-item">
-                  <label htmlFor="whitespace-rendering-select">Render whitespace</label>
-                  <select
-                    id="whitespace-rendering-select"
-                    className="styled-select"
-                    value={editorPreferences.whitespaceRenderingMode}
-                    onChange={(e) => onEditorPreferenceChanged('whitespaceRenderingMode', e.target.value)}
-                  >
-                    <option value="none">None</option>
-                    <option value="boundary">Boundary (trailing only)</option>
-                    <option value="all">All</option>
-                  </select>
-                </div>
-              </div>
-            )}
-            <div className="section">
-              <h4>Behavior</h4>
-              {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
-              {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
-              {renderToggle('skip_prompt', 'Skip confirmation prompt')}
-              {renderToggle('enable_pre_write_validation', 'Pre-write validation')}
-              {renderSelect('history_scope', 'History scope', ['session', 'project', 'global'])}
-              {renderTextareaInput(
-                'system_prompt_text',
-                'System prompt',
-                'Leave blank to use the embedded default system prompt.',
-                12,
-                'Applies to the main agent. Leave blank to use the built-in default prompt.',
-              )}
-            </div>
-          </>
+          <GeneralSettingsTab
+            editorPreferences={editorPreferences}
+            onEditorPreferenceChanged={onEditorPreferenceChanged}
+            renderToggle={renderers.renderToggle}
+            renderSelect={renderers.renderSelect}
+            renderTextareaInput={renderers.renderTextareaInput}
+          />
         );
 
-      /* ── Security ────────────────────────────────────────── */
       case 'security':
         return (
-          <div className="section">
-            <h4>Security</h4>
-            {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
-            {renderSelect('self_review_gate_mode', 'Self-review gate', ['off', 'code', 'always'])}
-            <div style={{ marginTop: 'var(--space-5)' }}>
-              <h4>Git Permissions</h4>
-              {renderToggle('allow_orchestrator_git_write', 'Allow orchestrator git write')}
-            </div>
-          </div>
+          <SecuritySettingsTab
+            renderToggle={renderers.renderToggle}
+            renderNumberInput={renderers.renderNumberInput}
+            renderSelect={renderers.renderSelect}
+          />
         );
 
-      /* ── Credentials ─────────────────────────────────────── */
       case 'credentials':
         return <CredentialsSettingsTab />;
 
-      /* ── Performance ─────────────────────────────────────── */
       case 'performance':
         return (
-          <div className="section">
-            <h4>API Timeouts</h4>
-            {renderNumberInput('api_timeouts.connection_timeout_sec', 'Connection timeout (s)', 1, 300)}
-            {renderNumberInput('api_timeouts.first_chunk_timeout_sec', 'First chunk timeout (s)', 1, 600)}
-            {renderNumberInput('api_timeouts.chunk_timeout_sec', 'Chunk timeout (s)', 1, 600)}
-            {renderNumberInput('api_timeouts.overall_timeout_sec', 'Overall timeout (s)', 1, 3600)}
-          </div>
+          <PerformanceSettingsTab
+            renderNumberInput={renderers.renderNumberInput}
+          />
         );
 
-      /* ── Subagents ──────────────────────────────────────── */
-      case 'subagents': {
-        const currentSubProvider = String(
-          getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_provider') || '',
-        );
-        const currentSubModel = String(
-          getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_model') || '',
-        );
-
-        // Get models for the currently selected provider
-        const selectedProvider = subagentProviders.find((p) => p.id === currentSubProvider);
-        const availableModels = selectedProvider?.models || [];
-
-        // Sort personas for display
-        const personaEntries = Object.entries(subagentTypes)
-          .filter(([, v]) => v.enabled)
-          .sort(([a], [b]) => a.localeCompare(b));
-
+      case 'subagents':
         return (
-          <div className="section">
-            <h4>Default Subagent</h4>
-
-            {/* Provider dropdown */}
-            <div className="config-item">
-              <label htmlFor="subagent-provider-select">Provider</label>
-              <select
-                id="subagent-provider-select"
-                className="styled-select"
-                value={currentSubProvider}
-                onChange={(e) => updateSetting('subagent_provider', e.target.value)}
-              >
-                <option value="">Default (inherit from main agent)</option>
-                {subagentProviders.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Model dropdown */}
-            <div className="config-item">
-              <label htmlFor="subagent-model-select">Model</label>
-              <select
-                id="subagent-model-select"
-                className="styled-select"
-                value={currentSubModel}
-                onChange={(e) => updateSetting('subagent_model', e.target.value)}
-              >
-                <option value="">Default (use provider&apos;s default model)</option>
-                {availableModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Parallel subagent settings */}
-            <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
-              <h4>Parallel Subagents</h4>
-              <>
-                {renderToggle('subagent_parallel_enabled', 'Enable parallel subagent execution')}
-                
-                {getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_parallel_enabled') && (
-                  <div style={{ marginTop: 'var(--space-3)' }}>
-                    {renderNumberInput('subagent_max_parallel', 'Maximum parallel subagents', 1, 10)}
-                    <div className="config-help" style={{ marginTop: 'var(--space-2)' }}>
-                      Controls how many subagents can run simultaneously. Set to 0 or disable above to run all subagents serially.
-                    </div>
-                  </div>
-                )}
-              </>
-            </div>
-
-            {/* Default persona dropdown */}
-            {renderSelect('default_subagent_persona', 'Default Persona', [
-              'general',
-              'coder',
-              'refactor',
-              'debugger',
-              'tester',
-              'code_reviewer',
-              'researcher',
-              'web_scraper',
-              'orchestrator',
-              'computer_user',
-            ])}
-
-            {/* ── Per-persona model mapping ──────────────── */}
-            <div style={{ marginTop: 'var(--space-5)' }}>
-              <h4>Per-Persona Overrides</h4>
-              <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
-                Set a specific provider and/or model for individual personas. Empty values inherit from the default
-                subagent settings above.
-              </div>
-
-              {personaEntries.length === 0 && <div className="settings-empty">No personas available</div>}
-
-              <div className="persona-mapping-list">
-                {personaEntries.map(([personaId, persona]) => {
-                  const isSaving = subagentSavingPersona === personaId;
-                  const personaProvider = persona.provider || '';
-                  const personaModelsForProvider =
-                    subagentProviders.find((p) => p.id === personaProvider)?.models || [];
-
-                  return (
-                    <div key={personaId} className="persona-mapping-row">
-                      <span className="persona-mapping-name" title={persona.description}>
-                        {persona.name}
-                      </span>
-                      <select
-                        className="styled-select persona-mapping-select"
-                        value={personaProvider}
-                        onChange={async (e) => {
-                          setSubagentSavingPersona(personaId);
-                          try {
-                            await api.updateSubagentType(personaId, {
-                              provider: e.target.value,
-                              model: '', // clear model when provider changes
-                            });
-                            setSubagentTypes((prev) => ({
-                              ...prev,
-                              [personaId]: {
-                                ...prev[personaId],
-                                provider: e.target.value,
-                                model: '',
-                              },
-                            }));
-                            addNotification('success', 'Settings', `${persona.name}: provider updated`, 3000);
-                          } catch (err) {
-                            debugLog('[SettingsPanel] failed to update subagent provider:', err);
-                            addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
-                          } finally {
-                            setSubagentSavingPersona(null);
-                          }
-                        }}
-                        disabled={isSaving}
-                      >
-                        <option value="">Default</option>
-                        {subagentProviders.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        className="styled-select persona-mapping-select"
-                        value={persona.model || ''}
-                        onChange={async (e) => {
-                          setSubagentSavingPersona(personaId);
-                          try {
-                            await api.updateSubagentType(personaId, {
-                              model: e.target.value,
-                            });
-                            setSubagentTypes((prev) => ({
-                              ...prev,
-                              [personaId]: { ...prev[personaId], model: e.target.value },
-                            }));
-                            addNotification('success', 'Settings', `${persona.name}: model updated`, 3000);
-                          } catch (err) {
-                            debugLog('[SettingsPanel] failed to update subagent model:', err);
-                            addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
-                          } finally {
-                            setSubagentSavingPersona(null);
-                          }
-                        }}
-                        disabled={isSaving || personaProvider === ''}
-                      >
-                        <option value="">Default</option>
-                        {personaModelsForProvider.map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        );
-      }
-
-      /* ── Commit & Review ───────────────────────────────── */
-      case 'commit-review': {
-        const currentCommitProvider = String(
-          getNestedValue(settings as unknown as Record<string, unknown>, 'commit_provider') || '',
-        );
-        const currentCommitModel = String(
-          getNestedValue(settings as unknown as Record<string, unknown>, 'commit_model') || '',
-        );
-        const currentReviewProvider = String(
-          getNestedValue(settings as unknown as Record<string, unknown>, 'review_provider') || '',
-        );
-        const currentReviewModel = String(
-          getNestedValue(settings as unknown as Record<string, unknown>, 'review_model') || '',
+          <SubagentSettingsTab
+            settings={settings}
+            subagentProviders={state.subagentProviders}
+            subagentTypes={state.subagentTypes}
+            subagentSavingPersona={state.subagentSavingPersona}
+            setSubagentSavingPersona={state.setSubagentSavingPersona}
+            setSubagentTypes={state.setSubagentTypes}
+            updateSetting={mutations.updateSetting}
+            addNotification={state.addNotification}
+            renderToggle={renderers.renderToggle}
+            renderNumberInput={renderers.renderNumberInput}
+            renderSelect={renderers.renderSelect}
+            api={state.api}
+          />
         );
 
-        // Get models for the currently selected commit provider
-        const selectedCommitProvider = commitReviewProviders.find((p) => p.id === currentCommitProvider);
-        const commitAvailableModels = selectedCommitProvider?.models || [];
-
-        // Get models for the currently selected review provider
-        const selectedReviewProvider = commitReviewProviders.find((p) => p.id === currentReviewProvider);
-        const reviewAvailableModels = selectedReviewProvider?.models || [];
-
+      case 'commit-review':
         return (
-          <div className="section">
-            <h4>Commit Message Generation</h4>
-            <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
-              Configure which provider and model to use for generating commit messages. Leave empty to use the default (LastUsedProvider).
-            </div>
-
-            <div className="config-item">
-              <label htmlFor="commit-provider-select">Provider</label>
-              <select
-                id="commit-provider-select"
-                className="styled-select"
-                value={currentCommitProvider}
-                onChange={(e) => updateSetting('commit_provider', e.target.value)}
-              >
-                <option value="">Default (inherit from main agent)</option>
-                {commitReviewProviders.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="config-item">
-              <label htmlFor="commit-model-select">Model</label>
-              <select
-                id="commit-model-select"
-                className="styled-select"
-                value={currentCommitModel}
-                onChange={(e) => updateSetting('commit_model', e.target.value)}
-              >
-                <option value="">Default (use provider&apos;s default model)</option>
-                {commitAvailableModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
-              <h4>Code Review</h4>
-              <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
-                Configure which provider and model to use for code review commands (/review, /review-deep). Leave empty to use the default (LastUsedProvider).
-              </div>
-
-              <div className="config-item">
-                <label htmlFor="review-provider-select">Provider</label>
-                <select
-                  id="review-provider-select"
-                  className="styled-select"
-                  value={currentReviewProvider}
-                  onChange={(e) => updateSetting('review_provider', e.target.value)}
-                >
-                  <option value="">Default (inherit from main agent)</option>
-                  {commitReviewProviders.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="config-item">
-                <label htmlFor="review-model-select">Model</label>
-                <select
-                  id="review-model-select"
-                  className="styled-select"
-                  value={currentReviewModel}
-                  onChange={(e) => updateSetting('review_model', e.target.value)}
-                >
-                  <option value="">Default (use provider&apos;s default model)</option>
-                  {reviewAvailableModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
+          <CommitReviewSettingsTab
+            settings={settings}
+            commitReviewProviders={state.commitReviewProviders}
+            updateSetting={mutations.updateSetting}
+          />
         );
-      }
 
-      /* ── PDF OCR ─────────────────────────────────────────── */
       case 'pdf-ocr':
         return (
-          <div className="section">
-            <h4>PDF OCR</h4>
-            {renderToggle('pdf_ocr_enabled', 'Enable PDF OCR')}
-            {renderTextInput('pdf_ocr_provider', 'Provider', 'zai, minimax, openrouter…')}
-            {renderTextInput('pdf_ocr_model', 'Model', 'GLM-4.6V, MiniMax-VL, qwen-vl…')}
-          </div>
+          <OcrSettingsTab
+            renderToggle={renderers.renderToggle}
+            renderTextInput={renderers.renderTextInput}
+          />
         );
 
-      /* ── MCP ─────────────────────────────────────────────── */
-      case 'mcp': {
-        const mcpSettings = settings.mcp || {};
-        const servers = mcpSettings.servers || {};
-        const serverEntries = Object.entries(servers);
-
+      case 'mcp':
         return (
-          <div className="section">
-            <h4>MCP Configuration</h4>
-
-            {/* MCP toggles */}
-            {renderToggle('mcp.enabled', 'MCP enabled')}
-            {renderToggle('mcp.auto_start', 'Auto-start servers')}
-            {renderToggle('mcp.auto_discover', 'Auto-discover servers')}
-            {renderTextInput('mcp.timeout', 'Timeout (e.g. 30s)', '30s')}
-
-            {/* Server list */}
-            <div style={{ marginTop: 'var(--space-5)' }}>
-              <h4>Servers ({serverEntries.length})</h4>
-
-              {serverEntries.length === 0 && !editingServer && (
-                <div className="settings-empty">No MCP servers configured</div>
-              )}
-
-              <div className="crud-list">
-                {serverEntries.map(([name, cfg]) => {
-                  const server = cfg as Record<string, unknown>;
-                  return (
-                    <div key={name} className="crud-item">
-                      <span className="crud-item-name">{name}</span>
-                      <span className="crud-item-detail">{(server.command as string) || ''}</span>
-                      <button
-                        type="button"
-                        className="crud-btn"
-                        title="Manage credentials"
-                        onClick={() => handleLoadCredentials(name)}
-                      >
-                        <Lock size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        className="crud-btn"
-                        title="Edit server"
-                        onClick={() => {
-                          setEditingServer({ mode: 'edit', originalName: name });
-                          setServerName(name);
-                          setServerCommand((server.command as string) || '');
-                          setServerArgs(
-                            Array.isArray(server.args) ? (server.args as unknown[]).map(String).join(' ') : '',
-                          );
-                          const existingEnv = (server.env as Record<string, string>) || {};
-                          setServerEnvVars(
-                            Object.entries(existingEnv).map(([key, value]) => ({ key, value })),
-                          );
-                          setNewEnvKey('');
-                          setNewEnvValue('');
-                        }}
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        className="crud-btn danger"
-                        title="Delete server"
-                        onClick={() => handleDeleteServer(name)}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  );
-                })}
-
-                {/* Inline form (Add / Edit) */}
-                {editingServer && (
-                  <div className="crud-inline-form">
-                    <div className="form-row">
-                      <label>Name</label>
-                      <input
-                        type="text"
-                        className="styled-input"
-                        value={serverName}
-                        onChange={(e) => setServerName(e.target.value)}
-                        placeholder="server-name"
-                        disabled={editingServer.mode === 'edit'}
-                      />
-                    </div>
-                    <div className="form-row">
-                      <label>Command</label>
-                      <input
-                        type="text"
-                        className="styled-input"
-                        value={serverCommand}
-                        onChange={(e) => setServerCommand(e.target.value)}
-                        placeholder="npx or path/to/binary"
-                      />
-                    </div>
-                    <div className="form-row">
-                      <label>Args (space-separated)</label>
-                      <input
-                        type="text"
-                        className="styled-input"
-                        value={serverArgs}
-                        onChange={(e) => setServerArgs(e.target.value)}
-                        placeholder="--flag value"
-                      />
-                    </div>
-                    <div className="form-row" style={{ flexDirection: 'column' }}>
-                      <label>Environment Variables</label>
-                      {serverEnvVars.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
-                          {serverEnvVars.map((ev, idx) => (
-                            <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                              <input
-                                type="text"
-                                className="styled-input"
-                                value={ev.key}
-                                onChange={(e) => {
-                                  const updated = [...serverEnvVars];
-                                  updated[idx] = { ...updated[idx], key: e.target.value };
-                                  setServerEnvVars(updated);
-                                }}
-                                placeholder="VAR_NAME"
-                                style={{ flex: 1 }}
-                              />
-                              <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>=</span>
-                              {ev.value === '{{stored}}' ? (
-                                <span
-                                  style={{
-                                    flex: 1.5,
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    background: 'var(--bg-secondary)',
-                                    color: 'var(--text-muted)',
-                                    fontSize: '12px',
-                                    border: '1px solid var(--border)',
-                                  }}
-                                >
-                                  🔒 Stored in credential manager
-                                </span>
-                              ) : (
-                                <input
-                                  type="password"
-                                  className="styled-input"
-                                  value={ev.value}
-                                  onChange={(e) => {
-                                    const updated = [...serverEnvVars];
-                                    updated[idx] = { ...updated[idx], value: e.target.value };
-                                    setServerEnvVars(updated);
-                                  }}
-                                  placeholder="value"
-                                  style={{ flex: 1.5 }}
-                                />
-                              )}
-                              <button
-                                type="button"
-                                className="crud-btn danger"
-                                title="Remove"
-                                onClick={() => setServerEnvVars(serverEnvVars.filter((_, i) => i !== idx))}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          className="styled-input"
-                          value={newEnvKey}
-                          onChange={(e) => setNewEnvKey(e.target.value)}
-                          placeholder="NEW_VAR"
-                          style={{ flex: 1 }}
-                        />
-                        <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>=</span>
-                        <input
-                          type="password"
-                          className="styled-input"
-                          value={newEnvValue}
-                          onChange={(e) => setNewEnvValue(e.target.value)}
-                          placeholder="secret value"
-                          style={{ flex: 1.5 }}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && newEnvKey.trim() && newEnvValue.trim()) {
-                              setServerEnvVars([...serverEnvVars, { key: newEnvKey.trim(), value: newEnvValue.trim() }]);
-                              setNewEnvKey('');
-                              setNewEnvValue('');
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="crud-btn"
-                          title="Add env var"
-                          onClick={() => {
-                            if (newEnvKey.trim() && newEnvValue.trim()) {
-                              setServerEnvVars([...serverEnvVars, { key: newEnvKey.trim(), value: newEnvValue.trim() }]);
-                              setNewEnvKey('');
-                              setNewEnvValue('');
-                            }
-                          }}
-                        >
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="form-actions">
-                      <button
-                        type="button"
-                        className="form-btn primary"
-                        onClick={editingServer.mode === 'edit' ? handleUpdateServer : handleAddServer}
-                      >
-                        {editingServer.mode === 'edit' ? 'Update' : 'Add'}
-                      </button>
-                      <button type="button" className="form-btn cancel" onClick={resetServerForm}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {!editingServer && (
-                  <button
-                    type="button"
-                    className="crud-add-btn"
-                    onClick={() => {
-                      setEditingServer({ mode: 'add' });
-                      setServerName('');
-                      setServerCommand('');
-                      setServerArgs('');
-                      setServerEnvVars([]);
-                      setNewEnvKey('');
-                      setNewEnvValue('');
-                    }}
-                  >
-                    <Plus size={14} /> Add server
-                  </button>
-                )}
-              </div>
-
-              {/* Credential management panel */}
-              {credentialServer && (
-                <div style={{ marginTop: 'var(--space-4)' }}>
-                  <h4>Credentials — {credentialServer}</h4>
-
-                  {credentialLoading ? (
-                    <div className="settings-empty">Loading credentials…</div>
-                  ) : (
-                    <div className="crud-inline-form">
-                      {credentialEntries.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-                          {credentialEntries.map((entry, idx) => (
-                            <div key={entry.key} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                              <span
-                                title={entry.status === 'set' ? 'Credential is set' : 'Credential is missing'}
-                                style={{
-                                  display: 'inline-block',
-                                  width: '8px',
-                                  height: '8px',
-                                  borderRadius: '50%',
-                                  backgroundColor: entry.status === 'set' ? 'var(--color-success, #22c55e)' : 'var(--text-muted, #888)',
-                                  flexShrink: 0,
-                                }}
-                              />
-                              <span
-                                style={{
-                                  flex: 1.2,
-                                  fontFamily: 'monospace',
-                                  fontSize: '12px',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                                title={entry.key}
-                              >
-                                {entry.key}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: '11px',
-                                  color: entry.status === 'set' ? 'var(--color-success, #22c55e)' : 'var(--text-muted, #888)',
-                                  width: '56px',
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {entry.status === 'set' ? 'Set' : 'Missing'}
-                              </span>
-                              <input
-                                type="password"
-                                className="styled-input"
-                                value={entry.value}
-                                onChange={(e) => {
-                                  const updated = [...credentialEntries];
-                                  updated[idx] = { ...updated[idx], value: e.target.value };
-                                  setCredentialEntries(updated);
-                                }}
-                                placeholder="Leave empty to keep current"
-                                style={{ flex: 1 }}
-                              />
-                              <button
-                                type="button"
-                                className="crud-btn danger"
-                                title="Delete credential"
-                                onClick={() => handleDeleteCredential(entry.key)}
-                                disabled={savingKey === 'mcp-credential-delete'}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Add new credential row */}
-                      <div className="form-row" style={{ marginTop: '8px' }}>
-                        <label>Add credential</label>
-                        <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flex: 1 }}>
-                          <input
-                            type="text"
-                            className="styled-input"
-                            value={newCredentialKey}
-                            onChange={(e) => setNewCredentialKey(e.target.value)}
-                            placeholder="ENV_VAR_NAME"
-                            style={{ flex: 1.2 }}
-                          />
-                          <input
-                            type="password"
-                            className="styled-input"
-                            value={newCredentialValue}
-                            onChange={(e) => setNewCredentialValue(e.target.value)}
-                            placeholder="secret value"
-                            style={{ flex: 1 }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleAddCredentialEntry();
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="crud-btn"
-                            title="Add credential"
-                            onClick={handleAddCredentialEntry}
-                            disabled={!newCredentialKey.trim() || !newCredentialValue.trim()}
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="form-actions">
-                        <button
-                          type="button"
-                          className="form-btn primary"
-                          onClick={handleSaveCredential}
-                          disabled={savingKey === 'mcp-credential-save'}
-                        >
-                          Save
-                        </button>
-                        <button type="button" className="form-btn cancel" onClick={handleCloseCredentials}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+          <MCPSettingsTab
+            settings={settings}
+            editingServer={state.editingServer}
+            serverName={state.serverName}
+            serverCommand={state.serverCommand}
+            serverArgs={state.serverArgs}
+            serverEnvVars={state.serverEnvVars}
+            newEnvKey={state.newEnvKey}
+            newEnvValue={state.newEnvValue}
+            credentialServer={state.credentialServer}
+            credentialEntries={state.credentialEntries}
+            credentialLoading={state.credentialLoading}
+            newCredentialKey={state.newCredentialKey}
+            newCredentialValue={state.newCredentialValue}
+            savingKey={mutations.savingKey}
+            setEditingServer={state.setEditingServer}
+            setServerName={state.setServerName}
+            setServerCommand={state.setServerCommand}
+            setServerArgs={state.setServerArgs}
+            setServerEnvVars={state.setServerEnvVars}
+            setNewEnvKey={state.setNewEnvKey}
+            setNewEnvValue={state.setNewEnvValue}
+            setCredentialEntries={state.setCredentialEntries}
+            setNewCredentialKey={state.setNewCredentialKey}
+            setNewCredentialValue={state.setNewCredentialValue}
+            renderToggle={renderers.renderToggle}
+            renderTextInput={renderers.renderTextInput}
+            resetServerForm={mutations.resetServerForm}
+            handleAddServer={mutations.handleAddServer}
+            handleUpdateServer={mutations.handleUpdateServer}
+            handleDeleteServer={mutations.handleDeleteServer}
+            handleLoadCredentials={mutations.handleLoadCredentials}
+            handleSaveCredential={mutations.handleSaveCredential}
+            handleDeleteCredential={mutations.handleDeleteCredential}
+            handleAddCredentialEntry={mutations.handleAddCredentialEntry}
+            handleCloseCredentials={mutations.handleCloseCredentials}
+          />
         );
-      }
 
-      /* ── Custom Providers ────────────────────────────────── */
-      case 'providers': {
-        const customProviders = settings.custom_providers || {};
-        const providerEntries = Object.entries(customProviders);
-
+      case 'providers':
         return (
-          <div className="section">
-            {/* Current Provider section - shows active provider and allows re-onboarding */}
-            <div className="current-provider-section">
-              <h4>Current Provider</h4>
-              {loadingProviderInfo ? (
-                <div className="settings-loading">Loading...</div>
-              ) : currentProviderInfo ? (
-                <div className="current-provider-info">
-                  <div className="current-provider-detail">
-                    <span className="label">Provider:</span>
-                    <span className="value">{currentProviderInfo.provider || 'Not configured'}</span>
-                  </div>
-                  <div className="current-provider-detail">
-                    <span className="label">Model:</span>
-                    <span className="value">{currentProviderInfo.model || '—'}</span>
-                  </div>
-                  <div className="current-provider-detail">
-                    <span className="label">Credential:</span>
-                    <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                      {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="onboarding-reopen-btn"
-                    onClick={() => onRequestProviderSetup?.()}
-                    title="Change provider, model, or API key"
-                  >
-                    <Cog size={14} />
-                    Provider Setup
-                  </button>
-                </div>
-              ) : (
-                <div className="settings-empty">
-                  No provider configured
-                  <button
-                    type="button"
-                    className="onboarding-reopen-btn"
-                    onClick={() => onRequestProviderSetup?.()}
-                  >
-                    <Cog size={14} />
-                    Set up provider
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Custom Providers section */}
-            <h4 style={{ marginTop: '24px' }}>Custom Providers ({providerEntries.length})</h4>
-
-            {providerEntries.length === 0 && !editingProvider && (
-              <div className="settings-empty">No custom providers configured</div>
-            )}
-
-            <div className="crud-list">
-              {providerEntries.map(([name, cfg]) => {
-                const p = cfg as Record<string, unknown>;
-                return (
-                  <div key={name} className="crud-item">
-                    <span className="crud-item-name">{name}</span>
-                    <span className="crud-item-detail">{(p.endpoint as string) || (p.api_base as string) || ''}</span>
-                    <button
-                      type="button"
-                      className="crud-btn"
-                      title="Edit provider"
-                      onClick={() => {
-                        setEditingProvider({ mode: 'edit', originalName: name });
-                        setProviderName(name);
-                        setProviderApiBase((p.endpoint as string) || (p.api_base as string) || '');
-                        setProviderModelName(
-                          (p.model_name as string) ||
-                            (Array.isArray(p.models) && (p.models as unknown[]).length > 0
-                              ? String((p.models as unknown[])[0])
-                              : ''),
-                        );
-                        setProviderContextSize((p.context_size as number) || 32768);
-                        setProviderEnvVar((p.env_var as string) || '');
-                        setProviderSupportsVision(!!p.supports_vision);
-                        setProviderVisionModel((p.vision_model as string) || '');
-                        // Format model_context_sizes as "model1:8192,model2:131072"
-                        const mcs = p.model_context_sizes;
-                        if (mcs && typeof mcs === 'object') {
-                          const pairs = Object.entries(mcs as Record<string, unknown>)
-                            .map(([model, size]) => `${model}:${size}`)
-                            .join(',');
-                          setProviderModelContextSizes(pairs);
-                        } else {
-                          setProviderModelContextSizes('');
-                        }
-                      }}
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      className="crud-btn danger"
-                      title="Delete provider"
-                      onClick={() => handleDeleteProvider(name)}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {/* Inline form */}
-              {editingProvider && (
-                <div className="crud-inline-form">
-                  <div className="form-row">
-                    <label>Name</label>
-                    <input
-                      type="text"
-                      className="styled-input"
-                      value={providerName}
-                      onChange={(e) => setProviderName(e.target.value)}
-                      placeholder="provider-name"
-                      disabled={editingProvider.mode === 'edit'}
-                    />
-                  </div>
-                  <div className="form-row">
-                    <label>API Base URL</label>
-                    <input
-                      type="text"
-                      className="styled-input"
-                      value={providerApiBase}
-                      onChange={(e) => setProviderApiBase(e.target.value)}
-                      placeholder="https://api.example.com/v1"
-                    />
-                  </div>
-                  <div className="form-row">
-                    <label>Default Model</label>
-                    <input
-                      type="text"
-                      className="styled-input"
-                      value={providerModelName}
-                      onChange={(e) => setProviderModelName(e.target.value)}
-                      placeholder="gpt-4o-mini"
-                    />
-                  </div>
-                  <div className="form-row">
-                    <label>Default Context Size (tokens)</label>
-                    <input
-                      type="number"
-                      className="styled-input config-row-input"
-                      value={providerContextSize}
-                      onChange={(e) => setProviderContextSize(parseInt(e.target.value) || 32768)}
-                      placeholder="32768"
-                      min="0"
-                    />
-                  </div>
-                  <div className="form-row">
-                    <label>Per-Model Context Sizes (optional)</label>
-                    <input
-                      type="text"
-                      className="styled-input"
-                      value={providerModelContextSizes}
-                      onChange={(e) => setProviderModelContextSizes(e.target.value)}
-                      placeholder="model1:8192,model2:131072,model3:2097152"
-                    />
-                    <small
-                      style={{
-                        color: '#888',
-                        fontSize: '12px',
-                        marginTop: '4px',
-                        display: 'block',
-                      }}
-                    >
-                      Format: model_name:context_size, separated by commas
-                    </small>
-                  </div>
-                  <div className="form-row">
-                    <label>API Key Env Var (optional)</label>
-                    <input
-                      type="text"
-                      className="styled-input"
-                      value={providerEnvVar}
-                      onChange={(e) => setProviderEnvVar(e.target.value)}
-                      placeholder="OPENAI_API_KEY"
-                    />
-                  </div>
-                  <label className="styled-toggle">
-                    <input
-                      type="checkbox"
-                      checked={providerSupportsVision}
-                      onChange={(e) => setProviderSupportsVision(e.target.checked)}
-                    />
-                    <span className="toggle-track" />
-                    <span className="toggle-label">Supports Vision</span>
-                  </label>
-                  {providerSupportsVision && (
-                    <div className="form-row">
-                      <label>Vision Model (optional)</label>
-                      <input
-                        type="text"
-                        className="styled-input"
-                        value={providerVisionModel}
-                        onChange={(e) => setProviderVisionModel(e.target.value)}
-                        placeholder="Leave empty to use default model"
-                      />
-                    </div>
-                  )}
-                  <div className="form-actions">
-                    <button
-                      type="button"
-                      className="form-btn primary"
-                      onClick={editingProvider.mode === 'edit' ? handleUpdateProvider : handleAddProvider}
-                    >
-                      {editingProvider.mode === 'edit' ? 'Update' : 'Add'}
-                    </button>
-                    <button type="button" className="form-btn cancel" onClick={resetProviderForm}>
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!editingProvider && (
-                <button
-                  type="button"
-                  className="crud-add-btn"
-                  onClick={() => {
-                    setEditingProvider({ mode: 'add' });
-                    setProviderName('');
-                    setProviderApiBase('');
-                    setProviderModelName('');
-                    setProviderContextSize(32768);
-                    setProviderEnvVar('');
-                    setProviderSupportsVision(false);
-                    setProviderVisionModel('');
-                    setProviderModelContextSizes('');
-                  }}
-                >
-                  <Plus size={14} /> Add provider
-                </button>
-              )}
-            </div>
-          </div>
+          <ProviderSettingsTab
+            settings={settings}
+            onRequestProviderSetup={onRequestProviderSetup}
+            editingProvider={state.editingProvider}
+            providerName={state.providerName}
+            providerApiBase={state.providerApiBase}
+            providerModelName={state.providerModelName}
+            providerContextSize={state.providerContextSize}
+            providerEnvVar={state.providerEnvVar}
+            providerSupportsVision={state.providerSupportsVision}
+            providerVisionModel={state.providerVisionModel}
+            providerModelContextSizes={state.providerModelContextSizes}
+            loadingProviderInfo={state.loadingProviderInfo}
+            currentProviderInfo={state.currentProviderInfo}
+            setEditingProvider={state.setEditingProvider}
+            setProviderName={state.setProviderName}
+            setProviderApiBase={state.setProviderApiBase}
+            setProviderModelName={state.setProviderModelName}
+            setProviderContextSize={state.setProviderContextSize}
+            setProviderEnvVar={state.setProviderEnvVar}
+            setProviderSupportsVision={state.setProviderSupportsVision}
+            setProviderVisionModel={state.setProviderVisionModel}
+            setProviderModelContextSizes={state.setProviderModelContextSizes}
+            resetProviderForm={mutations.resetProviderForm}
+            handleAddProvider={mutations.handleAddProvider}
+            handleUpdateProvider={mutations.handleUpdateProvider}
+            handleDeleteProvider={mutations.handleDeleteProvider}
+          />
         );
-      }
 
-      /* ── Skills ───────────────────────────────────────────── */
-      case 'skills': {
-        const skills = settings.skills || {};
-        const skillEntries = Object.entries(skills);
-
-        if (skillEntries.length === 0) {
-          return <div className="settings-empty">No skills available</div>;
-        }
-
+      case 'skills':
         return (
-          <div className="section">
-            <h4>Skills ({skillEntries.length})</h4>
-            <div className="skills-list">
-              {skillEntries.map(([name, cfg]: [string, unknown]) => {
-                const enabled = !!(cfg as Record<string, unknown>).enabled;
-                return (
-                  <div key={name} className="skill-item">
-                    <span className="skill-item-name">{name}</span>
-                    <label className="styled-toggle">
-                      <input type="checkbox" checked={enabled} onChange={() => toggleSkill(name, !enabled)} />
-                      <span className="toggle-track" />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <SkillsSettingsTab
+            settings={settings}
+            toggleSkill={mutations.toggleSkill}
+          />
         );
-      }
 
       default:
         return null;
@@ -1943,13 +287,13 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
           <button
             key={tab.id}
             type="button"
-            className={`settings-subtab ${activeSubTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveSubTab(tab.id)}
+            className={`settings-subtab ${state.activeSubTab === tab.id ? 'active' : ''}`}
+            onClick={() => state.setActiveSubTab(tab.id)}
           >
             {tab.label}
           </button>
         ))}
-        {renderSaving()}
+        {renderers.renderSaving()}
       </div>
 
       {/* Config Scope Selector — applies to all tabs */}
@@ -1959,52 +303,33 @@ function SettingsPanel({ settings, onSettingsChanged, onRequestProviderSetup, ed
             <button
               key={layer}
               type="button"
-              className={`layerscope-btn ${configViewLayer === layer ? 'active' : ''}`}
-              onClick={() => setConfigViewLayer(layer)}
-              disabled={layerLoading === layer}
+              className={`layerscope-btn ${state.configViewLayer === layer ? 'active' : ''}`}
+              onClick={() => state.setConfigViewLayer(layer)}
+              disabled={state.layerLoading === layer}
             >
               {layer === 'session' ? 'Session' : layer === 'workspace' ? 'Workspace' : 'Global'}
-              {layerLoading === layer && <span style={{ marginLeft: 4, opacity: 0.5 }}>…</span>}
+              {state.layerLoading === layer && <span style={{ marginLeft: 4, opacity: 0.5 }}>…</span>}
             </button>
           ))}
         </div>
         <span className="config-scope-desc">
-          {configViewLayer === 'session' && 'Session overrides only'}
-          {configViewLayer === 'workspace' && 'Workspace config (shared across sessions)'}
-          {configViewLayer === 'global' && 'Global config (~/.config/sprout)'}
+          {state.configViewLayer === 'session' && 'Session overrides only'}
+          {state.configViewLayer === 'workspace' && 'Workspace config (shared across sessions)'}
+          {state.configViewLayer === 'global' && 'Global config (~/.config/sprout)'}
         </span>
-        {layerError && (
-          <div className="config-scope-error">{layerError}</div>
+        {state.layerError && (
+          <div className="config-scope-error">{state.layerError}</div>
         )}
-        {configViewLayer === 'workspace' && layerData && Object.keys(layerData).length === 0 && (
+        {state.configViewLayer === 'workspace' && state.layerData && Object.keys(state.layerData).length === 0 && (
           <div className="config-scope-create">
             <span>No workspace config found. </span>
             <button
               type="button"
               className="config-scope-create-btn"
-              disabled={creatingWorkspaceConfig}
-              onClick={async () => {
-                if (creatingWorkspaceConfig) return;
-                setCreatingWorkspaceConfig(true);
-                try {
-                  const globalData = await api.getSettingsLayer('global');
-                  // Strip mcp from data before writing to workspace — the global GET
-                  // response contains redacted MCP credentials; writing those to the
-                  // workspace config would corrupt credential references.  The workspace
-                  // layer inherits MCP from global via the layered merge instead.
-                  const { mcp: _mcpRedacted, ...workspaceData } = globalData;
-                  await api.updateSettings(workspaceData, 'workspace');
-                  const data = await api.getSettingsLayer('workspace');
-                  setLayerData(data);
-                  addNotification('success', 'Settings', 'Workspace config created from global settings', 3000);
-                } catch (err) {
-                  addNotification('error', 'Settings', 'Failed to create workspace config', 5000);
-                } finally {
-                  setCreatingWorkspaceConfig(false);
-                }
-              }}
+              disabled={state.creatingWorkspaceConfig}
+              onClick={mutations.handleCreateWorkspaceConfig}
             >
-              {creatingWorkspaceConfig ? 'Creating…' : 'Create from global'}
+              {state.creatingWorkspaceConfig ? 'Creating…' : 'Create from global'}
             </button>
           </div>
         )}

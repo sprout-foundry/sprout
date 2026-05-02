@@ -12,6 +12,7 @@ import { useSproutFetch } from './SproutAdapterContext';
 
 export const MAX_PANES = 6;
 export const MIN_PANE_WIDTH_PERCENT = 8;
+export const DEFAULT_MAX_PANES = 6; // Default configurable max panes
 
 // ---------------------------------------------------------------------------
 // Adapter-agnostic file write helpers (consent flow for external paths)
@@ -156,6 +157,8 @@ interface EditorManagerContextValue {
   paneSizes: PaneSize; // Track pane sizes for resizable split panes
   isFormatOnSaveEnabled: boolean;
   setFormatOnSaveEnabled: (enabled: boolean) => void;
+  maxPanes: number; // Configurable max panes for UI (capped at MAX_PANES)
+  setMaxPanes: (n: number) => void;
 
   // Actions
   openFile: (file: any) => string; // Returns buffer ID
@@ -292,6 +295,31 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   const [autoSaveInterval] = useState(30000); // 30 seconds
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
+  const [maxPanes, setMaxPanesState] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('editor.max-panes');
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        // Clamp to range [2, MAX_PANES]
+        if (!isNaN(parsed) && parsed >= 2 && parsed <= MAX_PANES) {
+          return parsed;
+        }
+      }
+      return DEFAULT_MAX_PANES;
+    } catch (err) {
+      return DEFAULT_MAX_PANES;
+    }
+  });
+  const setMaxPanes = useCallback((n: number) => {
+    // Clamp to range [2, MAX_PANES]
+    const clamped = Math.max(2, Math.min(MAX_PANES, n));
+    setMaxPanesState(clamped);
+    try {
+      localStorage.setItem('editor.max-panes', String(clamped));
+    } catch (err) {
+      // Ignore localStorage errors
+    }
+  }, []);
 
   // Keep a ref to the latest buffers Map so async closures don't read stale data
   const buffersRef = useRef(buffers);
@@ -1074,7 +1102,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Split a pane
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
-    if (panes.length >= MAX_PANES) return null; // Max 6 panes
+    if (panes.length >= maxPanes) return null; // Respects configurable limit
 
     const newPaneId = `pane-${Date.now()}`;
 
@@ -1117,7 +1145,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     // Activate new pane
     setActivePaneId(newPaneId);
     return newPaneId;
-  }, [panes]);
+  }, [panes, maxPanes]);
 
   // Close split (reset to single pane)
   const closeSplit = useCallback(() => {
@@ -1205,6 +1233,8 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     setWhitespaceRenderingMode,
     autoSaveInterval,
     paneSizes,
+    maxPanes,
+    setMaxPanes,
     openFile,
     openWorkspaceBuffer,
     openCompareBuffer,

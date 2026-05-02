@@ -13,7 +13,7 @@ import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { TasksPage, BillingPage, TeamPage } from './platform';
-import { useEditorManager, MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
+import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
@@ -961,26 +961,32 @@ const AppContent: React.FC<AppContentProps> = ({
 
       return (
         <>
-          {panes.map((pane, index) => {
-            const paneSize = panes.length === 1
-              ? 100
-              : (paneSizes[pane.id] || (100 / panes.length));
-            const isLast = index === panes.length - 1;
-            const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-
+          {(() => {
+            const rawSizes = panes.map(p => paneSizes[p.id] || (100 / panes.length));
+            const totalSize = rawSizes.reduce((a, b) => a + b, 0);
             return (
-              <React.Fragment key={pane.id}>
-                {renderPaneById(pane.id, toPaneFlex(paneSize))}
-                {showResizeHandles && !isLast && (
-                  <ResizeHandle
-                    direction={splitAxis}
-                    onResize={handlePaneResize(pane.id, splitAxis)}
-                    onResizeEnd={handlePaneResizeEnd(pane.id)}
-                  />
-                )}
-              </React.Fragment>
+              <>
+                {panes.map((pane, index) => {
+                  const paneSize = normalizePaneSize(rawSizes[index], totalSize);
+                  const isLast = index === panes.length - 1;
+                  const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
+
+                  return (
+                    <React.Fragment key={pane.id}>
+                      {renderPaneById(pane.id, toPaneFlex(paneSize))}
+                      {showResizeHandles && !isLast && (
+                        <ResizeHandle
+                          direction={splitAxis}
+                          onResize={handlePaneResize(pane.id, splitAxis)}
+                          onResizeEnd={handlePaneResizeEnd(pane.id)}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </>
             );
-          })}
+          })()}
         </>
       );
     }

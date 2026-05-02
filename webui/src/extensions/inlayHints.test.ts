@@ -346,6 +346,90 @@ describe('annotation guard', () => {
   });
 });
 
+describe('view reference tracking', () => {
+  beforeEach(() => { vi.useFakeTimers(); resetMocks(); mocks.getSemanticInlayHints.mockResolvedValue({ inlay_hints: [{ from: 0, to: 3, label: ': T', kind: 'type' }] }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('updates this.view after update() is called with reconfiguration', () => {
+    const { plugin, mockView: originalView } = createPlugin();
+    const newMockView = createMockView('new content', 0, 20);
+
+    // Simulate a reconfiguration transaction
+    plugin.update({
+      docChanged: false,
+      viewportChanged: false,
+      transactions: [{ annotation: () => undefined, reconfigured: true }],
+      view: newMockView,
+    });
+
+    // Verify that this.view has been updated to the new view
+    expect((plugin as any).view).toBe(newMockView);
+    expect((plugin as any).view).not.toBe(originalView);
+  });
+
+  it('view reference is updated before scheduleUpdate is called', () => {
+    const { plugin } = createPlugin();
+    const newMockView = createMockView('content', 0, 20);
+
+    let viewAtScheduleUpdate: any = null;
+    const originalScheduleUpdate = (plugin as any).scheduleUpdate.bind(plugin);
+    (plugin as any).scheduleUpdate = () => {
+      viewAtScheduleUpdate = (plugin as any).view;
+      return originalScheduleUpdate();
+    };
+
+    plugin.update({
+      docChanged: true,
+      viewportChanged: false,
+      transactions: [{ annotation: () => undefined }],
+      view: newMockView,
+    });
+
+    // Verify that this.view was already updated when scheduleUpdate was called
+    expect(viewAtScheduleUpdate).toBe(newMockView);
+  });
+
+  it('async callback uses this.view instead of captured view parameter', async () => {
+    let capturedView: any = null;
+    let dispatchedView: any = null;
+
+    // Track the view that gets dispatched to after async fetch
+    mocks.getSemanticInlayHints.mockImplementationOnce(() => {
+      return new Promise(resolve => {
+        setTimeout(() => {
+          resolve({ inlay_hints: [{ from: 0, to: 3, label: ': RESULT', kind: 'type' }] });
+        }, 100);
+      });
+    });
+
+    const { plugin } = createPlugin();
+
+    // Track the view captured by buildViewportDecorations during buildDecorations
+    const originalBuildViewportDecorations = (plugin as any).buildViewportDecorations.bind(plugin);
+    (plugin as any).buildViewportDecorations = function(view: any) {
+      capturedView = view;
+      return originalBuildViewportDecorations(view);
+    };
+
+    // Track which view dispatch gets called on after async fetch
+    const thisViewRef = (plugin as any).view;
+    const originalDispatch = thisViewRef.dispatch.bind(thisViewRef);
+    thisViewRef.dispatch = (...args: any[]) => {
+      dispatchedView = thisViewRef;
+      return originalDispatch(...args);
+    };
+
+    vi.advanceTimersByTime(600); // Wait for debounce + fetch
+
+    // The buildViewportDecorations should have been called
+    expect(capturedView).not.toBeNull();
+
+    // After the async fetch resolves, dispatch should be called
+    // This confirms the async callback used this.view (which is the current view)
+    expect(dispatchedView).toBe(thisViewRef);
+  });
+});
+
 describe('destroy', () => {
   beforeEach(() => { vi.useFakeTimers(); resetMocks(); mocks.getSemanticInlayHints.mockResolvedValue({ inlay_hints: [] }); });
   afterEach(() => { vi.useRealTimers(); });

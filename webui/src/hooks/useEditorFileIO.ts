@@ -376,6 +376,21 @@ export function useEditorFileIO(
       const serverMtime =
         saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
 
+      // If format-on-save was applied, update the CodeMirror view with the formatted content
+      if (saveResult?.formattedContent && viewRef.current) {
+        isExternalUpdateRef.current = true;
+        try {
+          viewRef.current.dispatch({
+            changes: { from: 0, to: viewRef.current.state.doc.length, insert: saveResult.formattedContent },
+            annotations: suppressHistoryAnnotations,
+            effects: setOriginalContent.of(saveResult.formattedContent),
+          });
+          setLocalContent(saveResult.formattedContent);
+        } finally {
+          isExternalUpdateRef.current = false;
+        }
+      }
+
       // Note: originalContent is updated by saveBuffer in EditorManagerContext
       // (no need to call setBufferOriginalContent here).
 

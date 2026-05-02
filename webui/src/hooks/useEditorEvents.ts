@@ -12,7 +12,6 @@
  * - editor-find / editor-find-replace
  * - editor-select-all
  * - editor-format-document
- * - format-on-save-failed
  * - editor-find-all-references
  * - editor-go-to-workspace-symbol
  * - editor-go-to-symbol
@@ -122,44 +121,10 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       } else if (e.type === 'editor-format-document') {
         const currentBuffer = bufferRef.current;
         if (viewRef.current && currentBuffer) {
-          const detail = (e as CustomEvent).detail as { requestId?: string; content?: string } | undefined;
-          const requestId = detail?.requestId;
-          const content = detail?.content ?? viewRef.current.state.doc.toString();
-          const formatPromise = formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size);
-          const capturedBufferId = currentBuffer.id;
-
-          if (requestId) {
-            formatPromise.then(result => {
-              if (bufferRef.current?.id !== capturedBufferId) {
-                return;
-              }
-              const windowAny = window as unknown as Record<string, Map<string, (r: { formatted: string; error?: string }) => void>>;
-              const resolveMap = windowAny.__formatResolveMap;
-              const stillActive = resolveMap?.has(requestId);
-              if (result.error) {
-                notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
-              }
-              if (stillActive && !result.error && result.formatted !== content && viewRef.current) {
-                viewRef.current.dispatch({
-                  changes: {
-                    from: 0,
-                    to: viewRef.current.state.doc.length,
-                    insert: result.formatted,
-                  },
-                  annotations: [Transaction.addToHistory.of(false)],
-                });
-              }
-              if (resolveMap) {
-                const resolve = resolveMap.get(requestId);
-                if (resolve) {
-                  resolve(result);
-                  resolveMap.delete(requestId);
-                }
-              }
-            });
-          } else {
-            formatPromise.then(result => {
-              if (bufferRef.current?.id !== capturedBufferId) return;
+          const content = viewRef.current.state.doc.toString();
+          formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size)
+            .then(result => {
+              if (bufferRef.current?.id !== currentBuffer.id) return;
               if (result.error) {
                 notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
                 return;
@@ -175,10 +140,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
                 });
               }
             });
-          }
         }
-      } else if (e.type === 'format-on-save-failed') {
-        notificationBus.notify('warning', 'Format Document', 'Format on save failed - file saved without formatting');
       } else if (e.type === 'editor-find-all-references') {
         handleFindAllReferences();
       } else if (e.type === 'editor-go-to-workspace-symbol') {
@@ -218,7 +180,6 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
     document.addEventListener('editor-find-replace', handler);
     document.addEventListener('editor-select-all', handler);
     document.addEventListener('editor-format-document', handler);
-    document.addEventListener('format-on-save-failed', handler);
     document.addEventListener('editor-find-all-references', handler);
     document.addEventListener('editor-go-to-workspace-symbol', handler);
     document.addEventListener('editor-go-to-symbol', handler);
@@ -236,7 +197,6 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       document.removeEventListener('editor-find-replace', handler);
       document.removeEventListener('editor-select-all', handler);
       document.removeEventListener('editor-format-document', handler);
-      document.removeEventListener('format-on-save-failed', handler);
       document.removeEventListener('editor-find-all-references', handler);
       document.removeEventListener('editor-go-to-workspace-symbol', handler);
       document.removeEventListener('editor-go-to-symbol', handler);

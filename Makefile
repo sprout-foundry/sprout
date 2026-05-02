@@ -262,6 +262,10 @@ verify-dist-local:
 	@echo "Verifying local-mode dist bundle..."
 	@bash scripts/verify-dist-bundle.sh dist/local
 
+# Export endpoint manifest (for Foundry Service Worker sync)
+export-endpoint-manifest:
+	@node scripts/export-endpoint-manifest.mjs
+
 # Full development build: UI + WASM + Go binary
 # Optimized: skips React rebuild if source files haven't changed
 build-all: deploy-ui build-wasm build

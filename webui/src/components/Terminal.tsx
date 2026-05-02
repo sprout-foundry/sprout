@@ -518,8 +518,8 @@ function Terminal({
     (direction: 'horizontal' | 'vertical') => {
       const currentDir = splitDirectionRef.current;
 
-      if (currentDir !== 'none') {
-        // Unsplit: remove secondary pane and cleanup
+      if (currentDir === direction) {
+        // Same direction → toggle off (unsplit)
         if (panesRef.current.length > 1) {
           const secondaryPane = panesRef.current[1];
           secondaryPane.sessions.forEach((s) => {
@@ -534,8 +534,13 @@ function Terminal({
         }
         splitDirectionRef.current = 'none';
         setSplitDirection('none');
+      } else if (currentDir !== 'none') {
+        // Different direction → switch direction, keep existing panes
+        setSplitSizes([50, 50]);
+        splitDirectionRef.current = direction;
+        setSplitDirection(direction);
       } else {
-        // Create new pane with session
+        // Not split → create new pane with session
         paneIdCounter.current += 1;
         const paneId = `pane-${paneIdCounter.current}`;
         const splitSessionNum = sessionCounterRef.current++;

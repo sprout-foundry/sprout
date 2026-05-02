@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   FileEdit,
-  BarChart3,
   ClipboardList,
   BarChart3 as BarChart3Icon,
   FileText,

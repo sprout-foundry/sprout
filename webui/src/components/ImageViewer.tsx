@@ -6,6 +6,15 @@ import { useLog } from '../utils/log';
 import ViewerToolbar from './ViewerToolbar';
 import './ImageViewer.css';
 
+/** EyeDropper API — Chrome-only, not in standard TS DOM lib */
+interface EyeDropperResult {
+  sRGBHex: string;
+}
+
+interface EyeDropper {
+  open(): Promise<EyeDropperResult>;
+}
+
 interface ImageViewerProps {
   filePath: string;
   fileName: string;
@@ -288,8 +297,8 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
       return;
     }
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dropper = new (window as any).EyeDropper();
+      const EyeDropperConstructor = window.EyeDropper as unknown as new () => EyeDropper;
+      const dropper = new EyeDropperConstructor();
       const result = await dropper.open();
       setPickedColor(result.sRGBHex);
       await navigator.clipboard.writeText(result.sRGBHex);

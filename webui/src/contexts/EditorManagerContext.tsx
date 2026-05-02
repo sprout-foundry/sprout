@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
-import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
+import type { EditorBuffer, EditorPane, PaneLayout, EditorFileEntry } from '../types/editor';
 import { showThemedPrompt, showThemedConfirm } from '@sprout/ui';
-import { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
 import { debugLog } from '../utils/log';
 import { useSproutFetch } from './SproutAdapterContext';
@@ -167,7 +167,7 @@ interface EditorManagerContextValue {
   setMaxPanes: (n: number) => void;
 
   // Actions
-  openFile: (file: any) => string; // Returns buffer ID
+  openFile: (file: EditorFileEntry) => string; // Returns buffer ID
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
@@ -176,7 +176,7 @@ interface EditorManagerContextValue {
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }) => string;
   openCompareBuffer: (options: {
     originalContent: string;
@@ -198,7 +198,7 @@ interface EditorManagerContextValue {
   updateBufferContent: (bufferId: string, content: string) => void;
   updateBufferCursor: (bufferId: string, position: { line: number; column: number }) => void;
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
-  updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
+  updateBufferMetadata: (bufferId: string, updates: Record<string, unknown>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
   saveBuffer: (bufferId: string) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
@@ -421,7 +421,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, []);
 
   // Open a file in an editor pane
-  const openFile = useCallback((file: any) => {
+  const openFile = useCallback((file: EditorFileEntry) => {
     const filePath = file.path;
 
     // Check if file is already open in a buffer
@@ -509,7 +509,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     ext?: string;
     isPinned?: boolean;
     isClosable?: boolean;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }) => {
     const currentBuffers = buffersRef.current;
     const existingBufferEntry = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === options.path);
@@ -621,7 +621,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, [openWorkspaceBuffer]);
 
   // Update buffer content
-  const updateBufferMetadata = useCallback((bufferId: string, updates: Record<string, any>) => {
+  const updateBufferMetadata = useCallback((bufferId: string, updates: Record<string, unknown>) => {
     setBuffers(prev => {
       const buf = prev.get(bufferId);
       if (!buf) return prev;

@@ -2,7 +2,9 @@
  * Search domain API — adapter-aware search operations.
  */
 
-export async function search(fetchFn: typeof fetch, query: string, options?: Record<string, any>): Promise<any> {
+import { SearchOptions, SearchResponse, SearchReplaceRequest, SearchReplaceResponse } from './types';
+
+export async function search(fetchFn: typeof fetch, query: string, options?: SearchOptions): Promise<SearchResponse> {
   const params = new URLSearchParams({ query });
   if (options?.case_sensitive) params.set('case_sensitive', 'true');
   if (options?.whole_word) params.set('whole_word', 'true');
@@ -17,7 +19,7 @@ export async function search(fetchFn: typeof fetch, query: string, options?: Rec
   return response.json();
 }
 
-export async function searchReplace(fetchFn: typeof fetch, request: Record<string, any>): Promise<any> {
+export async function searchReplace(fetchFn: typeof fetch, request: SearchReplaceRequest): Promise<SearchReplaceResponse> {
   const response = await fetchFn('/api/search/replace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

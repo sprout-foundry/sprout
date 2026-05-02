@@ -87,7 +87,7 @@ export default function MCPSettingsTab({
 
         <div className="crud-list">
           {serverEntries.map(([name, cfg]) => {
-            const server = cfg as Record<string, unknown>;
+            const server = cfg as unknown as Record<string, unknown>;
             return (
               <div key={name} className="crud-item">
                 <span className="crud-item-name">{name}</span>

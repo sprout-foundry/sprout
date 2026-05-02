@@ -13,6 +13,8 @@ interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  /** Optional name displayed in the fallback UI to identify which panel failed. */
+  panelName?: string;
 }
 
 interface ErrorBoundaryState {
@@ -81,11 +83,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
 
       // Default error UI
+      const heading = this.props.panelName ? `Error in ${this.props.panelName}` : 'Something went wrong';
       return (
         <div className="error-boundary">
           <div className="error-boundary-content">
             <h2>
-              <TriangleAlert size={24} className="inline-block mr-2 align-text-bottom" /> Something went wrong
+              <TriangleAlert size={24} className="inline-block mr-2 align-text-bottom" /> {heading}
             </h2>
             <p className="error-message">{this.state.error && this.state.error.toString()}</p>
             <details className="error-details">

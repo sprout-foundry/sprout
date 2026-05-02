@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback, memo, type ReactNode } from 'react';
 import type { DragEvent, MouseEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   X,
@@ -966,4 +966,4 @@ function EditorTabs({
   );
 }
 
-export default EditorTabs;
+export default memo(EditorTabs);

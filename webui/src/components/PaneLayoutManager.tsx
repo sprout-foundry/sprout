@@ -4,7 +4,7 @@ import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus, GitBranch } from 'lu
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
 import ResizeHandle from './ResizeHandle';
-import { MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
+import { MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import type { EditorPane, EditorBuffer, PaneLayout } from '../types/editor';
 import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity } from '../types/app';
 import type { OpenWorkspaceBufferFn } from '../hooks/useChatSessionSync';
@@ -623,24 +623,32 @@ function PaneLayoutManager({
 
     return (
       <>
-        {panes.map((pane, index) => {
-          const paneSize = panes.length === 1 ? 100 : paneSizes[pane.id] || 100 / panes.length;
-          const isLast = index === panes.length - 1;
-          const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-
+        {(() => {
+          const rawSizes = panes.map(p => paneSizes[p.id] || (100 / panes.length));
+          const totalSize = rawSizes.reduce((a, b) => a + b, 0);
           return (
-            <Fragment key={pane.id}>
-              {renderPaneById(pane.id, toPaneFlex(paneSize))}
-              {showResizeHandles && !isLast && (
-                <ResizeHandle
-                  direction={splitAxis}
-                  onResize={handlePaneResize(pane.id, splitAxis)}
-                  onResizeEnd={handlePaneResizeEnd(pane.id)}
-                />
-              )}
-            </Fragment>
+            <>
+              {panes.map((pane, index) => {
+                const paneSize = normalizePaneSize(rawSizes[index], totalSize);
+                const isLast = index === panes.length - 1;
+                const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
+
+                return (
+                  <Fragment key={pane.id}>
+                    {renderPaneById(pane.id, toPaneFlex(paneSize))}
+                    {showResizeHandles && !isLast && (
+                      <ResizeHandle
+                        direction={splitAxis}
+                        onResize={handlePaneResize(pane.id, splitAxis)}
+                        onResizeEnd={handlePaneResizeEnd(pane.id)}
+                      />
+                    )}
+                  </Fragment>
+                );
+              })}
+            </>
           );
-        })}
+        })()}
       </>
     );
   }

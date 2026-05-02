@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
+import { MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
 
 interface UsePaneManagementParams {
   panes: EditorPane[];
@@ -16,6 +17,10 @@ interface UsePaneManagementParams {
   setIsLinkedScrollEnabled: Dispatch<SetStateAction<boolean>>;
   maxPanes?: number; // Optional: configurable max panes limit (default: 6)
 }
+
+// Pane position values supporting up to 6 panes
+const PANE_POSITIONS = ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary', 'senary'] as const;
+const STABLE_PANE_IDS = ['pane-2', 'pane-3', 'pane-4', 'pane-5', 'pane-6'] as const;
 
 /** Pane layout management: close, switch, split, grid, resize. */
 export function usePaneManagement({
@@ -61,15 +66,18 @@ export function usePaneManagement({
     (paneId: string, direction: 'vertical' | 'horizontal') => {
       if (panes.length >= maxPanes) return null;
       const usedIds = new Set(panes.map((p) => p.id));
-      const stableIds = ['pane-2', 'pane-3', 'pane-4'];
-      const newPaneId = stableIds.find((id) => !usedIds.has(id)) || `pane-${Date.now()}`;
+      const newPaneId = STABLE_PANE_IDS.find((id) => !usedIds.has(id)) || `pane-${Date.now()}`;
+      // Dynamic position assignment based on current panes.length index
+      const positionIndex = panes.length; // New pane index (0-based: primary already at 0)
+      // We never exceed bounds because we check panes.length < maxPanes above
+      const newPosition = PANE_POSITIONS[positionIndex] as (typeof PANE_POSITIONS)[number];
       const newPanes: EditorPane[] = [
         ...panes,
         {
           id: newPaneId,
           bufferId: null,
           isActive: false,
-          position: panes.length === 1 ? 'secondary' : panes.length === 2 ? 'tertiary' : 'quaternary',
+          position: newPosition,
         },
       ];
       setPanes(newPanes);
@@ -82,7 +90,7 @@ export function usePaneManagement({
       setActivePaneId(newPaneId);
       return newPaneId;
     },
-    [panes, setPanes, setPaneLayoutState, setPaneSizes, setActivePaneId],
+    [panes, maxPanes, setPanes, setPaneLayoutState, setPaneSizes, setActivePaneId],
   );
 
   const splitIntoGrid = useCallback(() => {
@@ -107,13 +115,19 @@ export function usePaneManagement({
     }
 
     const usedIds = new Set(panes.map((p) => p.id));
-    const newPaneIds = ['pane-2', 'pane-3', 'pane-4'].filter((id) => !usedIds.has(id));
+    const newPaneIds = STABLE_PANE_IDS.filter((id) => !usedIds.has(id));
 
+    // Grid is always 2×2 = 4 panes (primary + 3 additional)
+    const numAdditionalPanes = Math.min(3, newPaneIds.length);
     const newPanes: EditorPane[] = [
       { ...primaryPane, position: 'primary' },
-      { id: newPaneIds[0], bufferId: null, isActive: false, position: 'secondary' },
-      { id: newPaneIds[1], bufferId: null, isActive: false, position: 'tertiary' },
-      { id: newPaneIds[2], bufferId: null, isActive: false, position: 'quaternary' },
+      ...Array.from({ length: numAdditionalPanes }, (_, i) => ({
+        id: newPaneIds[i],
+        bufferId: null,
+        isActive: false,
+        // We never exceed bounds because numAdditionalPanes is capped at 3 (PANE_POSITIONS has 6 entries)
+        position: PANE_POSITIONS[i + 1] as (typeof PANE_POSITIONS)[number],
+      })),
     ];
 
     setPanes(newPanes);
@@ -126,8 +140,9 @@ export function usePaneManagement({
       'grid:row': typeof prev['grid:row'] === 'number' && isFinite(prev['grid:row']) ? prev['grid:row'] : 50,
     }));
 
-    return [primaryPane.id, ...newPaneIds];
-  }, [panes, setBuffers, setPanes, setPaneLayoutState, setActivePaneId, setPaneSizes]);
+    const createdPaneIds = newPanes.map((p) => p.id);
+    return createdPaneIds;
+  }, [panes, maxPanes, setBuffers, setPanes, setPaneLayoutState, setActivePaneId, setPaneSizes]);
 
   const closeSplit = useCallback(() => {
     const activePane = panes.find((p) => p.id === activePaneId);
@@ -167,7 +182,18 @@ export function usePaneManagement({
 
   const updatePaneSize = useCallback(
     (paneId: string, size: number) => {
-      setPaneSizes((prev) => ({ ...prev, [paneId]: size }));
+      setPaneSizes((prev) => {
+        // Count only actual pane IDs (exclude group:*, nested:*, grid:* keys)
+        const actualPaneKeys = Object.keys(prev).filter(
+          key => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:')
+        );
+        const currentPanesCount = actualPaneKeys.length;
+
+        const maxAllowedSize = 100 - MIN_PANE_WIDTH_PERCENT * (currentPanesCount - 1);
+        // Clamp the size to ensure no pane goes below minimum width
+        const clampedSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowedSize, size));
+        return { ...prev, [paneId]: clampedSize };
+      });
     },
     [setPaneSizes],
   );

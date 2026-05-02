@@ -7,6 +7,13 @@ import { debugLog } from '../utils/log';
 import { useSproutFetch } from './SproutAdapterContext';
 
 // ---------------------------------------------------------------------------
+// Pane configuration constants
+// ---------------------------------------------------------------------------
+
+export const MAX_PANES = 6;
+export const MIN_PANE_WIDTH_PERCENT = 8;
+
+// ---------------------------------------------------------------------------
 // Adapter-agnostic file write helpers (consent flow for external paths)
 // These are module-level so they don't get recreated on every render.
 // ---------------------------------------------------------------------------
@@ -444,8 +451,15 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Helper to find the rightmost pane for chat placement
   const getRightmostPane = useCallback((paneList: EditorPane[]) => {
     if (paneList.length === 0) return null;
-    // Position order: primary=0, secondary=1, tertiary=2
-    const positionOrder: Record<string, number> = { 'primary': 0, 'secondary': 1, 'tertiary': 2 };
+    // Position order: primary=0, secondary=1, tertiary=2, quaternary=3, quinary=4, senary=5
+    const positionOrder: Record<string, number> = {
+      'primary': 0,
+      'secondary': 1,
+      'tertiary': 2,
+      'quaternary': 3,
+      'quinary': 4,
+      'senary': 5
+    };
     return paneList.reduce((rightmost, pane) => {
       const rightmostOrder = positionOrder[rightmost.position as string] ?? 0;
       const paneOrder = positionOrder[pane.position as string] ?? 0;
@@ -1060,9 +1074,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Split a pane
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
-    if (panes.length >= 3) return null; // Max 3 panes
+    if (panes.length >= MAX_PANES) return null; // Max 6 panes
 
     const newPaneId = `pane-${Date.now()}`;
+
+    // Determine the position for the new pane based on current count
+    const positionValues: Array<'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary' | 'senary'> =
+      ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary', 'senary'];
+    const newPosition = positionValues[panes.length];
 
     const newPanes: EditorPane[] = [
       ...panes,
@@ -1070,27 +1089,29 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
         id: newPaneId,
         bufferId: null,
         isActive: false,
-        position: panes.length === 1 ? 'secondary' : 'tertiary'
+        position: newPosition
       }
     ];
 
     setPanes(newPanes);
 
-    // Update layout
+    // Update layout and distribute sizes evenly
+    const newPaneCount = panes.length + 1;
     if (panes.length === 1) {
       setPaneLayoutState(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
-      // Initialize pane sizes (50/50 split)
+      // Initialize pane sizes (50/50 split for 2 panes)
       setPaneSizes({
         [panes[0].id]: 50,
         [newPaneId]: 50
       });
     } else {
-      // Preserve the original root split direction and let the caller
-      // decide how the nested split should be rendered.
-      setPaneSizes((prev) => ({
-        ...prev,
-        [newPaneId]: 50
-      }));
+      // Distribute sizes evenly among all panes
+      const evenSize = 100 / newPaneCount;
+      const newSizes: Record<string, number> = {};
+      newPanes.forEach(pane => {
+        newSizes[pane.id] = evenSize;
+      });
+      setPaneSizes(newSizes);
     }
 
     // Activate new pane
@@ -1153,10 +1174,23 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 
   // Update pane size (for resizable split panes)
   const updatePaneSize = useCallback((paneId: string, size: number) => {
-    setPaneSizes(prev => ({
-      ...prev,
-      [paneId]: size
-    }));
+    setPaneSizes(prev => {
+      // Count only actual pane IDs (exclude group:*, nested:*, grid:* keys)
+      const actualPaneKeys = Object.keys(prev).filter(
+        key => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:')
+      );
+      const currentPanesCount = actualPaneKeys.length;
+
+      // Calculate maximum size for this pane so that all other panes
+      // can maintain at least MIN_PANE_WIDTH_PERCENT
+      const maxAllowedSize = 100 - MIN_PANE_WIDTH_PERCENT * (currentPanesCount - 1);
+      // Clamp the size to ensure no pane goes below minimum width
+      const clampedSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowedSize, size));
+      return {
+        ...prev,
+        [paneId]: clampedSize
+      };
+    });
   }, []);
 
   const value: EditorManagerContextValue = {

@@ -647,6 +647,38 @@ These are high-impact structural improvements identified through code evaluation
 
 ---
 
+## Frontend Architecture
+
+[] - FRONTEND: Decompose App.tsx (2,376 lines) — Extract state management into a reducer or context. Extract event handling into a dedicated `useEventHandler` hook. Target: App.tsx under 500 lines. `webui/src/App.tsx`
+[] - FRONTEND: Decompose oversized components — SettingsPanel.tsx (2,019), LocationSwitcher.tsx (1,885), ContextPanel.tsx (1,829), Chat.tsx (760). Follow the EditorPane extraction pattern from SP-010.
+[] - FRONTEND: Eliminate `any` types in critical paths — Define proper TypeScript interfaces for all event types and API responses. Enable `no-explicit-any` as `error` in ESLint. `webui/src/App.tsx`, `contexts/EditorManagerContext.tsx`, `services/api.ts`
+[] - FRONTEND: Deduplicate types between webui and packages/ui — Define shared types in `packages/ui/src/types/` and import from webui. `Message`, `ToolExecution`, and other interfaces are defined independently in both packages.
+[] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`
+
+## Backend Architecture
+
+[] - BACKEND: Fix AskUser tool for WebUI mode — `pkg/agent_tools/ask_user.go` reads from stdin (which is `/dev/null` in daemon mode). Route through the event bus + approval manager pattern (like security approvals) so the question appears in the WebUI chat.
+[] - BACKEND: Add proactive rate limiting — The API client only reacts to 429 responses with retry. Add a simple token-bucket rate limiter per provider to prevent cascading 429s when running multiple subagents. `pkg/agent_api/provider_adapter.go`
+[] - BACKEND: Add MCP client reconnection — If an MCP server connection drops, the client doesn't reconnect. Add exponential backoff reconnection with health check pings. `pkg/mcp/client.go`
+[] - BACKEND: Remove global env mutation in config manager — `NewManagerWithLayers()` calls `envutil.SetEnv("CONFIG", dir)` which mutates process-level environment variables. Pass paths explicitly through function arguments instead. `pkg/configuration/config.go`
+
+## Reliability Gaps
+
+[] - RELIABILITY: Cap `messages[]` array in App.tsx — The underlying `messages[]` array holds every message for the session with no size bound. Very long sessions (100+ tool calls) accumulate significant memory despite `react-virtuoso` rendering. Implement message windowing — keep the last N messages in state, with a separate persistence layer for history. `webui/src/App.tsx`
+
+## Test Coverage
+
+[] - TESTING: ~170 Go source files have zero test coverage — `pkg/agent/` (16 untested), `pkg/agent_tools/` (13 untested), `pkg/webui/` (20 untested), `pkg/mcp/` (7 untested)
+[] - TESTING: `packages/ui` has zero test coverage — 24 components, 1 test file with 19 tests
+[] - TESTING: `webui/src/` has ~4% test coverage — 262 source files, 11 test files
+
+## Roadmap Hygiene
+
+[] - HYGIENE: Create roadmap specs for undocumented features — Memory system, multi-chat sessions, trace/dataset mode, and self_review tool all have zero roadmap coverage despite being fully implemented.
+[] - HYGIENE: Deduplicate TODO.md — ~25 back-to-back duplicate entries across Editor Tier 3/4, SP-010, Credentials, Cloud, and AGENT-TERM sections.
+
+---
+
 ## Agent Terminal Sessions — Hidden PTY Routing + Background Mode
 
 > **Spec:** [SP-008](./roadmap/SP-008-agent-terminal-sessions.md) | **Status:** 📋 Proposed | Implementation awaiting start.

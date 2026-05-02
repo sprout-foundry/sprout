@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import { Save, Sun, Moon, Loader2 } from 'lucide-react';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
@@ -113,4 +113,4 @@ function EditorToolbar({
   );
 }
 
-export default EditorToolbar;
+export default memo(EditorToolbar);

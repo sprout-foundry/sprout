@@ -250,6 +250,21 @@
   flex-shrink: 0;
 }
 
+/* ── Per-pane tab bar ── */
+.terminal-pane-tab-bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  min-height: auto;
+}
+
+.terminal-pane-tab-bar .terminal-tab-bar {
+  flex: 1;
+  min-width: 0;
+}
+
 .terminal-pane-dot {
   width: 7px;
   height: 7px;

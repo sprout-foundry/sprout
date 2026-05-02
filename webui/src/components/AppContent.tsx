@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose, MessageSquarePlus } from 'lucide-react';
+import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import WorkspaceBar from './WorkspaceBar';
 import Terminal from './Terminal';
@@ -1045,6 +1046,7 @@ const AppContent: React.FC<AppContentProps> = ({
         />
       )}
 
+      <ErrorBoundary panelName="Sidebar">
       <Sidebar
         isConnected={state.isConnected}
         instances={instances}
@@ -1110,6 +1112,7 @@ const AppContent: React.FC<AppContentProps> = ({
           openWorkspaceBuffer,
         }}
       />
+      </ErrorBoundary>
       <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}>
         <div className="header-bar">
           <MenuBar />
@@ -1169,6 +1172,7 @@ const AppContent: React.FC<AppContentProps> = ({
             )}
 
             {/* Render platform pages or editor workspace */}
+            <ErrorBoundary panelName="Editor">
             {state.currentView === 'tasks' ? (
               <TasksPage />
             ) : state.currentView === 'billing' ? (
@@ -1193,8 +1197,10 @@ const AppContent: React.FC<AppContentProps> = ({
                 </div>
               </EditorWithOutline>
             )}
+            </ErrorBoundary>
           </div>
           {showContextSidebar && !PLATFORM_VIEWS.has(state.currentView) && (
+            <ErrorBoundary panelName="Context Panel">
             <ContextPanel
               ref={contextPanelRef}
               context="chat"
@@ -1218,6 +1224,7 @@ const AppContent: React.FC<AppContentProps> = ({
               onRestoreSession={(sessionId) => apiService.restoreSession(sessionId)}
               onLoadRevisionDetails={(revisionId) => apiService.getRevisionDetails(revisionId)}
             />
+            </ErrorBoundary>
           )}
         </div>
         <Status isConnected={state.isConnected} stats={state.stats} />
@@ -1234,10 +1241,12 @@ const AppContent: React.FC<AppContentProps> = ({
       </div>
 
       {supportsLocalTerminal && (
+        <ErrorBoundary panelName="Terminal">
         <Terminal
           isExpanded={isTerminalExpanded}
           onToggleExpand={onTerminalExpandedChange}
         />
+        </ErrorBoundary>
       )}
 
       <CommandPalette

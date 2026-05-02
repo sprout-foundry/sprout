@@ -810,7 +810,7 @@ function App() {
                 connection_phase: phase,
                 transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
               },
-              logs: [...prev.logs, logEntry]
+              logs: [...prev.logs, logEntry].slice(-500)
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
         }
@@ -837,7 +837,7 @@ function App() {
           subagentActivities: [],
           queryProgress: null, // Clear previous progress
           currentTodos: [],    // Clear previous todos
-          logs: [...prev.logs, logEntry]
+          logs: [...prev.logs, logEntry].slice(-500)
         }));
         debugLog('[>>] Query started:', startedQuery);
         break;
@@ -958,7 +958,7 @@ function App() {
                   }
                   return tool;
                 }),
-            logs: [...prev.logs, logEntry]
+            logs: [...prev.logs, logEntry].slice(-500)
           };
         });
         debugLog('[OK] Query completed');
@@ -1023,7 +1023,7 @@ function App() {
               }
               break;
             }
-            return { ...prev, messages, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+            return { ...prev, messages, toolExecutions: updated, logs: [...prev.logs, logEntry].slice(-500) };
           }
 
           // Add new tool execution from rich start event
@@ -1059,7 +1059,7 @@ function App() {
             ...prev,
             messages,
             toolExecutions: [...prev.toolExecutions, newTool],
-            logs: [...prev.logs, logEntry]
+            logs: [...prev.logs, logEntry].slice(-500)
           };
         });
         debugLog('[tool] Tool start:', event.data?.tool_name);
@@ -1110,7 +1110,7 @@ function App() {
             return {
               ...prev,
               toolExecutions: [...prev.toolExecutions, fallbackExecution],
-              logs: [...prev.logs, logEntry]
+              logs: [...prev.logs, logEntry].slice(-500)
             };
           }
 
@@ -1123,7 +1123,7 @@ function App() {
             return msg;
           });
 
-          return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
+          return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry].slice(-500) };
         });
         debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
         break;
@@ -1149,13 +1149,13 @@ function App() {
           };
 
           if (!activity.message) {
-            return { ...prev, logs: [...prev.logs, logEntry] };
+            return { ...prev, logs: [...prev.logs, logEntry].slice(-500) };
           }
 
           return {
             ...prev,
             subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-            logs: [...prev.logs, logEntry]
+            logs: [...prev.logs, logEntry].slice(-500)
           };
         });
         break;
@@ -1208,11 +1208,11 @@ function App() {
                   break;
                 }
                 if (touched) {
-                  return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+                  return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry].slice(-500) };
                 }
               }
 
-              return { ...prev, logs: [...prev.logs, logEntry] };
+              return { ...prev, logs: [...prev.logs, logEntry].slice(-500) };
             });
           } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
             // Warning/error messages are operational notices, not model reasoning.
@@ -1231,7 +1231,7 @@ function App() {
                   content: (lastMessage.content || '') + prefixedMsg
                 };
               }
-              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry].slice(-500) };
             });
           } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
             // Meaningful info messages should render in chat, but not inside reasoning.
@@ -1247,7 +1247,7 @@ function App() {
                   content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
                 };
               }
-              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry].slice(-500) };
             });
           }
           // For plain 'info' (unclassified): silently skip rendering in WebUI.
@@ -1263,7 +1263,7 @@ function App() {
         setState(prev => ({
           ...prev,
           currentTodos: normalizedTodos,
-          logs: [...prev.logs, logEntry]
+          logs: [...prev.logs, logEntry].slice(-500)
         }));
         break;
 
@@ -1296,7 +1296,7 @@ function App() {
         // Handle terminal output - this will be processed by the Terminal component
         setState(prev => ({
           ...prev,
-          logs: [...prev.logs, logEntry]
+          logs: [...prev.logs, logEntry].slice(-500)
         }));
         debugLog('[term] Terminal output received:', event.data);
         break;
@@ -1324,7 +1324,7 @@ function App() {
               content: `[FAIL] Error: ${errorMessage}`,
               timestamp: new Date()
             }],
-            logs: [...prev.logs, logEntry]
+            logs: [...prev.logs, logEntry].slice(-500)
           }));
           // Fetch fresh provider state from backend to ensure sync
           apiService.getStats().then((stats: any) => {
@@ -1356,7 +1356,7 @@ function App() {
               content: `[FAIL] Error: ${errorMessage}`,
               timestamp: new Date()
             }],
-            logs: [...prev.logs, logEntry]
+            logs: [...prev.logs, logEntry].slice(-500)
           }));
         }
         console.error('[FAIL] Error event:', event.data);
@@ -1382,7 +1382,7 @@ function App() {
             ...prev.stats,
             ...event.data
           },
-          logs: [...prev.logs, logEntry]
+          logs: [...prev.logs, logEntry].slice(-500)
         }));
         break;
 
@@ -1412,7 +1412,7 @@ function App() {
               riskType: event.data.risk_type != null ? String(event.data.risk_type) : undefined,
               target: event.data.target != null ? String(event.data.target) : undefined,
             },
-            logs: [...prev.logs, logEntry],
+            logs: [...prev.logs, logEntry].slice(-500),
           }));
         }
         debugLog('[security] Approval request:', event.data?.tool_name, event.data?.risk_level);
@@ -1432,7 +1432,7 @@ function App() {
             filePath: event.data.file_path != null ? String(event.data.file_path) : undefined,
             concern: event.data.concern != null ? String(event.data.concern) : undefined,
           },
-          logs: [...prev.logs, logEntry],
+          logs: [...prev.logs, logEntry].slice(-500),
         }));
         debugLog('[security] Prompt request:', event.data?.file_path, event.data?.concern);
         break;
@@ -1442,7 +1442,7 @@ function App() {
         logEntry.level = 'warning';
         setState(prev => ({
           ...prev,
-          logs: [...prev.logs, logEntry]
+          logs: [...prev.logs, logEntry].slice(-500)
         }));
         debugLog('[?] Unknown event type:', event.type, event.data);
     }

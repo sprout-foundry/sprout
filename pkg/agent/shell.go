@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -109,6 +110,20 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 
 		returnResult = builder.String()
 		wasTruncated = true
+	}
+
+	// Redact secrets from the output before returning to LLM
+	if a.security != nil {
+		redactor := a.security.GetOutputRedactor()
+		if redactor != nil {
+			result := redactor.RedactToolOutput(returnResult, "shell_command", map[string]interface{}{
+				"command": command,
+			})
+			if len(result.Secrets) > 0 {
+				log.Printf("[redaction] Shell output redacted: %d -> %d chars", len(returnResult), len(result.Content))
+			}
+			returnResult = result.Content
+		}
 	}
 
 	// Store in history for potential deduplication

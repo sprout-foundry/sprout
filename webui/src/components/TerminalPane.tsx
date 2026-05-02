@@ -673,10 +673,14 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           wholeWord: false,
         };
 
-        if (direction === 'next') {
-          searchAddon.findNext(query, searchOptions);
-        } else {
-          searchAddon.findPrevious(query, searchOptions);
+        try {
+          if (direction === 'next') {
+            searchAddon.findNext(query, searchOptions);
+          } else {
+            searchAddon.findPrevious(query, searchOptions);
+          }
+        } catch (err) {
+          debugLog('[TerminalPane] search error (invalid regex?):', err);
         }
       },
       [],
@@ -688,6 +692,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       searchAddonRef.current?.clearDecorations();
       setMatchIndex(undefined);
       setMatchCount(undefined);
+      xtermRef.current?.focus();
     }, []);
 
     // ── Expose methods to parent ─────────────────────────────────────────────
@@ -796,8 +801,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
 
-      // Set up search results listener
-      searchAddon.onDidChangeResults((results: { resultIndex?: number; resultCount?: number }) => {
+      // Set up search results listener (store disposable for cleanup)
+      const resultsDisposable = searchAddon.onDidChangeResults((results: { resultIndex?: number; resultCount?: number }) => {
         setMatchIndex(results.resultIndex);
         setMatchCount(results.resultCount);
       });
@@ -816,6 +821,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       return () => {
+        // Dispose search results listener
+        resultsDisposable.dispose();
         // Remove wheel event listener
         if (container) {
           container.removeEventListener('wheel', handleWheel);

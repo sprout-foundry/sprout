@@ -50,12 +50,14 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
     // Focus input when search bar becomes visible
     useEffect(() => {
       if (visible) {
-        // Small delay to ensure the DOM has updated
-        const timer = setTimeout(() => {
-          inputRef.current?.focus();
-          inputRef.current?.select();
-        }, 50);
-        return () => clearTimeout(timer);
+        // Double rAF ensures the DOM has been painted before focusing
+        const raf1 = requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.select();
+          });
+        });
+        return () => cancelAnimationFrame(raf1);
       }
     }, [visible]);
 
@@ -152,12 +154,13 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
         <div className="terminal-search-input-wrapper">
           <input
             ref={inputRef}
-            type="text"
+            type="search"
             className="terminal-search-input"
             placeholder="Search in terminal..."
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            aria-label="Search in terminal"
           />
         </div>
 
@@ -167,6 +170,7 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             onClick={handlePrevious}
             disabled={!query.trim()}
             title="Previous match (Shift+Enter)"
+            aria-label="Previous match"
             type="button"
           >
             <ChevronUp size={14} />
@@ -177,12 +181,13 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             onClick={handleNext}
             disabled={!query.trim()}
             title="Next match (Enter)"
+            aria-label="Next match"
             type="button"
           >
             <ChevronDown size={14} />
           </button>
 
-          <span className="terminal-search-counter">
+          <span className="terminal-search-counter" aria-live="polite">
             {getMatchCounter()}
           </span>
 
@@ -192,6 +197,8 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             className={`terminal-search-toggle-btn ${caseSensitive ? 'active' : ''}`}
             onClick={toggleCaseSensitive}
             title="Match case (Aa)"
+            aria-label="Match case"
+            aria-pressed={caseSensitive}
             type="button"
           >
             <Type size={14} />
@@ -201,6 +208,8 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             className={`terminal-search-toggle-btn ${regex ? 'active' : ''}`}
             onClick={toggleRegex}
             title="Use regular expressions (.*)"
+            aria-label="Use regular expression"
+            aria-pressed={regex}
             type="button"
           >
             <Hash size={14} />

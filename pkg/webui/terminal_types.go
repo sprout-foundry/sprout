@@ -354,17 +354,26 @@ func (tm *TerminalManager) GetOrCreateHiddenSessionForChat(ctx context.Context, 
 		// between our RUnlock and the CreateHiddenSession Lock.
 		if errors.Is(err, ErrSessionExists) {
 			// Re-lookup the session created by the other goroutine
-			session, exists := tm.GetSession(sessionID)
+			existing, exists := tm.GetSession(sessionID)
 			if exists {
-				session.mutex.RLock()
-				active := session.Active
-				session.mutex.RUnlock()
+				existing.mutex.RLock()
+				active := existing.Active
+				existing.mutex.RUnlock()
 				if active {
 					return sessionID, nil
 				}
+				// Session exists but is inactive (e.g., closed after a timeout).
+				// Clean it up so we can create a fresh one.
+				_ = tm.CloseSession(sessionID)
 			}
+			// Retry creation after cleanup.
+			session, err = tm.CreateHiddenSession(sessionID, "agent", chatID)
+			if err != nil {
+				return "", fmt.Errorf("failed to create hidden session for chat %s after cleanup: %w", chatID, err)
+			}
+		} else {
+			return "", fmt.Errorf("failed to create hidden session for chat %s: %w", chatID, err)
 		}
-		return "", fmt.Errorf("failed to create hidden session for chat %s: %w", chatID, err)
 	}
 
 	// Wait for the shell to finish initializing (source rc files, print banners)

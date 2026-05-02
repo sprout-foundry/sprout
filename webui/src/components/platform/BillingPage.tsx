@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { useLog } from '../../utils/log';
+import { getBillingStatus, getProrationRecords, BillingStatus, ProrationRecord } from '../../services/billingService';
+import ProrationDisplay from './ProrationDisplay';
+import InvoiceHistory from './InvoiceHistory';
 import './PlatformPages.css';
 
 interface FoundryUsage {
@@ -27,6 +30,8 @@ const BillingPage: React.FC = () => {
   const [billing, setBilling] = useState<FoundryBilling | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
+  const [prorationRecords, setProrationRecords] = useState<ProrationRecord[]>([]);
 
   const fetchBilling = useCallback(async () => {
     const adapter = getAdapter();
@@ -59,9 +64,23 @@ const BillingPage: React.FC = () => {
     }
   }, [log]);
 
+  const fetchBillingStatus = useCallback(async () => {
+    const status = await getBillingStatus();
+    if (status) {
+      setBillingStatus(status);
+    }
+  }, []);
+
+  const fetchProrations = useCallback(async () => {
+    const records = await getProrationRecords(10);
+    setProrationRecords(records);
+  }, []);
+
   useEffect(() => {
     fetchBilling();
-  }, [fetchBilling]);
+    fetchBillingStatus();
+    fetchProrations();
+  }, [fetchBilling, fetchBillingStatus, fetchProrations]);
 
   const formatNumber = (num: number) => {
     return new Intl.NumberFormat('en-US').format(num);
@@ -122,6 +141,29 @@ const BillingPage: React.FC = () => {
 
       {!loading && !error && billing && (
         <>
+          {/* Dunning Status Alert */}
+          {billingStatus?.dunning_status === 'active' && (
+            <div className="platform-card warning" style={{ marginTop: '0' }}>
+              <div className="platform-card-header">
+                <h3 className="platform-card-title">Payment Issue</h3>
+              </div>
+              <div className="platform-card-body">
+                We had trouble processing your recent payment. Please update your payment method to avoid service interruption.
+              </div>
+            </div>
+          )}
+
+          {billingStatus?.dunning_status === 'suspended' && (
+            <div className="platform-card error" style={{ marginTop: '0' }}>
+              <div className="platform-card-header">
+                <h3 className="platform-card-title">Service Suspended</h3>
+              </div>
+              <div className="platform-card-body">
+                Your service has been temporarily suspended due to payment issues. Please update your payment method to restore access.
+              </div>
+            </div>
+          )}
+
           {/* Tier Information */}
           <div className="platform-card">
             <div className="platform-card-header">
@@ -206,6 +248,45 @@ const BillingPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Proration Credits/Charges Summary */}
+          {billingStatus?.proration_credits && billingStatus.proration_credits !== 0 && (
+            <div className="platform-card" style={{ marginTop: '24px' }}>
+              <div className="platform-card-header">
+                <h3 className="platform-card-title">Proration Summary</h3>
+              </div>
+              <div className="platform-card-body">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Current period proration credit:</span>
+                  <span style={{ fontWeight: '600', color: '#22c55e' }}>
+                    +{formatCurrency(billingStatus.proration_credits)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {billingStatus?.proration_charges && billingStatus.proration_charges !== 0 && (
+            <div className="platform-card warning" style={{ marginTop: '24px' }}>
+              <div className="platform-card-header">
+                <h3 className="platform-card-title">Proration Charge</h3>
+              </div>
+              <div className="platform-card-body">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Current period proration charge:</span>
+                  <span style={{ fontWeight: '600', color: '#ef4444' }}>
+                    -{formatCurrency(billingStatus.proration_charges)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Proration History */}
+          <ProrationDisplay prorationRecords={prorationRecords} />
+
+          {/* Invoice History */}
+          <InvoiceHistory />
 
           {billing.overage && (
             <div className="platform-card warning">

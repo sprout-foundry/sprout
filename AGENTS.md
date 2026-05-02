@@ -34,6 +34,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-012** UX Polish (proposed)
 - **SP-013** Agent Settings Management (proposed)
 - **SP-014** Agent Terminal Sessions (active)
+- **SP-015** Cloud Platform Integration (partially implemented)
 
 ## Testing
 

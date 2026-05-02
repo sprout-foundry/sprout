@@ -14,6 +14,12 @@ export const MAX_PANES = 6;
 export const MIN_PANE_WIDTH_PERCENT = 8;
 export const DEFAULT_MAX_PANES = 6; // Default configurable max panes
 
+/** Normalize pane sizes so they sum to exactly 100 */
+export function normalizePaneSize(size: number, total: number): number {
+  if (total === 0) return size;
+  return (size / total) * 100;
+}
+
 // ---------------------------------------------------------------------------
 // Adapter-agnostic file write helpers (consent flow for external paths)
 // These are module-level so they don't get recreated on every render.
@@ -1073,19 +1079,24 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
       closeBuffer(pane.bufferId);
     }
 
-    setPanes(prev => {
-      const newPanes = prev.filter(p => p.id !== paneId);
-      return newPanes;
+    const remaining = panes.filter(p => p.id !== paneId);
+    setPanes(remaining);
+
+    // Redistribute pane sizes evenly among remaining panes
+    const evenSize = remaining.length === 1 ? 100 : 100 / remaining.length;
+    const newSizes: Record<string, number> = {};
+    remaining.forEach(p => {
+      newSizes[p.id] = evenSize;
     });
+    setPaneSizes(newSizes);
 
     // If we closed the active pane, activate another
     if (paneId === activePaneId) {
-      const remainingPanes = panes.filter(p => p.id !== paneId);
-      setActivePaneId(remainingPanes[0]?.id || null);
+      setActivePaneId(remaining[0]?.id || null);
     }
 
-    // (Going from 2 → 1, not 3 → 2 — a 2-pane split is still valid)
-    if (panes.length === 2) {
+    // Going to single pane
+    if (remaining.length === 1) {
       setPaneLayoutState('single');
     }
   }, [panes, activePaneId, closeBuffer]);

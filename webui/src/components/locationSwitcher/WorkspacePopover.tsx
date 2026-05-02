@@ -1,9 +1,18 @@
 import React from 'react';
-import { FolderOpen, Monitor, RefreshCw, Loader2 } from 'lucide-react';
+import { FolderOpen, RefreshCw, Loader2 } from 'lucide-react';
 import { SproutInstance } from '../../services/api';
 import { supportsInstances } from '../../config/mode';
-import { normalizePath, collapseHomePath, getPathDisplayName } from './pathUtils';
-import { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
+import { normalizePath } from './pathUtils';
+import {
+  WorkspaceDirectory,
+  SwitchingState,
+  SSHFailureState,
+  RemoteWorkspaceContext,
+} from './types';
+import { WorkspaceSuggestionList } from './WorkspaceSuggestionList';
+import { WorkspaceSSHFavorites } from './WorkspaceSSHFavorites';
+import { WorkspaceRecentList } from './WorkspaceRecentList';
+import { WorkspaceInstances } from './WorkspaceInstances';
 
 export interface WorkspacePopoverProps {
   workspaceRoot: string;
@@ -25,7 +34,6 @@ export interface WorkspacePopoverProps {
 
   selectedIndex: number;
   setSelectedIndex: (index: number | ((prev: number) => number)) => void;
-  totalWorkspaceRows: number;
 
   recentWorkspaceItems: string[];
   remoteHostFavorites: string[];
@@ -47,16 +55,35 @@ export interface WorkspacePopoverProps {
 }
 
 export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
-  workspaceRoot, daemonRoot, remoteContext, switchingState, sshFailure,
-  showExpiredSessionRecovery, handleReloadWithoutSSHPath, handleRefresh,
-  isConnected, isLoading,
-  inputValue, setInputValue, suggestions, suggestionsLoading, suggestionsError,
-  selectedIndex, setSelectedIndex, totalWorkspaceRows,
-  recentWorkspaceItems, remoteHostFavorites, sshFavoriteWorkspaces,
-  submitWorkspaceChange, handleInputSubmit, addSSHFavoriteWorkspace, removeSSHFavoriteWorkspace,
-  popoverRef, pathInputRef,
-  sidebarCollapsed = false, instances = [], selectedInstancePID = 0,
-  isSwitchingInstance = false, onInstanceChange,
+  workspaceRoot,
+  daemonRoot,
+  remoteContext,
+  switchingState,
+  sshFailure,
+  showExpiredSessionRecovery,
+  handleReloadWithoutSSHPath,
+  handleRefresh,
+  isConnected,
+  isLoading,
+  inputValue,
+  setInputValue,
+  suggestions,
+  suggestionsLoading,
+  suggestionsError,
+  selectedIndex,
+  setSelectedIndex,
+  recentWorkspaceItems,
+  remoteHostFavorites,
+  submitWorkspaceChange,
+  handleInputSubmit,
+  addSSHFavoriteWorkspace,
+  removeSSHFavoriteWorkspace,
+  popoverRef,
+  pathInputRef,
+  instances = [],
+  selectedInstancePID = 0,
+  isSwitchingInstance = false,
+  onInstanceChange,
 }) => {
   return (
     <div
@@ -171,224 +198,54 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
             : 'Press Enter to switch. Arrow keys select a suggestion or recent workspace.'}
         </div>
 
-        {suggestionsLoading ? (
-          <div className="location-switcher-directory-loading">
-            <Loader2 size={14} className="spin" />
-            <span>Finding folders...</span>
-          </div>
-        ) : null}
-
-        {suggestionsError ? (
-          <div className="location-switcher-directory-error">
-            <span>{suggestionsError}</span>
-          </div>
-        ) : null}
-
-        {!suggestionsLoading && suggestions.length > 0 ? (
-          <>
-            <div className="location-switcher-section-header" role="presentation">
-              Suggestions
-            </div>
-            <div className="location-switcher-directory-list">
-              {suggestions.map((dir, index) => (
-                <button
-                  key={dir.path}
-                  type="button"
-                  className={`location-switcher-item ${
-                    index === selectedIndex ? 'selected' : ''
-                  } ${dir.path === workspaceRoot ? 'active' : ''}`}
-                  onClick={() => submitWorkspaceChange(dir.path)}
-                  role="option"
-                  aria-selected={dir.path === workspaceRoot}
-                >
-                  <span className="location-switcher-item-text">
-                    {dir.name}
-                  </span>
-                  <span className="location-switcher-item-meta">
-                    {remoteContext
-                      ? collapseHomePath(dir.path, remoteContext.homePath)
-                      : dir.path}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
+        <WorkspaceSuggestionList
+          workspaceRoot={workspaceRoot}
+          remoteContext={remoteContext}
+          suggestions={suggestions}
+          suggestionsLoading={suggestionsLoading}
+          suggestionsError={suggestionsError}
+          selectedIndex={selectedIndex}
+          onSelectSuggestion={submitWorkspaceChange}
+        />
 
         {/* SSH Favorites (remote only) */}
         {remoteContext ? (
-          <>
-            <div className="location-switcher-section-header" role="presentation">
-              Favorite Paths on {remoteContext.hostAlias}
-            </div>
-            <div className="location-switcher-ssh-actions">
-              <button
-                type="button"
-                className="location-switcher-session-btn"
-                onClick={() => addSSHFavoriteWorkspace(remoteContext.hostAlias, workspaceRoot)}
-                disabled={!workspaceRoot || switchingState.isSwitching}
-              >
-                Save Current Path
-              </button>
-            </div>
-            <div className="location-switcher-recent-list">
-              {remoteHostFavorites.length === 0 ? (
-                <div
-                  className="location-switcher-item location-switcher-item-empty"
-                  role="option"
-                  aria-selected={false}
-                >
-                  <span className="location-switcher-item-text">
-                    No saved paths on this host yet
-                  </span>
-                </div>
-              ) : (
-                remoteHostFavorites.map((path) => (
-                  <div
-                    key={`remote-favorite-${remoteContext.hostAlias}-${path}`}
-                    className="location-switcher-item location-switcher-item-session"
-                  >
-                    <span className="location-switcher-item-text">
-                      {getPathDisplayName(path)}
-                    </span>
-                    <span className="location-switcher-item-meta">
-                      {collapseHomePath(path, remoteContext.homePath)}
-                    </span>
-                    <div className="location-switcher-session-actions">
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn"
-                        onClick={() => submitWorkspaceChange(path)}
-                        disabled={switchingState.isSwitching}
-                      >
-                        Open
-                      </button>
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn"
-                        onClick={() => setInputValue(path)}
-                        disabled={switchingState.isSwitching}
-                      >
-                        Fill
-                      </button>
-                      <button
-                        type="button"
-                        className="location-switcher-session-btn danger"
-                        onClick={() => removeSSHFavoriteWorkspace(remoteContext.hostAlias, path)}
-                        disabled={switchingState.isSwitching}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </>
+          <WorkspaceSSHFavorites
+            remoteContext={remoteContext}
+            workspaceRoot={workspaceRoot}
+            favorites={remoteHostFavorites}
+            isSwitching={switchingState.isSwitching}
+            onSelectFavorite={submitWorkspaceChange}
+            onFillInput={setInputValue}
+            onSaveFavorite={() =>
+              addSSHFavoriteWorkspace(remoteContext.hostAlias, workspaceRoot)
+            }
+            onRemoveFavorite={(path) =>
+              removeSSHFavoriteWorkspace(remoteContext.hostAlias, path)
+            }
+          />
         ) : null}
 
         {/* Recent */}
-        <div className="location-switcher-section-header" role="presentation">
-          {remoteContext ? `Recent Paths on ${remoteContext.hostAlias}` : 'Recent Workspaces'}
-        </div>
-
-        <div className="location-switcher-recent-list">
-          {recentWorkspaceItems.length === 0 ? (
-            <div
-              className="location-switcher-item location-switcher-item-empty"
-              role="option"
-              aria-selected={false}
-            >
-              <span className="location-switcher-item-text">
-                No recent workspaces yet
-              </span>
-            </div>
-          ) : (
-            recentWorkspaceItems.map((path, index) => {
-              const rowIndex = suggestions.length + index;
-              return (
-                <button
-                  key={path}
-                  type="button"
-                  className={`location-switcher-item ${
-                    rowIndex === selectedIndex ? 'selected' : ''
-                  }`}
-                  onClick={() => submitWorkspaceChange(path)}
-                  role="option"
-                  aria-selected={false}
-                >
-                  <span className="location-switcher-item-text">
-                    {getPathDisplayName(path)}
-                  </span>
-                  <span className="location-switcher-item-meta">
-                    {remoteContext
-                      ? collapseHomePath(path, remoteContext.homePath)
-                      : path}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
+        <WorkspaceRecentList
+          remoteContext={remoteContext}
+          recentWorkspaces={recentWorkspaceItems}
+          selectedIndex={selectedIndex}
+          suggestionCount={suggestions.length}
+          onSelectWorkspace={submitWorkspaceChange}
+        />
 
         <div className="location-switcher-divider" role="separator" />
 
         {/* Instances section */}
         {supportsInstances && !remoteContext ? (
-          <>
-            <div className="location-switcher-section-header" role="presentation">
-              <Monitor size={12} className="location-switcher-section-icon" />
-              Instances
-            </div>
-
-            {instances.length === 0 ? (
-              <div
-                className="location-switcher-item location-switcher-item-empty"
-                role="option"
-                aria-selected={false}
-              >
-                <span className="location-switcher-item-text">No instances available</span>
-              </div>
-            ) : (
-              instances.map((instance) => {
-                const name = instance.working_dir
-                  .split('/')
-                  .filter(Boolean)
-                  .slice(-2)
-                  .join('/');
-                const label = `${name} · pid:${instance.pid}`;
-
-                return (
-                  <button
-                    key={`instance-${instance.id}`}
-                    type="button"
-                    className={`location-switcher-item ${
-                      instance.pid === selectedInstancePID ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      if (onInstanceChange && instance.pid) {
-                        onInstanceChange(instance.pid);
-                      }
-                    }}
-                    role="option"
-                    aria-selected={instance.pid === selectedInstancePID}
-                    aria-label={`Switch to instance ${label}`}
-                    disabled={
-                      switchingState.isSwitching ||
-                      isSwitchingInstance ||
-                      !onInstanceChange ||
-                      instance.is_host
-                    }
-                  >
-                    <span className="location-switcher-item-text">{label}</span>
-                    {instance.pid === selectedInstancePID ? (
-                      <span className="location-switcher-item-indicator">●</span>
-                    ) : null}
-                  </button>
-                );
-              })
-            )}
-          </>
+          <WorkspaceInstances
+            instances={instances}
+            selectedInstancePID={selectedInstancePID}
+            isSwitching={switchingState.isSwitching}
+            isSwitchingInstance={isSwitchingInstance}
+            onInstanceChange={onInstanceChange}
+          />
         ) : null}
       </div>
 

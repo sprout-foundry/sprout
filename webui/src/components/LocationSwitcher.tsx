@@ -161,7 +161,6 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           suggestionsError={sug.suggestionsError}
           selectedIndex={sug.selectedIndex}
           setSelectedIndex={sug.setSelectedIndex}
-          totalWorkspaceRows={sug.totalWorkspaceRows}
           recentWorkspaceItems={sug.recentWorkspaceItems}
           remoteHostFavorites={sug.remoteHostFavorites}
           sshFavoriteWorkspaces={ws.sshFavoriteWorkspaces}

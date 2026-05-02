@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type } from 'lucide-react';
 import './Terminal.css';
@@ -15,10 +15,9 @@ type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
 const TERMINAL_HEIGHT_MIN = 120;
 const TERMINAL_HEIGHT_DEFAULT = 400;
-const TERMINAL_HEIGHT_MAX_FACTOR = 100; // max = innerHeight - this
+const TERMINAL_HEIGHT_MAX_FACTOR = 100;
 const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
 
-// Font size constants and storage
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
 const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
@@ -33,6 +32,12 @@ const clampFontSize = (value: number): number => {
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
 };
 
+interface TerminalPaneData {
+  id: string;
+  sessions: TerminalSession[];
+  activeSessionId: string;
+}
+
 interface TerminalProps {
   isConnected?: boolean;
   isExpanded?: boolean;
@@ -45,11 +50,10 @@ function Terminal({
   onToggleExpand,
 }: TerminalProps): JSX.Element {
   const getCollapsedHeight = useCallback(() => {
-    if (typeof window === 'undefined') {
-      return 42;
-    }
+    if (typeof window === 'undefined') return 42;
     return window.innerWidth <= 768 ? 34 : 42;
   }, []);
+
   const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
   const [hasActivated, setHasActivated] = useState(externalIsExpanded);
   const [terminalHeight, setTerminalHeight] = useState<number>(() => {
@@ -65,22 +69,20 @@ function Terminal({
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
 
-  // ── Shell selection state ─────────────────────────────────────────────────
+  // Shell selection state
   const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);
   const [shellsLoaded, setShellsLoaded] = useState(false);
   const [selectedShell, setSelectedShell] = useState<string | null>(null);
   const [showShellMenu, setShowShellMenu] = useState(false);
   const shellPickerRef = useRef<HTMLDivElement>(null);
-  // Track which shell each session should use (map: sessionId → shell name | null)
   const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
-  // Track which sessions need reattach to existing PTY (map: sessionId → sessionId)
   const sessionReattachIdsRef = useRef<Map<string, string | null>>(new Map());
 
-  // ── Attachable sessions state ───────────────────────────────────────────────
+  // Attachable sessions
   const [attachableSessions, setAttachableSessions] = useState<AttachableSession[]>([]);
   const isFetchingSessionsRef = useRef(false);
 
-  // ── Font size state ───────────────────────────────────────────────────────
+  // Font size
   const [fontSize, setFontSize] = useState<number>(() => {
     if (typeof window === 'undefined') return FONT_SIZE_DEFAULT;
     try {
@@ -93,47 +95,51 @@ function Terminal({
     }
   });
 
-  // ── Split state ──────────────────────────────────────────────────────────
+  // Split state
   const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
   const splitDirectionRef = useRef<SplitDirection>('none');
   const [splitSizes, setSplitSizes] = useState<[number, number]>([50, 50]);
-  const [secondarySessionId, setSecondarySessionId] = useState<string | null>(null);
-  const secondarySessionIdRef = useRef<string | null>(null);
 
-  // Tabbed session state — derive initial IDs together
+  // Pane-based session state
   const paneIdCounter = useRef(0);
-  const [sessionState] = useState(() => {
-    paneIdCounter.current += 1;
-    const id = `pane-${paneIdCounter.current}`;
-    return { initialId: id, initialSessions: [{ id, name: 'Session 1', is_pinned: false }] };
-  });
-  const [sessions, setSessions] = useState<TerminalSession[]>(sessionState.initialSessions);
-  const [activeSessionId, setActiveSessionId] = useState(sessionState.initialId);
   const sessionCounterRef = useRef(1);
-  const sessionsRef = useRef(sessions);
-  sessionsRef.current = sessions;
+  const panesRef = useRef<TerminalPaneData[]>([]);
+
+  const [panes, setPanes] = useState<TerminalPaneData[]>(() => {
+    paneIdCounter.current += 1;
+    const paneId = `pane-${paneIdCounter.current}`;
+    const sessionId = `session-${sessionCounterRef.current++}`;
+    const initialPane: TerminalPaneData = {
+      id: paneId,
+      sessions: [{ id: sessionId, name: 'Session 1', is_pinned: false }],
+      activeSessionId: sessionId,
+    };
+    panesRef.current = [initialPane];
+    return [initialPane];
+  });
+
+  const [focusedPaneId, setFocusedPaneId] = useState<string>(panes[0].id);
 
   const hasMountedRef = useRef(false);
   const isDraggingVertical = useRef(false);
   const dragStartY = useRef(0);
   const dragStartHeight = useRef(0);
 
-  // Split divider drag refs
   const isDraggingSplit = useRef(false);
   const splitDragStartPos = useRef(0);
   const splitDragStartSizes = useRef<[number, number]>([50, 50]);
 
-  // Keyed refs to each pane's imperative handle
   const paneHandles = useRef<Map<string, TerminalPaneHandle | null>>(new Map());
-  const activeSessionIdRef = useRef(activeSessionId);
-  activeSessionIdRef.current = activeSessionId;
+
+  // Keep panesRef in sync
+  useEffect(() => {
+    panesRef.current = panes;
+  }, [panes]);
 
   useEffect(() => {
     setIsExpanded(externalIsExpanded);
     if (externalIsExpanded) {
       setHasActivated(true);
-      // Dispatch a custom event to trigger terminal resize in all panes
-      // This fixes the issue where terminal doesn't fill space after reopening
       window.dispatchEvent(new CustomEvent('sprout-terminal-expand'));
     }
   }, [externalIsExpanded]);
@@ -147,9 +153,7 @@ function Terminal({
   }, [collapsedHeight, isExpanded, terminalHeight]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return undefined;
-    }
+    if (typeof window === 'undefined') return undefined;
 
     const updateCollapsedHeight = () => {
       setCollapsedHeight(getCollapsedHeight());
@@ -160,7 +164,6 @@ function Terminal({
     return () => window.removeEventListener('resize', updateCollapsedHeight);
   }, [getCollapsedHeight]);
 
-  // ── Fetch available shells on mount ────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     ApiService.getInstance()
@@ -168,7 +171,6 @@ function Terminal({
       .then((res) => {
         if (cancelled) return;
         setAvailableShells(res.shells || []);
-        // Default to the server-specified default shell
         const defaultShell = res.shells.find((s) => s.default) || res.shells[0];
         if (defaultShell) {
           setSelectedShell(defaultShell.name);
@@ -185,7 +187,6 @@ function Terminal({
     };
   }, []);
 
-  // Fetch attachable agent sessions
   const fetchAttachableSessions = useCallback(async () => {
     if (isFetchingSessionsRef.current) return;
     isFetchingSessionsRef.current = true;
@@ -211,28 +212,21 @@ function Terminal({
     }
   }, []);
 
-  // ── Poll for attachable agent sessions ─────────────────────────────────────
   useEffect(() => {
-    // Initial fetch
     fetchAttachableSessions();
-
-    // Poll every 5 seconds when terminal is expanded
     const intervalId = setInterval(() => {
       if (isExpanded) {
         fetchAttachableSessions();
       }
     }, 5000);
-
     return () => {
       clearInterval(intervalId);
     };
   }, [isExpanded, fetchAttachableSessions]);
 
-  // Listen for WebSocket events to refresh attachable sessions
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      // Refresh if it's a terminal-related event
       if (
         detail?.type === 'terminal_output' ||
         detail?.type === 'pty_exit' ||
@@ -245,7 +239,6 @@ function Terminal({
     return () => window.removeEventListener('sprout:wsevent', handler as EventListener);
   }, [fetchAttachableSessions]);
 
-  // Close shell picker when clicking outside or pressing Escape
   useEffect(() => {
     if (!showShellMenu) return;
     const handleClick = (e: MouseEvent) => {
@@ -310,50 +303,46 @@ function Terminal({
     }
   }, []);
 
+  const getFocusedPane = useCallback((): TerminalPaneData | null => {
+    return panesRef.current.find((p) => p.id === focusedPaneId) ?? null;
+  }, [focusedPaneId]);
+
   const clearActivePane = useCallback(() => {
-    const handle = paneHandles.current.get(activeSessionIdRef.current);
-    handle?.clear();
+    const pane = getFocusedPane();
+    if (pane) {
+      const handle = paneHandles.current.get(pane.activeSessionId);
+      handle?.clear();
+    }
+  }, [getFocusedPane]);
+
+  // Helper: Update a pane immutably
+  const updatePane = useCallback((paneId: string, updater: (pane: TerminalPaneData) => TerminalPaneData) => {
+    setPanes((prev) => prev.map((p) => (p.id === paneId ? updater(p) : p)));
   }, []);
 
-  // ── Session management ────────────────────────────────────────────────────
-
-  const newPaneId = useCallback(() => {
-    paneIdCounter.current += 1;
-    return `pane-${paneIdCounter.current}`;
-  }, []);
-
-  const addSession = useCallback(
-    (shell?: string | null) => {
-      sessionCounterRef.current += 1;
-      const id = newPaneId();
+  // Session management scoped to panes
+  const addSessionToPane = useCallback(
+    (paneId: string, shell?: string | null) => {
+      const sessionNum = sessionCounterRef.current++;
+      const sessionId = `session-${sessionNum}`;
       const newSession: TerminalSession = {
-        id,
-        name: `Session ${sessionCounterRef.current}`,
+        id: sessionId,
+        name: `Session ${sessionNum}`,
         is_pinned: false,
       };
-      // Track which shell this session should use
-      sessionShellsRef.current.set(id, shell ?? selectedShell ?? null);
-      setSessions((prev) => [...prev, newSession]);
-      setActiveSessionId(id);
+      sessionShellsRef.current.set(sessionId, shell ?? selectedShell ?? null);
+      updatePane(paneId, (pane) => ({
+        ...pane,
+        sessions: [...pane.sessions, newSession],
+        activeSessionId: sessionId,
+      }));
     },
-    [newPaneId, selectedShell],
+    [selectedShell, updatePane],
   );
 
-  const handleShellPickerSelect = useCallback(
-    (shellName: string) => {
-      setSelectedShell(shellName);
-      setShowShellMenu(false);
-      addSession(shellName);
-    },
-    [addSession],
-  );
-
-  // Handle attaching an agent session
   const handleAttachAgentSession = useCallback(
     async (sessionId: string, name: string) => {
-      // Optimistically remove from the list to prevent double-clicks
       setAttachableSessions((prev) => prev.filter((s) => s.id !== sessionId));
-
       try {
         const response = await clientFetch(`/api/terminal/agent-sessions/${sessionId}/attach`, {
           method: 'POST',
@@ -366,150 +355,134 @@ function Terminal({
           throw new Error(`Failed to attach session: ${response.status}`);
         }
 
-        // Fire a custom event to notify the terminal to create a new tab
-        window.dispatchEvent(
-          new CustomEvent('sprout:terminal-attach-session', {
-            detail: { sessionId, name },
-          }),
-        );
-
-        // Refresh the attachable sessions list
+        const pane = getFocusedPane();
+        if (pane) {
+          const sessionName = name || `Agent: ${sessionId.substring(0, 20)}`;
+          const newSession: TerminalSession = {
+            id: sessionId,
+            name: sessionName,
+            is_pinned: false,
+          };
+          sessionReattachIdsRef.current.set(sessionId, sessionId);
+          updatePane(pane.id, (p) => ({
+            ...p,
+            sessions: [...p.sessions, newSession],
+            activeSessionId: sessionId,
+          }));
+        }
         await fetchAttachableSessions();
       } catch (err) {
         debugLog('[Terminal] Failed to attach agent session:', err);
         notificationBus.notify('warning', 'Terminal', 'Failed to attach session: ' + String(err));
-        // Rollback: re-fetch to restore the session in the list
         fetchAttachableSessions();
       }
     },
-    [fetchAttachableSessions],
+    [fetchAttachableSessions, getFocusedPane, updatePane],
   );
 
-  // Clear all split state (used by closeSecondaryPane and closeSession)
-  const clearSplitState = useCallback(() => {
-    secondarySessionIdRef.current = null;
-    setSecondarySessionId(null);
-    splitDirectionRef.current = 'none';
-    setSplitDirection('none');
-  }, []);
+  const closeSessionInPane = useCallback(
+    (paneId: string, sessionId: string) => {
+      const pane = panesRef.current.find((p) => p.id === paneId);
+      if (!pane || pane.sessions.length <= 1) return;
 
-  // Close secondary pane (called directly or when secondary session is closed)
-  const closeSecondaryPane = useCallback(() => {
-    // Clean up the secondary pane's WebSocket connection before clearing state
-    if (secondarySessionIdRef.current) {
-      const handle = paneHandles.current.get(secondarySessionIdRef.current);
+      const handle = paneHandles.current.get(sessionId);
       handle?.cleanup?.();
-      paneHandles.current.delete(secondarySessionIdRef.current);
-      sessionShellsRef.current.delete(secondarySessionIdRef.current);
-      sessionReattachIdsRef.current.delete(secondarySessionIdRef.current);
-    }
-    clearSplitState();
-  }, [clearSplitState]);
-
-  const closeSession = useCallback(
-    (id: string) => {
-      // Synchronously compute what remains using the ref (always up-to-date)
-      const remaining = sessionsRef.current.filter((s) => s.id !== id);
-      if (remaining.length === 0) return; // guard: never remove the last session
-
-      // Clean up the pane's WebSocket connection
-      const handle = paneHandles.current.get(id);
-      handle?.cleanup?.();
-      paneHandles.current.delete(id);
-      sessionShellsRef.current.delete(id);
-      sessionReattachIdsRef.current.delete(id);
-
-      // If closing the session that's in the secondary pane, unsplit
-      if (secondarySessionIdRef.current === id) {
-        clearSplitState();
-      }
-
-      // Batch state updates
-      setSessions(remaining);
-      setActiveSessionId((current) => (current !== id ? current : remaining[0].id));
-
-      // Auto-unsplit if only one session would remain and split is still active
-      // (could happen if the closed session was NOT the secondary one but was one of >2)
-      if (remaining.length === 1 && splitDirectionRef.current !== 'none') {
-        clearSplitState();
-      }
-    },
-    [clearSplitState],
-  );
-
-  const renameSession = useCallback((id: string, name: string) => {
-    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
-  }, []);
-
-  const togglePinSession = useCallback((id: string) => {
-    setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, is_pinned: !s.is_pinned } : s)));
-  }, []);
-
-  const switchSession = useCallback((id: string) => {
-    setActiveSessionId(id);
-  }, []);
-
-  const handleProcessExit = useCallback(
-    (sessionId: string) => {
-      // Guard: if session no longer exists in tracking, it was already closed
-      if (
-        !sessionsRef.current.some((s) => s.id === sessionId) &&
-        secondarySessionIdRef.current !== sessionId &&
-        !paneHandles.current.has(sessionId)
-      ) {
-        debugLog('[Terminal] pty_exit for already-closed session:', sessionId);
-        return;
-      }
-
-      // Case a: The exited session is the secondary split pane
-      if (secondarySessionIdRef.current === sessionId) {
-        closeSecondaryPane();
-        notificationBus.notify('info', 'Terminal', 'Terminal process exited in split pane — pane closed.');
-        return;
-      }
-
-      // Case b: There's more than one session → close normally
-      if (sessionsRef.current.length > 1) {
-        closeSession(sessionId);
-        notificationBus.notify('info', 'Terminal', 'Terminal process exited — session closed.');
-        return;
-      }
-
-      // Case c: Last/only session → restart with fresh shell.
-      // Don't call cleanup() directly here — the React key change
-      // (setSessions + setActiveSessionId below) triggers effect teardown
-      // which handles WebSocket disconnection. Calling cleanup() mid-event-handler
-      // risks disconnecting the service whose event callback is still on the stack.
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
 
-      // Create a brand new session
-      paneIdCounter.current += 1;
-      sessionCounterRef.current += 1;
-      const newId = `pane-${paneIdCounter.current}`;
-      const newSession: TerminalSession = {
-        id: newId,
-        name: `Session ${sessionCounterRef.current}`,
-        is_pinned: false,
-      };
+      const remaining = pane.sessions.filter((s) => s.id !== sessionId);
+      const newActive = pane.activeSessionId === sessionId ? remaining[0].id : pane.activeSessionId;
 
-      // Track the shell for the new session (use the currently selected shell)
-      sessionShellsRef.current.set(newId, selectedShell ?? null);
+      updatePane(paneId, (p) => ({
+        ...p,
+        sessions: remaining,
+        activeSessionId: newActive,
+      }));
 
-      // Replace sessions array with just the new session
-      setSessions([newSession]);
-      setActiveSessionId(newId);
-
-      // Clear any split state
-      clearSplitState();
-
-      notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
+      // Auto-close secondary pane if it has no sessions
+      if (panesRef.current.length > 1 && remaining.length === 0) {
+        setPanes((prev) => prev.filter((p) => p.id !== paneId));
+        splitDirectionRef.current = 'none';
+        setSplitDirection('none');
+      }
     },
-    [closeSecondaryPane, closeSession, clearSplitState, selectedShell],
+    [updatePane],
   );
 
-  // ── Listen for attach-session events from BackgroundTasks ─────────────────────
+  const renameSessionInPane = useCallback(
+    (paneId: string, sessionId: string, name: string) => {
+      updatePane(paneId, (pane) => ({
+        ...pane,
+        sessions: pane.sessions.map((s) => (s.id === sessionId ? { ...s, name } : s)),
+      }));
+    },
+    [updatePane],
+  );
+
+  const togglePinInPane = useCallback(
+    (paneId: string, sessionId: string) => {
+      updatePane(paneId, (pane) => ({
+        ...pane,
+        sessions: pane.sessions.map((s) => (s.id === sessionId ? { ...s, is_pinned: !s.is_pinned } : s)),
+      }));
+    },
+    [updatePane],
+  );
+
+  const switchSessionInPane = useCallback(
+    (paneId: string, sessionId: string) => {
+      updatePane(paneId, (pane) => ({ ...pane, activeSessionId: sessionId }));
+    },
+    [updatePane],
+  );
+
+  const handleProcessExit = useCallback(
+    (paneId: string, sessionId: string) => {
+      const pane = panesRef.current.find((p) => p.id === paneId);
+      if (!pane) return;
+
+      if (!pane.sessions.some((s) => s.id === sessionId) && !paneHandles.current.has(sessionId)) {
+        debugLog('[Terminal] pty_exit for already-closed session:', sessionId);
+        return;
+      }
+
+      const isSecondaryPane = panesRef.current.length > 1 && panesRef.current[1]?.id === paneId;
+
+      if (pane.sessions.length > 1) {
+        closeSessionInPane(paneId, sessionId);
+        notificationBus.notify('info', 'Terminal', 'Terminal process exited — session closed.');
+        return;
+      }
+
+      paneHandles.current.delete(sessionId);
+      sessionShellsRef.current.delete(sessionId);
+      sessionReattachIdsRef.current.delete(sessionId);
+
+      const sessionNum2 = sessionCounterRef.current++;
+      const newSessionId = `session-${sessionNum2}`;
+      const newSession: TerminalSession = {
+        id: newSessionId,
+        name: `Session ${sessionNum2}`,
+        is_pinned: false,
+      };
+      sessionShellsRef.current.set(newSessionId, selectedShell ?? null);
+
+      updatePane(paneId, (p) => ({
+        ...p,
+        sessions: [newSession],
+        activeSessionId: newSessionId,
+      }));
+
+      if (isSecondaryPane) {
+        notificationBus.notify('info', 'Terminal', 'Terminal process exited in split pane — restarted.');
+      } else {
+        notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
+      }
+    },
+    [closeSessionInPane, selectedShell, updatePane],
+  );
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ sessionId: string; name?: string }>).detail;
@@ -517,61 +490,72 @@ function Terminal({
       const sessionId = detail.sessionId;
       const sessionName = detail.name || `Agent: ${sessionId.substring(0, 20)}`;
 
-      // Check if session already exists in tabs
-      if (sessionsRef.current.some((s) => s.id === sessionId)) {
-        setActiveSessionId(sessionId);
+      const pane = getFocusedPane();
+      if (!pane) return;
+
+      if (pane.sessions.some((s) => s.id === sessionId)) {
+        switchSessionInPane(pane.id, sessionId);
         return;
       }
 
-      // Add as new session tab
       const newSession: TerminalSession = {
         id: sessionId,
         name: sessionName,
         is_pinned: false,
       };
       sessionReattachIdsRef.current.set(sessionId, sessionId);
-      setSessions((prev) => [...prev, newSession]);
-      setActiveSessionId(sessionId);
+      updatePane(pane.id, (p) => ({
+        ...p,
+        sessions: [...p.sessions, newSession],
+        activeSessionId: sessionId,
+      }));
     };
     window.addEventListener('sprout:terminal-attach-session', handler as EventListener);
     return () => window.removeEventListener('sprout:terminal-attach-session', handler as EventListener);
-  }, []);
-
-  // ── Split management ──────────────────────────────────────────────────────
+  }, [getFocusedPane, switchSessionInPane, updatePane]);
 
   const toggleSplit = useCallback(
     (direction: 'horizontal' | 'vertical') => {
       const currentDir = splitDirectionRef.current;
 
-      if (currentDir === direction) {
-        // Unsplit: clear secondary session reference
-        clearSplitState();
-      } else {
-        // Entering or switching split mode — create a secondary session if needed
-        if (!secondarySessionIdRef.current) {
-          paneIdCounter.current += 1;
-          const newId = `pane-${paneIdCounter.current}`;
-          sessionCounterRef.current += 1;
-          const newSession: TerminalSession = {
-            id: newId,
-            name: `Session ${sessionCounterRef.current}`,
-            is_pinned: false,
-          };
-          // Track the shell for the new split pane session
-          sessionShellsRef.current.set(newId, selectedShell ?? null);
-          setSessions((s) => [...s, newSession]);
-          secondarySessionIdRef.current = newId;
-          setSecondarySessionId(newId);
+      if (currentDir !== 'none') {
+        // Unsplit: remove secondary pane and cleanup
+        if (panesRef.current.length > 1) {
+          const secondaryPane = panesRef.current[1];
+          secondaryPane.sessions.forEach((s) => {
+            const handle = paneHandles.current.get(s.id);
+            handle?.cleanup?.();
+            paneHandles.current.delete(s.id);
+            sessionShellsRef.current.delete(s.id);
+            sessionReattachIdsRef.current.delete(s.id);
+          });
+          setPanes((prev) => prev.slice(0, 1));
+          setFocusedPaneId(panesRef.current[0].id);
         }
+        splitDirectionRef.current = 'none';
+        setSplitDirection('none');
+      } else {
+        // Create new pane with session
+        paneIdCounter.current += 1;
+        const paneId = `pane-${paneIdCounter.current}`;
+        const splitSessionNum = sessionCounterRef.current++;
+        const sessionId = `session-${splitSessionNum}`;
+        const newPane: TerminalPaneData = {
+          id: paneId,
+          sessions: [{ id: sessionId, name: `Session ${splitSessionNum}`, is_pinned: false }],
+          activeSessionId: sessionId,
+        };
+        sessionShellsRef.current.set(sessionId, selectedShell ?? null);
+        setPanes((prev) => [...prev, newPane]);
+        setFocusedPaneId(paneId);
         setSplitSizes([50, 50]);
         splitDirectionRef.current = direction;
         setSplitDirection(direction);
       }
     },
-    [clearSplitState, selectedShell],
+    [selectedShell],
   );
 
-  // Listen for external terminal action events (from command palette / hotkeys)
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ action: string }>).detail;
@@ -581,31 +565,26 @@ function Terminal({
       } else if (detail.action === 'split_vertical') {
         toggleSplit('vertical');
       } else if (detail.action === 'clear') {
-        // Clear the active terminal pane
         clearActivePane();
       } else if (detail.action === 'kill') {
-        // Kill the active terminal session (close it)
-        const activeId = activeSessionIdRef.current;
-        if (activeId) {
-          closeSession(activeId);
+        const pane = getFocusedPane();
+        if (pane) {
+          closeSessionInPane(pane.id, pane.activeSessionId);
         }
       }
     };
     window.addEventListener('sprout:terminal-action', handler as EventListener);
     return () => window.removeEventListener('sprout:terminal-action', handler as EventListener);
-  }, [toggleSplit, clearActivePane, closeSession]);
-
-  // ── Split divider drag ────────────────────────────────────────────────────
+  }, [clearActivePane, closeSessionInPane, getFocusedPane, toggleSplit]);
 
   const handleSplitDividerDragStart = useCallback(
     (e: ReactMouseEvent) => {
       e.preventDefault();
       isDraggingSplit.current = true;
-      setIsResizingVertical(true); // disable transitions
+      setIsResizingVertical(true);
       splitDragStartPos.current = splitDirection === 'vertical' ? e.clientX : e.clientY;
       splitDragStartSizes.current = [...splitSizes];
 
-      // Measure the panes container for accurate percentage calculation
       const bodyEl = document.querySelector('.terminal-panes-container');
       const bodyRect = bodyEl?.getBoundingClientRect();
       const containerWidth = bodyRect?.width ?? window.innerWidth;
@@ -619,7 +598,6 @@ function Terminal({
 
         const deltaPx = currentPos - splitDragStartPos.current;
         const startSizes = splitDragStartSizes.current;
-        // Convert pixel delta to relative change
         const newFirst = startSizes[0] + (deltaPx / containerSize) * 100;
         const clamped = Math.max(20, Math.min(80, newFirst));
         setSplitSizes([clamped, 100 - clamped]);
@@ -642,7 +620,6 @@ function Terminal({
     [splitDirection, splitSizes, terminalHeight],
   );
 
-  // Compute inline style for a given pane index (0 = primary, 1 = secondary)
   const splitStyleForPane = useCallback(
     (paneIndex: number): CSSProperties => {
       if (splitDirection === 'none') return {};
@@ -652,8 +629,6 @@ function Terminal({
     },
     [splitDirection, splitSizes],
   );
-
-  // ── Vertical resize (terminal height) ──────────────────────────────────────
 
   const handleVerticalResizeStart = useCallback(
     (e: ReactMouseEvent) => {
@@ -677,13 +652,11 @@ function Terminal({
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
-        // Persist the final height
         setTerminalHeight((prev) => {
           try {
             localStorage.setItem(TERMINAL_HEIGHT_STORAGE_KEY, String(Math.round(prev)));
           } catch (err) {
             debugLog('[Terminal] failed to persist terminal height:', err);
-            // Storage write failed (quota, security policy, etc.) — non-critical
           }
           return prev;
         });
@@ -707,7 +680,6 @@ function Terminal({
     }
   }, []);
 
-  // Clean up body styles and flags if component unmounts mid-drag
   useEffect(() => {
     return () => {
       if (isDraggingSplit.current || isDraggingVertical.current) {
@@ -717,14 +689,11 @@ function Terminal({
     };
   }, []);
 
-  // Clean up all WebSocket connections when the Terminal component unmounts
   useEffect(() => {
     return () => {
-      // Clean up all pane handles and their WebSocket connections
       paneHandles.current.forEach((handle) => {
         handle?.cleanup?.();
       });
-      // Ensure all refs are cleared
       paneHandles.current.clear();
       sessionShellsRef.current.clear();
       sessionReattachIdsRef.current.clear();
@@ -753,7 +722,7 @@ function Terminal({
         />
       )}
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="terminal-header">
         <div className="terminal-title-row" onClick={toggleExpanded}>
           <div className="terminal-title">
@@ -815,132 +784,109 @@ function Terminal({
             </button>
           </div>
         </div>
-        {isExpanded && sessions.length > 0 && (
-          <div
-            className="terminal-tab-bar-row"
-            style={{ display: 'flex', alignItems: 'stretch', position: 'relative' }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <TerminalTabBar
-                sessions={sessions}
-                activeSessionId={activeSessionId}
-                onSwitch={switchSession}
-                onClose={closeSession}
-                onRename={renameSession}
-                onTogglePin={togglePinSession}
-                attachableSessions={attachableSessions}
-                onAttachSession={handleAttachAgentSession}
-              />
-            </div>
-            <div className="shell-picker-dropdown" ref={shellPickerRef}>
-              <button
-                className="terminal-tab-new shell-picker-btn"
-                onClick={() => {
-                  if (availableShells.length <= 1) {
-                    addSession(selectedShell);
-                  } else {
-                    setShowShellMenu((prev) => !prev);
-                  }
-                }}
-                title="New terminal session"
-                type="button"
-                aria-label="New terminal session"
-                aria-haspopup={availableShells.length > 1}
-                aria-expanded={showShellMenu}
-              >
-                <Plus size={14} />
-                {shellsLoaded && selectedShell && (
-                  <span style={{ fontSize: 10, marginLeft: 3, opacity: 0.7 }}>{selectedShell}</span>
-                )}
-              </button>
-              {showShellMenu && shellsLoaded && availableShells.length > 1 && (
-                <div className="shell-picker-menu" role="menu">
-                  <div className="shell-picker-header">New Terminal</div>
-                  {availableShells.map((shell) => (
-                    <button
-                      key={shell.name}
-                      className="shell-picker-item"
-                      onClick={() => handleShellPickerSelect(shell.name)}
-                      type="button"
-                      role="menuitem"
-                      title={shell.path}
-                    >
-                      {shell.default && <Check size={12} className="shell-default-indicator" />}
-                      {!shell.default && <span style={{ width: 12, flexShrink: 0 }} />}
-                      <span className="shell-name">{shell.name}</span>
-                      <span className="shell-path">{shell.path}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ── Background Tasks ── */}
+      {/* Background Tasks */}
       {isExpanded && <BackgroundTasks />}
 
-      {/* ── Body ── */}
+      {/* Body */}
       <div className="terminal-body">
         <div className={`terminal-panes-container ${isSplitActive ? `terminal-split-${splitDirection}` : ''}`}>
-          {/* Primary pane */}
-          {activeSessionId && (
-            <div className="terminal-pane-wrapper" style={splitStyleForPane(0)}>
-              <TerminalPane
-                key={activeSessionId}
-                ref={(handle) => {
-                  // Capture the session ID from the key to avoid stale ref issues
-                  const id = activeSessionId;
-                  if (handle) {
-                    paneHandles.current.set(id, handle);
-                  } else {
-                    paneHandles.current.delete(id);
-                  }
-                }}
-                isActive={hasActivated || isExpanded}
-                isConnected={isConnected}
-                showCloseButton={false}
-                preferredShell={sessionShellsRef.current.get(activeSessionId) ?? null}
-                reattachSessionId={sessionReattachIdsRef.current.get(activeSessionId) ?? null}
-                fontSize={fontSize}
-                onProcessExit={() => handleProcessExit(activeSessionId)}
-              />
-            </div>
-          )}
-
-          {/* Split divider */}
-          {isSplitActive && (
-            <div
-              className={`terminal-split-divider terminal-split-divider-${splitDirection}`}
-              onMouseDown={handleSplitDividerDragStart}
-            />
-          )}
-
-          {/* Secondary pane */}
-          {isSplitActive && secondarySessionId && (
-            <div className="terminal-pane-wrapper" style={splitStyleForPane(1)}>
-              <TerminalPane
-                key={secondarySessionId}
-                ref={(handle) => {
-                  const id = secondarySessionId;
-                  if (handle) {
-                    paneHandles.current.set(id, handle);
-                  } else {
-                    paneHandles.current.delete(id);
-                  }
-                }}
-                isActive={hasActivated || isExpanded}
-                isConnected={isConnected}
-                showCloseButton={true}
-                onClose={closeSecondaryPane}
-                preferredShell={sessionShellsRef.current.get(secondarySessionId) ?? null}
-                reattachSessionId={sessionReattachIdsRef.current.get(secondarySessionId) ?? null}
-                fontSize={fontSize}
-                onProcessExit={() => handleProcessExit(secondarySessionId!)}
-              />
-            </div>
-          )}
+          {panes.map((pane, index) => (
+            <React.Fragment key={pane.id}>
+              <div
+                className="terminal-pane-wrapper"
+                style={splitStyleForPane(index)}
+                onMouseDown={() => setFocusedPaneId(pane.id)}
+              >
+                <div className="terminal-pane-tab-bar">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <TerminalTabBar
+                      sessions={pane.sessions}
+                      activeSessionId={pane.activeSessionId}
+                      onSwitch={(id) => switchSessionInPane(pane.id, id)}
+                      onClose={(id) => closeSessionInPane(pane.id, id)}
+                      onRename={(id, name) => renameSessionInPane(pane.id, id, name)}
+                      onTogglePin={(id) => togglePinInPane(pane.id, id)}
+                      attachableSessions={attachableSessions}
+                      onAttachSession={handleAttachAgentSession}
+                      onCreate={() => addSessionToPane(pane.id)}
+                    />
+                  </div>
+                  <div className="shell-picker-dropdown" ref={focusedPaneId === pane.id ? shellPickerRef : null}>
+                    <button
+                      className="terminal-tab-new shell-picker-btn"
+                      onClick={() => {
+                        if (availableShells.length <= 1) {
+                          addSessionToPane(pane.id);
+                        } else {
+                          setShowShellMenu((prev) => !prev);
+                        }
+                      }}
+                      title="New terminal session"
+                      type="button"
+                      aria-label="New terminal session"
+                      aria-haspopup={availableShells.length > 1}
+                      aria-expanded={showShellMenu && focusedPaneId === pane.id}
+                    >
+                      <Plus size={14} />
+                      {shellsLoaded && selectedShell && (
+                        <span style={{ fontSize: 10, marginLeft: 3, opacity: 0.7 }}>{selectedShell}</span>
+                      )}
+                    </button>
+                    {showShellMenu && shellsLoaded && availableShells.length > 1 && focusedPaneId === pane.id && (
+                      <div className="shell-picker-menu" role="menu">
+                        <div className="shell-picker-header">New Terminal</div>
+                        {availableShells.map((shell) => (
+                          <button
+                            key={shell.name}
+                            className="shell-picker-item"
+                            onClick={() => {
+                              setSelectedShell(shell.name);
+                              setShowShellMenu(false);
+                              addSessionToPane(pane.id, shell.name);
+                            }}
+                            type="button"
+                            role="menuitem"
+                            title={shell.path}
+                          >
+                            {shell.default && <Check size={12} className="shell-default-indicator" />}
+                            {!shell.default && <span style={{ width: 12, flexShrink: 0 }} />}
+                            <span className="shell-name">{shell.name}</span>
+                            <span className="shell-path">{shell.path}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <TerminalPane
+                  key={pane.activeSessionId}
+                  ref={(handle) => {
+                    const id = pane.activeSessionId;
+                    if (handle) {
+                      paneHandles.current.set(id, handle);
+                    } else {
+                      paneHandles.current.delete(id);
+                    }
+                  }}
+                  isActive={hasActivated || isExpanded}
+                  isConnected={isConnected}
+                  showCloseButton={false}
+                  preferredShell={sessionShellsRef.current.get(pane.activeSessionId) ?? null}
+                  reattachSessionId={sessionReattachIdsRef.current.get(pane.activeSessionId) ?? null}
+                  fontSize={fontSize}
+                  onProcessExit={() => handleProcessExit(pane.id, pane.activeSessionId)}
+                />
+              </div>
+              {index === 0 && isSplitActive && (
+                <div
+                  className={`terminal-split-divider terminal-split-divider-${splitDirection}`}
+                  onMouseDown={handleSplitDividerDragStart}
+                />
+              )}
+            </React.Fragment>
+          ))}
         </div>
       </div>
     </div>

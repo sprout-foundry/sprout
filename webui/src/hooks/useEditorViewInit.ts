@@ -58,6 +58,7 @@ export interface UseEditorViewInitOptions {
     editorTabSize: number;
     editorUsesTabs: boolean;
     whitespaceRenderingMode: WhitespaceRenderingMode;
+    inlayHintsEnabled: boolean;
   };
   actions: {
     getSaveFn: () => () => void;

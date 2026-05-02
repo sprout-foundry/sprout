@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -22,13 +23,24 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 		return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
+	// Preserve existing file permissions before writing
+	var filePerm os.FileMode = 0644
+	if fi, statErr := os.Stat(cleanPath); statErr == nil {
+		filePerm = fi.Mode() & 0777
+	}
+
 	// Write the file
-	err = os.WriteFile(cleanPath, []byte(content), 0644)
+	err = os.WriteFile(cleanPath, []byte(content), filePerm)
 	if err != nil {
 		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
 	}
 
-	// Read back the file to confirm successful write and return content
+	// Log when permissions differ from default
+	if filePerm != 0644 {
+		log.Printf("[permissions] Preserving existing file mode %o for %s", filePerm, cleanPath)
+	}
+
+	// Read back the file to confirm successful write
 	readContent, readErr := os.ReadFile(cleanPath)
 	if readErr != nil {
 		return "", fmt.Errorf("file written but failed to read back for verification: %w", readErr)
@@ -37,8 +49,75 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// Get file info for confirmation
 	info, err := os.Stat(cleanPath)
 	if err != nil {
-		return fmt.Sprintf("File %s written successfully. Content:\n\n%s", cleanPath, string(readContent)), nil
+		return fmt.Sprintf("File %s written successfully", cleanPath), nil
 	}
 
-	return fmt.Sprintf("File %s written successfully (%d bytes). Content:\n\n%s", cleanPath, info.Size(), string(readContent)), nil
+	// Return summary instead of full content to save LLM tokens
+	return formatWriteSummary(cleanPath, readContent, info.Size()), nil
+}
+
+// formatWriteSummary creates a summary of the written file with line count, byte count, and a preview.
+func formatWriteSummary(path string, content []byte, size int64) string {
+	lines := countLines(content)
+
+	if lines <= 10 {
+		// Short file: return full content
+		return fmt.Sprintf("Successfully wrote %s (%d lines, %d bytes)\n\n%s", path, lines, size, string(content))
+	}
+
+	// Long file: return first 5 and last 5 lines with truncation notice
+	allLines := splitLines(content)
+	firstLines := allLines[:5]
+	lastLines := allLines[len(allLines)-5:]
+
+	log.Printf("[write] Returning summary for %s (%d lines)", path, lines)
+
+	return fmt.Sprintf("Successfully wrote %s (%d lines, %d bytes)\n--- First 5 lines ---\n%s...--- Last 5 lines ---\n%s",
+		path, lines, size, joinLines(firstLines), joinLines(lastLines))
+}
+
+// countLines counts the number of lines in the content.
+func countLines(content []byte) int {
+	if len(content) == 0 {
+		return 0
+	}
+	count := 1
+	for _, b := range content {
+		if b == '\n' {
+			count++
+		}
+	}
+	return count
+}
+
+// splitLines splits content into individual lines.
+func splitLines(content []byte) []string {
+	result := []string{}
+	start := 0
+	for i, b := range content {
+		if b == '\n' {
+			result = append(result, string(content[start:i]))
+			start = i + 1
+		}
+	}
+	// Add last line (may be empty if file ends with newline)
+	if start < len(content) {
+		result = append(result, string(content[start:]))
+	} else if len(content) > 0 && content[len(content)-1] == '\n' {
+		// File ends with newline - add empty last line
+		result = append(result, "")
+	}
+	return result
+}
+
+// joinLines joins lines with newlines.
+func joinLines(lines []string) string {
+	result := ""
+	for i, line := range lines {
+		if i > 0 {
+			result += "\n"
+		}
+		result += line
+	}
+	return result
 }

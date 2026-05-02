@@ -2,6 +2,8 @@
 package agent
 
 import (
+	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -12,6 +14,7 @@ const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/
 const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
 const defaultFetchURLArchiveDir = "/tmp/sprout/downloads"
 const defaultAnalyzeImageResultExcerptChars = 4000
+const defaultToolResultMaxChars = 50000     // Universal cap on tool result size (~12K tokens)
 
 // getToolTimeout returns the timeout duration for tool execution
 // Subagents get 30 minutes (for large file operations), other tools get 5 minutes
@@ -48,4 +51,20 @@ func isSubagentTool(toolName string) bool {
 	default:
 		return false
 	}
+}
+
+// truncateToolResult truncates large tool results to prevent blowing up the LLM context window.
+// Keeps the first 45K chars and last 5K chars with a truncation notice in between.
+func truncateToolResult(result string) string {
+	if len(result) <= defaultToolResultMaxChars {
+		return result
+	}
+
+	headChars := 45000
+	tailChars := 5000
+	omitted := len(result) - headChars - tailChars
+
+	log.Printf("tool result truncated: %d -> %d chars (omitted %d)", len(result), defaultToolResultMaxChars, omitted)
+
+	return result[:headChars] + fmt.Sprintf("\n[... truncated: %d chars omitted. Total was %d chars ...]\n", omitted, len(result)) + result[len(result)-tailChars:]
 }

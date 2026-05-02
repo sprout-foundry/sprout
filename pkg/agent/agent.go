@@ -600,6 +600,12 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 	// Interrupts are now primarily handled via context cancellation
 }
 
+// InterruptCtx returns the agent's interrupt context so child operations
+// (e.g., tool execution) can derive from it and respect user cancellations.
+func (a *Agent) InterruptCtx() context.Context {
+	return a.interruptCtx
+}
+
 // GetMessages returns the current conversation messages
 func (a *Agent) GetMessages() []api.Message {
 	if a.state == nil {

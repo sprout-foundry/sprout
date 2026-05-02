@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -45,6 +46,7 @@ type compactionContext struct {
 
 // ConversationOptimizer manages conversation history optimization
 type ConversationOptimizer struct {
+	mu            sync.RWMutex
 	fileReads     map[string]*FileReadRecord     // filepath -> latest read record
 	shellCommands map[string]*ShellCommandRecord // command -> latest execution record
 	enabled       bool
@@ -69,6 +71,8 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 	if !co.enabled {
 		return messages
 	}
+	co.mu.Lock()
+	defer co.mu.Unlock()
 
 	// First pass: find the most recent read of each file
 	for i, msg := range messages {
@@ -1027,6 +1031,9 @@ func (co *ConversationOptimizer) createFileReadSummary(msg api.Message) string {
 
 // GetOptimizationStats returns statistics about optimization
 func (co *ConversationOptimizer) GetOptimizationStats() map[string]interface{} {
+	co.mu.RLock()
+	defer co.mu.RUnlock()
+
 	return map[string]interface{}{
 		"enabled":          co.enabled,
 		"tracked_files":    len(co.fileReads),
@@ -1171,6 +1178,9 @@ func (co *ConversationOptimizer) InvalidateFile(filePath string) {
 	if filePath == "" {
 		return
 	}
+	co.mu.Lock()
+	defer co.mu.Unlock()
+
 	if co.debug && co.printLine != nil {
 		co.printLine(fmt.Sprintf("\n[~] Invalidating cached file data: %s\n", filePath))
 	}
@@ -1179,6 +1189,9 @@ func (co *ConversationOptimizer) InvalidateFile(filePath string) {
 
 // Reset clears all optimization state
 func (co *ConversationOptimizer) Reset() {
+	co.mu.Lock()
+	defer co.mu.Unlock()
+
 	co.fileReads = make(map[string]*FileReadRecord)
 	co.shellCommands = make(map[string]*ShellCommandRecord)
 }

@@ -223,7 +223,11 @@ func isValidGitOperation(op tools.GitOperationType) bool {
 // Note: For the full interactive commit flow, users should use the /commit slash command
 func handleGitCommitOperation(a *Agent) (string, error) {
 	// Check for staged changes first
-	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	cmd := exec.Command("git", "diff", "--staged", "--name-only")
+	if dir := a.currentWorkspaceRoot(); dir != "" {
+		cmd.Dir = dir
+	}
+	stagedOutput, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to check for staged changes", err)
 	}
@@ -296,7 +300,11 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	// Check for staged changes first
-	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	cmd := exec.Command("git", "diff", "--staged", "--name-only")
+	if dir := a.currentWorkspaceRoot(); dir != "" {
+		cmd.Dir = dir
+	}
+	stagedOutput, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to check for staged changes", err)
 	}
@@ -367,6 +375,12 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 
 	var executor *git.CommitExecutor
 
+	// Get workspace directory from the agent, if available.
+	workDir := ""
+	if chatAgent != nil {
+		workDir = chatAgent.currentWorkspaceRoot()
+	}
+
 	// Wire the elevation gate into the commit executor if available.
 	if chatAgent != nil && chatAgent.GetElevationGate() != nil {
 		gate := chatAgent.GetElevationGate()
@@ -385,6 +399,7 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 	} else {
 		executor = git.NewCommitExecutor(client, userMessage, notes)
 	}
+	executor.Dir = workDir
 
 	return executor.ExecuteCommit()
 }

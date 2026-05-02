@@ -79,23 +79,7 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
     activeRequestsRef,
   });
 
-  // Message sending
-  const { handleSendMessage: handleMessageSend, handleStopProcessing } = useMessageSending({
-    setState,
-    setInputValue,
-    activeChatIdRef,
-    activeRequestsRef,
-    isConnectedRef,
-    onRequestProviderSetup: () => {}, // Not used here - handled by onboarding
-  });
-
-  // Security handlers (use eventsProvider directly, not useEvents)
-  const { handleSecurityApprovalResponse, handleSecurityPromptResponse } = useSecurityHandlers({
-    eventsProvider,
-    setState,
-  });
-
-  // Onboarding
+  // Onboarding (before useMessageSending — provides refreshOnboardingStatus)
   const {
     onboarding,
     selectedProvider,
@@ -110,6 +94,29 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
     onInstallGitBash,
     updateOnboarding,
   } = useOnboarding();
+
+  // Ref to hold the latest refreshOnboardingStatus so useMessageSending can use it
+  // without creating a circular dependency in hook ordering.
+  const refreshOnboardingStatusRef = useRef(refreshOnboardingStatus);
+  refreshOnboardingStatusRef.current = refreshOnboardingStatus;
+
+  // Message sending
+  const { handleSendMessage: handleMessageSend, handleStopProcessing } = useMessageSending({
+    setState,
+    setInputValue,
+    activeChatIdRef,
+    activeRequestsRef,
+    isConnectedRef,
+    onRequestProviderSetup: useCallback(() => {
+      refreshOnboardingStatusRef.current();
+    }, []),
+  });
+
+  // Security handlers (use eventsProvider directly, not useEvents)
+  const { handleSecurityApprovalResponse, handleSecurityPromptResponse } = useSecurityHandlers({
+    eventsProvider,
+    setState,
+  });
 
   // Handler that applies the onboarding provider/model to app state
   const handleOnboardingComplete = useCallback(async () => {
@@ -157,7 +164,6 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
     handleGitUnstage,
     handleGitDiscard,
   } = useGitHandlers({
-    gitRefreshToken,
     setGitRefreshToken,
   });
 
@@ -192,11 +198,6 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
       /* Health check failed — hook will keep showing offline state */
     }
   }, []);
-
-  // Handler to open provider setup from message-sending failures
-  const onRequestProviderSetup = useCallback(() => {
-    void refreshOnboardingStatus();
-  }, [refreshOnboardingStatus]);
 
   // Initial setup effects (only run once via dependencies array)
   useAppInitialization({

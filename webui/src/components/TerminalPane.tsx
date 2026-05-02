@@ -714,7 +714,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           if (event.key.toLowerCase() === 'v') {
             event.preventDefault();
             navigator.clipboard.readText().then((text) => {
-              terminalWSRef.current?.sendRawInput(text);
+              if (wasmActiveRef.current) {
+                handleWasmInput(text);
+              } else {
+                terminalWSRef.current?.sendRawInput(text);
+              }
             }).catch((err) => {
               debugLog('[TerminalPane] clipboard paste failed:', err);
             });
@@ -841,6 +845,21 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           }
         } else if (event.type === 'pty_exit') {
           xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
+          setPaneConnected(false);
+          onConnectionChangeRef.current?.(false);
+
+          // Clean up the WebSocket connection for this dead session
+          const service = terminalWSRef.current;
+          if (service && eventHandlerRef.current) {
+            service.removeEvent(eventHandlerRef.current);
+            eventHandlerRef.current = null;
+          }
+          if (service) {
+            service.closeSession();
+            service.disconnect();
+            terminalWSRef.current = null;
+          }
+
           onProcessExitRef.current?.();
         } else if (event.type === 'error') {
           xtermRef.current?.write(`\r\n${data?.message as string}\r\n`);

@@ -454,7 +454,8 @@ function Terminal({
       // Guard: if session no longer exists in tracking, it was already closed
       if (
         !sessionsRef.current.some((s) => s.id === sessionId) &&
-        secondarySessionIdRef.current !== sessionId
+        secondarySessionIdRef.current !== sessionId &&
+        !paneHandles.current.has(sessionId)
       ) {
         debugLog('[Terminal] pty_exit for already-closed session:', sessionId);
         return;

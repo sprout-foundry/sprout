@@ -41,6 +41,8 @@ interface TerminalPaneProps {
   fontSize?: number;
   /** Session ID to reattach to (for promoting background agent sessions to visible tabs). */
   reattachSessionId?: string | null;
+  /** Called when the PTY process exits (pty_exit event from backend). */
+  onProcessExit?: () => void;
 }
 
 interface TerminalContextMenuState {
@@ -54,7 +56,7 @@ interface TerminalContextMenuState {
 const EXPAND_RESIZE_DELAY_MS = 100; // Delay to allow terminal expand animation to progress before triggering resize
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId }, ref) => {
+  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId, onProcessExit }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
     const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
@@ -63,6 +65,10 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // tear down / reconnect when a parent passes an inline callback.
     const onConnectionChangeRef = useRef(onConnectionChange);
     onConnectionChangeRef.current = onConnectionChange;
+
+    // Stabilize onProcessExit callback
+    const onProcessExitRef = useRef(onProcessExit);
+    onProcessExitRef.current = onProcessExit;
 
     // Stabilize preferredShell so the WebSocket lifecycle effect doesn't
     // tear down / reconnect when a parent changes the value.
@@ -835,6 +841,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           }
         } else if (event.type === 'pty_exit') {
           xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
+          onProcessExitRef.current?.();
         } else if (event.type === 'error') {
           xtermRef.current?.write(`\r\n${data?.message as string}\r\n`);
         }

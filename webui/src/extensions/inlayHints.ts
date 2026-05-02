@@ -6,7 +6,7 @@
  *
  * Implementation approach:
  * - ViewPlugin manages decorations for inlay hints.
- * - On document/viewport changes, debounces recomputation (500ms).
+ * - On document/viewport changes, debounces recomputation (250ms).
  * - Fetches hints from the semantic API (POST /api/semantic).
  * - Only renders hints for lines in current viewport for performance.
  * - Only runs for TypeScript/Go files (semantic-supported languages).
@@ -26,7 +26,7 @@ import { debugLog } from '../utils/log';
 
 // ── Constants ────────────────────────────────────────────────────────
 
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 250;
 
 /** Internal annotation used to trigger a view re-render after async hint computation. */
 const inlayHintsAnnotation = Annotation.define<boolean>();
@@ -76,7 +76,8 @@ class InlayHintWidget extends WidgetType {
   }
 
   eq(other: InlayHintWidget): boolean {
-    return this.label === other.label && this.kind === other.kind;
+    return other instanceof InlayHintWidget &&
+      this.label === other.label && this.kind === other.kind;
   }
 
   ignoreEvent(_event: Event): boolean {
@@ -93,7 +94,7 @@ class InlayHintWidget extends WidgetType {
  */
 class InlayHintsPlugin {
   decorations: DecorationSet = Decoration.none;
-  private view: EditorView;
+  private view: EditorView | null;
   private getFilePath: () => string | undefined;
   private getContent: () => string;
   private languageId: string | undefined;
@@ -135,7 +136,7 @@ class InlayHintsPlugin {
     }
 
     this.timeoutId = setTimeout(() => {
-      if (this.destroyed) return;
+      if (this.destroyed || !this.view) return;
       this.decorations = this.buildDecorations();
       this.view.dispatch({
         annotations: [inlayHintsAnnotation.of(true)],
@@ -159,7 +160,9 @@ class InlayHintsPlugin {
 
   private buildDecorations(): DecorationSet {
     try {
-      const content = this.view.state.doc.toString();
+      if (!this.view) return Decoration.none;
+      const view = this.view;
+      const content = view.state.doc.toString();
       const filePath = this.getFilePath();
 
       // Only render for supported languages
@@ -178,7 +181,7 @@ class InlayHintsPlugin {
         if (!filePath || !this.languageId) return Decoration.none;
         const generation = ++this.fetchGeneration;
         void this.fetchHints(content, filePath, this.languageId).then((hints) => {
-          if (this.destroyed) return;
+          if (this.destroyed || !this.view) return;
           // Only apply if a newer fetch hasn't started since this one was issued.
           if (this.fetchGeneration !== generation) return;
           this.cachedHints = hints;
@@ -190,10 +193,10 @@ class InlayHintsPlugin {
           });
         });
         // Keep existing hints visible while fetching new ones (prevents visual flash).
-        return this.buildViewportDecorations(this.view);
+        return this.buildViewportDecorations(view);
       }
 
-      return this.buildViewportDecorations(this.view);
+      return this.buildViewportDecorations(view);
     } catch (err) {
       debugLog('[inlayHints] buildDecorations error:', err);
       return Decoration.none;
@@ -248,6 +251,7 @@ class InlayHintsPlugin {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
     }
+    this.view = null;
     this.cachedHints = [];
     this.cachedContent = '';
   }

@@ -1,8 +1,8 @@
 /**
  * Security approval and prompt handlers.
  *
- * These handlers use the LocalEventsProvider directly since the outer App
- * component cannot use useEvents() (it's not inside EventsContextProvider).
+ * These handlers use the eventsProvider prop directly rather than the
+ * useEvents() hook, keeping the dependency explicit and testable.
  */
 
 import { useCallback } from 'react';

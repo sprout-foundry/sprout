@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, memo } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { type SymbolInfo as BreadcrumbSymbol, type SymbolKind, KIND_ICONS } from '../utils/symbolUtils';
@@ -183,4 +183,4 @@ function EditorBreadcrumb({
   );
 }
 
-export default EditorBreadcrumb;
+export default memo(EditorBreadcrumb);

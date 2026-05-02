@@ -26,3 +26,4 @@ architectural area, its current state, and open work.
 | SP-012 | [UX Polish](./SP-012-ux-polish.md) | 📋 Spec |
 | SP-013 | [Agent Settings Management Tool](./SP-013-agent-settings-skill.md) | 📋 Spec |
 | SP-014 | [Agent Terminal Sessions — Hidden PTY Routing](./SP-014-agent-terminal-sessions.md) | ✅ Active |
+| SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 📋 Spec (partially implemented) |

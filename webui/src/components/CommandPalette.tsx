@@ -89,6 +89,9 @@ const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'focus_split_1', label: 'Focus Editor Split 1', category: 'View' },
   { id: 'focus_split_2', label: 'Focus Editor Split 2', category: 'View' },
   { id: 'focus_split_3', label: 'Focus Editor Split 3', category: 'View' },
+  { id: 'focus_split_4', label: 'Focus Editor Split 4', category: 'View' },
+  { id: 'focus_split_5', label: 'Focus Editor Split 5', category: 'View' },
+  { id: 'focus_split_6', label: 'Focus Editor Split 6', category: 'View' },
   { id: 'split_terminal_vertical', label: 'Split Terminal Vertical', category: 'View' },
   { id: 'split_terminal_horizontal', label: 'Split Terminal Horizontal', category: 'View' },
   { id: 'editor_toggle_word_wrap', label: 'Toggle Word Wrap', category: 'View' },
@@ -519,6 +522,15 @@ function CommandPalette({
           break;
         case 'focus_split_3':
           window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_3' } }));
+          break;
+        case 'focus_split_4':
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_4' } }));
+          break;
+        case 'focus_split_5':
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_5' } }));
+          break;
+        case 'focus_split_6':
+          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_split_6' } }));
           break;
         case 'split_terminal_vertical':
           window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));

@@ -505,9 +505,11 @@ const AppContent: React.FC<AppContentProps> = ({
       const direction = panes.length === 1 ? 'vertical' : 'horizontal';
       const newPaneId = splitPane(sourcePaneId, direction);
       if (newPaneId) {
-        // Update pane sizes to 50/50
-        updatePaneSize(`group:${sourcePaneId}`, 50);
-        updatePaneSize(`nested:${sourcePaneId}`, 50);
+        // Initial 1→2 split: apply nested layout sizing
+        if (panes.length === 1) {
+          updatePaneSize(`group:${sourcePaneId}`, 50);
+          updatePaneSize(`nested:${sourcePaneId}`, 50);
+        }
         // Focus the new pane
         switchPane(newPaneId);
       }
@@ -578,6 +580,15 @@ const AppContent: React.FC<AppContentProps> = ({
           break;
         case 'focus_split_3':
           handleFocusPaneIndex(2);
+          break;
+        case 'focus_split_4':
+          handleFocusPaneIndex(3);
+          break;
+        case 'focus_split_5':
+          handleFocusPaneIndex(4);
+          break;
+        case 'focus_split_6':
+          handleFocusPaneIndex(5);
           break;
         case 'close_editor':
           if (activeBufferId) {

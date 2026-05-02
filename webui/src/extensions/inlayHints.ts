@@ -101,6 +101,7 @@ class InlayHintsPlugin {
   private cachedContent: string = '';
   private cachedHints: InlayHint[] = [];
   private destroyed = false;
+  private fetchGeneration = 0;
 
   constructor(
     view: EditorView,
@@ -173,11 +174,11 @@ class InlayHintsPlugin {
       if (content !== this.cachedContent) {
         // Fire-and-forget the fetch; update cache and schedule re-render when it completes.
         if (!filePath || !this.languageId) return Decoration.none;
-        const fetchContent = content;
+        const generation = ++this.fetchGeneration;
         void this.fetchHints(content, filePath, this.languageId).then((hints) => {
           if (this.destroyed) return;
-          // Only apply if cache hasn't been updated by a newer fetch
-          if (this.cachedContent !== fetchContent) return;
+          // Only apply if a newer fetch hasn't started since this one was issued.
+          if (this.fetchGeneration !== generation) return;
           this.cachedHints = hints;
           this.cachedContent = content;
           // Trigger re-render with new hints
@@ -186,7 +187,8 @@ class InlayHintsPlugin {
             annotations: [inlayHintsAnnotation.of(true)],
           });
         });
-        return Decoration.none; // Return current decorations; will update when fetch resolves
+        // Keep existing hints visible while fetching new ones (prevents visual flash).
+        return this.buildViewportDecorations(view);
       }
 
       return this.buildViewportDecorations(view);
@@ -245,6 +247,7 @@ class InlayHintsPlugin {
       this.timeoutId = null;
     }
     this.cachedHints = [];
+    this.cachedContent = '';
   }
 }
 

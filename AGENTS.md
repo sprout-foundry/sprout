@@ -48,6 +48,8 @@ python3 test_runner.py          # Run E2E tests
 
 **`repo_orchestrator` privileges**: This persona can stage files, commit (via the commit tool), and push without interactive approval. However, operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona.
 
+**VIOLATION NOTE (May 2026)**: An agent performed `git reset --hard HEAD~1` via shell_command, which undid a commit and violated this policy. The changes were re-applied and re-committed, but this serves as a reminder that **reset/checkout/restore operations require explicit user approval via the git tool, not shell_command**.
+
 ## Code Quality
 
 - **File size target**: Under 500 lines per file

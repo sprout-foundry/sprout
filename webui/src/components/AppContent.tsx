@@ -13,7 +13,7 @@ import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { TasksPage, BillingPage, TeamPage } from './platform';
-import { useEditorManager } from '../contexts/EditorManagerContext';
+import { useEditorManager, MAX_PANES, MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
@@ -497,7 +497,7 @@ const AppContent: React.FC<AppContentProps> = ({
       return;
     }
     // index >= panes.length — need to split to create more panes
-    if (panes.length < 3) {
+    if (panes.length < MAX_PANES) {
       // Split from the active pane (or last pane)
       const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
       if (!sourcePaneId) return;
@@ -636,7 +636,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }
     return window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY) === '1';
   });
-  const canSplit = panes.length < 3;
+  const canSplit = panes.length < MAX_PANES;
   const canCloseSplit = panes.length > 1;
 
   useEffect(() => {
@@ -646,7 +646,8 @@ const AppContent: React.FC<AppContentProps> = ({
   }, [isMobile, showContextSidebar]);
 
   useEffect(() => {
-    if (panes.length < 3 && nestedSplit) {
+    // Clear nested split when we don't have exactly 3 panes
+    if (panes.length !== 3 && nestedSplit) {
       setNestedSplit(null);
     }
   }, [nestedSplit, panes.length]);
@@ -778,7 +779,8 @@ const AppContent: React.FC<AppContentProps> = ({
       dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
     }
     const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
-    const newSize = Math.max(10, Math.min(90, sizeAtDragStart + deltaPercent));
+    const maxAllowed = 100 - MIN_PANE_WIDTH_PERCENT * Math.max(0, Object.keys(paneSizes).filter(k => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:')).length - 1);
+    const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
     updatePaneSize(sizeKey, newSize);
   }, [paneSizes, updatePaneSize]);
 
@@ -929,7 +931,7 @@ const AppContent: React.FC<AppContentProps> = ({
       if (panes.length === 2) {
         const [firstPane, secondPane] = panes;
         const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-        const firstPaneSize = Math.max(10, Math.min(90, paneSizes[firstPane.id] || 50));
+        const firstPaneSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50));
         const secondPaneSize = 100 - firstPaneSize;
 
         return (

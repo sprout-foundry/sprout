@@ -1440,6 +1440,33 @@ class ApiService {
     return response.json();
   }
 
+  async getSemanticInlayHints(path: string, content: string, languageId: string): Promise<{
+    message: string;
+    path: string;
+    language_id: string;
+    method: string;
+    capabilities: { diagnostics: boolean; definition: boolean; inlay_hints: boolean };
+    inlay_hints?: Array<{ from: number; to: number; label: string; kind: 'type' | 'parameter' | 'none' }> | null;
+    duration_ms?: number;
+    error?: string;
+    version: string;
+  }> {
+    const response = await clientFetch('/api/semantic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path,
+        content,
+        language_id: languageId,
+        method: 'inlay_hints',
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to get inlay hints: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // ── Workspace Symbol Index API ───────────────────────────────────────
 
   async getWorkspaceSymbols(query: string): Promise<{

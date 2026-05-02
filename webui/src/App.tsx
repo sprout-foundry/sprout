@@ -7,6 +7,7 @@ import UpdateNotification from './components/UpdateNotification';
 import OnboardingDialog from './components/OnboardingDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
+import { AppStateProvider } from './contexts/AppStateContext';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
@@ -15,6 +16,7 @@ import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import { EventsContextProvider } from './contexts/EventsContext';
 import { LocalEventsProvider } from './services/localEventsProvider';
+import type { AppState } from './types/app';
 import { useAppState } from './hooks/useAppState';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import useWebSocketEvents from './hooks/useWebSocketEvents';
@@ -62,7 +64,6 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
     useWebSocketEvents({
       state,
       setState,
-      setInputValue: () => {}, // Not used by useWebSocketEvents for setting input
       setQueuedMessages,
       queuedMessagesRef,
     });
@@ -121,7 +122,7 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
   // Handler that applies the onboarding provider/model to app state
   const handleOnboardingComplete = useCallback(async () => {
     handleCompleteOnboarding(async (values) => {
-      setState((prev) => ({
+      setState((prev: AppState) => ({
         ...prev,
         provider: values.provider,
         model: values.model,
@@ -138,7 +139,8 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
   // Wrapper for view change to match AppContent's expected type
   const handleViewChange = useCallback(
     (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
-      handleViewChangeBase(view as 'chat' | 'editor' | 'git');
+      if (view === 'tasks' || view === 'billing' || view === 'team') return;
+      handleViewChangeBase(view);
     },
     [handleViewChangeBase],
   );
@@ -167,12 +169,7 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
     setGitRefreshToken,
   });
 
-  // Terminal output handler (simple passthrough)
-  const handleTerminalOutput = useCallback((output: string) => {
-    // You could handle terminal output here if needed
-  }, []);
-
-  // Memoized stats for Sidebar
+  // Sidebar state
   const stats = useMemo(
     () => ({
       queryCount: state.queryCount,
@@ -255,7 +252,6 @@ function AppInner({ eventsProvider }: AppInnerProps): JSX.Element {
         onGitStage={handleGitStage}
         onGitUnstage={handleGitUnstage}
         onGitDiscard={handleGitDiscard}
-        onTerminalOutput={handleTerminalOutput}
         onTerminalExpandedChange={setIsTerminalExpanded}
         isConnected={state.isConnected}
         backendReachable={backendReachable}
@@ -322,21 +318,23 @@ function App(): JSX.Element {
         console.error('Application error:', error, errorInfo);
       }}
     >
-      <SproutAdapterProvider>
-        <EventsContextProvider provider={eventsProvider}>
-          <ThemeProvider>
-            <NotificationProvider>
-              <PlatformNavProvider>
-                <HotkeyProvider>
-                  <EditorManagerProvider>
-                    <AppInner eventsProvider={eventsProvider} />
-                  </EditorManagerProvider>
-                </HotkeyProvider>
-              </PlatformNavProvider>
-            </NotificationProvider>
-          </ThemeProvider>
-        </EventsContextProvider>
-      </SproutAdapterProvider>
+      <AppStateProvider>
+        <SproutAdapterProvider>
+          <EventsContextProvider provider={eventsProvider}>
+            <ThemeProvider>
+              <NotificationProvider>
+                <PlatformNavProvider>
+                  <HotkeyProvider>
+                    <EditorManagerProvider>
+                      <AppInner eventsProvider={eventsProvider} />
+                    </EditorManagerProvider>
+                  </HotkeyProvider>
+                </PlatformNavProvider>
+              </NotificationProvider>
+            </ThemeProvider>
+          </EventsContextProvider>
+        </SproutAdapterProvider>
+      </AppStateProvider>
     </ErrorBoundary>
   );
 }

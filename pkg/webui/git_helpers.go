@@ -90,7 +90,8 @@ func normalizeGitPath(path string) string {
 	if cleaned == "." || cleaned == "" {
 		return ""
 	}
-	return cleaned
+	// Always use forward slashes for git paths (git always uses / even on Windows)
+	return filepath.ToSlash(cleaned)
 }
 
 // makeGitRelativePath converts absolute paths to workspace-relative paths

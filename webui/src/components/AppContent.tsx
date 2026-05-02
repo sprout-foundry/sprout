@@ -13,7 +13,7 @@ import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { TasksPage, BillingPage, TeamPage } from './platform';
-import { useEditorManager, MAX_PANES, MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
+import { useEditorManager, MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
 import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
@@ -207,6 +207,7 @@ const AppContent: React.FC<AppContentProps> = ({
     updatePaneSize,
     updateBufferMetadata,
     updateBufferTitle,
+    maxPanes,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
@@ -497,7 +498,7 @@ const AppContent: React.FC<AppContentProps> = ({
       return;
     }
     // index >= panes.length — need to split to create more panes
-    if (panes.length < MAX_PANES) {
+    if (panes.length < maxPanes) {
       // Split from the active pane (or last pane)
       const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
       if (!sourcePaneId) return;
@@ -511,7 +512,7 @@ const AppContent: React.FC<AppContentProps> = ({
         switchPane(newPaneId);
       }
     }
-  }, [panes, activePaneId, splitPane, switchPane, updatePaneSize]);
+  }, [panes, activePaneId, splitPane, switchPane, updatePaneSize, maxPanes]);
 
   // Listen for hotkey custom events
   useEffect(() => {
@@ -636,7 +637,7 @@ const AppContent: React.FC<AppContentProps> = ({
     }
     return window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY) === '1';
   });
-  const canSplit = panes.length < MAX_PANES;
+  const canSplit = panes.length < maxPanes;
   const canCloseSplit = panes.length > 1;
 
   useEffect(() => {

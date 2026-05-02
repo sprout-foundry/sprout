@@ -107,6 +107,12 @@ func (c *CommitCommand) SetAgentError(err error) {
 
 // Execute runs the commit command
 func (c *CommitCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	// Set git working directory from agent workspace root
+	if chatAgent != nil {
+		SetGitDir(chatAgent.GetWorkspaceRoot())
+	} else {
+		SetGitDir("")
+	}
 	// Parse flags and get clean args
 	cleanArgs := c.parseFlags(args)
 
@@ -227,7 +233,7 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 
 	// Stage files
 	for _, file := range filesToAdd {
-		cmd := exec.Command("git", "add", file)
+		cmd := gitCommand("add", file)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			c.printf("[FAIL] Failed to stage %s: %v\n", file, err)
@@ -344,7 +350,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	// Get staged diff
-	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
+	diffOutput, err := gitCommand("diff", "--staged").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -383,14 +389,14 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	// Get current branch name
-	branchOutput, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	branchOutput, err := gitCommand("rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to get branch name: %w", err)
 	}
 	branch := strings.TrimSpace(string(branchOutput))
 
 	// Get staged files with their status
-	stagedFilesOutput, err := exec.Command("git", "diff", "--cached", "--name-status").CombinedOutput()
+	stagedFilesOutput, err := gitCommand("diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to get staged files status: %w", err)
 	}
@@ -619,7 +625,7 @@ retryLoop:
 	}
 	defer os.Remove(tempFile)
 
-	cmd := exec.Command("git", "commit", "-F", tempFile)
+	cmd := gitCommand("commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create commit: %w\nOutput: %s", err, string(output))

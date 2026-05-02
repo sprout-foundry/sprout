@@ -9,6 +9,24 @@ import (
 	"golang.org/x/term"
 )
 
+// currentDir is the working directory override for git commands.
+// When non-empty, all gitCommand calls use this directory.
+var currentDir string
+
+// SetGitDir sets the working directory for subsequent gitCommand calls.
+func SetGitDir(dir string) {
+	currentDir = strings.TrimSpace(dir)
+}
+
+// gitCommand creates an exec.Cmd for a git command with the correct working directory.
+func gitCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	if currentDir != "" {
+		cmd.Dir = currentDir
+	}
+	return cmd
+}
+
 // normalizeNewlines converts newlines for terminal compatibility
 func normalizeNewlines(s string) string {
 	if term.IsTerminal(int(os.Stdout.Fd())) {
@@ -19,7 +37,7 @@ func normalizeNewlines(s string) string {
 
 // getStagedFiles returns the list of staged file paths.
 func getStagedFiles() ([]string, error) {
-	out, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	out, err := gitCommand("diff", "--staged", "--name-only").CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get staged files: %w", err)
 	}
@@ -35,7 +53,7 @@ func getStagedFiles() ([]string, error) {
 
 // getPorcelainStatusLines returns non-empty lines from `git status --porcelain`.
 func getPorcelainStatusLines() ([]string, error) {
-	out, err := exec.Command("git", "status", "--porcelain").CombinedOutput()
+	out, err := gitCommand("status", "--porcelain").CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git status: %w", err)
 	}
@@ -65,7 +83,7 @@ func parseFilenameFromStatusLine(line string) (string, bool) {
 func stageFiles(c printlnPrintfHelper, files []string) {
 	c.println("\n[pkg] Staging files...")
 	for _, file := range files {
-		cmd := exec.Command("git", "add", file)
+		cmd := gitCommand("add", file)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			c.printf("[FAIL] Failed to stage %s: %v\n", file, err)
@@ -91,7 +109,7 @@ func selectAllModifiedFiles(validStatusLines []string) []string {
 
 // getStagedFiles returns the list of staged file paths.
 func getGitCommitHash() (string, error) {
-	output, err := exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
+	output, err := gitCommand("rev-parse", "HEAD").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get commit hash: %w", err)
 	}
@@ -100,7 +118,7 @@ func getGitCommitHash() (string, error) {
 
 // getGitBranchName retrieves the current git branch name
 func getGitBranchName() (string, error) {
-	output, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
+	output, err := gitCommand("rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get branch name: %w", err)
 	}

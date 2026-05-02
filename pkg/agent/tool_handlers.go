@@ -11,224 +11,279 @@ import (
 // isGitCheckoutSubcommand checks if a git command is a checkout or switch operation.
 // These are always blocked from shell_command to force use of the git tool
 // which requires explicit user approval.
+// This function checks ALL git commands in a compound shell command (e.g., "cd x && git checkout").
 func isGitCheckoutSubcommand(command string) bool {
-	trimmed := strings.TrimSpace(command)
-	if !strings.HasPrefix(trimmed, "git ") {
-		return false
-	}
-	parts := strings.Fields(trimmed)
-	if len(parts) < 2 {
-		return false
-	}
-	// Skip leading flags (e.g., -c key=val, -C path, --no-pager)
-	for i := 1; i < len(parts); i++ {
-		part := parts[i]
-		if strings.HasPrefix(part, "-") {
-			// Skip flags that take an argument: -c, -C, --exec-path, etc.
-			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-				i++ // skip the next argument (the value)
-			}
+	// Find all occurrences of "git " in the command and check each subcommand
+	// This handles compound commands like "cd /path && git checkout branch"
+	remaining := command
+	for {
+		// Find the next "git " occurrence
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		
+		// Extract the substring starting from "git "
+		gitCmd := remaining[idx:]
+		
+		// Parse the git command to find the subcommand
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
 			continue
 		}
-		sub := strings.TrimPrefix(strings.TrimPrefix(part, "--"), "-")
-		return sub == "checkout" || sub == "switch"
+		
+		// Skip leading flags (e.g., -c key=val, -C path, --no-pager)
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				// Skip flags that take an argument: -c, -C, --exec-path, etc.
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++ // skip the next argument (the value)
+				}
+				continue
+			}
+			// Clean up the subcommand by removing trailing punctuation (e.g., "checkout)" -> "checkout")
+			sub := strings.TrimRight(strings.TrimPrefix(strings.TrimPrefix(part, "--"), "-"), ");\"'")
+			if sub == "checkout" || sub == "switch" {
+				return true
+			}
+			// If we found a non-flag, non-checkout subcommand, stop checking this git invocation
+			break
+		}
+		
+		// Move past this git invocation to check for more
+		remaining = remaining[idx+1:]
 	}
-	return false
 }
 
 // isGitWriteCommand checks if a command is a git write operation (which should use git tool for approval)
+// This function checks ALL git commands in a compound shell command (e.g., "cd x && git commit").
 func isGitWriteCommand(command string) bool {
-	trimmed := strings.TrimSpace(command)
-	if !strings.HasPrefix(trimmed, "git ") {
-		return false
-	}
-
-	// Extract the git subcommand (e.g., "git log" -> "log")
-	// Handle git -c flag and other options before subcommand
-	parts := strings.Fields(trimmed)
-	if len(parts) < 2 {
-		return false // Not a complete git command
-	}
-
-	// Find the actual subcommand (skip "git" and any leading flags like -c, -C, etc.)
-	subcommand := ""
-	subcommandIdx := 2
-	for i := 1; i < len(parts); i++ {
-		part := parts[i]
-		if strings.HasPrefix(part, "-") {
-			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-				i++ // skip the flag value
-			}
+	// Find all occurrences of "git " in the command and check each subcommand
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
 			continue
 		}
-		subcommand = part
-		subcommandIdx = i
-		break
-	}
-
-	if subcommand == "" {
-		return false
-	}
-
-	// Normalize subcommand (remove dashes, handle branch -d/-D as "branch")
-	subcommand = strings.TrimPrefix(subcommand, "--")
-	subcommand = strings.TrimPrefix(subcommand, "-")
-
-	// Handle special subcommands that can be read or write depending on flags/args.
-	rest := parts[subcommandIdx+1:]
-	switch subcommand {
-	case "branch":
-		// Read-only examples: git branch, git branch -a, git branch --list
-		// Write examples: git branch new-feature, git branch -d old-feature
-		branchWriteFlags := map[string]struct{}{
-			"-d": {}, "-D": {}, "--delete": {}, "-m": {}, "-M": {}, "--move": {},
-			"-c": {}, "-C": {}, "--copy": {}, "-f": {}, "--force": {},
-			"-u": {}, "--set-upstream-to": {}, "--unset-upstream": {}, "--edit-description": {},
-		}
-		for _, arg := range rest {
-			if _, ok := branchWriteFlags[arg]; ok {
-				return true
+		
+		// Find the actual subcommand (skip "git" and any leading flags like -c, -C, etc.)
+		subcommand := ""
+		subcommandIdx := 2
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++ // skip the flag value
+				}
+				continue
 			}
-			// A positional argument (that isn't a list flag) generally means create/update branch.
-			if !strings.HasPrefix(arg, "-") {
-				return true
+			// Clean up the subcommand by removing trailing punctuation (e.g., "commit)" -> "commit")
+			subcommand = strings.TrimRight(part, ");\"'")
+			subcommandIdx = i
+			break
+		}
+
+		if subcommand != "" {
+			// Normalize subcommand (remove dashes, handle branch -d/-D as "branch")
+			subcommand = strings.TrimPrefix(subcommand, "--")
+			subcommand = strings.TrimPrefix(subcommand, "-")
+
+			// Handle special subcommands that can be read or write depending on flags/args.
+			rest := parts[subcommandIdx+1:]
+			switch subcommand {
+			case "branch":
+				// Read-only examples: git branch, git branch -a, git branch --list
+				// Write examples: git branch new-feature, git branch -d old-feature
+				branchWriteFlags := map[string]struct{}{
+					"-d": {}, "-D": {}, "--delete": {}, "-m": {}, "-M": {}, "--move": {},
+					"-c": {}, "-C": {}, "--copy": {}, "-f": {}, "--force": {},
+					"-u": {}, "--set-upstream-to": {}, "--unset-upstream": {}, "--edit-description": {},
+				}
+				for _, arg := range rest {
+					if _, ok := branchWriteFlags[arg]; ok {
+						return true
+					}
+					// A positional argument (that isn't a list flag) generally means create/update branch.
+					if !strings.HasPrefix(arg, "-") {
+						return true
+					}
+				}
+				remaining = remaining[idx+1:]
+				continue
+			case "tag":
+				// Read-only examples: git tag, git tag -l
+				// Write examples: git tag v1.2.3, git tag -d v1.2.3
+				tagWriteFlags := map[string]struct{}{
+					"-d": {}, "--delete": {}, "-a": {}, "-s": {}, "-u": {}, "-f": {}, "--force": {},
+				}
+				for _, arg := range rest {
+					if _, ok := tagWriteFlags[arg]; ok {
+						return true
+					}
+					if !strings.HasPrefix(arg, "-") {
+						return true
+					}
+				}
+				remaining = remaining[idx+1:]
+				continue
+			case "stash":
+				// Read-only: git stash list/show
+				// Write: git stash [push|pop|apply|drop|clear|branch|store]
+				if len(rest) == 0 {
+					return true // plain `git stash` is equivalent to push
+				}
+				action := rest[0]
+				switch action {
+				case "list", "show":
+					remaining = remaining[idx+1:]
+					continue
+				default:
+					return true
+				}
+			}
+
+			// Staging operations (git add) are always allowed per policy — not considered a restricted write.
+			if subcommand == "add" {
+				remaining = remaining[idx+1:]
+				continue
+			}
+
+			// Check if it's a write operation
+			writerCommands := []string{
+				"commit", "push", "rm", "mv", "reset",
+				"rebase", "merge", "checkout", "clean",
+				"am", "apply", "cherry-pick", "revert",
+				"switch", "restore", "fetch", "pull", "clone",
+				"init", "worktree",
+			}
+
+			for _, writeCmd := range writerCommands {
+				if subcommand == writeCmd {
+					return true
+				}
 			}
 		}
-		return false
-	case "tag":
-		// Read-only examples: git tag, git tag -l
-		// Write examples: git tag v1.2.3, git tag -d v1.2.3
-		tagWriteFlags := map[string]struct{}{
-			"-d": {}, "--delete": {}, "-a": {}, "-s": {}, "-u": {}, "-f": {}, "--force": {},
-		}
-		for _, arg := range rest {
-			if _, ok := tagWriteFlags[arg]; ok {
-				return true
-			}
-			if !strings.HasPrefix(arg, "-") {
-				return true
-			}
-		}
-		return false
-	case "stash":
-		// Read-only: git stash list/show
-		// Write: git stash [push|pop|apply|drop|clear|branch|store]
-		if len(rest) == 0 {
-			return true // plain `git stash` is equivalent to push
-		}
-		action := rest[0]
-		switch action {
-		case "list", "show":
-			return false
-		default:
-			return true
-		}
+		
+		// Move past this git invocation to check for more
+		remaining = remaining[idx+1:]
 	}
-
-	// Staging operations (git add) are always allowed per policy — not considered a restricted write.
-	if subcommand == "add" {
-		return false
-	}
-
-	// Check if it's a write operation
-	writerCommands := []string{
-		"commit", "push", "rm", "mv", "reset",
-		"rebase", "merge", "checkout", "clean",
-		"am", "apply", "cherry-pick", "revert",
-		"switch", "restore", "fetch", "pull", "clone",
-		"init", "worktree",
-	}
-
-	for _, writeCmd := range writerCommands {
-		if subcommand == writeCmd {
-			return true
-		}
-	}
-
-	return false
 }
 
 // isBroadGitAdd checks if a git add command uses broad patterns (all files)
 // instead of targeting specific files. Repo_orchestrator must use specific
 // file paths to stage changes — this prevents accidental mass-staging.
+// This function checks ALL git add commands in a compound shell command.
 func isBroadGitAdd(command string) bool {
-	trimmed := strings.TrimSpace(command)
-	if !strings.HasPrefix(trimmed, "git ") {
-		return false
-	}
-	parts := strings.Fields(trimmed)
-	if len(parts) < 2 {
-		return false
-	}
-	// Find the "add" subcommand (skip leading flags)
-	addIdx := -1
-	for i := 1; i < len(parts); i++ {
-		if strings.HasPrefix(parts[i], "-") {
-			if parts[i] == "-c" || parts[i] == "-C" || parts[i] == "--exec-path" || parts[i] == "--git-dir" || parts[i] == "--work-tree" {
-				i++ // skip the flag value
-			}
+	// Find all occurrences of "git add" in the command
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
 			continue
 		}
-		if parts[i] == "add" {
-			addIdx = i
-			break
+		
+		// Find the "add" subcommand (skip leading flags)
+		addIdx := -1
+		for i := 1; i < len(parts); i++ {
+			if strings.HasPrefix(parts[i], "-") {
+				if parts[i] == "-c" || parts[i] == "-C" || parts[i] == "--exec-path" || parts[i] == "--git-dir" || parts[i] == "--work-tree" {
+					i++ // skip the flag value
+				}
+				continue
+			}
+			if parts[i] == "add" {
+				addIdx = i
+				break
+			}
+			// If the subcommand is not "add", this is not a git add command
+			return false
 		}
-		return false // subcommand is not "add"
-	}
-	if addIdx == -1 {
-		return false
-	}
-	// Check remaining args for broad patterns
-	for _, arg := range parts[addIdx+1:] {
-		switch arg {
-		case ".", "-A", "--all", "-a":
-			return true
+		
+		if addIdx == -1 {
+			remaining = remaining[idx+1:]
+			continue
 		}
+		
+		// Check remaining args for broad patterns
+		for _, arg := range parts[addIdx+1:] {
+			switch arg {
+			case ".", "-A", "--all", "-a":
+				return true
+			}
+		}
+		
+		// Move past this git invocation to check for more
+		remaining = remaining[idx+1:]
 	}
-	return false
 }
 
 // isGitDiscardCommand checks if a git command could discard changes
 // (restore, reset --hard, checkout -- <file>). These are always blocked
 // from shell_command regardless of orchestrator permissions.
+// This function checks ALL git commands in a compound shell command (e.g., "cd x && git reset").
 func isGitDiscardCommand(command string) bool {
-	trimmed := strings.TrimSpace(command)
-	if !strings.HasPrefix(trimmed, "git ") {
-		return false
-	}
-	parts := strings.Fields(trimmed)
-	if len(parts) < 2 {
-		return false
-	}
-	// Find the subcommand (skip leading flags like -c, -C)
-	subcommand := ""
-	for i := 1; i < len(parts); i++ {
-		part := parts[i]
-		if strings.HasPrefix(part, "-") {
-			// Skip flags that take arguments
-			if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-				i++
-			}
+	// Find all occurrences of "git " in the command and check each subcommand
+	// This handles compound commands like "cd /path && git restore file"
+	remaining := command
+	for {
+		idx := strings.Index(remaining, "git ")
+		if idx == -1 {
+			return false
+		}
+		
+		gitCmd := remaining[idx:]
+		parts := strings.Fields(gitCmd)
+		if len(parts) < 2 {
+			remaining = remaining[idx+1:]
 			continue
 		}
-		subcommand = part
-		break
+		
+		// Find the subcommand (skip leading flags like -c, -C)
+		subcommand := ""
+		for i := 1; i < len(parts); i++ {
+			part := parts[i]
+			if strings.HasPrefix(part, "-") {
+				// Skip flags that take arguments
+				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+					i++
+				}
+				continue
+			}
+			// Clean up the subcommand by removing trailing punctuation (e.g., "reset)" -> "reset")
+			subcommand = strings.TrimRight(part, ");\"'")
+			break
+		}
+		
+		if subcommand != "" {
+			// git restore always discards (working tree or staged changes)
+			if subcommand == "restore" {
+				return true
+			}
+			// git reset can discard staged changes (even without --hard)
+			if subcommand == "reset" {
+				return true
+			}
+		}
+		
+		// Move past this git invocation to check for more
+		remaining = remaining[idx+1:]
 	}
-	if subcommand == "" {
-		return false
-	}
-
-	// git restore always discards (working tree or staged changes)
-	if subcommand == "restore" {
-		return true
-	}
-
-	// git reset can discard staged changes (even without --hard)
-	if subcommand == "reset" {
-		return true
-	}
-
-	return false
 }
 
 // extractGitSubcommand extracts the subcommand from a git command string for display purposes.

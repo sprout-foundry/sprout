@@ -25,6 +25,7 @@ import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspE
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
 import { getLanguageExtensions } from '../extensions/languageRegistry';
 import { minimapExtension } from '../extensions/minimap';
+import { inlayHintsExtension } from '../extensions/inlayHints';
 import { debugLog } from '../utils/log';
 import type { EditorBuffer } from '../types/editor';
 
@@ -46,6 +47,7 @@ export interface UseEditorReconfigureOptions {
     lineWrapping: any;
     minimap: any;
     relativeLineNumbers: any;
+    inlayHints: any;
   };
   hotkeys: any;
   keymaps: {
@@ -59,6 +61,7 @@ export interface UseEditorReconfigureOptions {
     minimapEnabled: boolean;
     relativeLineNumbersEnabled: boolean;
     whitespaceRenderingMode: WhitespaceRenderingMode;
+    inlayHintsEnabled: boolean;
   };
 }
 
@@ -222,4 +225,25 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     settings.minimapEnabled,
     settings.relativeLineNumbersEnabled,
   ]);
+
+  // ---------------------------------------------------------------------------
+  // Inlay hints compartment sync
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const ext = settings.inlayHintsEnabled
+      ? inlayHintsExtension(
+          () => buffer?.file?.path,
+          () => view.state.doc.toString(),
+          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name).languageId,
+        )
+      : [];
+
+    view.dispatch({
+      effects: compartments.inlayHints.reconfigure(ext),
+    });
+  }, [settings.inlayHintsEnabled, buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 }

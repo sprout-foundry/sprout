@@ -67,6 +67,7 @@ import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
 import { unsavedLineHighlight } from '../extensions/unsavedLineHighlight';
 import { whitespaceRenderingPlugin } from '../extensions/whitespaceRendering';
 import { minimapExtension } from '../extensions/minimap';
+import { inlayHintsExtension } from '../extensions/inlayHints';
 import { getLanguageExtensions } from '../extensions/languageRegistry';
 import {
   createEmmetCompartment,
@@ -94,6 +95,7 @@ export interface ExtensionSettings {
   editorTabSize: number;
   editorUsesTabs: boolean;
   whitespaceRenderingMode: WhitespaceRenderingMode;
+  inlayHintsEnabled: boolean;
 }
 
 export interface ThemeConfig {
@@ -157,6 +159,7 @@ export interface UseEditorExtensionsReturn {
     fontSize: Compartment;
     tabSize: Compartment;
     lsp: Compartment;
+    inlayHints: Compartment;
   };
   /**
    * Build the full CodeMirror extension array for `EditorState.create()`.
@@ -183,6 +186,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
     fontSize: new Compartment(),
     tabSize: new Compartment(),
     lsp: new Compartment(),
+    inlayHints: new Compartment(),
   }).current; // stable reference — never recreated
 
   // ── Extension builder ─────────────────────────────────────────────────
@@ -256,6 +260,11 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       foldGutter({ openText: '▼', closedText: '▶' }),
       codeFolding(),
       compartments.minimap.of(settings.minimapEnabled ? minimapExtension() : []),
+      compartments.inlayHints.of(
+        settings.inlayHintsEnabled
+          ? inlayHintsExtension(buffer.getFilePath, buffer.getContent, buffer.languageId)
+          : [],
+      ),
       compartments.fontSize.of([
         EditorView.theme({ '&': { fontSize: `${settings.editorFontSize}px` } }),
       ]),

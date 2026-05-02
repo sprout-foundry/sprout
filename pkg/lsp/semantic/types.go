@@ -14,6 +14,7 @@ type Capabilities struct {
 	Rename      bool `json:"rename"`
 	References  bool `json:"references"`
 	CodeActions bool `json:"code_actions"`
+	InlayHints  bool `json:"inlay_hints"`
 }
 
 // ToolInput is the normalized request shape sent to language adapters.
@@ -97,6 +98,14 @@ type ToolCodeAction struct {
 	Edits []ToolCodeActionEdit `json:"edits"`
 }
 
+// ToolInlayHint is an adapter inlay hint in editor offset coordinates.
+type ToolInlayHint struct {
+	From  int    `json:"from"`   // 0-based byte offset where hint is displayed
+	To    int    `json:"to"`     // 0-based byte offset (end of hint range, typically From)
+	Label string `json:"label"`  // text to display
+	Kind  string `json:"kind"`   // "type", "parameter", or "none"
+}
+
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
 	Capabilities Capabilities        `json:"capabilities"`
@@ -106,6 +115,7 @@ type ToolResult struct {
 	Rename       *ToolRename        `json:"rename,omitempty"`
 	References   *ToolReferences   `json:"references,omitempty"`
 	CodeActions  []ToolCodeAction  `json:"code_actions,omitempty"`
+	InlayHints   []ToolInlayHint   `json:"inlay_hints,omitempty"`
 	Error        string             `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.

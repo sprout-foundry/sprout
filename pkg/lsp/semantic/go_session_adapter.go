@@ -49,7 +49,7 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 		if err := a.ensureServerLocked(input.WorkspaceRoot); err != nil {
 			if errors.Is(err, errGoplsNotAvailable) {
 				return ToolResult{
-					Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: true, Rename: true},
+					Capabilities: Capabilities{Diagnostics: true, Definition: false, Hover: true, Rename: true, References: true, CodeActions: true, InlayHints: false},
 					Error:        "gopls_not_available",
 				}, nil
 			}
@@ -65,6 +65,21 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 		return runGoHover(input)
 	case "rename":
 		return runGoRename(input)
+	case "inlay_hints":
+		if err := a.ensureServerLocked(input.WorkspaceRoot); err != nil {
+			if errors.Is(err, errGoplsNotAvailable) {
+				return ToolResult{
+					Capabilities: Capabilities{Diagnostics: true, Definition: true, Hover: true, Rename: true, References: true, CodeActions: true, InlayHints: false},
+					Error:        "gopls_not_available",
+				}, nil
+			}
+			return ToolResult{}, err
+		}
+		result, err := runGoInlayHintsWithRemote(input, a.goplsPath, a.remoteAddr)
+		if err != nil {
+			a.resetServerLocked()
+		}
+		return result, err
 	default:
 		return ToolResult{Capabilities: Capabilities{}}, nil
 	}

@@ -11,7 +11,6 @@ import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 
 export interface UseGitHandlersOptions {
-  gitRefreshToken: number;
   setGitRefreshToken: Dispatch<SetStateAction<number>>;
 }
 
@@ -24,7 +23,6 @@ export interface UseGitHandlersReturn {
 }
 
 export function useGitHandlers({
-  gitRefreshToken,
   setGitRefreshToken,
 }: UseGitHandlersOptions): UseGitHandlersReturn {
   const handleGitCommit = useCallback(async (message: string, files: string[]) => {

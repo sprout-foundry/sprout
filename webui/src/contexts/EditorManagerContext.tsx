@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { EditorBuffer, EditorPane, PaneLayout } from '../types/editor';
 import { showThemedPrompt, showThemedConfirm } from '@sprout/ui';
 import { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { formatCode, isFormattable } from '../services/formatter';
+import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
 import { debugLog } from '../utils/log';
 import { useSproutFetch } from './SproutAdapterContext';
 
@@ -200,7 +200,7 @@ interface EditorManagerContextValue {
   updateBufferScroll: (bufferId: string, position: { top: number; left: number }) => void;
   updateBufferMetadata: (bufferId: string, updates: Record<string, any>) => void;
   updateBufferTitle: (bufferId: string, title: string) => void;
-  saveBuffer: (bufferId: string) => Promise<{ mod_time?: number } | void>;
+  saveBuffer: (bufferId: string) => Promise<{ mod_time?: number; formattedContent?: string } | void>;
   setBufferModified: (bufferId: string, isModified: boolean) => void;
   setBufferOriginalContent: (bufferId: string, originalContent: string) => void;
   setBufferExternallyModified: (bufferId: string, diskContent: string, mtime?: number) => void;
@@ -862,54 +862,30 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
     // Normal save for existing files
     // Format before saving if format-on-save is enabled
     let contentToSave = buffer.content;
+    let formattedContent: string | undefined;
     if (isFormatOnSaveEnabled && isFormattable(buffer.file.path)) {
       try {
-        // Initialize the global resolve map if needed
-        const windowAny = window as unknown as Record<string, Map<string, (result: { formatted: string; error?: string }) => void>>;
-        let resolveMap = windowAny.__formatResolveMap;
-        if (!resolveMap) {
-          windowAny.__formatResolveMap = new Map();
-          resolveMap = windowAny.__formatResolveMap;
-        }
-
-        const requestId = crypto.randomUUID();
-        const savedContent = buffer.content;
-        const formatPromise = new Promise<{ formatted: string; error?: string }>((resolve) => {
-          resolveMap!.set(requestId, resolve);
-        });
-
-        // Dispatch the format event to the editor with the content to format.
-        // Passing content explicitly (rather than having EditorPane read from
-        // the editor state) ensures that if the user triggers another save
-        // while a format is in-flight, each save formats the exact content it
-        // captured — preventing a rapid-save race from overwriting formatted
-        // content with stale unformatted content.
-        document.dispatchEvent(new CustomEvent('editor-format-document', {
-          detail: { requestId, content: savedContent },
-        }));
-
-        // Wait for the editor to resolve or timeout
-        const timeout = new Promise<{ formatted: string; error?: string }>((resolve) =>
-          setTimeout(() => resolve({ formatted: buffer.content }), 2000),
+        const formatPromise = formatCodeWithConfigDiscovery(
+          buffer.content,
+          buffer.file.path,
+          buffer.file.size,
         );
-        const result = await Promise.race([formatPromise, timeout]);
-
-        // Delete the resolve callback immediately. If the timeout won the
-        // race, the EditorPane handler will see the entry is gone (via
-        // resolveMap.has(requestId) → false) and skip applying the stale
-        // formatted content to the CodeMirror editor. If the format won
-        // the race, the entry was already deleted by the EditorPane handler.
-        resolveMap.delete(requestId);
-
-        if (!result.error) {
+        // Timeout to prevent save from hanging indefinitely (e.g., Prettier
+        // processing a very large file or a stalled config fetch).
+        const formatTimeout = new Promise<{ formatted: string; error?: string }>((resolve) =>
+          setTimeout(() => resolve({ formatted: buffer.content, error: 'Format timed out' }), 2000),
+        );
+        const result = await Promise.race([formatPromise, formatTimeout]);
+        if (!result.error && result.formatted !== buffer.content) {
           contentToSave = result.formatted;
+          formattedContent = result.formatted;
+        } else if (result.error) {
+          // Log but don't block save
+          debugLog(`[saveBuffer] Format-on-save skipped for ${buffer.file.path}: ${result.error}`);
         }
       } catch {
-        // If anything goes wrong, just save the original content
-        // Dispatch an event so EditorPane can notify the user
-        document.dispatchEvent(new CustomEvent('format-on-save-failed', {
-          detail: { bufferId, filePath: buffer.file.path },
-        }));
+        // If formatting fails, save the original content
+        debugLog(`[saveBuffer] Format-on-save failed for ${buffer.file.path}, saving unformatted`);
       }
     }
 
@@ -929,11 +905,11 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
             const newBuffers = new Map(prev);
             const buf = newBuffers.get(bufferId);
             if (buf) {
-              newBuffers.set(bufferId, { ...buf, originalContent: buf.content, isModified: false });
+              newBuffers.set(bufferId, { ...buf, originalContent: formattedContent ?? buf.content, isModified: false });
             }
             return newBuffers;
           });
-          return { mod_time: typeof data.mod_time === 'number' ? data.mod_time : undefined };
+          return { mod_time: typeof data.mod_time === 'number' ? data.mod_time : undefined, formattedContent };
         }
       }
     } catch (error) {

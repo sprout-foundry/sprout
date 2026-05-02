@@ -17,6 +17,7 @@ This document captures findings from a deep audit of the codebase that are **not
 | §3.4 | write_file preserves original file permissions **[BEHAVIOR]** | `97a9952` |
 | §3.2 | WebSocket ReadLimit already set at 512KB (was already done) | — |
 | §5.3 | write_file returns summary with preview instead of full echo **[BEHAVIOR]** | `97a9952` |
+| §6.3 | Cloud adapter spec → SP-015 roadmap spec | `97a9952` |
 | §6.5 | Universal tool result truncation at 50K chars **[BEHAVIOR]** | `97a9952` |
 
 ---
@@ -28,7 +29,6 @@ These implemented features have **no roadmap spec coverage**:
 
 | Feature | Location | Lines |
 |---------|----------|-------|
-| Cloud adapter + endpoint registry | `webui/src/services/cloudAdapter.ts`, `cloudEndpointRegistry.ts` | ~1,736 |
 | Multi-chat sessions (tabbed conversations) | `pkg/webui/client_context.go` | 23 references |
 | Context compaction / conversation optimizer | `pkg/agent/conversation_optimizer.go` | 1,204 |
 | Trace/dataset mode (JSONL export) | `pkg/trace/` | ~1,300 non-test |
@@ -129,7 +129,6 @@ The `upgrader.CheckOrigin` already validates against localhost/loopback and `SPR
 
 ### 6.1 [GAP] Agent Memory System Has No Roadmap Spec
 ### 6.2 [GAP] Multi-Chat Sessions Have No Roadmap Spec
-### 6.3 [GAP] Cloud Adapter Has No Roadmap Spec
 ### 6.4 [GAP] Trace/Dataset Mode Has No Roadmap Spec
 ### 6.6 [GAP] No `self_review` Tool in Roadmap
 

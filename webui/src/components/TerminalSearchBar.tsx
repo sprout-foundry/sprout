@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { ChevronUp, ChevronDown, X, Type, Hash } from 'lucide-react';
 
@@ -9,9 +9,6 @@ export interface TerminalSearchOptions {
 }
 
 export interface TerminalSearchBarHandle {
-  show: () => void;
-  hide: () => void;
-  toggle: () => void;
   focusInput: () => void;
 }
 
@@ -33,15 +30,6 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
 
     // Expose methods to parent
     useImperativeHandle(ref, () => ({
-      show: () => {
-        // Parent controls visibility via props
-      },
-      hide: () => {
-        // Parent controls visibility via props
-      },
-      toggle: () => {
-        // Parent controls visibility via props
-      },
       focusInput: () => {
         inputRef.current?.focus();
       },
@@ -50,14 +38,19 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
     // Focus input when search bar becomes visible
     useEffect(() => {
       if (visible) {
-        // Double rAF ensures the DOM has been painted before focusing
-        const raf1 = requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
+        // Double rAF ensures the DOM has been painted before focusing.
+        // Track both handles so cleanup can cancel either one.
+        let innerRaf = 0;
+        const outerRaf = requestAnimationFrame(() => {
+          innerRaf = requestAnimationFrame(() => {
             inputRef.current?.focus();
             inputRef.current?.select();
           });
         });
-        return () => cancelAnimationFrame(raf1);
+        return () => {
+          cancelAnimationFrame(outerRaf);
+          if (innerRaf) cancelAnimationFrame(innerRaf);
+        };
       }
     }, [visible]);
 

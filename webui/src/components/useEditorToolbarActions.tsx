@@ -10,7 +10,7 @@
  */
 
 import { useMemo, type ReactNode } from 'react';
-import { Eye, Columns2, ListOrdered } from 'lucide-react';
+import { Eye, Columns2, ListOrdered, Paintbrush, SaveAll } from 'lucide-react';
 
 import type { ToolbarAction } from './EditorToolbarActions';
 
@@ -28,6 +28,9 @@ export interface UseEditorToolbarActionsOptions {
   onToggleRelativeLineNumbers: () => void;
   onOpenLivePreview?: () => void;
   onOpenLivePreviewInSplit?: () => void;
+  onFormatDocument?: () => void;
+  formatOnSaveEnabled?: boolean;
+  onToggleFormatOnSave?: () => void;
 }
 
 export interface UseEditorToolbarActionsReturn {
@@ -53,10 +56,34 @@ export function useEditorToolbarActions(
     onToggleRelativeLineNumbers,
     onOpenLivePreview,
     onOpenLivePreviewInSplit,
+    onFormatDocument,
+    formatOnSaveEnabled,
+    onToggleFormatOnSave,
   } = options;
 
   const rightActions = useMemo<ToolbarAction[]>(() => {
     const actions: ToolbarAction[] = [];
+
+    // Format document action
+    if (onFormatDocument) {
+      actions.push({
+        id: 'format-document',
+        title: 'Format document (Shift+Alt+F)',
+        icon: <Paintbrush size={16} />,
+        onClick: onFormatDocument,
+      });
+    }
+
+    // Format on save toggle
+    if (onToggleFormatOnSave && formatOnSaveEnabled !== undefined) {
+      actions.push({
+        id: 'format-on-save',
+        title: formatOnSaveEnabled ? 'Disable format on save' : 'Enable format on save',
+        icon: <SaveAll size={16} />,
+        onClick: onToggleFormatOnSave,
+        active: formatOnSaveEnabled,
+      });
+    }
 
     // Live preview actions for SVG/HTML files
     if (isSvgFile || isHtmlFile) {
@@ -121,6 +148,9 @@ export function useEditorToolbarActions(
     onToggleRelativeLineNumbers,
     onOpenLivePreview,
     onOpenLivePreviewInSplit,
+    onFormatDocument,
+    formatOnSaveEnabled,
+    onToggleFormatOnSave,
   ]);
 
   return { rightActions };

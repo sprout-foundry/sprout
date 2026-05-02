@@ -11,9 +11,10 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { EditorView as CMEditorView, keymap } from '@codemirror/view';
+import { EditorView as CMEditorView, keymap, type ViewUpdate, type KeyBinding } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { searchKeymap } from '@codemirror/search';
+import type { HighlightStyle } from '@codemirror/language';
 
 import type { EditorBuffer } from '../types/editor';
 import type { EditorSettingsCompartments } from './useEditorSettings';
@@ -23,11 +24,36 @@ import { resolveLanguageId } from '../extensions/languageRegistry';
 import { buildLSPPluginExtensions, lspSyncOnDocChange, setGlobalDisplayFileCallback, type DisplayFileCallback, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
+import type { Extension } from '@codemirror/state';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import type { ThemePack } from '../themes/themePacks';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export interface EditorViewInitSettings {
+  wordWrapEnabled: boolean;
+  relativeLineNumbersEnabled: boolean;
+  minimapEnabled: boolean;
+  editorFontSize: number;
+  editorTabSize: number;
+  editorUsesTabs: boolean;
+  whitespaceRenderingMode: WhitespaceRenderingMode;
+  inlayHintsEnabled: boolean;
+  signatureHelpEnabled: boolean;
+}
+
+export interface EditorViewInitKeymaps {
+  customKeymap: Extension;
+  replacePanelKeymap: readonly KeyBinding[];
+  zoomKeymap: readonly KeyBinding[];
+  semanticKeymap: readonly KeyBinding[];
+}
+
+export interface EditorViewInitActions {
+  getSaveFn: () => () => void;
+}
 
 export interface UseEditorViewInitOptions {
   paneId: string;
@@ -38,33 +64,19 @@ export interface UseEditorViewInitOptions {
   localContent: string;
   buildExtensions: UseEditorExtensionsReturn['buildExtensions'];
   compartments: UseEditorExtensionsReturn['compartments'];
-  themePack: any;
-  customHighlightStyle: any;
+  themePack: ThemePack;
+  customHighlightStyle: HighlightStyle | null;
   lastInitLanguageKey: React.MutableRefObject<string | null>;
-  keymaps: {
-    customKeymap: any;
-    replacePanelKeymap: any[];
-    zoomKeymap: any[];
-    semanticKeymap: any[];
-  };
+  /** Ref to keymaps — stable identity avoids EditorView recreation */
+  keymapsRef: React.MutableRefObject<EditorViewInitKeymaps>;
   localContentRef: React.MutableRefObject<string>;
-  openWorkspaceBuffer: (buffer: any) => void;
+  openWorkspaceBuffer: (buffer: { kind: 'file' | 'chat' | 'diff' | 'review' | 'compare'; path: string; title: string; ext?: string }) => void;
   onCancelPendingFlush: () => void;
-  onUpdate?: (update: any) => void;
-  settings: {
-    wordWrapEnabled: boolean;
-    relativeLineNumbersEnabled: boolean;
-    minimapEnabled: boolean;
-    editorFontSize: number;
-    editorTabSize: number;
-    editorUsesTabs: boolean;
-    whitespaceRenderingMode: WhitespaceRenderingMode;
-    inlayHintsEnabled: boolean;
-    signatureHelpEnabled: boolean;
-  };
-  actions: {
-    getSaveFn: () => () => void;
-  };
+  onUpdate?: (update: ViewUpdate) => void;
+  /** Ref to settings — stable identity avoids EditorView recreation */
+  settingsRef: React.MutableRefObject<EditorViewInitSettings>;
+  /** Ref to actions — stable identity avoids EditorView recreation */
+  actionsRef: React.MutableRefObject<EditorViewInitActions>;
 }
 
 export interface UseEditorViewInitReturn {
@@ -91,13 +103,13 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     themePack,
     customHighlightStyle,
     lastInitLanguageKey,
-    keymaps,
+    keymapsRef,
     localContentRef,
     openWorkspaceBuffer,
     onCancelPendingFlush,
     onUpdate,
-    settings,
-    actions,
+    settingsRef,
+    actionsRef,
   } = options;
 
   useEffect(() => {
@@ -105,8 +117,15 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
 
     const resolvedLanguage = resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name);
 
+    // Read current values from refs to avoid stale closure issues.
+    // These are read inside the effect (not captured by dependency array)
+    // so the EditorView is only recreated when identity-based deps change.
+    const settings = settingsRef.current;
+    const keymaps = keymapsRef.current;
+    const actions = actionsRef.current;
+
     // Create update listener if onUpdate callback provided
-    const updateListener = onUpdate ? CMEditorView.updateListener.of((update: any) => {
+    const updateListener = onUpdate ? CMEditorView.updateListener.of((update: ViewUpdate) => {
       onUpdate(update);
     }) : null;
 
@@ -220,12 +239,12 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     compartments,
     themePack,
     customHighlightStyle,
-    keymaps,
     localContentRef,
     openWorkspaceBuffer,
     onCancelPendingFlush,
     onUpdate,
-    settings,
-    actions,
+    settingsRef,
+    keymapsRef,
+    actionsRef,
   ]);
 }

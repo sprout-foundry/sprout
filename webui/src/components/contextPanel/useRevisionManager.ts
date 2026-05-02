@@ -15,7 +15,7 @@ export function useRevisionManager(
   const log = useLog();
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());
-  const [revisionDetailsById, setRevisionDetailsById] = useState<Record<string, Record<string, string>>>({});
+  const [_revisionDetailsById, setRevisionDetailsById] = useState<Record<string, Record<string, string>>>({});
   const revisionDetailsByIdRef = useRef<Record<string, Record<string, string>>>({});
   const [revisionDetailsLoading, setRevisionDetailsLoading] = useState<Record<string, boolean>>({});
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);

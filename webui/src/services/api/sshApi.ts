@@ -2,19 +2,34 @@
  * SSH/Instances domain API — adapter-aware SSH and instance operations.
  */
 
-export async function getInstances(fetchFn: typeof fetch): Promise<any> {
+import {
+  SproutInstance,
+  SSHHostEntry,
+  SSHHostsResponse,
+  SSHSessionEntry,
+  SSHSessionsResponse,
+  SSHOpenResponse,
+  SSHLaunchStatus,
+  SSHBrowseEntry,
+  SSHBrowseResponse,
+  SSHCloseResponse,
+  SelectInstanceResponse,
+  InstancesResponse,
+} from './types';
+
+export async function getInstances(fetchFn: typeof fetch): Promise<InstancesResponse> {
   const response = await fetchFn('/api/instances');
   if (!response.ok) throw new Error('Failed to fetch instances');
   return response.json();
 }
 
-export async function getSSHHosts(fetchFn: typeof fetch): Promise<any> {
+export async function getSSHHosts(fetchFn: typeof fetch): Promise<SSHHostsResponse> {
   const response = await fetchFn('/api/instances/ssh-hosts');
   if (!response.ok) throw new Error('Failed to fetch SSH hosts');
   return response.json();
 }
 
-export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string, remoteWorkspacePath?: string): Promise<any> {
+export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
   const response = await fetchFn('/api/instances/ssh/open', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -27,7 +42,7 @@ export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string,
   return response.json();
 }
 
-export async function getSSHLaunchStatus(fetchFn: typeof fetch, hostAlias: string, remoteWorkspacePath?: string): Promise<any> {
+export async function getSSHLaunchStatus(fetchFn: typeof fetch, hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {
   const params = new URLSearchParams({ host_alias: hostAlias });
   if (remoteWorkspacePath) params.set('remote_workspace_path', remoteWorkspacePath);
   const response = await fetchFn(`/api/instances/ssh/launch-status?${params}`);
@@ -35,13 +50,13 @@ export async function getSSHLaunchStatus(fetchFn: typeof fetch, hostAlias: strin
   return response.json();
 }
 
-export async function getSSHSessions(fetchFn: typeof fetch): Promise<any> {
+export async function getSSHSessions(fetchFn: typeof fetch): Promise<SSHSessionsResponse> {
   const response = await fetchFn('/api/instances/ssh/sessions');
   if (!response.ok) throw new Error('Failed to fetch SSH sessions');
   return response.json();
 }
 
-export async function browseSSHDirectory(fetchFn: typeof fetch, sessionKey: string, path: string): Promise<any> {
+export async function browseSSHDirectory(fetchFn: typeof fetch, sessionKey: string, path: string): Promise<SSHBrowseResponse> {
   const response = await fetchFn(`/api/instances/ssh/${encodeURIComponent(sessionKey)}/browse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -54,7 +69,7 @@ export async function browseSSHDirectory(fetchFn: typeof fetch, sessionKey: stri
   return response.json();
 }
 
-export async function closeSSHSession(fetchFn: typeof fetch, key: string): Promise<any> {
+export async function closeSSHSession(fetchFn: typeof fetch, key: string): Promise<SSHCloseResponse> {
   const response = await fetchFn(`/api/instances/ssh/sessions/${encodeURIComponent(key)}`, { method: 'DELETE' });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Close failed' }));
@@ -63,7 +78,7 @@ export async function closeSSHSession(fetchFn: typeof fetch, key: string): Promi
   return response.json();
 }
 
-export async function selectInstance(fetchFn: typeof fetch, pid: number): Promise<any> {
+export async function selectInstance(fetchFn: typeof fetch, pid: number): Promise<SelectInstanceResponse> {
   const response = await fetchFn('/api/instances/select', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

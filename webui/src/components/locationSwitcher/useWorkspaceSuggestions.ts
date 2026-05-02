@@ -52,9 +52,9 @@ export interface UseWorkspaceSuggestionsResult {
 }
 
 export function useWorkspaceSuggestions({
-  isConnected, workspaceRoot, daemonRoot, remoteContext, switchingState,
-  sshFailure, isLoading, recentWorkspaces, remoteRecentWorkspaces, sshFavoriteWorkspaces,
-  submitWorkspaceChange, setSwitchingState, setSshFailure, sidebarCollapsed,
+  isConnected, workspaceRoot, daemonRoot: _daemonRoot, remoteContext, switchingState: _switchingState,
+  sshFailure: _sshFailure, isLoading: _isLoading, recentWorkspaces, remoteRecentWorkspaces, sshFavoriteWorkspaces,
+  submitWorkspaceChange, setSwitchingState, setSshFailure, sidebarCollapsed: _sidebarCollapsed,
   isOpen, isSshPanelOpen, setIsOpen, setIsSshPanelOpen,
 }: UseWorkspaceSuggestionsProps): UseWorkspaceSuggestionsResult {
 
@@ -87,7 +87,7 @@ export function useWorkspaceSuggestions({
     return (sshFavoriteWorkspaces[remoteContext.hostAlias] || []).filter((p) => p !== workspaceRoot);
   }, [remoteContext?.hostAlias, sshFavoriteWorkspaces, workspaceRoot]);
 
-  const showText = !sidebarCollapsed;
+  const showText = !_sidebarCollapsed;
   const totalWorkspaceRows = suggestions.length + recentWorkspaceItems.length;
 
   // Suggestions loading
@@ -107,8 +107,8 @@ export function useWorkspaceSuggestions({
         const ct = response.headers.get('Content-Type') || '';
         if (!ct.includes('application/json')) { setSuggestions([]); setSuggestionsLoading(false); return; }
         const data = await response.json(); if (cancelled) return;
-        const next = (data.files || []).filter((f: any) => f.type === 'directory' && !String(f.name || '').startsWith('.'))
-          .map((f: any) => ({ name: String(f.name), path: normalizePath(String(f.path)) }))
+        const next = (data.files || []).filter((f: { type: string; name: string; path: string }) => f.type === 'directory' && !String(f.name || '').startsWith('.'))
+          .map((f: { type: string; name: string; path: string }) => ({ name: String(f.name), path: normalizePath(String(f.path)) }))
           .filter((e: WorkspaceDirectory) => !prefix || e.name.toLowerCase().startsWith(prefix.toLowerCase()))
           .sort((a: WorkspaceDirectory, b: WorkspaceDirectory) => a.name.localeCompare(b.name))
           .slice(0, MAX_SUGGESTIONS);

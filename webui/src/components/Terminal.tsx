@@ -433,6 +433,11 @@ function Terminal({
   const switchSessionInPane = useCallback(
     (paneId: string, sessionId: string) => {
       updatePane(paneId, (pane) => ({ ...pane, activeSessionId: sessionId }));
+      // After switching tabs, the newly visible xterm needs a resize since it
+      // was display:none (0×0) and now needs to fit the pane dimensions.
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
     },
     [updatePane],
   );
@@ -865,24 +870,38 @@ function Terminal({
                     )}
                   </div>
                 </div>
-                <TerminalPane
-                  key={pane.activeSessionId}
-                  ref={(handle) => {
-                    const id = pane.activeSessionId;
-                    if (handle) {
-                      paneHandles.current.set(id, handle);
-                    } else {
-                      paneHandles.current.delete(id);
-                    }
-                  }}
-                  isActive={hasActivated || isExpanded}
-                  isConnected={isConnected}
-                  showCloseButton={false}
-                  preferredShell={sessionShellsRef.current.get(pane.activeSessionId) ?? null}
-                  reattachSessionId={sessionReattachIdsRef.current.get(pane.activeSessionId) ?? null}
-                  fontSize={fontSize}
-                  onProcessExit={() => handleProcessExit(pane.id, pane.activeSessionId)}
-                />
+                {pane.sessions.map((session) => {
+                  const isActiveSession = session.id === pane.activeSessionId;
+                  return (
+                    <div
+                      key={session.id}
+                      style={{
+                        display: isActiveSession ? 'flex' : 'none',
+                        flex: '1 1 0%',
+                        minWidth: 0,
+                        minHeight: 0,
+                        flexDirection: 'column',
+                      }}
+                    >
+                      <TerminalPane
+                        ref={(handle) => {
+                          if (handle) {
+                            paneHandles.current.set(session.id, handle);
+                          } else {
+                            paneHandles.current.delete(session.id);
+                          }
+                        }}
+                        isActive={hasActivated || isExpanded}
+                        isConnected={isConnected}
+                        showCloseButton={false}
+                        preferredShell={sessionShellsRef.current.get(session.id) ?? null}
+                        reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
+                        fontSize={fontSize}
+                        onProcessExit={() => handleProcessExit(pane.id, session.id)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
               {index === 0 && isSplitActive && (
                 <div

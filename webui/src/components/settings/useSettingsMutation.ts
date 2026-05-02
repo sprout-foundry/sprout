@@ -63,7 +63,7 @@ interface MutationHookParams {
   // Workspace config
   creatingWorkspaceConfig: boolean;
   setCreatingWorkspaceConfig: (v: boolean) => void;
-  setLayerData: (v: Record<string, any> | null) => void;
+  setLayerData: (v: Record<string, unknown> | null) => void;
 }
 
 export function useSettingsMutation(params: MutationHookParams) {
@@ -192,7 +192,7 @@ export function useSettingsMutation(params: MutationHookParams) {
           enabled,
         },
       };
-      await api.updateSkills(updatedSkills);
+      await api.updateSkills({ skills: updatedSkills });
       onSettingsChanged({ ...settings, skills: updatedSkills });
       addNotification('success', 'Settings', `${skillName} ${enabled ? 'enabled' : 'disabled'}`, 3000);
     } catch (err) {

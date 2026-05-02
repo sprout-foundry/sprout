@@ -43,8 +43,8 @@ declare global {
       // Auto-update event listeners
       onUpdateError: (callback: (data: NotificationEvent) => void) => () => void;
       onUpdateAvailable: (callback: (data: NotificationEvent) => void) => () => void;
-      onUpdateDownloadProgress: (callback: (progress: any) => void) => () => void;
-      onUpdateDownloaded: (callback: (info: any) => void) => () => void;
+      onUpdateDownloadProgress: (callback: (progress: { percent?: number }) => void) => () => void;
+      onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void;
       onTriggerUpdateCheck: (callback: () => void) => () => void;
     };
   }
@@ -143,7 +143,7 @@ function UpdateNotification(): JSX.Element | null {
     if (window.sproutDesktop.onUpdateDownloadProgress) {
       unsubscribeDownloadProgress = window.sproutDesktop.onUpdateDownloadProgress((progress) => {
         console.log(`Update download progress: ${progress.percent}%`);
-        setDownloadProgress(progress.percent);
+        setDownloadProgress(progress.percent ?? null);
       });
     }
 

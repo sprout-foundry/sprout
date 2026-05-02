@@ -2,13 +2,24 @@
  * Editor/Semantic domain API — adapter-aware editor and semantic operations.
  */
 
-export async function getPrettierConfig(fetchFn: typeof fetch, filePath: string): Promise<any> {
+import {
+  DiagnosticsResponse,
+  SemanticDiagnosticsResponse,
+  SemanticDefinitionResponse,
+  SemanticHoverResponse,
+  SemanticRenameResponse,
+  SemanticReferencesResponse,
+  SemanticCodeActionsResponse,
+  WorkspaceSymbolsResponse,
+} from './types';
+
+export async function getPrettierConfig(fetchFn: typeof fetch, filePath: string): Promise<Record<string, unknown>> {
   const response = await fetchFn(`/api/prettier/config?path=${encodeURIComponent(filePath)}`);
   if (!response.ok) throw new Error('Failed to fetch prettier config');
   return response.json();
 }
 
-export async function getDiagnostics(fetchFn: typeof fetch, path: string, content: string): Promise<any> {
+export async function getDiagnostics(fetchFn: typeof fetch, path: string, content: string): Promise<DiagnosticsResponse> {
   const response = await fetchFn('/api/diagnostics', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -18,7 +29,7 @@ export async function getDiagnostics(fetchFn: typeof fetch, path: string, conten
   return response.json();
 }
 
-export async function getSemanticDiagnostics(fetchFn: typeof fetch, path: string, content: string, languageId: string, trigger: 'edit' | 'save' = 'edit'): Promise<any> {
+export async function getSemanticDiagnostics(fetchFn: typeof fetch, path: string, content: string, languageId: string, trigger: 'edit' | 'save' = 'edit'): Promise<SemanticDiagnosticsResponse> {
   const response = await fetchFn('/api/semantic/diagnostics', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -28,7 +39,7 @@ export async function getSemanticDiagnostics(fetchFn: typeof fetch, path: string
   return response.json();
 }
 
-export async function getSemanticDefinition(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<any> {
+export async function getSemanticDefinition(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<SemanticDefinitionResponse> {
   const response = await fetchFn('/api/semantic/definition', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -38,7 +49,7 @@ export async function getSemanticDefinition(fetchFn: typeof fetch, path: string,
   return response.json();
 }
 
-export async function getSemanticHover(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<any> {
+export async function getSemanticHover(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<SemanticHoverResponse> {
   const response = await fetchFn('/api/semantic/hover', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,7 +59,7 @@ export async function getSemanticHover(fetchFn: typeof fetch, path: string, cont
   return response.json();
 }
 
-export async function getSemanticRename(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<any> {
+export async function getSemanticRename(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<SemanticRenameResponse> {
   const response = await fetchFn('/api/semantic/rename', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -58,7 +69,7 @@ export async function getSemanticRename(fetchFn: typeof fetch, path: string, con
   return response.json();
 }
 
-export async function getSemanticReferences(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<any> {
+export async function getSemanticReferences(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<SemanticReferencesResponse> {
   const response = await fetchFn('/api/semantic/references', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -68,7 +79,7 @@ export async function getSemanticReferences(fetchFn: typeof fetch, path: string,
   return response.json();
 }
 
-export async function getSemanticCodeActions(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<any> {
+export async function getSemanticCodeActions(fetchFn: typeof fetch, path: string, content: string, languageId: string, line: number, column: number): Promise<SemanticCodeActionsResponse> {
   const response = await fetchFn('/api/semantic/code-actions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -78,7 +89,7 @@ export async function getSemanticCodeActions(fetchFn: typeof fetch, path: string
   return response.json();
 }
 
-export async function getWorkspaceSymbols(fetchFn: typeof fetch, query: string): Promise<any> {
+export async function getWorkspaceSymbols(fetchFn: typeof fetch, query: string): Promise<WorkspaceSymbolsResponse> {
   const response = await fetchFn(`/api/semantic/workspace-symbols?query=${encodeURIComponent(query)}`);
   if (!response.ok) throw new Error('Failed to fetch workspace symbols');
   return response.json();

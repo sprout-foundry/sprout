@@ -2,6 +2,8 @@
  * Chat/Agent domain API — adapter-aware chat operations.
  */
 
+import { UploadImageResponse } from './types';
+
 export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: string): Promise<void> {
   const response = await fetchFn('/api/query', {
     method: 'POST',
@@ -14,7 +16,7 @@ export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: s
   }
 }
 
-export async function uploadImage(fetchFn: typeof fetch, file: File | Blob): Promise<any> {
+export async function uploadImage(fetchFn: typeof fetch, file: File | Blob): Promise<UploadImageResponse> {
   const formData = new FormData();
   formData.append('image', file);
   const response = await fetchFn('/api/upload-image', { method: 'POST', body: formData });

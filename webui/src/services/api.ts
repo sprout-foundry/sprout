@@ -234,7 +234,7 @@ class ApiService {
     return ApiService.instance;
   }
 
-  private parseWorkspacePayload(text: string): any {
+  private parseWorkspacePayload(text: string): Record<string, unknown> {
     const trimmed = text.trim();
     if (!trimmed) {
       return {};
@@ -270,7 +270,7 @@ class ApiService {
     const data = this.parseWorkspacePayload(text);
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to fetch workspace');
+      throw new Error((data.error as string) || (data.message as string) || 'Failed to fetch workspace');
     }
 
     if (this.isHTMLResponseBody(text)) {
@@ -278,7 +278,7 @@ class ApiService {
     }
 
     if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-      return data as WorkspaceResponse;
+      return data as unknown as WorkspaceResponse;
     }
 
     throw new Error('Workspace API returned malformed response');
@@ -297,7 +297,7 @@ class ApiService {
     const data = this.parseWorkspacePayload(text);
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to update workspace');
+      throw new Error((data.error as string) || (data.message as string) || 'Failed to update workspace');
     }
 
     if (this.isHTMLResponseBody(text)) {
@@ -305,7 +305,7 @@ class ApiService {
     }
 
     if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-      return data as WorkspaceResponse & { message: string };
+      return data as unknown as WorkspaceResponse & { message: string };
     }
 
     // Some remote/proxy setups respond to workspace set with a non-JSON success body.
@@ -313,7 +313,7 @@ class ApiService {
     const workspace = await this.getWorkspace();
     return {
       ...workspace,
-      message: data.message || 'Workspace updated',
+      message: (data.message as string) || 'Workspace updated',
     };
   }
 
@@ -510,7 +510,7 @@ class ApiService {
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error((data as any).error || 'Failed to open in file browser');
+      throw new Error((data as Record<string, unknown>).error as string || 'Failed to open in file browser');
     }
   }
 
@@ -550,12 +550,12 @@ class ApiService {
     });
 
     if (!startResponse.ok) {
-      const errData = await startResponse.json().catch(() => ({})) as any;
+      const errData = await startResponse.json().catch(() => ({})) as Record<string, unknown>;
       throw new SSHWorkspaceOpenError({
-        error: errData.error || errData.message || 'Failed to start SSH workspace launch',
-        step: errData.step,
-        details: errData.details,
-        log_path: errData.log_path,
+        error: (errData.error as string) || (errData.message as string) || 'Failed to start SSH workspace launch',
+        step: errData.step as string | undefined,
+        details: errData.details as string | undefined,
+        log_path: errData.log_path as string | undefined,
       });
     }
 
@@ -651,7 +651,7 @@ class ApiService {
     });
 
     const text = await response.text();
-    let data: any = {};
+    let data: Record<string, unknown> = {};
     if (text) {
       try {
         data = JSON.parse(text);
@@ -661,7 +661,7 @@ class ApiService {
     }
 
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to browse SSH directory');
+      throw new Error((data.error as string) || (data.message as string) || 'Failed to browse SSH directory');
     }
 
     return {
@@ -680,7 +680,7 @@ class ApiService {
       body: JSON.stringify({ key }),
     });
     const text = await response.text();
-    let data: any = {};
+    let data: Record<string, unknown> = {};
     if (text) {
       try {
         data = JSON.parse(text);
@@ -689,9 +689,9 @@ class ApiService {
       }
     }
     if (!response.ok) {
-      throw new Error(data.error || data.message || 'Failed to close SSH session');
+      throw new Error((data.error as string) || (data.message as string) || 'Failed to close SSH session');
     }
-    return data;
+    return data as { message: string; key: string };
   }
 
   async selectInstance(pid: number): Promise<{ message: string; pid: number }> {
@@ -1182,7 +1182,7 @@ class ApiService {
     }
   }
 
-  async startFixFromDeepReview(reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<{
+  async startFixFromDeepReview(reviewOutput: string, _options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -1705,7 +1705,7 @@ class ApiService {
   }
 
   /** Get settings from a specific config layer (global, workspace, or session) */
-  async getSettingsLayer(layer: 'global' | 'workspace' | 'session'): Promise<Record<string, any>> {
+  async getSettingsLayer(layer: 'global' | 'workspace' | 'session'): Promise<Record<string, unknown>> {
     try {
       const response = await clientFetch(`/api/settings?layer=${layer}`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1727,7 +1727,7 @@ class ApiService {
     }
   }
 
-  async updateSettings(settings: Record<string, any>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
+  async updateSettings(settings: Record<string, unknown>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
     try {
       const url = layer ? `/api/settings?layer=${layer}` : '/api/settings';
       const response = await clientFetch(url, {
@@ -1743,7 +1743,7 @@ class ApiService {
     }
   }
 
-  async getMCPSettings(): Promise<any> {
+  async getMCPSettings(): Promise<MCPSettingsResponse> {
     try {
       const response = await clientFetch('/api/settings/mcp');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1754,7 +1754,7 @@ class ApiService {
     }
   }
 
-  async updateMCPSettings(settings: any): Promise<{ message: string }> {
+  async updateMCPSettings(settings: MCPSettingsResponse): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/mcp', {
         method: 'PUT',
@@ -1769,7 +1769,7 @@ class ApiService {
     }
   }
 
-  async addMCPServer(server: any): Promise<{ message: string }> {
+  async addMCPServer(server: MCPServerConfig): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/mcp/servers/', {
         method: 'POST',
@@ -1784,7 +1784,7 @@ class ApiService {
     }
   }
 
-  async updateMCPServer(name: string, server: any): Promise<{ message: string }> {
+  async updateMCPServer(name: string, server: MCPServerConfig): Promise<{ message: string }> {
     try {
       const response = await clientFetch(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
         method: 'PUT',
@@ -1812,7 +1812,7 @@ class ApiService {
     }
   }
 
-  async getCustomProviders(): Promise<any> {
+  async getCustomProviders(): Promise<CustomProvidersResponse> {
     try {
       const response = await clientFetch('/api/settings/providers');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1823,7 +1823,7 @@ class ApiService {
     }
   }
 
-  async addCustomProvider(provider: any): Promise<{ message: string }> {
+  async addCustomProvider(provider: CustomProviderConfig): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/providers', {
         method: 'POST',
@@ -1838,7 +1838,7 @@ class ApiService {
     }
   }
 
-  async updateCustomProvider(name: string, provider: any): Promise<{ message: string }> {
+  async updateCustomProvider(name: string, provider: CustomProviderConfig): Promise<{ message: string }> {
     try {
       const response = await clientFetch(`/api/settings/providers/${encodeURIComponent(name)}`, {
         method: 'PUT',
@@ -1866,7 +1866,7 @@ class ApiService {
     }
   }
 
-  async getSkills(): Promise<any> {
+  async getSkills(): Promise<SkillsResponse> {
     try {
       const response = await clientFetch('/api/settings/skills');
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -1877,7 +1877,7 @@ class ApiService {
     }
   }
 
-  async updateSkills(skills: any): Promise<{ message: string }> {
+  async updateSkills(skills: SkillsResponse): Promise<{ message: string }> {
     try {
       const response = await clientFetch('/api/settings/skills', {
         method: 'PUT',
@@ -1895,18 +1895,7 @@ class ApiService {
   // ── Subagent Types API ──────────────────────────────────────────
 
   async getSubagentTypes(): Promise<{
-    subagent_types: Record<string, {
-      id: string;
-      name: string;
-      description: string;
-      provider: string;
-      model: string;
-      system_prompt: string;
-      system_prompt_text?: string;
-      allowed_tools: string[];
-      aliases: string[];
-      enabled: boolean;
-    }>;
+    subagent_types: Record<string, SubagentTypeInfo>;
     available_providers: Array<{ id: string; name: string; models: string[] }>;
     current_provider: string;
     current_model: string;
@@ -1924,7 +1913,7 @@ class ApiService {
   async updateSubagentType(
     name: string,
     updates: { provider?: string; model?: string },
-  ): Promise<{ success: boolean; type: any }> {
+  ): Promise<{ success: boolean; type: SubagentTypeInfo }> {
     try {
       const response = await clientFetch(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
         method: 'PUT',
@@ -2148,10 +2137,10 @@ export interface SproutSettings {
     auto_start: boolean;
     auto_discover: boolean;
     timeout: string;
-    servers: Record<string, any>;
+    servers: Record<string, MCPServerConfig>;
   };
-  custom_providers: Record<string, any>;
-  skills: Record<string, any>;
+  custom_providers: Record<string, CustomProviderConfig>;
+  skills: Record<string, SkillConfig>;
 }
 
 // ── Hotkeys interfaces ─────────────────────────────────────────────
@@ -2167,4 +2156,87 @@ export interface HotkeyConfig {
   version: string;
   hotkeys: HotkeyEntry[];
   path?: string;  // Filesystem path to the hotkeys config file
+}
+
+// ── MCP Settings interfaces ─────────────────────────────────────────
+
+export interface MCPServerConfig {
+  name: string;
+  type?: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  credentials?: Record<string, string>;
+  working_dir?: string;
+  timeout?: string;
+  auto_start?: boolean;
+  max_restarts?: number;
+}
+
+export interface MCPSettingsResponse {
+  mcp: {
+    enabled: boolean;
+    auto_start: boolean;
+    auto_discover: boolean;
+    timeout: string;
+    servers: Record<string, MCPServerConfig>;
+  };
+}
+
+// ── Custom Provider interfaces ───────────────────────────────────────
+
+export interface CustomProviderConfig {
+  name: string;
+  endpoint: string;
+  model_name: string;
+  context_size: number;
+  model_context_sizes?: Record<string, number>;
+  reasoning_effort?: string;
+  temperature?: number;
+  top_p?: number;
+  parameters?: Record<string, unknown>;
+  requires_api_key: boolean;
+  tool_calls?: string[];
+  env_var?: string;
+  chunk_timeout_ms?: number;
+  supports_vision?: boolean;
+  vision_model?: string;
+  vision_fallback_provider?: string;
+  vision_fallback_model?: string;
+}
+
+export interface CustomProvidersResponse {
+  custom_providers: Record<string, CustomProviderConfig>;
+}
+
+// ── Skills interfaces ───────────────────────────────────────────────
+
+export interface SkillConfig {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  enabled: boolean;
+  metadata?: Record<string, string>;
+  allowed_tools?: string;
+}
+
+export interface SkillsResponse {
+  skills: Record<string, SkillConfig>;
+}
+
+// ── Subagent Type interfaces ─────────────────────────────────────────
+
+export interface SubagentTypeInfo {
+  id: string;
+  name: string;
+  description: string;
+  provider: string;
+  model: string;
+  system_prompt: string;
+  system_prompt_text?: string;
+  allowed_tools: string[];
+  aliases: string[];
+  enabled: boolean;
 }

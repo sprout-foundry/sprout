@@ -30,24 +30,37 @@ import * as session from '../services/api/sessionApi';
 import * as misc from '../services/api/miscApi';
 
 /**
+ * Extract all but the first element from a tuple type.
+ *
+ * The generic constraints use `any[]` for flexibility — they model function
+ * parameter tuples where the first entry is the injected `fetchFn` and the
+ * caller should never reference it.
+ */
+type Tail<T extends any[]> = T extends [any, ...infer R] ? R : never;
+
+/**
  * Creates bound API methods from a domain module and a fetch function.
  * Binds the fetch function as the first argument to every exported function.
+ *
+ * The implementation casts through `any` at the binding boundary so that the
+ * caller-facing type signature is fully typed.  This is the standard pattern
+ * for generic higher-order function binding in TypeScript.
  */
-function bindModule<T extends Record<string, (...args: any[]) => any>>(
+function bindModule<T extends Record<string, (...args: any[]) => unknown>>(
   mod: T,
   fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): { [K in keyof T]: (...args: Tail<Parameters<T[K]>>) => ReturnType<T[K]> } {
-  const result: Record<string, (...args: any[]) => any> = {};
+  const result: Record<string, (...args: unknown[]) => unknown> = {};
   for (const key of Object.keys(mod)) {
     if (typeof mod[key] === 'function') {
-      result[key] = (...args: any[]) => mod[key](fetchFn, ...args);
+      result[key] = (...args: unknown[]) => (mod[key] as (...a: unknown[]) => unknown)(fetchFn, ...args);
     }
   }
+  // Type-system boundary: the result shape is guaranteed by the generic constraint
+  // but TypeScript cannot verify the mapped return type directly.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return result as any;
 }
-
-/** Extract all but the first element from a tuple type */
-type Tail<T extends any[]> = T extends [any, ...infer R] ? R : never;
 
 /**
  * Files API hook — adapter-aware file operations.

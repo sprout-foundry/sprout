@@ -34,6 +34,7 @@ export interface UseEditorViewInitOptions {
   editorRef: React.RefObject<HTMLDivElement | null>;
   viewRef: React.MutableRefObject<CMEditorView | null>;
   buffer: EditorBuffer | null | undefined;
+  /** @deprecated Use localContentRef instead — reading localContent in the init effect triggers EditorView recreation on every keystroke */
   localContent: string;
   buildExtensions: UseEditorExtensionsReturn['buildExtensions'];
   compartments: UseEditorExtensionsReturn['compartments'];
@@ -85,7 +86,6 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     editorRef,
     viewRef,
     buffer,
-    localContent,
     compartments,
     buildExtensions,
     themePack,
@@ -131,8 +131,14 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
       ],
     });
 
+    // Use the ref to read the current content at the time the effect runs.
+    // Do NOT add localContent to the dependency array below — doing so causes
+    // the entire EditorView to be destroyed and recreated on every keystroke,
+    // which breaks editing and resets scroll position.
+    const initContent = localContentRef.current;
+
     const state = EditorState.create({
-      doc: localContent,
+      doc: initContent,
       extensions,
     });
 
@@ -211,7 +217,6 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     buffer?.file?.name,
     editorRef,
     viewRef,
-    localContent,
     compartments,
     themePack,
     customHighlightStyle,

@@ -81,67 +81,82 @@ SSH hosts, etc.) is either gated behind feature flags or returns synthetic respo
 
 ## What's Already Implemented
 
-The `APIAdapter` / `CloudAdapter` / `cloudEndpointRegistry.ts` pattern in the sprout
-webui already captures this matrix in code:
+The integration uses **two independent paths** (both must stay in sync):
 
+**Path 1: CloudAdapter** (sprout repo) — intercepts `clientFetch()` calls:
 ```
 services/apiAdapter.ts          — Interface definition (APIAdapter)
 services/cloudAdapter.ts        — Cloud implementation (CloudAdapter)
-services/cloudEndpointRegistry.ts — Maps every /api/* endpoint to a category:
-                                    wasm-local | foundry-backend | synthetic | no-op
+services/cloudEndpointRegistry.ts — Maps every /api/* endpoint to a category
 config/mode.ts                  — Feature flags derived from adapter capabilities
 bootstrapAdapter.ts             — Installs CloudAdapter when REACT_APP_SPROUT_MODE=cloud
 ```
 
-**Endpoint categories in cloudEndpointRegistry.ts:**
-- `wasm-local` (17 endpoints) → Interface 1 + 2, handled by WASM in browser
-- `foundry-backend` (44 endpoints) → Interface 3 + 4, proxied to Foundry Go server
-- `synthetic` (13 endpoints) → Feature-gated (onboarding, instances, SSH, etc.)
-- `no-op` → Reserved for future use
+**Path 2: Service Worker** (foundry repo) — intercepts browser fetch requests:
+```
+browser-ide/src/sprout-sw.ts    — Intercepts /api/* requests from webui
+browser-ide/src/chat-bridge.ts  — Chat body translation to Foundry format
+browser-ide/src/sw-vfs.ts       — VFS bridge between SW and WASM shell
+browser-ide/src/editor.ts       — Loads webui static bundle + WASM
+```
+
+**Path 3: Server-side stubs** (foundry repo) — returns synthetic responses:
+```
+internal/api/webui_compat.go    — 80+ stub handlers for cloud-incompatible endpoints
+internal/api/proxy.go           — LLM proxy with SSE streaming
+internal/api/workspace_proxy.go — Reverse proxy to sprout containers (incl. WebSocket)
+```
+
+**Endpoint categories** (shared across all paths):
+- `wasm-local` (17 endpoints) → File/shell ops, handled by WASM in browser
+- `foundry-backend` (44 endpoints) → Chat/git/settings, proxied to Foundry
+- `synthetic` (13 endpoints) → Feature-gated (onboarding, instances, SSH)
+- `no-op` (1 endpoint) → OS file browser open
 
 ---
 
 ## What Still Needs Work
 
-### Environment B (Cloud Web App — current focus)
+### Critical: Dual-path drift risk
 
-1. **WASM file ops aren't wired into the adapter yet.** The registry classifies 17
-   endpoints as `wasm-local`, but the CloudAdapter doesn't intercept them — it only
-   rewrites URLs and returns synthetic responses. The `wasm-local` endpoints still
-   fall through to `fetch()` which hits the Foundry server. Need to either:
-   - Have the CloudAdapter return WASM-generated responses for these endpoints
-   - Or add a WASM middleware that intercepts before the adapter
+The CloudAdapter (sprout repo) and Service Worker (foundry repo) independently
+implement the same routing logic. When endpoints are added/changed in one repo,
+the other must be updated manually. There is no automated sync or shared
+classification between the two.
 
-2. **Terminal uses WASM directly (already works).** `TerminalPane.tsx` calls
-   `initWasmShell()` and runs commands through it. This is the one interface
-   that already works correctly in cloud mode.
+### Environment B (Cloud Static / Browser IDE — current focus)
 
-3. **Git operations need a real backend.** All 20 git endpoints route to
-   `foundry-backend`, but the Foundry server needs real git implementations
-   (currently stubs return empty data).
+1. **WASM file ops not wired into CloudAdapter.** The registry classifies 17
+   endpoints as `wasm-local`, but the CloudAdapter doesn't intercept them — they
+   fall through to `fetch()` → Foundry server → 404 or stub response.
+   The Service Worker path handles these correctly via `MessageChannel`.
+   Need: Add WASM interception in `CloudAdapter.fetch()`.
 
-4. **Agent/chat needs Foundry WebSocket.** The CloudAdapter returns `wsUrl`, but
-   the Foundry WebSocket bridge needs to relay agent events.
+2. **Chat translation duplicated.** `CloudAdapter.translateRequestBody()` and
+   Foundry's `chat-bridge.ts` both translate `{query}` → `{messages, stream}`.
+   These can drift. Need: shared translation logic or explicit contract docs.
 
-### Environment C (Cloud + Docker — future)
+3. **WebSocket vs SSE mismatch.** The webui expects a WebSocket connection.
+   In browser IDE mode, there is no WebSocket — Foundry uses SSE for streaming.
+   Need: Verify the webui can work without WebSocket in cloud mode.
 
-Not started. Will need:
-- Docker API client in Foundry backend
-- A `DockerAdapter` or extended CloudAdapter that routes file/shell/git ops
-  through Docker container APIs instead of WASM
+### Environment C (Cloud + Docker)
 
-### Architecture Improvements (Option A — shared component library)
+1. **Workspace proxy works.** Foundry reverse-proxies to the sprout container
+   on port 56000, including WebSocket upgrades. This is the most functional path.
 
-The current approach (Option B: adapter pattern) uses `clientFetch()` as the
-interception point. This works but means the adapter is a network-level shim.
-Option A would make interfaces explicit components:
+2. **Remote runner tunnels.** `workspace_tunnel.go` provides JSON-over-WebSocket
+   tunneling for runners that can't expose ports. Works but needs resilience
+   testing (reconnection, timeout handling).
 
-```
-<FileSystemProvider>   — injects readFile/writeFile/listDir
-<TerminalProvider>     — injects executeCommand/streamOutput
-<AgentProvider>        — injects sendQuery/streamResponse
-<GitProvider>          — injects gitStatus/gitCommit/gitDiff
-```
+### Cross-cutting concerns
 
-Each provider would have environment-specific implementations. But this is a
-larger refactor and the current adapter pattern is sufficient for launch.
+1. **Build flag consistency.** `VITE_SPROUT_MODE` vs `REACT_APP_SPROUT_MODE`
+   may not match. Need audit.
+
+2. **Feature flag adoption.** Components must consistently use `supports*`
+   flags from `mode.ts` to avoid rendering local-only UI in cloud mode.
+
+3. **Endpoint registry sync.** Adding a new API endpoint in sprout must be
+   reflected in both `cloudEndpointRegistry.ts` AND `sprout-sw.ts`. There is
+   no automated check for this.

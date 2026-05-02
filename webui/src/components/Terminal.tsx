@@ -449,6 +449,65 @@ function Terminal({
     setActiveSessionId(id);
   }, []);
 
+  const handleProcessExit = useCallback(
+    (sessionId: string) => {
+      // Guard: if session no longer exists in tracking, it was already closed
+      if (
+        !sessionsRef.current.some((s) => s.id === sessionId) &&
+        secondarySessionIdRef.current !== sessionId
+      ) {
+        debugLog('[Terminal] pty_exit for already-closed session:', sessionId);
+        return;
+      }
+
+      // Case a: The exited session is the secondary split pane
+      if (secondarySessionIdRef.current === sessionId) {
+        closeSecondaryPane();
+        notificationBus.notify('info', 'Terminal', 'Terminal process exited in split pane — pane closed.');
+        return;
+      }
+
+      // Case b: There's more than one session → close normally
+      if (sessionsRef.current.length > 1) {
+        closeSession(sessionId);
+        notificationBus.notify('info', 'Terminal', 'Terminal process exited — session closed.');
+        return;
+      }
+
+      // Case c: Last/only session → restart with fresh shell.
+      // Don't call cleanup() directly here — the React key change
+      // (setSessions + setActiveSessionId below) triggers effect teardown
+      // which handles WebSocket disconnection. Calling cleanup() mid-event-handler
+      // risks disconnecting the service whose event callback is still on the stack.
+      paneHandles.current.delete(sessionId);
+      sessionShellsRef.current.delete(sessionId);
+      sessionReattachIdsRef.current.delete(sessionId);
+
+      // Create a brand new session
+      paneIdCounter.current += 1;
+      sessionCounterRef.current += 1;
+      const newId = `pane-${paneIdCounter.current}`;
+      const newSession: TerminalSession = {
+        id: newId,
+        name: `Session ${sessionCounterRef.current}`,
+        is_pinned: false,
+      };
+
+      // Track the shell for the new session (use the currently selected shell)
+      sessionShellsRef.current.set(newId, selectedShell ?? null);
+
+      // Replace sessions array with just the new session
+      setSessions([newSession]);
+      setActiveSessionId(newId);
+
+      // Clear any split state
+      clearSplitState();
+
+      notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
+    },
+    [closeSecondaryPane, closeSession, clearSplitState, selectedShell],
+  );
+
   // ── Listen for attach-session events from BackgroundTasks ─────────────────────
   useEffect(() => {
     const handler = (e: Event) => {
@@ -844,6 +903,7 @@ function Terminal({
                 preferredShell={sessionShellsRef.current.get(activeSessionId) ?? null}
                 reattachSessionId={sessionReattachIdsRef.current.get(activeSessionId) ?? null}
                 fontSize={fontSize}
+                onProcessExit={() => handleProcessExit(activeSessionId)}
               />
             </div>
           )}
@@ -876,6 +936,7 @@ function Terminal({
                 preferredShell={sessionShellsRef.current.get(secondarySessionId) ?? null}
                 reattachSessionId={sessionReattachIdsRef.current.get(secondarySessionId) ?? null}
                 fontSize={fontSize}
+                onProcessExit={() => handleProcessExit(secondarySessionId!)}
               />
             </div>
           )}

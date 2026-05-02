@@ -742,6 +742,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-010 Phase 3: Add tab tooltips — Add `title` attribute to tab name showing full file path on hover. `webui/src/components/EditorTabs.tsx`
 [x] - SP-010 Phase 3: Remove 3-pane editor limit — Increase from 3 to 6 panes (configurable). Add minimum pane width enforcement. `webui/src/contexts/EditorManagerContext.tsx`
 [x] - SP-010 Phase 3: Remove 3-pane editor limit — Increase from 3 to 6 panes (configurable). Add minimum pane width enforcement. `webui/src/contexts/EditorManagerContext.tsx`
+[x] - SP-010 Phase 3: Add format-on-save option — Wire existing formatter service to save action. Opt-in via editor settings. `webui/src/components/EditorPane.tsx`
 [] - SP-010 Phase 3: Add format-on-save option — Wire existing formatter service to save action. Opt-in via editor settings. `webui/src/components/EditorPane.tsx`
 
 ---

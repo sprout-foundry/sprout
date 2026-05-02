@@ -215,6 +215,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       editorUsesTabs: settings.editorUsesTabs,
       whitespaceRenderingMode: settings.whitespaceRenderingMode,
       inlayHintsEnabled: settings.inlayHintsEnabled,
+      signatureHelpEnabled: settings.signatureHelpEnabled,
     },
     actions: { getSaveFn: () => saveRef.current },
   });
@@ -235,6 +236,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
       whitespaceRenderingMode,
       inlayHintsEnabled: settings.inlayHintsEnabled,
+      signatureHelpEnabled: settings.signatureHelpEnabled,
     },
   });
 

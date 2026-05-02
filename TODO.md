@@ -749,7 +749,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 ## SP-011: Terminal Parity & Bug Fixes
 
-[] - SP-011 Phase 0: Handle `pty_exit` — On `pty_exit` event, auto-close secondary split panes, restart or close primary sessions (last session gets a fresh shell), add `onProcessExit` callback prop to TerminalPane. `webui/src/components/TerminalPane.tsx`, `webui/src/components/Terminal.tsx`
+[x] - SP-011 Phase 0: Handle `pty_exit` — On `pty_exit` event, auto-close secondary split panes, restart or close primary sessions (last session gets a fresh shell), add `onProcessExit` callback prop to TerminalPane. `webui/src/components/TerminalPane.tsx`, `webui/src/components/Terminal.tsx`
 [] - SP-011 Phase 0: Fix tabs + split pane conflict — Redesign session-to-pane mapping to use per-pane tab bars (each pane gets its own independent tab group, matching VS Code behavior). Removes the shared `activeSessionId` dual-purpose state. `webui/src/components/Terminal.tsx`
 [] - SP-011 Phase 0: Verify and fix zoom (+) (-) buttons — Two divergent font-size implementations exist (`packages/ui` vs `webui`). Verify buttons work in running app; ensure fontSize prop propagates to xterm.js Terminal options and persists to localStorage. `webui/src/components/Terminal.tsx`, `webui/src/components/TerminalPane.tsx`
 [] - SP-011 Phase 1: Add terminal search via @xterm/addon-search — Ctrl+Shift+F opens search bar above terminal. Text input with next/prev, match counter, case/regex toggles. Close on Escape. `webui/src/components/TerminalSearchBar.tsx`

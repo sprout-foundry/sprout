@@ -413,6 +413,66 @@ function analyze(input) {
     };
   }
 
+  if (method === 'signature_help') {
+    try {
+      const pos = input.position || { line: 1, column: 1 };
+      const offset = lineColToOffset(fileContent, pos.line, pos.column);
+      const helpInfo = ls.getSignatureHelpItems(filePath, offset, {
+        triggerReason: { triggerKind: input.trigger === 'edit' ? ts.SignatureHelpTriggerKind.CharacterTyped : ts.SignatureHelpTriggerKind.Invoked }
+      });
+
+      if (!helpInfo || helpInfo.items.length === 0) {
+        return {
+          capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true, code_actions: true, inlay_hints: true, signature_help: true },
+          signature_help: { signatures: [], activeSignature: 0, activeParameter: 0 }
+        };
+      }
+
+      const signatures = [];
+      for (const item of helpInfo.items) {
+        const parameters = [];
+        for (const param of item.parameters) {
+          parameters.push({
+            label: param.displayParts.map((p) => p.text).join(''),
+            documentation: param.documentation ? param.documentation.map((d) => d.text).join('') : ''
+          });
+        }
+
+        const prefixLabel = item.prefixDisplayParts ? item.prefixDisplayParts.map((p) => p.text).join('') : '';
+        const suffixLabel = item.suffixDisplayParts ? item.suffixDisplayParts.map((p) => p.text).join('') : '';
+        const sepLabel = item.separatorDisplayParts ? item.separatorDisplayParts.map((p) => p.text).join('') : ', ';
+        const paramLabel = item.parameters.map((p) => p.displayParts.map((d) => d.text).join('')).join(sepLabel);
+        const label = prefixLabel + paramLabel + suffixLabel;
+
+        let doc = '';
+        if (item.documentation) {
+          doc = item.documentation.map((d) => d.text).join('');
+        }
+
+        signatures.push({
+          label: label,
+          documentation: doc,
+          parameters: parameters
+        });
+      }
+
+      return {
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true, code_actions: true, inlay_hints: true, signature_help: true },
+        signature_help: {
+          signatures: signatures,
+          activeSignature: helpInfo.selectedItemIndex || 0,
+          activeParameter: helpInfo.argumentCount > 0 ? helpInfo.argumentCount - 1 : 0
+        }
+      };
+    } catch (err) {
+      return {
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true, code_actions: true, inlay_hints: true, signature_help: false },
+        signature_help: { signatures: [], activeSignature: 0, activeParameter: 0 },
+        error: String(err && err.message ? err.message : err)
+      };
+    }
+  }
+
   const syntactic = ls.getSyntacticDiagnostics(filePath) || [];
   const semantic = ls.getSemanticDiagnostics(filePath) || [];
   const all = syntactic.concat(semantic);
@@ -488,13 +548,13 @@ rl.on('line', (line) => {
 
   try {
     const out = analyze(input);
-    process.stdout.write(JSON.stringify(out) + '\n');
+    process.stdout.write(JSON.stringify(out) + '\\n');
   } catch (err) {
     const out = {
-      capabilities: { diagnostics: false, definition: false, hover: false, rename: false },
+      capabilities: { diagnostics: false, definition: false, hover: false, rename: false, signature_help: false },
       error: String(err && err.message ? err.message : err),
     };
-    process.stdout.write(JSON.stringify(out) + '\n');
+    process.stdout.write(JSON.stringify(out) + '\\n');
   }
 });
 `

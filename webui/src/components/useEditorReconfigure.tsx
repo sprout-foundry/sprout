@@ -26,6 +26,7 @@ import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspCli
 import { getLanguageExtensions } from '../extensions/languageRegistry';
 import { minimapExtension } from '../extensions/minimap';
 import { inlayHintsExtension } from '../extensions/inlayHints';
+import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { debugLog } from '../utils/log';
 import type { EditorBuffer } from '../types/editor';
 
@@ -48,6 +49,7 @@ export interface UseEditorReconfigureOptions {
     minimap: any;
     relativeLineNumbers: any;
     inlayHints: any;
+    signatureHelp: any;
   };
   hotkeys: any;
   keymaps: {
@@ -62,6 +64,7 @@ export interface UseEditorReconfigureOptions {
     relativeLineNumbersEnabled: boolean;
     whitespaceRenderingMode: WhitespaceRenderingMode;
     inlayHintsEnabled: boolean;
+    signatureHelpEnabled: boolean;
   };
 }
 
@@ -246,4 +249,25 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
       effects: compartments.inlayHints.reconfigure(ext),
     });
   }, [settings.inlayHintsEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+
+  // ---------------------------------------------------------------------------
+  // Signature help compartment sync
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const ext = settings.signatureHelpEnabled
+      ? signatureHelpExtension(
+          () => buffer?.file?.path,
+          () => view.state.doc.toString(),
+          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name).languageId,
+        )
+      : [];
+
+    view.dispatch({
+      effects: compartments.signatureHelp.reconfigure(ext),
+    });
+  }, [settings.signatureHelpEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 }

@@ -641,9 +641,9 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 	tm := NewTerminalManager(dir)
 
 	session := createAndReadySession(t, tm, "exec-reuse")
-	defer tm.CloseSession("exec-reuse")
 
-	// First: trigger a timeout with a short-lived command
+	// First: trigger a timeout with a short-lived command.
+	// After timeout, the session is closed to force recreation on next use.
 	shortCtx, shortCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer shortCancel()
 	_, exitCode, _ := tm.ExecuteCommandAndWait(shortCtx, session, "sleep 10")
@@ -651,16 +651,32 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 		t.Errorf("expected exit code -1 for timeout, got %d", exitCode)
 	}
 
-	// Wait a moment for the Ctrl+C to be processed.
+	// Wait for the async CloseSession goroutine to complete.
 	time.Sleep(500 * time.Millisecond)
 
-	// Second: the session should still be usable
+	// The session should now be inactive — closed by the timeout handler.
+	if tm.IsSessionActive("exec-reuse") {
+		t.Error("expected session to be inactive after timeout")
+	}
+
+	// GetOrCreateHiddenSessionForChat should create a fresh session
+	// (the old one was closed by the timeout handler).
+	newSessionID, err := tm.GetOrCreateHiddenSessionForChat(context.Background(), "exec-reuse")
+	if err != nil {
+		t.Fatalf("failed to create new session after old one was closed: %v", err)
+	}
+
+	newSession, exists := tm.GetSession(newSessionID)
+	if !exists {
+		t.Fatal("new session not found after creation")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo recovered")
+	output, exitCode, err := tm.ExecuteCommandAndWait(ctx, newSession, "echo recovered")
 	if err != nil {
-		t.Fatalf("command after timeout should succeed, got error: %v", err)
+		t.Fatalf("command on new session should succeed, got error: %v", err)
 	}
 	if exitCode != 0 {
 		t.Errorf("expected exit code 0 after recovery, got %d", exitCode)

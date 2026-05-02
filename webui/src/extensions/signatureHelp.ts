@@ -27,8 +27,7 @@ import {
   type ViewUpdate,
   keymap,
 } from '@codemirror/view';
-import { Annotation, Prec, type Extension } from '@codemirror/state';
-import type { KeyBinding } from '@codemirror/view';
+import { Annotation, type Extension } from '@codemirror/state';
 import { ApiService } from '../services/api';
 import { isLSPClientConnected } from './lspExtensions';
 import { debugLog } from '../utils/log';
@@ -208,14 +207,14 @@ function splitByCommas(s: string): string[] {
       depth--;
       current += ch;
     } else if (ch === ',' && depth === 0) {
-      result.push(current.trimStart());
+      result.push(current.trim());
       current = '';
     } else {
       current += ch;
     }
   }
 
-  const trimmed = current.trimStart();
+  const trimmed = current.trim();
   if (trimmed) {
     result.push(trimmed);
   }
@@ -504,8 +503,7 @@ const activePlugins = new WeakMap<EditorView, SignatureHelpPlugin>();
 
 // Keybinding extension with plugin instance access
 function signatureKeymapExtension(): Extension {
-  return Prec.high(
-    keymap.of([
+  return keymap.of([
       {
         key: 'Ctrl-Shift-Space',
         run(view: EditorView) {
@@ -528,7 +526,7 @@ function signatureKeymapExtension(): Extension {
           return false;
         },
       },
-    ]),
+    ],
   );
 }
 

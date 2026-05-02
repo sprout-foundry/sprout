@@ -657,6 +657,41 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
     }, []);
 
+    // ── Search functionality handlers ────────────────────────────────────────
+
+    // Handle search requests from the search bar
+    const handleSearch = useCallback(
+      (options: TerminalSearchOptions, direction: 'next' | 'previous') => {
+        const term = xtermRef.current;
+        const searchAddon = searchAddonRef.current;
+        if (!term || !searchAddon) return;
+
+        const { query, caseSensitive, regex } = options;
+        const searchOptions = {
+          caseSensitive,
+          regex,
+          wholeWord: false,
+        };
+
+        if (direction === 'next') {
+          searchAddon.findNext(query, searchOptions);
+        } else {
+          searchAddon.findPrevious(query, searchOptions);
+        }
+      },
+      [],
+    );
+
+    // Close search bar and clear decorations
+    const handleCloseSearch = useCallback(() => {
+      setSearchVisible(false);
+      searchAddonRef.current?.clearDecorations();
+      setMatchIndex(undefined);
+      setMatchCount(undefined);
+    }, []);
+
+    // ── Expose methods to parent ─────────────────────────────────────────────
+
     // Expose clear / focus / cleanup to parent via ref
     useImperativeHandle(ref, () => ({
       clear: () => xtermRef.current?.clear(),
@@ -741,12 +776,31 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             });
             return false;
           }
+          if (event.key.toLowerCase() === 'f') {
+            event.preventDefault();
+            setSearchVisible((prev) => {
+              const next = !prev;
+              if (next) {
+                searchBarRef.current?.focusInput();
+              } else if (searchAddonRef.current) {
+                searchAddonRef.current.clearDecorations();
+              }
+              return next;
+            });
+            return false;
+          }
         }
         return true;
       });
 
       fitAddonRef.current = fitAddon;
       searchAddonRef.current = searchAddon;
+
+      // Set up search results listener
+      searchAddon.onDidChangeResults((results: { resultIndex?: number; resultCount?: number }) => {
+        setMatchIndex(results.resultIndex);
+        setMatchCount(results.resultCount);
+      });
 
       term.onData((data) => {
         if (wasmActiveRef.current) {
@@ -1014,6 +1068,14 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             </button>
           </div>
         )}
+        <TerminalSearchBar
+          ref={searchBarRef}
+          visible={searchVisible}
+          onSearch={handleSearch}
+          onClose={handleCloseSearch}
+          matchIndex={matchIndex}
+          matchCount={matchCount}
+        />
         <div
           className="terminal-pane-content"
           onClick={() => xtermRef.current?.focus()}

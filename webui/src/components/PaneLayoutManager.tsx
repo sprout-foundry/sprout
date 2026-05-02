@@ -4,6 +4,7 @@ import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus, GitBranch } from 'lu
 import EditorTabs from './EditorTabs';
 import WorkspacePane from './WorkspacePane';
 import ResizeHandle from './ResizeHandle';
+import { MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
 import type { EditorPane, EditorBuffer, PaneLayout } from '../types/editor';
 import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity } from '../types/app';
 import type { OpenWorkspaceBufferFn } from '../hooks/useChatSessionSync';
@@ -332,7 +333,8 @@ function PaneLayoutManager({
           dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
         }
         const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey) ?? 50;
-        const newSize = Math.max(10, Math.min(90, sizeAtDragStart + deltaPercent));
+        const maxAllowed = 100 - MIN_PANE_WIDTH_PERCENT * Math.max(0, Object.keys(paneSizes).filter(k => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:')).length - 1);
+        const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
         updatePaneSize(sizeKey, newSize);
       },
     [paneSizes, containerRef, updatePaneSize],
@@ -542,8 +544,8 @@ function PaneLayoutManager({
 
   // ── 2×2 Grid layout ────────────────────────────────────────────
   if (paneLayout === 'split-grid' && panes.length === 4) {
-    const colSplit = Math.max(10, Math.min(90, paneSizes['grid:col'] ?? 50));
-    const rowSplit = Math.max(10, Math.min(90, paneSizes['grid:row'] ?? 50));
+    const colSplit = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes['grid:col'] ?? 50));
+    const rowSplit = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes['grid:row'] ?? 50));
 
     const positionOrder: Record<string, number> = {
       primary: 0,
@@ -603,7 +605,7 @@ function PaneLayoutManager({
     if (panes.length === 2) {
       const [firstPane, secondPane] = panes;
       const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-      const firstPaneSize = Math.max(10, Math.min(90, paneSizes[firstPane.id] || 50));
+      const firstPaneSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50));
       const secondPaneSize = 100 - firstPaneSize;
 
       return (

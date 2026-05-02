@@ -14,6 +14,7 @@ interface UsePaneManagementParams {
   setActiveBufferId: Dispatch<SetStateAction<string | null>>;
   setPaneSizes: Dispatch<SetStateAction<PaneSize>>;
   setIsLinkedScrollEnabled: Dispatch<SetStateAction<boolean>>;
+  maxPanes?: number; // Optional: configurable max panes limit (default: 6)
 }
 
 /** Pane layout management: close, switch, split, grid, resize. */
@@ -28,6 +29,7 @@ export function usePaneManagement({
   setActiveBufferId,
   setPaneSizes,
   setIsLinkedScrollEnabled,
+  maxPanes = 6,
 }: UsePaneManagementParams) {
   const closePane = useCallback(
     (paneId: string) => {
@@ -57,7 +59,7 @@ export function usePaneManagement({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const splitPane = useCallback(
     (paneId: string, direction: 'vertical' | 'horizontal') => {
-      if (panes.length >= 4) return null;
+      if (panes.length >= maxPanes) return null;
       const usedIds = new Set(panes.map((p) => p.id));
       const stableIds = ['pane-2', 'pane-3', 'pane-4'];
       const newPaneId = stableIds.find((id) => !usedIds.has(id)) || `pane-${Date.now()}`;

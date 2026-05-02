@@ -185,7 +185,7 @@ export interface ChatContextPanelProps extends ContextPanelBaseProps {
   onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
   onLoadRevisionHistory: () => Promise<{ revisions: Revision[] }>;
   onLoadSessions: () => Promise<{ sessions: SessionEntry[]; current_session_id: string }>;
-  onRestoreSession: (sessionId: string) => Promise<{ messages: any[] }>;
+  onRestoreSession: (sessionId: string) => Promise<{ messages: unknown[] }>;
   onLoadRevisionDetails: (revisionId: string) => Promise<{ revision?: { files: RevisionDetailFile[] } }>;
 }
 

@@ -1,4 +1,4 @@
-import { SproutInstance, SSHHostEntry, SSHSessionEntry } from '../../services/api';
+import type { SproutInstance } from '../../services/api';
 
 export interface LocationSwitcherProps {
   isConnected: boolean;

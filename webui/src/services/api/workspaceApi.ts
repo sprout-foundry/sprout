@@ -2,13 +2,15 @@
  * Workspace domain API — adapter-aware workspace operations.
  */
 
-export async function getWorkspace(fetchFn: typeof fetch): Promise<any> {
+import { WorkspaceResponse } from './types';
+
+export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResponse> {
   const response = await fetchFn('/api/workspace');
   const text = await response.text();
 
-  const parseWorkspacePayload = (t: string): any => {
+  const parseWorkspacePayload = (t: string): Record<string, unknown> => {
     const trimmed = t.trim();
-    if (!trimmed) return {};
+    if (!trimmed) return {} as Record<string, unknown>;
     try { return JSON.parse(trimmed); } catch { return { message: trimmed }; }
   };
 
@@ -20,7 +22,8 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<any> {
   const data = parseWorkspacePayload(text);
 
   if (!response.ok) {
-    throw new Error(data.error || data.message || 'Failed to fetch workspace');
+    const errMsg = String(data.error ?? data.message ?? 'Failed to fetch workspace');
+    throw new Error(errMsg);
   }
 
   if (isHTMLResponseBody(text)) {
@@ -28,13 +31,13 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<any> {
   }
 
   if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-    return data;
+    return data as unknown as WorkspaceResponse;
   }
 
   throw new Error('Workspace API returned malformed response');
 }
 
-export async function setWorkspace(fetchFn: typeof fetch, path: string): Promise<any> {
+export async function setWorkspace(fetchFn: typeof fetch, path: string): Promise<WorkspaceResponse & { message: string }> {
   const response = await fetchFn('/api/workspace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -44,12 +47,12 @@ export async function setWorkspace(fetchFn: typeof fetch, path: string): Promise
   const text = await response.text();
   const data = (() => {
     const trimmed = text.trim();
-    if (!trimmed) return {};
+    if (!trimmed) return {} as Record<string, unknown>;
     try { return JSON.parse(trimmed); } catch { return { message: trimmed }; }
   })();
 
   if (!response.ok) {
-    throw new Error(data.error || data.message || 'Failed to update workspace');
+    throw new Error(String(data.error ?? data.message ?? 'Failed to update workspace'));
   }
 
   const isHTML = text.trim().toLowerCase().startsWith('<!doctype html') || text.trim().toLowerCase().startsWith('<html');
@@ -58,10 +61,10 @@ export async function setWorkspace(fetchFn: typeof fetch, path: string): Promise
   }
 
   if (data && typeof data === 'object' && 'workspace_root' in data && 'daemon_root' in data) {
-    return data;
+    return data as unknown as WorkspaceResponse & { message: string };
   }
 
   // Remote/proxy setups may respond with non-JSON success body
   const workspace = await getWorkspace(fetchFn);
-  return { ...workspace, message: data.message || 'Workspace updated' };
+  return { ...workspace, message: String(data.message ?? 'Workspace updated') };
 }

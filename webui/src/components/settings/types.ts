@@ -1,5 +1,26 @@
 import type { SproutSettings, ProviderOption } from '../../services/api';
 
+/**
+ * Shared context passed to domain-specific mutation hooks.
+ * Contains common services and state needed by all mutation operations.
+ */
+export interface MutationContext {
+  /** API service instance */
+  api: ReturnType<typeof import('../../services/api').ApiService.getInstance>;
+  /** Reference to current settings (kept up-to-date by useSettingsState) */
+  settingsRef: React.MutableRefObject<SproutSettings | null>;
+  /** Callback to notify parent component of settings changes */
+  onSettingsChanged: (settings: SproutSettings) => void;
+  /** Function to show toast notifications */
+  addNotification: (type: 'success' | 'error' | 'info', title: string, message: string, duration?: number) => string;
+  /** Current settings layer ('session' | 'workspace' | 'global') */
+  configViewLayer: 'session' | 'workspace' | 'global';
+  /** Callback to update provenance sources (for session layer) */
+  setProvenanceSources: (v: Record<string, string>) => void;
+  /** Setter for savingKey (to update loading indicators) */
+  setSavingKey: (key: string | null) => void;
+}
+
 export interface SubagentTypeEntry {
   id: string;
   name: string;

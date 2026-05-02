@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -139,7 +138,7 @@ func (cf *CommitFlow) selectFilesToCommitConsole() error {
 	// Stage selected files
 	fmt.Printf("\r\n[up] Staging %d file(s)...\r\n", len(selectedFiles))
 	for _, file := range selectedFiles {
-		cmd := exec.Command("git", "add", file)
+		cmd := gitCommand("add", file)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to stage %s: %w\n%s", file, err, output)
 		}
@@ -197,13 +196,13 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 
 	// Reset any staged files first
 	fmt.Printf("\r\n[~] Resetting staged files...\r\n")
-	if err := exec.Command("git", "reset", "HEAD").Run(); err != nil {
+	if err := gitCommand("reset", "HEAD").Run(); err != nil {
 		return fmt.Errorf("failed to reset staged files: %w", err)
 	}
 
 	// Stage only the selected file
 	fmt.Printf("[up] Staging %s...\r\n", selectedFile)
-	cmd := exec.Command("git", "add", selectedFile)
+	cmd := gitCommand("add", selectedFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to stage %s: %w\n%s", selectedFile, err, output)
 	}
@@ -216,7 +215,7 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 func (cf *CommitFlow) stageAllAndCommitConsole() error {
 	fmt.Printf("\r\n[*] Staging all modified files...\r\n")
 
-	cmd := exec.Command("git", "add", "-A")
+	cmd := gitCommand("add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}

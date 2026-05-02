@@ -130,6 +130,8 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
                 return;
               }
               if (result.formatted !== content && viewRef.current) {
+                // Bail out if the user edited while formatting was in progress
+                if (viewRef.current.state.doc.toString() !== content) return;
                 viewRef.current.dispatch({
                   changes: {
                     from: 0,

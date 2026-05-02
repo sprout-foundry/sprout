@@ -746,6 +746,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       fitAddonRef.current = fitAddon;
+      searchAddonRef.current = searchAddon;
 
       term.onData((data) => {
         if (wasmActiveRef.current) {
@@ -772,6 +773,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         }
         xtermRef.current = null;
         fitAddonRef.current = null;
+        searchAddonRef.current = null;
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps -- fontSize intentionally excluded to avoid recreating xterm on zoom; updates handled by separate "keep font size in sync" effect
     }, [isActive, getTerminalTheme, getTerminalFontFamily, handleWheel]);

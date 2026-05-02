@@ -187,24 +187,13 @@ export const useGitWorkspace = ({
       });
   }, [fetchFn]);
 
-  // Debounced git status refresh on file change WebSocket events.
-  // When files are written (editor save, agent edits, search replace), the git
-  // panel should reflect the new status. Uses a 2s debounce to coalesce rapid
-  // agent edits into a single refresh.
+  // Debounced git status refresh on file change and tool completion events.
+  // When files are written (editor save, agent edits, search replace, shell
+  // commands), the git panel should reflect the new status.
+  // Uses a 2s debounce to coalesce rapid agent edits into a single refresh.
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const handleFileChanged = (event: SproutEvent) => {
-      if (event?.type !== 'file_changed') return;
-
-      const eventData = event.data as Record<string, unknown> | undefined;
-      const action = String(eventData?.action || '');
-      // Skip git-level actions — those already trigger explicit refreshes
-      // via runGitAction → loadGitStatus.
-      if (action.startsWith('git_')) return;
-
-      // Only refresh on actual file content changes
-      if (!['write', 'edit', 'created', 'deleted'].includes(action)) return;
-
+    const scheduleRefresh = () => {
       if (debounceTimerRef.current !== null) {
         clearTimeout(debounceTimerRef.current);
       }
@@ -214,9 +203,55 @@ export const useGitWorkspace = ({
       }, 2000);
     };
 
-    events.onEvent(handleFileChanged);
+    const handleGitRefreshEvent = (event: SproutEvent) => {
+      // 1) file_changed events from the agent's write/edit file tools
+      if (event?.type === 'file_changed') {
+        const eventData = event.data as Record<string, unknown> | undefined;
+        const action = String(eventData?.action || '');
+        // Skip git-level actions — those already trigger explicit refreshes
+        // via runGitAction → loadGitStatus.
+        if (action.startsWith('git_')) return;
+
+        // Only refresh on actual file content changes
+        if (!['write', 'edit', 'created', 'deleted'].includes(action)) return;
+
+        scheduleRefresh();
+        return;
+      }
+
+      // 2) file_content_changed events from the server-side fsnotify file
+      //    watcher (e.g., when a file changes on disk from a shell command
+      //    or external process, and the file is open in the editor).
+      if (event?.type === 'file_content_changed') {
+        scheduleRefresh();
+        return;
+      }
+
+      // 3) tool_end events from file-modifying tools — covers shell_command
+      //    (which can run sed/cp/mv/git checkout/etc.) and the structured
+      //    file tools that go through writeFileContent on the server.
+      if (event?.type === 'tool_end') {
+        const eventData = event.data as Record<string, unknown> | undefined;
+        if (eventData?.status === 'failed') return; // Don't refresh on failure
+
+        const toolName = String(eventData?.tool_name || '');
+        const fileModifyingTools = [
+          'shell_command',
+          'write_file',
+          'edit_file',
+          'write_structured_file',
+          'patch_structured_file',
+        ];
+        if (!fileModifyingTools.includes(toolName)) return;
+
+        scheduleRefresh();
+        return;
+      }
+    };
+
+    events.onEvent(handleGitRefreshEvent);
     return () => {
-      events.removeEvent(handleFileChanged);
+      events.removeEvent(handleGitRefreshEvent);
       if (debounceTimerRef.current !== null) {
         clearTimeout(debounceTimerRef.current);
       }

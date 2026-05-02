@@ -18,6 +18,7 @@ export interface UseSplitManagerOptions {
   closePane: (paneId: string) => void;
   updatePaneSize: (paneId: string, size: number) => void;
   switchToBuffer: (bufferId: string) => void;
+  maxPanes: number; // Configurable max panes from editor manager context
 }
 
 export interface UseSplitManagerReturn {
@@ -44,6 +45,7 @@ export function useSplitManager({
   closePane,
   updatePaneSize,
   switchToBuffer,
+  maxPanes,
 }: UseSplitManagerOptions): UseSplitManagerReturn {
   const [nestedSplit, setNestedSplit] = useState<NestedSplit | null>(null);
 
@@ -101,7 +103,7 @@ export function useSplitManager({
     }
   }, [closeSplit, closePane, nestedSplit, paneLayout, panes, switchToBuffer]);
 
-  const canSplit = panes.length < 3;
+  const canSplit = panes.length < maxPanes;
   const canSplitGrid = paneLayout !== 'split-grid';
   const canCloseSplit = panes.length > 1;
 

@@ -33,6 +33,7 @@ interface UseHotkeyIntegrationOptions {
   toggleBufferPin: (bufferId: string) => void;
   onToggleCommandPalette: () => void;
   onOpenCommandPalette: () => void;
+  maxPanes?: number; // Optional: configurable max panes limit (default: 6)
 }
 
 export function useHotkeyIntegration({
@@ -57,6 +58,7 @@ export function useHotkeyIntegration({
   toggleBufferPin,
   onToggleCommandPalette,
   onOpenCommandPalette,
+  maxPanes = 6,
 }: UseHotkeyIntegrationOptions) {
   const handlePrimaryViewChange = useCallback(
     (view: 'chat' | 'editor' | 'git') => {
@@ -96,7 +98,7 @@ export function useHotkeyIntegration({
         return;
       }
       // index >= panes.length — need to split to create more panes
-      if (panes.length < 3) {
+      if (panes.length < maxPanes) {
         // Split from the active pane (or last pane)
         const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
         if (!sourcePaneId) return;

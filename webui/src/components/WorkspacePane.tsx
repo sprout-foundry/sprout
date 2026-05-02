@@ -15,7 +15,7 @@ interface ToolExecution {
   message?: string;
   startTime: Date;
   endTime?: Date;
-  details?: any;
+  details?: unknown;
   arguments?: string;
   result?: string;
   persona?: string;
@@ -31,6 +31,30 @@ interface Message {
   toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
 }
 
+type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+interface TodoItem {
+  id: string;
+  content: string;
+  status: TodoStatus;
+}
+
+interface SubagentActivity {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  phase: 'spawn' | 'output' | 'complete';
+  message: string;
+  timestamp: Date;
+  taskId?: string;
+  persona?: string;
+  isParallel?: boolean;
+  provider?: string;
+  model?: string;
+  taskCount?: number;
+  failures?: number;
+}
+
 interface DeepReviewResult {
   message: string;
   status: string;
@@ -43,9 +67,29 @@ interface DeepReviewResult {
   warnings?: string[];
 }
 
+interface GitDiffResponse {
+  message: string;
+  path: string;
+  has_staged: boolean;
+  has_unstaged: boolean;
+  staged_diff: string;
+  unstaged_diff: string;
+  diff: string;
+}
+
+interface PerChatCacheEntry {
+  messages: Message[];
+  toolExecutions: ToolExecution[];
+  subagentActivities: SubagentActivity[];
+  currentTodos: TodoItem[];
+  queryProgress: unknown;
+  lastError: string | null;
+  isProcessing: boolean;
+}
+
 interface WorkspacePaneProps {
   paneId: string;
-  perChatCache?: Record<string, any>;
+  perChatCache?: Record<string, PerChatCacheEntry>;
   activeChatId?: string | null;
   onOpenCommandPalette?: () => void;
   onOpenTerminal?: () => void;
@@ -64,7 +108,7 @@ interface WorkspacePaneProps {
   };
   diffState: {
     activeDiffPath: string | null;
-    activeDiff: any;
+    activeDiff: GitDiffResponse | null;
     diffMode: 'combined' | 'staged' | 'unstaged';
     isDiffLoading: boolean;
     diffError: string | null;
@@ -126,13 +170,13 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
       return (
         <DiffWorkspaceTab
           path={diffPath || diffState.activeDiffPath || buffer.file.name}
-          diff={isActiveDiff ? diffState.activeDiff : (buffer.metadata?.diff || null)}
+          diff={isActiveDiff ? diffState.activeDiff : ((buffer.metadata?.diff as GitDiffResponse | null) || null)}
           diffMode={isActiveDiff ? diffState.diffMode : ((buffer.metadata?.diffMode as 'combined' | 'staged' | 'unstaged' | undefined) || 'combined')}
           isLoading={diffState.isDiffLoading && isActiveDiff}
           error={isActiveDiff ? diffState.diffError : null}
           onDiffModeChange={diffState.onDiffModeChange}
           title={buffer.metadata?.title as string | undefined}
-          modeOptions={buffer.metadata?.modeOptions as any}
+          modeOptions={buffer.metadata?.modeOptions as ('staged' | 'combined' | 'unstaged')[] | undefined}
         />
       );
     }

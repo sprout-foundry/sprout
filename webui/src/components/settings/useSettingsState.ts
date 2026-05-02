@@ -12,8 +12,8 @@ interface UseSettingsStateReturn {
   setConfigViewLayer: (v: 'session' | 'workspace' | 'global') => void;
   layerLoading: string | null;
   setLayerLoading: (v: string | null) => void;
-  layerData: Record<string, any> | null;
-  setLayerData: (v: Record<string, any> | null) => void;
+  layerData: Record<string, unknown> | null;
+  setLayerData: (v: Record<string, unknown> | null) => void;
   layerError: string | null;
   setLayerError: (v: string | null) => void;
   creatingWorkspaceConfig: boolean;
@@ -97,7 +97,7 @@ export function useSettingsState(
 
   const [configViewLayer, setConfigViewLayer] = useState<'session' | 'workspace' | 'global'>('session');
   const [layerLoading, setLayerLoading] = useState<string | null>(null);
-  const [layerData, setLayerData] = useState<Record<string, any> | null>(null);
+  const [layerData, setLayerData] = useState<Record<string, unknown> | null>(null);
   const [layerError, setLayerError] = useState<string | null>(null);
 
   const displaySettingsRef = useRef<SproutSettings | null>(null);

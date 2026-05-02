@@ -89,6 +89,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
     const eventHandlerRef = useRef<((event: WsEvent) => void) | null>(null);
     const hasAutoFocusedReadyRef = useRef(false);
+    const lastRestoreTimeRef = useRef(0);
     const resizeTimerRef = useRef<number | null>(null);
     const expandTimeoutRef = useRef<number | null>(null);
 
@@ -900,6 +901,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         } else if (event.type === 'session_ready') {
           setPaneConnected(true);
           onConnectionChangeRef.current?.(true);
+          // Skip resize if we just restored — session_restored already sent it
+          // to avoid duplicate SIGWINCH that causes prompt line duplication.
+          if (Date.now() - lastRestoreTimeRef.current < 5000) {
+            return;
+          }
           const shouldAutoFocus = !hasAutoFocusedReadyRef.current;
           if (shouldAutoFocus) {
             hasAutoFocusedReadyRef.current = true;
@@ -913,17 +919,27 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         } else if (event.type === 'output' || event.type === 'error_output') {
           xtermRef.current?.write((data?.output as string) || '');
         } else if (event.type === 'session_restored') {
-          // Reattach: clear the terminal first to avoid duplicating content
-          // that was already displayed, then replay the scrollback from the
-          // server's ring buffer.
+          // Reattach: reset the terminal to prevent duplicating content
+          // that was already displayed. The server sends its ring buffer
+          // scrollback which we write into the fresh terminal.
           const term = xtermRef.current;
           if (term) {
-            term.clear();
+            term.reset();
             const scrollback = (data?.scrollback as string) || '';
             if (scrollback) {
               term.write(scrollback);
             }
           }
+          // Record restore time so session_ready and resize observer can
+          // skip their own resize — we send it here to avoid multiple
+          // SIGWINCH events that cause prompt line duplication.
+          lastRestoreTimeRef.current = Date.now();
+          setPaneConnected(true);
+          onConnectionChangeRef.current?.(true);
+          requestAnimationFrame(() => {
+            sendResize();
+            xtermRef.current?.focus();
+          });
         } else if (event.type === 'pty_exit') {
           xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
           setPaneConnected(false);
@@ -1002,7 +1018,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         resizeTimerRef.current = window.setTimeout(sendResize, 80);
       };
 
-      schedule();
+      // Skip the immediate resize if we just restored from a reattach — the
+      // session_restored handler already sent a resize to avoid duplicate
+      // SIGWINCH events that cause prompt line duplication.
+      if (Date.now() - lastRestoreTimeRef.current > 5000) {
+        schedule();
+      }
       window.addEventListener('resize', schedule);
 
       let observer: ResizeObserver | null = null;

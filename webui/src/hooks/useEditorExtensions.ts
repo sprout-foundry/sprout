@@ -68,6 +68,7 @@ import { unsavedLineHighlight } from '../extensions/unsavedLineHighlight';
 import { whitespaceRenderingPlugin } from '../extensions/whitespaceRendering';
 import { minimapExtension } from '../extensions/minimap';
 import { inlayHintsExtension } from '../extensions/inlayHints';
+import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { getLanguageExtensions } from '../extensions/languageRegistry';
 import {
   createEmmetCompartment,
@@ -96,6 +97,7 @@ export interface ExtensionSettings {
   editorUsesTabs: boolean;
   whitespaceRenderingMode: WhitespaceRenderingMode;
   inlayHintsEnabled: boolean;
+  signatureHelpEnabled: boolean;
 }
 
 export interface ThemeConfig {
@@ -160,6 +162,7 @@ export interface UseEditorExtensionsReturn {
     tabSize: Compartment;
     lsp: Compartment;
     inlayHints: Compartment;
+    signatureHelp: Compartment;
   };
   /**
    * Build the full CodeMirror extension array for `EditorState.create()`.
@@ -187,6 +190,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
     tabSize: new Compartment(),
     lsp: new Compartment(),
     inlayHints: new Compartment(),
+    signatureHelp: new Compartment(),
   }).current; // stable reference — never recreated
 
   // ── Extension builder ─────────────────────────────────────────────────
@@ -263,6 +267,11 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       compartments.inlayHints.of(
         settings.inlayHintsEnabled
           ? inlayHintsExtension(buffer.getFilePath, buffer.getContent, buffer.languageId)
+          : [],
+      ),
+      compartments.signatureHelp.of(
+        settings.signatureHelpEnabled
+          ? signatureHelpExtension(buffer.getFilePath, buffer.getContent, buffer.languageId)
           : [],
       ),
       compartments.fontSize.of([

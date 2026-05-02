@@ -135,7 +135,6 @@ interface AppContentProps {
   onGitStage: (files: string[]) => Promise<void>;
   onGitUnstage: (files: string[]) => Promise<void>;
   onGitDiscard: (files: string[]) => Promise<void>;
-  onTerminalOutput: (output: string) => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
   // Backend reachability (cloud mode)
@@ -177,7 +176,6 @@ const AppContent: React.FC<AppContentProps> = ({
   onGitStage,
   onGitUnstage,
   onGitDiscard,
-  onTerminalOutput,
   onTerminalExpandedChange,
   isConnected,
   backendReachable,

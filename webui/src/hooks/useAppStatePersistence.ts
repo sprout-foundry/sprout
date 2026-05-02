@@ -5,10 +5,8 @@
  */
 
 import { useEffect } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import type { AppState } from '../types/app';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
-import { debugLog } from '../utils/log';
 
 export interface UseAppStatePersistenceOptions {
   state: AppState;

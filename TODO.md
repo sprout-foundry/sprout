@@ -737,7 +737,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-010 Phase 2: Create Error Lens extension — Show diagnostic messages inline at end of line via `Decoration.widget`. Debounced 150ms. `webui/src/extensions/errorLens.ts`
 [x] - SP-010 Phase 2: Verify and style word occurrence highlighting — `highlightSelectionMatches()` is imported; confirm it works, add custom highlight styling. `webui/src/extensions/wordHighlights.ts`
 [x] - SP-010 Phase 2: Create inlay hints extension — Request LSP inlay hints for TypeScript/Go, show type annotations and parameter names inline. Toggle via editor settings. `webui/src/extensions/inlayHints.ts`
-[] - SP-010 Phase 2: Create signature help extension — Show function signature tooltip when typing `(` or `,` inside a call. Uses LSP capability. `webui/src/extensions/signatureHelp.ts`
+[x] - SP-010 Phase 2: Create signature help extension — Show function signature tooltip when typing `(` or `,` inside a call. Uses LSP capability. `webui/src/extensions/signatureHelp.ts`
 [] - SP-010 Phase 3: Add React.memo to editor child components — Wrap EditorTabs, EditorBreadcrumb, EditorToolbar with React.memo to prevent unnecessary re-renders.
 [] - SP-010 Phase 3: Add tab tooltips — Add `title` attribute to tab name showing full file path on hover. `webui/src/components/EditorTabs.tsx`
 [] - SP-010 Phase 3: Remove 3-pane editor limit — Increase from 3 to 6 panes (configurable). Add minimum pane width enforcement. `webui/src/contexts/EditorManagerContext.tsx`

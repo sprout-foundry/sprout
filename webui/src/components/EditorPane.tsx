@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState, useMemo, useCallback } from 'react';
 import { EditorView as CMEditorView } from '@codemirror/view';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -51,7 +51,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const { compartments, buildExtensions } = useEditorExtensions();
 
-  const { panes, buffers, updateBufferContent, updateBufferCursor, updateBufferScroll, setBufferModified, splitPane, openWorkspaceBuffer, setBufferLanguageOverride, isLinkedScrollEnabled, toggleLinkedScroll, whitespaceRenderingMode, setWhitespaceRenderingMode } = useEditorManager();
+  const { panes, buffers, updateBufferContent, updateBufferCursor, updateBufferScroll, setBufferModified, splitPane, openWorkspaceBuffer, setBufferLanguageOverride, isLinkedScrollEnabled, toggleLinkedScroll, whitespaceRenderingMode, setWhitespaceRenderingMode, isFormatOnSaveEnabled, setFormatOnSaveEnabled } = useEditorManager();
   const { themePack, customHighlightStyle } = useTheme();
   const { hotkeys } = useHotkeys();
 
@@ -240,6 +240,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     },
   });
 
+  const handleFormatDocument = useCallback(() => {
+    document.dispatchEvent(new CustomEvent('editor-format-document'));
+  }, []);
+
+  const handleToggleFormatOnSave = useCallback(() => {
+    setFormatOnSaveEnabled(!isFormatOnSaveEnabled);
+  }, [isFormatOnSaveEnabled, setFormatOnSaveEnabled]);
+
   const { rightActions } = useEditorToolbarActions({
     isSvgFile: fileType.isSvgFile,
     isHtmlFile: fileType.isHtmlFile,
@@ -250,6 +258,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onToggleRelativeLineNumbers: settings.onToggleRelativeLineNumbers,
     onOpenLivePreview: livePreview.openLivePreview,
     onOpenLivePreviewInSplit: livePreview.openLivePreviewInSplit,
+    onFormatDocument: handleFormatDocument,
+    formatOnSaveEnabled: isFormatOnSaveEnabled,
+    onToggleFormatOnSave: handleToggleFormatOnSave,
   });
 
   if (!buffer || !buffer.file || buffer.file.isDir) {

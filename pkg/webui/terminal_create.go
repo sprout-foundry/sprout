@@ -132,6 +132,12 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("PTY reader panic for session %s: %v", session.ID, r)
+			// Mark inactive and close subscribers so callers don't hang forever
+			// waiting for output that will never arrive.
+			session.mutex.Lock()
+			session.Active = false
+			session.mutex.Unlock()
+			session.closeAllSubs()
 		}
 	}()
 

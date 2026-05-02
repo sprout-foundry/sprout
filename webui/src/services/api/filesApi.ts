@@ -2,13 +2,15 @@
  * Files domain API — adapter-aware file operations.
  */
 
-export async function getFiles(fetchFn: typeof fetch): Promise<any> {
+import { FilesResponse, CreateItemResponse, DeleteItemResponse, RenameItemResponse } from './types';
+
+export async function getFiles(fetchFn: typeof fetch): Promise<FilesResponse> {
   const response = await fetchFn('/api/files');
   if (!response.ok) throw new Error('Failed to fetch files');
   return response.json();
 }
 
-export async function createItem(fetchFn: typeof fetch, path: string, isDirectory = false): Promise<any> {
+export async function createItem(fetchFn: typeof fetch, path: string, isDirectory = false): Promise<CreateItemResponse> {
   const response = await fetchFn('/api/files/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,7 +23,7 @@ export async function createItem(fetchFn: typeof fetch, path: string, isDirector
   return response.json();
 }
 
-export async function deleteItem(fetchFn: typeof fetch, path: string): Promise<any> {
+export async function deleteItem(fetchFn: typeof fetch, path: string): Promise<DeleteItemResponse> {
   const response = await fetchFn('/api/files/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -34,7 +36,7 @@ export async function deleteItem(fetchFn: typeof fetch, path: string): Promise<a
   return response.json();
 }
 
-export async function renameItem(fetchFn: typeof fetch, oldPath: string, newPath: string): Promise<any> {
+export async function renameItem(fetchFn: typeof fetch, oldPath: string, newPath: string): Promise<RenameItemResponse> {
   const response = await fetchFn('/api/files/rename', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

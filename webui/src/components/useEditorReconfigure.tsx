@@ -28,6 +28,8 @@ import { minimapExtension } from '../extensions/minimap';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { debugLog } from '../utils/log';
+import type { Compartment } from '@codemirror/state';
+import type { Extension } from '@codemirror/state';
 import type { EditorBuffer } from '../types/editor';
 
 // ---------------------------------------------------------------------------
@@ -39,33 +41,29 @@ export interface UseEditorReconfigureOptions {
   buffer: EditorBuffer | null | undefined;
   lastInitLanguageKey: React.MutableRefObject<string | null>;
   compartments: {
-    language: any;
-    lsp: any;
-    hotkeys: any;
-    whitespaceRendering: any;
-    fontSize: any;
-    tabSize: any;
-    lineWrapping: any;
-    minimap: any;
-    relativeLineNumbers: any;
-    inlayHints: any;
-    signatureHelp: any;
+    language: Compartment;
+    lsp: Compartment;
+    hotkeys: Compartment;
+    whitespaceRendering: Compartment;
+    fontSize: Compartment;
+    tabSize: Compartment;
+    lineWrapping: Compartment;
+    minimap: Compartment;
+    relativeLineNumbers: Compartment;
+    inlayHints: Compartment;
+    signatureHelp: Compartment;
   };
-  hotkeys: any;
-  keymaps: {
-    customKeymap: any;
-  };
-  settings: {
-    editorFontSize: number;
-    editorTabSize: number;
-    editorUsesTabs: boolean;
-    wordWrapEnabled: boolean;
-    minimapEnabled: boolean;
-    relativeLineNumbersEnabled: boolean;
-    whitespaceRenderingMode: WhitespaceRenderingMode;
-    inlayHintsEnabled: boolean;
-    signatureHelpEnabled: boolean;
-  };
+  hotkeys: unknown;
+  keymapsRef: React.MutableRefObject<{ customKeymap: Extension }>;
+  editorFontSize: number;
+  editorTabSize: number;
+  editorUsesTabs: boolean;
+  wordWrapEnabled: boolean;
+  minimapEnabled: boolean;
+  relativeLineNumbersEnabled: boolean;
+  whitespaceRenderingMode: WhitespaceRenderingMode;
+  inlayHintsEnabled: boolean;
+  signatureHelpEnabled: boolean;
 }
 
 /**
@@ -80,8 +78,16 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     lastInitLanguageKey,
     compartments,
     hotkeys,
-    keymaps,
-    settings,
+    keymapsRef,
+    editorFontSize,
+    editorTabSize,
+    editorUsesTabs,
+    wordWrapEnabled,
+    minimapEnabled,
+    relativeLineNumbersEnabled,
+    whitespaceRenderingMode,
+    inlayHintsEnabled,
+    signatureHelpEnabled,
   } = options;
 
   // ---------------------------------------------------------------------------
@@ -141,10 +147,10 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
 
     view.dispatch({
       effects: compartments.hotkeys.reconfigure(
-        keymaps.customKeymap,
+        keymapsRef.current.customKeymap,
       ),
     });
-  }, [hotkeys, keymaps.customKeymap]);
+  }, [hotkeys, keymapsRef]);
 
   // ---------------------------------------------------------------------------
   // Snippet language sync
@@ -176,10 +182,10 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
 
     view.dispatch({
       effects: compartments.whitespaceRendering.reconfigure(
-        whitespaceRenderingPlugin(settings.whitespaceRenderingMode),
+        whitespaceRenderingPlugin(whitespaceRenderingMode),
       ),
     });
-  }, [settings.whitespaceRenderingMode]);
+  }, [whitespaceRenderingMode]);
 
   // ---------------------------------------------------------------------------
   // Compartment reconfiguration for settings changes
@@ -192,41 +198,41 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     // Font size
     view.dispatch({
       effects: compartments.fontSize.reconfigure([
-        CMEditorView.theme({ '&': { fontSize: `${settings.editorFontSize}px` } }),
+        CMEditorView.theme({ '&': { fontSize: `${editorFontSize}px` } }),
       ]),
     });
 
     // Tab size
     view.dispatch({
       effects: compartments.tabSize.reconfigure([
-        EditorState.tabSize.of(settings.editorTabSize === 0 ? 4 : settings.editorTabSize),
-        indentUnit.of(settings.editorUsesTabs ? '\t' : ' '.repeat(settings.editorTabSize === 0 ? 4 : settings.editorTabSize)),
+        EditorState.tabSize.of(editorTabSize === 0 ? 4 : editorTabSize),
+        indentUnit.of(editorUsesTabs ? '\t' : ' '.repeat(editorTabSize === 0 ? 4 : editorTabSize)),
       ]),
     });
 
     // Word wrap
     view.dispatch({
-      effects: compartments.lineWrapping.reconfigure(settings.wordWrapEnabled ? CMEditorView.lineWrapping : []),
+      effects: compartments.lineWrapping.reconfigure(wordWrapEnabled ? CMEditorView.lineWrapping : []),
     });
 
     // Minimap
     view.dispatch({
-      effects: compartments.minimap.reconfigure(settings.minimapEnabled ? minimapExtension() : []),
+      effects: compartments.minimap.reconfigure(minimapEnabled ? minimapExtension() : []),
     });
 
     // Relative line numbers
     view.dispatch({
       effects: compartments.relativeLineNumbers.reconfigure(
-        settings.relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers(),
+        relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers(),
       ),
     });
   }, [
-    settings.editorFontSize,
-    settings.editorTabSize,
-    settings.editorUsesTabs,
-    settings.wordWrapEnabled,
-    settings.minimapEnabled,
-    settings.relativeLineNumbersEnabled,
+    editorFontSize,
+    editorTabSize,
+    editorUsesTabs,
+    wordWrapEnabled,
+    minimapEnabled,
+    relativeLineNumbersEnabled,
   ]);
 
   // ---------------------------------------------------------------------------
@@ -237,7 +243,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     const view = viewRef.current;
     if (!view) return;
 
-    const ext = settings.inlayHintsEnabled
+    const ext = inlayHintsEnabled
       ? inlayHintsExtension(
           () => buffer?.file?.path,
           () => view.state.doc.toString(),
@@ -248,7 +254,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     view.dispatch({
       effects: compartments.inlayHints.reconfigure(ext),
     });
-  }, [settings.inlayHintsEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+  }, [inlayHintsEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 
   // ---------------------------------------------------------------------------
   // Signature help compartment sync
@@ -258,7 +264,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     const view = viewRef.current;
     if (!view) return;
 
-    const ext = settings.signatureHelpEnabled
+    const ext = signatureHelpEnabled
       ? signatureHelpExtension(
           () => buffer?.file?.path,
           () => view.state.doc.toString(),
@@ -269,5 +275,5 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     view.dispatch({
       effects: compartments.signatureHelp.reconfigure(ext),
     });
-  }, [settings.signatureHelpEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+  }, [signatureHelpEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 }

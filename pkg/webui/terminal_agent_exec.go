@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -145,6 +146,26 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 				_, _ = session.Pty.Write([]byte{3})
 			}
 			session.mutex.RUnlock()
+
+			// If the context expired (not cancelled), the shell is likely in a
+			// bad state — close the session so GetOrCreateHiddenSessionForChat
+			// creates a fresh one on the next command. A context.Canceled error
+			// means the user explicitly interrupted; the session may still be OK.
+			if ctx.Err() == context.DeadlineExceeded {
+				log.Printf("PTY session %s: command timed out, closing session for recreation", session.ID)
+				// Close in a goroutine to avoid deadlock — CloseSession acquires
+				// execMu which we're holding. The goroutine will block until
+				// this function returns and releases execMu, then proceed.
+				sid := session.ID
+				go func() {
+					// Brief sleep to let this function return and release execMu.
+					time.Sleep(100 * time.Millisecond)
+					if err := tm.CloseSession(sid); err != nil {
+						log.Printf("PTY session %s: failed to close after timeout: %v", sid, err)
+					}
+				}()
+			}
+
 			return stripANSI(buf.String()), -1, ctx.Err()
 
 		case chunk, ok := <-sub.ch:

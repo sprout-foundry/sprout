@@ -594,17 +594,16 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   }, []);
 
   const updateBufferContent = useCallback((bufferId: string, content: string) => {
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
-      }
-      return newBuffers;
-    });
-  }, []);
-
-  // Update buffer cursor position
+  setBuffers(prev => {
+    const buffer = prev.get(bufferId);
+    // Skip update if content hasn't changed to avoid unnecessary re-renders
+    if (!buffer || buffer.content === content) return prev;
+    
+    const newBuffers = new Map(prev);
+    newBuffers.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
+    return newBuffers;
+  });
+}, []);// Update buffer cursor position
   const updateBufferCursor = useCallback((bufferId: string, position: { line: number; column: number }) => {
     setBuffers(prev => {
       const newBuffers = new Map(prev);

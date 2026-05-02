@@ -656,7 +656,7 @@ function EditorTabs({
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <span className="tab-name">{buffer.file.name}</span>
+                      <span className="tab-name" title={buffer.file.path}>{buffer.file.name}</span>
                     )}
                     {buffer.isModified && <span className="tab-modified">●</span>}
                     {buffer.externallyModified && (

@@ -140,6 +140,15 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'focus_split_3':
           onFocusPaneIndex(2);
           break;
+        case 'focus_split_4':
+          onFocusPaneIndex(3);
+          break;
+        case 'focus_split_5':
+          onFocusPaneIndex(4);
+          break;
+        case 'focus_split_6':
+          onFocusPaneIndex(5);
+          break;
         case 'focus_tab_4':
           onFocusTabIndex(3);
           break;

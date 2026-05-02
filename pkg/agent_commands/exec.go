@@ -30,6 +30,16 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	command := strings.Join(args, " ")
 
+	// Security check: block git checkout/switch operations
+	if IsGitCheckoutSubcommand(command) {
+		return fmt.Errorf("git checkout/switch/restore operations are not allowed via /exec. Use the git tool to require explicit user approval (command: '%s')", command)
+	}
+
+	// Security check: block git discard operations (reset, restore)
+	if IsGitDiscardCommand(command) {
+		return fmt.Errorf("git %s operations are not allowed via /exec. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", ExtractGitSubcommand(command), command)
+	}
+
 	// Execute the shell command using the same pattern as direct shell execution
 	fmt.Printf("\033[34m[shell]\033[0m Executing: %s\n", command)
 	result, err := tools.ExecuteShellCommand(context.Background(), command)
@@ -100,7 +110,20 @@ func IsShellCommand(prompt string) bool {
 	return false
 }
 
-// ExecuteShellCommandDirectly executes a shell command directly and returns the result
+// ExecuteShellCommandDirectly executes a shell command directly and returns the result.
+// NOTE: This function includes security checks for git commands. For unprivileged
+// execution, callers should use tools.ExecuteShellCommand directly (but this is
+// generally not recommended for agent-initiated commands).
 func ExecuteShellCommandDirectly(command string) (string, error) {
+	// Security check: block git checkout/switch operations
+	if IsGitCheckoutSubcommand(command) {
+		return "", fmt.Errorf("git checkout/switch/restore operations are not allowed via ExecuteShellCommandDirectly. Use the git tool to require explicit user approval (command: '%s')", command)
+	}
+
+	// Security check: block git discard operations (reset, restore)
+	if IsGitDiscardCommand(command) {
+		return "", fmt.Errorf("git %s operations are not allowed via ExecuteShellCommandDirectly. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", ExtractGitSubcommand(command), command)
+	}
+
 	return tools.ExecuteShellCommand(context.Background(), command)
 }

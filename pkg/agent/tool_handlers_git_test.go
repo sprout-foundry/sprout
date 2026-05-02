@@ -45,6 +45,37 @@ func TestIsGitWriteCommand(t *testing.T) {
 			t.Fatalf("isGitWriteCommand(%q) = %v, want %v", tc.command, got, tc.write)
 		}
 	}
+	
+	// Test compound commands (shell chaining)
+	compoundTests := []struct {
+		name    string
+		command string
+		write   bool
+	}{
+		// Should return true: compound commands with write operations
+		{"cd && commit", "cd /some/path && git commit -m 'fix'", true},
+		{"cd ; push", "cd /some/path; git push origin main", true},
+		{"subshell merge", "(cd /some/path && git merge feature)", true},
+		{"bash -c rebase", "bash -c 'cd /some/path && git rebase main'", true},
+		{"status && commit", "git status && git commit -m 'fix'", true},
+		{"multiple git, second push", "git log && git push", true},
+		{"cd && reset", "cd /path && git reset HEAD", true},
+		{"cd && restore", "cd /path && git restore file.txt", true},
+		
+		// Should return false: compound commands without write operations
+		{"cd && status", "cd /some/path && git status", false},
+		{"git log && diff", "git log && git diff", false},
+		{"cd && add", "cd /path && git add file.txt", false}, // add is allowed, not considered a restricted write
+		{"cd && branch list", "cd /path && git branch", false},
+	}
+	
+	for _, tc := range compoundTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGitWriteCommand(tc.command); got != tc.write {
+				t.Errorf("isGitWriteCommand(%q) = %v, want %v", tc.command, got, tc.write)
+			}
+		})
+	}
 }
 
 func TestIsGitCommitSubcommand(t *testing.T) {
@@ -108,6 +139,37 @@ func TestIsGitCheckoutSubcommand(t *testing.T) {
 		if got := isGitCheckoutSubcommand(tc.command); got != tc.isCheckout {
 			t.Fatalf("isGitCheckoutSubcommand(%q) = %v, want %v", tc.command, got, tc.isCheckout)
 		}
+	}
+	
+	// Test compound commands (shell chaining)
+	compoundTests := []struct {
+		name     string
+		command  string
+		isCheckout bool
+	}{
+		// Should return true: compound commands with checkout/switch
+		{"cd && checkout", "cd /some/path && git checkout main", true},
+		{"cd ; checkout", "cd /some/path; git checkout -b feature", true},
+		{"status && checkout", "git status && git checkout main", true},
+		{"multiple git, second checkout", "git log && git checkout branch", true},
+		
+		// Should return false: compound commands without checkout/switch
+		{"cd && status", "cd /some/path && git status", false},
+		{"git log && diff", "git log && git diff", false},
+		{"cd && reset", "cd /path && git reset HEAD", false},
+		
+		// Note: These edge cases are not handled by the simple parser
+		// They would require more complex shell parsing to detect
+		{"subshell checkout (BLOCKED - finds git)", "(cd /some/path && git switch main)", true}, // Actually blocked because git is found
+		{"bash -c checkout (BLOCKED - finds git)", "bash -c 'cd /some/path && git checkout'", true}, // Now blocked because git is found inside quotes
+	}
+	
+	for _, tc := range compoundTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGitCheckoutSubcommand(tc.command); got != tc.isCheckout {
+				t.Errorf("isGitCheckoutSubcommand(%q) = %v, want %v", tc.command, got, tc.isCheckout)
+			}
+		})
 	}
 }
 
@@ -222,6 +284,35 @@ func TestIsBroadGitAdd(t *testing.T) {
 			}
 		})
 	}
+	
+	// Test compound commands (shell chaining)
+	compoundTests := []struct {
+		name    string
+		command string
+		broad   bool
+	}{
+		// Should return true: compound commands with broad git add
+		{"cd && add .", "cd /some/path && git add .", true},
+		{"cd ; add -A", "cd /some/path; git add -A", true},
+		{"subshell add", "(cd /some/path && git add --all)", true},
+		{"bash -c add", "bash -c 'cd /some/path && git add -a'", true},
+		{"status && add .", "git status && git add .", true},
+		{"multiple git, second broad add", "git log && git add -A", true},
+		
+		// Should return false: compound commands with specific add or no add
+		{"cd && add file", "cd /some/path && git add file.txt", false},
+		{"git log && add specific", "git log && git add src/main.go", false},
+		{"cd && status", "cd /path && git status", false},
+		{"cd && commit", "cd /path && git commit -m 'fix'", false},
+	}
+	
+	for _, tc := range compoundTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isBroadGitAdd(tc.command); got != tc.broad {
+				t.Errorf("isBroadGitAdd(%q) = %v, want %v", tc.command, got, tc.broad)
+			}
+		})
+	}
 }
 
 func TestIsGitDiscardCommand(t *testing.T) {
@@ -257,6 +348,38 @@ func TestIsGitDiscardCommand(t *testing.T) {
 	}
 
 	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isGitDiscardCommand(tc.command); got != tc.discard {
+				t.Errorf("isGitDiscardCommand(%q) = %v, want %v", tc.command, got, tc.discard)
+			}
+		})
+	}
+	
+	// Test compound commands (shell chaining)
+	compoundTests := []struct {
+		name    string
+		command string
+		discard bool
+	}{
+		// Should return true: compound commands with reset/restore
+		{"cd && reset", "cd /some/path && git reset --hard HEAD~1", true},
+		{"cd ; reset", "cd /some/path; git reset --hard", true},
+		{"status && reset", "git status && git reset --hard", true},
+		{"multiple git, second reset", "git log && git reset HEAD", true},
+		{"cd && restore", "cd /path && git restore file.txt", true},
+		
+		// Should return false: compound commands without reset/restore
+		{"cd && status", "cd /some/path && git status", false},
+		{"git log && diff", "git log && git diff", false},
+		{"cd && add", "cd /path && git add file.txt", false},
+		
+		// Note: These edge cases are not handled by the simple parser
+		// They would require more complex shell parsing to detect
+		{"subshell reset (BLOCKED - finds git)", "(cd /some/path && git reset)", true}, // Actually blocked because git is found
+		{"bash -c reset (BLOCKED - finds git)", "bash -c 'cd /some/path && git reset'", true}, // Now blocked because git is found inside quotes
+	}
+	
+	for _, tc := range compoundTests {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isGitDiscardCommand(tc.command); got != tc.discard {
 				t.Errorf("isGitDiscardCommand(%q) = %v, want %v", tc.command, got, tc.discard)

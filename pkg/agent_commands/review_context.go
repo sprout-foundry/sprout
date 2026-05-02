@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -36,7 +35,7 @@ func detectProjectType() string {
 }
 
 func extractStagedChangesSummary() string {
-	cmd := exec.Command("git", "diff", "--cached", "--stat")
+	cmd := gitCommand("diff", "--cached", "--stat")
 	output, err := cmd.Output()
 	if err != nil {
 		return ""

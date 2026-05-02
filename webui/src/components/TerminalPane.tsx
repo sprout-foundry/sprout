@@ -98,6 +98,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Track whether component is mounted to prevent callbacks after unmount
     const isMountedRef = useRef(true);
 
+    // Stabilize fontSize so the xterm init effect doesn't recreate the XTerm
+    // instance when the user clicks zoom (+) or (-). The separate "keep font
+    // size in sync" effect handles updates to the existing instance.
+    const fontSizeRef = useRef(fontSize);
+    fontSizeRef.current = fontSize;
+
     // ── WASM shell state ──────────────────────────────────────────────────
     const wasmShellRef = useRef<WasmShell | null>(null);
     const [wasmActive, setWasmActive] = useState(false);
@@ -677,7 +683,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         cursorBlink: true,
         allowProposedApi: true,
         fontFamily: getTerminalFontFamily(),
-        fontSize: fontSize ?? FONT_SIZE_DEFAULT,
+        fontSize: fontSizeRef.current ?? FONT_SIZE_DEFAULT,
         lineHeight: 1.2,
         letterSpacing: 0,
         scrollback: 5000,
@@ -756,7 +762,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         xtermRef.current = null;
         fitAddonRef.current = null;
       };
-    }, [isActive, getTerminalTheme, getTerminalFontFamily, fontSize, handleWheel]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- fontSize intentionally excluded to avoid recreating xterm on zoom; updates handled by separate "keep font size in sync" effect
+    }, [isActive, getTerminalTheme, getTerminalFontFamily, handleWheel]);
 
     // Keep theme and font size in sync
     useEffect(() => {

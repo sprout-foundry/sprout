@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -14,7 +13,7 @@ import (
 // The review focuses on high-level, critical issues or staged files that should not be committed
 func generateCommitReview(chatAgent *agent.Agent) (string, error) {
 	// Get staged diff
-	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
+	diffOutput, err := gitCommand("diff", "--staged").CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get staged diff: %w", err)
 	}

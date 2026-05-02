@@ -32,7 +32,6 @@ vi.mock('@codemirror/view', () => ({
 
 vi.mock('@codemirror/state', () => ({
   Annotation: { define: vi.fn(() => ({})) },
-  Prec: { high: vi.fn((ext) => ext) },
 }));
 
 vi.mock('../services/api', () => ({

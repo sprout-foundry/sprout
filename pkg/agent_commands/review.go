@@ -57,6 +57,12 @@ func (c *ReviewDeepCommand) Execute(args []string, chatAgent *agent.Agent) error
 }
 
 func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent) error {
+	// Set git working directory from agent workspace root
+	if chatAgent != nil {
+		SetGitDir(chatAgent.GetWorkspaceRoot())
+	} else {
+		SetGitDir("")
+	}
 	// Create a logger (skip prompt for non-interactive mode)
 	logger := utils.GetLogger(true)
 
@@ -81,7 +87,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	logger.LogProcessStep("Configuration loaded successfully")
 
 	// Check for staged changes
-	cmdCheckStaged := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")
+	cmdCheckStaged := gitCommand("diff", "--cached", "--quiet", "--exit-code")
 	if err := cmdCheckStaged.Run(); err != nil {
 		// If err is not nil, it means there are staged changes (exit code 1) or another error
 		if _, ok := err.(*exec.ExitError); ok {
@@ -101,7 +107,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	}
 
 	// Get the diff of staged changes
-	cmdDiff := exec.Command("git", "diff", "--cached")
+	cmdDiff := gitCommand("diff", "--cached")
 	stagedDiffBytes, err := cmdDiff.Output()
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get staged diff: %w", err))

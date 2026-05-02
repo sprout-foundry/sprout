@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -92,6 +91,13 @@ func (f *FileItem) Value() interface{} { return f.Filename }
 // 1) If there are staged changes, use them and generate a commit message
 // 2) If there are no staged changes, prompt user to select files, then generate the commit message
 func (cf *CommitFlow) Execute() error {
+	// Set git working directory from agent workspace root
+	if cf.agent != nil {
+		SetGitDir(cf.agent.GetWorkspaceRoot())
+	} else {
+		SetGitDir("")
+	}
+
 	// Interactive terminal
 	if term.IsTerminal(int(os.Stdin.Fd())) {
 		stagedFiles, _, err := cf.getGitStatus()
@@ -166,13 +172,13 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 // getGitStatus returns lists of staged and unstaged files
 func (cf *CommitFlow) getGitStatus() (staged, unstaged []string, err error) {
 	// Get staged files
-	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	stagedOutput, err := gitCommand("diff", "--staged", "--name-only").CombinedOutput()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get staged files: %w", err)
 	}
 
 	// Get unstaged files
-	unstagedOutput, err := exec.Command("git", "diff", "--name-only").CombinedOutput()
+	unstagedOutput, err := gitCommand("diff", "--name-only").CombinedOutput()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get unstaged files: %w", err)
 	}
@@ -253,7 +259,7 @@ func (cf *CommitFlow) stageAllAndCommit() error {
 	cf.println("")
 	cf.println("[*] Staging all modified files...")
 
-	cmd := exec.Command("git", "add", "-A")
+	cmd := gitCommand("add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
@@ -296,10 +302,10 @@ func (cf *CommitFlow) singleFileCommit() error {
 	// Reset staging area and stage only the selected file
 	cf.println("")
 	cf.println("[~] Resetting staging area...")
-	exec.Command("git", "reset").Run() // Reset staging area
+	gitCommand("reset").Run() // Reset staging area
 
 	cf.printf("[up] Staging: %s\n", selectedFile)
-	cmd := exec.Command("git", "add", selectedFile)
+	cmd := gitCommand("add", selectedFile)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
 	}
@@ -310,7 +316,7 @@ func (cf *CommitFlow) singleFileCommit() error {
 // generateCommitMessageAndCommit handles the commit message generation and commit
 func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 	// Get diff for commit message generation
-	diffOutput, err := exec.Command("git", "diff", "--staged").CombinedOutput()
+	diffOutput, err := gitCommand("diff", "--staged").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -346,8 +352,15 @@ func (cf *CommitFlow) executeNonInteractive() error {
 // CommitStagedWithMessage commits staged files with an optional message or auto-generated message
 // This method is designed for non-interactive use by the commit tool
 func (cf *CommitFlow) CommitStagedWithMessage() error {
+	// Set git working directory from agent workspace root
+	if cf.agent != nil {
+		SetGitDir(cf.agent.GetWorkspaceRoot())
+	} else {
+		SetGitDir("")
+	}
+
 	// Check for staged changes first
-	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
+	stagedOutput, err := gitCommand("diff", "--staged", "--name-only").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to check for staged changes: %w", err)
 	}

@@ -83,6 +83,13 @@ type semanticCodeAction struct {
 	Edits []semanticCodeActionEdit `json:"edits"`
 }
 
+type semanticInlayHint struct {
+	From  int    `json:"from"`
+	To    int    `json:"to"`
+	Label string `json:"label"`
+	Kind  string `json:"kind"`
+}
+
 type semanticResponse struct {
 	Message      string                    `json:"message"`
 	Path         string                  `json:"path"`
@@ -95,6 +102,7 @@ type semanticResponse struct {
 	Rename       *semanticRename        `json:"rename,omitempty"`
 	References   *semanticReferences    `json:"references,omitempty"`
 	CodeActions  []semanticCodeAction   `json:"code_actions,omitempty"`
+	InlayHints   []semanticInlayHint   `json:"inlay_hints,omitempty"`
 	Error        string                  `json:"error,omitempty"`
 	Version      string                  `json:"version"`
 	DurationMs   int64                   `json:"duration_ms,omitempty"`
@@ -177,7 +185,7 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "File path is required", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" && req.Method != "code_actions" {
+	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" && req.Method != "code_actions" && req.Method != "inlay_hints" {
 		http.Error(w, "Invalid method", http.StatusBadRequest)
 		return
 	}
@@ -324,6 +332,17 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 				Title: ca.Title,
 				Kind:  ca.Kind,
 				Edits: edits,
+			})
+		}
+	}
+	if len(toolResult.InlayHints) > 0 {
+		result.InlayHints = make([]semanticInlayHint, 0, len(toolResult.InlayHints))
+		for _, h := range toolResult.InlayHints {
+			result.InlayHints = append(result.InlayHints, semanticInlayHint{
+				From:  h.From,
+				To:    h.To,
+				Label: h.Label,
+				Kind:  h.Kind,
 			})
 		}
 	}

@@ -1,16 +1,18 @@
 export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome' | 'compare';
 
+export interface EditorFileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+  ext?: string;
+}
+
 export interface EditorBuffer {
   id: string;
   kind: EditorBufferKind;
-  file: {
-    name: string;
-    path: string;
-    isDir: boolean;
-    size: number;
-    modified: number;
-    ext?: string;
-  };
+  file: EditorFileEntry;
   content: string;
   originalContent: string; // Content when file was loaded/reset
   cursorPosition: {

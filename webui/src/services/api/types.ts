@@ -257,10 +257,10 @@ export interface SproutSettings {
     auto_start: boolean;
     auto_discover: boolean;
     timeout: string;
-    servers: Record<string, any>;
+    servers: Record<string, MCPServerConfig>;
   };
-  custom_providers: Record<string, any>;
-  skills: Record<string, any>;
+  custom_providers: Record<string, CustomProviderConfig>;
+  skills: Record<string, SkillConfig>;
 }
 
 export interface HotkeyEntry {
@@ -274,4 +274,612 @@ export interface HotkeyConfig {
   version: string;
   hotkeys: HotkeyEntry[];
   path?: string;  // Filesystem path to the hotkeys config file
+}
+
+// ── MCP Settings interfaces ─────────────────────────────────────────
+
+export interface MCPServerConfig {
+  name: string;
+  type?: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  credentials?: Record<string, string>;
+  working_dir?: string;
+  timeout?: string;
+  auto_start?: boolean;
+  max_restarts?: number;
+}
+
+export interface MCPSettingsResponse {
+  mcp: {
+    enabled: boolean;
+    auto_start: boolean;
+    auto_discover: boolean;
+    timeout: string;
+    servers: Record<string, MCPServerConfig>;
+  };
+}
+
+// ── Custom Provider interfaces ───────────────────────────────────────
+
+export interface CustomProviderConfig {
+  name: string;
+  endpoint: string;
+  model_name: string;
+  context_size: number;
+  model_context_sizes?: Record<string, number>;
+  reasoning_effort?: string;
+  temperature?: number;
+  top_p?: number;
+  parameters?: Record<string, unknown>;
+  requires_api_key: boolean;
+  tool_calls?: string[];
+  env_var?: string;
+  chunk_timeout_ms?: number;
+  supports_vision?: boolean;
+  vision_model?: string;
+  vision_fallback_provider?: string;
+  vision_fallback_model?: string;
+}
+
+export interface CustomProvidersResponse {
+  custom_providers: Record<string, CustomProviderConfig>;
+}
+
+// ── Skills interfaces ───────────────────────────────────────────────
+
+export interface SkillConfig {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  enabled: boolean;
+  metadata?: Record<string, string>;
+  allowed_tools?: string;
+}
+
+export interface SkillsResponse {
+  skills: Record<string, SkillConfig>;
+}
+
+// ── Subagent Type interfaces ─────────────────────────────────────────
+
+export interface SubagentTypeInfo {
+  id: string;
+  name: string;
+  description: string;
+  provider: string;
+  model: string;
+  system_prompt: string;
+  system_prompt_text?: string;
+  allowed_tools: string[];
+  aliases: string[];
+  enabled: boolean;
+}
+
+export interface SubagentTypesResponse {
+  subagent_types: Record<string, SubagentTypeInfo>;
+  available_providers: Array<{ id: string; name: string; models: string[] }>;
+  current_provider: string;
+  current_model: string;
+}
+
+export interface UpdateSubagentTypeResponse {
+  success: boolean;
+  type: SubagentTypeInfo;
+}
+
+// ── Git types ───────────────────────────────────────────────────────
+
+export interface GitStatusEntry {
+  path: string;
+  status: string;
+  staged: boolean;
+}
+
+export interface GitStatusResponse {
+  message: string;
+  status: {
+    branch: string;
+    ahead: number;
+    behind: number;
+    staged: GitStatusEntry[];
+    modified: GitStatusEntry[];
+    untracked: GitStatusEntry[];
+    deleted: GitStatusEntry[];
+    renamed: GitStatusEntry[];
+    truncated?: boolean;
+  };
+  files: Array<{ path: string; status: string; staged?: boolean }>;
+}
+
+export interface GitBranchesResponse {
+  message: string;
+  current: string;
+  branches: string[];
+}
+
+export interface GitBranchResponse {
+  message: string;
+  branch: string;
+}
+
+export interface GitPushPullResponse {
+  message: string;
+  output?: string;
+}
+
+export interface GitStageResponse {
+  message: string;
+  path: string;
+}
+
+export interface GitStageAllResponse {
+  message: string;
+}
+
+export interface GitCommitResponse {
+  message: string;
+  commit: string;
+}
+
+export interface GitCommitMessageResponse {
+  message: string;
+  commit_message: string;
+  provider?: string;
+  model?: string;
+  warnings?: string[];
+}
+
+export interface GitLogEntry {
+  hash: string;
+  short_hash: string;
+  author: string;
+  date: string;
+  message: string;
+  ref_names?: string;
+}
+
+export interface GitLogResponse {
+  message: string;
+  commits: GitLogEntry[];
+  offset: number;
+  limit: number;
+  total: number;
+}
+
+export interface GitCommitDetailResponse {
+  message: string;
+  hash: string;
+  short_hash: string;
+  author: string;
+  date: string;
+  ref_names?: string;
+  subject: string;
+  files: Array<{ path: string; status: string }>;
+  diff: string;
+  stats: string;
+}
+
+export interface GitCommitFileDiffResponse {
+  message: string;
+  hash: string;
+  path: string;
+  diff: string;
+}
+
+export interface GitDiffResponse {
+  message: string;
+  path: string;
+  has_staged: boolean;
+  has_unstaged: boolean;
+  staged_diff: string;
+  unstaged_diff: string;
+  diff: string;
+}
+
+// ── Credentials types ───────────────────────────────────────────────
+
+export interface ProviderCredentialEntry {
+  provider: string;
+  display_name: string;
+  env_var: string;
+  requires_api_key: boolean;
+  has_stored_credential: boolean;
+  has_env_credential: boolean;
+  credential_source: string;
+  masked_value: string;
+  key_pool_size: number;
+}
+
+export interface ProviderCredentialsResponse {
+  storage_backend: string;
+  providers: ProviderCredentialEntry[];
+}
+
+export interface TestProviderConnectionResponse {
+  success: boolean;
+  error?: string;
+  model_count?: number;
+}
+
+export interface KeyPoolResponse {
+  provider: string;
+  key_count: number;
+  masked_keys: string[];
+}
+
+export interface MCPServerCredentialsResponse {
+  server: string;
+  credentials: Record<string, { status: string; has_value: boolean }>;
+}
+
+export interface UpdateMCPServerCredentialsResponse {
+  success: boolean;
+  server: string;
+}
+
+// ── Onboarding types ────────────────────────────────────────────────
+
+export interface CompleteOnboardingRequest {
+  provider: string;
+  model?: string;
+  api_key?: string;
+}
+
+export interface CompleteOnboardingResponse {
+  success: boolean;
+  message: string;
+  provider: string;
+  model: string;
+  validation?: { tested: boolean; model_count?: number };
+}
+
+// ── Search types ────────────────────────────────────────────────────
+
+export interface SearchOptions {
+  case_sensitive?: boolean;
+  whole_word?: boolean;
+  regex?: boolean;
+  include?: string;
+  exclude?: string;
+  max_results?: number;
+  context_lines?: number;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  total_matches: number;
+  total_files: number;
+  truncated: boolean;
+  query: string;
+}
+
+export interface SearchReplaceMatch {
+  line_number: number;
+  old_line: string;
+  new_line: string;
+  column_start: number;
+  column_end: number;
+}
+
+export interface SearchReplaceChange {
+  file: string;
+  matches: SearchReplaceMatch[];
+  changed_lines: number;
+}
+
+export interface SearchReplaceRequest {
+  search: string;
+  replace: string;
+  files: string[];
+  case_sensitive?: boolean;
+  whole_word?: boolean;
+  regex?: boolean;
+  preview: boolean;
+}
+
+export interface SearchReplaceResponse {
+  changes: SearchReplaceChange[];
+  total_changes: number;
+  preview: boolean;
+}
+
+// ── Editor types ────────────────────────────────────────────────────
+
+export interface DiagnosticEntry {
+  from: number;
+  to: number;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  source: string;
+}
+
+export interface DiagnosticsResponse {
+  message: string;
+  path: string;
+  diagnostics: DiagnosticEntry[];
+  version: string;
+}
+
+export interface SemanticCapabilities {
+  diagnostics: boolean;
+  definition: boolean;
+}
+
+export interface SemanticDiagnosticsResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities;
+  diagnostics: DiagnosticEntry[];
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticDefinitionResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities;
+  definition?: { path: string; line: number; column: number } | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticHoverResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities & { hover: boolean };
+  hover?: { contents: string } | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticRenameResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities & { hover: boolean; rename: boolean };
+  rename?: { locations: Array<{ filePath: string; from: number; to: number }> } | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticReferencesResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities & { hover: boolean; rename: boolean; references: boolean };
+  references?: { locations: Array<{ filePath: string; line: number; startCol: number; endCol: number; lineText: string }>; symbolName: string } | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticCodeActionsResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities & { hover: boolean; rename: boolean; references: boolean; code_actions: boolean };
+  code_actions?: Array<{ title: string; kind: string; edits: Array<{ filePath: string; from: number; to: number; newText: string }> }> | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface WorkspaceSymbolEntry {
+  name: string;
+  kind: string;
+  line?: number;
+}
+
+export interface WorkspaceSymbolFile {
+  file: string;
+  symbols: WorkspaceSymbolEntry[];
+}
+
+export interface WorkspaceSymbolsResponse {
+  message: string;
+  files: WorkspaceSymbolFile[];
+  total: number;
+}
+
+// ── Session types ───────────────────────────────────────────────────
+
+export interface SessionEntry {
+  session_id: string;
+  name: string;
+  working_directory: string;
+  last_updated: string;
+  message_count: number;
+  total_tokens: number;
+}
+
+export interface SessionsResponse {
+  message: string;
+  sessions: SessionEntry[];
+  current_session_id: string;
+}
+
+export interface SessionRestoreResponse {
+  message: string;
+  session_id: string;
+  message_count: number;
+  messages: Array<{ role: string; content: string }>;
+  total_tokens: number;
+  name?: string;
+  working_directory?: string;
+}
+
+// ── Misc / Changelog types ──────────────────────────────────────────
+
+export interface ChangelogFile {
+  path: string;
+  operation: string;
+  lines_added: number;
+  lines_deleted: number;
+}
+
+export interface ChangelogRevision {
+  revision_id: string;
+  timestamp: string;
+  files: ChangelogFile[];
+  description: string;
+}
+
+export interface ChangelogResponse {
+  message: string;
+  revisions: ChangelogRevision[];
+}
+
+export interface ChangesResponse {
+  message: string;
+  changes: ChangelogRevision[];
+}
+
+export interface RevisionFileDetail {
+  file_revision_hash?: string;
+  path: string;
+  operation: string;
+  lines_added: number;
+  lines_deleted: number;
+  original_code: string;
+  new_code: string;
+  diff: string;
+}
+
+export interface RevisionDetailResponse {
+  message: string;
+  revision: {
+    revision_id: string;
+    timestamp: string;
+    description: string;
+    files: RevisionFileDetail[];
+  };
+}
+
+export interface RollbackResponse {
+  message: string;
+  revision_id: string;
+}
+
+// ── Review types ────────────────────────────────────────────────────
+
+export interface DeepReviewResponse {
+  message: string;
+  status: string;
+  feedback: string;
+  detailed_guidance?: string;
+  suggested_new_prompt?: string;
+  review_output: string;
+  provider?: string;
+  model?: string;
+  warnings?: string[];
+}
+
+export interface DeepReviewFixResponse {
+  message: string;
+  result: string;
+}
+
+export interface DeepReviewFixStartResponse {
+  message: string;
+  job_id: string;
+  session_id: string;
+}
+
+export interface DeepReviewFixStatusResponse {
+  message: string;
+  job_id: string;
+  session_id: string;
+  status: 'running' | 'completed' | 'error';
+  logs: string[];
+  next_index: number;
+  result: string;
+  error: string;
+}
+
+// ── Instances / SSH types ───────────────────────────────────────────
+
+export interface InstancesResponse {
+  instances: SproutInstance[];
+  current_pid: number;
+  active_host_pid: number;
+  active_host_port: number;
+  desired_host_pid: number;
+}
+
+export interface SSHHostsResponse {
+  hosts: SSHHostEntry[];
+}
+
+export interface SSHSessionsResponse {
+  sessions: SSHSessionEntry[];
+}
+
+export interface SSHBrowseResponse {
+  path: string;
+  home_path?: string;
+  files: SSHBrowseEntry[];
+}
+
+export interface SSHCloseResponse {
+  message: string;
+  key: string;
+}
+
+export interface SelectInstanceResponse {
+  message: string;
+  pid: number;
+}
+
+// ── Terminal types ──────────────────────────────────────────────────
+
+export interface TerminalHistoryResponse {
+  history: string[];
+  count: number;
+}
+
+export interface AddTerminalHistoryResponse {
+  message: string;
+  command: string;
+}
+
+// ── Chat types ──────────────────────────────────────────────────────
+
+export interface UploadImageResponse {
+  path: string;
+  filename: string;
+}
+
+// ── File operations types ───────────────────────────────────────────
+
+export interface CreateItemResponse {
+  message: string;
+  path: string;
+}
+
+export interface DeleteItemResponse {
+  message: string;
+  path: string;
+}
+
+export interface RenameItemResponse {
+  message: string;
+  old_path: string;
+  new_path: string;
 }

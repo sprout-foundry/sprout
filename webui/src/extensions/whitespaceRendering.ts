@@ -156,7 +156,7 @@ const createWhitespacePlugin = (mode: WhitespaceRenderingMode) =>
           return Decoration.none;
         }
 
-        const pieces: Array<{ from: number; to: number; decoration: any }> = [];
+        const pieces: Array<{ from: number; to: number; decoration: ReturnType<Decoration['range']> }> = [];
         const { from: viewFrom, to: viewTo } = view.viewport;
 
         if (view.state.doc.length === 0 || viewFrom >= view.state.doc.length) {

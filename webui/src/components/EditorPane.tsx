@@ -151,6 +151,38 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const keymaps = buildKeymaps(keymapActions);
 
+  // Stable refs for keymaps, settings, and actions — passed to hooks so that
+  // the dependency arrays don't change on every render, which would destroy
+  // and recreate the EditorView (breaking editing and resetting scroll).
+  const keymapsRef = useRef(keymaps);
+  keymapsRef.current = keymaps;
+
+  const settingsRef = useRef({
+    wordWrapEnabled: settings.wordWrapEnabled,
+    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+    minimapEnabled: settings.minimapEnabled,
+    editorFontSize: settings.editorFontSize,
+    editorTabSize: settings.editorTabSize,
+    editorUsesTabs: settings.editorUsesTabs,
+    whitespaceRenderingMode: settings.whitespaceRenderingMode,
+    inlayHintsEnabled: settings.inlayHintsEnabled,
+    signatureHelpEnabled: settings.signatureHelpEnabled,
+  });
+  settingsRef.current = {
+    wordWrapEnabled: settings.wordWrapEnabled,
+    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+    minimapEnabled: settings.minimapEnabled,
+    editorFontSize: settings.editorFontSize,
+    editorTabSize: settings.editorTabSize,
+    editorUsesTabs: settings.editorUsesTabs,
+    whitespaceRenderingMode: settings.whitespaceRenderingMode,
+    inlayHintsEnabled: settings.inlayHintsEnabled,
+    signatureHelpEnabled: settings.signatureHelpEnabled,
+  };
+
+  const actionsRef = useRef({ getSaveFn: () => saveRef.current });
+  actionsRef.current = { getSaveFn: () => saveRef.current };
+
   useEditorEvents({
     viewRef,
     bufferRef,
@@ -201,23 +233,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     themePack,
     customHighlightStyle,
     lastInitLanguageKey,
-    keymaps,
+    keymapsRef,
     localContentRef,
     openWorkspaceBuffer,
     onCancelPendingFlush: cancelPendingFlush,
     onUpdate,
-    settings: {
-      wordWrapEnabled: settings.wordWrapEnabled,
-      relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-      minimapEnabled: settings.minimapEnabled,
-      editorFontSize: settings.editorFontSize,
-      editorTabSize: settings.editorTabSize,
-      editorUsesTabs: settings.editorUsesTabs,
-      whitespaceRenderingMode: settings.whitespaceRenderingMode,
-      inlayHintsEnabled: settings.inlayHintsEnabled,
-      signatureHelpEnabled: settings.signatureHelpEnabled,
-    },
-    actions: { getSaveFn: () => saveRef.current },
+    settingsRef,
+    actionsRef,
   });
 
   useEditorReconfigure({
@@ -226,18 +248,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     lastInitLanguageKey,
     compartments,
     hotkeys,
-    keymaps,
-    settings: {
-      editorFontSize: settings.editorFontSize,
-      editorTabSize: settings.editorTabSize,
-      editorUsesTabs: settings.editorUsesTabs,
-      wordWrapEnabled: settings.wordWrapEnabled,
-      minimapEnabled: settings.minimapEnabled,
-      relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-      whitespaceRenderingMode,
-      inlayHintsEnabled: settings.inlayHintsEnabled,
-      signatureHelpEnabled: settings.signatureHelpEnabled,
-    },
+    keymapsRef,
+    editorFontSize: settings.editorFontSize,
+    editorTabSize: settings.editorTabSize,
+    editorUsesTabs: settings.editorUsesTabs,
+    wordWrapEnabled: settings.wordWrapEnabled,
+    minimapEnabled: settings.minimapEnabled,
+    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+    whitespaceRenderingMode,
+    inlayHintsEnabled: settings.inlayHintsEnabled,
+    signatureHelpEnabled: settings.signatureHelpEnabled,
   });
 
   const handleFormatDocument = useCallback(() => {

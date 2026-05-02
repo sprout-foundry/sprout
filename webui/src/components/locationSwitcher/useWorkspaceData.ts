@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ApiService, SSHWorkspaceOpenError } from '../../services/api';
+import { ApiService } from '../../services/api';
 import { getSSHProxyContext } from '../../services/clientSession';
 import { showThemedConfirm } from '../ThemedDialog';
 import { normalizePath } from './pathUtils';

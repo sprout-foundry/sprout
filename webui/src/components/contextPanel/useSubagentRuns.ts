@@ -1,6 +1,5 @@
 import { useMemo, useCallback } from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
-import { debugLog } from '../../utils/log';
 import type {
   ChatContextPanelProps,
   SubagentRun,

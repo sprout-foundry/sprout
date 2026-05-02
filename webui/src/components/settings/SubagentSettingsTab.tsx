@@ -15,7 +15,7 @@ interface SubagentSettingsTabProps {
   renderToggle: FieldRenderers['renderToggle'];
   renderNumberInput: FieldRenderers['renderNumberInput'];
   renderSelect: FieldRenderers['renderSelect'];
-  api: { updateSubagentType: (id: string, data: Record<string, unknown>) => Promise<any> };
+  api: { updateSubagentType: (id: string, data: Record<string, unknown>) => Promise<unknown> };
 }
 
 export default function SubagentSettingsTab({

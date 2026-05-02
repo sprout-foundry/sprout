@@ -122,8 +122,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	// Create a context with a timeout for the tool execution
 	// Subagents get 30 minutes (for large file operations), other tools get 5 minutes
 	// Can be overridden via SPROUT_TOOL_TIMEOUT environment variable
+	// Use agent's interrupt context as parent so user Ctrl+C propagates to running tools
 	toolTimeout := getToolTimeout(normalizedToolName)
-	ctx, cancel := context.WithTimeout(context.Background(), toolTimeout)
+	parentCtx := te.agent.InterruptCtx()
+	ctx, cancel := context.WithTimeout(parentCtx, toolTimeout)
 	defer cancel()
 
 	// Create a channel to receive the result of the tool execution
@@ -231,6 +233,9 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	modelResult := fullResult
 	if err == nil {
 		modelResult = constrainToolResultForModel(normalizedToolName, args, fullResult)
+
+		// Universal truncation: cap total result size to prevent blowing up LLM context
+		modelResult = truncateToolResult(modelResult)
 	}
 
 	// Apply secret redaction to tool output before sending to LLM.

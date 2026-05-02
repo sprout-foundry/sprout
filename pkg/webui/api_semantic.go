@@ -90,6 +90,23 @@ type semanticInlayHint struct {
 	Kind  string `json:"kind"`
 }
 
+type semanticSignatureHelpParameter struct {
+	Label         string `json:"label"`
+	Documentation string `json:"documentation,omitempty"`
+}
+
+type semanticSignatureHelpSignature struct {
+	Label         string                          `json:"label"`
+	Documentation string                          `json:"documentation,omitempty"`
+	Parameters    []semanticSignatureHelpParameter `json:"parameters"`
+}
+
+type semanticSignatureHelp struct {
+	Signatures      []semanticSignatureHelpSignature `json:"signatures"`
+	ActiveSignature int                              `json:"activeSignature"`
+	ActiveParameter  int                              `json:"activeParameter"`
+}
+
 type semanticResponse struct {
 	Message      string                    `json:"message"`
 	Path         string                  `json:"path"`
@@ -103,6 +120,7 @@ type semanticResponse struct {
 	References   *semanticReferences    `json:"references,omitempty"`
 	CodeActions  []semanticCodeAction   `json:"code_actions,omitempty"`
 	InlayHints   []semanticInlayHint   `json:"inlay_hints,omitempty"`
+	SignatureHelp *semanticSignatureHelp `json:"signature_help,omitempty"`
 	Error        string                  `json:"error,omitempty"`
 	Version      string                  `json:"version"`
 	DurationMs   int64                   `json:"duration_ms,omitempty"`
@@ -185,13 +203,13 @@ func (ws *ReactWebServer) handleAPISemantic(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "File path is required", http.StatusBadRequest)
 		return
 	}
-	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" && req.Method != "code_actions" && req.Method != "inlay_hints" {
+	if req.Method != "diagnostics" && req.Method != "definition" && req.Method != "hover" && req.Method != "rename" && req.Method != "references" && req.Method != "code_actions" && req.Method != "inlay_hints" && req.Method != "signature_help" {
 		http.Error(w, "Invalid method", http.StatusBadRequest)
 		return
 	}
-	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" || req.Method == "references" || req.Method == "code_actions" {
+	if req.Method == "definition" || req.Method == "hover" || req.Method == "rename" || req.Method == "references" || req.Method == "code_actions" || req.Method == "signature_help" {
 		if req.Position == nil || req.Position.Line <= 0 || req.Position.Column <= 0 {
-			http.Error(w, "Position is required for definition, hover, rename, references, and code_actions", http.StatusBadRequest)
+			http.Error(w, "Position is required for definition, hover, rename, references, code_actions, and signature_help", http.StatusBadRequest)
 			return
 		}
 	}
@@ -344,6 +362,29 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 				Label: h.Label,
 				Kind:  h.Kind,
 			})
+		}
+	}
+	if toolResult.SignatureHelp != nil {
+		sh := toolResult.SignatureHelp
+		sigs := make([]semanticSignatureHelpSignature, 0, len(sh.Signatures))
+		for _, sig := range sh.Signatures {
+			params := make([]semanticSignatureHelpParameter, 0, len(sig.Parameters))
+			for _, p := range sig.Parameters {
+				params = append(params, semanticSignatureHelpParameter{
+					Label:         p.Label,
+					Documentation: p.Documentation,
+				})
+			}
+			sigs = append(sigs, semanticSignatureHelpSignature{
+				Label:         sig.Label,
+				Documentation: sig.Documentation,
+				Parameters:    params,
+			})
+		}
+		result.SignatureHelp = &semanticSignatureHelp{
+			Signatures:      sigs,
+			ActiveSignature: sh.ActiveSignature,
+			ActiveParameter:  sh.ActiveParameter,
 		}
 	}
 }

@@ -15,6 +15,7 @@ type Capabilities struct {
 	References  bool `json:"references"`
 	CodeActions bool `json:"code_actions"`
 	InlayHints  bool `json:"inlay_hints"`
+	SignatureHelp bool `json:"signature_help"`
 }
 
 // ToolInput is the normalized request shape sent to language adapters.
@@ -106,6 +107,26 @@ type ToolInlayHint struct {
 	Kind  string `json:"kind"`   // "type", "parameter", or "none"
 }
 
+// ToolSignatureHelpParameter is a single parameter in a function signature.
+type ToolSignatureHelpParameter struct {
+	Label         string `json:"label"`
+	Documentation string `json:"documentation,omitempty"`
+}
+
+// ToolSignatureHelpSignature is a single function signature.
+type ToolSignatureHelpSignature struct {
+	Label         string                       `json:"label"`
+	Documentation string                       `json:"documentation,omitempty"`
+	Parameters    []ToolSignatureHelpParameter `json:"parameters"`
+}
+
+// ToolSignatureHelp is the signature help result.
+type ToolSignatureHelp struct {
+	Signatures      []ToolSignatureHelpSignature `json:"signatures"`
+	ActiveSignature int                          `json:"activeSignature"`
+	ActiveParameter  int                          `json:"activeParameter"`
+}
+
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
 	Capabilities Capabilities        `json:"capabilities"`
@@ -116,6 +137,7 @@ type ToolResult struct {
 	References   *ToolReferences   `json:"references,omitempty"`
 	CodeActions  []ToolCodeAction  `json:"code_actions,omitempty"`
 	InlayHints   []ToolInlayHint   `json:"inlay_hints,omitempty"`
+	SignatureHelp *ToolSignatureHelp `json:"signature_help,omitempty"`
 	Error        string             `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.

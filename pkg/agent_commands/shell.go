@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"context"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 	"os/user"
 	"runtime"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -171,6 +172,11 @@ Example format: find . -name "*.go" | wc -l`, description)},
 	fmt.Printf("\n[>>] Executing %s...\n\n", c.getScriptType(isSingleCommand))
 
 	var execErr error
+
+	// Security check: block git checkout/switch/discard operations in generated scripts
+	if IsGitCheckoutSubcommand(generatedScript) || IsGitDiscardCommand(generatedScript) {
+		return fmt.Errorf("git %s operations are not allowed via /shell. Use the git tool with explicit user approval", ExtractGitSubcommand(generatedScript))
+	}
 
 	if isSingleCommand {
 		// Execute single command directly (output streams in real-time)

@@ -33,10 +33,16 @@
 }
 
 .pane-content .editor .cm-editor,
-.pane-content .editor .cm-scroller,
-.pane-content .editor .cm-content {
+.pane-content .editor .cm-scroller {
   width: 100%;
   height: 100%;
+}
+
+/* .cm-content should not have height constraint - it needs to grow
+   to fit content so scrolling works properly */
+.pane-content .editor .cm-content {
+  width: 100%;
+  min-height: 100%;
 }
 
 .pane-footer {
@@ -64,6 +70,31 @@
 
 .pane-footer .tab-size:hover {
   opacity: 1;
+}
+
+.pane-footer .zoom-control {
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+  user-select: none;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.pane-footer .zoom-control:hover {
+  opacity: 1;
+}
+
+.pane-footer .zoom-level {
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.pane-footer .zoom-level:hover {
+  color: var(--accent-primary);
 }
 
 .pane-footer .encoding-indicator {

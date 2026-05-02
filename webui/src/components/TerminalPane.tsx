@@ -92,6 +92,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const resizeTimerRef = useRef<number | null>(null);
     const expandTimeoutRef = useRef<number | null>(null);
 
+    // ── Search functionality ────────────────────────────────────────────────
+    const searchAddonRef = useRef<SearchAddon | null>(null);
+    const searchBarRef = useRef<TerminalSearchBarHandle | null>(null);
+    const [searchVisible, setSearchVisible] = useState(false);
+    const [matchIndex, setMatchIndex] = useState<number | undefined>(undefined);
+    const [matchCount, setMatchCount] = useState<number | undefined>(undefined);
+
     // Track whether the pane is currently mounted/active so the cleanup function
     // can distinguish between a temporary freeze and a permanent unmount.
     const isActiveRef = useRef(isActive);
@@ -693,7 +700,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       const fitAddon = new FitAddon();
+      const searchAddon = new SearchAddon();
       term.loadAddon(fitAddon);
+      term.loadAddon(searchAddon);
       term.open(xtermContainerRef.current);
 
       // Add wheel event handler to prevent page scroll-chaining when the

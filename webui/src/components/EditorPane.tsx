@@ -214,6 +214,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       editorTabSize: settings.editorTabSize,
       editorUsesTabs: settings.editorUsesTabs,
       whitespaceRenderingMode: settings.whitespaceRenderingMode,
+      inlayHintsEnabled: settings.inlayHintsEnabled,
     },
     actions: { getSaveFn: () => saveRef.current },
   });
@@ -233,6 +234,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       minimapEnabled: settings.minimapEnabled,
       relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
       whitespaceRenderingMode,
+      inlayHintsEnabled: settings.inlayHintsEnabled,
     },
   });
 

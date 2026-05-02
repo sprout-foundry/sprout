@@ -58,6 +58,7 @@ export interface UseEditorSettingsReturn {
   whitespaceRenderingMode: WhitespaceRenderingMode;
   indentManuallySet: boolean;
   lineEnding: LineEnding;
+  inlayHintsEnabled: boolean;
   
   // Ref mirrors
   wordWrapRef: React.MutableRefObject<boolean>;
@@ -65,6 +66,7 @@ export interface UseEditorSettingsReturn {
   relativeLineNumbersEnabledRef: React.MutableRefObject<boolean>;
   whitespaceRenderingModeRef: React.MutableRefObject<WhitespaceRenderingMode>;
   indentManuallySetRef: React.MutableRefObject<boolean>;
+  inlayHintsEnabledRef: React.MutableRefObject<boolean>;
   
   // Setters for external use (e.g., file loading, buffer changes)
   setEditorTabSize: (v: number) => void;
@@ -81,6 +83,7 @@ export interface UseEditorSettingsReturn {
   onToggleMinimap: () => void;
   onToggleRelativeLineNumbers: () => void;
   onCycleWhitespaceRendering: () => WhitespaceRenderingMode;
+  onToggleInlayHints: () => void;
 }
 
 export interface EditorSettingsCompartments {
@@ -171,6 +174,16 @@ export function useEditorSettings(
     }
   };
 
+  const getStoredInlayHintsEnabled = (): boolean => {
+    try {
+      const stored = localStorage.getItem('editor:inlay-hints-enabled');
+      return stored !== null ? stored === 'true' : true;
+    } catch (err) {
+      debugLog('Failed to read inlay hints setting from localStorage:', err);
+      return true;
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Settings state
   // ---------------------------------------------------------------------------
@@ -203,6 +216,8 @@ export function useEditorSettings(
 
   const [lineEnding, setLineEnding] = useState<LineEnding>('LF');
 
+  const [inlayHintsEnabled, setInlayHintsEnabled] = useState<boolean>(getStoredInlayHintsEnabled);
+
   // ---------------------------------------------------------------------------
   // Ref mirrors for dedup and stale closure avoidance
   // ---------------------------------------------------------------------------
@@ -216,6 +231,8 @@ export function useEditorSettings(
   const whitespaceRenderingModeRef = useRef<WhitespaceRenderingMode>(getStoredWhitespaceRenderingMode());
   const lastWhitespaceToggleRef = useRef(0);
   const indentManuallySetRef = useRef(false);
+  const inlayHintsEnabledRef = useRef(inlayHintsEnabled);
+  const lastInlayHintsToggleRef = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Ref sync effects
@@ -237,6 +254,10 @@ export function useEditorSettings(
   useEffect(() => {
     indentManuallySetRef.current = indentManuallySet;
   }, [indentManuallySet]);
+
+  useEffect(() => {
+    inlayHintsEnabledRef.current = inlayHintsEnabled;
+  }, [inlayHintsEnabled]);
 
   // ---------------------------------------------------------------------------
   // Orphaned localStorage cleanup
@@ -400,6 +421,20 @@ export function useEditorSettings(
     return next;
   }, []);
 
+  const onToggleInlayHints = useCallback(() => {
+    const now = Date.now();
+    if (now - lastInlayHintsToggleRef.current < 100) return;
+    lastInlayHintsToggleRef.current = now;
+    const next = !inlayHintsEnabledRef.current;
+    inlayHintsEnabledRef.current = next;
+    setInlayHintsEnabled(next);
+    try {
+      localStorage.setItem('editor:inlay-hints-enabled', String(next));
+    } catch (err) {
+      debugLog('[onToggleInlayHints] localStorage persist failed:', err);
+    }
+  }, []);
+
   return {
     // State
     editorFontSize,
@@ -411,6 +446,7 @@ export function useEditorSettings(
     whitespaceRenderingMode: whitespaceRenderingModeRef.current,
     indentManuallySet,
     lineEnding,
+    inlayHintsEnabled,
     
     // Ref mirrors
     wordWrapRef,
@@ -418,6 +454,7 @@ export function useEditorSettings(
     relativeLineNumbersEnabledRef,
     whitespaceRenderingModeRef,
     indentManuallySetRef,
+    inlayHintsEnabledRef,
     
     // Setters
     setEditorTabSize,
@@ -434,5 +471,6 @@ export function useEditorSettings(
     onToggleMinimap,
     onToggleRelativeLineNumbers,
     onCycleWhitespaceRendering,
+    onToggleInlayHints,
   };
 }

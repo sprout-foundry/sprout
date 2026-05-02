@@ -372,6 +372,47 @@ function analyze(input) {
     };
   }
 
+  if (method === 'inlay_hints') {
+    const hints = [];
+    try {
+      const sourceText = ts.sys.readFile(filePath) || '';
+      const inlayHints = ls.provideInlayHints(filePath, { start: 0, length: sourceText.length }, {
+        includeInlayHints: true,
+        includeInlayParameterNameHints: 'all',
+        includeInlayParameterNameHintsWhenArgumentMatchesName: true,
+        includeInlayVariableTypeHints: true,
+        includeInlayFunctionCallArguments: true,
+        includeInlayEnumMemberValueHints: true,
+        includeInlayFunctionLikeSignatureHint: true,
+        includeInlayPropertyNameHints: true,
+      }) || [];
+      for (const hint of inlayHints) {
+        const label = hint.text || '';
+        let kind = 'none';
+        if (hint.kind === 'Type') kind = 'type';
+        else if (hint.kind === 'Parameter') kind = 'parameter';
+        else if (hint.kind === 'Enum') kind = 'type';
+        hints.push({
+          from: hint.position,
+          to: hint.position,
+          label: label,
+          kind: kind,
+        });
+      }
+    } catch (err) {
+      return {
+        capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true, code_actions: true, inlay_hints: false },
+        inlay_hints: [],
+        error: String(err && err.message ? err.message : err)
+      };
+    }
+
+    return {
+      capabilities: { diagnostics: true, definition: true, hover: true, rename: true, references: true, code_actions: true, inlay_hints: true },
+      inlay_hints: hints
+    };
+  }
+
   const syntactic = ls.getSyntacticDiagnostics(filePath) || [];
   const semantic = ls.getSemanticDiagnostics(filePath) || [];
   const all = syntactic.concat(semantic);

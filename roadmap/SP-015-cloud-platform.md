@@ -131,8 +131,10 @@ Foundry reverse-proxies to the container's port 56000, including WebSocket upgra
 - Foundry imports this manifest at build time to generate its SW route table
 - Drift is structurally impossible when the import is wired
 
-**Remaining work:**
-- Wire `endpoint-manifest.json` import into Foundry's `sprout-sw.ts` build process
+**Done:**
+- Wire `endpoint-manifest.json` import into Foundry's `sprout-sw.ts` build process (committed to foundry repo)
+- Route table now built via `buildRoutesFromManifest()` from the imported manifest
+- Update process: copy manifest file + rebuild foundry browser-ide
 - Add a CI check that fails if Foundry's SW route table diverges from the manifest
 - Consider a shared npm package (`@sprout/endpoint-registry`) for type-safe imports
 

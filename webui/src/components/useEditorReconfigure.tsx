@@ -245,5 +245,5 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     view.dispatch({
       effects: compartments.inlayHints.reconfigure(ext),
     });
-  }, [settings.inlayHintsEnabled, buffer?.id, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+  }, [settings.inlayHintsEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
 }

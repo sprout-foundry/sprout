@@ -150,15 +150,34 @@ describe('InlayHintWidget', () => {
 
   it('eq true', async () => {
     createPlugin(); await flush(600);
-    expect(mockDecoration.widget.mock.calls[0][0].widget.eq({ label: ': number', kind: 'type' })).toBe(true);
+    const widget = mockDecoration.widget.mock.calls[0][0].widget;
+    // eq should return true for a widget with the same label and kind of the same type
+    // Create a comparable widget using the same constructor
+    const sameWidget = Object.create(Object.getPrototypeOf(widget));
+    sameWidget.label = ': number';
+    sameWidget.kind = 'type';
+    expect(widget.eq(sameWidget)).toBe(true);
   });
   it('eq false (label)', async () => {
     createPlugin(); await flush(600);
-    expect(mockDecoration.widget.mock.calls[0][0].widget.eq({ label: ': x', kind: 'type' })).toBe(false);
+    const widget = mockDecoration.widget.mock.calls[0][0].widget;
+    const diffWidget = Object.create(Object.getPrototypeOf(widget));
+    diffWidget.label = ': x';
+    diffWidget.kind = 'type';
+    expect(widget.eq(diffWidget)).toBe(false);
   });
   it('eq false (kind)', async () => {
     createPlugin(); await flush(600);
-    expect(mockDecoration.widget.mock.calls[0][0].widget.eq({ label: ': number', kind: 'parameter' })).toBe(false);
+    const widget = mockDecoration.widget.mock.calls[0][0].widget;
+    const diffWidget = Object.create(Object.getPrototypeOf(widget));
+    diffWidget.label = ': number';
+    diffWidget.kind = 'parameter';
+    expect(widget.eq(diffWidget)).toBe(false);
+  });
+  it('eq false (non-widget)', async () => {
+    createPlugin(); await flush(600);
+    const widget = mockDecoration.widget.mock.calls[0][0].widget;
+    expect(widget.eq({ label: ': number', kind: 'type' } as any)).toBe(false);
   });
   it('ignoreEvent', async () => {
     createPlugin(); await flush(600);
@@ -310,20 +329,20 @@ describe('edge cases', () => {
 describe('debounce', () => {
   beforeEach(() => { vi.useFakeTimers(); resetMocks(); mocks.getSemanticInlayHints.mockResolvedValue({ inlay_hints: [{ from: 0, to: 3, label: ': T', kind: 'type' }] }); });
   afterEach(() => { vi.useRealTimers(); });
-  it('waits 500ms', async () => {
+  it('waits for debounce period', async () => {
     createPlugin();
     expect(mocks.getSemanticInlayHints).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(500); await vi.runAllTimersAsync();
+    vi.advanceTimersByTime(300); await vi.runAllTimersAsync();
     expect(mocks.getSemanticInlayHints).toHaveBeenCalled();
   });
   it('resets on new update', async () => {
     const { plugin, mockView } = createPlugin();
-    vi.advanceTimersByTime(200);
+    vi.advanceTimersByTime(100);
     mockView.state.doc.toString.mockReturnValue('new');
     plugin.update({ docChanged: true, viewportChanged: false, transactions: [], view: mockView });
-    vi.advanceTimersByTime(200);
+    vi.advanceTimersByTime(100);
     expect(mocks.getSemanticInlayHints).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(500); await vi.runAllTimersAsync();
+    vi.advanceTimersByTime(300); await vi.runAllTimersAsync();
     expect(mocks.getSemanticInlayHints).toHaveBeenCalled();
   });
 });

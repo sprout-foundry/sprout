@@ -59,6 +59,7 @@ export interface UseEditorViewInitOptions {
     editorUsesTabs: boolean;
     whitespaceRenderingMode: WhitespaceRenderingMode;
     inlayHintsEnabled: boolean;
+    signatureHelpEnabled: boolean;
   };
   actions: {
     getSaveFn: () => () => void;

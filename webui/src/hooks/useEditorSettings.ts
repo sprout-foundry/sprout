@@ -59,6 +59,7 @@ export interface UseEditorSettingsReturn {
   indentManuallySet: boolean;
   lineEnding: LineEnding;
   inlayHintsEnabled: boolean;
+  signatureHelpEnabled: boolean;
   
   // Ref mirrors
   wordWrapRef: React.MutableRefObject<boolean>;
@@ -67,6 +68,7 @@ export interface UseEditorSettingsReturn {
   whitespaceRenderingModeRef: React.MutableRefObject<WhitespaceRenderingMode>;
   indentManuallySetRef: React.MutableRefObject<boolean>;
   inlayHintsEnabledRef: React.MutableRefObject<boolean>;
+  signatureHelpEnabledRef: React.MutableRefObject<boolean>;
   
   // Setters for external use (e.g., file loading, buffer changes)
   setEditorTabSize: (v: number) => void;
@@ -84,6 +86,7 @@ export interface UseEditorSettingsReturn {
   onToggleRelativeLineNumbers: () => void;
   onCycleWhitespaceRendering: () => WhitespaceRenderingMode;
   onToggleInlayHints: () => void;
+  onToggleSignatureHelp: () => void;
 }
 
 export interface EditorSettingsCompartments {
@@ -184,6 +187,16 @@ export function useEditorSettings(
     }
   };
 
+  const getStoredSignatureHelpEnabled = (): boolean => {
+    try {
+      const stored = localStorage.getItem('editor:signature-help-enabled');
+      return stored !== null ? stored === 'true' : true;
+    } catch (err) {
+      debugLog('Failed to read signature help setting from localStorage:', err);
+      return true;
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Settings state
   // ---------------------------------------------------------------------------
@@ -217,6 +230,7 @@ export function useEditorSettings(
   const [lineEnding, setLineEnding] = useState<LineEnding>('LF');
 
   const [inlayHintsEnabled, setInlayHintsEnabled] = useState<boolean>(getStoredInlayHintsEnabled);
+  const [signatureHelpEnabled, setSignatureHelpEnabled] = useState<boolean>(getStoredSignatureHelpEnabled);
 
   // ---------------------------------------------------------------------------
   // Ref mirrors for dedup and stale closure avoidance
@@ -233,6 +247,8 @@ export function useEditorSettings(
   const indentManuallySetRef = useRef(false);
   const inlayHintsEnabledRef = useRef(inlayHintsEnabled);
   const lastInlayHintsToggleRef = useRef(0);
+  const signatureHelpEnabledRef = useRef(signatureHelpEnabled);
+  const lastSignatureHelpToggleRef = useRef(0);
 
   // ---------------------------------------------------------------------------
   // Ref sync effects
@@ -258,6 +274,10 @@ export function useEditorSettings(
   useEffect(() => {
     inlayHintsEnabledRef.current = inlayHintsEnabled;
   }, [inlayHintsEnabled]);
+
+  useEffect(() => {
+    signatureHelpEnabledRef.current = signatureHelpEnabled;
+  }, [signatureHelpEnabled]);
 
   // ---------------------------------------------------------------------------
   // Orphaned localStorage cleanup
@@ -435,6 +455,20 @@ export function useEditorSettings(
     }
   }, []);
 
+  const onToggleSignatureHelp = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSignatureHelpToggleRef.current < 100) return;
+    lastSignatureHelpToggleRef.current = now;
+    const next = !signatureHelpEnabledRef.current;
+    signatureHelpEnabledRef.current = next;
+    setSignatureHelpEnabled(next);
+    try {
+      localStorage.setItem('editor:signature-help-enabled', String(next));
+    } catch (err) {
+      debugLog('[onToggleSignatureHelp] localStorage persist failed:', err);
+    }
+  }, []);
+
   return {
     // State
     editorFontSize,
@@ -447,6 +481,7 @@ export function useEditorSettings(
     indentManuallySet,
     lineEnding,
     inlayHintsEnabled,
+    signatureHelpEnabled,
     
     // Ref mirrors
     wordWrapRef,
@@ -455,6 +490,7 @@ export function useEditorSettings(
     whitespaceRenderingModeRef,
     indentManuallySetRef,
     inlayHintsEnabledRef,
+    signatureHelpEnabledRef,
     
     // Setters
     setEditorTabSize,
@@ -472,5 +508,6 @@ export function useEditorSettings(
     onToggleRelativeLineNumbers,
     onCycleWhitespaceRendering,
     onToggleInlayHints,
+    onToggleSignatureHelp,
   };
 }

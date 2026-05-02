@@ -13,6 +13,12 @@ import type { EditorBuffer } from '../types/editor';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const FONT_SIZE_DEFAULT = 14;
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -27,6 +33,9 @@ export interface EditorPaneFooterProps {
     whitespaceRenderingModeRef: { current: WhitespaceRenderingMode };
     onCycleTabSize: () => void;
     onCycleWhitespaceRendering: () => WhitespaceRenderingMode;
+    onZoomIn: () => void;
+    onZoomOut: () => void;
+    onResetZoom: () => void;
   };
   lsp: {
     lspLanguage: string | null;
@@ -67,6 +76,10 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
     }
   };
 
+  const handleResetZoom = () => {
+    settings.onResetZoom();
+  };
+
   return (
     <div className="pane-footer">
       <div className="editor-stats">
@@ -77,11 +90,39 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
           {selectionInfo && selectionInfo.selectionCount !== undefined && selectionInfo.selectionCount > 1 && ` (${selectionInfo.selectionCount} selections)`}
           {selectionInfo && selectionInfo.selectionCount !== undefined && selectionInfo.selectionCount === 1 && ` (${selectionInfo.charCount ?? 0} selected)`}
         </span>
-        {settings.editorFontSize !== 13 && (
-          <span className="zoom-level">
-            Zoom: {Math.round((settings.editorFontSize / 13) * 100)}%
-          </span>
-        )}
+        <span
+          className="zoom-control"
+          role="button"
+          tabIndex={0}
+          onClick={settings.onZoomOut}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); settings.onZoomOut(); }}}
+          title="Zoom out (decrease font size)"
+          style={{ cursor: 'pointer', opacity: 0.7 }}
+        >
+          −
+        </span>
+        <span
+          className="zoom-level"
+          role="button"
+          tabIndex={0}
+          onClick={handleResetZoom}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleResetZoom(); }}}
+          title="Reset zoom to default"
+          style={{ cursor: 'pointer' }}
+        >
+          {Math.round((settings.editorFontSize / FONT_SIZE_DEFAULT) * 100)}%
+        </span>
+        <span
+          className="zoom-control"
+          role="button"
+          tabIndex={0}
+          onClick={settings.onZoomIn}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); settings.onZoomIn(); }}}
+          title="Zoom in (increase font size)"
+          style={{ cursor: 'pointer', opacity: 0.7 }}
+        >
+          +
+        </span>
         <span
           className="tab-size"
           role="button"

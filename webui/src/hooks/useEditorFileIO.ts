@@ -288,12 +288,14 @@ export function useEditorFileIO(
         // Restore scroll position from buffer state.
         if (buf && viewRef.current && (buf.scrollPosition.top > 0 || buf.scrollPosition.left > 0)) {
           const { top, left } = buf.scrollPosition;
-          requestAnimationFrame(() => {
-            if (viewRef.current) {
+          // Use setTimeout with 0 to ensure this runs after the current render cycle
+          // and after CodeMirror has finished layout
+          setTimeout(() => {
+            if (viewRef.current && viewRef.current.scrollDOM) {
               viewRef.current.scrollDOM.scrollTop = top;
               viewRef.current.scrollDOM.scrollLeft = left;
             }
-          });
+          }, 0);
         }
 
         // Fetch git diff after loading file

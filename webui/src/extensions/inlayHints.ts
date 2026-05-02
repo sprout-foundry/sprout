@@ -122,6 +122,8 @@ class InlayHintsPlugin {
     if (update.transactions.some((t) => t.annotation(inlayHintsAnnotation))) {
       return;
     }
+    // Keep view reference current for reconfiguration scenarios.
+    this.view = update.view;
     if (update.docChanged || update.viewportChanged || update.transactions.some((t) => t.reconfigured)) {
       this.scheduleUpdate();
     }
@@ -134,7 +136,7 @@ class InlayHintsPlugin {
 
     this.timeoutId = setTimeout(() => {
       if (this.destroyed) return;
-      this.decorations = this.buildDecorations(this.view);
+      this.decorations = this.buildDecorations();
       this.view.dispatch({
         annotations: [inlayHintsAnnotation.of(true)],
       });
@@ -155,9 +157,9 @@ class InlayHintsPlugin {
     }
   }
 
-  private buildDecorations(view: EditorView): DecorationSet {
+  private buildDecorations(): DecorationSet {
     try {
-      const content = view.state.doc.toString();
+      const content = this.view.state.doc.toString();
       const filePath = this.getFilePath();
 
       // Only render for supported languages
@@ -181,17 +183,17 @@ class InlayHintsPlugin {
           if (this.fetchGeneration !== generation) return;
           this.cachedHints = hints;
           this.cachedContent = content;
-          // Trigger re-render with new hints
-          this.decorations = this.buildViewportDecorations(view);
-          view.dispatch({
+          // Trigger re-render with new hints using current view reference
+          this.decorations = this.buildViewportDecorations(this.view);
+          this.view.dispatch({
             annotations: [inlayHintsAnnotation.of(true)],
           });
         });
         // Keep existing hints visible while fetching new ones (prevents visual flash).
-        return this.buildViewportDecorations(view);
+        return this.buildViewportDecorations(this.view);
       }
 
-      return this.buildViewportDecorations(view);
+      return this.buildViewportDecorations(this.view);
     } catch (err) {
       debugLog('[inlayHints] buildDecorations error:', err);
       return Decoration.none;

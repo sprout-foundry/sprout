@@ -65,6 +65,12 @@ func (a *goSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 		return runGoHover(input)
 	case "rename":
 		return runGoRename(input)
+	case "signature_help":
+		return runGoSignatureHelp(input)
+	case "references":
+		return runGoReferences(input)
+	case "code_actions":
+		return runGoCodeActions(input)
 	case "inlay_hints":
 		if err := a.ensureServerLocked(input.WorkspaceRoot); err != nil {
 			if errors.Is(err, errGoplsNotAvailable) {

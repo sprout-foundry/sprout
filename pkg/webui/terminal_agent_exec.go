@@ -122,21 +122,33 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// Buffer to accumulate output from the PTY.
 	var buf bytes.Buffer
 
-	// Apply a 30s default timeout only when the caller hasn't set one.
-	// This allows callers to pass longer deadlines for slow commands.
-	var cancel context.CancelFunc
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
-	} else {
-		cancel = func() {}
-	}
-	defer cancel()
+	// Always cap the sentinel wait at 30 seconds, independent of the caller's
+	// context deadline. The caller may have a 2+ minute timeout for the tool
+	// execution, but if the PTY sentinel hasn't appeared in 30s, the session is
+	// stuck. The caller can fall back to os/exec with the remaining deadline.
+	// We still respect caller cancellation (context.Canceled) immediately.
+	const sentinelTimeout = 30 * time.Second
+	sentinelCtx, sentinelCancel := context.WithTimeout(context.Background(), sentinelTimeout)
+	defer sentinelCancel()
+
+	// Combine sentinel timeout with caller cancellation.
+	// If the caller cancels (user interrupt), we stop immediately.
+	// If the sentinel timer expires, the session is stuck — close it.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			sentinelCancel() // propagate caller cancellation
+		case <-done:
+		}
+	}()
 
 	// Wait for the sentinel line to appear in the output.
 	for {
 		select {
-		case <-ctx.Done():
-			// Context cancelled or timeout.
+		case <-sentinelCtx.Done():
+			// Sentinel timeout or caller cancellation.
 			// Try to interrupt the running command so the session can be reused.
 			session.mutex.RLock()
 			if session.Pty != nil {
@@ -147,26 +159,24 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			}
 			session.mutex.RUnlock()
 
-			// If the context expired (not cancelled), the shell is likely in a
-			// bad state — close the session so GetOrCreateHiddenSessionForChat
-			// creates a fresh one on the next command. A context.Canceled error
-			// means the user explicitly interrupted; the session may still be OK.
-			if ctx.Err() == context.DeadlineExceeded {
-				log.Printf("PTY session %s: command timed out, closing session for recreation", session.ID)
-				// Close in a goroutine to avoid deadlock — CloseSession acquires
-				// execMu which we're holding. The goroutine will block until
-				// this function returns and releases execMu, then proceed.
-				sid := session.ID
-				go func() {
-					// Brief sleep to let this function return and release execMu.
-					time.Sleep(100 * time.Millisecond)
-					if err := tm.CloseSession(sid); err != nil {
-						log.Printf("PTY session %s: failed to close after timeout: %v", sid, err)
-					}
-				}()
+			// Determine the cause: caller cancellation vs sentinel timeout.
+			// In either case, the shell state is unknown — close the session
+			// so a fresh one is created on the next command.
+			callerCancelled := ctx.Err() != nil
+			if !callerCancelled {
+				log.Printf("PTY session %s: sentinel not detected within %s, closing session for recreation", session.ID, sentinelTimeout)
+			} else {
+				log.Printf("PTY session %s: caller cancelled, closing session for recreation", session.ID)
 			}
+			sid := session.ID
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				if err := tm.CloseSession(sid); err != nil {
+					log.Printf("PTY session %s: failed to close after timeout: %v", sid, err)
+				}
+			}()
 
-			return stripANSI(buf.String()), -1, ctx.Err()
+			return stripANSI(buf.String()), -1, sentinelCtx.Err()
 
 		case chunk, ok := <-sub.ch:
 			if !ok {

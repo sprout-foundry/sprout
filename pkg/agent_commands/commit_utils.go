@@ -171,7 +171,7 @@ func (h *CommitMessageHandler) CreateCommit(commitMessage string) error {
 	defer os.Remove(tempFile)
 
 	fmt.Println("\n[save] Creating commit...")
-	cmd := exec.Command("git", "commit", "-F", tempFile)
+	cmd := gitCommand("commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create commit: %w", err)

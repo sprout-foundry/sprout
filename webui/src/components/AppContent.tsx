@@ -19,6 +19,7 @@ import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import type { ChatSession } from '../services/chatSessions';
+import type { PerChatState } from '../types/app';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 
 const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
@@ -42,7 +43,7 @@ interface ToolExecution {
   message?: string;
   startTime: Date;
   endTime?: Date;
-  details?: any;
+  details?: unknown;
   arguments?: string;
   result?: string;
   persona?: string;
@@ -62,7 +63,7 @@ interface LogEntry {
   id: string;
   type: string;
   timestamp: Date;
-  data: any;
+  data: unknown;
   level: 'info' | 'warning' | 'error' | 'success';
   category: 'query' | 'tool' | 'file' | 'system' | 'stream';
 }
@@ -78,8 +79,8 @@ interface AppState {
   lastError: string | null;
   currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
   toolExecutions: ToolExecution[];
-  queryProgress: any;
-  stats: any;
+  queryProgress: unknown;
+  stats: Record<string, unknown>;
   currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
   fileEdits: Array<{
     path: string;
@@ -142,7 +143,7 @@ interface AppContentProps {
   onRetryConnection?: () => void;
   chatSessions?: ChatSession[];
   activeChatId?: string | null;
-  perChatCache?: Record<string, any>;
+  perChatCache?: Record<string, PerChatState>;
   onActiveChatChange?: (id: string) => void;
   onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string) => void;
@@ -230,10 +231,10 @@ const AppContent: React.FC<AppContentProps> = ({
       if (latest.arguments) {
         const args = JSON.parse(latest.arguments);
         if (Array.isArray(args.todos)) {
-          return args.todos.map((todo: any) => ({
-            id: todo.id || `${todo.content}-${todo.status}`,
+          return args.todos.map((todo: { id?: string; content?: string; status?: string }) => ({
+            id: todo.id || `${todo.content ?? ''}-${todo.status ?? ''}`,
             content: todo.content || '',
-            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(todo.status) ? todo.status : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled'
+            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(todo.status ?? '') ? (todo.status ?? 'pending') : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled'
           }));
         }
       }
@@ -1298,7 +1299,7 @@ const EditorPaneComponent: React.FC<{
   paneId: string;
   isActive?: boolean;
   onClick?: () => void;
-  perChatCache?: Record<string, any>;
+  perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];

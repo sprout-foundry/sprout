@@ -1,4 +1,3 @@
-import type { SproutSettings } from '../../services/api';
 import type { EditorPreferences } from './types';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 

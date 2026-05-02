@@ -10,6 +10,7 @@ import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import type { WsEvent } from '../services/websocket';
+import { getWebUIClientId } from '../services/clientSession';
 import { debugLog, error as logError } from '../utils/log';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
@@ -95,7 +96,6 @@ export function useEventHandler({
     // Determine log level and category based on event type
     switch (event.type) {
       case 'connection_status': {
-        const { getWebUIClientId } = require('../services/clientSession');
         if (eventData?.client_id && eventData.client_id !== getWebUIClientId()) {
           break;
         }
@@ -694,7 +694,7 @@ export function useEventHandler({
         logEntry.category = 'system';
         logEntry.level = 'info';
         debugLog('[workspace] Workspace changed:', eventData);
-        if (!eventData?.client_id || eventData.client_id === require('../services/clientSession').getWebUIClientId()) {
+        if (!eventData?.client_id || eventData.client_id === getWebUIClientId()) {
           if (eventData?.source === 'worktree_switch' || eventData?.source === 'worktree_clear') {
             // Worktree chat switches and clears should NOT hard-reload — they
             // change the workspace root for the active chat but the browser

@@ -100,7 +100,7 @@ export default function ProviderSettingsTab({
 
       <div className="crud-list">
         {providerEntries.map(([name, cfg]) => {
-          const p = cfg as Record<string, unknown>;
+          const p = cfg as unknown as Record<string, unknown>;
           return (
             <div key={name} className="crud-item">
               <span className="crud-item-name">{name}</span>

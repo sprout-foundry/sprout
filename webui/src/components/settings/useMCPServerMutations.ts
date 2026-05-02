@@ -150,7 +150,7 @@ export function useMCPServerMutations(params: MCPMutationParams) {
     setNewCredentialValue('');
     try {
       const resp = await api.getMCPServerCredentials(credentialServerName);
-      const entries = Object.entries(resp.credentials || {}).map(([key, info]: [string, any]) => ({
+      const entries = Object.entries(resp.credentials || {}).map(([key, info]: [string, { status: string }]) => ({
         key,
         value: '',
         status: info.status === 'set' ? 'set' : 'missing',

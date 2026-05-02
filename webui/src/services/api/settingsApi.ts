@@ -2,25 +2,37 @@
  * Settings domain API — adapter-aware settings operations.
  */
 
-export async function getSettings(fetchFn: typeof fetch): Promise<any> {
+import {
+  SproutSettings,
+  MCPSettingsResponse,
+  MCPServerConfig,
+  CustomProvidersResponse,
+  CustomProviderConfig,
+  SkillsResponse,
+  SubagentTypesResponse,
+  UpdateSubagentTypeResponse,
+  HotkeyConfig,
+} from './types';
+
+export async function getSettings(fetchFn: typeof fetch): Promise<SproutSettings> {
   const response = await fetchFn('/api/settings');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function getSettingsLayer(fetchFn: typeof fetch, layer: 'global' | 'workspace' | 'session'): Promise<any> {
+export async function getSettingsLayer(fetchFn: typeof fetch, layer: 'global' | 'workspace' | 'session'): Promise<Record<string, unknown>> {
   const response = await fetchFn(`/api/settings?layer=${layer}`);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function getSettingsProvenance(fetchFn: typeof fetch): Promise<any> {
+export async function getSettingsProvenance(fetchFn: typeof fetch): Promise<{ sources: Record<string, string> }> {
   const response = await fetchFn('/api/settings?layer=provenance');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateSettings(fetchFn: typeof fetch, settings: Record<string, any>, layer?: 'session' | 'workspace' | 'global'): Promise<any> {
+export async function updateSettings(fetchFn: typeof fetch, settings: Record<string, unknown>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
   const url = layer ? `/api/settings?layer=${layer}` : '/api/settings';
   const response = await fetchFn(url, {
     method: 'PUT',
@@ -31,13 +43,13 @@ export async function updateSettings(fetchFn: typeof fetch, settings: Record<str
   return response.json();
 }
 
-export async function getMCPSettings(fetchFn: typeof fetch): Promise<any> {
+export async function getMCPSettings(fetchFn: typeof fetch): Promise<MCPSettingsResponse> {
   const response = await fetchFn('/api/settings/mcp');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateMCPSettings(fetchFn: typeof fetch, settingsData: any): Promise<any> {
+export async function updateMCPSettings(fetchFn: typeof fetch, settingsData: MCPSettingsResponse): Promise<{ message: string }> {
   const response = await fetchFn('/api/settings/mcp', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -47,7 +59,7 @@ export async function updateMCPSettings(fetchFn: typeof fetch, settingsData: any
   return response.json();
 }
 
-export async function addMCPServer(fetchFn: typeof fetch, server: any): Promise<any> {
+export async function addMCPServer(fetchFn: typeof fetch, server: MCPServerConfig): Promise<{ message: string }> {
   const response = await fetchFn('/api/settings/mcp/servers/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -57,7 +69,7 @@ export async function addMCPServer(fetchFn: typeof fetch, server: any): Promise<
   return response.json();
 }
 
-export async function updateMCPServer(fetchFn: typeof fetch, name: string, server: any): Promise<any> {
+export async function updateMCPServer(fetchFn: typeof fetch, name: string, server: MCPServerConfig): Promise<{ message: string }> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -67,19 +79,19 @@ export async function updateMCPServer(fetchFn: typeof fetch, name: string, serve
   return response.json();
 }
 
-export async function deleteMCPServer(fetchFn: typeof fetch, name: string): Promise<any> {
+export async function deleteMCPServer(fetchFn: typeof fetch, name: string): Promise<{ message: string }> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, { method: 'DELETE' });
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function getCustomProviders(fetchFn: typeof fetch): Promise<any> {
+export async function getCustomProviders(fetchFn: typeof fetch): Promise<CustomProvidersResponse> {
   const response = await fetchFn('/api/settings/providers');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function addCustomProvider(fetchFn: typeof fetch, provider: any): Promise<any> {
+export async function addCustomProvider(fetchFn: typeof fetch, provider: CustomProviderConfig): Promise<{ message: string }> {
   const response = await fetchFn('/api/settings/providers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -89,7 +101,7 @@ export async function addCustomProvider(fetchFn: typeof fetch, provider: any): P
   return response.json();
 }
 
-export async function updateCustomProvider(fetchFn: typeof fetch, name: string, provider: any): Promise<any> {
+export async function updateCustomProvider(fetchFn: typeof fetch, name: string, provider: CustomProviderConfig): Promise<{ message: string }> {
   const response = await fetchFn(`/api/settings/providers/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -99,19 +111,19 @@ export async function updateCustomProvider(fetchFn: typeof fetch, name: string, 
   return response.json();
 }
 
-export async function deleteCustomProvider(fetchFn: typeof fetch, name: string): Promise<any> {
+export async function deleteCustomProvider(fetchFn: typeof fetch, name: string): Promise<{ message: string }> {
   const response = await fetchFn(`/api/settings/providers/${encodeURIComponent(name)}`, { method: 'DELETE' });
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function getSkills(fetchFn: typeof fetch): Promise<any> {
+export async function getSkills(fetchFn: typeof fetch): Promise<SkillsResponse> {
   const response = await fetchFn('/api/settings/skills');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateSkills(fetchFn: typeof fetch, skills: any): Promise<any> {
+export async function updateSkills(fetchFn: typeof fetch, skills: SkillsResponse): Promise<{ message: string }> {
   const response = await fetchFn('/api/settings/skills', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -121,13 +133,13 @@ export async function updateSkills(fetchFn: typeof fetch, skills: any): Promise<
   return response.json();
 }
 
-export async function getSubagentTypes(fetchFn: typeof fetch): Promise<any> {
+export async function getSubagentTypes(fetchFn: typeof fetch): Promise<SubagentTypesResponse> {
   const response = await fetchFn('/api/settings/subagent-types');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateSubagentType(fetchFn: typeof fetch, name: string, updates: Record<string, any>): Promise<any> {
+export async function updateSubagentType(fetchFn: typeof fetch, name: string, updates: { provider?: string; model?: string }): Promise<UpdateSubagentTypeResponse> {
   const response = await fetchFn(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -140,13 +152,13 @@ export async function updateSubagentType(fetchFn: typeof fetch, name: string, up
   return response.json();
 }
 
-export async function getHotkeys(fetchFn: typeof fetch): Promise<any> {
+export async function getHotkeys(fetchFn: typeof fetch): Promise<HotkeyConfig> {
   const response = await fetchFn('/api/hotkeys');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateHotkeys(fetchFn: typeof fetch, config: any): Promise<any> {
+export async function updateHotkeys(fetchFn: typeof fetch, config: HotkeyConfig): Promise<{ success: boolean; config: HotkeyConfig }> {
   const response = await fetchFn('/api/hotkeys', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -156,7 +168,7 @@ export async function updateHotkeys(fetchFn: typeof fetch, config: any): Promise
   return response.json();
 }
 
-export async function validateHotkeys(fetchFn: typeof fetch, config: any): Promise<any> {
+export async function validateHotkeys(fetchFn: typeof fetch, config: HotkeyConfig): Promise<{ valid: boolean; config: HotkeyConfig }> {
   const response = await fetchFn('/api/hotkeys/validate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -166,7 +178,7 @@ export async function validateHotkeys(fetchFn: typeof fetch, config: any): Promi
   return response.json();
 }
 
-export async function applyHotkeyPreset(fetchFn: typeof fetch, preset: string): Promise<any> {
+export async function applyHotkeyPreset(fetchFn: typeof fetch, preset: string): Promise<{ success: boolean; preset: string; config: HotkeyConfig }> {
   const response = await fetchFn('/api/hotkeys/preset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

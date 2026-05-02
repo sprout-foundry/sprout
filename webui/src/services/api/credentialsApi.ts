@@ -2,7 +2,15 @@
  * Credentials domain API — adapter-aware credential operations.
  */
 
-export async function getProviderCredentials(fetchFn: typeof fetch): Promise<any> {
+import {
+  ProviderCredentialsResponse,
+  TestProviderConnectionResponse,
+  KeyPoolResponse,
+  MCPServerCredentialsResponse,
+  UpdateMCPServerCredentialsResponse,
+} from './types';
+
+export async function getProviderCredentials(fetchFn: typeof fetch): Promise<ProviderCredentialsResponse> {
   const response = await fetchFn('/api/settings/credentials');
   if (!response.ok) throw new Error(`Failed to fetch provider credentials: HTTP ${response.status}`);
   return response.json();
@@ -32,7 +40,7 @@ export async function deleteProviderCredential(fetchFn: typeof fetch, provider: 
   }
 }
 
-export async function testProviderConnection(fetchFn: typeof fetch, provider: string): Promise<any> {
+export async function testProviderConnection(fetchFn: typeof fetch, provider: string): Promise<TestProviderConnectionResponse> {
   const response = await fetchFn('/api/settings/credentials/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -45,7 +53,7 @@ export async function testProviderConnection(fetchFn: typeof fetch, provider: st
   return response.json();
 }
 
-export async function getKeyPool(fetchFn: typeof fetch, provider: string): Promise<any> {
+export async function getKeyPool(fetchFn: typeof fetch, provider: string): Promise<KeyPoolResponse> {
   const response = await fetchFn(`/api/settings/credentials/pool/${encodeURIComponent(provider)}`);
   if (!response.ok) throw new Error('Failed to fetch key pool');
   return response.json();
@@ -75,13 +83,13 @@ export async function removeKeyFromPool(fetchFn: typeof fetch, provider: string,
   }
 }
 
-export async function getMCPServerCredentials(fetchFn: typeof fetch, serverName: string): Promise<any> {
+export async function getMCPServerCredentials(fetchFn: typeof fetch, serverName: string): Promise<MCPServerCredentialsResponse> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateMCPServerCredentials(fetchFn: typeof fetch, serverName: string, credentials: Record<string, string>): Promise<any> {
+export async function updateMCPServerCredentials(fetchFn: typeof fetch, serverName: string, credentials: Record<string, string>): Promise<UpdateMCPServerCredentialsResponse> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

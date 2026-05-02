@@ -779,7 +779,7 @@ function Sidebar({
           if (!response.ok) throw new Error(`Failed to fetch files: ${response.statusText}`);
           const data = await response.json();
           if (data.message !== 'success') throw new Error(data.message);
-          return (data.files || []).map((file: any) => ({
+          return (data.files || []).map((file: { name: string; path: string; size?: number; modified?: number; mod_time?: number; isDir?: boolean; is_dir?: boolean; git_status?: string }) => ({
             name: file.name,
             path: file.path,
             size: file.size || 0,
@@ -787,7 +787,7 @@ function Sidebar({
             isDir: Boolean(file.isDir ?? file.is_dir),
             ext: (file.isDir ?? file.is_dir) ? '' : file.name.includes('.') ? `.${file.name.split('.').pop() || ''}` : '',
             gitStatus: file.git_status || undefined,
-          })).sort((a: any, b: any) => {
+          })).sort((a: { isDir: boolean; gitStatus?: string; name: string }, b: { isDir: boolean; gitStatus?: string; name: string }) => {
             if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
             if ((a.gitStatus === 'ignored') !== (b.gitStatus === 'ignored')) return a.gitStatus === 'ignored' ? 1 : -1;
             return a.name.localeCompare(b.name);

@@ -2,13 +2,15 @@
  * Onboarding domain API — adapter-aware onboarding operations.
  */
 
-export async function getOnboardingStatus(fetchFn: typeof fetch): Promise<any> {
+import { OnboardingStatusResponse, CompleteOnboardingRequest, CompleteOnboardingResponse } from './types';
+
+export async function getOnboardingStatus(fetchFn: typeof fetch): Promise<OnboardingStatusResponse> {
   const response = await fetchFn('/api/onboarding/status');
   if (!response.ok) throw new Error('Failed to fetch onboarding status');
   return response.json();
 }
 
-export async function completeOnboarding(fetchFn: typeof fetch, payload: Record<string, any>): Promise<any> {
+export async function completeOnboarding(fetchFn: typeof fetch, payload: CompleteOnboardingRequest): Promise<CompleteOnboardingResponse> {
   const response = await fetchFn('/api/onboarding/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

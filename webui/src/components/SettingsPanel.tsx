@@ -4,7 +4,7 @@ import type { SproutSettings } from '../services/api';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
-import { SUB_TABS, type EditorPreferences, type SettingsPanelProps } from './settings/types';
+import { SUB_TABS, type SettingsPanelProps } from './settings/types';
 import { useSettingsState } from './settings/useSettingsState';
 import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
@@ -97,7 +97,8 @@ function SettingsPanel({
   });
 
   // Use field renderers hook
-  const renderers = useSettingsFieldRenderers({
+  // eslint-disable-next-line testing-library/render-result-naming-convention
+  const fieldRenderers = useSettingsFieldRenderers({
     displaySettingsRef: state.displaySettingsRef,
     settings,
     textDrafts: state.textDrafts,
@@ -131,18 +132,18 @@ function SettingsPanel({
           <GeneralSettingsTab
             editorPreferences={editorPreferences}
             onEditorPreferenceChanged={onEditorPreferenceChanged}
-            renderToggle={renderers.renderToggle}
-            renderSelect={renderers.renderSelect}
-            renderTextareaInput={renderers.renderTextareaInput}
+            renderToggle={fieldRenderers.renderToggle}
+            renderSelect={fieldRenderers.renderSelect}
+            renderTextareaInput={fieldRenderers.renderTextareaInput}
           />
         );
 
       case 'security':
         return (
           <SecuritySettingsTab
-            renderToggle={renderers.renderToggle}
-            renderNumberInput={renderers.renderNumberInput}
-            renderSelect={renderers.renderSelect}
+            renderToggle={fieldRenderers.renderToggle}
+            renderNumberInput={fieldRenderers.renderNumberInput}
+            renderSelect={fieldRenderers.renderSelect}
           />
         );
 
@@ -152,7 +153,7 @@ function SettingsPanel({
       case 'performance':
         return (
           <PerformanceSettingsTab
-            renderNumberInput={renderers.renderNumberInput}
+            renderNumberInput={fieldRenderers.renderNumberInput}
           />
         );
 
@@ -167,9 +168,9 @@ function SettingsPanel({
             setSubagentTypes={state.setSubagentTypes}
             updateSetting={mutations.updateSetting}
             addNotification={state.addNotification}
-            renderToggle={renderers.renderToggle}
-            renderNumberInput={renderers.renderNumberInput}
-            renderSelect={renderers.renderSelect}
+            renderToggle={fieldRenderers.renderToggle}
+            renderNumberInput={fieldRenderers.renderNumberInput}
+            renderSelect={fieldRenderers.renderSelect}
             api={state.api}
           />
         );
@@ -186,8 +187,8 @@ function SettingsPanel({
       case 'pdf-ocr':
         return (
           <OcrSettingsTab
-            renderToggle={renderers.renderToggle}
-            renderTextInput={renderers.renderTextInput}
+            renderToggle={fieldRenderers.renderToggle}
+            renderTextInput={fieldRenderers.renderTextInput}
           />
         );
 
@@ -218,8 +219,8 @@ function SettingsPanel({
             setCredentialEntries={state.setCredentialEntries}
             setNewCredentialKey={state.setNewCredentialKey}
             setNewCredentialValue={state.setNewCredentialValue}
-            renderToggle={renderers.renderToggle}
-            renderTextInput={renderers.renderTextInput}
+            renderToggle={fieldRenderers.renderToggle}
+            renderTextInput={fieldRenderers.renderTextInput}
             resetServerForm={mutations.resetServerForm}
             handleAddServer={mutations.handleAddServer}
             handleUpdateServer={mutations.handleUpdateServer}
@@ -293,7 +294,7 @@ function SettingsPanel({
             {tab.label}
           </button>
         ))}
-        {renderers.renderSaving()}
+        {fieldRenderers.renderSaving()}
       </div>
 
       {/* Config Scope Selector — applies to all tabs */}

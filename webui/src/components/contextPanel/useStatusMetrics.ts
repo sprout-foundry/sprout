@@ -96,5 +96,5 @@ export function useStatusMetrics(
       maxToolCount,
       duration,
     };
-  }, [currentTurnTools, chatMessages, chatFileEdits]);
+  }, [chatProps, currentTurnTools, chatMessages, chatFileEdits]);
 }

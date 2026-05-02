@@ -650,7 +650,7 @@ These are high-impact structural improvements identified through code evaluation
 ## Frontend Architecture
 
 [x] - FRONTEND: Decompose App.tsx (2,376 lines) — Extract state management into a reducer or context. Extract event handling into a dedicated `useEventHandler` hook. Target: App.tsx under 500 lines. `webui/src/App.tsx`
-[] - FRONTEND: Decompose oversized components — SettingsPanel.tsx (2,019), LocationSwitcher.tsx (1,885), ContextPanel.tsx (1,829), Chat.tsx (760). Follow the EditorPane extraction pattern from SP-010.
+[x] - FRONTEND: Decompose oversized components — SettingsPanel.tsx (2,019), LocationSwitcher.tsx (1,885), ContextPanel.tsx (1,829), Chat.tsx (760). Follow the EditorPane extraction pattern from SP-010.
 [] - FRONTEND: Eliminate `any` types in critical paths — Define proper TypeScript interfaces for all event types and API responses. Enable `no-explicit-any` as `error` in ESLint. `webui/src/App.tsx`, `contexts/EditorManagerContext.tsx`, `services/api.ts`
 [] - FRONTEND: Deduplicate types between webui and packages/ui — Define shared types in `packages/ui/src/types/` and import from webui. `Message`, `ToolExecution`, and other interfaces are defined independently in both packages.
 [] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`

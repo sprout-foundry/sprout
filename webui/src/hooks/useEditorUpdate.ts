@@ -88,12 +88,15 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
         // Update buffer in global state
         const buf = bufferRef.current;
         if (buf) {
-          updateBufferContent(buf.id, newContent);
-          setBufferModified(buf.id, newContent !== buf.originalContent);
+          // Only update if content actually changed to avoid unnecessary re-renders
+          if (newContent !== buf.content) {
+            updateBufferContent(buf.id, newContent);
+            setBufferModified(buf.id, newContent !== buf.originalContent);
 
-          // Trigger diagnostics for file buffers (excluding workspace buffers)
-          if (buf.kind === 'file' && buf.file && !buf.file.path.startsWith('__workspace/')) {
-            fetchDiagnosticsRef.current(buf.file.path, newContent, 'edit');
+            // Trigger diagnostics for file buffers (excluding workspace buffers)
+            if (buf.kind === 'file' && buf.file && !buf.file.path.startsWith('__workspace/')) {
+              fetchDiagnosticsRef.current(buf.file.path, newContent, 'edit');
+            }
           }
         }
       }
@@ -104,7 +107,6 @@ export function useEditorUpdate(params: UseEditorUpdateParams): UseEditorUpdateR
     [
       bufferRef,
       fetchDiagnosticsRef,
-      localContentRef,
       setLocalContent,
       isExternalUpdateRef,
       handleCursorUpdate,

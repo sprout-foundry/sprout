@@ -510,66 +510,22 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return nil, "", fmt.Errorf("parameter validation failed for tool '%s': %w", toolName, err)
 	}
 
-	// Execute the tool handler — prefer the image-capable handler when set
+	// Execute the tool handler — prefer the image-capable handler when set.
+	// Filesystem security errors (ErrOutsideWorkingDirectory) are caught and
+	// retried with user approval inside each handler (see tool_handlers_file.go,
+	// tool_handlers_structured.go) so there's no need for a second catch here.
 	if tool.HandlerImages != nil {
 		imgs, result, execErr := tool.HandlerImages(ctx, agent, validatedArgs)
 		if execErr != nil {
-			// Check if the error is a filesystem security violation and prompt the user
-			if agent != nil && (errors.Is(execErr, filesystem.ErrOutsideWorkingDirectory) || errors.Is(execErr, filesystem.ErrWriteOutsideWorkingDirectory)) {
-				filePath := extractFilePathFromArgs(args)
-				newCtx, approved := handleFileSecurityError(ctx, agent, toolName, filePath, execErr)
-				if approved {
-					// User approved — retry with bypass context
-					imgs, result, execErr = tool.HandlerImages(newCtx, agent, validatedArgs)
-					if execErr != nil {
-						return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
-					}
-					return imgs, result, nil
-				}
-				// User rejected or no prompt available — return security error
-				return nil, result, agenterrors.NewSecurityError(fmt.Sprintf("file access outside working directory rejected: %s — %s", toolName, filePath), execErr)
-			}
 			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
 		}
 		return imgs, result, nil
 	}
 	result, err := tool.Handler(ctx, agent, validatedArgs)
 	if err != nil {
-		// Check if the error is a filesystem security violation and prompt the user
-		if agent != nil && (errors.Is(err, filesystem.ErrOutsideWorkingDirectory) || errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory)) {
-			filePath := extractFilePathFromArgs(args)
-			newCtx, approved := handleFileSecurityError(ctx, agent, toolName, filePath, err)
-			if approved {
-				// User approved — retry with bypass context
-				result, err = tool.Handler(newCtx, agent, validatedArgs)
-				if err != nil {
-					return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
-				}
-				return nil, result, nil
-			}
-			// User rejected or no prompt available — return security error
-			return nil, result, agenterrors.NewSecurityError(fmt.Sprintf("file access outside working directory rejected: %s — %s", toolName, filePath), err)
-		}
 		return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
 	}
 	return nil, result, nil
-}
-
-// extractFilePathFromArgs extracts the file path from tool arguments for error messages
-func extractFilePathFromArgs(args map[string]interface{}) string {
-	// Most file tools use "path" as the parameter name
-	if path, ok := args["path"].(string); ok && path != "" {
-		return path
-	}
-	// Some tools use "file_path"
-	if path, ok := args["file_path"].(string); ok && path != "" {
-		return path
-	}
-	// read_file uses "file_path"
-	if path, ok := args["filePath"].(string); ok && path != "" {
-		return path
-	}
-	return "<unknown path>"
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user

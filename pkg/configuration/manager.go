@@ -162,7 +162,7 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 	}
 
 	// Load config from explicit directory without mutating env vars
-	config, err := LoadConfigWithLayers(configPath, "", "")
+	config, err := LoadConfigWithLayers(configPath, "", "", configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config from %q: %w", configDir, err)
 	}
@@ -205,7 +205,7 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 	}
 
 	// Load merged config (global + workspace, no session layer)
-	config, err := LoadConfigWithLayers(globalPath, workspacePath, "")
+	config, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
 	if err != nil {
 		return nil, fmt.Errorf("load layered config: %w", err)
 	}
@@ -239,7 +239,8 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 // LoadConfigWithLayers loads configuration from three layers:
 // globalPath -> workspacePath -> sessionPath (each overrides previous)
 // Each layer is optional; missing layers are skipped.
-func LoadConfigWithLayers(globalPath, workspacePath, sessionPath string) (*Config, error) {
+// globalDir is the directory for global providers (used when globalPath is empty but custom providers need loading).
+func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir string) (*Config, error) {
 	var result *Config
 
 	// 1. Load global config (base)
@@ -293,11 +294,9 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath string) (*Confi
 	var globalProvidersDir string
 	if globalPath != "" {
 		globalProvidersDir = filepath.Join(filepath.Dir(globalPath), ProvidersDirName)
-	} else {
-		// Fallback: use the default global config dir's providers subdirectory.
-		if configDir, dirErr := getDefaultConfigDir(); dirErr == nil {
-			globalProvidersDir = filepath.Join(configDir, ProvidersDirName)
-		}
+	} else if globalDir != "" {
+		// Use explicit globalDir if available (for hermetic environments)
+		globalProvidersDir = filepath.Join(globalDir, ProvidersDirName)
 	}
 	if globalProvidersDir != "" {
 		fileProviders, err := LoadCustomProvidersFromDir(globalProvidersDir)
@@ -586,9 +585,14 @@ func (m *Manager) EnrichCustomProviders() {
 	if m.config.CustomProviders == nil {
 		m.config.CustomProviders = make(map[string]CustomProviderConfig)
 	}
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return
+	// Use manager's explicit configDir if set, otherwise fall back to env-based resolution.
+	configDir := m.configDir
+	if configDir == "" {
+		var err error
+		configDir, err = GetConfigDir()
+		if err != nil {
+			return
+		}
 	}
 	providersDir := filepath.Join(configDir, ProvidersDirName)
 	fileProviders, err := LoadCustomProvidersFromDir(providersDir)

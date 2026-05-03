@@ -19,14 +19,14 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
     return null;
   }
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (import.meta.env.PROD ? "production" : "development" !== 'production') {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
     return null;
   }
 
   try {
-    const swUrl = `${process.env.PUBLIC_URL || ''}/sw.js`;
+    const swUrl = `${import.meta.env.PUBLIC_URL || ''}/sw.js`;
     const registration = await navigator.serviceWorker.register(swUrl);
     await registration.update();
     debugLog('SW registered:', registration);

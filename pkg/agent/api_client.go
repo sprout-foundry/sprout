@@ -360,6 +360,13 @@ func (ac *APIClient) SendWithRetry(messages []api.Message, tools []api.Tool, rea
 
 // sendRequest sends a single request to the LLM
 func (ac *APIClient) sendRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	// Proactive per-provider rate limiting to prevent cascading 429s
+	// when multiple agents share the same provider.
+	limiter := utils.GetProviderRateLimiter(ac.agent.GetProvider())
+	if err := limiter.Wait(ac.agent.interruptCtx); err != nil {
+		return nil, agenterrors.NewTransientError("rate limit wait canceled", err)
+	}
+
 	// Estimate and store the current request's token count before sending
 	ac.agent.state.SetCurrentContextTokens(ac.estimateRequestTokens(messages, tools))
 

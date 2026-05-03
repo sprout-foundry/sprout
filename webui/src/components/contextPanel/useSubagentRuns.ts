@@ -2,8 +2,8 @@ import { useMemo, useCallback } from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import type {
   ChatContextPanelProps,
-  SubagentRun,
-  NormalizedActivity,
+  ContextSubagentRun,
+  ContextNormalizedActivity,
 } from './types';
 import { isSubagentTool, getSubagentPrompt } from './helpers';
 
@@ -41,7 +41,7 @@ export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
   }, []);
 
   const normalizeSubagentActivity = useCallback(
-    (rawMessage: string): NormalizedActivity => {
+    (rawMessage: string): ContextNormalizedActivity => {
       const cleaned = stripAnsiCodes(rawMessage).trim();
       const taskMatch = cleaned.match(/^→\s+\[([^\]]+)\]\s+Subagent:\s+(.*)$/);
       if (taskMatch) {
@@ -86,7 +86,7 @@ export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
     [summarizeExecutionTarget],
   );
 
-  return useMemo<SubagentRun[]>(() => {
+  return useMemo<ContextSubagentRun[]>(() => {
     return subagentToolExecutions.filter(isSubagentTool).map((tool) => {
       const structuredActivities = subagentActivities
         .filter((activity) => {

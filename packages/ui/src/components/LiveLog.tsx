@@ -1,14 +1,8 @@
 import { useRef, useEffect, useCallback } from 'react';
+import type { LiveLogLine } from '../types/chat';
 import './LiveLog.css';
 
 // ── Live Log Scroller Component ────────────────────────────────────
-
-export interface LiveLogLine {
-  id: string;
-  text: string;
-  timestamp: Date;
-  taskId?: string;
-}
 
 export interface LiveLogProps {
   lines: LiveLogLine[];

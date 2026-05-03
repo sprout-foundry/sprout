@@ -1,21 +1,21 @@
 import type { SproutSettings, ProviderOption } from '../../services/api';
+import type { SubagentTypeInfo } from '../../services/api/types';
 import { getNestedValue } from './settingsHelpers';
-import type { SubagentTypeEntry } from './types';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
 interface SubagentSettingsTabProps {
   settings: SproutSettings;
   subagentProviders: ProviderOption[];
-  subagentTypes: Record<string, SubagentTypeEntry>;
+  subagentTypes: Record<string, SubagentTypeInfo>;
   subagentSavingPersona: string | null;
   setSubagentSavingPersona: (v: string | null) => void;
-  setSubagentTypes: (v: Record<string, SubagentTypeEntry> | ((prev: Record<string, SubagentTypeEntry>) => Record<string, SubagentTypeEntry>)) => void;
   updateSetting: (keyOrPath: string, value: unknown) => Promise<void>;
   addNotification: (type: 'success' | 'error' | 'info', title: string, message: string, duration?: number) => string;
   renderToggle: FieldRenderers['renderToggle'];
   renderNumberInput: FieldRenderers['renderNumberInput'];
   renderSelect: FieldRenderers['renderSelect'];
   api: { updateSubagentType: (id: string, data: Record<string, unknown>) => Promise<unknown> };
+  setSubagentTypes: (v: Record<string, SubagentTypeInfo> | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>)) => void;
 }
 
 export default function SubagentSettingsTab({
@@ -144,7 +144,7 @@ export default function SubagentSettingsTab({
                         provider: e.target.value,
                         model: '',
                       });
-                      setSubagentTypes((prev: Record<string, SubagentTypeEntry>) => ({
+                      setSubagentTypes((prev: Record<string, SubagentTypeInfo>) => ({
                         ...prev,
                         [personaId]: {
                           ...prev[personaId],
@@ -177,7 +177,7 @@ export default function SubagentSettingsTab({
                       await api.updateSubagentType(personaId, {
                         model: e.target.value,
                       });
-                      setSubagentTypes((prev: Record<string, SubagentTypeEntry>) => ({
+                      setSubagentTypes((prev: Record<string, SubagentTypeInfo>) => ({
                         ...prev,
                         [personaId]: { ...prev[personaId], model: e.target.value },
                       }));

@@ -5,67 +5,15 @@
  * into structured segments for rendering in the UI.
  */
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * A todo item representing a task with its status
- */
-export interface TodoItem {
-  id: string;
-  content: string;
-  status: string; // 'pending', 'in_progress', 'completed', etc.
-}
-
-/**
- * A text segment containing plain prose (markdown-ready)
- */
-export interface TextSegment {
-  type: 'text';
-  content: string;
-}
-
-/**
- * A tool call segment representing a tool execution
- */
-export interface ToolCallSegment {
-  type: 'tool_call';
-  toolId: string;
-  toolName: string;
-  summary?: string;
-}
-
-/**
- * A todo update segment containing a list of todos
- */
-export interface TodoUpdateSegment {
-  type: 'todo_update';
-  todos: Array<{ id: string; content: string; status: string }>;
-}
-
-/**
- * A progress segment showing agent activity
- */
-export interface ProgressSegment {
-  type: 'progress';
-  message: string;
-  details?: string;
-}
-
-/**
- * A result segment showing a completion or error status
- */
-export interface ResultSegment {
-  type: 'result';
-  label: string;
-  content: string;
-}
-
-/**
- * Discriminated union type representing all message segment types
- */
-export type MessageSegment = TextSegment | ToolCallSegment | TodoUpdateSegment | ProgressSegment | ResultSegment;
+import type { TodoItem, TodoStatus } from '../types/chat';
+import type {
+  TextSegment,
+  ToolCallSegment,
+  TodoUpdateSegment,
+  ProgressSegment,
+  ResultSegment,
+  MessageSegment,
+} from '../types/message-segments';
 
 // ============================================================================
 // Pattern Regexes
@@ -139,7 +87,7 @@ function parseTodoLine(line: string): TodoItem | null {
   const statusSymbol = match[1];
   const content = match[2].trim();
 
-  let status: string;
+  let status: TodoStatus;
   switch (statusSymbol) {
     case 'x':
       status = 'completed';
@@ -291,7 +239,7 @@ export function parseMessageSegments(rawContent: string): MessageSegment[] {
 
     // Check for todo lines (group consecutive ones)
     if (isTodoLine(line)) {
-      const todos: Array<{ id: string; content: string; status: string }> = [];
+      const todos: TodoItem[] = [];
 
       while (i < lines.length && isTodoLine(lines[i])) {
         const todo = parseTodoLine(lines[i]);
@@ -384,8 +332,5 @@ export function parseMessageSegments(rawContent: string): MessageSegment[] {
   return mergedSegments;
 }
 
-// ============================================================================
-// Export
-// ============================================================================
-
-// All types are already exported as interfaces above
+// Re-export MessageSegment type for backward compatibility
+export type { MessageSegment } from '../types/message-segments';

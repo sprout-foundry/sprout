@@ -56,6 +56,32 @@ func GetAPIKeysPath() (string, error) {
 	return filepath.Join(configDir, apiKeysFileName), nil
 }
 
+// GetAPIKeysPathFromDir returns the path to the API keys file in a specific config directory.
+func GetAPIKeysPathFromDir(configDir string) (string, error) {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create config directory: %w", err)
+	}
+	return filepath.Join(configDir, apiKeysFileName), nil
+}
+
+// GetAPIKeysLockPath returns the path to the API keys lock file.
+func GetAPIKeysLockPath() (string, error) {
+	path, err := GetAPIKeysPath()
+	if err != nil {
+		return "", err
+	}
+	return path + ".lock", nil
+}
+
+// GetAPIKeysLockPathFromDir returns the path to the API keys lock file in a specific config directory.
+func GetAPIKeysLockPathFromDir(configDir string) (string, error) {
+	path, err := GetAPIKeysPathFromDir(configDir)
+	if err != nil {
+		return "", err
+	}
+	return path + ".lock", nil
+}
+
 // GetMachineKeyPath returns the path to the machine key file.
 func GetMachineKeyPath() (string, error) {
 	configDir, err := GetConfigDir()
@@ -65,11 +91,27 @@ func GetMachineKeyPath() (string, error) {
 	return filepath.Join(configDir, machineKeyFileName), nil
 }
 
+// GetMachineKeyPathFromDir returns the path to the machine key file in a specific config directory.
+func GetMachineKeyPathFromDir(configDir string) (string, error) {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create config directory: %w", err)
+	}
+	return filepath.Join(configDir, machineKeyFileName), nil
+}
+
 // encryptionModePath returns the path to the encryption mode file.
 // The mode file tracks whether API keys are encrypted with "machine-key" or "passphrase".
 func encryptionModePath() (string, error) {
 	configDir, err := GetConfigDir()
 	if err != nil {
+		return "", err
+	}
+	return filepath.Join(configDir, "api_keys.mode"), nil
+}
+
+// encryptionModePathFromDir returns the path to the encryption mode file in a specific config directory.
+func encryptionModePathFromDir(configDir string) (string, error) {
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return "", err
 	}
 	return filepath.Join(configDir, "api_keys.mode"), nil
@@ -98,6 +140,29 @@ func GetEncryptionMode() (string, error) {
 	return "", nil
 }
 
+// GetEncryptionModeFromDir returns the current encryption mode from a specific config directory.
+// Returns an empty string if no mode file exists (legacy or plaintext files).
+func GetEncryptionModeFromDir(configDir string) (string, error) {
+	modePath, err := encryptionModePathFromDir(configDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to get mode file path: %w", err)
+	}
+
+	data, err := os.ReadFile(modePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil // No mode file yet
+		}
+		return "", fmt.Errorf("failed to read mode file: %w", err)
+	}
+
+	mode := strings.TrimSpace(string(data))
+	if mode == "machine-key" || mode == "passphrase" {
+		return mode, nil
+	}
+	return "", nil
+}
+
 // SetEncryptionMode writes the encryption mode file.
 // mode should be "machine-key" or "passphrase".
 func SetEncryptionMode(mode string) error {
@@ -105,6 +170,19 @@ func SetEncryptionMode(mode string) error {
 		return fmt.Errorf("invalid encryption mode: %q (must be 'machine-key' or 'passphrase')", mode)
 	}
 	modePath, err := encryptionModePath()
+	if err != nil {
+		return fmt.Errorf("failed to get mode file path: %w", err)
+	}
+	return AtomicWriteFile(modePath, []byte(mode+"\n"), 0600)
+}
+
+// SetEncryptionModeForDir writes the encryption mode file in a specific config directory.
+// mode should be "machine-key" or "passphrase".
+func SetEncryptionModeForDir(configDir, mode string) error {
+	if mode != "machine-key" && mode != "passphrase" {
+		return fmt.Errorf("invalid encryption mode: %q (must be 'machine-key' or 'passphrase')", mode)
+	}
+	modePath, err := encryptionModePathFromDir(configDir)
 	if err != nil {
 		return fmt.Errorf("failed to get mode file path: %w", err)
 	}

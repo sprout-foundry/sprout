@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import type { EditorBuffer, EditorPane, PaneLayout, EditorFileEntry } from '../types/editor';
+import type { EditorBuffer, EditorPane, PaneLayout, PaneSize, EditorFileEntry } from '../types/editor';
 import { showThemedPrompt, showThemedConfirm } from '@sprout/ui';
 import { type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
@@ -143,10 +143,6 @@ async function writeFileWithFetch(
     }),
     fetchFn,
   );
-}
-
-interface PaneSize {
-  [paneId: string]: number; // Size in pixels or percentage
 }
 
 interface EditorManagerContextValue {

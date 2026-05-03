@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState, useEffect } from 'react';
-import LiveLog, { type LiveLogLine } from './LiveLog';
+import LiveLog from './LiveLog';
+import type { LiveLogLine } from '../types/chat';
 
 const meta = {
   title: 'Components/LiveLog',

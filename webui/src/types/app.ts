@@ -8,6 +8,32 @@
 import type { ChatSession } from '../services/chatSessions';
 import type { OnboardingEnvironment, OnboardingProviderOption } from '../services/api';
 
+// Import canonical types from @sprout/ui
+import type {
+  Message,
+  ToolExecution,
+  SubagentActivity,
+  LogEntry,
+  TodoStatus,
+  TodoItem,
+  FileEdit,
+  ToolRef,
+} from '@sprout/ui';
+
+// Re-export for downstream consumers
+export type {
+  Message,
+  ToolExecution,
+  SubagentActivity,
+  LogEntry,
+  TodoStatus,
+  TodoItem,
+  FileEdit,
+  ToolRef,
+};
+
+// ── WebUI-specific Types ─────────────────────────────────────────────
+
 export interface WorktreeInfo {
   path: string;
   branch: string;
@@ -15,72 +41,6 @@ export interface WorktreeInfo {
   is_current: boolean;
   parent_path?: string;
   parent_branch?: string;
-}
-
-export interface ToolExecution {
-  id: string;
-  tool: string;
-  status: 'started' | 'running' | 'completed' | 'error';
-  message?: string;
-  startTime: Date;
-  endTime?: Date;
-  details?: unknown;
-  arguments?: string;
-  result?: string;
-  persona?: string;
-  subagentType?: 'single' | 'parallel';
-  queryId?: number;
-  toolIndex?: number;
-}
-
-export interface Message {
-  id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
-}
-
-export interface LogEntry {
-  id: string;
-  type: string;
-  timestamp: Date;
-  data: unknown;
-  level: 'info' | 'warning' | 'error' | 'success';
-  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
-}
-
-export interface SubagentActivity {
-  id: string;
-  toolCallId: string;
-  toolName: string;
-  phase: 'spawn' | 'output' | 'complete';
-  message: string;
-  timestamp: Date;
-  taskId?: string;
-  persona?: string;
-  isParallel?: boolean;
-  provider?: string;
-  model?: string;
-  taskCount?: number;
-  failures?: number;
-}
-
-export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
-
-export interface TodoItem {
-  id: string;
-  content: string;
-  status: TodoStatus;
-}
-
-export interface FileEdit {
-  path: string;
-  action: string;
-  timestamp: Date;
-  linesAdded?: number;
-  linesDeleted?: number;
 }
 
 export interface PerChatState {
@@ -108,7 +68,7 @@ export interface AppState {
   logs: LogEntry[];
   isProcessing: boolean;
   lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
   toolExecutions: ToolExecution[];
   queryProgress: unknown;
   stats: Record<string, unknown>; // Enhanced stats from API

@@ -6,7 +6,7 @@ import type {
   Revision,
   RevisionDetailFile,
 } from './types';
-import { normalizeRevision, buildRevisionFileKey } from './helpers';
+import { normalizeRevision, buildRevisionFileKey } from '@sprout/ui';
 
 export function useRevisionManager(
   chatProps: ChatContextPanelProps | null,

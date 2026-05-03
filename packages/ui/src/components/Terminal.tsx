@@ -6,6 +6,7 @@ import './Terminal.css';
 import TerminalPane from './TerminalPane';
 import TerminalTabBar, { type TerminalSession } from './TerminalTabBar';
 import { FONT_SIZE_DEFAULT } from './terminalConstants';
+import type { ShellInfo } from '../types/terminal';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
 
@@ -33,12 +34,6 @@ interface TerminalPaneData {
   id: string;
   sessions: TerminalSession[];
   activeSessionId: string;
-}
-
-export interface ShellInfo {
-  name: string;
-  path: string;
-  is_default?: boolean;
 }
 
 export interface TerminalProps {

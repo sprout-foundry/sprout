@@ -5,18 +5,12 @@ import {
   type NotificationEvent,
   type NotificationType as BusNotificationType,
 } from '../services/notificationBus';
+import type { NotificationData } from '../types/notification';
 
 // Re-export NotificationType for convenience
 export type NotificationType = BusNotificationType;
 
-export type Notification = {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  duration?: number;
-  createdAt: number;
-}
+export type Notification = NotificationData;
 
 interface NotificationState {
   notifications: Notification[];

@@ -106,11 +106,13 @@ export { showThemedAlert, showThemedConfirm, showThemedPrompt } from './componen
 
 // ── Utilities ─────────────────────────────────────────────────────────
 export { generateUUID } from './utils/uuid';
-export { detectLineEnding } from './utils/lineEndingDetect';
+export { detectLineEnding, type LineEnding, type LineEndingDetectionResult } from './utils/lineEndingDetect';
 export { copyToClipboard } from './utils/clipboard';
 export { fuzzyScore, fuzzyFilter, highlightMatches, type FuzzyResult } from './utils/fuzzyMatch';
 export { debugLog } from './utils/log';
 export { groupSubagentRuns } from './utils/subagentGrouping';
+export { stripAnsiCodes, hasAnsiCodes, ansiToHtml } from './utils/ansi';
+export { getStatusInfo } from './utils/git';
 export type { CommandHistoryState, CommandHistoryApi } from './components/command_input_history';
 export {
   createEmptyState,

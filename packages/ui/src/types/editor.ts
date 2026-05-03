@@ -8,17 +8,19 @@
 
 export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome' | 'compare';
 
+export interface EditorFileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modified: number;
+  ext?: string;
+}
+
 export interface EditorBuffer {
   id: string;
   kind: EditorBufferKind;
-  file: {
-    name: string;
-    path: string;
-    isDir: boolean;
-    size: number;
-    modified: number;
-    ext?: string;
-  };
+  file: EditorFileEntry;
   content: string;
   originalContent: string; // Content when file was loaded/reset
   cursorPosition: {
@@ -46,7 +48,7 @@ export interface EditorPane {
   id: string;
   bufferId: string | null; // null = empty pane
   isActive: boolean;
-  position?: 'primary' | 'secondary' | 'tertiary' | 'quaternary';
+  position?: 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary' | 'senary';
   dimensions?: {
     width: number | string;
     height: number | string;

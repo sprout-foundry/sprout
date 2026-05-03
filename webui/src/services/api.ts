@@ -1,4 +1,6 @@
 import { clientFetch } from './clientSession';
+import type { ShellInfo } from '@sprout/ui';
+import type { ChangelogResponse, ChangesResponse, RevisionDetailResponse, RollbackResponse } from './api/types';
 
 interface StatsResponse {
   // Basic info
@@ -197,12 +199,6 @@ export class SSHWorkspaceOpenError extends Error {
     this.details = payload.details;
     this.logPath = payload.log_path;
   }
-}
-
-export interface ShellInfo {
-  name: string;
-  path: string;
-  default: boolean;
 }
 
 export interface WorkspaceResponse {
@@ -1532,20 +1528,7 @@ class ApiService {
   }
 
   // History and Rollback API methods
-  async getChangelog(): Promise<{
-    message: string;
-    revisions: Array<{
-      revision_id: string;
-      timestamp: string;
-      files: Array<{
-        path: string;
-        operation: string;
-        lines_added: number;
-        lines_deleted: number;
-      }>;
-      description: string;
-    }>;
-  }> {
+  async getChangelog(): Promise<ChangelogResponse> {
     try {
       const cacheBuster = Date.now();
       const response = await clientFetch(`/api/history/changelog?_=${cacheBuster}`, {
@@ -1561,20 +1544,7 @@ class ApiService {
     }
   }
 
-  async getChanges(): Promise<{
-    message: string;
-    changes: Array<{
-      revision_id: string;
-      timestamp: string;
-      files: Array<{
-        path: string;
-        operation: string;
-        lines_added: number;
-        lines_deleted: number;
-      }>;
-      description: string;
-    }>;
-  }> {
+  async getChanges(): Promise<ChangesResponse> {
     try {
       const cacheBuster = Date.now();
       const response = await clientFetch(`/api/history/changes?_=${cacheBuster}`, {
@@ -1590,24 +1560,7 @@ class ApiService {
     }
   }
 
-  async getRevisionDetails(revisionId: string): Promise<{
-    message: string;
-    revision: {
-      revision_id: string;
-      timestamp: string;
-      description: string;
-      files: Array<{
-        file_revision_hash?: string;
-        path: string;
-        operation: string;
-        lines_added: number;
-        lines_deleted: number;
-        original_code: string;
-        new_code: string;
-        diff: string;
-      }>;
-    };
-  }> {
+  async getRevisionDetails(revisionId: string): Promise<RevisionDetailResponse> {
     try {
       const cacheBuster = Date.now();
       const response = await clientFetch(
@@ -1624,7 +1577,7 @@ class ApiService {
     }
   }
 
-  async rollbackToRevision(revisionId: string): Promise<{ message: string; revision_id: string }> {
+  async rollbackToRevision(revisionId: string): Promise<RollbackResponse> {
     try {
       const response = await clientFetch('/api/history/rollback', {
         method: 'POST',
@@ -2101,6 +2054,7 @@ class ApiService {
 
 export { ApiService };
 export type { StatsResponse, QueryRequest, FilesResponse, SearchMatch, SearchResult };
+export type { ShellInfo } from '@sprout/ui';
 export interface ProvidersResponse {
   providers: Array<{
     id: string;

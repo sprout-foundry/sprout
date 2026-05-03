@@ -1301,12 +1301,12 @@ function App() {
             isProcessing: activeRequestsRef.current > 0,
             queryProgress: null,
             lastError: errorMessage,
-            messages: [...prev.messages, {
+            messages: trimMessages([...prev.messages, {
               id: generateMessageId(),
               type: 'assistant',
               content: `[FAIL] Error: ${errorMessage}`,
               timestamp: new Date()
-            }],
+            }]),
             logs: [...prev.logs, logEntry]
           }));
           // Fetch fresh provider state from backend to ensure sync
@@ -1333,12 +1333,12 @@ function App() {
             isProcessing: activeRequestsRef.current > 0,
             queryProgress: null,
             lastError: errorMessage,
-            messages: [...prev.messages, {
+            messages: trimMessages([...prev.messages, {
               id: generateMessageId(),
               type: 'assistant',
               content: `[FAIL] Error: ${errorMessage}`,
               timestamp: new Date()
-            }],
+            }]),
             logs: [...prev.logs, logEntry]
           }));
         }
@@ -1710,12 +1710,12 @@ function App() {
       setState(prev => ({
         ...prev,
         lastError: null,
-        messages: [...prev.messages, {
+        messages: trimMessages([...prev.messages, {
           id: generateMessageId(),
           type: 'user',
           content: trimmedMessage,
           timestamp: new Date()
-        }]
+        }])
       }));
       await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
       setInputValue('');
@@ -1745,12 +1745,12 @@ function App() {
         ...prev,
         isProcessing: activeRequestsRef.current > 0,
         lastError: `Failed to send message: ${errorMsg}`,
-        messages: [...prev.messages, {
+        messages: trimMessages([...prev.messages, {
           id: generateMessageId(),
           type: 'assistant',
           content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
-        }]
+        }])
       }));
     }
   }, [apiService]);
@@ -1785,12 +1785,12 @@ function App() {
         isProcessing: false,
         queryProgress: null,
         lastError: errorMsg,
-        messages: [...prev.messages, {
+        messages: trimMessages([...prev.messages, {
           id: generateMessageId(),
           type: 'assistant',
           content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
-        }]
+        }])
       }));
     }
   }, [apiService]);
@@ -1812,12 +1812,12 @@ function App() {
       setState(prev => ({
         ...prev,
         lastError: `Failed to send queued message: ${errorMsg}`,
-        messages: [...prev.messages, {
+        messages: trimMessages([...prev.messages, {
           id: generateMessageId(),
           type: 'assistant',
           content: `[FAIL] Error: ${errorMsg}`,
           timestamp: new Date()
-        }]
+        }])
       }));
     });
   }, [state.isProcessing, handleSendMessage]);

@@ -517,8 +517,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			// Check if the error is a filesystem security violation and prompt the user
 			if agent != nil && (errors.Is(execErr, filesystem.ErrOutsideWorkingDirectory) || errors.Is(execErr, filesystem.ErrWriteOutsideWorkingDirectory)) {
 				filePath := extractFilePathFromArgs(args)
-				newCtx := handleFileSecurityError(ctx, agent, toolName, filePath, execErr)
-				if filesystem.SecurityBypassEnabled(newCtx) {
+				newCtx, approved := handleFileSecurityError(ctx, agent, toolName, filePath, execErr)
+				if approved {
 					// User approved — retry with bypass context
 					imgs, result, execErr = tool.HandlerImages(newCtx, agent, validatedArgs)
 					if execErr != nil {
@@ -526,6 +526,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					}
 					return imgs, result, nil
 				}
+				// User rejected or no prompt available — return security error
+				return nil, result, agenterrors.NewSecurityError(fmt.Sprintf("file access outside working directory rejected: %s — %s", toolName, filePath), execErr)
 			}
 			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
 		}
@@ -536,8 +538,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		// Check if the error is a filesystem security violation and prompt the user
 		if agent != nil && (errors.Is(err, filesystem.ErrOutsideWorkingDirectory) || errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory)) {
 			filePath := extractFilePathFromArgs(args)
-			newCtx := handleFileSecurityError(ctx, agent, toolName, filePath, err)
-			if filesystem.SecurityBypassEnabled(newCtx) {
+			newCtx, approved := handleFileSecurityError(ctx, agent, toolName, filePath, err)
+			if approved {
 				// User approved — retry with bypass context
 				result, err = tool.Handler(newCtx, agent, validatedArgs)
 				if err != nil {
@@ -545,6 +547,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				}
 				return nil, result, nil
 			}
+			// User rejected or no prompt available — return security error
+			return nil, result, agenterrors.NewSecurityError(fmt.Sprintf("file access outside working directory rejected: %s — %s", toolName, filePath), err)
 		}
 		return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
 	}
@@ -632,75 +636,70 @@ func formatRiskType(riskType string) string {
 
 // handleFileSecurityError checks if an error is due to filesystem security and prompts the user
 // Returns a context with security bypass enabled if user approves, original context otherwise
-func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePath string, err error) context.Context {
+func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePath string, err error) (context.Context, bool) {
 	// Check if this is a filesystem security error
-	if errors.Is(err, filesystem.ErrOutsideWorkingDirectory) || errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
-		// Unsafe mode bypasses filesystem security checks automatically
-		if agent.GetUnsafeMode() {
-			agent.debugLog("[UNLOCK] Unsafe mode: automatically allowing file access outside working directory: %s\n", filePath)
-			return filesystem.WithSecurityBypass(ctx)
-		}
-
-		// If user already approved filesystem access this session, skip re-prompting
-		if agent.IsSecurityBypassApproved() {
-			agent.debugLog("[UNLOCK] Session-level security bypass: allowing file access outside working directory: %s\n", filePath)
-			return filesystem.WithSecurityBypass(ctx)
-		}
-
-		// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
-		// because stdin is /dev/null. Instead, we must return the error and let the primary
-		// agent handle the security decision.
-		if configuration.GetEnvSimple("FROM_AGENT") == "1" {
-			agent.debugLog("Subagent encountered filesystem security error for %s, delegating to primary agent\n", filePath)
-			// Return the original context (without bypass) so the error is propagated
-			return ctx
-		}
-
-		// Check if we're running as a subagent — subagents cannot prompt.
-		// Note: SPROUT_FROM_AGENT is already checked above (returns early), but we also
-		// check SPROUT_SUBAGENT here for completeness.
-		isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
-
-		// Prefer webui approval path when a browser tab is connected.
-		// See the comment in the security validation section above for rationale.
-		if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
-			// WEBUI: request approval via event bus for the browser dialog
-			prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory: %s", toolName, filePath)
-			extras := map[string]string{
-				"risk_type": "Filesystem Security",
-				"target":    filePath,
-			}
-			if mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, "CAUTION", prompt, extras) {
-				agent.debugLog("User approved file access outside working directory: %s\n", filePath)
-				agent.SetSecurityBypassApproved()
-				return filesystem.WithSecurityBypass(ctx)
-			} else {
-				agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
-			}
-		} else {
-			// CLI: prompt user interactively via terminal stdin
-			agentConfig := agent.GetConfig()
-			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
-
-			if canPrompt {
-				prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
-				if logger.AskForConfirmation(prompt, false, false) {
-					agent.debugLog("User approved file access outside working directory: %s\n", filePath)
-					agent.SetSecurityBypassApproved()
-					return filesystem.WithSecurityBypass(ctx)
-				} else {
-					agent.debugLog("User rejected file access outside working directory: %s\n", filePath)
-				}
-			} else {
-				// No prompting available (subagent or no mechanism), return original context (error will propagate)
-				if agent.debug {
-					agent.debugLog("Cannot prompt for filesystem security approval (subagent or no mechanism): %s\n", filePath)
-				}
-			}
-		}
+	if !errors.Is(err, filesystem.ErrOutsideWorkingDirectory) && !errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory) {
+		return ctx, false
 	}
-	return ctx
+
+	// Unsafe mode bypasses filesystem security checks automatically
+	if agent.GetUnsafeMode() {
+		agent.debugLog("[UNLOCK] Unsafe mode: automatically allowing file access outside working directory: %s\n", filePath)
+		return filesystem.WithSecurityBypass(ctx), true
+	}
+
+	// If user already approved filesystem access this session, skip re-prompting
+	if agent.IsSecurityBypassApproved() {
+		agent.debugLog("[UNLOCK] Session-level security bypass: allowing file access outside working directory: %s\n", filePath)
+		return filesystem.WithSecurityBypass(ctx), true
+	}
+
+	// Subagents cannot prompt — return unapproved so the error propagates
+	isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
+	if isSubagent {
+		agent.debugLog("Subagent encountered filesystem security error for %s, delegating to primary agent\n", filePath)
+		return ctx, false
+	}
+
+	// Prefer webui approval path when a browser tab is connected.
+	// Same pattern as the pre-execution security classification above.
+	if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && agent.HasActiveWebUIClients() {
+		// WEBUI: request approval via event bus for the browser dialog
+		prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory: %s", toolName, filePath)
+		extras := map[string]string{
+			"risk_type": "Filesystem Security",
+			"target":    filePath,
+		}
+		if mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, "CAUTION", prompt, extras) {
+			agent.debugLog("[APPROVAL] User approved file access outside working directory: %s\n", filePath)
+			agent.SetSecurityBypassApproved()
+			return filesystem.WithSecurityBypass(ctx), true
+		}
+		agent.debugLog("[APPROVAL] User rejected file access outside working directory: %s\n", filePath)
+		return ctx, false
+	}
+
+	// CLI: prompt user interactively via terminal stdin
+	agentConfig := agent.GetConfig()
+	logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+	canPrompt := logger != nil && logger.IsInteractive()
+
+	if canPrompt {
+		prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
+		if logger.AskForConfirmation(prompt, false, false) {
+			agent.debugLog("[APPROVAL] User approved file access outside working directory: %s\n", filePath)
+			agent.SetSecurityBypassApproved()
+			return filesystem.WithSecurityBypass(ctx), true
+		}
+		agent.debugLog("[APPROVAL] User rejected file access outside working directory: %s\n", filePath)
+		return ctx, false
+	}
+
+	// No prompting available — return unapproved
+	if agent.debug {
+		agent.debugLog("Cannot prompt for filesystem security approval (no mechanism): %s\n", filePath)
+	}
+	return ctx, false
 }
 
 // validateParameters validates and extracts parameters according to tool configuration

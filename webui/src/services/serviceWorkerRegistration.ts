@@ -19,7 +19,8 @@ export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration
     return null;
   }
 
-  if (import.meta.env.PROD ? "production" : "development" !== 'production') {
+  const env = import.meta.env.PROD ? "production" : "development";
+  if (env !== 'production') {
     const registrations = await navigator.serviceWorker.getRegistrations();
     await Promise.all(registrations.map((registration) => registration.unregister()));
     return null;

@@ -37,6 +37,7 @@ const DEFAULT_APP_STATE: AppState = {
   perChatCache: {},
   securityApprovalRequest: null,
   securityPromptRequest: null,
+  askUserRequest: null,
 };
 
 /**

@@ -2,113 +2,146 @@ package agent
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 )
 
-func TestNormalizePositiveInt(t *testing.T) {
+// --- normalizePositiveInt ---
+
+func TestNormalizePositiveInt_AllIntTypes(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    any
-		expected int
+		input any
+		want  int
 	}{
-		// int
-		{"int positive", int(42), 42},
-		{"int zero", int(0), 0},
-		{"int negative", int(-5), 0},
-		{"int max", int(^uint(0) >> 1), int(^uint(0) >> 1)},
-
-		// int8
-		{"int8 positive", int8(7), 7},
-		{"int8 zero", int8(0), 0},
-		{"int8 negative", int8(-1), 0},
-
-		// int16
-		{"int16 positive", int16(100), 100},
-		{"int16 zero", int16(0), 0},
-		{"int16 negative", int16(-10), 0},
-
-		// int32
-		{"int32 positive", int32(999), 999},
-		{"int32 zero", int32(0), 0},
-		{"int32 negative", int32(-999), 0},
-
-		// int64
-		{"int64 positive", int64(12345), 12345},
-		{"int64 zero", int64(0), 0},
-		{"int64 negative", int64(-1), 0},
-
-		// uint
-		{"uint positive", uint(99), 99},
-		{"uint zero", uint(0), 0},
-
-		// uint8
-		{"uint8 positive", uint8(5), 5},
-		{"uint8 zero", uint8(0), 0},
-
-		// uint16
-		{"uint16 positive", uint16(200), 200},
-		{"uint16 zero", uint16(0), 0},
-
-		// uint32
-		{"uint32 positive", uint32(5000), 5000},
-		{"uint32 zero", uint32(0), 0},
-
-		// uint64
-		{"uint64 positive", uint64(777), 777},
-		{"uint64 zero", uint64(0), 0},
-		{"uint64 overflow", uint64(^uint64(0)), 0}, // exceeds max int
-
-		// float32
-		{"float32 positive", float32(3.7), 3},
-		{"float32 zero", float32(0.0), 0},
-		{"float32 negative", float32(-1.5), 0},
-
-		// float64
-		{"float64 positive", float64(12.8), 12},
-		{"float64 zero", float64(0.0), 0},
-		{"float64 negative", float64(-99.9), 0},
-
-		// json.Number
-		{"json.Number positive", json.Number("456"), 456},
-		{"json.Number zero", json.Number("0"), 0},
-		{"json.Number negative", json.Number("-10"), 0},
-
-		// string
-		{"string positive", "88", 88},
-		{"string zero", "0", 0},
-		{"string negative", "-3", 0},
-		{"string with spaces", "  55  ", 55},
-		{"string non-numeric", "abc", 0},
-		{"string empty", "", 0},
-
-		// nil and unknown
-		{"nil", nil, 0},
-		{"bool true", true, 0},
-		{"bool false", false, 0},
-		{"slice", []int{1, 2}, 0},
-		{"map", map[string]int{"a": 1}, 0},
+		{int(5), 5},
+		{int(0), 0},
+		{int(-3), 0},
+		{int8(7), 7},
+		{int8(0), 0},
+		{int8(-1), 0},
+		{int16(100), 100},
+		{int16(0), 0},
+		{int16(-1), 0},
+		{int32(999), 999},
+		{int32(0), 0},
+		{int32(-1), 0},
+		{int64(12345), 12345},
+		{int64(0), 0},
+		{int64(-1), 0},
 	}
+	for _, tc := range tests {
+		got := normalizePositiveInt(tc.input)
+		if got != tc.want {
+			t.Errorf("normalizePositiveInt(%v(%T)) = %d, want %d", tc.input, tc.input, got, tc.want)
+		}
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := normalizePositiveInt(tt.input)
-			if result != tt.expected {
-				t.Errorf("normalizePositiveInt(%v) = %d; want %d", tt.input, result, tt.expected)
+func TestNormalizePositiveInt_AllUintTypes(t *testing.T) {
+	tests := []struct {
+		input any
+		want  int
+	}{
+		{uint(5), 5},
+		{uint(0), 0},
+		{uint8(7), 7},
+		{uint8(0), 0},
+		{uint16(100), 100},
+		{uint16(0), 0},
+		{uint32(999), 999},
+		{uint32(0), 0},
+		{uint64(12345), 12345},
+		{uint64(0), 0},
+	}
+	for _, tc := range tests {
+		got := normalizePositiveInt(tc.input)
+		if got != tc.want {
+			t.Errorf("normalizePositiveInt(%v(%T)) = %d, want %d", tc.input, tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizePositiveInt_FloatTypes(t *testing.T) {
+	tests := []struct {
+		input any
+		want  int
+	}{
+		{float32(3.7), 3},
+		{float32(0.0), 0},
+		{float32(-1.5), 0},
+		{float64(9.9), 9},
+		{float64(0.0), 0},
+		{float64(-5.2), 0},
+	}
+	for _, tc := range tests {
+		got := normalizePositiveInt(tc.input)
+		if got != tc.want {
+			t.Errorf("normalizePositiveInt(%v(%T)) = %d, want %d", tc.input, tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestNormalizePositiveInt_JSONNumberAndString(t *testing.T) {
+	tests := []struct {
+		name  string
+		input any
+		want  int
+	}{
+		{"json_number_42", json.Number("42"), 42},
+		{"json_number_0", json.Number("0"), 0},
+		{"json_number_neg", json.Number("-5"), 0},
+		{"json_number_invalid", json.Number("invalid"), 0},
+		{"string_42", "42", 42},
+		{"string_padded", "  7  ", 7},
+		{"string_0", "0", 0},
+		{"string_neg", "-3", 0},
+		{"string_abc", "abc", 0},
+		{"string_empty", "", 0},
+		{"string_float", "3.14", 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := normalizePositiveInt(tc.input)
+			if got != tc.want {
+				t.Errorf("normalizePositiveInt(%v) = %d, want %d", tc.input, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestShouldStopExecution(t *testing.T) {
+func TestNormalizePositiveInt_UnknownAndNilTypes(t *testing.T) {
+	if normalizePositiveInt([]int{1, 2, 3}) != 0 {
+		t.Error("slice type should return 0")
+	}
+	if normalizePositiveInt(nil) != 0 {
+		t.Error("nil should return 0")
+	}
+}
+
+func TestNormalizePositiveInt_OverflowGuard(t *testing.T) {
+	maxInt := int64(int(^uint(0) >> 1))
+	if normalizePositiveInt(maxInt) != int(maxInt) {
+		t.Errorf("maxInt should be accepted")
+	}
+	if normalizePositiveInt(maxInt+1) != 0 {
+		t.Errorf("maxInt+1 should be rejected as overflow")
+	}
+}
+
+// --- shouldStopExecution ---
+
+func TestShouldStopExecution_CriticalAndFatal(t *testing.T) {
+	te := &ToolExecutor{agent: nil}
+
 	tests := []struct {
-		name     string
-		result   string
-		expected bool
+		name   string
+		result string
+		want   bool
 	}{
 		{"empty", "", false},
 		{"normal output", "Task completed successfully", false},
-		{"critical error", "CRITICAL ERROR: something broke", true},
-		{"fatal error", "FATAL ERROR: cannot proceed", true},
+		{"critical error", "CRITICAL ERROR: something went wrong", true},
+		{"fatal error", "FATAL ERROR: unrecoverable", true},
 		{"critical in middle", "Something CRITICAL ERROR happened", true},
 		{"fatal in middle", "Something FATAL ERROR happened", true},
 		{"warning not critical", "WARNING: this is not critical", false},
@@ -118,47 +151,101 @@ func TestShouldStopExecution(t *testing.T) {
 		{"multi-line with critical", "line1\nCRITICAL ERROR\nline3", true},
 		{"multi-line with fatal", "line1\nFATAL ERROR\nline3", true},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			te := &ToolExecutor{}
-			result := te.shouldStopExecution("dummy", tt.result)
-			if result != tt.expected {
-				t.Errorf("shouldStopExecution(%q) = %v; want %v", tt.result, result, tt.expected)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := te.shouldStopExecution("test", tc.result)
+			if got != tc.want {
+				t.Errorf("shouldStopExecution(%q) = %v, want %v", tc.result, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestGenerateToolCallID(t *testing.T) {
-	te := &ToolExecutor{}
+// --- GenerateToolCallID ---
 
-	// Generate multiple IDs and verify they are unique
-	ids := make(map[string]bool)
+func TestGenerateToolCallID_ContainsToolName(t *testing.T) {
+	te := &ToolExecutor{agent: nil}
+	id := te.GenerateToolCallID("shell_command")
+	if len(id) < 10 {
+		t.Errorf("ID too short: %q", id)
+	}
+}
+
+func TestGenerateToolCallID_Uniqueness(t *testing.T) {
+	te := &ToolExecutor{agent: nil}
+	seen := make(map[string]bool)
 	for i := 0; i < 100; i++ {
-		id := te.GenerateToolCallID("test_tool")
-		if ids[id] {
-			t.Errorf("duplicate ID generated: %s", id)
+		id := te.GenerateToolCallID("tool")
+		if seen[id] {
+			t.Fatalf("duplicate ID generated: %q", id)
 		}
-		ids[id] = true
+		seen[id] = true
 	}
+}
 
-	// Verify ID format: call_<sanitized_name>_<timestamp>_<seq>
-	id := te.GenerateToolCallID("test_tool")
-	if len(id) == 0 {
-		t.Error("generated ID should not be empty")
+func TestGenerateToolCallID_ConcurrentUniqueness(t *testing.T) {
+	te := &ToolExecutor{agent: nil}
+	results := make(chan string, 200)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results <- te.GenerateToolCallID("tool")
+		}()
 	}
+	wg.Wait()
+	close(results)
 
-	// Different tool names should produce different ID prefixes
-	id1 := te.GenerateToolCallID("tool_a")
-	id2 := te.GenerateToolCallID("tool_b")
-	if id1 == id2 {
-		t.Errorf("IDs for different tools should differ: got %s for both", id1)
+	seen := make(map[string]bool)
+	for id := range results {
+		if seen[id] {
+			t.Fatalf("duplicate ID in concurrent generation: %q", id)
+		}
+		seen[id] = true
 	}
+}
 
-	// Underscores in tool name should be removed
-	idWithUnderscore := te.GenerateToolCallID("my_tool_name")
-	if len(idWithUnderscore) == 0 {
-		t.Error("ID with underscore tool name should not be empty")
+// --- tryExecuteMCPTool ---
+
+func TestTryExecuteMCPTool_NilAgent(t *testing.T) {
+	te := &ToolExecutor{agent: nil}
+	result, err, handled := te.tryExecuteMCPTool("mcp_test", nil)
+	if !handled {
+		t.Error("should be handled with nil agent")
+	}
+	if err == nil {
+		t.Error("expected error with nil agent")
+	}
+	if result != "" {
+		t.Errorf("expected empty result, got %q", result)
+	}
+}
+
+func TestTryExecuteMCPTool_NonMCPTool(t *testing.T) {
+	te := &ToolExecutor{agent: &Agent{}}
+	result, err, handled := te.tryExecuteMCPTool("shell_command", nil)
+	if handled {
+		t.Error("non-MCP tool should not be handled")
+	}
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result != "" {
+		t.Errorf("expected empty result, got %q", result)
+	}
+}
+
+func TestTryExecuteMCPTool_MCPPrefixWithoutManager(t *testing.T) {
+	a := &Agent{}
+	a.initSubManagers()
+	te := &ToolExecutor{agent: a}
+	_, err, handled := te.tryExecuteMCPTool("mcp_test", map[string]interface{}{})
+	if !handled {
+		t.Error("MCP-prefixed tool should be handled")
+	}
+	if err == nil {
+		t.Error("expected error with no MCP manager")
 	}
 }

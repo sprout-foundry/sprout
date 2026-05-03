@@ -46,7 +46,7 @@
   "root": true,
   "rules": {
     "@typescript-eslint/consistent-type-imports": [
-      "warn",
+      "error",
       {
         "fixStyle": "separate-type-imports",
         "prefer": "type-imports"
@@ -55,7 +55,7 @@
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "@typescript-eslint/no-empty-function": [
-      "warn",
+      "error",
       {
         "allow": [
           "constructors",
@@ -64,10 +64,10 @@
       }
     ],
     "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-non-null-assertion": "warn",
-    "@typescript-eslint/no-shadow": "warn",
+    "@typescript-eslint/no-non-null-assertion": "error",
+    "@typescript-eslint/no-shadow": "error",
     "@typescript-eslint/no-unused-vars": [
-      "warn",
+      "error",
       {
         "argsIgnorePattern": "^_",
         "ignoreRestSiblings": true,
@@ -75,7 +75,7 @@
       }
     ],
     "@typescript-eslint/no-use-before-define": [
-      "warn",
+      "error",
       {
         "classes": true,
         "functions": false,
@@ -83,16 +83,16 @@
       }
     ],
     "curly": [
-      "warn",
+      "error",
       "multi-line"
     ],
     "eqeqeq": [
-      "warn",
+      "error",
       "smart"
     ],
     "no-case-declarations": "off",
     "no-console": [
-      "warn",
+      "error",
       {
         "allow": [
           "warn",
@@ -100,15 +100,17 @@
         ]
       }
     ],
-    "no-return-await": "warn",
+    "no-return-await": "error",
     "no-shadow": "off",
     "no-template-curly-in-string": "off",
-    "no-var": "warn",
-    "prefer-const": "warn",
-    "react/display-name": "warn",
-    "react/no-deprecated": "warn",
-    "react/no-render-return-value": "warn",
-    "react/no-unescaped-entities": "warn",
+    "no-unreachable": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "react-hooks/exhaustive-deps": "error",
+    "react/display-name": "error",
+    "react/no-deprecated": "error",
+    "react/no-render-return-value": "error",
+    "react/no-unescaped-entities": "error",
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off"
   },

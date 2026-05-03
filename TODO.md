@@ -667,7 +667,7 @@ These are high-impact structural improvements identified through code evaluation
 
 ## Reliability Gaps
 
-[] - RELIABILITY: Cap `messages[]` array in App.tsx — The underlying `messages[]` array holds every message for the session with no size bound. Very long sessions (100+ tool calls) accumulate significant memory despite `react-virtuoso` rendering. Implement message windowing — keep the last N messages in state, with a separate persistence layer for history. `webui/src/App.tsx`
+[x] - RELIABILITY: Cap `messages[]` array in App.tsx — The underlying `messages[]` array holds every message for the session with no size bound. Very long sessions (100+ tool calls) accumulate significant memory despite `react-virtuoso` rendering. Implement message windowing — keep the last N messages in state, with a separate persistence layer for history. `webui/src/App.tsx`
 
 ## Test Coverage
 

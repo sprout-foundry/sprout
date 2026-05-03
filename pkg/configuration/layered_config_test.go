@@ -286,7 +286,7 @@ func TestLoadConfigWithLayers_GlobalOnly(t *testing.T) {
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, "", "")
+	result, err := LoadConfigWithLayers(globalPath, "", "", tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -323,7 +323,7 @@ func TestLoadConfigWithLayers_WorkspaceOverride(t *testing.T) {
 	err = os.WriteFile(workspacePath, []byte(workspaceCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, "")
+	result, err := LoadConfigWithLayers(globalPath, workspacePath, "", tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -365,7 +365,7 @@ func TestLoadConfigWithLayers_SessionOverride(t *testing.T) {
 	err = os.WriteFile(sessionPath, []byte(sessionCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, sessionPath)
+	result, err := LoadConfigWithLayers(globalPath, workspacePath, sessionPath, tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -387,7 +387,7 @@ func TestLoadConfigWithLayers_MissingWorkspace(t *testing.T) {
 	err := os.WriteFile(globalPath, []byte(globalCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, "")
+	result, err := LoadConfigWithLayers(globalPath, workspacePath, "", tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -416,7 +416,7 @@ func TestLoadConfigWithLayers_CorruptFile(t *testing.T) {
 	err = os.WriteFile(workspacePath, []byte(corruptCfg), 0644)
 	require.NoError(t, err)
 
-	result, err := LoadConfigWithLayers(globalPath, workspacePath, "")
+	result, err := LoadConfigWithLayers(globalPath, workspacePath, "", tempDir)
 	require.NoError(t, err) // Should not error, should log warning and continue
 	require.NotNil(t, result)
 

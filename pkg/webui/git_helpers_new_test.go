@@ -143,6 +143,11 @@ func TestTruncateDiffOutput(t *testing.T) {
 			diff:     "12345678901234567890", maxBytes: 10,
 			want:     "1234567890\n\n... [diff truncated]",
 		},
+		{
+			name:     "empty string",
+			diff:     "", maxBytes: 10,
+			want:     "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -162,18 +167,21 @@ func TestContainsPath(t *testing.T) {
 	}
 
 	tests := []struct {
-		name string
-		path string
-		want bool
+		name  string
+		files []GitFile
+		path  string
+		want  bool
 	}{
-		{"matching path", "src/main.go", true},
-		{"no matching path", "src/missing.go", false},
-		{"normalized file path matches", "src/helper.go", true}, // file has messy path, query is clean
+		{"matching path", files, "src/main.go", true},
+		{"no matching path", files, "src/missing.go", false},
+		{"normalized file path matches", files, "src/helper.go", true}, // file has messy path, query is clean
+		{"empty list", nil, "anything.go", false},
+		{"empty slice", []GitFile{}, "anything.go", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := containsPath(files, tt.path)
+			got := containsPath(tt.files, tt.path)
 			if got != tt.want {
 				t.Errorf("containsPath(%q) = %v, want %v", tt.path, got, tt.want)
 			}

@@ -1,60 +1,12 @@
-export type EditorBufferKind = 'file' | 'chat' | 'diff' | 'review' | 'welcome' | 'compare';
+// ── Editor types re-exported from @sprout/ui ─────────────────────────────
+// These types are the canonical source defined in packages/ui/src/types/editor.ts
 
-export interface EditorFileEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  size: number;
-  modified: number;
-  ext?: string;
-}
-
-export interface EditorBuffer {
-  id: string;
-  kind: EditorBufferKind;
-  file: EditorFileEntry;
-  content: string;
-  originalContent: string; // Content when file was loaded/reset
-  cursorPosition: {
-    line: number;
-    column: number;
-  };
-  scrollPosition: {
-    top: number;
-    left: number;
-  };
-  isModified: boolean;
-  isActive: boolean; // Currently displayed in an editor pane
-  paneId?: string | null; // Which pane is displaying this buffer
-  isPinned?: boolean;
-  isClosable?: boolean;
-  externallyModified?: boolean;
-  diskContent?: string | null;
-  metadata?: Record<string, unknown>;
-  languageOverride?: string | null; // Language mode override (null = auto-detect by extension)
-}
-
-export type PaneLayout = 'single' | 'split-vertical' | 'split-horizontal' | 'split-grid';
-
-export interface EditorPane {
-  id: string;
-  bufferId: string | null; // null = empty pane
-  isActive: boolean;
-  position?: 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary' | 'senary';
-  dimensions?: {
-    width: number | string;
-    height: number | string;
-  };
-}
-
-export interface PaneSize {
-  [paneId: string]: number; // Size in percentage for pane sizing
-}
-
-export interface EditorState {
-  activeBufferId: string | null;
-  buffers: Map<string, EditorBuffer>;
-  panes: EditorPane[];
-  paneLayout: PaneLayout;
-  activePaneId: string | null;
-}
+export type {
+  EditorBufferKind,
+  EditorFileEntry,
+  EditorBuffer,
+  PaneLayout,
+  EditorPane,
+  PaneSize,
+  EditorState,
+} from '@sprout/ui';

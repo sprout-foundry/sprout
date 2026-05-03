@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { useState, useCallback } from 'react';
-import Terminal, { type ShellInfo } from './Terminal';
+import Terminal, { type TerminalProps } from './Terminal';
+import type { ShellInfo } from '../types/terminal';
 
 const meta = {
   title: 'Components/Terminal',
@@ -147,9 +148,9 @@ export const Interactive: Story = {
 
     const handleFetchShells = useCallback(async (): Promise<ShellInfo[]> => {
       return [
-        { name: 'bash', path: '/bin/bash', is_default: true },
-        { name: 'zsh', path: '/bin/zsh' },
-        { name: 'fish', path: '/usr/bin/fish' },
+        { name: 'bash', path: '/bin/bash', default: true },
+        { name: 'zsh', path: '/bin/zsh', default: false },
+        { name: 'fish', path: '/usr/bin/fish', default: false },
       ];
     }, []);
 

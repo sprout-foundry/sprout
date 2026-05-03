@@ -20,7 +20,7 @@ import {
   Hourglass,
 } from 'lucide-react';
 import { debugLog } from '../../utils/log';
-import type { ToolExecution, Revision, RevisionFile } from './types';
+import type { ToolExecution } from '@sprout/ui';
 
 // ── Tool helpers ────────────────────────────────────────────────────
 
@@ -140,38 +140,4 @@ export const formatTokens = (tokens: number): string => {
 export const formatCost = (cost: number): string => {
   if (!Number.isFinite(cost)) return '—';
   return `$${cost.toFixed(4)}`;
-};
-
-// ── Revision normalization ──────────────────────────────────────────
-
-export const normalizeRevision = (raw: unknown): Revision => {
-  const r = raw as Record<string, unknown> | null | undefined;
-  if (!r) {
-    return {
-      revision_id: 'unknown',
-      timestamp: new Date().toISOString(),
-      files: [],
-      description: '',
-    };
-  }
-  const files = Array.isArray(r.files)
-    ? (r.files as Array<Record<string, unknown>>).map((file: Record<string, unknown>) => ({
-        file_revision_hash: typeof file?.file_revision_hash === 'string' ? file.file_revision_hash : undefined,
-        path: typeof file?.path === 'string' ? file.path : 'Unknown',
-        operation: typeof file?.operation === 'string' ? file.operation : 'edited',
-        lines_added: Number(file?.lines_added || 0),
-        lines_deleted: Number(file?.lines_deleted || 0),
-      }))
-    : [];
-
-  return {
-    revision_id: typeof r?.revision_id === 'string' ? r.revision_id : 'unknown',
-    timestamp: typeof r?.timestamp === 'string' ? r.timestamp : new Date().toISOString(),
-    files,
-    description: typeof r?.description === 'string' ? r.description : '',
-  };
-};
-
-export const buildRevisionFileKey = (file: RevisionFile | (RevisionFile & { diff?: string }), index: number) => {
-  return `${file.file_revision_hash || file.path}::${index}`;
 };

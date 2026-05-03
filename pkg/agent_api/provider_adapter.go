@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	utils "github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ProviderAdapter adapts the existing ClientInterface to the new Provider interface
@@ -20,8 +22,20 @@ func NewProviderAdapter(clientType ClientType, client ClientInterface) *Provider
 	}
 }
 
-// SendChatRequest adapts the old interface to the new one
+// SendChatRequest adapts the old interface to the new one.
+//
+// Note: This uses the same global per-provider rate limiter as APIClient.sendRequest().
+// Both paths share one bucket per provider to coordinate across all agents, preventing
+// cascading 429s when multiple subagents run concurrently. Do NOT add additional rate
+// limiting at this layer without coordinating with pkg/agent/api_client.go.
 func (a *ProviderAdapter) SendChatRequest(ctx context.Context, req *ProviderChatRequest) (*ChatResponse, error) {
+	// Proactive per-provider rate limiting to prevent cascading 429s
+	// when multiple agents share the same provider.
+	limiter := utils.GetProviderRateLimiter(string(a.clientType))
+	if err := limiter.Wait(ctx); err != nil {
+		return nil, fmt.Errorf("rate limit wait canceled: %w", err)
+	}
+
 	// Convert ProviderChatRequest to old format
 	messages := req.Messages
 	tools := req.Tools

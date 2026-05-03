@@ -112,6 +112,7 @@ type StateManager interface {
 
 	// Conversation pruner
 	GetConversationPruner() *ConversationPruner
+	SetConversationPruner(*ConversationPruner)
 
 	// Command history
 	GetCommandHistory() []string
@@ -543,6 +544,10 @@ func (s *AgentStateManager) SetLastRunTerminationReason(reason string) {
 
 func (s *AgentStateManager) GetConversationPruner() *ConversationPruner {
 	return s.conversationPruner
+}
+
+func (s *AgentStateManager) SetConversationPruner(pruner *ConversationPruner) {
+	s.conversationPruner = pruner
 }
 
 // --- Command history ---

@@ -512,13 +512,60 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 
 	// Execute the tool handler — prefer the image-capable handler when set
 	if tool.HandlerImages != nil {
-		return tool.HandlerImages(ctx, agent, validatedArgs)
+		imgs, result, execErr := tool.HandlerImages(ctx, agent, validatedArgs)
+		if execErr != nil {
+			// Check if the error is a filesystem security violation and prompt the user
+			if agent != nil && (errors.Is(execErr, filesystem.ErrOutsideWorkingDirectory) || errors.Is(execErr, filesystem.ErrWriteOutsideWorkingDirectory)) {
+				filePath := extractFilePathFromArgs(args)
+				newCtx := handleFileSecurityError(ctx, agent, toolName, filePath, execErr)
+				if filesystem.SecurityBypassEnabled(newCtx) {
+					// User approved — retry with bypass context
+					imgs, result, execErr = tool.HandlerImages(newCtx, agent, validatedArgs)
+					if execErr != nil {
+						return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
+					}
+					return imgs, result, nil
+				}
+			}
+			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
+		}
+		return imgs, result, nil
 	}
 	result, err := tool.Handler(ctx, agent, validatedArgs)
 	if err != nil {
+		// Check if the error is a filesystem security violation and prompt the user
+		if agent != nil && (errors.Is(err, filesystem.ErrOutsideWorkingDirectory) || errors.Is(err, filesystem.ErrWriteOutsideWorkingDirectory)) {
+			filePath := extractFilePathFromArgs(args)
+			newCtx := handleFileSecurityError(ctx, agent, toolName, filePath, err)
+			if filesystem.SecurityBypassEnabled(newCtx) {
+				// User approved — retry with bypass context
+				result, err = tool.Handler(newCtx, agent, validatedArgs)
+				if err != nil {
+					return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
+				}
+				return nil, result, nil
+			}
+		}
 		return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
 	}
 	return nil, result, nil
+}
+
+// extractFilePathFromArgs extracts the file path from tool arguments for error messages
+func extractFilePathFromArgs(args map[string]interface{}) string {
+	// Most file tools use "path" as the parameter name
+	if path, ok := args["path"].(string); ok && path != "" {
+		return path
+	}
+	// Some tools use "file_path"
+	if path, ok := args["file_path"].(string); ok && path != "" {
+		return path
+	}
+	// read_file uses "file_path"
+	if path, ok := args["filePath"].(string); ok && path != "" {
+		return path
+	}
+	return "<unknown path>"
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user

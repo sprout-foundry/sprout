@@ -30,7 +30,7 @@ const diffState = StateField.define<DecorationSet>({
         return builder.finish();
       }
     }
-    return decorations;
+    return tr.changes.empty ? decorations : decorations.map(tr.changes);
   },
 });
 

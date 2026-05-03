@@ -5,6 +5,10 @@
  * These types are shared across the application and can be imported from this module.
  */
 
+import type { ShellInfo } from '@sprout/ui';
+export type { ShellInfo };
+export type { ChangelogResponse, ChangesResponse, RevisionDetailResponse, RollbackResponse } from '@sprout/ui';
+
 export interface StatsResponse {
   // Basic info
   provider: string;
@@ -202,12 +206,6 @@ export class SSHWorkspaceOpenError extends Error {
     this.details = payload.details;
     this.logPath = payload.log_path;
   }
-}
-
-export interface ShellInfo {
-  name: string;
-  path: string;
-  default: boolean;
 }
 
 export interface WorkspaceResponse {
@@ -727,55 +725,8 @@ export interface SessionRestoreResponse {
 
 // ── Misc / Changelog types ──────────────────────────────────────────
 
-export interface ChangelogFile {
-  path: string;
-  operation: string;
-  lines_added: number;
-  lines_deleted: number;
-}
-
-export interface ChangelogRevision {
-  revision_id: string;
-  timestamp: string;
-  files: ChangelogFile[];
-  description: string;
-}
-
-export interface ChangelogResponse {
-  message: string;
-  revisions: ChangelogRevision[];
-}
-
-export interface ChangesResponse {
-  message: string;
-  changes: ChangelogRevision[];
-}
-
-export interface RevisionFileDetail {
-  file_revision_hash?: string;
-  path: string;
-  operation: string;
-  lines_added: number;
-  lines_deleted: number;
-  original_code: string;
-  new_code: string;
-  diff: string;
-}
-
-export interface RevisionDetailResponse {
-  message: string;
-  revision: {
-    revision_id: string;
-    timestamp: string;
-    description: string;
-    files: RevisionFileDetail[];
-  };
-}
-
-export interface RollbackResponse {
-  message: string;
-  revision_id: string;
-}
+// ChangelogResponse, ChangesResponse, RevisionDetailResponse, and RollbackResponse
+// are now imported from @sprout/ui
 
 // ── Review types ────────────────────────────────────────────────────
 

@@ -1,5 +1,34 @@
 // @sprout/ui — Reusable React components for Sprout IDE
 
+// ── Chat / shared data types ──────────────────────────────────────────
+export type {
+  Message,
+  ToolExecution,
+  SubagentActivity,
+  LogEntry,
+  TodoStatus,
+  TodoItem,
+  FileEdit,
+  LiveLogLine,
+  SubagentRun,
+  ToolRef,
+  ChatProps,
+} from './types/chat';
+
+export { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types/chat';
+
+// ── Message Segment Types ─────────────────────────────────────────────
+export type {
+  TextSegment,
+  ToolCallSegment,
+  TodoUpdateSegment,
+  ProgressSegment,
+  ResultSegment,
+  MessageSegment,
+} from './types/message-segments';
+
+export { parseMessageSegments } from './utils/messageSegments';
+
 // ── Types ────────────────────────────────────────────────────────────
 export type { NotificationType } from './services/notificationBus';
 export { notificationBus } from './services/notificationBus';
@@ -11,9 +40,13 @@ export type { ContextMenuProps } from './components/ContextMenu';
 export type { FileInfo } from './types/file-tree';
 export type { FileTreeHandle, FileTreeProps } from './components/FileTree';
 export type { GitStatusData, GitFile, FileSection, GitCommitSummary, GitCommitDetail, GitCommitFileEntry, } from './types/git-types';
+export type { RevisionFile, Revision, RevisionDetailFile } from './types/revision';
+export { normalizeRevision, buildRevisionFileKey } from './types/revision';
+export type { ChangelogResponse, ChangesResponse, RevisionDetailResponse, RollbackResponse } from './types/api-responses';
 export type { GitSidebarPanelProps, GitBranchesState } from './components/GitPanel';
 export type { CommandPaletteProps, PaletteMode, CommandDef, FileResult, SymbolResult } from './components/CommandPalette';
-export type { TerminalProps, ShellInfo } from './components/Terminal';
+export type { TerminalProps } from './components/Terminal';
+export type { ShellInfo } from './types/terminal';
 export type { TerminalThemePack, CreateTerminalConnection } from './components/TerminalPane';
 export type { TerminalSession, AttachableSession } from './components/TerminalTabBar';
 export type { EditorProps, EditorTheme, CursorPosition as EditorCursorPosition } from './components/Editor';
@@ -23,6 +56,7 @@ export type { SproutEvent, SproutEventCallback, EventsProvider } from './types/e
 export type {
   EditorBuffer,
   EditorBufferKind,
+  EditorFileEntry,
   EditorPane,
   PaneLayout,
   PaneSize,
@@ -74,8 +108,9 @@ export { showThemedAlert, showThemedConfirm, showThemedPrompt } from './componen
 export { generateUUID } from './utils/uuid';
 export { detectLineEnding } from './utils/lineEndingDetect';
 export { copyToClipboard } from './utils/clipboard';
-export { fuzzyScore, fuzzyFilter, highlightMatches } from './utils/fuzzyMatch';
+export { fuzzyScore, fuzzyFilter, highlightMatches, type FuzzyResult } from './utils/fuzzyMatch';
 export { debugLog } from './utils/log';
+export { groupSubagentRuns } from './utils/subagentGrouping';
 export type { CommandHistoryState, CommandHistoryApi } from './components/command_input_history';
 export {
   createEmptyState,

@@ -6,6 +6,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLog } from '../utils/log';
+import type { FileEdit, Revision, RevisionFile } from '@sprout/ui';
+import { normalizeRevision } from '@sprout/ui';
 import {
   Pencil,
   Plus,
@@ -28,61 +30,12 @@ import { ApiService } from '../services/api';
 import { showThemedConfirm, showThemedAlert } from './ThemedDialog';
 import './FileEditsPanel.css';
 
-interface FileEdit {
-  path: string;
-  action: string; // 'edited', 'created', 'deleted', 'renamed'
-  timestamp: Date;
-  linesAdded?: number;
-  linesDeleted?: number;
-}
-
-interface RevisionFile {
-  path: string;
-  operation: string;
-  lines_added: number;
-  lines_deleted: number;
-}
-
-interface Revision {
-  revision_id: string;
-  timestamp: string;
-  files: RevisionFile[];
-  description: string;
-}
-
 interface FileEditsPanelProps {
   edits: FileEdit[];
   onFileClick?: (filePath: string) => void;
 }
 
 const MAX_RECENT_FILE_ROWS = 12;
-
-const normalizeRevision = (raw: unknown): Revision => {
-  const r = raw as Record<string, unknown> | null | undefined;
-  if (!r) {
-    return {
-      revision_id: 'unknown',
-      timestamp: new Date().toISOString(),
-      files: [],
-      description: '',
-    };
-  }
-  const files = Array.isArray(r.files)
-    ? (r.files as Array<Record<string, unknown>>).map((file: Record<string, unknown>) => ({
-        path: typeof file?.path === 'string' ? file.path : 'Unknown',
-        operation: typeof file?.operation === 'string' ? file.operation : 'edited',
-        lines_added: Number(file?.lines_added || 0),
-        lines_deleted: Number(file?.lines_deleted || 0),
-      }))
-    : [];
-
-  return {
-    revision_id: typeof r.revision_id === 'string' ? r.revision_id : 'unknown',
-    timestamp: typeof r.timestamp === 'string' ? r.timestamp : new Date().toISOString(),
-    files,
-    description: typeof r.description === 'string' ? r.description : '',
-  };
-};
 
 const sortRevisionsNewestFirst = (revisions: Revision[]): Revision[] => {
   return [...revisions].sort((a, b) => {

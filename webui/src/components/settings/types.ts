@@ -1,4 +1,5 @@
 import type { SproutSettings, ProviderOption } from '../../services/api';
+import type { SubagentTypeInfo } from '../../services/api/types';
 
 /**
  * Shared context passed to domain-specific mutation hooks.
@@ -21,18 +22,8 @@ export interface MutationContext {
   setSavingKey: (key: string | null) => void;
 }
 
-export interface SubagentTypeEntry {
-  id: string;
-  name: string;
-  description: string;
-  provider: string;
-  model: string;
-  system_prompt: string;
-  system_prompt_text?: string;
-  allowed_tools: string[];
-  aliases: string[];
-  enabled: boolean;
-}
+/** @deprecated Use SubagentTypeInfo from services/api/types */
+export type SubagentTypeEntry = SubagentTypeInfo;
 
 export type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
 

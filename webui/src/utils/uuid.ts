@@ -1,16 +1,8 @@
 /**
- * Generates a UUID v4 string.
- * Uses crypto.randomUUID() if available, otherwise falls back to a custom implementation.
+ * UUID utilities — re-exported from @sprout/ui
+ *
+ * These utilities are defined in packages/ui and are re-exported here
+ * to maintain backward compatibility with existing imports in webui.
  */
-export const generateUUID = (): string => {
-  if (crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
 
-  // Fallback for older browsers that don't support crypto.randomUUID()
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const randomNumber = Math.floor(Math.random() * 16);
-    const value = c === 'x' ? randomNumber : (randomNumber & 0x3) | 0x8;
-    return value.toString(16);
-  });
-};
+export { generateUUID } from '@sprout/ui';

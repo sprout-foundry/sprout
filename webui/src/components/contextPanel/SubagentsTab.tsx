@@ -2,7 +2,7 @@ import React from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
 import { LiveLog } from '@sprout/ui';
-import type { SubagentRun, LiveLogLine } from './types';
+import type { ContextSubagentRun, LiveLogLine } from './types';
 import {
   getPersonaColor,
   getStatusIcon,
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 interface SubagentsTabProps {
-  subagentRuns: SubagentRun[];
+  subagentRuns: ContextSubagentRun[];
   expandedSubagents: Set<string>;
   toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   expandedTools: Set<string>;

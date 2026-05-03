@@ -1,8 +1,8 @@
-/** Maximum number of files to render per section before showing "Show more" */
-export const MAX_FILES_PER_SECTION = 500;
+/**
+ * Git constants — re-exported from @sprout/ui
+ *
+ * These constants are defined in packages/ui and are re-exported here
+ * to maintain backward compatibility with existing imports in webui.
+ */
 
-/** Initial number of files to render per section */
-export const MAX_FILES_INITIAL = 100;
-
-/** Number of files to load when user clicks "Show more" */
-export const LOAD_MORE_INCREMENT = 100;
+export { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '@sprout/ui';

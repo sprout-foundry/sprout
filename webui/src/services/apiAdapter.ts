@@ -4,56 +4,14 @@
  * In local mode, the default adapter uses clientFetch (same-origin fetch to Go backend).
  * In cloud mode, a CloudAdapter is installed that routes to the Foundry platform API.
  *
- * This is the foundation for Option A (shared component library): components
- * will eventually accept adapters via context instead of calling clientFetch directly.
- *
- * NOTE: The APIAdapter and PlatformNavItem interfaces are duplicated in
- * packages/ui/src/types/adapter.ts for the @sprout/ui component library.
- * Changes here MUST be mirrored there until the types are extracted to a shared package.
+ * Adapter and PlatformNavItem types are imported from @sprout/ui (canonical source).
  */
 
-export interface APIAdapter {
-  /** Human-readable name for debugging */
-  readonly name: string;
+// Import canonical types from @sprout/ui
+import type { APIAdapter, PlatformNavItem } from '@sprout/ui';
 
-  /** Make an HTTP request to the backend */
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-
-  /** Get the WebSocket URL for real-time events. Return null if WS not supported. */
-  getWebSocketURL(): string | null;
-
-  /** Whether this adapter requires backend reachability checks */
-  readonly requiresBackendHealthCheck: boolean;
-
-  /** Whether file operations go through the HTTP API (vs handled client-side by WASM) */
-  readonly fileOpsViaAPI: boolean;
-
-  /** Whether onboarding flow should be shown */
-  readonly showOnboarding: boolean;
-
-  /** Whether SSH connections are supported */
-  readonly supportsSSH: boolean;
-
-  /** Whether instance management is supported */
-  readonly supportsInstances: boolean;
-
-  /** Whether local PTY terminal is supported */
-  readonly supportsLocalTerminal: boolean;
-
-  /** Whether settings panel should be shown */
-  readonly supportsSettings: boolean;
-
-  /** Platform-specific routes to inject into the sidebar (e.g., billing, tasks) */
-  readonly platformNavItems?: readonly PlatformNavItem[];
-}
-
-export interface PlatformNavItem {
-  readonly id: string;
-  readonly label: string;
-  readonly href: string;
-  readonly icon?: string;
-  readonly order?: number;
-}
+// Re-export for downstream consumers
+export type { APIAdapter, PlatformNavItem } from '@sprout/ui';
 
 // Singleton adapter instance
 let activeAdapter: APIAdapter | null = null;

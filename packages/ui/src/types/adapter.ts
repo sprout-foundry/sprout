@@ -1,8 +1,9 @@
 /**
  * Adapter types for @sprout/ui.
  *
- * NOTE: These interfaces are duplicated in webui/src/services/apiAdapter.ts.
- * Changes here MUST be mirrored there until the types are extracted to a shared package.
+ * This is the canonical source for APIAdapter and PlatformNavItem interfaces.
+ * These types are re-exported from webui/src/services/apiAdapter to maintain
+ * backward compatibility with existing imports.
  */
 
 /** Platform-specific navigation item */

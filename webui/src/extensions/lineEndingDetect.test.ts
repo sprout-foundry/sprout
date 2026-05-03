@@ -1,4 +1,4 @@
-import { detectLineEnding } from './lineEndingDetect';
+import { detectLineEnding } from '@sprout/ui';
 
 describe('detectLineEnding', () => {
   it('returns LF for empty string', () => {

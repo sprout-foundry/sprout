@@ -13,10 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
-// envMutex protects concurrent access to the SPROUT_CONFIG/LEDIT_CONFIG environment variable.
-// Both NewManagerWithDir and NewManagerWithLayers temporarily set this env var,
-// so they must be serialized to avoid config path corruption.
-var envMutex sync.Mutex
+// Manager manages configuration state with safe concurrent access.
 type Manager struct {
 	mu        sync.RWMutex
 	config    *Config
@@ -150,47 +147,34 @@ func NewManagerWithConfig(cfg *Config, apiKeys *APIKeys) *Manager {
 // This is intended for tests and tooling that need a hermetic config
 // environment without touching the caller's real ~/.config/sprout.
 func NewManagerWithDir(configDir string) (*Manager, error) {
-	envMutex.Lock()
-	defer envMutex.Unlock()
-
 	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create config directory %q: %w", configDir, err)
 	}
 
-	// Temporarily point the configuration layer at configDir.
-	prev, ok := LookupEnv("CONFIG")
-	SetEnv("CONFIG", configDir)
-	defer func() {
-		if ok {
-			SetEnv("CONFIG", prev)
-		} else {
-			UnsetEnv("CONFIG")
-		}
-	}()
-
-	// Ensure a config file exists so Load() doesn't fall through to the real
-	// user home directory.
+	// Ensure a config file exists so we can load from it.
 	configPath := filepath.Join(configDir, ConfigFileName)
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		cfg := NewConfig()
 		cfg.LastUsedProvider = "test" // predictable default for tests
-		if err := cfg.Save(); err != nil {
+		if err := cfg.SaveToDir(configDir); err != nil {
 			return nil, fmt.Errorf("failed to write default config to %q: %w", configDir, err)
 		}
 	}
 
-	config, err := Load()
+	// Load config from explicit directory without mutating env vars
+	config, err := LoadConfigWithLayers(configPath, "", "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config from %q: %w", configDir, err)
 	}
 
-	apiKeys, err := LoadAPIKeys()
+	// Load API keys from explicit directory without mutating env vars
+	apiKeys, err := LoadAPIKeysFromDir(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load API keys from %q: %w", configDir, err)
 	}
 
 	mgr := NewManagerWithConfig(config, apiKeys)
-	mgr.configDir = configDir // Store explicit dir for saves after env var is restored
+	mgr.configDir = configDir // Store explicit dir for saves
 	return mgr, nil
 }
 
@@ -200,11 +184,7 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 // Each layer is optional - missing layers are skipped.
 // Settings writes go to the workspace dir if provided, otherwise global.
 func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
-	envMutex.Lock()
-	defer envMutex.Unlock()
-
-	// Set SPROUT_CONFIG to workspace dir (if present) or global dir
-	// so that Save() writes to the correct location.
+	// Determine which directory should receive save writes
 	saveDir := globalDir
 	if workspaceDir != "" {
 		saveDir = workspaceDir
@@ -213,15 +193,6 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		if err := os.MkdirAll(saveDir, 0700); err != nil {
 			return nil, fmt.Errorf("failed to create config directory %q: %w", saveDir, err)
 		}
-		prev, ok := LookupEnv("CONFIG")
-		SetEnv("CONFIG", saveDir)
-		defer func() {
-			if ok {
-				SetEnv("CONFIG", prev)
-			} else {
-				UnsetEnv("CONFIG")
-			}
-		}()
 	}
 
 	// Compute file paths
@@ -239,8 +210,13 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		return nil, fmt.Errorf("load layered config: %w", err)
 	}
 
-	// Load API keys (always from global location)
-	apiKeys, err := LoadAPIKeys()
+	// Load API keys (always from global location, without mutating env vars)
+	var apiKeys *APIKeys
+	if globalDir != "" {
+		apiKeys, err = LoadAPIKeysFromDir(globalDir)
+	} else {
+		apiKeys, err = LoadAPIKeys()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load API keys: %w", err)
 	}
@@ -256,7 +232,7 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		apiKeys:   apiKeys,
 		lastSaved: cloneConfig(config),
 		loaded:    true,
-		configDir: saveDir, // Store explicit dir for saves after env var is restored
+		configDir: saveDir, // Store explicit dir for saves
 	}, nil
 }
 
@@ -432,7 +408,11 @@ func (m *Manager) UpdateConfigNoSave(mutator func(*Config) error) error {
 func (m *Manager) SaveAPIKeys() error {
 	m.mu.RLock()
 	keys := m.apiKeys
+	configDir := m.configDir
 	m.mu.RUnlock()
+	if configDir != "" {
+		return SaveAPIKeysToDir(keys, configDir)
+	}
 	return SaveAPIKeys(keys)
 }
 
@@ -443,9 +423,18 @@ func (m *Manager) RefreshAPIKeys() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	keys, err := LoadAPIKeys()
-	if err != nil {
-		return fmt.Errorf("refresh API keys: %w", err)
+	var keys *APIKeys
+	var err error
+	if m.configDir != "" {
+		keys, err = LoadAPIKeysFromDir(m.configDir)
+		if err != nil {
+			return fmt.Errorf("refresh API keys: %w", err)
+		}
+	} else {
+		keys, err = LoadAPIKeys()
+		if err != nil {
+			return fmt.Errorf("refresh API keys: %w", err)
+		}
 	}
 	m.apiKeys = keys
 	return nil

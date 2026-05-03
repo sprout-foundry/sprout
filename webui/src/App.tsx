@@ -8,6 +8,7 @@ import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import './App.css';
 import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
@@ -15,6 +16,13 @@ import SecurityPromptDialog from './components/SecurityPromptDialog';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
+import type { AppState, PerChatState } from './types/app';
+import type {
+  Message,
+  ToolExecution,
+  LogEntry,
+  SubagentActivity,
+} from '@sprout/ui';
 import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
 import {
   type ChatSession,
@@ -25,6 +33,16 @@ import {
   switchChatSession,
 } from './services/chatSessions';
 import { debugLog } from './utils/log';
+
+/** Extract a tool call identifier from opaque ToolExecution.details. */
+const getToolCallId = (details: unknown): string | undefined => {
+  if (details && typeof details === 'object') {
+    const d = details as Record<string, unknown>;
+    const id = d.tool_call_id ?? d.id;
+    return typeof id === 'string' ? id : undefined;
+  }
+  return undefined;
+};
 
 /**
  * Generate a unique message ID with browser compatibility fallback.
@@ -98,106 +116,6 @@ const registerServiceWorker = async () => {
   return null;
 };
 
-interface AppState {
-  isConnected: boolean;
-  provider: string;
-  model: string;
-  sessionId: string | null;
-  queryCount: number;
-  messages: Message[];
-  logs: LogEntry[];
-  isProcessing: boolean;
-  lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git';
-  toolExecutions: ToolExecution[];
-  queryProgress: any;
-  stats: any; // Enhanced stats from API
-  currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
-  fileEdits: Array<{
-    path: string;
-    action: string;
-    timestamp: Date;
-    linesAdded?: number;
-    linesDeleted?: number;
-  }>;
-  subagentActivities: SubagentActivity[];
-  activeChatId: string | null;
-  chatSessions: ChatSession[];
-  // Snapshot of per-chat state, saved on switch-away and restored on switch-back
-  perChatCache: Record<string, {
-    messages: Message[];
-    toolExecutions: ToolExecution[];
-    fileEdits: AppState['fileEdits'];
-    subagentActivities: SubagentActivity[];
-    currentTodos: AppState['currentTodos'];
-    queryProgress: any;
-    lastError: string | null;
-    isProcessing: boolean;
-  }>;
-  securityApprovalRequest: {
-    requestId: string;
-    toolName: string;
-    riskLevel: string;
-    reasoning: string;
-    command?: string;
-    riskType?: string;
-    target?: string;
-  } | null;
-  securityPromptRequest: {
-    requestId: string;
-    prompt: string;
-    filePath?: string;
-    concern?: string;
-  } | null;
-}
-
-interface ToolExecution {
-  id: string;
-  tool: string;
-  status: 'started' | 'running' | 'completed' | 'error';
-  message?: string;
-  startTime: Date;
-  endTime?: Date;
-  details?: any;
-  arguments?: string;
-  result?: string;
-  persona?: string;
-  subagentType?: 'single' | 'parallel';
-}
-
-interface Message {
-  id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  reasoning?: string;  // Chain-of-thought content from content_type: "reasoning"
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
-}
-
-interface LogEntry {
-  id: string;
-  type: string;
-  timestamp: Date;
-  data: any;
-  level: 'info' | 'warning' | 'error' | 'success';
-  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
-}
-
-interface SubagentActivity {
-  id: string;
-  toolCallId: string;
-  toolName: string;
-  phase: 'spawn' | 'output' | 'complete';
-  message: string;
-  timestamp: Date;
-  taskId?: string;
-  persona?: string;
-  isParallel?: boolean;
-  provider?: string;
-  model?: string;
-  taskCount?: number;
-  failures?: number;
-}
 
 interface OnboardingState {
   checking: boolean;
@@ -400,6 +318,8 @@ function App() {
       activeChatId: null,
       chatSessions: [],
       perChatCache: {},
+      securityApprovalRequest: null,
+      securityPromptRequest: null,
     };
   });
 
@@ -1028,7 +948,7 @@ function App() {
 
           // Check if we already have this tool from a legacy tool_execution event
           const existingIdx = prev.toolExecutions.findIndex(t => {
-            const existingID = t.details?.tool_call_id || t.details?.id || t.id;
+            const existingID = getToolCallId(t.details) || t.id;
             return toolCallID && existingID === toolCallID;
           });
 
@@ -1115,7 +1035,7 @@ function App() {
 
           let matched = false;
           const updatedExecutions = prev.toolExecutions.map(t => {
-            const existingID = t.details?.tool_call_id || t.id;
+            const existingID = getToolCallId(t.details) || t.id;
             const match = toolCallID && existingID === toolCallID;
             if (!match) {
               // Also try matching by tool name + no end time (for backward compat)
@@ -1961,7 +1881,7 @@ function App() {
     });
   }, [wsService]);
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     setState(prev => ({
       ...prev,
       currentView: view
@@ -2080,7 +2000,8 @@ function App() {
         // You could send this to an error reporting service here
       }}
     >
-      <ThemeProvider>
+      <SproutAdapterProvider>
+        <ThemeProvider>
         <NotificationProvider>
         <HotkeyProvider>
           <EditorManagerProvider>
@@ -2342,6 +2263,7 @@ function App() {
         </HotkeyProvider>
         </NotificationProvider>
       </ThemeProvider>
+      </SproutAdapterProvider>
     </ErrorBoundary>
   );
 }

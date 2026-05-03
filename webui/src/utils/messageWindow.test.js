@@ -1,20 +1,13 @@
 import { trimMessages, DEFAULT_MAX_MESSAGES } from './messageWindow';
-import type { Message } from '@sprout/ui';
 
-/**
- * Helper to create mock Message objects for testing.
- */
-const makeMsg = (id: string, type: 'user' | 'assistant' = 'user'): Message => ({
+const makeMsg = (id, type = 'user') => ({
   id: String(id),
   type,
   content: `Message ${id}`,
   timestamp: new Date(),
 });
 
-/**
- * Helper to create a sequential array of messages.
- */
-const makeMessages = (count: number): Message[] =>
+const makeMessages = (count) =>
   Array.from({ length: count }, (_, i) => makeMsg(i));
 
 describe('DEFAULT_MAX_MESSAGES', () => {
@@ -109,7 +102,7 @@ describe('trimMessages', () => {
     });
 
     it('returns the same empty array reference', () => {
-      const messages: Message[] = [];
+      const messages = [];
       const result = trimMessages(messages);
 
       expect(result).toBe(messages);

@@ -94,6 +94,65 @@ func LoadAPIKeys() (*APIKeys, error) {
 	return &keys, nil
 }
 
+// LoadAPIKeysFromDir loads API keys from a specific config directory.
+// This is like LoadAPIKeys() but takes an explicit config directory instead
+// of reading from environment variables. It's useful for test environments and
+// other scenarios where you want to load from a specific location without
+// mutating process state.
+//
+// When keyring is active, it loads from both keyring (tracked providers) and the
+// file store at the specified configDir (for backward compatibility with keys
+// stored before keyring was enabled). When file is active, it uses LoadFromDir.
+func LoadAPIKeysFromDir(configDir string) (*APIKeys, error) {
+	backend, err := credentials.GetStorageBackend()
+	if err != nil {
+		return nil, fmt.Errorf("load API keys: %w", err)
+	}
+
+	if _, isKeyring := backend.(*credentials.OSKeyringBackend); isKeyring {
+		// Load tracked providers from the keyring
+		keyringProviders, err := credentials.ListKeyringProviders()
+		if err != nil {
+			return nil, fmt.Errorf("load keyring providers: %w", err)
+		}
+
+		keys := make(APIKeys)
+		keyringSet := make(map[string]bool)
+
+		for _, provider := range keyringProviders {
+			value, _, err := credentials.GetFromActiveBackend(provider)
+			if err != nil {
+				log.Printf("[config] Warning: failed to get key for %q from keyring: %v", provider, err)
+				continue
+			}
+			if value != "" {
+				keys[provider] = value
+				keyringSet[provider] = true
+			}
+		}
+
+		// Also load from file store for keys not yet in the keyring (backward compat)
+		fileStore, err := credentials.LoadFromDir(configDir)
+		if err == nil {
+			for provider, value := range fileStore {
+				if !keyringSet[provider] && value != "" {
+					keys[provider] = value
+				}
+			}
+		}
+
+		return &keys, nil
+	}
+
+	// File backend or unset: use LoadFromDir
+	store, err := credentials.LoadFromDir(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("load API keys: %w", err)
+	}
+	keys := APIKeys(store)
+	return &keys, nil
+}
+
 // SaveAPIKeys saves API keys to the active backend.
 // When keyring is active, each key is stored via SetToActiveBackend, keys that
 // are no longer in the map are deleted from the keyring, and keys that are now
@@ -169,6 +228,79 @@ func SaveAPIKeys(keys *APIKeys) error {
 		return credentials.Save(empty)
 	}
 	return credentials.Save(credentials.Store(*keys))
+}
+
+// SaveAPIKeysToDir saves API keys to a specific config directory.
+// This is like SaveAPIKeys() but routes file-backend saves through
+// credentials.SaveToDir() instead of credentials.Save().
+func SaveAPIKeysToDir(keys *APIKeys, configDir string) error {
+	backend, err := credentials.GetStorageBackend()
+	if err != nil {
+		return fmt.Errorf("save API keys: %w", err)
+	}
+
+	if _, isKeyring := backend.(*credentials.OSKeyringBackend); isKeyring {
+		// Build set of providers the caller wants to keep
+		keepSet := make(map[string]bool)
+		if keys != nil {
+			for provider, value := range *keys {
+				if value != "" {
+					if err := credentials.SetToActiveBackend(provider, value); err != nil {
+						return fmt.Errorf("save API key for %q: %w", provider, err)
+					}
+					keepSet[provider] = true
+				}
+			}
+		}
+
+		// Delete providers that were in the keyring but are no longer in the map
+		keyringProviders, err := credentials.ListKeyringProviders()
+		if err != nil {
+			return fmt.Errorf("list keyring providers for cleanup: %w", err)
+		}
+		for _, p := range keyringProviders {
+			if !keepSet[p] {
+				if err := credentials.DeleteFromActiveBackend(p); err != nil {
+					log.Printf("[config] Warning: failed to delete key for %q from keyring: %v", p, err)
+				}
+			}
+		}
+
+		// Clean file store: remove keys that are now tracked in the keyring
+		// Re-read the (possibly updated) provider list after deletions above
+		keyringProviders, err = credentials.ListKeyringProviders()
+		if err != nil {
+			log.Printf("[config] Warning: could not list keyring providers for file cleanup: %v", err)
+			return nil
+		}
+
+		keyringSet := make(map[string]bool, len(keyringProviders))
+		for _, p := range keyringProviders {
+			keyringSet[p] = true
+		}
+
+		// Use AtomicModifyForDir to atomically read the file store from the
+		// specific configDir, remove keys that are now in the keyring, and save.
+		if err := credentials.AtomicModifyForDir(configDir, func(store credentials.Store) error {
+			for provider := range store {
+				if keyringSet[provider] {
+					delete(store, provider)
+				}
+			}
+			return nil
+		}); err != nil {
+			log.Printf("[config] Warning: failed to clean migrated keys from file store: %v", err)
+		}
+
+		return nil
+	}
+
+	// File backend or unset: use dir-aware save
+	if keys == nil {
+		empty := credentials.Store{}
+		return credentials.SaveToDir(empty, configDir)
+	}
+	return credentials.SaveToDir(credentials.Store(*keys), configDir)
 }
 
 // PopulateFromEnvironment populates API keys from environment variables

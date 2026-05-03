@@ -16,6 +16,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/gorilla/websocket"
 )
 
@@ -307,8 +308,8 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	if strings.TrimSpace(targetClientID) != "" {
 		// Event has explicit client_id - must match connection's client_id
 		if strings.TrimSpace(targetClientID) != strings.TrimSpace(connInfo.ClientID) {
-			// Log mismatched security events for diagnostics
-			if event.Type == events.EventTypeSecurityApprovalRequest || event.Type == events.EventTypeSecurityPromptRequest {
+			// Log mismatched security/interaction events for diagnostics
+			if event.Type == events.EventTypeSecurityApprovalRequest || event.Type == events.EventTypeSecurityPromptRequest || event.Type == events.EventTypeAskUserRequest {
 				log.Printf("[SECURITY] Dropping %s event: payload client_id=%q does not match connection client_id=%q (request_id=%v)",
 					event.Type, strings.TrimSpace(targetClientID), connInfo.ClientID, data["request_id"])
 			}
@@ -336,7 +337,7 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	
 	// No client_id and no chat_id - only allow known global event types
 	switch event.Type {
-	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest:
+	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest, events.EventTypeAskUserRequest:
 		return true
 	default:
 		return false
@@ -404,6 +405,11 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 	case "security_prompt_response":
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handleSecurityPromptResponse(safeConn, msg, clientID)
+		})
+
+	case "ask_user_response":
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+			ws.handleAskUserResponse(safeConn, msg, clientID)
 		})
 	}
 }
@@ -874,6 +880,57 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": fmt.Sprintf("No pending security prompt with id: %s", requestID)},
+		})
+	}
+}
+
+// handleAskUserResponse processes ask_user responses from the webui.
+// The webui sends a { "type": "ask_user_response", "data": { "request_id": "...", "response": "..." } }
+// message when the user responds to a question prompt.
+func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+	data, ok := msg["data"].(map[string]interface{})
+	if !ok {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Invalid ask_user response payload"},
+		})
+		return
+	}
+
+	requestID, _ := data["request_id"].(string)
+	if requestID == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "request_id is required"},
+		})
+		return
+	}
+
+	response, _ := data["response"].(string)
+	response = strings.TrimSpace(response)
+	if response == "" {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "response cannot be empty"},
+		})
+		return
+	}
+
+	mgr := agenttools.GetGlobalAskUserManager()
+	if mgr == nil {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "Ask user manager is not available"},
+		})
+		return
+	}
+
+	if mgr.RespondToAskUser(requestID, response) {
+		log.Printf("Ask user response received: request_id=%s response_length=%d", requestID, len(response))
+	} else {
+		_ = safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": fmt.Sprintf("No pending ask_user request with id: %s", requestID)},
 		})
 	}
 }

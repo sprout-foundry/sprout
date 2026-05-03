@@ -1,30 +1,35 @@
 package agent
 
 import (
+	"strings"
 	"sync"
 	"testing"
 )
 
-func TestSetStreamingEnabled(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- Enable/Disable streaming ---
+
+func TestStreaming_EnableDisable(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+
+	if a.IsStreamingEnabled() {
+		t.Error("streaming should start disabled")
+	}
 
 	a.SetStreamingEnabled(true)
 	if !a.IsStreamingEnabled() {
-		t.Error("expected streaming enabled")
+		t.Error("streaming should be enabled after SetStreamingEnabled(true)")
 	}
 
 	a.SetStreamingEnabled(false)
 	if a.IsStreamingEnabled() {
-		t.Error("expected streaming disabled")
+		t.Error("streaming should be disabled after SetStreamingEnabled(false)")
 	}
 }
 
-func TestSetStreamingEnabled_EnablesMutex(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- Mutex auto-creation on enable ---
 
-	// Ensure no mutex exists initially
+func TestStreaming_EnablesMutex(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
 	a.output.SetOutputMutex(nil)
 
 	a.SetStreamingEnabled(true)
@@ -35,10 +40,8 @@ func TestSetStreamingEnabled_EnablesMutex(t *testing.T) {
 	}
 }
 
-func TestSetStreamingEnabled_DoesNotReplaceExistingMutex(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
-
+func TestStreaming_DoesNotReplaceExistingMutex(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
 	existingMutex := &sync.Mutex{}
 	a.output.SetOutputMutex(existingMutex)
 
@@ -50,53 +53,11 @@ func TestSetStreamingEnabled_DoesNotReplaceExistingMutex(t *testing.T) {
 	}
 }
 
-func TestSetStreamingCallback(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- DisableStreaming clears state ---
 
-	var received string
-	a.SetStreamingCallback(func(s string) {
-		received = s
-	})
-
-	cb := a.output.GetStreamingCallback()
-	if cb == nil {
-		t.Fatal("expected callback to be set")
-	}
-
-	cb("test chunk")
-	if received != "test chunk" {
-		t.Errorf("expected 'test chunk', got %q", received)
-	}
-}
-
-func TestEnableStreaming(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
-
-	var captured string
-	a.EnableStreaming(func(s string) {
-		captured = s
-	})
-
-	if !a.IsStreamingEnabled() {
-		t.Error("expected streaming enabled")
-	}
-
-	cb := a.output.GetStreamingCallback()
-	if cb == nil {
-		t.Fatal("expected callback to be set")
-	}
-
-	cb("enable-streaming-test")
-	if captured != "enable-streaming-test" {
-		t.Errorf("expected 'enable-streaming-test', got %q", captured)
-	}
-}
-
-func TestDisableStreaming(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+func TestStreaming_DisableClearsState(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
 	a.output.SetStreamingCallback(func(s string) {})
 	a.output.SetFlushCallback(func() {})
@@ -105,62 +66,92 @@ func TestDisableStreaming(t *testing.T) {
 	a.DisableStreaming()
 
 	if a.IsStreamingEnabled() {
-		t.Error("expected streaming disabled")
+		t.Error("streaming should be disabled")
 	}
 	if a.output.GetStreamingCallback() != nil {
-		t.Error("expected streaming callback to be nil")
+		t.Error("streaming callback should be nil after DisableStreaming")
 	}
 	if a.output.GetFlushCallback() != nil {
-		t.Error("expected flush callback to be nil")
+		t.Error("flush callback should be nil after DisableStreaming")
 	}
 }
 
-func TestSetFlushCallback(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- SetStreamingCallback / EnableStreaming ---
+
+func TestStreaming_SetStreamingCallback(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
+
+	var received string
+	a.SetStreamingCallback(func(s string) { received = s })
+
+	cb := a.output.GetStreamingCallback()
+	if cb == nil {
+		t.Fatal("expected callback to be set")
+	}
+	cb("test chunk")
+	if received != "test chunk" {
+		t.Errorf("expected 'test chunk', got %q", received)
+	}
+}
+
+func TestStreaming_EnableStreaming(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
+
+	var captured string
+	a.EnableStreaming(func(s string) { captured = s })
+
+	if !a.IsStreamingEnabled() {
+		t.Error("streaming should be enabled after EnableStreaming")
+	}
+
+	cb := a.output.GetStreamingCallback()
+	if cb == nil {
+		t.Fatal("expected callback to be set")
+	}
+	cb("enable-streaming-test")
+	if captured != "enable-streaming-test" {
+		t.Errorf("expected 'enable-streaming-test', got %q", captured)
+	}
+}
+
+// --- SetFlushCallback ---
+
+func TestStreaming_SetFlushCallback(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
 	var flushed bool
-	a.SetFlushCallback(func() {
-		flushed = true
-	})
+	a.SetFlushCallback(func() { flushed = true })
 
 	cb := a.output.GetFlushCallback()
 	if cb == nil {
 		t.Fatal("expected flush callback to be set")
 	}
 	cb()
-
 	if !flushed {
 		t.Error("expected flush callback to have been called")
 	}
 }
 
-func TestSetOutputMutex(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- SetOutputMutex ---
 
+func TestStreaming_SetOutputMutex(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
 	mu := &sync.Mutex{}
 	a.SetOutputMutex(mu)
-
 	if a.output.GetOutputMutex() != mu {
 		t.Error("expected same mutex")
 	}
 }
 
-func TestIsStreamingEnabled_Default(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- PublishStreamChunk: router path ---
 
-	if a.IsStreamingEnabled() {
-		t.Error("expected streaming disabled by default")
-	}
-}
+func TestStreaming_PublishStreamChunk_WithRouter(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
-func TestPublishStreamChunk_WithRouter(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
-
-	// Set up a streaming callback to capture terminal output
 	var terminalChunks []string
 	a.output.SetStreamingCallback(func(s string) {
 		terminalChunks = append(terminalChunks, s)
@@ -170,7 +161,7 @@ func TestPublishStreamChunk_WithRouter(t *testing.T) {
 	router := NewOutputRouter(a, nil)
 	a.output.SetOutputRouter(router)
 
-	// Assistant text should go to terminal callback
+	// Assistant text should go to terminal callback via router
 	a.PublishStreamChunk("hello world", "assistant_text")
 
 	if len(terminalChunks) != 1 {
@@ -181,9 +172,9 @@ func TestPublishStreamChunk_WithRouter(t *testing.T) {
 	}
 }
 
-func TestPublishStreamChunk_WithRouter_ReasoningNotToTerminal(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+func TestStreaming_PublishStreamChunk_WithRouter_ReasoningNotToTerminal(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
 	var terminalChunks []string
 	a.output.SetStreamingCallback(func(s string) {
@@ -194,7 +185,7 @@ func TestPublishStreamChunk_WithRouter_ReasoningNotToTerminal(t *testing.T) {
 	router := NewOutputRouter(a, nil)
 	a.output.SetOutputRouter(router)
 
-	// Reasoning should NOT go to terminal callback (default)
+	// Reasoning should NOT go to terminal callback via router
 	a.PublishStreamChunk("reasoning step", "reasoning")
 
 	if len(terminalChunks) != 0 {
@@ -202,9 +193,9 @@ func TestPublishStreamChunk_WithRouter_ReasoningNotToTerminal(t *testing.T) {
 	}
 }
 
-func TestPublishStreamChunk_DefaultContentType(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+func TestStreaming_PublishStreamChunk_WithRouter_DefaultContentType(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
 	var terminalChunks []string
 	a.output.SetStreamingCallback(func(s string) {
@@ -226,16 +217,18 @@ func TestPublishStreamChunk_DefaultContentType(t *testing.T) {
 	}
 }
 
-func TestPublishStreamChunk_WithoutRouter_WithCallback(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+// --- PublishStreamChunk: fallback path (no router) ---
+
+func TestStreaming_PublishStreamChunk_NoRouter(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
 	var callbackChunks []string
 	a.output.SetStreamingCallback(func(s string) {
 		callbackChunks = append(callbackChunks, s)
 	})
-	// No router set — should use fallback path
 
+	// No router set — should use fallback path
 	a.PublishStreamChunk("fallback chunk", "assistant_text")
 
 	if len(callbackChunks) != 1 {
@@ -246,20 +239,45 @@ func TestPublishStreamChunk_WithoutRouter_WithCallback(t *testing.T) {
 	}
 }
 
-func TestPublishStreamChunk_WithoutRouter_Reasoning_NoCallback(t *testing.T) {
-	a := &Agent{}
-	a.initSubManagers()
+func TestStreaming_PublishStreamChunk_NoRouter_DefaultContentType(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
+
+	var received string
+	a.output.SetStreamingCallback(func(s string) { received = s })
+
+	// Empty content type should default to "assistant_text"
+	a.PublishStreamChunk("test", "")
+	if received != "test" {
+		t.Errorf("expected 'test', got %q", received)
+	}
+}
+
+func TestStreaming_PublishStreamChunk_NoRouter_ReasoningNotForwarded(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
 
 	var callbackCalled bool
-	a.output.SetStreamingCallback(func(s string) {
-		callbackCalled = true
-	})
-	// No router set
+	a.output.SetStreamingCallback(func(s string) { callbackCalled = true })
 
 	// Reasoning content should NOT go to streaming callback in fallback path
 	a.PublishStreamChunk("reasoning", "reasoning")
 
 	if callbackCalled {
 		t.Error("reasoning content should not trigger streaming callback in fallback path")
+	}
+}
+
+func TestStreaming_PublishStreamChunk_CallbackIntegration(t *testing.T) {
+	a := &Agent{output: NewAgentOutputManager()}
+	a.output.SetOutputMutex(&sync.Mutex{})
+
+	var buf strings.Builder
+	a.output.SetStreamingCallback(func(s string) { buf.WriteString(s) })
+	a.output.SetStreamingEnabled(true)
+
+	a.PublishStreamChunk("abc", "")
+	if buf.String() != "abc" {
+		t.Errorf("expected 'abc' in buffer, got %q", buf.String())
 	}
 }

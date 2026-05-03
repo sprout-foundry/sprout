@@ -183,3 +183,16 @@ npm run build  # Should compile with @sprout/* packages
 - [Integration Contract Analysis](../sprout-foundry/docs/INTEGRATION_CONTRACT_ANALYSIS.md)
 - [Compatibility Matrix](../sprout-foundry/COMPATIBILITY.md)
 - [sprout-foundry AGENTS.md](../sprout-foundry/AGENTS.md)
+
+### Testing with sprout-foundry
+
+**Recommended**: Use Docker Compose in sprout-foundry repo
+```bash
+cd ../sprout-foundry
+docker compose -f docker-compose.local.yml up --build -d
+
+# Then run integration tests
+make test-integration
+```
+
+**Manual**: If Docker is not available, ensure PostgreSQL is running and sprout binary is on PATH.

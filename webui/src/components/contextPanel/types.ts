@@ -1,77 +1,34 @@
 import type { ReactNode, CSSProperties } from 'react';
+import type {
+  ToolExecution,
+  LogEntry,
+  SubagentActivity,
+  TodoItem,
+  FileEdit,
+  LiveLogLine,
+  RevisionFile,
+  Revision,
+  RevisionDetailFile,
+} from '@sprout/ui';
+import type { SessionEntry } from '../../services/api/types';
 
-// ── Core data interfaces ───────────────────────────────────────────
+// Re-export shared types from @sprout/ui for convenience
+export type {
+  ToolExecution,
+  LogEntry,
+  SubagentActivity,
+  TodoItem,
+  FileEdit,
+  LiveLogLine,
+  RevisionFile,
+  Revision,
+  RevisionDetailFile,
+};
 
-export interface ToolExecution {
-  id: string;
-  tool: string;
-  status: 'started' | 'running' | 'completed' | 'error';
-  message?: string;
-  startTime: Date;
-  endTime?: Date;
-  details?: unknown;
-  arguments?: string;
-  result?: string;
-  persona?: string;
-  subagentType?: 'single' | 'parallel';
-  queryId?: number;
-}
+// Re-export SessionEntry from services/api/types for convenience
+export type { SessionEntry };
 
-export interface LogEntry {
-  id: string;
-  type: string;
-  timestamp: Date;
-  data: unknown;
-  level: 'info' | 'warning' | 'error' | 'success';
-  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
-}
-
-export interface SubagentActivity {
-  id: string;
-  toolCallId: string;
-  toolName: string;
-  phase: 'spawn' | 'output' | 'complete' | 'step';
-  message: string;
-  timestamp: Date;
-  taskId?: string;
-  persona?: string;
-  isParallel?: boolean;
-  provider?: string;
-  model?: string;
-  taskCount?: number;
-  failures?: number;
-  tool?: string;
-}
-
-export interface RevisionFile {
-  file_revision_hash?: string;
-  path: string;
-  operation: string;
-  lines_added: number;
-  lines_deleted: number;
-}
-
-export interface Revision {
-  revision_id: string;
-  timestamp: string;
-  files: RevisionFile[];
-  description: string;
-}
-
-export interface RevisionDetailFile extends RevisionFile {
-  original_code: string;
-  new_code: string;
-  diff: string;
-}
-
-export interface SessionEntry {
-  session_id: string;
-  name: string;
-  working_directory: string;
-  last_updated: string;
-  message_count: number;
-  total_tokens: number;
-}
+// ── WebUI-specific Core data interfaces ─────────────────────────────
 
 export interface StatusMetrics {
   userMsgs: number;
@@ -89,9 +46,9 @@ export interface StatusMetrics {
   duration: number;
 }
 
-// ── Derived types for subagent runs ────────────────────────────────
+// ── Derived types for subagent runs (webui view-model, not @sprout/ui) ──
 
-export interface SubagentActivityItem {
+export interface ContextSubagentActivityItem {
   id: string;
   timestamp: Date;
   taskId?: string;
@@ -99,31 +56,24 @@ export interface SubagentActivityItem {
   isSpawn: boolean;
 }
 
-export interface SubagentTaskGroup {
+export interface ContextSubagentTaskGroup {
   taskId: string | null;
-  items: SubagentActivityItem[];
-  latest: SubagentActivityItem;
+  items: ContextSubagentActivityItem[];
+  latest: ContextSubagentActivityItem;
 }
 
-export interface SubagentRun {
+export interface ContextSubagentRun {
   tool: ToolExecution;
   prompt?: string;
-  latestActivity?: SubagentActivityItem;
-  activities: SubagentActivityItem[];
-  orderedTaskGroups: SubagentTaskGroup[];
+  latestActivity?: ContextSubagentActivityItem;
+  activities: ContextSubagentActivityItem[];
+  orderedTaskGroups: ContextSubagentTaskGroup[];
 }
 
-export interface NormalizedActivity {
+export interface ContextNormalizedActivity {
   taskId?: string;
   label: string;
   isSpawn: boolean;
-}
-
-export interface LiveLogLine {
-  id: string;
-  text: string;
-  timestamp: Date;
-  taskId?: string;
 }
 
 // ── Props ───────────────────────────────────────────────────────────
@@ -141,20 +91,10 @@ export interface ContextPanelBaseProps {
 export interface ChatContextPanelProps extends ContextPanelBaseProps {
   context: 'chat';
   toolExecutions: ToolExecution[];
-  fileEdits: Array<{
-    path: string;
-    action: string;
-    timestamp: Date;
-    linesAdded?: number;
-    linesDeleted?: number;
-  }>;
+  fileEdits: FileEdit[];
   logs: LogEntry[];
   subagentActivities: SubagentActivity[];
-  currentTodos: Array<{
-    id: string;
-    content: string;
-    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  }>;
+  currentTodos: TodoItem[];
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;

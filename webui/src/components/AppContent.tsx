@@ -19,7 +19,8 @@ import { ApiService, SproutInstance } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import type { ChatSession } from '../services/chatSessions';
-import type { PerChatState } from '../types/app';
+import type { AppState, PerChatState } from '../types/app';
+import type { TodoItem, LogEntry } from '@sprout/ui';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 
 const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
@@ -35,76 +36,6 @@ const toPaneFlex = (weight: number): React.CSSProperties => ({
   minWidth: 0,
   minHeight: 0,
 });
-
-interface ToolExecution {
-  id: string;
-  tool: string;
-  status: 'started' | 'running' | 'completed' | 'error';
-  message?: string;
-  startTime: Date;
-  endTime?: Date;
-  details?: unknown;
-  arguments?: string;
-  result?: string;
-  persona?: string;
-  subagentType?: 'single' | 'parallel';
-}
-
-interface Message {
-  id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  reasoning?: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
-}
-
-interface LogEntry {
-  id: string;
-  type: string;
-  timestamp: Date;
-  data: unknown;
-  level: 'info' | 'warning' | 'error' | 'success';
-  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
-}
-
-interface AppState {
-  isConnected: boolean;
-  provider: string;
-  model: string;
-  queryCount: number;
-  messages: Message[];
-  logs: LogEntry[];
-  isProcessing: boolean;
-  lastError: string | null;
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
-  toolExecutions: ToolExecution[];
-  queryProgress: unknown;
-  stats: Record<string, unknown>;
-  currentTodos: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }>;
-  fileEdits: Array<{
-    path: string;
-    action: string;
-    timestamp: Date;
-    linesAdded?: number;
-    linesDeleted?: number;
-  }>;
-  subagentActivities: Array<{
-    id: string;
-    toolCallId: string;
-    toolName: string;
-    phase: 'spawn' | 'output' | 'complete';
-    message: string;
-    timestamp: Date;
-    taskId?: string;
-    persona?: string;
-    isParallel?: boolean;
-    provider?: string;
-    model?: string;
-    taskCount?: number;
-    failures?: number;
-  }>;
-}
 
 interface AppContentProps {
   state: AppState;
@@ -145,6 +76,7 @@ interface AppContentProps {
   activeChatId?: string | null;
   perChatCache?: Record<string, PerChatState>;
   onActiveChatChange?: (id: string) => void;
+  onTerminalOutput?: (output: string) => void;
   onCreateChat?: () => Promise<string | null>;
   onDeleteChat?: (id: string) => void;
   onRenameChat?: (id: string, name: string) => void;

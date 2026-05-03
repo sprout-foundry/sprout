@@ -1,6 +1,7 @@
 import React, { ComponentProps } from 'react';
 import { File } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import type { PerChatState } from '../types/app';
 import Chat from './Chat';
 import EditorPane from './EditorPane';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
@@ -8,52 +9,8 @@ import CompareTab from './CompareTab';
 import ReviewWorkspaceTab from './ReviewWorkspaceTab';
 import './WorkspacePane.css';
 
-interface ToolExecution {
-  id: string;
-  tool: string;
-  status: 'started' | 'running' | 'completed' | 'error';
-  message?: string;
-  startTime: Date;
-  endTime?: Date;
-  details?: unknown;
-  arguments?: string;
-  result?: string;
-  persona?: string;
-  subagentType?: 'single' | 'parallel';
-}
-
-interface Message {
-  id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  reasoning?: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean }>;
-}
-
-type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
-
-interface TodoItem {
-  id: string;
-  content: string;
-  status: TodoStatus;
-}
-
-interface SubagentActivity {
-  id: string;
-  toolCallId: string;
-  toolName: string;
-  phase: 'spawn' | 'output' | 'complete';
-  message: string;
-  timestamp: Date;
-  taskId?: string;
-  persona?: string;
-  isParallel?: boolean;
-  provider?: string;
-  model?: string;
-  taskCount?: number;
-  failures?: number;
-}
+// Re-export PerChatState for downstream consumers
+export type { PerChatState };
 
 interface DeepReviewResult {
   message: string;
@@ -77,19 +34,9 @@ interface GitDiffResponse {
   diff: string;
 }
 
-interface PerChatCacheEntry {
-  messages: Message[];
-  toolExecutions: ToolExecution[];
-  subagentActivities: SubagentActivity[];
-  currentTodos: TodoItem[];
-  queryProgress: unknown;
-  lastError: string | null;
-  isProcessing: boolean;
-}
-
 interface WorkspacePaneProps {
   paneId: string;
-  perChatCache?: Record<string, PerChatCacheEntry>;
+  perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   onOpenCommandPalette?: () => void;
   onOpenTerminal?: () => void;

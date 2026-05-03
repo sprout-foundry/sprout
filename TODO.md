@@ -662,7 +662,7 @@ These are high-impact structural improvements identified through code evaluation
 
 [x] - BACKEND: Fix AskUser tool for WebUI mode — `pkg/agent_tools/ask_user.go` reads from stdin (which is `/dev/null` in daemon mode). Route through the event bus + approval manager pattern (like security approvals) so the question appears in the WebUI chat.
 [x] - BACKEND: Add proactive rate limiting — The API client only reacts to 429 responses with retry. Add a simple token-bucket rate limiter per provider to prevent cascading 429s when running multiple subagents. `pkg/agent_api/provider_adapter.go`
-[] - BACKEND: Add MCP client reconnection — If an MCP server connection drops, the client doesn't reconnect. Add exponential backoff reconnection with health check pings. `pkg/mcp/client.go`
+[x] - BACKEND: Add MCP client reconnection — If an MCP server connection drops, the client doesn't reconnect. Add exponential backoff reconnection with health check pings. `pkg/mcp/client.go`
 [] - BACKEND: Remove global env mutation in config manager — `NewManagerWithLayers()` calls `envutil.SetEnv("CONFIG", dir)` which mutates process-level environment variables. Pass paths explicitly through function arguments instead. `pkg/configuration/config.go`
 
 ## Reliability Gaps

@@ -33,11 +33,6 @@ func (te *ToolExecutor) tryExecuteMCPTool(toolName string, args map[string]inter
 
 // shouldStopExecution checks if execution should stop after a tool
 func (te *ToolExecutor) shouldStopExecution(toolName, result string) bool {
-	// Stop on ask_user to wait for response
-	if toolName == "ask_user" {
-		return true
-	}
-
 	// Stop on critical errors
 	if strings.Contains(result, "CRITICAL ERROR") ||
 		strings.Contains(result, "FATAL ERROR") {

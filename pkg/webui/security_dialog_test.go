@@ -315,6 +315,14 @@ func TestSecurityEventsInGlobalAllowlist(t *testing.T) {
 	if !ws.shouldForwardEventToConnection(promptEvent, conn) {
 		t.Error("REGRESSION: security_prompt_request must be in global event allowlist — WebUI file security prompts depend on this")
 	}
+
+	askUserEvent := events.UIEvent{
+		Type: events.EventTypeAskUserRequest,
+		Data: map[string]interface{}{"request_id": "reg_3"},
+	}
+	if !ws.shouldForwardEventToConnection(askUserEvent, conn) {
+		t.Error("REGRESSION: ask_user_request must be in global event allowlist — WebUI ask_user dialogs depend on this")
+	}
 }
 
 // TestSecurityEventsNotForwardedToWrongClient verifies targeted security

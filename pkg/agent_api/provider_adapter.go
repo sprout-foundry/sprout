@@ -203,33 +203,13 @@ func isVisionModel(modelID string) bool {
 
 // containsReasoningModel checks if a model supports reasoning
 func containsReasoningModel(model string) bool {
-	reasoningModels := []string{"o1", "o3", "o4"}
-	for _, rm := range reasoningModels {
-		if contains(model, rm) {
+	modelLower := strings.ToLower(model)
+	for _, rm := range []string{"o1", "o3", "o4"} {
+		if strings.Contains(modelLower, rm) {
 			return true
 		}
 	}
 	return false
-}
-
-// contains checks if a string contains a substring (case-insensitive)
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) &&
-		(s == substr ||
-			len(s) > len(substr) &&
-				(s[:len(substr)] == substr ||
-					s[len(s)-len(substr):] == substr ||
-					findSubstring(s, substr) != -1))
-}
-
-// findSubstring finds a substring in a string (simple implementation)
-func findSubstring(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }
 
 // CreateProviderFromClient creates a Provider from an existing ClientInterface

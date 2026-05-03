@@ -48,8 +48,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		result, err := tools.ReadFileWithRange(ctx, path, startLine, endLine)
 
 		if err != nil {
-			ctx2 := handleFileSecurityError(ctx, a, "read_file", path, err)
-			if ctx2 != ctx {
+			if ctx2, approved := handleFileSecurityError(ctx, a, "read_file", path, err); approved {
 				result, err = tools.ReadFileWithRange(ctx2, path, startLine, endLine)
 			}
 		}
@@ -70,8 +69,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	result, err := tools.ReadFile(ctx, path)
 
 	if err != nil {
-		ctx2 := handleFileSecurityError(ctx, a, "read_file", path, err)
-		if ctx2 != ctx {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "read_file", path, err); approved {
 			result, err = tools.ReadFile(ctx2, path)
 		}
 	}
@@ -364,8 +362,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	result, err := tools.WriteFile(ctx, path, content)
 
 	if err != nil {
-		ctx2 := handleFileSecurityError(ctx, a, "write_file", path, err)
-		if ctx2 != ctx {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "write_file", path, err); approved {
 			result, err = tools.WriteFile(ctx2, path, content)
 		}
 	}
@@ -435,8 +432,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	result, err := tools.EditFile(ctx, path, oldStr, newStr)
 
 	if err != nil {
-		ctx2 := handleFileSecurityError(ctx, a, "edit_file", path, err)
-		if ctx2 != ctx {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, err); approved {
 			originalContent, err = tools.ReadFile(ctx2, path)
 			if err != nil {
 				return "", fmt.Errorf("failed to read original file for diff: %w", err)

@@ -16,6 +16,7 @@ import './App.css';
 import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
+import AskUserDialog from './components/AskUserDialog';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
@@ -323,6 +324,7 @@ function App() {
       perChatCache: {},
       securityApprovalRequest: null,
       securityPromptRequest: null,
+      askUserRequest: null,
     };
   });
 
@@ -427,6 +429,15 @@ function App() {
       data: { request_id: requestId, response },
     });
     setState((prev) => ({ ...prev, securityPromptRequest: null }));
+  }, [wsService]);
+
+  const handleAskUserResponse = useCallback((requestId: string, response: string) => {
+    if (!wsService.isConnected()) return;
+    wsService.sendEvent({
+      type: 'ask_user_response',
+      data: { request_id: requestId, response },
+    });
+    setState((prev) => ({ ...prev, askUserRequest: null }));
   }, [wsService]);
 
   const selectedOnboardingProvider = useMemo(() => {
@@ -1402,6 +1413,22 @@ function App() {
         debugLog('[security] Prompt request:', event.data?.file_path, event.data?.concern);
         break;
 
+      case 'ask_user_request':
+        logEntry.category = 'system';
+        logEntry.level = 'info';
+        if (event.data?.status === 'responded') break;
+        if (!event.data?.question) break;
+        setState((prev) => ({
+          ...prev,
+          askUserRequest: {
+            requestId: String(event.data.request_id || ''),
+            question: String(event.data.question || ''),
+          },
+          logs: [...prev.logs, logEntry],
+        }));
+        debugLog('[ask_user] Question:', event.data?.question);
+        break;
+
       default:
         // Handle any unknown event types
         logEntry.level = 'warning';
@@ -2073,6 +2100,13 @@ function App() {
                   filePath={state.securityPromptRequest.filePath}
                   concern={state.securityPromptRequest.concern}
                   onRespond={handleSecurityPromptResponse}
+                />
+              )}
+              {state.askUserRequest && (
+                <AskUserDialog
+                  requestId={state.askUserRequest.requestId}
+                  question={state.askUserRequest.question}
+                  onRespond={handleAskUserResponse}
                 />
               )}
               {onboarding.open && (

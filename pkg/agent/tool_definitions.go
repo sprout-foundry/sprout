@@ -188,6 +188,16 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleTodoRead,
 	})
 
+	// ask_user - Ask user a question and wait for response
+	registry.RegisterTool(ToolConfig{
+		Name:        "ask_user",
+		Description: "Ask the user a question and wait for their response. Use this when you need clarification, user input, or a decision that cannot be determined from context alone.",
+		Parameters: []ParameterConfig{
+			{"question", "string", true, []string{}, "The question to ask the user (required)"},
+		},
+		Handler: handleAskUser,
+	})
+
 	// Register run_subagent tool - for multi-agent collaboration
 	registry.RegisterTool(ToolConfig{
 		Name:        "run_subagent",
@@ -423,13 +433,20 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	// This check ensures that subagents (identified by SPROUT_SUBAGENT env var)
 		// cannot spawn further subagents, preventing runaway agent chains
 	if configuration.GetEnvSimple("SUBAGENT") == "1" {
-		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
-			const errMsg = "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
-				"This restriction prevents runaway agent chains and ensures proper task delegation. " +
-				"If you need additional work done, please complete your current task and return " +
-				"your results to the primary agent for further delegation."
+		if toolName == "run_subagent" || toolName == "run_parallel_subagents" || toolName == "ask_user" {
+			var errMsg string
+			switch toolName {
+			case "ask_user":
+				errMsg = "SUBAGENT_RESTRICTION: Subagents cannot ask the user questions directly. " +
+					"Complete your current task and return results to the primary agent for further delegation."
+			default:
+				errMsg = "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
+					"This restriction prevents runaway agent chains and ensures proper task delegation. " +
+					"If you need additional work done, please complete your current task and return " +
+					"your results to the primary agent for further delegation."
+			}
 			if agent != nil && agent.debug {
-				agent.debugLog("[NO] Blocked subagent tool '%s' - nested subagents are not allowed\n", toolName)
+				agent.debugLog("[NO] Blocked subagent tool '%s' - not allowed in subagent context\n", toolName)
 			}
 			return nil, "", agenterrors.NewSecurityError(errMsg, nil)
 		}

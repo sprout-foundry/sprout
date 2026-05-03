@@ -655,7 +655,8 @@ These are high-impact structural improvements identified through code evaluation
 [x] - FRONTEND: Eliminate `any` types in critical paths — Define proper TypeScript interfaces for all event types and API responses. Enable `no-explicit-any` as `error` in ESLint. `webui/src/App.tsx`, `contexts/EditorManagerContext.tsx`, `services/api.ts`
 [x] - FRONTEND: Deduplicate types between webui and packages/ui — Define shared types in `packages/ui/src/types/` and import from webui. `Message`, `ToolExecution`, and other interfaces are defined independently in both packages.
 [x] - FRONTEND: Deduplicate types between webui and packages/ui — Define shared types in `packages/ui/src/types/` and import from webui. `Message`, `ToolExecution`, and other interfaces are defined independently in both packages.
-[] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`
+[x] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`
+[x] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`
 
 ## Backend Architecture
 

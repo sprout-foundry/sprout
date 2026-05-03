@@ -23,7 +23,7 @@ export type LogLevel = keyof typeof Levels;
 // Module-level minimum log level
 // Default to debug in non-production, warn in production
 const getProductionLevel = () => {
-  return process.env.NODE_ENV === 'production' ? Levels.warn : Levels.debug;
+  return import.meta.env.PROD ? Levels.warn : Levels.debug;
 };
 let minLevel: number = getProductionLevel();
 
@@ -47,8 +47,8 @@ export function getMinLevel(): number {
  * Debug log - only shows in non-production environments AND if minLevel <= debug
  */
 export function debugLog(...args: unknown[]) {
-  // Check NODE_ENV first (existing behavior)
-  if (process.env.NODE_ENV !== 'production' && minLevel <= Levels.debug) {
+  // Check production env first (existing behavior)
+  if (!import.meta.env.PROD && minLevel <= Levels.debug) {
     console.log(...args);
   }
 }

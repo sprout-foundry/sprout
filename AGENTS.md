@@ -60,3 +60,126 @@ python3 test_runner.py          # Run E2E tests
 - **No code duplication**: Use existing utilities
 - **Self-documenting code**: Descriptive names; comments only for "why"
 - **Incremental refactoring**: Build after each extraction step
+
+## Integration with Sprout Foundry
+
+This repo (`sprout`) integrates with the [`sprout-foundry`](../sprout-foundry) repository. Both repos must stay in sync.
+
+### 1. Binary Distribution
+
+**How it works**:
+- The `sprout` binary is distributed via `scripts/install.sh`
+- sprout-foundry installs it in Docker images using `SPROUT_VERSION` build argument
+- Version is tracked in sprout-foundry's `VERSION` file
+
+**When to update version**:
+- After releasing a new version (create GitHub release)
+- When sprout-foundry needs new features/fixes
+- Update `SPROUT_VERSION` in sprout-foundry's `VERSION` file
+
+**Release process**:
+```bash
+# Create new release
+git tag -a v1.3.0 -m "Release 1.3.0"
+git push origin v1.3.0
+# Create GitHub release with binary assets
+```
+
+### 2. NPM Packages
+
+**Packages maintained here** (consumed by sprout-foundry):
+- `packages/events` - Shared events transport (`@sprout/events`)
+- `packages/ui` - Shared React components (`@sprout/ui`)
+
+**Build requirements**:
+- Packages must be built before sprout-foundry can use them
+- Build command: `npm run build` (in package directory or root)
+- Output: `dist/` directory with compiled JS and TypeScript definitions
+
+**When updating packages**:
+1. Make changes in `packages/`
+2. Build: `npm run build`
+3. Test in sprout-foundry: `cd ../sprout-foundry/webui && npm install`
+4. Update version in `packages/*/package.json` if breaking changes
+5. Document changes in `COMPATIBILITY.md` in sprout-foundry
+
+**Version management**:
+- Package versions are in `packages/*/package.json`
+- sprout-foundry references via `file:../packages/...` paths
+- Breaking changes require version bump and compatibility update
+
+### 3. API Contracts
+
+**Daemon API** (sprout runs in workspace containers):
+- Port: 56000 (configurable via `--port` or `--web-port`)
+- Health: `GET /health` → `{"status":"ok","port":56000,"uptime":"..."}`
+- WebSocket: Terminal/editor sessions
+- Environment variables: `SPROUT_BIND_ADDR`, `SPROUT_ALLOWED_ORIGINS`, `SPROUT_TRUSTED_USER_HEADER`
+
+**Task Runner Output** (`sprout --output-json`):
+```json
+{
+  "status": "success|error",
+  "query": "original prompt",
+  "error": "error message (if error)",
+  "files_modified": ["file1", "file2"],
+  "git_diff": "unified diff",
+  "metrics": {
+    "elapsed_seconds": 45.2,
+    "tokens_in": 12500,
+    "tokens_out": 3200,
+    "llm_calls": 4,
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-20250514"
+  }
+}
+```
+
+**When changing contracts**:
+1. Update `COMPATIBILITY.md` in sprout-foundry
+2. Bump version in `VERSION` file (sprout-foundry)
+3. Test integration thoroughly
+4. Document breaking changes
+
+### 4. Testing Integration
+
+**Test locally**:
+```bash
+# Build sprout binary
+go build -o ~/bin/sprout ./cmd/sprout
+
+# Test with sprout-foundry
+cd ../sprout-foundry
+make test-integration  # Requires sprout on PATH
+```
+
+**Verify package integration**:
+```bash
+# Build packages
+cd packages/events && npm run build
+cd ../ui && npm run build
+
+# Test in sprout-foundry
+cd ../sprout-foundry/webui
+npm install
+npm run build  # Should compile with @sprout/* packages
+```
+
+### 5. Common Integration Issues
+
+**"Package dist/ not found"**:
+- Build the package: `cd packages/<name> && npm run build`
+
+**"Cannot find module '@sprout/*'"**:
+- Check if packages are built
+- Reinstall in sprout-foundry: `cd ../sprout-foundry/webui && npm install`
+
+**Version mismatch**:
+- Check sprout-foundry's `VERSION` file
+- Ensure sprout version matches requirements in `COMPATIBILITY.md`
+
+### Resources
+
+- [Integration Contract Analysis](../sprout-foundry/docs/INTEGRATION_CONTRACT_ANALYSIS.md)
+- [Compatibility Matrix](../sprout-foundry/COMPATIBILITY.md)
+- [sprout-foundry AGENTS.md](../sprout-foundry/AGENTS.md)

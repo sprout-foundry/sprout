@@ -94,6 +94,10 @@ export interface AppState {
     filePath?: string;
     concern?: string;
   } | null;
+  askUserRequest: {
+    requestId: string;
+    question: string;
+  } | null;
 }
 
 export interface OnboardingState {

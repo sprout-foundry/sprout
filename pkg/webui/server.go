@@ -23,6 +23,7 @@ import (
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"github.com/sprout-foundry/sprout/pkg/security"
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/gorilla/websocket"
 )
 
@@ -162,6 +163,9 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 
 	securityPromptMgr := security.NewApprovalManager()
 	security.SetGlobalApprovalManager(securityPromptMgr)
+
+	askUserMgr := agenttools.NewAskUserManager()
+	agenttools.SetGlobalAskUserManager(askUserMgr)
 
 	// Run startup permission check
 	if configDir, err := configuration.GetConfigDir(); err == nil {

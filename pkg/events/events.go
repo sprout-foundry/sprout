@@ -33,6 +33,7 @@ const (
 	EventTypeValidation              = "validation"
 	EventTypeSecurityApprovalRequest = "security_approval_request"
 	EventTypeSecurityPromptRequest  = "security_prompt_request"
+	EventTypeAskUserRequest        = "ask_user_request"
 	EventTypeAgentMessage            = "agent_message"
 	EventTypeWorkspaceChanged        = "workspace_changed"
 	EventTypeSessionTerminated       = "session_terminated"
@@ -92,7 +93,8 @@ func (eb *EventBus) Publish(eventType string, data any) {
 	eb.mutex.Unlock()
 
 	isCritical := eventType == EventTypeSecurityApprovalRequest ||
-		eventType == EventTypeSecurityPromptRequest
+		eventType == EventTypeSecurityPromptRequest ||
+		eventType == EventTypeAskUserRequest
 
 	// Publish to all subscribers without holding the lock
 	for _, ch := range subscribers {
@@ -347,4 +349,16 @@ func SecurityPromptResponseEvent(requestID, response bool) map[string]interface{
 		"request_id": requestID,
 		"response":   response,
 	}
+}
+
+// AskUserRequestEvent creates an ask_user request event for the webui
+func AskUserRequestEvent(requestID, question, clientID string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"request_id": requestID,
+		"question":   question,
+	}
+	if clientID != "" {
+		payload["client_id"] = clientID
+	}
+	return payload
 }

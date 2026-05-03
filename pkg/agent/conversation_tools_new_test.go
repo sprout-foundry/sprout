@@ -1,150 +1,372 @@
 package agent
 
 import (
-	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-func TestSanitizeToolMessagesV2(t *testing.T) {
-	// Create a test conversation handler
-	a := newTestAgent(t)
-	ch := NewConversationHandler(a)
+// makeTestToolCall creates a ToolCall with the given ID and function name/arguments.
+func makeTestToolCall(id, name, args string) api.ToolCall {
+	tc := api.ToolCall{ID: id, Type: "function"}
+	tc.Function.Name = name
+	tc.Function.Arguments = args
+	return tc
+}
 
-	t.Run("empty messages", func(t *testing.T) {
-		result := ch.sanitizeToolMessages(nil)
-		if len(result) != 0 {
-			t.Errorf("sanitizeToolMessages(nil) = %d items; want 0", len(result))
-		}
-	})
+// newTestHandlerForProvider creates a minimal ConversationHandler with an agent
+// that reports the given provider for sanitization testing.
+func newTestHandlerForProvider(provider string) *ConversationHandler {
+	state := NewAgentStateManager(false)
+	state.SetSessionProvider(api.ClientType(provider))
+	agent := &Agent{
+		debug: true,
+		state: state,
+	}
+	return &ConversationHandler{
+		agent: agent,
+	}
+}
 
-	t.Run("only user messages", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "user", Content: "hello"},
-			{Role: "system", Content: "instructions"},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 2 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 2", len(result))
-		}
-	})
+func TestSanitizeToolMessagesEmpty(t *testing.T) {
+	ch := newTestHandlerForProvider("")
 
-	t.Run("proper tool call pair", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "assistant", Content: "Let me check", ToolCalls: []api.ToolCall{
-				{ID: "call_1", Type: "function", Function: struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}{Name: "shell_command", Arguments: "{}"}},
-			}},
-			{Role: "tool", Content: "output", ToolCallId: "call_1"},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 2 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 2 (both kept)", len(result))
-		}
-	})
+	tests := []struct {
+		name     string
+		input    []api.Message
+		expected int // expected message count
+	}{
+		{"nil input", nil, 0},
+		{"empty slice", []api.Message{}, 0},
+		{"single user message", []api.Message{{Role: "user", Content: "hello"}}, 1},
+	}
 
-	t.Run("orphaned tool result removed", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "user", Content: "hello"},
-			{Role: "tool", Content: "orphaned result", ToolCallId: "call_orphan"},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 1 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 1 (orphaned tool removed)", len(result))
-		}
-		if result[0].Role != "user" {
-			t.Errorf("expected user message kept, got role: %s", result[0].Role)
-		}
-	})
-
-	t.Run("tool result with empty tool_call_id removed", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "user", Content: "hello"},
-			{Role: "tool", Content: "no id", ToolCallId: ""},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 1 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 1 (tool with empty ID removed)", len(result))
-		}
-	})
-
-	t.Run("multiple tool calls and results", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "assistant", Content: "Running tools", ToolCalls: []api.ToolCall{
-				{ID: "call_a", Type: "function", Function: struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}{Name: "read_file", Arguments: "{}"}},
-				{ID: "call_b", Type: "function", Function: struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}{Name: "write_file", Arguments: "{}"}},
-			}},
-			{Role: "tool", Content: "file content", ToolCallId: "call_a"},
-			{Role: "tool", Content: "written", ToolCallId: "call_b"},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 3 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 3", len(result))
-		}
-	})
-
-	t.Run("mixed valid and orphaned", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "user", Content: "start"},
-			{Role: "assistant", Content: "checking", ToolCalls: []api.ToolCall{
-				{ID: "call_1", Type: "function", Function: struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}{Name: "read_file", Arguments: "{}"}},
-			}},
-			{Role: "tool", Content: "result", ToolCallId: "call_1"},
-			{Role: "tool", Content: "orphan", ToolCallId: "call_missing"},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 3 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 3 (orphan removed)", len(result))
-		}
-		// Verify the orphaned tool message was removed
-		for _, msg := range result {
-			if msg.Role == "tool" && strings.Contains(msg.Content, "orphan") {
-				t.Error("orphaned tool message should have been removed")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := ch.sanitizeToolMessages(tt.input)
+			if len(out) != tt.expected {
+				t.Errorf("got %d messages, want %d", len(out), tt.expected)
 			}
-		}
-	})
+		})
+	}
+}
 
-	t.Run("assistant with no tool calls preserved", func(t *testing.T) {
-		messages := []api.Message{
-			{Role: "assistant", Content: "Just text, no tools"},
-		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 1 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 1", len(result))
-		}
-		if result[0].Role != "assistant" {
-			t.Errorf("expected assistant message, got: %s", result[0].Role)
-		}
-	})
+func TestSanitizeToolMessagesHappyPath(t *testing.T) {
+	ch := newTestHandlerForProvider("")
 
-	t.Run("duplicate tool results — only first kept", func(t *testing.T) {
-		// When there are two tool results for the same tool_call_id,
-		// the second one should be dropped (already seen)
-		messages := []api.Message{
-			{Role: "assistant", Content: "checking", ToolCalls: []api.ToolCall{
-				{ID: "call_dup", Type: "function", Function: struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}{Name: "read_file", Arguments: "{}"}},
-			}},
-			{Role: "tool", Content: "first result", ToolCallId: "call_dup"},
-			{Role: "tool", Content: "duplicate result", ToolCallId: "call_dup"},
+	messages := []api.Message{
+		{Role: "user", Content: "do something"},
+		{
+			Role:    "assistant",
+			Content: "running tool",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_1", Content: "file content"},
+		{Role: "assistant", Content: "done"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 4 {
+		t.Fatalf("expected 4 messages, got %d", len(out))
+	}
+	if out[0].Role != "user" || out[1].Role != "assistant" || out[2].Role != "tool" || out[3].Role != "assistant" {
+		t.Errorf("roles not preserved: %v", func() []string {
+			var r []string
+			for _, m := range out {
+				r = append(r, m.Role)
+			}
+			return r
+		}())
+	}
+}
+
+func TestSanitizeToolMessagesOrphanedToolResult(t *testing.T) {
+	ch := newTestHandlerForProvider("")
+
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+		{Role: "tool", ToolCallId: "call_orphan", Content: "no matching assistant"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 message (orphaned tool dropped), got %d", len(out))
+	}
+	if out[0].Role != "user" {
+		t.Errorf("expected user message, got %s", out[0].Role)
+	}
+}
+
+func TestSanitizeToolMessagesMissingToolCallId(t *testing.T) {
+	ch := newTestHandlerForProvider("")
+
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role:    "assistant",
+			Content: "doing thing",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "", Content: "missing id"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 2 {
+		t.Fatalf("expected 2 messages (tool with empty id dropped), got %d", len(out))
+	}
+}
+
+func TestSanitizeToolMessagesInterleavedUserMessages(t *testing.T) {
+	ch := newTestHandlerForProvider("")
+
+	messages := []api.Message{
+		{Role: "user", Content: "first prompt"},
+		{
+			Role:    "assistant",
+			Content: "ok",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_a", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_a", Content: "content"},
+		{Role: "user", Content: "interjected user message"},
+		{Role: "assistant", Content: "received"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 5 {
+		t.Fatalf("expected 5 messages (user messages preserved), got %d", len(out))
+	}
+	if out[3].Role != "user" || out[3].Content != "interjected user message" {
+		t.Error("interjected user message should be preserved in position")
+	}
+}
+
+func TestSanitizeToolMessagesMultipleToolCallsOneMissingResult(t *testing.T) {
+	ch := newTestHandlerForProvider("")
+
+	messages := []api.Message{
+		{Role: "user", Content: "do two things"},
+		{
+			Role:    "assistant",
+			Content: "running tools",
+			ToolCalls: []api.ToolCall{
+				makeTestToolCall("call_1", "read_file", ""),
+				makeTestToolCall("call_2", "write_file", ""),
+			},
+		},
+		// Only call_1 has a result; call_2 result is missing
+		{Role: "tool", ToolCallId: "call_1", Content: "file content"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(out))
+	}
+	// Assistant with tool calls is preserved even though one result is missing
+	if len(out[1].ToolCalls) != 2 {
+		t.Errorf("assistant should still have 2 tool calls, got %d", len(out[1].ToolCalls))
+	}
+}
+
+func TestSanitizeToolMessagesMinimaxSecondPass(t *testing.T) {
+	// Minimax does a second pass to catch orphaned tool results that the
+	// first pass might leave behind (e.g., if a tool result appears before
+	// its assistant message in a corrupted history).
+	ch := newTestHandlerForProvider("minimax")
+
+	messages := []api.Message{
+		{Role: "user", Content: "start"},
+		// Tool result before any assistant — orphan that first pass would also drop,
+		// but second pass double-checks the final list.
+		{Role: "tool", ToolCallId: "call_orphan", Content: "orphan result 1"},
+		{
+			Role:    "assistant",
+			Content: "doing work",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_real", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_real", Content: "valid result"},
+		// Another orphan after the assistant — first pass catches this since
+		// it wasn't in seenToolCalls. Second pass verifies the final list is clean.
+		{Role: "tool", ToolCallId: "call_orphan2", Content: "orphan result 2"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages (user + assistant + valid tool), got %d", len(out))
+	}
+	if out[0].Role != "user" {
+		t.Errorf("first message should be user, got %s", out[0].Role)
+	}
+	if out[1].Role != "assistant" {
+		t.Errorf("second message should be assistant, got %s", out[1].Role)
+	}
+	if out[2].Role != "tool" || out[2].ToolCallId != "call_real" {
+		t.Errorf("third message should be valid tool result for call_real, got role=%s id=%s", out[2].Role, out[2].ToolCallId)
+	}
+}
+
+func TestSanitizeToolMessagesMinimaxDoubleOrphanSecondPass(t *testing.T) {
+	// Construct a pathological case where a tool result with an ID that
+	// happens to match a tool call seen in a *later* assistant message
+	// could pass the first pass but fail the second pass (since in the
+	// second pass we only scan forward, not backward).
+	ch := newTestHandlerForProvider("minimax")
+
+	messages := []api.Message{
+		{Role: "user", Content: "go"},
+		// This tool result has ID "call_a" which is emitted by the assistant below.
+		// First pass: call_a is NOT in seenToolCalls yet, so it's dropped.
+		{Role: "tool", ToolCallId: "call_a", Content: "premature result"},
+		{
+			Role:    "assistant",
+			Content: "running",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_a", "read_file", "")},
+		},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	// First pass drops the premature tool result. Second pass should not re-introduce it.
+	if len(out) != 2 {
+		t.Fatalf("expected 2 messages (user + assistant), got %d", len(out))
+	}
+}
+
+func TestSanitizeToolMessagesNonMinimaxNoSecondPass(t *testing.T) {
+	// Non-minimax providers should not run the second pass.
+	// The first pass behavior should be the final output.
+	ch := newTestHandlerForProvider("openai")
+
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role:    "assistant",
+			Content: "running",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_1", Content: "ok"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(out))
+	}
+}
+
+func TestSanitizeToolMessagesAgentNil(t *testing.T) {
+	// When agent is nil, sanitization should still work (no debug logging).
+	ch := &ConversationHandler{agent: nil}
+
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role:    "assistant",
+			Content: "doing",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_1", Content: "result"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(out))
+	}
+}
+
+func TestSanitizeToolMessagesToolCallIdEmptyInAssistant(t *testing.T) {
+	// Tool calls with empty IDs in assistant should not be tracked.
+	ch := newTestHandlerForProvider("")
+
+	tc := makeTestToolCall("", "bad_tool", "")
+	messages := []api.Message{
+		{Role: "user", Content: "go"},
+		{
+			Role:    "assistant",
+			Content: "running",
+			ToolCalls: []api.ToolCall{tc},
+		},
+		// This tool result references an ID that was never tracked (empty).
+		{Role: "tool", ToolCallId: "call_ghost", Content: "ghost result"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 2 {
+		t.Fatalf("expected 2 messages (user + assistant), orphan dropped; got %d", len(out))
+	}
+}
+
+func TestSanitizeToolMessagesMultipleToolResultsPerCall(t *testing.T) {
+	// Edge case: same tool_call_id used multiple times in tool results.
+	// Each result consumes one entry from seenToolCalls, so only the first
+	// result should be kept (since we delete on match).
+	ch := newTestHandlerForProvider("")
+
+	messages := []api.Message{
+		{Role: "user", Content: "go"},
+		{
+			Role:    "assistant",
+			Content: "running",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_1", Content: "first result"},
+		{Role: "tool", ToolCallId: "call_1", Content: "duplicate result"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	// First result is kept (matches and deletes from seen), second is dropped.
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(out))
+	}
+}
+
+func TestSanitizeToolMessagesComplexConversation(t *testing.T) {
+	ch := newTestHandlerForProvider("deepseek")
+
+	messages := []api.Message{
+		{Role: "user", Content: "write a file"},
+		{
+			Role:    "assistant",
+			Content: "I'll write the file",
+			ToolCalls: []api.ToolCall{makeTestToolCall("tc1", "write_file", "")},
+		},
+		{Role: "tool", ToolCallId: "tc1", Content: "file written"},
+		{
+			Role:    "assistant",
+			Content: "now read it back",
+			ToolCalls: []api.ToolCall{makeTestToolCall("tc2", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "tc2", Content: "file content read"},
+		{Role: "assistant", Content: "all done"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 6 {
+		t.Fatalf("expected 6 messages, got %d", len(out))
+	}
+	roles := []string{out[0].Role, out[1].Role, out[2].Role, out[3].Role, out[4].Role, out[5].Role}
+	expected := []string{"user", "assistant", "tool", "assistant", "tool", "assistant"}
+	for i, r := range roles {
+		if r != expected[i] {
+			t.Errorf("position %d: got %s, want %s", i, r, expected[i])
 		}
-		result := ch.sanitizeToolMessages(messages)
-		if len(result) != 2 {
-			t.Errorf("sanitizeToolMessages() = %d items; want 2 (duplicate removed)", len(result))
-		}
-	})
+	}
+}
+
+func TestSanitizeToolMessagesDeepseekProvider(t *testing.T) {
+	ch := newTestHandlerForProvider("deepseek")
+
+	// DeepSeek does not get the second pass — only first pass sanitization.
+	messages := []api.Message{
+		{Role: "user", Content: "go"},
+		{Role: "tool", ToolCallId: "no_assistant", Content: "orphan"},
+		{
+			Role:    "assistant",
+			Content: "ok",
+			ToolCalls: []api.ToolCall{makeTestToolCall("call_ok", "read_file", "")},
+		},
+		{Role: "tool", ToolCallId: "call_ok", Content: "result"},
+	}
+
+	out := ch.sanitizeToolMessages(messages)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages (orphan dropped), got %d", len(out))
+	}
 }

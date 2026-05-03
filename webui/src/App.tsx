@@ -9,6 +9,9 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
+import { EventsContextProvider } from '@sprout/events';
+import { LocalEventsProvider } from './services/localEventsProvider';
+import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import './App.css';
 import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
@@ -593,6 +596,9 @@ function App() {
           queryProgress: prev.queryProgress,
           lastError: prev.lastError,
           isProcessing: prev.isProcessing,
+          provider: prev.provider,
+          model: prev.model,
+          queryCount: prev.queryCount,
         },
       } : prev.perChatCache;
       const restoredIsProcessing = cached?.isProcessing ?? false;
@@ -2001,6 +2007,8 @@ function App() {
       }}
     >
       <SproutAdapterProvider>
+        <PlatformNavProvider>
+        <EventsContextProvider provider={new LocalEventsProvider()}>
         <ThemeProvider>
         <NotificationProvider>
         <HotkeyProvider>
@@ -2263,6 +2271,8 @@ function App() {
         </HotkeyProvider>
         </NotificationProvider>
       </ThemeProvider>
+        </EventsContextProvider>
+        </PlatformNavProvider>
       </SproutAdapterProvider>
     </ErrorBoundary>
   );

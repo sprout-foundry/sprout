@@ -59,8 +59,22 @@ func NewMCPClient(config MCPServerConfig, logger *utils.Logger) *MCPClient {
 	}
 }
 
-// Start starts the MCP server process
+// Start starts the MCP server process.
+// External callers are blocked during active reconnection to prevent
+// concurrent process creation races. Use startInternal() for reconnection.
 func (c *MCPClient) Start(ctx context.Context) error {
+	c.mutex.Lock()
+	if c.reconnecting {
+		c.mutex.Unlock()
+		return fmt.Errorf("server %s is reconnecting, cannot start", c.config.Name)
+	}
+	c.mutex.Unlock()
+	return c.startInternal(ctx)
+}
+
+// startInternal contains the process creation logic. It acquires the mutex
+// internally so callers (both Start() and reconnect()) must NOT hold it.
+func (c *MCPClient) startInternal(ctx context.Context) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -69,6 +83,11 @@ func (c *MCPClient) Start(ctx context.Context) error {
 	}
 	if c.stopping {
 		return fmt.Errorf("server %s is stopping, cannot start", c.config.Name)
+	}
+
+	// Cancel any previous context to prevent goroutine leaks on retry
+	if c.cancel != nil {
+		c.cancel()
 	}
 
 	// Create context for the server process
@@ -152,11 +171,17 @@ func (c *MCPClient) Stop(ctx context.Context) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if !c.running {
+	if !c.running && !c.reconnecting {
 		return nil
 	}
 
-	// Signal that this is an intentional stop (not a crash)
+	// Signal that this is an intentional stop (not a crash).
+	// Setting stopping=true prevents reconnect() from completing:
+	//   - If reconnect() is in backoff wait, ctx.Done() fires and it returns.
+	//   - If reconnect() already set running=false and is about to call
+	//     startInternal(), startInternal() will see stopping=true and fail.
+	//   - If reconnect() hasn't started cleanup yet, the guards in reconnect()
+	//     will see stopping=true and return immediately.
 	c.stopping = true
 	c.reconnecting = false
 
@@ -215,6 +240,8 @@ func (c *MCPClient) Stop(ctx context.Context) error {
 
 	c.running = false
 	c.initialized = false
+	c.reconnectAttempt = 0 // Reset reconnect budget on clean stop
+	c.stopping = false     // Reset so the client can be restarted with Start()
 
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("[STOP] Stopped MCP server: %s", c.config.Name))
@@ -646,10 +673,17 @@ func (c *MCPClient) handleMessages() {
 			c.reqMutex.RLock()
 			if responseChan, exists := c.pendingReqs[idStr]; exists {
 				c.reqMutex.RUnlock()
-				select {
-				case responseChan <- message:
-				default:
-				}
+				// Protect against send on closed channel if reconnect/Stop
+				// closes the channel between our RUnlock and this send.
+				func() {
+					defer func() {
+						recover() //nolint:errcheck // safe to swallow send-on-closed-channel
+					}()
+					select {
+					case responseChan <- message:
+					default:
+					}
+				}()
 			} else {
 				c.reqMutex.RUnlock()
 			}
@@ -660,45 +694,39 @@ func (c *MCPClient) handleMessages() {
 
 	// Scanner ended - check if this was unexpected (process died)
 	if err := scanner.Err(); err != nil {
-		c.mutex.Lock()
-		stopping := c.stopping
-		running := c.running
-		c.mutex.Unlock()
-
-		if !stopping && running {
-			if c.logger != nil {
-				c.logger.LogProcessStep(fmt.Sprintf("[WARN] MCP server %s stdout scanner ended unexpectedly: %v", c.config.Name, err))
-			}
-			// Trigger reconnection
-			c.mutex.Lock()
-			if c.running && !c.stopping {
-				// Capture client context before spawning reconnect goroutine
-				clientCtx := c.ctx
-				go c.reconnect(clientCtx)
-			}
-			c.mutex.Unlock()
-		}
+		c.triggerReconnect("stdout scanner ended unexpectedly", err)
 	} else {
 		// Scanner ended without error (EOF)
-		c.mutex.Lock()
-		stopping := c.stopping
-		running := c.running
-		c.mutex.Unlock()
+		c.triggerReconnect("stdout closed unexpectedly (EOF)", nil)
+	}
+}
 
-		if !stopping && running {
-			if c.logger != nil {
-				c.logger.LogProcessStep(fmt.Sprintf("[WARN] MCP server %s stdout closed unexpectedly (EOF)", c.config.Name))
-			}
-			// Trigger reconnection
-			c.mutex.Lock()
-			if c.running && !c.stopping {
-				// Capture client context before spawning reconnect goroutine
-				clientCtx := c.ctx
-				go c.reconnect(clientCtx)
-			}
-			c.mutex.Unlock()
+// triggerReconnect checks if a reconnection should be attempted after the
+// message handler exits unexpectedly, and spawns the reconnect goroutine.
+func (c *MCPClient) triggerReconnect(reason string, err error) {
+	c.mutex.RLock()
+	stopping := c.stopping
+	running := c.running
+	c.mutex.RUnlock()
+
+	if stopping || !running {
+		return
+	}
+
+	if c.logger != nil {
+		if err != nil {
+			c.logger.LogProcessStep(fmt.Sprintf("[WARN] MCP server %s %s: %v", c.config.Name, reason, err))
+		} else {
+			c.logger.LogProcessStep(fmt.Sprintf("[WARN] MCP server %s %s", c.config.Name, reason))
 		}
 	}
+
+	c.mutex.Lock()
+	if c.running && !c.stopping {
+		clientCtx := c.ctx
+		go c.reconnect(clientCtx)
+	}
+	c.mutex.Unlock()
 }
 
 // handleErrors handles stderr output from the server
@@ -826,19 +854,27 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 		return
 	}
 
-	// Terminate old process and clean up before restarting
+	// Terminate old process and clean up before restarting.
+	// Nil out fields under lock to prevent double-close races with concurrent Stop().
 	c.mutex.Lock()
 	oldCancel := c.cancel
 	oldStdin := c.stdin
 	oldStdout := c.stdout
 	oldStderr := c.stderr
+	c.stdin = nil
+	c.stdout = nil
+	c.stderr = nil
+	c.cancel = nil
+	// Clear health check state so startInternal() will create a fresh one (MUST_FIX #3)
+	c.healthCheckCancel = nil
+	c.healthCheckCtx = nil
 	c.mutex.Unlock()
 
 	// Cancel the old context to signal old goroutines to stop
 	if oldCancel != nil {
 		oldCancel()
 	}
-	// Close old pipes to unblock old goroutines
+	// Close old pipes to unblock old goroutines (safe to call nil-check since we nulled above)
 	if oldStdin != nil {
 		oldStdin.Close()
 	}
@@ -849,7 +885,7 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 		oldStderr.Close()
 	}
 	// Brief sleep to let old goroutines detect EOF and exit
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
 	// Mark as not running before attempting restart
 	// Clear pending requests to prevent stale response delivery
@@ -865,11 +901,12 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 	c.initialized = false
 	c.mutex.Unlock()
 
-	// Start the server again (this will increment restartCount)
+	// Start the server again via startInternal (bypasses reconnecting guard).
+	// This will increment restartCount and create a new health check goroutine.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := c.Start(ctx); err != nil {
+	if err := c.startInternal(ctx); err != nil {
 		c.mutex.Lock()
 		c.running = false
 		c.mutex.Unlock()

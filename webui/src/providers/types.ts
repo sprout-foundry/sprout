@@ -6,15 +6,10 @@
  */
 
 import { type ReactNode } from 'react';
+import type { LogEntry } from '@sprout/ui';
 
-export interface ProviderLogEntry {
-  id: string;
-  type: string;
-  timestamp: Date;
-  data: unknown;
-  level: 'info' | 'warning' | 'error' | 'success';
-  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
-}
+/** @deprecated Use LogEntry from @sprout/ui instead */
+export type ProviderLogEntry = LogEntry;
 
 /** Generic action that can be performed by providers */
 export interface Action {

@@ -1,0 +1,155 @@
+/**
+ * Shared chat-related types for @sprout/ui.
+ *
+ * These types define the core data structures used across the chat UI:
+ * messages, tool executions, subagent activities, log entries, todos,
+ * and file edits. They are the single canonical source — consumers in
+ * both `packages/ui` and `webui` should import from here (via `@sprout/ui`).
+ */
+
+// ── Core data types ────────────────────────────────────────────────
+
+export interface ToolRef {
+  toolId: string;
+  toolName: string;
+  label: string;
+  parallel?: boolean;
+  toolIndex?: number;
+}
+
+export interface Message {
+  id: string;
+  type: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
+  toolRefs?: ToolRef[];
+}
+
+export interface ToolExecution {
+  id: string;
+  tool: string;
+  status: 'started' | 'running' | 'completed' | 'error';
+  message?: string;
+  startTime: Date;
+  endTime?: Date;
+  details?: unknown;
+  arguments?: string;
+  result?: string;
+  persona?: string;
+  subagentType?: 'single' | 'parallel';
+  queryId?: number;
+  toolIndex?: number;
+}
+
+export interface SubagentActivity {
+  id: string;
+  toolCallId: string;
+  toolName: string;
+  phase: 'spawn' | 'output' | 'complete' | 'step';
+  message: string;
+  timestamp: Date;
+  taskId?: string;
+  persona?: string;
+  isParallel?: boolean;
+  provider?: string;
+  model?: string;
+  taskCount?: number;
+  failures?: number;
+  tool?: string;
+}
+
+export interface LogEntry {
+  id: string;
+  type: string;
+  timestamp: Date;
+  data: unknown;
+  level: 'info' | 'warning' | 'error' | 'success';
+  category: 'query' | 'tool' | 'file' | 'system' | 'stream';
+}
+
+export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: TodoStatus;
+}
+
+export interface FileEdit {
+  path: string;
+  action: string;
+  timestamp: Date;
+  linesAdded?: number;
+  linesDeleted?: number;
+}
+
+// ── Live Log Types ─────────────────────────────────────────────────────
+
+export interface LiveLogLine {
+  id: string;
+  text: string;
+  timestamp: Date;
+  taskId?: string;
+}
+
+// ── Subagent Activity Types ─────────────────────────────────────────────
+
+export interface SubagentRun {
+  toolCallId: string;
+  persona: string;
+  isParallel: boolean;
+  isComplete: boolean;
+  completionMessage: string;
+  completionTimestamp: Date | null;
+  activities: SubagentActivity[];
+  spawnActivity: SubagentActivity | null;
+  completeActivity: SubagentActivity | null;
+  outputLines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
+}
+
+// ── Chat Component Props ───────────────────────────────────────────────
+/**
+ * Shared props interface for chat components.
+ * This is the canonical definition used across ChatPanel implementations.
+ */
+export interface ChatProps {
+  messages: Message[];
+  onSendMessage: (message: string) => void;
+  onQueueMessage: (message: string) => void;
+  queuedMessagesCount: number;
+  queuedMessages?: string[];
+  onQueueMessageRemove?: (index: number) => void;
+  onQueueMessageEdit?: (index: number, newText: string) => void;
+  onQueueReorder?: (fromIndex: number, toIndex: number) => void;
+  onClearQueuedMessages?: () => void;
+  inputValue: string;
+  onInputChange: (value: string) => void;
+  isProcessing?: boolean;
+  lastError?: string | null;
+  toolExecutions?: ToolExecution[];
+  queryProgress?: unknown;
+  currentTodos?: TodoItem[];
+  subagentActivities?: SubagentActivity[];
+  onToolPillClick?: (toolId: string) => void;
+  onStopProcessing?: () => void;
+  // Worktree support
+  chatId?: string;
+  worktreePath?: string;
+  workspaceRoot?: string;
+  onWorktreeChange?: (worktreePath: string) => void;
+  // Provider availability
+  providerAvailable?: boolean;
+  onRequestProviderSetup?: () => void;
+  // Status bar
+  stats?: Record<string, unknown>;
+  isConnected?: boolean;
+  // Backend reachability (cloud mode)
+  backendReachable?: boolean;
+  onRetryConnection?: () => void;
+}
+
+// ── Constants ──────────────────────────────────────────────────────────
+
+export const MAX_ACTIVE_LINES = 50;
+export const MAX_COMPLETED_SUMMARIES = 3;

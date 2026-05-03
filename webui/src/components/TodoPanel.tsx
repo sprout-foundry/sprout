@@ -1,11 +1,6 @@
 import { Check, Circle, Loader2, Minus } from 'lucide-react';
+import type { TodoItem } from '@sprout/ui';
 import './TodoPanel.css';
-
-interface TodoItem {
-  id: string;
-  content: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-}
 
 interface TodoPanelProps {
   todos: TodoItem[];

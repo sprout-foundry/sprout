@@ -3,10 +3,11 @@ import { ExternalLink, CheckCircle, Circle, Loader2, Minus, Wrench, Bot, Termina
 import { parseMessageSegments, type MessageSegment } from '../utils/messageSegments';
 import { stripAnsiCodes } from '../utils/ansi';
 import MessageContent from './MessageContent';
+import type { ToolRef } from '../types/chat';
 
 export interface MessageSegmentsProps {
   content: string;
-  toolRefs?: Array<{ toolId: string; toolName: string; label: string; parallel?: boolean; toolIndex?: number }>;
+  toolRefs?: ToolRef[];
   onToolClick?: (toolName: string) => void;
   onToolRefClick?: (toolId: string) => void;
   /** Returns the status of a tool execution by ID, used to show footnote vs pill. */

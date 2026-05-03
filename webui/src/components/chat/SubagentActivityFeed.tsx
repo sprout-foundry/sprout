@@ -7,65 +7,12 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-react';
-import { LiveLog } from '@sprout/ui';
+import { LiveLog, groupSubagentRuns } from '@sprout/ui';
 import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';
 
 // ── Utility Functions ────────────────────────────────────────────────
-
-export const groupSubagentRuns = (activities: SubagentActivity[]): SubagentRun[] => {
-  const runMap = new Map<string, SubagentRun>();
-
-  for (const activity of activities) {
-    const key = activity.toolCallId || activity.id;
-    let run = runMap.get(key);
-    if (!run) {
-      run = {
-        toolCallId: activity.toolCallId,
-        persona: activity.persona || 'subagent',
-        isParallel: activity.isParallel || false,
-        isComplete: false,
-        completionMessage: '',
-        completionTimestamp: null,
-        activities: [],
-        spawnActivity: null,
-        completeActivity: null,
-        outputLines: [],
-      };
-      runMap.set(key, run);
-    }
-
-    run.activities.push(activity);
-    if (activity.persona && (!run.spawnActivity || activity.phase === 'spawn')) {
-      run.persona = activity.persona;
-    }
-    if (activity.isParallel) {
-      run.isParallel = true;
-    }
-    if (activity.phase === 'spawn') {
-      run.spawnActivity = activity;
-    }
-    if (activity.phase === 'complete') {
-      run.isComplete = true;
-      run.completeActivity = activity;
-      run.completionMessage = activity.message;
-      run.completionTimestamp = activity.timestamp;
-    }
-    if (activity.phase === 'output' || activity.phase === 'step') {
-      const lines = activity.message.split('\n').filter((l) => l.trim());
-      for (const line of lines) {
-        run.outputLines.push({
-          id: `${activity.id}-${run.outputLines.length}`,
-          text: line.trim(),
-          timestamp: activity.timestamp,
-          taskId: activity.taskId,
-        });
-      }
-    }
-  }
-
-  return Array.from(runMap.values());
-};
+// groupSubagentRuns is now imported from @sprout/ui
 
 const PERSONA_COLORS: Record<string, string> = {
   coder: '#58a6ff',

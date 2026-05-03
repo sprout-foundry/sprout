@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
+import type { SubagentTypeInfo } from '../../services/api/types';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { debugLog } from '../../utils/log';
 import { getNestedValue } from './settingsHelpers';
@@ -23,8 +24,8 @@ interface UseSettingsStateReturn {
   displaySettingsRef: React.MutableRefObject<SproutSettings | null>;
   subagentProviders: ProviderOption[];
   setSubagentProviders: (v: ProviderOption[] | ((prev: ProviderOption[]) => ProviderOption[])) => void;
-  subagentTypes: Record<string, SubagentTypeEntry>;
-  setSubagentTypes: (v: Record<string, SubagentTypeEntry> | ((prev: Record<string, SubagentTypeEntry>) => Record<string, SubagentTypeEntry>)) => void;
+  subagentTypes: Record<string, SubagentTypeInfo>;
+  setSubagentTypes: (v: Record<string, SubagentTypeInfo> | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>)) => void;
   subagentSavingPersona: string | null;
   setSubagentSavingPersona: (v: string | null) => void;
   currentProviderInfo: { provider: string; model: string; hasCredential: boolean } | null;
@@ -140,7 +141,7 @@ export function useSettingsState(
 
   // Subagent providers/models for dropdowns
   const [subagentProviders, setSubagentProviders] = useState<ProviderOption[]>([]);
-  const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeEntry>>({});
+  const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeInfo>>({});
   const [subagentSavingPersona, setSubagentSavingPersona] = useState<string | null>(null);
 
   // Current provider info for the Providers tab
@@ -226,7 +227,7 @@ export function useSettingsState(
         const data = await api.getSubagentTypes();
         if (cancelled) return;
         setSubagentProviders((data.available_providers || []) as ProviderOption[]);
-        setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeEntry>);
+        setSubagentTypes((data.subagent_types || {}) as Record<string, SubagentTypeInfo>);
       } catch (err) {
         debugLog('[SettingsPanel] failed to load subagent types:', err);
       }

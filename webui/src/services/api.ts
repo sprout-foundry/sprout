@@ -2,217 +2,80 @@ import { clientFetch } from './clientSession';
 import type { ShellInfo } from '@sprout/ui';
 import type { ChangelogResponse, ChangesResponse, RevisionDetailResponse, RollbackResponse } from './api/types';
 
-interface StatsResponse {
-  // Basic info
-  provider: string;
-  model: string;
-  session_id: string;
-  query_count: number;
-  queries?: number;
-  uptime: string;
-  uptime_formatted?: string;
-  connections: number;
+// ── Import shared types from canonical source ──────────────────────
+// All interfaces, types, and error classes are defined once in
+// ./api/types.ts and re-exported here for backward compatibility.
 
-  // Token usage
-  total_tokens: number;
-  prompt_tokens: number;
-  completion_tokens: number;
-  cached_tokens: number;
-  cache_efficiency: number;
+import type {
+  StatsResponse,
+  QueryRequest,
+  FilesResponse,
+  SearchMatch,
+  SearchResult,
+  ProviderOption,
+  OnboardingProviderOption,
+  OnboardingEnvironment,
+  OnboardingStatusResponse,
+  SproutInstance,
+  SSHHostEntry,
+  SSHSessionEntry,
+  SSHOpenResponse,
+  SSHBrowseEntry,
+  SSHOpenErrorPayload,
+  SSHLaunchStatus,
+  WorkspaceResponse,
+  ProvidersResponse,
+  SproutSettings,
+  HotkeyEntry,
+  HotkeyConfig,
+  MCPServerConfig,
+  MCPSettingsResponse,
+  CustomProviderConfig,
+  CustomProvidersResponse,
+  SkillConfig,
+  SkillsResponse,
+  SubagentTypeInfo,
+} from './api/types';
 
-  // Context usage
-  current_context_tokens: number;
-  max_context_tokens: number;
-  context_usage_percent: number;
-  context_warning_issued: boolean;
+// Import SSHWorkspaceOpenError as a value (it's a class)
+import { SSHWorkspaceOpenError } from './api/types';
 
-  // Cost tracking
-  total_cost: number;
-  cached_cost_savings: number;
+// Re-export all types for backward compatibility — consumers import
+// these from '../services/api' and the API must not break.
+export type {
+  StatsResponse,
+  QueryRequest,
+  FilesResponse,
+  SearchMatch,
+  SearchResult,
+  ShellInfo,
+  ProviderOption,
+  OnboardingProviderOption,
+  OnboardingEnvironment,
+  OnboardingStatusResponse,
+  SproutInstance,
+  SSHHostEntry,
+  SSHSessionEntry,
+  SSHOpenResponse,
+  SSHBrowseEntry,
+  SSHOpenErrorPayload,
+  SSHLaunchStatus,
+  WorkspaceResponse,
+  ProvidersResponse,
+  SproutSettings,
+  HotkeyEntry,
+  HotkeyConfig,
+  MCPServerConfig,
+  MCPSettingsResponse,
+  CustomProviderConfig,
+  CustomProvidersResponse,
+  SkillConfig,
+  SkillsResponse,
+  SubagentTypeInfo,
+} from './api/types';
 
-  // Performance metrics
-  last_tps: number;
-
-  // Iteration tracking
-  current_iteration: number;
-  max_iterations: number;
-
-  // Configuration
-  streaming_enabled: boolean;
-  debug_mode: boolean;
-
-  // Processing state
-  is_processing?: boolean;
-}
-
-interface QueryRequest {
-  query: string;
-  chat_id?: string;
-}
-
-interface FilesResponse {
-  message: string;
-  files: Array<{
-    path: string;
-    modified: boolean;
-    content?: string;
-  }>;
-}
-
-interface SearchMatch {
-  line_number: number;
-  line: string;
-  column_start: number;
-  column_end: number;
-  context_before: string[];
-  context_after: string[];
-}
-
-interface SearchResult {
-  file: string;
-  matches: SearchMatch[];
-  match_count: number;
-}
-
-export interface ProviderOption {
-  id: string;
-  name: string;
-  models: string[];
-}
-
-export interface OnboardingProviderOption {
-  id: string;
-  name: string;
-  models: string[];
-  requires_api_key: boolean;
-  has_credential: boolean;
-  recommended: boolean;
-  description: string;
-  setup_hint: string;
-  docs_url: string;
-  signup_url: string;
-  api_key_label: string;
-  api_key_help: string;
-  recommended_model: string;
-  recommended_model_why: string;
-}
-
-export interface OnboardingEnvironment {
-  runtime_platform: string;
-  host_platform: string;
-  backend_mode: string;
-  has_wsl: boolean;
-  has_git_bash: boolean;
-  recommended_terminal: string;
-  active_distro: string;
-  wsl_distros: string[];
-}
-
-export interface OnboardingStatusResponse {
-  setup_required: boolean;
-  reason: string;
-  current_provider: string;
-  current_model: string;
-  providers: OnboardingProviderOption[];
-  environment?: OnboardingEnvironment;
-}
-
-export interface SproutInstance {
-  id: string;
-  pid: number;
-  port: number;
-  working_dir: string;
-  start_time: string;
-  last_ping: string;
-  session_id?: string;
-  is_host: boolean;
-  is_current: boolean;
-}
-
-export interface SSHHostEntry {
-  alias: string;
-  hostname?: string;
-  user?: string;
-  port?: string;
-}
-
-export interface SSHSessionEntry {
-  key: string;
-  host_alias: string;
-  remote_workspace_path: string;
-  local_port?: number;
-  remote_port: number;
-  remote_pid?: number;
-  url?: string;
-  started_at: string;
-  active: boolean;
-}
-
-export interface SSHOpenResponse {
-  message: string;
-  url: string;
-  port?: number;
-  /** Same-origin proxy URL served by the local sprout server (e.g. http://127.0.0.1:54421/ssh/{key}/).
-   *  Prefer this over `url` to keep the browser on the same origin for PWA compatibility. */
-  proxy_url?: string;
-  proxy_base?: string;
-}
-
-export interface SSHBrowseEntry {
-  name: string;
-  path: string;
-  type: string;
-}
-
-export interface SSHOpenErrorPayload {
-  error: string;
-  step?: string;
-  details?: string;
-  log_path?: string;
-}
-
-export interface SSHLaunchStatus {
-  key: string;
-  step: string;
-  status: string;
-  in_progress: boolean;
-  last_error?: string;
-  details?: string;
-  log_path?: string;
-  updated_at: string;
-  /** Non-empty when in_progress=false and last_error is absent. */
-  proxy_base?: string;
-  proxy_url?: string;
-  local_port?: number;
-}
-
-export class SSHWorkspaceOpenError extends Error {
-  step?: string;
-  details?: string;
-  logPath?: string;
-
-  constructor(payload: SSHOpenErrorPayload) {
-    const baseMessage = payload.error || 'Failed to open SSH workspace';
-    super(payload.step ? `${baseMessage} (${payload.step})` : baseMessage);
-    this.name = 'SSHWorkspaceOpenError';
-    this.step = payload.step;
-    this.details = payload.details;
-    this.logPath = payload.log_path;
-  }
-}
-
-export interface WorkspaceResponse {
-  daemon_root: string;
-  workspace_root: string;
-  ssh_context?: {
-    host_alias: string;
-    session_key?: string;
-    is_remote: boolean;
-    launch_mode?: string;
-    launcher_url?: string;
-    home_path?: string;
-  };
-}
+// Re-export SSHWorkspaceOpenError as a value for backward compatibility
+export { SSHWorkspaceOpenError };
 
 class ApiService {
   /** Maximum time (ms) to wait for a ssh-launch-status poll to show completion. */
@@ -2053,144 +1916,3 @@ class ApiService {
 }
 
 export { ApiService };
-export type { StatsResponse, QueryRequest, FilesResponse, SearchMatch, SearchResult };
-export type { ShellInfo } from '@sprout/ui';
-export interface ProvidersResponse {
-  providers: Array<{
-    id: string;
-    name: string;
-    models: string[];
-  }>;
-}
-
-// ── Settings interfaces ───────────────────────────────────────────
-
-export interface SproutSettings {
-  reasoning_effort: string;
-  system_prompt_text: string;
-  skip_prompt: boolean;
-  enable_pre_write_validation: boolean;
-  enable_zsh_command_detection: boolean;
-  auto_execute_detected_commands: boolean;
-  history_scope: string;
-  self_review_gate_mode: string;
-  subagent_provider: string;
-  subagent_model: string;
-  default_subagent_persona: string;
-  pdf_ocr_enabled: boolean;
-  pdf_ocr_provider: string;
-  pdf_ocr_model: string;
-  api_timeouts: {
-    connection_timeout_sec: number;
-    first_chunk_timeout_sec: number;
-    chunk_timeout_sec: number;
-    overall_timeout_sec: number;
-  } | null;
-  mcp: {
-    enabled: boolean;
-    auto_start: boolean;
-    auto_discover: boolean;
-    timeout: string;
-    servers: Record<string, MCPServerConfig>;
-  };
-  custom_providers: Record<string, CustomProviderConfig>;
-  skills: Record<string, SkillConfig>;
-}
-
-// ── Hotkeys interfaces ─────────────────────────────────────────────
-
-export interface HotkeyEntry {
-  key: string;
-  command_id: string;
-  description?: string;
-  global?: boolean;
-}
-
-export interface HotkeyConfig {
-  version: string;
-  hotkeys: HotkeyEntry[];
-  path?: string;  // Filesystem path to the hotkeys config file
-}
-
-// ── MCP Settings interfaces ─────────────────────────────────────────
-
-export interface MCPServerConfig {
-  name: string;
-  type?: string;
-  command?: string;
-  args?: string[];
-  url?: string;
-  env?: Record<string, string>;
-  credentials?: Record<string, string>;
-  working_dir?: string;
-  timeout?: string;
-  auto_start?: boolean;
-  max_restarts?: number;
-}
-
-export interface MCPSettingsResponse {
-  mcp: {
-    enabled: boolean;
-    auto_start: boolean;
-    auto_discover: boolean;
-    timeout: string;
-    servers: Record<string, MCPServerConfig>;
-  };
-}
-
-// ── Custom Provider interfaces ───────────────────────────────────────
-
-export interface CustomProviderConfig {
-  name: string;
-  endpoint: string;
-  model_name: string;
-  context_size: number;
-  model_context_sizes?: Record<string, number>;
-  reasoning_effort?: string;
-  temperature?: number;
-  top_p?: number;
-  parameters?: Record<string, unknown>;
-  requires_api_key: boolean;
-  tool_calls?: string[];
-  env_var?: string;
-  chunk_timeout_ms?: number;
-  supports_vision?: boolean;
-  vision_model?: string;
-  vision_fallback_provider?: string;
-  vision_fallback_model?: string;
-}
-
-export interface CustomProvidersResponse {
-  custom_providers: Record<string, CustomProviderConfig>;
-}
-
-// ── Skills interfaces ───────────────────────────────────────────────
-
-export interface SkillConfig {
-  id: string;
-  name: string;
-  description: string;
-  path: string;
-  enabled: boolean;
-  metadata?: Record<string, string>;
-  allowed_tools?: string;
-}
-
-export interface SkillsResponse {
-  skills: Record<string, SkillConfig>;
-}
-
-// ── Subagent Type interfaces ─────────────────────────────────────────
-
-export interface SubagentTypeInfo {
-  id: string;
-  name: string;
-  description: string;
-  provider: string;
-  model: string;
-  system_prompt: string;
-  system_prompt_text?: string;
-  allowed_tools: string[];
-  aliases: string[];
-  enabled: boolean;
-}

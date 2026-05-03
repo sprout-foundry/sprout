@@ -37,6 +37,7 @@ import {
   switchChatSession,
 } from './services/chatSessions';
 import { debugLog } from './utils/log';
+import { trimMessages } from './utils/messageWindow';
 
 /** Extract a tool call identifier from opaque ToolExecution.details. */
 const getToolCallId = (details: unknown): string | undefined => {
@@ -575,7 +576,7 @@ function App() {
         activeChatId: prev.activeChatId || activeChatId,
         // Only set initial messages if we have none yet (don't clobber live messages)
         messages: prev.messages.length === 0 && initialMessages.length > 0
-          ? initialMessages
+          ? trimMessages(initialMessages)
           : prev.messages,
       }));
     } catch (error) {
@@ -599,7 +600,7 @@ function App() {
       const newCache = currentId ? {
         ...prev.perChatCache,
         [currentId]: {
-          messages: prev.messages,
+          messages: trimMessages(prev.messages),
           toolExecutions: prev.toolExecutions,
           fileEdits: prev.fileEdits,
           subagentActivities: prev.subagentActivities,
@@ -661,7 +662,7 @@ function App() {
         return {
           ...prev,
           activeChatId: response.active_chat_id,
-          messages: useBackendMessages ? backendMessages : prev.messages,
+          messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
           isProcessing: finalIsProcessing,
         };
       });
@@ -913,6 +914,12 @@ function App() {
                 { ...lastMsg, reasoning: undefined },
               ];
             }
+          }
+
+          // Cap messages array to bound memory for long sessions.
+          // Only trim on clear completions (not during streaming).
+          if (!wasClearCommand) {
+            nextMessages = trimMessages(nextMessages);
           }
 
           return {
@@ -1627,7 +1634,7 @@ function App() {
       if (restoredMessages.length > 0) {
         setState(prev => ({
           ...prev,
-          messages: restoredMessages,
+          messages: trimMessages(restoredMessages),
           toolExecutions: [],
           fileEdits: [],
           subagentActivities: [],

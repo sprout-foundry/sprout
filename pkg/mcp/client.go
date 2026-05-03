@@ -17,29 +17,45 @@ import (
 
 // MCPClient implements the MCPServer interface for subprocess-based MCP servers
 type MCPClient struct {
-	config       MCPServerConfig
-	cmd          *exec.Cmd
-	stdin        io.WriteCloser
-	stdout       io.ReadCloser
-	stderr       io.ReadCloser
-	running      bool
-	initialized  bool
-	mutex        sync.RWMutex
-	logger       *utils.Logger
-	messageID    int64
-	pendingReqs  map[string]chan MCPMessage
-	reqMutex     sync.RWMutex
-	restartCount int
-	ctx          context.Context
-	cancel       context.CancelFunc
+	config             MCPServerConfig
+	cmd                *exec.Cmd
+	stdin              io.WriteCloser
+	stdout             io.ReadCloser
+	stderr             io.ReadCloser
+	running            bool
+	initialized        bool
+	mutex              sync.RWMutex
+	logger             *utils.Logger
+	messageID          int64
+	pendingReqs        map[string]chan MCPMessage
+	reqMutex           sync.RWMutex
+	restartCount       int
+	ctx                context.Context
+	cancel             context.CancelFunc
+	// Health check and reconnection fields
+	healthInterval     time.Duration
+	stopping           bool
+	reconnecting       bool
+	reconnectAttempt   int
+	connectedAt        time.Time
+	healthCheckCancel  context.CancelFunc
+	healthCheckCtx     context.Context
 }
 
 // NewMCPClient creates a new MCP client for a server
 func NewMCPClient(config MCPServerConfig, logger *utils.Logger) *MCPClient {
+	// Default health check interval is 30 seconds
+	healthInterval := 30 * time.Second
+	if config.Timeout > 0 && config.Timeout < 60*time.Second {
+		// If config timeout is reasonable, use a slightly longer health check interval
+		healthInterval = config.Timeout * 2
+	}
+
 	return &MCPClient{
-		config:      config,
-		logger:      logger,
-		pendingReqs: make(map[string]chan MCPMessage),
+		config:         config,
+		logger:         logger,
+		pendingReqs:    make(map[string]chan MCPMessage),
+		healthInterval: healthInterval,
 	}
 }
 
@@ -50,6 +66,9 @@ func (c *MCPClient) Start(ctx context.Context) error {
 
 	if c.running {
 		return fmt.Errorf("server %s is already running", c.config.Name)
+	}
+	if c.stopping {
+		return fmt.Errorf("server %s is stopping, cannot start", c.config.Name)
 	}
 
 	// Create context for the server process
@@ -99,15 +118,30 @@ func (c *MCPClient) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start MCP server %s: %w", c.config.Name, err)
 	}
 
+	// Initialize state for this connection
 	c.running = true
+	c.stopping = false
+	c.reconnecting = false
+	c.connectedAt = time.Now()
+
+	// Increment restart count (tracks all starts, including manual Start() calls)
 	c.restartCount++
 
 	// Start message handling goroutines
 	go c.handleMessages()
 	go c.handleErrors()
 
+	// Start health check if this is a new start (not already running health check)
+	if c.healthCheckCancel == nil {
+		c.startHealthCheck()
+	}
+
 	if c.logger != nil {
-		c.logger.LogProcessStep(fmt.Sprintf("[>>] Started MCP server: %s", c.config.Name))
+		action := "Started"
+		if c.reconnectAttempt > 0 {
+			action = fmt.Sprintf("Reconnected (attempt %d)", c.reconnectAttempt)
+		}
+		c.logger.LogProcessStep(fmt.Sprintf("[>>] %s MCP server: %s (restart #%d)", action, c.config.Name, c.restartCount))
 	}
 
 	return nil
@@ -120,6 +154,25 @@ func (c *MCPClient) Stop(ctx context.Context) error {
 
 	if !c.running {
 		return nil
+	}
+
+	// Signal that this is an intentional stop (not a crash)
+	c.stopping = true
+	c.reconnecting = false
+
+	// Clear pending requests to unblock waiting callers
+	c.reqMutex.Lock()
+	for reqID, ch := range c.pendingReqs {
+		close(ch)
+		delete(c.pendingReqs, reqID)
+	}
+	c.reqMutex.Unlock()
+
+	// Stop health check goroutine
+	if c.healthCheckCancel != nil {
+		c.healthCheckCancel()
+		c.healthCheckCancel = nil
+		c.healthCheckCtx = nil
 	}
 
 	// Cancel the context to signal shutdown
@@ -231,9 +284,12 @@ func (c *MCPClient) Initialize(ctx context.Context) error {
 
 // ListTools lists available tools from the server
 func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
-	if !c.initialized {
+	c.mutex.RLock()
+	needsInit := !c.initialized
+	c.mutex.RUnlock()
+	if needsInit {
 		if err := c.Initialize(ctx); err != nil {
-			return nil, fmt.Errorf("create client: %w", err)
+			return nil, fmt.Errorf("initialize client: %w", err)
 		}
 	}
 
@@ -279,7 +335,10 @@ func (c *MCPClient) ListTools(ctx context.Context) ([]MCPTool, error) {
 
 // CallTool calls a tool on the server
 func (c *MCPClient) CallTool(ctx context.Context, request MCPToolCallRequest) (*MCPToolCallResult, error) {
-	if !c.initialized {
+	c.mutex.RLock()
+	needsInit := !c.initialized
+	c.mutex.RUnlock()
+	if needsInit {
 		if err := c.Initialize(ctx); err != nil {
 			return nil, fmt.Errorf("initialize client: %w", err)
 		}
@@ -327,7 +386,10 @@ func (c *MCPClient) CallTool(ctx context.Context, request MCPToolCallRequest) (*
 
 // ListResources lists available resources from the server
 func (c *MCPClient) ListResources(ctx context.Context) ([]MCPResource, error) {
-	if !c.initialized {
+	c.mutex.RLock()
+	needsInit := !c.initialized
+	c.mutex.RUnlock()
+	if needsInit {
 		if err := c.Initialize(ctx); err != nil {
 			return nil, fmt.Errorf("initialize client: %w", err)
 		}
@@ -365,7 +427,10 @@ func (c *MCPClient) ListResources(ctx context.Context) ([]MCPResource, error) {
 
 // ReadResource reads a resource from the server
 func (c *MCPClient) ReadResource(ctx context.Context, uri string) (*MCPContent, error) {
-	if !c.initialized {
+	c.mutex.RLock()
+	needsInit := !c.initialized
+	c.mutex.RUnlock()
+	if needsInit {
 		if err := c.Initialize(ctx); err != nil {
 			return nil, fmt.Errorf("initialize client: %w", err)
 		}
@@ -406,7 +471,10 @@ func (c *MCPClient) ReadResource(ctx context.Context, uri string) (*MCPContent, 
 
 // ListPrompts lists available prompts from the server
 func (c *MCPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
-	if !c.initialized {
+	c.mutex.RLock()
+	needsInit := !c.initialized
+	c.mutex.RUnlock()
+	if needsInit {
 		if err := c.Initialize(ctx); err != nil {
 			return nil, fmt.Errorf("initialize client: %w", err)
 		}
@@ -444,7 +512,10 @@ func (c *MCPClient) ListPrompts(ctx context.Context) ([]MCPPrompt, error) {
 
 // GetPrompt gets a prompt from the server
 func (c *MCPClient) GetPrompt(ctx context.Context, name string, args map[string]interface{}) (*MCPContent, error) {
-	if !c.initialized {
+	c.mutex.RLock()
+	needsInit := !c.initialized
+	c.mutex.RUnlock()
+	if needsInit {
 		if err := c.Initialize(ctx); err != nil {
 			return nil, fmt.Errorf("initialize client: %w", err)
 		}
@@ -511,13 +582,21 @@ func (c *MCPClient) sendRequest(ctx context.Context, method string, params inter
 		c.reqMutex.Unlock()
 	}()
 
+	// Capture stdin under lock
+	c.mutex.RLock()
+	stdin := c.stdin
+	c.mutex.RUnlock()
+	if stdin == nil {
+		return nil, fmt.Errorf("stdin not available: server not running")
+	}
+
 	// Send the message
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	if _, err := c.stdin.Write(append(messageBytes, '\n')); err != nil {
+	if _, err := stdin.Write(append(messageBytes, '\n')); err != nil {
 		return nil, fmt.Errorf("failed to write request: %w", err)
 	}
 
@@ -578,6 +657,48 @@ func (c *MCPClient) handleMessages() {
 		// Handle notifications/events (ID is nil)
 		// Could be extended to handle server notifications in the future
 	}
+
+	// Scanner ended - check if this was unexpected (process died)
+	if err := scanner.Err(); err != nil {
+		c.mutex.Lock()
+		stopping := c.stopping
+		running := c.running
+		c.mutex.Unlock()
+
+		if !stopping && running {
+			if c.logger != nil {
+				c.logger.LogProcessStep(fmt.Sprintf("[WARN] MCP server %s stdout scanner ended unexpectedly: %v", c.config.Name, err))
+			}
+			// Trigger reconnection
+			c.mutex.Lock()
+			if c.running && !c.stopping {
+				// Capture client context before spawning reconnect goroutine
+				clientCtx := c.ctx
+				go c.reconnect(clientCtx)
+			}
+			c.mutex.Unlock()
+		}
+	} else {
+		// Scanner ended without error (EOF)
+		c.mutex.Lock()
+		stopping := c.stopping
+		running := c.running
+		c.mutex.Unlock()
+
+		if !stopping && running {
+			if c.logger != nil {
+				c.logger.LogProcessStep(fmt.Sprintf("[WARN] MCP server %s stdout closed unexpectedly (EOF)", c.config.Name))
+			}
+			// Trigger reconnection
+			c.mutex.Lock()
+			if c.running && !c.stopping {
+				// Capture client context before spawning reconnect goroutine
+				clientCtx := c.ctx
+				go c.reconnect(clientCtx)
+			}
+			c.mutex.Unlock()
+		}
+	}
 }
 
 // handleErrors handles stderr output from the server
@@ -586,7 +707,219 @@ func (c *MCPClient) handleErrors() {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line != "" && c.logger != nil {
-			c.logger.LogProcessStep(fmt.Sprintf("[search] MCP server %s stderr: %s", c.config.Name, line))
+			c.logger.LogProcessStep(fmt.Sprintf("[STDERR] MCP server %s stderr: %s", c.config.Name, line))
 		}
 	}
+}
+
+// ping sends a ping request to check if the server is responsive
+func (c *MCPClient) ping(ctx context.Context) error {
+	c.mutex.RLock()
+	stdin := c.stdin
+	c.mutex.RUnlock()
+
+	if stdin == nil {
+		return fmt.Errorf("stdin not available")
+	}
+
+	_, err := c.sendRequest(ctx, "ping", nil)
+	return err
+}
+
+// startHealthCheck starts the health check goroutine
+func (c *MCPClient) startHealthCheck() {
+	// Derive health check context from client's context
+	healthCtx, healthCancel := context.WithCancel(c.ctx)
+	c.healthCheckCtx = healthCtx
+	c.healthCheckCancel = healthCancel
+
+	go func() {
+		ticker := time.NewTicker(c.healthInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-healthCtx.Done():
+				// Health check stopped
+				return
+			case <-ticker.C:
+				c.mutex.RLock()
+				running := c.running && !c.stopping
+				c.mutex.RUnlock()
+
+				if !running {
+					// Server not running or stopping, skip health check
+					continue
+				}
+
+				// Send ping
+				ctx, cancel := context.WithTimeout(healthCtx, 10*time.Second)
+				if err := c.ping(ctx); err != nil {
+					cancel()
+					// Health check failed, trigger reconnection
+					c.mutex.Lock()
+					if c.running && !c.stopping {
+						if c.logger != nil {
+							c.logger.LogProcessStep(fmt.Sprintf("[WARN] Health check failed for MCP server %s: %v", c.config.Name, err))
+						}
+						go c.reconnect(healthCtx)
+					}
+					c.mutex.Unlock()
+				} else {
+					cancel()
+					// Health check passed, check if we should reset backoff
+					c.mutex.Lock()
+					if c.reconnectAttempt > 0 && time.Since(c.connectedAt) > 2*time.Minute {
+						// Connection has been stable for 2 minutes, reset backoff
+						if c.logger != nil {
+							c.logger.LogProcessStep(fmt.Sprintf("[OK] Connection stable for MCP server %s, resetting backoff", c.config.Name))
+						}
+						c.reconnectAttempt = 0
+					}
+					c.mutex.Unlock()
+				}
+			}
+		}
+	}()
+}
+
+// reconnect attempts to reconnect to the MCP server with exponential backoff
+func (c *MCPClient) reconnect(ctx context.Context) {
+	c.mutex.Lock()
+	if c.stopping || c.reconnecting || c.reconnectAttempt >= c.getMaxRestarts() {
+		c.mutex.Unlock()
+		if c.logger != nil {
+			if c.stopping {
+				c.logger.LogProcessStep(fmt.Sprintf("[INFO] Skipping reconnect for %s (server stopping)", c.config.Name))
+			} else if c.reconnecting {
+				c.logger.LogProcessStep(fmt.Sprintf("[INFO] Skipping reconnect for %s (reconnect already in progress)", c.config.Name))
+			} else {
+				c.logger.LogProcessStep(fmt.Sprintf("[ERROR] Max reconnect attempts (%d) reached for MCP server %s", c.getMaxRestarts(), c.config.Name))
+			}
+		}
+		return
+	}
+
+	c.reconnecting = true
+	c.reconnectAttempt++
+	attempt := c.reconnectAttempt
+	c.mutex.Unlock()
+	defer func() {
+		c.mutex.Lock()
+		c.reconnecting = false
+		c.mutex.Unlock()
+	}()
+
+	// Calculate backoff delay
+	delay := c.calculateBackoff(attempt)
+	if c.logger != nil {
+		c.logger.LogProcessStep(fmt.Sprintf("[RECONNECT] Attempting reconnect %d/%d for MCP server %s in %v", attempt, c.getMaxRestarts(), c.config.Name, delay))
+	}
+
+	// Wait for backoff delay
+	select {
+	case <-time.After(delay):
+	case <-ctx.Done():
+		if c.logger != nil {
+			c.logger.LogProcessStep(fmt.Sprintf("[RECONNECT] Reconnect cancelled for MCP server %s", c.config.Name))
+		}
+		return
+	}
+
+	// Terminate old process and clean up before restarting
+	c.mutex.Lock()
+	oldCancel := c.cancel
+	oldStdin := c.stdin
+	oldStdout := c.stdout
+	oldStderr := c.stderr
+	c.mutex.Unlock()
+
+	// Cancel the old context to signal old goroutines to stop
+	if oldCancel != nil {
+		oldCancel()
+	}
+	// Close old pipes to unblock old goroutines
+	if oldStdin != nil {
+		oldStdin.Close()
+	}
+	if oldStdout != nil {
+		oldStdout.Close()
+	}
+	if oldStderr != nil {
+		oldStderr.Close()
+	}
+	// Brief sleep to let old goroutines detect EOF and exit
+	time.Sleep(10 * time.Millisecond)
+
+	// Mark as not running before attempting restart
+	// Clear pending requests to prevent stale response delivery
+	c.reqMutex.Lock()
+	for id, ch := range c.pendingReqs {
+		close(ch)
+		delete(c.pendingReqs, id)
+	}
+	c.reqMutex.Unlock()
+
+	c.mutex.Lock()
+	c.running = false
+	c.initialized = false
+	c.mutex.Unlock()
+
+	// Start the server again (this will increment restartCount)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if err := c.Start(ctx); err != nil {
+		c.mutex.Lock()
+		c.running = false
+		c.mutex.Unlock()
+
+		if c.logger != nil {
+			c.logger.LogProcessStep(fmt.Sprintf("[ERROR] Reconnect attempt %d failed for MCP server %s: %v", attempt, c.config.Name, err))
+		}
+
+		// Don't retry here - the health check will trigger another attempt if needed
+		return
+	}
+
+	// Re-initialize the server after successful connection
+	if err := c.Initialize(ctx); err != nil {
+		c.mutex.Lock()
+		c.running = false
+		c.mutex.Unlock()
+
+		if c.logger != nil {
+			c.logger.LogProcessStep(fmt.Sprintf("[ERROR] Failed to initialize after reconnect for MCP server %s: %v", c.config.Name, err))
+		}
+		return
+	}
+
+	if c.logger != nil {
+		c.logger.LogProcessStep(fmt.Sprintf("[OK] Successfully reconnected and initialized MCP server %s (attempt %d)", c.config.Name, attempt))
+	}
+
+	// Reset reconnect budget after successful reconnect+initialize so that
+	// subsequent crashes get a fresh retry budget instead of accumulating
+	// toward the max-restarts cap.
+	c.mutex.Lock()
+	c.reconnectAttempt = 0
+	c.mutex.Unlock()
+}
+
+// calculateBackoff calculates exponential backoff delay
+func (c *MCPClient) calculateBackoff(attempt int) time.Duration {
+	// Start with 1 second, double each attempt up to max 60 seconds
+	backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+	if backoff > 60*time.Second {
+		backoff = 60 * time.Second
+	}
+	return backoff
+}
+
+// getMaxRestarts returns the maximum number of restart attempts
+func (c *MCPClient) getMaxRestarts() int {
+	if c.config.MaxRestarts > 0 {
+		return c.config.MaxRestarts
+	}
+	return 3 // default, matching pkg/mcp/config.go
 }

@@ -1,11 +1,15 @@
-# SP-016: Embedding-Based Duplicate Detection
+# SP-016: Embedding Index — Duplicate Detection & Semantic Search
 
 **Status:** 📋 Proposed  
-**Depends on:** SP-001, SP-015  
+**Depends on:** SP-001, SP-003, SP-015  
 **Priority:** Medium  
-**Effort Estimate:** ~3-4 weeks
+**Effort Estimate:** ~5 weeks
 
 ## Problem
+
+Two distinct problems share the same underlying infrastructure: embedding the codebase into vectors.
+
+### Problem 1: Agent Duplicate Detection
 
 When an agent writes new code, it has no way to know whether similar functionality already exists elsewhere in the codebase. This leads to:
 
@@ -15,9 +19,18 @@ When an agent writes new code, it has no way to know whether similar functionali
 
 The agent already has `search_files` for text search, but semantic duplicates use different variable names, different signatures, and different approaches. Text search cannot find them.
 
+### Problem 2: Limited User Search
+
+The webui's search pane currently uses text-based search (`ripgrep` via `search_files`). Users looking for "authentication logic" must know the exact function or variable names. Natural language queries like "where is rate limiting enforced?" or "how does the terminal reattach flow work?" return nothing useful because text search can't bridge the semantic gap between intent and implementation.
+
+**Both problems are solved by the same embedding index.** Once the codebase is embedded at the function level, the same vectors serve both agent-side duplicate detection and user-facing semantic search. The index is built once, queried by two consumers.
+
 ## Proposed Solution
 
-Build an **embedding index** over the codebase at the function and file level. When the agent is about to create or modify a file, query the index for semantically similar existing code and surface matches as a warning.
+Build an **embedding index** over the codebase at the function and file level. The index serves two purposes:
+
+1. **Agent duplicate detection** — When the agent is about to create or modify a file, query the index for semantically similar existing code and surface matches as a warning.
+2. **User semantic search** — Extend the search pane to accept natural language queries, returning relevant functions ranked by semantic similarity alongside existing text search results.
 
 ### Architecture
 
@@ -34,12 +47,14 @@ Build an **embedding index** over the codebase at the function and file level. W
                                           │  (on-disk)   │
                                           └──────┬───────┘
                                                   │
-                          ┌───────────────────────┘
-                          ▼
-                   ┌──────────────┐     ┌─────────────┐
-                   │  Query at    │────▶│  Warning in  │
-                   │  edit time   │     │  tool result │
-                   └──────────────┘     └─────────────┘
+                    ┌─────────────────────────────┼────────────────────────┐
+                    ▼                                                      ▼
+             ┌──────────────┐     ┌─────────────┐                   ┌──────────────┐
+             │  Agent:      │────▶│  Warning in  │                   │  User:       │
+             │  edit time   │     │  tool result │                   │  Search Pane │
+             │  duplicate   │     └─────────────┘                   │  semantic    │
+             │  check       │                                      │  results     │
+             └──────────────┘                                      └──────────────┘
 ```
 
 ### Multi-Target Architecture
@@ -191,6 +206,72 @@ Consider whether the new code duplicates existing functionality.
 ```
 
 This is advisory, not blocking — the agent decides whether to proceed.
+
+#### 6. Semantic Search (User-Facing)
+
+Extends the webui search pane to support natural language queries alongside existing text search. The embedding index built for duplicate detection serves double duty here — no additional indexing required.
+
+**Search modes:**
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| **Text** (default) | Normal search input | Existing ripgrep-based search, unchanged |
+| **Semantic** | Prefix with `? ` or click "Semantic" toggle | Embed the query, return function/file matches ranked by similarity |
+
+**Semantic search results include:**
+
+```
+Query: "how does terminal reattach work"
+
+Results (semantic, top 10):
+  0.91  pkg/webui/terminal_lifecycle.go:ReattachSession
+        Reattach to an existing session, snapshot ring buffer for scrollback replay
+  0.87  pkg/webui/websocket.go:handleTerminalWebSocket
+        WebSocket handler for terminal create/reattach, sends session_restored
+  0.84  pkg/webui/terminal_agent_exec.go:ExecuteCommandAndWait
+        Execute a command in a hidden PTY session and wait for completion
+  0.78  pkg/agent/tools.go:executeTool
+        Route tool calls to registered handlers with security validation
+  ...
+```
+
+**UI integration:**
+
+- Add a "Semantic" toggle or mode selector to the existing search pane
+- Results show function name, file path, similarity score, and first line of doc comment
+- Clicking a result navigates to that file+line in the editor
+- Text and semantic results can be shown side-by-side or toggled
+
+**API endpoint:**
+
+```
+POST /api/search/semantic
+{
+  "query": "terminal reattach flow",
+  "top_k": 10,
+  "threshold": 0.70
+}
+
+→ {
+  "results": [
+    {
+      "id": "pkg/webui/terminal_lifecycle.go:ReattachSession",
+      "file": "pkg/webui/terminal_lifecycle.go",
+      "name": "ReattachSession",
+      "signature": "func (tm *TerminalManager) ReattachSession(sessionID string) (string, error)",
+      "start_line": 79,
+      "end_line": 100,
+      "similarity": 0.91,
+      "doc_comment": "Reattach to an existing session, snapshot ring buffer for scrollback replay"
+    },
+    ...
+  ]
+}
+```
+
+**Browser runtime:** In the cloud/foundry IDE, the query embedding runs client-side via `onnxruntime-web` so the user's natural language query never leaves the browser. Only the computed vector is sent to the server (or the index is also client-side for small repos).
+
+**Threshold tuning:** User-facing search uses a lower threshold (0.70) than duplicate detection (0.90) because false positives are less harmful in search — the user can ignore irrelevant results. Duplicate detection needs higher precision to avoid noisy warnings.
 
 **Verified detections (prototype, sprout codebase):**
 
@@ -494,15 +575,18 @@ For `edit_file`, parse the old and new content to identify which function(s) cha
 - `pkg/agent/tool_definitions.go` — Wire check into tool execution
 - `pkg/agent/tool_handlers_index.go` — Agent tools for index management
 
-### Phase 3: Browser Integration (Week 3)
+### Phase 3: Semantic Search + Browser Integration (Week 3-4)
 
-1. Add `onnxruntime-web` + `@huggingface/transformers` to foundry browser-ide dependencies
-2. Create embedding Web Worker (`embedding.worker.ts`) in foundry
-3. Wire foundry service worker to intercept embedding API calls → route to Web Worker
-4. Ensure vector format compatibility between Go and JS runtimes
-5. Cross-target vector parity tests (Go vectors == JS vectors)
+1. Add `/api/search/semantic` endpoint to webui server
+2. Add "Semantic" toggle to search pane in webui
+3. Add `onnxruntime-web` + `@huggingface/transformers` to foundry browser-ide dependencies
+4. Create embedding Web Worker (`embedding.worker.ts`) in foundry
+5. Wire foundry service worker to intercept embedding API calls → route to Web Worker
+6. Ensure vector format compatibility between Go and JS runtimes
+7. Cross-target vector parity tests (Go vectors == JS vectors)
 
 **Files (sprout):**
+- `pkg/webui/search_semantic_api.go` — Semantic search API handler
 - `pkg/embedding/compat_test.go` — Cross-runtime vector parity tests
 
 **Files (foundry):**
@@ -510,13 +594,17 @@ For `edit_file`, parse the old and new content to identify which function(s) cha
 - `browser-ide/src/services/embeddingService.ts` — Worker communication layer
 - `browser-ide/src/sprout-sw.ts` — Add embedding request interception
 
-### Phase 4: Polish (Week 4)
+**Files (webui):**
+- `webui/src/components/SearchView.tsx` — Add semantic search toggle and results display
+- `webui/src/services/api.ts` — Add `searchSemantic()` API call
+
+### Phase 4: Polish (Week 5)
 
 1. Add TypeScript extractor using tree-sitter (stretch goal)
 2. Performance tuning (batch embeddings, lazy loading)
 3. Cross-target vector compatibility tests (Go vectors == JS vectors)
 4. Settings integration (self-documenting via `manage_settings` tool)
-5. End-to-end test: build index on desktop, query in browser
+5. End-to-end test: build index on Go binary, query in browser
 
 ## Success Criteria
 
@@ -532,6 +620,16 @@ For `edit_file`, parse the old and new content to identify which function(s) cha
 | Peak RSS during indexing | **1GB actual** | ~1.2GB (est) |
 | Zero-config availability | ✅ Works immediately | Download required |
 | Privacy | 100% local | 100% local |
+
+### Semantic Search Metrics
+
+| Metric | Target |
+|--------|--------|
+| Query latency (natural language → results) | <100ms (Go binary), <200ms (browser) |
+| Relevance for "how does X work" queries | Top-3 results contain correct function >80% of the time |
+| Zero-result rate | <10% for queries describing real functionality |
+| UI response | Semantic toggle activates instantly; results stream as computed |
+| Privacy (browser) | Query embedding runs client-side; only vector sent to server (or fully local) |
 
 ## Risks and Mitigations
 

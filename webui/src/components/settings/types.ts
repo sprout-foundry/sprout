@@ -54,9 +54,9 @@ export type SettingsSubsection =
   // Agent (session scope)
   | 'agent-provider' | 'agent-general' | 'agent-behavior' | 'agent-subagents' | 'agent-skills'
   // Workspace (workspace scope)
-  | 'workspace-provider' | 'workspace-embeddings' | 'workspace-mcp' | 'workspace-credentials'
+  | 'workspace-provider' | 'workspace-embeddings' | 'workspace-mcp'
   // Environment (global scope)
-  | 'env-providers' | 'env-credentials'   | 'env-performance' | 'env-commit-review' | 'env-ocr' | 'env-embeddings'// Editor
+  | 'env-providers' | 'env-performance' | 'env-commit-review' | 'env-ocr'// Editor
   | 'editor-preferences';
 
 export interface SectionDef {
@@ -90,7 +90,6 @@ export const SECTION_GROUPS: SectionDef[] = [
       { id: 'workspace-provider', label: 'Provider & Model' },
       { id: 'workspace-embeddings', label: 'Embeddings' },
       { id: 'workspace-mcp', label: 'MCP Servers' },
-      { id: 'workspace-credentials', label: 'Credentials' },
     ],
   },
   {
@@ -100,11 +99,9 @@ export const SECTION_GROUPS: SectionDef[] = [
     description: 'Global infrastructure config (~/.config/sprout)',
     subsections: [
       { id: 'env-providers', label: 'Providers' },
-      { id: 'env-credentials', label: 'Credentials' },
       { id: 'env-performance', label: 'Performance' },
       { id: 'env-commit-review', label: 'Commit & Review' },
       { id: 'env-ocr', label: 'PDF OCR' },
-      { id: 'env-embeddings', label: 'Embeddings' },
     ],
   },
   {
@@ -144,13 +141,10 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'workspace-provider': 'general',
     'workspace-embeddings': 'embeddings',
     'workspace-mcp': 'mcp',
-    'workspace-credentials': 'credentials',
     'env-providers': 'providers',
-    'env-credentials': 'credentials',
     'env-performance': 'performance',
     'env-commit-review': 'commit-review',
     'env-ocr': 'pdf-ocr',
-    'env-embeddings': 'embeddings',
     'editor-preferences': 'general',
   };
   return map[subsectionId];

@@ -415,6 +415,8 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
 	// Search API
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
+	mux.HandleFunc("/api/search/semantic/status", ws.handleAPISemanticStatus)
+	mux.HandleFunc("/api/search/semantic/preview", ws.handleAPISemanticPreview)
 	mux.HandleFunc("/api/search/semantic", ws.handleAPISemanticSearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)

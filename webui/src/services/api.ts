@@ -1892,6 +1892,34 @@ class ApiService {
     }
   }
 
+  async searchSemanticStatus(): Promise<{
+    available: boolean;
+    initialized: boolean;
+    record_count: number;
+    workspace: string;
+  }> {
+    const response = await clientFetch('/api/search/semantic/status');
+    if (!response.ok) throw new Error('Failed to get semantic status');
+    return response.json();
+  }
+
+  async searchSemanticPreview(file: string, startLine: number, context?: number): Promise<{
+    file: string;
+    start_line: number;
+    snippet: Array<{
+      line_number: number;
+      content: string;
+      is_context: boolean;
+    }>;
+    total_lines: number;
+  }> {
+    const params = new URLSearchParams({ file, start_line: String(startLine) });
+    if (context) params.set('context', String(context));
+    const response = await clientFetch(`/api/search/semantic/preview?${params}`);
+    if (!response.ok) throw new Error('Failed to get preview');
+    return response.json();
+  }
+
   async searchReplace(request: {
     search: string;
     replace: string;

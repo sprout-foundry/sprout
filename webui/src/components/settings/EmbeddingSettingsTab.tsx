@@ -8,6 +8,7 @@ interface EmbeddingStatus {
   initialized: boolean;
   building: boolean;
   record_count: number;
+  init_error?: string;
 }
 
 interface EmbeddingSettingsTabProps {
@@ -119,6 +120,13 @@ export default function EmbeddingSettingsTab({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-success)' }}>
             <CheckCircle2 size={14} />
             <span style={{ fontSize: '13px' }}>{status.record_count.toLocaleString()} functions indexed</span>
+          </div>
+        ) : status.available && status.init_error ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-error)' }}>
+            <AlertTriangle size={14} />
+            <span style={{ fontSize: '13px' }}>
+              Initialization failed: {status.init_error}
+            </span>
           </div>
         ) : status.available ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>

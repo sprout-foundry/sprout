@@ -21,16 +21,15 @@ type EmbeddingManager struct {
 	indexMgr      *IndexManager
 	initialized   bool
 	building      bool // true while BuildIndex is running
+	initError     error // cached error from failed Init()
 	config        *configuration.EmbeddingIndexConfig
 	workspaceRoot string
 
 	// Resolved config values stored during init to avoid re-reading config
 	// under lock on every query call (SHOULD_FIX #7).
-	threshold float32
+	threshold  float32
 	maxResults int
-}
-
-// NewEmbeddingManager creates a new manager with the given config.
+}// NewEmbeddingManager creates a new manager with the given config.
 // The manager is NOT initialized until Init() or a query method is called.
 func NewEmbeddingManager(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) *EmbeddingManager {
 	return &EmbeddingManager{
@@ -41,9 +40,16 @@ func NewEmbeddingManager(cfg *configuration.EmbeddingIndexConfig, workspaceRoot 
 
 // Init initializes the ONNX Runtime provider and opens the vector store.
 // This is idempotent — calling it multiple times is safe.
+// If a previous Init() failed, the cached error is returned immediately.
 func (m *EmbeddingManager) Init(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// If we already tried and failed, return the cached error.
+	if m.initError != nil {
+		return m.initError
+	}
+
 	return m.initLocked(ctx)
 }
 
@@ -68,7 +74,8 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	// Initialize provider
 	provider, err := NewBundledProvider(modelDir, ortLibPath)
 	if err != nil {
-		return fmt.Errorf("embedding: init provider: %w", err)
+		m.initError = fmt.Errorf("embedding: init provider: %w", err)
+		return m.initError
 	}
 
 	// Resolve index directory
@@ -90,7 +97,8 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	store, err := NewJSONLFileStore(indexFile)
 	if err != nil {
 		provider.Close()
-		return fmt.Errorf("embedding: open store: %w", err)
+		m.initError = fmt.Errorf("embedding: open store: %w", err)
+		return m.initError
 	}
 
 	// Store resolved threshold and maxResults as fields (SHOULD_FIX #7).
@@ -146,6 +154,14 @@ func (m *EmbeddingManager) IsBuilding() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.building
+}
+
+// InitError returns the error from a previous failed Init() call, or nil if
+// initialization succeeded or has never been attempted.
+func (m *EmbeddingManager) InitError() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.initError
 }
 
 // IndexSize returns the number of records in the vector store.

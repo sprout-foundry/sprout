@@ -49,7 +49,8 @@ function SettingsPanel({
   /* ─── Collapsible section state ──────────────────────── */
 
   const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(new Set(['agent']));
+  const [showCredentials, setShowCredentials] = useState(false);
 
   const toggleSection = (sectionId: SettingsSection) => {
     setExpandedSections((prev) => {
@@ -165,8 +166,10 @@ function SettingsPanel({
       ? ({ ...settings, ...state.layerData } as unknown as SproutSettings)
       : settings;
 
-  // Update the display ref with active settings
-  state.displaySettingsRef.current = activeSettings;
+  // Sync display ref with active settings (in useEffect to avoid render-time mutation)
+  useEffect(() => {
+    state.displaySettingsRef.current = activeSettings;
+  }, [activeSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ─── Render subsection content ──────────────────────── */
 
@@ -286,9 +289,6 @@ function SettingsPanel({
           />
         );
 
-      case 'workspace-credentials':
-        return <CredentialsSettingsTab />;
-
       /* ── Environment section ───────────────────────── */
       case 'env-providers':
         return (
@@ -322,9 +322,6 @@ function SettingsPanel({
           />
         );
 
-      case 'env-credentials':
-        return <CredentialsSettingsTab />;
-
       case 'env-performance':
         return (
           <PerformanceSettingsTab
@@ -346,15 +343,6 @@ function SettingsPanel({
           <OcrSettingsTab
             renderToggle={fieldRenderers.renderToggle}
             renderTextInput={fieldRenderers.renderTextInput}
-          />
-        );
-
-      case 'env-embeddings':
-        return (
-          <EmbeddingSettingsTab
-            renderToggle={fieldRenderers.renderToggle}
-            renderTextInput={fieldRenderers.renderTextInput}
-            updateSetting={mutations.updateSetting}
           />
         );
 
@@ -424,6 +412,25 @@ function SettingsPanel({
           )}
         </div>
       ))}
+      {/* Credentials — separate panel per spec, not inside any section */}
+      <div className="settings-credentials-link">
+        <button
+          type="button"
+          className={`settings-section-header ${showCredentials ? 'expanded' : ''}`}
+          onClick={() => setShowCredentials(!showCredentials)}
+          aria-expanded={showCredentials}
+        >
+          <span className="settings-section-label">Credentials</span>
+          <span className="settings-scope-badge scope-global">global</span>
+          <ChevronRight className="settings-section-chevron" size={14} />
+        </button>
+        {showCredentials && (
+          <div className="settings-section-body">
+            <CredentialsSettingsTab />
+          </div>
+        )}
+      </div>
+
       {fieldRenderers.renderSaving()}
     </div>
   );

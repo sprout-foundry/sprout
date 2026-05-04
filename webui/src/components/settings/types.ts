@@ -25,6 +25,10 @@ export interface MutationContext {
 /** @deprecated Use SubagentTypeInfo from services/api/types */
 export type SubagentTypeEntry = SubagentTypeInfo;
 
+/**
+ * Legacy flat tab IDs — kept for backward compatibility with useSettingsState.
+ * New code should use SettingsSection / SettingsSubsection from SECTION_GROUPS.
+ */
 export type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills' | 'embeddings';
 
 export interface EditorPreferences {
@@ -42,18 +46,114 @@ export interface SettingsPanelProps {
   onEditorPreferenceChanged?: (key: string, value: unknown) => void;
 }
 
-export const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
-  { id: 'general', label: 'General' },
-  { id: 'security', label: 'Security' },
-  { id: 'credentials', label: 'Credentials' },
-  { id: 'performance', label: 'Perf' },
-  { id: 'subagents', label: 'Subagents' },
-  { id: 'commit-review', label: 'Commit & Review' },
-  { id: 'pdf-ocr', label: 'OCR' },
-  { id: 'mcp', label: 'MCP' },
-  { id: 'providers', label: 'Providers' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'embeddings', label: 'Embeddings' },
+/* ─── Hierarchical section model (SP-017) ──────────────────── */
+
+export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor';
+
+export type SettingsSubsection =
+  // Agent (session scope)
+  | 'agent-provider' | 'agent-general' | 'agent-behavior' | 'agent-subagents' | 'agent-skills'
+  // Workspace (workspace scope)
+  | 'workspace-provider' | 'workspace-security' | 'workspace-mcp' | 'workspace-credentials'
+  // Environment (global scope)
+  | 'env-providers' | 'env-credentials'   | 'env-performance' | 'env-commit-review' | 'env-ocr' | 'env-embeddings'// Editor
+  | 'editor-preferences';
+
+export interface SectionDef {
+  id: SettingsSection;
+  label: string;
+  scope: 'session' | 'workspace' | 'global' | 'runtime';
+  description: string;
+  subsections: { id: SettingsSubsection; label: string }[];
+}
+
+export const SECTION_GROUPS: SectionDef[] = [
+  {
+    id: 'agent',
+    label: 'Agent',
+    scope: 'session',
+    description: 'How the agent behaves this session',
+    subsections: [
+      { id: 'agent-provider', label: 'Provider & Model' },
+      { id: 'agent-general', label: 'General' },
+      { id: 'agent-behavior', label: 'Security' },
+      { id: 'agent-subagents', label: 'Subagents' },
+      { id: 'agent-skills', label: 'Skills' },
+    ],
+  },
+  {
+    id: 'workspace',
+    label: 'Workspace',
+    scope: 'workspace',
+    description: 'Settings for this project directory',
+    subsections: [
+      { id: 'workspace-provider', label: 'Provider & Model' },
+      { id: 'workspace-security', label: 'Security' },
+      { id: 'workspace-mcp', label: 'MCP Servers' },
+      { id: 'workspace-credentials', label: 'Credentials' },
+    ],
+  },
+  {
+    id: 'environment',
+    label: 'Environment',
+    scope: 'global',
+    description: 'Global infrastructure config (~/.config/sprout)',
+    subsections: [
+      { id: 'env-providers', label: 'Providers' },
+      { id: 'env-credentials', label: 'Credentials' },
+      { id: 'env-performance', label: 'Performance' },
+      { id: 'env-commit-review', label: 'Commit & Review' },
+      { id: 'env-ocr', label: 'PDF OCR' },
+      { id: 'env-embeddings', label: 'Embeddings' },
+    ],
+  },
+  {
+    id: 'editor',
+    label: 'Editor',
+    scope: 'runtime',
+    description: 'Editor display preferences (this session only)',
+    subsections: [
+      { id: 'editor-preferences', label: 'Display' },
+    ],
+  },
 ];
+
+/** Map a subsection ID to its parent section. */
+export function getSectionForSubsection(subsectionId: SettingsSubsection): SectionDef | undefined {
+  return SECTION_GROUPS.find((s) => s.subsections.some((sub) => sub.id === subsectionId));
+}
+
+/** Derive configViewLayer from a section scope. */
+export function scopeToLayer(scope: SectionDef['scope']): 'session' | 'workspace' | 'global' {
+  if (scope === 'session' || scope === 'runtime') return 'session';
+  if (scope === 'workspace') return 'workspace';
+  return 'global';
+}
+
+/**
+ * Map a subsection ID to the legacy SettingsSubTab used by useSettingsState.
+ * This keeps the internal fetch effects in useSettingsState working.
+ */
+export function subsectionToLegacyTab(subsectionId: SettingsSubsection): SettingsSubTab {
+  const map: Record<SettingsSubsection, SettingsSubTab> = {
+    'agent-provider': 'general',
+    'agent-general': 'general',
+    'agent-behavior': 'security',
+    'agent-subagents': 'subagents',
+    'agent-skills': 'skills',
+    'workspace-provider': 'general',
+    'workspace-security': 'security',
+    'workspace-mcp': 'mcp',
+    'workspace-credentials': 'credentials',
+    'env-providers': 'providers',
+    'env-credentials': 'credentials',
+    'env-performance': 'performance',
+    'env-commit-review': 'commit-review',
+    'env-ocr': 'pdf-ocr',
+    'env-embeddings': 'embeddings',
+    'editor-preferences': 'general',
+  };
+  return map[subsectionId];
+}
 
 export type { SproutSettings, ProviderOption };

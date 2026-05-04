@@ -19,6 +19,7 @@ import SubagentSettingsTab from './settings/SubagentSettingsTab';
 import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
+import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 
 /* ─── Component ──────────────────────────────────────────────── */
 
@@ -270,6 +271,15 @@ function SettingsPanel({
           <SkillsSettingsTab
             settings={settings}
             toggleSkill={mutations.toggleSkill}
+          />
+        );
+
+      case 'embeddings':
+        return (
+          <EmbeddingSettingsTab
+            renderToggle={fieldRenderers.renderToggle}
+            renderTextInput={fieldRenderers.renderTextInput}
+            updateSetting={mutations.updateSetting}
           />
         );
 

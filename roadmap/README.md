@@ -28,3 +28,4 @@ architectural area, its current state, and open work.
 | SP-014 | [Agent Terminal Sessions — Hidden PTY Routing](./SP-014-agent-terminal-sessions.md) | ✅ Active |
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 📋 Spec (partially implemented) |
 | SP-016 | [Embedding Index — Duplicate Detection & Semantic Search](./SP-016-embedding-duplicate-detection.md) | 📋 Spec |
+| SP-017 | [Settings Panel Rework — Scoped Collapsible Sections](./SP-017-settings-panel-rework.md) | 📋 Spec |

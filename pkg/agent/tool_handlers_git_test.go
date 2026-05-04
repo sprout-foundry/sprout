@@ -286,19 +286,23 @@ func TestIsBroadGitAdd(t *testing.T) {
 	}
 	
 	// Test compound commands (shell chaining)
+	// Note: isBroadGitAdd handles simple prefixed chains like "cd && git add ."
+	// but does NOT parse subshells, bash -c, or multi-git-command chains.
 	compoundTests := []struct {
 		name    string
 		command string
 		broad   bool
 	}{
-		// Should return true: compound commands with broad git add
+		// Should return true: simple prefix chains with cd and broad git add
 		{"cd && add .", "cd /some/path && git add .", true},
 		{"cd ; add -A", "cd /some/path; git add -A", true},
-		{"subshell add", "(cd /some/path && git add --all)", true},
-		{"bash -c add", "bash -c 'cd /some/path && git add -a'", true},
-		{"status && add .", "git status && git add .", true},
-		{"multiple git, second broad add", "git log && git add -A", true},
-		
+
+		// Should return false: subshell/bash -c/multiple git commands not parsed
+		{"subshell add", "(cd /some/path && git add --all)", false},
+		{"bash -c add", "bash -c 'cd /some/path && git add -a'", false},
+		{"status && add .", "git status && git add .", false},
+		{"multiple git, second broad add", "git log && git add -A", false},
+
 		// Should return false: compound commands with specific add or no add
 		{"cd && add file", "cd /some/path && git add file.txt", false},
 		{"git log && add specific", "git log && git add src/main.go", false},

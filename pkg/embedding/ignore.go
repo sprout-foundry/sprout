@@ -82,10 +82,27 @@ func layer1Ignore(path string) bool {
 	return false
 }
 
+// supportedCodeExtensions lists file extensions that should be collected
+// during directory walks for indexing.
+var supportedCodeExtensions = map[string]bool{
+	".go":  true,
+	".ts":  true,
+	".tsx": true,
+	".js":  true,
+	".jsx": true,
+	".mjs": true,
+	".py":  true,
+}
+
+// hasSupportedExtension returns true if the file path has a recognized source-code extension.
+func hasSupportedExtension(path string) bool {
+	return supportedCodeExtensions[filepath.Ext(path)]
+}
+
 // WalkCodeFiles walks the directory tree rooted at root and returns all file
 // paths that should be indexed (i.e., those that pass ShouldIgnorePath). Only
-// files with recognized extensions (.go) are included. Directories matching
-// Layer 1 skip patterns are pruned (no recursion).
+// files with recognized extensions (.go, .ts, .tsx, .js, .jsx, .mjs) are
+// included. Directories matching Layer 1 skip patterns are pruned (no recursion).
 func WalkCodeFiles(root string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -103,7 +120,7 @@ func WalkCodeFiles(root string) ([]string, error) {
 		}
 
 		// Only collect recognized source files.
-		if !strings.HasSuffix(path, ".go") {
+		if !hasSupportedExtension(path) {
 			return nil
 		}
 

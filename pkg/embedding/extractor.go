@@ -52,6 +52,10 @@ func ExtractFromFile(path string, opts ...ExtractOption) ([]CodeUnit, error) {
 	switch ext {
 	case ".go":
 		return ExtractGoFile(path, opts...)
+	case ".py":
+		return ExtractPyFile(path, opts...)
+	case ".ts", ".tsx", ".js", ".jsx", ".mjs":
+		return ExtractTSFile(path, opts...)
 	default:
 		// Unsupported language — return empty with no error.
 		return nil, nil

@@ -18,8 +18,8 @@ const ortVersion = "1.25.1"
 //
 //  1. Explicit config (explicitPath)
 //  2. ONNXRUNTIME_LIB env var
-//  3. Well-known system paths
-//  4. Cached in user config dir
+//  3. Cached in user config dir (our download — takes priority over system)
+//  4. Well-known system paths
 //  5. Extracted embedded library (requires embed_ort build tag)
 //  6. Auto-download from pre-built releases (unless SPROUT_NO_DOWNLOAD=1)
 //
@@ -40,20 +40,21 @@ func resolveORTLibrary(explicitPath string) (string, error) {
 		}
 	}
 
-	// 3. Well-known system paths
+	// 3. Cached in user config dir (our download — before system paths so our
+	// compatible version wins over any potentially incompatible system install).
+	cacheDir := ortCacheDir()
 	libName := ortLibraryName()
+	cached := filepath.Join(cacheDir, libName)
+	if _, err := os.Stat(cached); err == nil {
+		return cached, nil
+	}
+
+	// 4. Well-known system paths
 	for _, searchPath := range ortSearchPaths() {
 		candidate := filepath.Join(searchPath, libName)
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate, nil
 		}
-	}
-
-	// 4. Cached in user config dir
-	cacheDir := ortCacheDir()
-	cached := filepath.Join(cacheDir, libName)
-	if _, err := os.Stat(cached); err == nil {
-		return cached, nil
 	}
 
 	// 5. Try to extract embedded library (if compiled with embed_ort build tag)

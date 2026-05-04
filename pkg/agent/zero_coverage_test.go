@@ -744,20 +744,17 @@ func TestMin(t *testing.T) {
 
 func TestValidateDeepSeekToolCalls(t *testing.T) {
 	t.Parallel()
-	
+
 	tests := []struct {
-		name          string
-		shouldNotPanic bool
-		setupMessages  func() []api.Message
+		name         string
+		setupMessages func() []api.Message
 	}{
 		{
-			name:          "empty messages",
-			shouldNotPanic: true,
-			setupMessages:  func() []api.Message { return []api.Message{} },
+			name:         "empty messages",
+			setupMessages: func() []api.Message { return []api.Message{} },
 		},
 		{
-			name:          "assistant with tool calls followed by matching tool results",
-			shouldNotPanic: true,
+			name: "assistant with tool calls followed by matching tool results",
 			setupMessages: func() []api.Message {
 				tc := api.ToolCall{ID: "call_1", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
 				return []api.Message{
@@ -769,8 +766,7 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 			},
 		},
 		{
-			name:          "assistant with multiple tool calls",
-			shouldNotPanic: true,
+			name: "assistant with multiple tool calls",
 			setupMessages: func() []api.Message {
 				tc1 := api.ToolCall{ID: "call_1", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
 				tc2 := api.ToolCall{ID: "call_2", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "read_file"}}
@@ -783,8 +779,7 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 			},
 		},
 		{
-			name:          "assistant with tool calls missing some tool results",
-			shouldNotPanic: true,
+			name: "assistant with tool calls missing some tool results",
 			setupMessages: func() []api.Message {
 				tc1 := api.ToolCall{ID: "call_1", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
 				tc2 := api.ToolCall{ID: "call_2", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "read_file"}}
@@ -796,8 +791,7 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 			},
 		},
 		{
-			name:          "assistant without tool calls",
-			shouldNotPanic: true,
+			name: "assistant without tool calls",
 			setupMessages: func() []api.Message {
 				return []api.Message{
 					{Role: "user", Content: "hello"},
@@ -806,22 +800,12 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			handler := &ConversationHandler{}
-			handler.agent = &Agent{debug: false}
-			
-			messages := tc.setupMessages()
-			
-			defer func() {
-				if r := recover(); r != nil && tc.shouldNotPanic {
-					t.Errorf("validateDeepSeekToolCalls() panicked: %v", r)
-				}
-			}()
-			
-			handler.validateDeepSeekToolCalls(messages)
+			handler := &ConversationHandler{agent: &Agent{}}
+			handler.validateDeepSeekToolCalls(tc.setupMessages())
 		})
 	}
 }
@@ -832,20 +816,17 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 
 func TestValidateMinimaxToolCalls(t *testing.T) {
 	t.Parallel()
-	
+
 	tests := []struct {
-		name          string
-		shouldNotPanic bool
-		setupMessages  func() []api.Message
+		name         string
+		setupMessages func() []api.Message
 	}{
 		{
-			name:          "empty messages",
-			shouldNotPanic: true,
-			setupMessages:  func() []api.Message { return []api.Message{} },
+			name:         "empty messages",
+			setupMessages: func() []api.Message { return []api.Message{} },
 		},
 		{
-			name:          "assistant with tool calls followed by matching tool results",
-			shouldNotPanic: true,
+			name: "assistant with tool calls followed by matching tool results",
 			setupMessages: func() []api.Message {
 				tc := api.ToolCall{ID: "call_123", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
 				return []api.Message{
@@ -856,8 +837,7 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 			},
 		},
 		{
-			name:          "assistant with multiple tool calls and matching results",
-			shouldNotPanic: true,
+			name: "assistant with multiple tool calls and matching results",
 			setupMessages: func() []api.Message {
 				tc1 := api.ToolCall{ID: "call_a", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
 				tc2 := api.ToolCall{ID: "call_b", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "read_file"}}
@@ -870,8 +850,7 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 			},
 		},
 		{
-			name:          "orphaned tool result before any assistant",
-			shouldNotPanic: true,
+			name: "orphaned tool result before any assistant",
 			setupMessages: func() []api.Message {
 				return []api.Message{
 					{Role: "tool", ToolCallId: "orphan_call", Content: "orphan result"},
@@ -880,8 +859,7 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 			},
 		},
 		{
-			name:          "assistant without tool calls",
-			shouldNotPanic: true,
+			name: "assistant without tool calls",
 			setupMessages: func() []api.Message {
 				return []api.Message{
 					{Role: "user", Content: "hello"},
@@ -890,22 +868,12 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			handler := &ConversationHandler{}
-			handler.agent = &Agent{debug: false}
-			
-			messages := tc.setupMessages()
-			
-			defer func() {
-				if r := recover(); r != nil && tc.shouldNotPanic {
-					t.Errorf("validateMinimaxToolCalls() panicked: %v", r)
-				}
-			}()
-			
-			handler.validateMinimaxToolCalls(messages)
+			handler := &ConversationHandler{agent: &Agent{}}
+			handler.validateMinimaxToolCalls(tc.setupMessages())
 		})
 	}
 }
@@ -1678,13 +1646,7 @@ func TestGetCurrentCustomProviderCoverage(t *testing.T) {
 			wantFound:     false,
 		},
 		{
-			name:          "empty config manager",
-			configManager: &configuration.Manager{},
-			clientType:    "openai",
-			wantFound:     false,
-		},
-		{
-			name:          "case sensitive provider name",
+			name:          "empty config manager returns false",
 			configManager: &configuration.Manager{},
 			clientType:    "openai",
 			wantFound:     false,

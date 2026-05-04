@@ -35,6 +35,16 @@ interface SearchResult {
   match_count: number;
 }
 
+interface SemanticSearchResult {
+  file: string;
+  name: string;
+  signature: string;
+  start_line: number;
+  end_line: number;
+  language: string;
+  similarity: number;
+}
+
 interface SearchViewProps {
   onFileClick?: (filePath: string, lineNumber?: number) => void;
 }
@@ -57,10 +67,13 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
   const [useRegex, setUseRegex] = useState(false);
+  const [semanticMode, setSemanticMode] = useState(false);
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [_totalMatches, setTotalMatches] = useState(0);
   const [_totalFiles, setTotalFiles] = useState(0);
   const [truncated, setTruncated] = useState(false);
+  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[] | null>(null);
+  const [semanticDuration, setSemanticDuration] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReplace, setShowReplace] = useState(false);
@@ -87,6 +100,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         setTotalMatches(0);
         setTotalFiles(0);
         setTruncated(false);
+        setSemanticResults(null);
+        setSemanticDuration(null);
         setError(null);
         return;
       }
@@ -96,32 +111,48 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       setReplaceStatus(null);
 
       try {
-        const response = await apiService.search(query, {
-          case_sensitive: caseSensitive,
-          whole_word: wholeWord,
-          regex: useRegex,
-          exclude: excludePatterns || undefined,
-        });
+        if (semanticMode) {
+          // Semantic search mode
+          const response = await apiService.searchSemantic(query, {
+            top_k: 20,
+            threshold: 0.75,
+          });
 
-        setResults(response.results || []);
-        setTotalMatches(response.total_matches || 0);
-        setTotalFiles(response.total_files || 0);
-        setTruncated(response.truncated || false);
+          setSemanticResults(response.results || []);
+          setSemanticDuration(response.duration || null);
+          setResults(null);
+        } else {
+          // Text-based search mode
+          const response = await apiService.search(query, {
+            case_sensitive: caseSensitive,
+            whole_word: wholeWord,
+            regex: useRegex,
+            exclude: excludePatterns || undefined,
+          });
 
-        // Auto-expand if only one result
-        if (response.results && response.results.length === 1) {
-          setExpandedFiles(new Set([response.results[0].file]));
+          setResults(response.results || []);
+          setTotalMatches(response.total_matches || 0);
+          setTotalFiles(response.total_files || 0);
+          setTruncated(response.truncated || false);
+          setSemanticResults(null);
+          setSemanticDuration(null);
+
+          // Auto-expand if only one result
+          if (response.results && response.results.length === 1) {
+            setExpandedFiles(new Set([response.results[0].file]));
+          }
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Search failed';
         log.error(`Search failed: ${errorMessage}`, { title: 'Search Error' });
         setError(errorMessage);
         setResults(null);
+        setSemanticResults(null);
       } finally {
         setIsSearching(false);
       }
     },
-    [caseSensitive, wholeWord, useRegex, excludePatterns, apiService, log],
+    [semanticMode, caseSensitive, wholeWord, useRegex, excludePatterns, apiService, log],
   );
 
   // Debounced search trigger
@@ -140,6 +171,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       }, DEBOUNCE_DELAY);
     } else {
       setResults(null);
+      setSemanticResults(null);
+      setSemanticDuration(null);
       setTotalMatches(0);
       setTotalFiles(0);
       setTruncated(false);
@@ -152,6 +185,25 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       }
     };
   }, [searchQuery, performSearch]);
+
+  // Re-search when semanticMode toggles (clears results and re-searches if there's a query)
+  useEffect(() => {
+    setResults(null);
+    setSemanticResults(null);
+    setSemanticDuration(null);
+    setTotalMatches(0);
+    setTotalFiles(0);
+    setTruncated(false);
+    if (searchQuery.trim()) {
+      // Clear debounce timer if pending, then trigger immediate re-search
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        performSearch(searchQuery);
+      }, DEBOUNCE_DELAY);
+    }
+  }, [semanticMode, searchQuery, performSearch]);
 
   // Handle search input change
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -169,6 +221,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     } else if (e.key === 'Escape') {
       setSearchQuery('');
       setResults(null);
+      setSemanticResults(null);
+      setSemanticDuration(null);
       setTotalMatches(0);
       setTotalFiles(0);
       setTruncated(false);
@@ -282,6 +336,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     setSearchQuery('');
     setExcludePatterns('');
     setResults(null);
+    setSemanticResults(null);
+    setSemanticDuration(null);
     setTotalMatches(0);
     setTotalFiles(0);
     setTruncated(false);
@@ -303,6 +359,11 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   // Toggle regex
   const toggleRegex = useCallback(() => {
     setUseRegex((prev) => !prev);
+  }, []);
+
+  // Toggle semantic mode
+  const toggleSemanticMode = useCallback(() => {
+    setSemanticMode((prev) => !prev);
   }, []);
 
   // Highlight match in line
@@ -483,6 +544,14 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         >
           <span className="option-icon">.*</span>
         </button>
+        <button
+          className={`search-option-btn ${semanticMode ? 'active' : ''}`}
+          onClick={toggleSemanticMode}
+          title="Semantic search"
+          aria-pressed={semanticMode}
+        >
+          <span className="option-icon">S</span>
+        </button>
       </div>
 
       {/* Exclude patterns indicator */}
@@ -551,6 +620,12 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           {truncated && ' (truncated)'}
         </div>
       )}
+      {semanticResults && (
+        <div className="search-stats">
+          {semanticResults.length} {semanticResults.length === 1 ? 'match' : 'matches'}
+          {semanticDuration && <span className="search-stats-duration"> ({semanticDuration})</span>}
+        </div>
+      )}
 
       {/* Search results */}
       <div className="search-results">
@@ -568,7 +643,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           </div>
         )}
 
-        {filteredResults && filteredResults.length === 0 && !isSearching && !error && (
+        {filteredResults && filteredResults.length === 0 && !isSearching && !error && !semanticResults && (
           <div className="search-no-results">
             <Search size={24} />
             <span>No results found</span>
@@ -675,6 +750,50 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
               </div>
             );
           })}
+
+        {/* Semantic search results */}
+        {semanticResults && semanticResults.length === 0 && !isSearching && !error && (
+          <div className="search-no-results">
+            <Search size={24} />
+            <span>No semantic results found</span>
+          </div>
+        )}
+
+        {semanticResults &&
+          semanticResults.map((result, idx) => (
+            <div
+              key={`${result.file}-${result.start_line}`}
+              className="search-semantic-result search-match-row search-match-row--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => handleFileClick(result.file, result.start_line)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleFileClick(result.file, result.start_line);
+                }
+              }}
+            >
+              <div className="search-semantic-result-main">
+                <span className="search-semantic-result-name">{result.name}</span>
+                {result.signature && (
+                  <span className="search-semantic-result-signature">{result.signature}</span>
+                )}
+              </div>
+              <div className="search-semantic-result-meta">
+                <span className="search-semantic-result-file">{getRelativePath(result.file)}</span>
+                <span className="search-semantic-result-lines">
+                  {result.start_line}–{result.end_line}
+                </span>
+                {result.language && (
+                  <span className="search-semantic-result-lang">{result.language}</span>
+                )}
+                <span className="search-semantic-result-similarity">
+                  {(result.similarity * 100).toFixed(0)}%
+                </span>
+              </div>
+            </div>
+          ))}
       </div>
 
       {/* Context menu */}

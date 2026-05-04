@@ -1898,6 +1898,7 @@ class ApiService {
     building: boolean;
     record_count: number;
     workspace: string;
+    init_error?: string;
   }> {
     const response = await clientFetch('/api/search/semantic/status');
     if (!response.ok) throw new Error('Failed to get semantic status');

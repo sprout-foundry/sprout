@@ -16,19 +16,25 @@ type CheckDuplicatesResult struct {
 	WarningText string
 }
 
-// FormatDuplicateWarning formats duplicate matches as a warning string.
+// FormatDuplicateWarning formats duplicate matches as an agent-internal note
+// (not a user-facing warning). The format is designed for the agent to silently
+// evaluate whether its code overlaps with existing functionality.
 func FormatDuplicateWarning(matches []QueryResult) string {
 	if len(matches) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString("⚠ Potential duplicate detected:\n")
+	sb.WriteString("\n\n[DUPLICATE CHECK] The code you just wrote may overlap with existing functionality:\n")
 	for _, m := range matches {
-		sb.WriteString(fmt.Sprintf("  • %s (similarity: %.2f) — %s\n",
-			m.Record.ID, m.Similarity, m.Record.Signature))
+		sb.WriteString(fmt.Sprintf("  - %s (match: %d%%)\n", m.Record.ID, int(m.Similarity*100)))
+		if m.Record.Signature != "" {
+			sb.WriteString(fmt.Sprintf("    signature: %s\n", m.Record.Signature))
+		}
+		sb.WriteString(fmt.Sprintf("    location: %s:%d-%d\n", m.Record.File, m.Record.StartLine, m.Record.EndLine))
 	}
-	sb.WriteString("Consider whether the new code duplicates existing functionality.\n")
+	sb.WriteString("Review the above. If your code serves a genuinely different purpose, continue as planned. ")
+	sb.WriteString("If it duplicates existing functionality, refactor to reuse the existing code instead.\n")
 	return sb.String()
 }
 

@@ -417,6 +417,103 @@
   font-weight: 500;
 }
 
+/* ── Semantic Search Results ─────────────────────────────────── */
+
+.search-semantic-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  transition: background-color 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+}
+
+.search-semantic-result:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-focus);
+}
+
+.search-semantic-result:focus {
+  outline: none;
+}
+
+.search-semantic-result:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+
+.search-semantic-result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-semantic-result-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.search-semantic-result-signature {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.search-semantic-result-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+
+.search-semantic-result-file {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.search-semantic-result-lines {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.search-semantic-result-lang {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  background: var(--bg-surface);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.search-semantic-result-similarity {
+  font-weight: 600;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.search-stats-duration {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
 /* ── Exclude Indicator ─────────────────────────────────────── */
 
 .search-exclude-indicator {

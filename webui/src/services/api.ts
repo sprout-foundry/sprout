@@ -1857,6 +1857,41 @@ class ApiService {
     }
   }
 
+  // ── Semantic Search API ──────────────────────────────────────────
+
+  async searchSemantic(query: string, options?: {
+    top_k?: number;
+    threshold?: number;
+  }): Promise<{
+    results: Array<{
+      file: string;
+      name: string;
+      signature: string;
+      start_line: number;
+      end_line: number;
+      language: string;
+      similarity: number;
+    }>;
+    query: string;
+    total: number;
+    duration: string;
+  }> {
+    try {
+      const params = new URLSearchParams({ query });
+      if (options?.top_k) params.set('top_k', String(options.top_k));
+      if (options?.threshold != null) params.set('threshold', String(options.threshold));
+
+      const response = await clientFetch(`/api/search/semantic?${params}`);
+      if (!response.ok) {
+        throw new Error(`Semantic search failed: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to search semantically:', error);
+      throw error;
+    }
+  }
+
   async searchReplace(request: {
     search: string;
     replace: string;

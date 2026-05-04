@@ -108,11 +108,12 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 
 // EmbeddingIndexStatus represents the current state of the embedding index.
 type EmbeddingIndexStatus struct {
-	Available   bool   `json:"available"`   // whether embedding manager exists
-	Initialized bool   `json:"initialized"` // whether ONNX provider is initialized
-	Building    bool   `json:"building"`    // whether an index build is in progress
-	RecordCount int    `json:"record_count"` // number of indexed code units
-	Workspace   string `json:"workspace"`   // workspace root path
+	Available    bool   `json:"available"`     // whether embedding manager exists
+	Initialized  bool   `json:"initialized"`   // whether ONNX provider is initialized
+	Building     bool   `json:"building"`      // whether an index build is in progress
+	RecordCount  int    `json:"record_count"`  // number of indexed code units
+	Workspace    string `json:"workspace"`     // workspace root path
+	InitError    string `json:"init_error,omitempty"`  // error from failed initialization, if any
 }
 
 // handleAPISemanticStatus handles GET /api/search/semantic/status
@@ -137,12 +138,22 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 	}
 
 	writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
-		Available:   true,
-		Initialized: em.IsInitialized(),
-		Building:    em.IsBuilding(),
-		RecordCount: em.IndexSize(),
-		Workspace:   ws.GetWorkspaceRoot(),
+		Available:    true,
+		Initialized:  em.IsInitialized(),
+		Building:     em.IsBuilding(),
+		RecordCount:  em.IndexSize(),
+		Workspace:    ws.GetWorkspaceRoot(),
+		InitError:    initErrorMessage(em.InitError()),
 	})
+}
+
+// initErrorMessage converts an init error to a user-friendly message,
+// returning empty string if no error.
+func initErrorMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 // handleAPISemanticBuild handles POST /api/search/semantic/build

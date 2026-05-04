@@ -105,12 +105,12 @@ func TestResolveORTLibraryNotFound(t *testing.T) {
 func TestORTLibraryName(t *testing.T) {
 	switch runtime.GOOS {
 	case "linux":
-		if got := ortLibraryName(); got != "libonnxruntime.so.1.22.0" {
-			t.Errorf("ortLibraryName() = %q, want %q", got, "libonnxruntime.so.1.22.0")
+		if got := ortLibraryName(); got != "libonnxruntime.so.1.25.1" {
+			t.Errorf("ortLibraryName() = %q, want %q", got, "libonnxruntime.so.1.25.1")
 		}
 	case "darwin":
-		if got := ortLibraryName(); got != "libonnxruntime.1.22.0.dylib" {
-			t.Errorf("ortLibraryName() = %q, want %q", got, "libonnxruntime.1.22.0.dylib")
+		if got := ortLibraryName(); got != "libonnxruntime.1.25.1.dylib" {
+			t.Errorf("ortLibraryName() = %q, want %q", got, "libonnxruntime.1.25.1.dylib")
 		}
 	case "windows":
 		if got := ortLibraryName(); got != "onnxruntime.dll" {

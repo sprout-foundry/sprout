@@ -1895,11 +1895,21 @@ class ApiService {
   async searchSemanticStatus(): Promise<{
     available: boolean;
     initialized: boolean;
+    building: boolean;
     record_count: number;
     workspace: string;
   }> {
     const response = await clientFetch('/api/search/semantic/status');
     if (!response.ok) throw new Error('Failed to get semantic status');
+    return response.json();
+  }
+
+  async searchSemanticBuild(): Promise<{ status: string }> {
+    const response = await clientFetch('/api/search/semantic/build', { method: 'POST' });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error((data as Record<string, unknown>).error as string || 'Failed to start build');
+    }
     return response.json();
   }
 

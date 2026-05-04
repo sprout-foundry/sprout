@@ -88,7 +88,10 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const [semanticThreshold, setSemanticThreshold] = useState(0.75);
 
   // Embedding index status
-  const [indexStatus, setIndexStatus] = useState<{available: boolean; initialized: boolean; record_count: number} | null>(null);
+  const [indexStatus, setIndexStatus] = useState<{available: boolean; initialized: boolean; building: boolean; record_count: number} | null>(null);
+
+  // Build progress state
+  const [isBuilding, setIsBuilding] = useState(false);
 
   // Hover preview state
   const [previewData, setPreviewData] = useState<{
@@ -229,11 +232,54 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     }
   }, [semanticMode, searchQuery, performSearch]);
 
-  // Fetch index status when semantic mode is toggled on
+  // Fetch index status when semantic mode is toggled on; auto-trigger build if needed.
   useEffect(() => {
-    if (semanticMode) {
-      apiService.searchSemanticStatus().then(setIndexStatus).catch(() => setIndexStatus(null));
-    }
+    if (!semanticMode) return;
+
+    const checkAndBuild = async () => {
+      try {
+        const status = await apiService.searchSemanticStatus();
+        setIndexStatus(status);
+
+        // Auto-trigger build if index is available but not initialized and not already building.
+        if (status.available && !status.initialized && !status.building) {
+          setIsBuilding(true);
+          try {
+            await apiService.searchSemanticBuild();
+            // Poll for completion.
+            const poll = async () => {
+              const s = await apiService.searchSemanticStatus();
+              setIndexStatus(s);
+              if (s.building) {
+                setTimeout(poll, 2000);
+              } else {
+                setIsBuilding(false);
+              }
+            };
+            setTimeout(poll, 1000);
+          } catch {
+            setIsBuilding(false);
+          }
+        } else if (status.building) {
+          setIsBuilding(true);
+          // Already building, just poll.
+          const poll = async () => {
+            const s = await apiService.searchSemanticStatus();
+            setIndexStatus(s);
+            if (s.building) {
+              setTimeout(poll, 2000);
+            } else {
+              setIsBuilding(false);
+            }
+          };
+          setTimeout(poll, 2000);
+        }
+      } catch {
+        setIndexStatus(null);
+      }
+    };
+
+    checkAndBuild();
   }, [semanticMode, apiService]);
 
   // Handle search input change
@@ -627,7 +673,12 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       {/* Semantic index status indicator */}
       {semanticMode && indexStatus && (
         <div className="search-semantic-status">
-          {indexStatus.initialized ? (
+          {isBuilding || indexStatus.building ? (
+            <>
+              <Loader2 size={12} className="spinning" />
+              Building index...
+            </>
+          ) : indexStatus.initialized ? (
             <>
               <span className="search-semantic-status-dot search-semantic-status-dot--active" />
               {indexStatus.record_count.toLocaleString()} functions indexed
@@ -680,8 +731,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         </div>
       )}
 
-      {/* Replace row */}
-      {showReplace && (
+      {/* Replace row — hidden in semantic mode (no text to replace) */}
+      {showReplace && !semanticMode && (
         <div className="search-replace-row">
           <div className="search-input-wrapper">
             <Replace className="search-input-icon" size={16} />
@@ -713,7 +764,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       {/* Replace status */}
       {replaceStatus && <div className="search-replace-status">{replaceStatus}</div>}
 
-      {/* Expand/collapse replace toggle */}
+      {/* Expand/collapse replace toggle — hidden in semantic mode */}
+      {!semanticMode && (
       <button
         className="search-expand-toggle"
         onClick={() => setShowReplace(!showReplace)}
@@ -721,6 +773,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       >
         {showReplace ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
+      )}
 
       {/* Search stats */}
       {filteredResults && (

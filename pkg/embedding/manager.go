@@ -19,6 +19,7 @@ type EmbeddingManager struct {
 	store         *JSONLFileStore
 	indexMgr      *IndexManager
 	initialized   bool
+	building      bool // true while BuildIndex is running
 	config        *configuration.EmbeddingIndexConfig
 	workspaceRoot string
 
@@ -139,6 +140,13 @@ func (m *EmbeddingManager) IsInitialized() bool {
 	return m.initialized
 }
 
+// IsBuilding returns true if an index build is currently in progress.
+func (m *EmbeddingManager) IsBuilding() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.building
+}
+
 // IndexSize returns the number of records in the vector store.
 // Returns 0 and a nil error if the manager is not yet initialized.
 func (m *EmbeddingManager) IndexSize() int {
@@ -152,6 +160,20 @@ func (m *EmbeddingManager) IndexSize() int {
 
 // BuildIndex runs a full index build for the workspace.
 func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) {
+	m.mu.Lock()
+	if m.building {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("embedding: build already in progress")
+	}
+	m.building = true
+	m.mu.Unlock()
+
+	defer func() {
+		m.mu.Lock()
+		m.building = false
+		m.mu.Unlock()
+	}()
+
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}

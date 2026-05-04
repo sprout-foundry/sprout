@@ -577,32 +577,216 @@ For `edit_file`, parse the old and new content to identify which function(s) cha
 
 ### Phase 3: Semantic Search + Browser Integration (Week 3-4)
 
-1. Add `/api/search/semantic` endpoint to webui server
-2. Add "Semantic" toggle to search pane in webui
-3. Add `onnxruntime-web` + `@huggingface/transformers` to foundry browser-ide dependencies
-4. Create embedding Web Worker (`embedding.worker.ts`) in foundry
-5. Wire foundry service worker to intercept embedding API calls → route to Web Worker
-6. Ensure vector format compatibility between Go and JS runtimes
-7. Cross-target vector parity tests (Go vectors == JS vectors)
+1. ~~Add `/api/search/semantic` endpoint to webui server~~ ✅ `pkg/webui/search_semantic_api.go`
+2. ~~Add "Semantic" toggle to search pane in webui~~ ✅ `webui/src/components/SearchView.tsx`
+3. ~~Add `searchSemantic()` API client~~ ✅ `webui/src/services/api.ts`
+4. Add `onnxruntime-web` + `@huggingface/transformers` to foundry browser-ide dependencies
+5. Create embedding Web Worker (`embedding.worker.ts`) in foundry
+6. Wire foundry service worker to intercept embedding API calls → route to Web Worker
+7. Ensure vector format compatibility between Go and JS runtimes
+8. Cross-target vector parity tests (Go vectors == JS vectors)
 
-**Files (sprout):**
-- `pkg/webui/search_semantic_api.go` — Semantic search API handler
-- `pkg/embedding/compat_test.go` — Cross-runtime vector parity tests
+**Completed (sprout repo):**
+- `pkg/webui/search_semantic_api.go` — Semantic search API handler (GET /api/search/semantic)
+- `pkg/webui/search_semantic_api_test.go` — 9 tests for the endpoint
+- `webui/src/components/SearchView.tsx` — Semantic toggle + results display
+- `webui/src/components/SearchView.css` — Semantic result card styles
+- `webui/src/services/api.ts` — `searchSemantic()` API method
+- `pkg/webui/server.go` — Route registration
 
-**Files (foundry):**
-- `browser-ide/src/workers/embedding.worker.ts` — Browser embedding inference
-- `browser-ide/src/services/embeddingService.ts` — Worker communication layer
-- `browser-ide/src/sprout-sw.ts` — Add embedding request interception
+**Remaining — foundry repo integration:**
 
-**Files (webui):**
-- `webui/src/components/SearchView.tsx` — Add semantic search toggle and results display
-- `webui/src/services/api.ts` — Add `searchSemantic()` API call
+The foundry browser-ide needs local ONNX inference so that cloud/web users get semantic search without a Go binary. This work happens in the `sprout-foundry` repository.
+
+#### Foundry Integration Spec
+
+**Goal:** When the foundry browser-ide loads in a browser tab, it downloads the same MiniLM-L6-v2 ONNX model and runs embedding inference locally in a Web Worker. The service worker intercepts `/api/search/semantic` calls and routes them to the Web Worker instead of the server (which may not have an embedding index in cloud mode).
+
+**Files to create/modify in sprout-foundry:**
+
+| File | Action | Description |
+|------|--------|-------------|
+| `browser-ide/package.json` | Modify | Add `onnxruntime-web` and `@huggingface/transformers` dependencies |
+| `browser-ide/src/workers/embedding.worker.ts` | Create | Web Worker that loads ONNX model and runs inference |
+| `browser-ide/src/services/embeddingService.ts` | Create | Singleton service that communicates with the worker via postMessage |
+| `browser-ide/src/sprout-sw.ts` | Modify | Intercept `/api/search/semantic` → route to embedding service |
+| `browser-ide/src/workers/embedding.worker.ts` | Create | See detailed spec below |
+
+**Step 1: Add npm dependencies**
+
+```bash
+cd browser-ide
+npm install onnxruntime-web @huggingface/transformers
+```
+
+`onnxruntime-web` provides the WASM-based ONNX runtime (~8MB). `@huggingface/transformers` provides the tokenizer (BPE) and model download/caching via `Xenova/all-MiniLM-L6-v2`.
+
+**Step 2: Create `browser-ide/src/workers/embedding.worker.ts`**
+
+This Web Worker loads the MiniLM model on first use and exposes an `embed(text)` method. It uses the same ONNX model that the Go binary uses, ensuring identical vectors.
+
+```typescript
+// Architecture:
+// 1. Worker receives { type: 'embed', text: string, id: number }
+// 2. Worker tokenizes the text using the same WordPiece/BPE tokenizer
+// 3. Worker runs ONNX inference via onnxruntime-web (WASM backend)
+// 4. Worker mean-pools the token embeddings and L2-normalizes
+// 5. Worker posts back { type: 'result', embedding: Float32Array, id: number }
+
+import { pipeline, env } from '@huggingface/transformers';
+
+// Skip local model check — download from HuggingFace Hub
+env.allowLocalModels = false;
+
+let embedder: any = null;
+
+async function getEmbedder() {
+  if (!embedder) {
+    embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+      dtype: 'fp32',  // Must match Go binary's model precision for vector parity
+    });
+  }
+  return embedder;
+}
+
+self.onmessage = async (event) => {
+  const { type, id } = event.data;
+
+  if (type === 'embed') {
+    try {
+      const pipe = await getEmbedder();
+      const output = await pipe(event.data.text, {
+        pooling: 'mean',
+        normalize: true,
+      });
+      // output.data is a Float32Array of 384 dimensions
+      self.postMessage({
+        type: 'result',
+        id,
+        embedding: Array.from(output.data),  // Serialize for postMessage
+      });
+    } catch (err: any) {
+      self.postMessage({ type: 'error', id, error: err.message });
+    }
+  }
+
+  if (type === 'embedBatch') {
+    try {
+      const pipe = await getEmbedder();
+      const results = await Promise.all(
+        event.data.texts.map((text: string) =>
+          pipe(text, { pooling: 'mean', normalize: true })
+            .then((out: any) => Array.from(out.data))
+        )
+      );
+      self.postMessage({ type: 'batchResult', id, embeddings: results });
+    } catch (err: any) {
+      self.postMessage({ type: 'error', id, error: err.message });
+    }
+  }
+};
+```
+
+**Key requirements:**
+- Use `Xenova/all-MiniLM-L6-v2` — this is the pre-converted ONNX version of the same model the Go binary uses
+- `pooling: 'mean'` and `normalize: true` must match the Go binary's post-processing (mean pool + L2 normalize)
+- The model is cached in the browser's Cache API after first download (~23MB)
+- `dtype: 'fp32'` is critical for vector parity — the Go binary uses FP32 inference for queries even with an INT8 model, because the INT8 model is just the stored weights; inference outputs are still FP32
+
+**Step 3: Create `browser-ide/src/services/embeddingService.ts`**
+
+```typescript
+// Singleton service that manages the embedding Web Worker.
+// Provides async embed(text) and embedBatch(texts) methods.
+
+export class EmbeddingService {
+  private static instance: EmbeddingService;
+  private worker: Worker;
+  private nextId = 0;
+  private pending = new Map<number, { resolve: Function; reject: Function }>();
+
+  private constructor() {
+    this.worker = new Worker(
+      new URL('../workers/embedding.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+    this.worker.onmessage = (event) => {
+      const { type, id } = event.data;
+      const pending = this.pending.get(id);
+      if (!pending) return;
+      this.pending.delete(id);
+      if (type === 'result' || type === 'batchResult') {
+        pending.resolve(event.data);
+      } else if (type === 'error') {
+        pending.reject(new Error(event.data.error));
+      }
+    };
+  }
+
+  static getInstance(): EmbeddingService {
+    if (!EmbeddingService.instance) {
+      EmbeddingService.instance = new EmbeddingService();
+    }
+    return EmbeddingService.instance;
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve: (data: any) => resolve(data.embedding), reject });
+      this.worker.postMessage({ type: 'embed', text, id });
+    });
+  }
+
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve: (data: any) => resolve(data.embeddings), reject });
+      this.worker.postMessage({ type: 'embedBatch', texts, id });
+    });
+  }
+}
+```
+
+**Step 4: Modify `browser-ide/src/sprout-sw.ts`**
+
+Add a fetch interceptor for `/api/search/semantic`. When the service worker sees this request in cloud mode (no Go backend), it:
+1. Extracts the `query` parameter
+2. Calls `EmbeddingService.embed(query)` to get a 384-dim vector
+3. Compares against a locally-stored embedding index (IndexedDB) or falls back to the server
+
+For the initial implementation, the service worker should simply pass the request through to the server (which may have an embedding index from a connected workspace). The local inference path is a future enhancement once the foundry has its own local index storage.
+
+```typescript
+// In the fetch interceptor section of sprout-sw.ts:
+// For /api/search/semantic, just pass through to the server.
+// The Go backend handles embedding + vector search when it has an index.
+// Future: intercept and run locally when no Go backend is available.
+```
+
+**Step 5: Vector parity verification**
+
+Create a test that embeds the same text with both the Go binary and the JS runtime and asserts the cosine similarity is >0.999. This catches model mismatches, tokenizer differences, or post-processing bugs.
+
+Test inputs to verify:
+- `"func (a *Agent) executeTool(toolCall api.ToolCall) (string, error)"` — Go function signature
+- `"Read the contents of a file and return the result"` — natural language query
+- `"hello world"` — simple text
+- `""` — empty string (should produce a zero vector or error gracefully)
+
+The test lives in the sprout repo at `pkg/embedding/compat_test.go` and reads expected vectors from a JSON fixture generated by the JS runtime.
+
+**Notes for the implementing agent:**
+- The `Xenova/all-MiniLM-L6-v2` model on HuggingFace is the pre-converted ONNX version maintained by the Transformers.js team. It produces the same vectors as the Python `sentence-transformers/all-MiniLM-L6-v2` model.
+- The Go binary uses `onnxruntime_go` with the ONNX model file directly. For FP32 parity, both must use the same model file (or quantization level).
+- The INT8 quantized model used by the Go binary for indexing produces slightly different vectors than FP32. For query parity, the Go binary's `BundledProvider.Embed()` should use FP32 for queries (not INT8) — verify this in `pkg/embedding/bundled.go`.
+- Browser memory: expect ~150MB peak during inference (model weights + ONNX runtime). This is acceptable for a background worker.
 
 ### Phase 4: Polish (Week 5)
 
 1. Add TypeScript extractor using tree-sitter (stretch goal)
-2. Performance tuning (batch embeddings, lazy loading)
-3. Cross-target vector compatibility tests (Go vectors == JS vectors)
+2. Performance tuning (batch embeddings in CheckFileForDuplicates, lazy loading)
+3. Cross-target vector compatibility tests (Go vectors == JS vectors) — spec in Phase 3
 4. Settings integration (self-documenting via `manage_settings` tool)
 5. End-to-end test: build index on Go binary, query in browser
 

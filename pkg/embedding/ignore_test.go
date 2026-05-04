@@ -102,7 +102,8 @@ func TestWalkCodeFiles(t *testing.T) {
 	//     handler.go     ← should be included
 	//   node_modules/
 	//     pkg.go         ← should be excluded
-	//   utils.js         ← should be excluded (wrong extension)
+	//   utils.js         ← should be included (JS is supported)
+	//   data.txt         ← should be excluded (wrong extension)
 
 	if err := os.MkdirAll(filepath.Join(dir, "api"), 0o755); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
@@ -111,11 +112,12 @@ func TestWalkCodeFiles(t *testing.T) {
 		t.Fatalf("mkdir failed: %v", err)
 	}
 
-	// Create actual Go files.
+	// Create actual source files.
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0o644)
 	os.WriteFile(filepath.Join(dir, "api", "handler.go"), []byte("package api"), 0o644)
 	os.WriteFile(filepath.Join(dir, "node_modules", "pkg.go"), []byte("package pkg"), 0o644)
 	os.WriteFile(filepath.Join(dir, "utils.js"), []byte("console.log(1)"), 0o644)
+	os.WriteFile(filepath.Join(dir, "data.txt"), []byte("not a source file"), 0o644)
 
 	files, err := WalkCodeFiles(dir)
 	if err != nil {
@@ -132,14 +134,15 @@ func TestWalkCodeFiles(t *testing.T) {
 		relative = append(relative, rel)
 	}
 
-	// Should have exactly 2 Go files (main.go and api/handler.go).
-	if len(relative) != 2 {
-		t.Fatalf("expected 2 files, got %d: %v", len(relative), relative)
+	// Should have exactly 3 files (main.go, api/handler.go, utils.js).
+	if len(relative) != 3 {
+		t.Fatalf("expected 3 files, got %d: %v", len(relative), relative)
 	}
 
 	expected := map[string]bool{
 		"main.go":        true,
 		"api/handler.go": true,
+		"utils.js":       true,
 	}
 
 	for _, f := range relative {
@@ -153,8 +156,8 @@ func TestWalkCodeFiles(t *testing.T) {
 		if f == "node_modules/pkg.go" {
 			t.Error("node_modules/pkg.go should not be included")
 		}
-		if f == "utils.js" {
-			t.Error("utils.js should not be included")
+		if f == "data.txt" {
+			t.Error("data.txt should not be included")
 		}
 	}
 }

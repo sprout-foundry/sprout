@@ -351,5 +351,10 @@ func runGit(dir string, args ...string) ([]string, error) {
 
 // isSupportedFile returns true if the file path has a supported source-code extension.
 func isSupportedFile(path string) bool {
-	return strings.HasSuffix(path, ".go")
+	switch ext := filepath.Ext(path); ext {
+	case ".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py":
+		return true
+	default:
+		return false
+	}
 }

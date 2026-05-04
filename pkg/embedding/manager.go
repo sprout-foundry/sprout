@@ -56,25 +56,12 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		m.config = &configuration.EmbeddingIndexConfig{}
 	}
 
-	// Resolve config defaults
+	// Resolve ORT library path. resolveORTLibrary handles config, env var,
+	// system paths, embedded extraction, and download fallback.
 	ortLibPath := m.config.ORTLibraryPath
-	if ortLibPath == "" {
-		ortLibPath = os.Getenv("ONNXRUNTIME_LIB")
-	}
-	if ortLibPath == "" {
-		return fmt.Errorf("embedding: ONNX Runtime library path not configured. Set embedding_index.ort_library_path in config or ONNXRUNTIME_LIB env var")
-	}
 
 	modelDir := m.config.ModelDir
-	if modelDir == "" {
-		// Use the embedded model directory relative to the binary
-		exe, _ := os.Executable()
-		modelDir = filepath.Join(filepath.Dir(exe), "embedding_models")
-		// Also check relative to working directory
-		if _, err := os.Stat(filepath.Join(modelDir, "tokenizer.json")); err != nil {
-			modelDir = "pkg/embedding/models"
-		}
-	}
+	// If modelDir is empty, NewBundledProvider will use embedded model data.
 
 	// Initialize provider
 	provider, err := NewBundledProvider(modelDir, ortLibPath)

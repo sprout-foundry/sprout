@@ -113,6 +113,9 @@ type Config struct {
 	PDFOCRModel      string `json:"pdf_ocr_model,omitempty"`      // Model for PDF OCR (e.g., "glm-ocr", "llama3.2-vision")
 	PDFOCRDownloaded bool   `json:"pdf_ocr_downloaded,omitempty"` // Whether the model has been downloaded
 
+	// Embedding Index Configuration
+	EmbeddingIndex *EmbeddingIndexConfig `json:"embedding_index,omitempty"`
+
 	// Skills Configuration
 	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
 
@@ -187,6 +190,43 @@ type Skill struct {
 	Enabled      bool              `json:"enabled"`       // Whether this skill is available
 	Metadata     map[string]string `json:"metadata"`      // Optional metadata (author, version, etc.)
 	AllowedTools string            `json:"allowed_tools"` // Optional space-delimited list of pre-approved tools
+}
+
+// EmbeddingIndexConfig configures the embedding-based duplicate detection and semantic search.
+type EmbeddingIndexConfig struct {
+	// Enabled controls whether the embedding index is active.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Provider is the embedding provider to use. Currently only "bundled" is supported.
+	// Default: "bundled"
+	Provider string `json:"provider,omitempty"`
+
+	// ORTLibraryPath is the path to the ONNX Runtime shared library.
+	// If empty, the system will try to find it automatically.
+	ORTLibraryPath string `json:"ort_library_path,omitempty"`
+
+	// ModelDir is the directory containing the ONNX model and tokenizer files.
+	// If empty, uses the bundled models in the binary.
+	ModelDir string `json:"model_dir,omitempty"`
+
+	// IndexDir is the directory where the embedding index JSONL files are stored.
+	// If empty, uses ~/.config/sprout/embeddings/
+	IndexDir string `json:"index_dir,omitempty"`
+
+	// SimilarityThreshold is the cosine similarity threshold for duplicate detection.
+	// Range: 0.0 to 1.0. Default: 0.90
+	SimilarityThreshold float32 `json:"similarity_threshold,omitempty"`
+
+	// MaxResults is the maximum number of duplicate candidates to return.
+	// Default: 3
+	MaxResults int `json:"max_results,omitempty"`
+
+	// AutoIndex controls whether the index is built automatically on first use.
+	// Default: true
+	AutoIndex bool `json:"auto_index,omitempty"`
+
+	// ExcludePaths is a list of additional paths to exclude from indexing.
+	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
 
 // Optional helpers

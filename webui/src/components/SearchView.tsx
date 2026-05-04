@@ -17,6 +17,7 @@ import {
   FileText,
   FolderOpen,
   Ban,
+  Brain,
 } from 'lucide-react';
 import './SearchView.css';
 
@@ -83,6 +84,22 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
 
   const [contextMenu, setContextMenu] = useState<SearchContextMenuState | null>(null);
 
+  // Semantic threshold control state
+  const [semanticThreshold, setSemanticThreshold] = useState(0.75);
+
+  // Embedding index status
+  const [indexStatus, setIndexStatus] = useState<{available: boolean; initialized: boolean; record_count: number} | null>(null);
+
+  // Hover preview state
+  const [previewData, setPreviewData] = useState<{
+    file: string;
+    startLine: number;
+    snippet: Array<{ line_number: number; content: string; is_context: boolean }>;
+  } | null>(null);
+  const [previewPosition, setPreviewPosition] = useState<{ x: number; y: number } | null>(null);
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const apiService = ApiService.getInstance();
@@ -90,6 +107,13 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   // Focus search input on mount
   useEffect(() => {
     searchInputRef.current?.focus();
+  }, []);
+
+  // Clean up hover timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
   }, []);
 
   // Debounced search function
@@ -115,7 +139,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           // Semantic search mode
           const response = await apiService.searchSemantic(query, {
             top_k: 20,
-            threshold: 0.75,
+            threshold: semanticThreshold,
           });
 
           setSemanticResults(response.results || []);
@@ -152,7 +176,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         setIsSearching(false);
       }
     },
-    [semanticMode, caseSensitive, wholeWord, useRegex, excludePatterns, apiService, log],
+    [semanticMode, caseSensitive, wholeWord, useRegex, excludePatterns, semanticThreshold, apiService, log],
   );
 
   // Debounced search trigger
@@ -205,6 +229,13 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     }
   }, [semanticMode, searchQuery, performSearch]);
 
+  // Fetch index status when semantic mode is toggled on
+  useEffect(() => {
+    if (semanticMode) {
+      apiService.searchSemanticStatus().then(setIndexStatus).catch(() => setIndexStatus(null));
+    }
+  }, [semanticMode, apiService]);
+
   // Handle search input change
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -246,6 +277,45 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     }
     return relative.substring(0, lastSlash + 1);
   };
+
+  // ── Semantic hover preview handlers ──────────────────────────────
+
+  const handleSemanticResultMouseEnter = useCallback((e: MouseEvent<HTMLDivElement>, result: SemanticSearchResult) => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    hoverTimerRef.current = setTimeout(async () => {
+      try {
+        const data = await apiService.searchSemanticPreview(result.file, result.start_line, 10);
+        setPreviewData({
+          file: data.file,
+          startLine: data.start_line,
+          snippet: data.snippet,
+        });
+        // Position the tooltip near the result, avoiding off-screen right edge
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = rect.right + 8 + 500 > window.innerWidth
+          ? rect.left - 508
+          : rect.right + 8;
+        setPreviewPosition({
+          x,
+          y: rect.top,
+        });
+      } catch {
+        // Preview not available — silently ignore
+      }
+    }, 300); // 300ms hover delay before showing preview
+  }, [apiService]);
+
+  const handleSemanticResultMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setPreviewData(null);
+    setPreviewPosition(null);
+  }, []);
 
   // Filter results based on exclude patterns
   const filteredResults = useMemo(() => {
@@ -505,7 +575,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
             ref={searchInputRef}
             type="text"
             className="search-text-input"
-            placeholder="Search..."
+            placeholder={semanticMode ? 'Search by meaning...' : 'Search...'}
             value={searchQuery}
             onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
@@ -547,12 +617,52 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         <button
           className={`search-option-btn ${semanticMode ? 'active' : ''}`}
           onClick={toggleSemanticMode}
-          title="Semantic search"
+          title="Semantic search (finds code by meaning, not exact text)"
           aria-pressed={semanticMode}
         >
-          <span className="option-icon">S</span>
+          <Brain size={14} />
         </button>
       </div>
+
+      {/* Semantic index status indicator */}
+      {semanticMode && indexStatus && (
+        <div className="search-semantic-status">
+          {indexStatus.initialized ? (
+            <>
+              <span className="search-semantic-status-dot search-semantic-status-dot--active" />
+              {indexStatus.record_count.toLocaleString()} functions indexed
+            </>
+          ) : indexStatus.available ? (
+            <>
+              <span className="search-semantic-status-dot search-semantic-status-dot--pending" />
+              Index not built yet
+            </>
+          ) : (
+            <>
+              <span className="search-semantic-status-dot search-semantic-status-dot--inactive" />
+              Embedding not available
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Semantic threshold control */}
+      {semanticMode && (
+        <div className="search-semantic-threshold">
+          <label className="search-semantic-threshold-label">
+            Min relevance: {(semanticThreshold * 100).toFixed(0)}%
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="0.95"
+            step="0.05"
+            value={semanticThreshold}
+            onChange={(e) => setSemanticThreshold(parseFloat(e.target.value))}
+            className="search-semantic-threshold-slider"
+          />
+        </div>
+      )}
 
       {/* Exclude patterns indicator */}
       {excludePatterns && (
@@ -767,6 +877,8 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
               role="button"
               tabIndex={0}
               onClick={() => handleFileClick(result.file, result.start_line)}
+              onMouseEnter={(e) => handleSemanticResultMouseEnter(e, result)}
+              onMouseLeave={handleSemanticResultMouseLeave}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -788,6 +900,15 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
                 {result.language && (
                   <span className="search-semantic-result-lang">{result.language}</span>
                 )}
+                <div className="search-semantic-result-similarity-bar">
+                  <div
+                    className="search-semantic-result-similarity-fill"
+                    style={{
+                      width: `${result.similarity * 100}%`,
+                      backgroundColor: result.similarity > 0.85 ? 'var(--accent-success)' : 'var(--accent-primary)',
+                    }}
+                  />
+                </div>
                 <span className="search-semantic-result-similarity">
                   {(result.similarity * 100).toFixed(0)}%
                 </span>
@@ -795,6 +916,37 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
             </div>
           ))}
       </div>
+
+      {/* Semantic hover preview tooltip */}
+      {previewData && previewPosition && (
+        <div
+          ref={previewRef}
+          className="search-semantic-preview"
+          style={{
+            position: 'fixed',
+            left: previewPosition.x,
+            top: previewPosition.y,
+            zIndex: 1000,
+          }}
+          onMouseEnter={() => { /* keep visible when hovering over preview */ }}
+          onMouseLeave={handleSemanticResultMouseLeave}
+        >
+          <div className="search-semantic-preview-header">
+            {getRelativePath(previewData.file)}
+          </div>
+          <pre className="search-semantic-preview-code">
+            {previewData.snippet.map((line) => (
+              <div
+                key={line.line_number}
+                className={`search-semantic-preview-line ${line.is_context ? 'search-semantic-preview-line--context' : ''}`}
+              >
+                <span className="search-semantic-preview-linenum">{line.line_number}</span>
+                <span className="search-semantic-preview-content">{line.content}</span>
+              </div>
+            ))}
+          </pre>
+        </div>
+      )}
 
       {/* Context menu */}
       <ContextMenu

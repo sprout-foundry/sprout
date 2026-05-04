@@ -1,7 +1,9 @@
 package webui
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -108,6 +110,7 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 type EmbeddingIndexStatus struct {
 	Available   bool   `json:"available"`   // whether embedding manager exists
 	Initialized bool   `json:"initialized"` // whether ONNX provider is initialized
+	Building    bool   `json:"building"`    // whether an index build is in progress
 	RecordCount int    `json:"record_count"` // number of indexed code units
 	Workspace   string `json:"workspace"`   // workspace root path
 }
@@ -126,6 +129,7 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 		writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
 			Available:   false,
 			Initialized: false,
+			Building:    false,
 			RecordCount: 0,
 			Workspace:   ws.GetWorkspaceRoot(),
 		})
@@ -135,9 +139,44 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
 		Available:   true,
 		Initialized: em.IsInitialized(),
+		Building:    em.IsBuilding(),
 		RecordCount: em.IndexSize(),
 		Workspace:   ws.GetWorkspaceRoot(),
 	})
+}
+
+// handleAPISemanticBuild handles POST /api/search/semantic/build
+// Triggers a full index build. Returns immediately with status while building in background.
+func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+	em := ws.getEmbeddingManager(clientID)
+	if em == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "embedding manager not available"})
+		return
+	}
+
+	if em.IsBuilding() {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "build already in progress"})
+		return
+	}
+
+	// Start build in background goroutine
+	go func() {
+		ctx := context.Background()
+		stats, err := em.BuildIndex(ctx)
+		if err != nil {
+			log.Printf("[embedding] background build failed: %v", err)
+			return
+		}
+		log.Printf("[embedding] background build complete: %d units indexed", stats.UnitsExtracted)
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "build started"})
 }
 
 // getEmbeddingManager returns the embedding manager for the given client's agent.

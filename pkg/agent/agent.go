@@ -294,9 +294,15 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		agent.changeTracker = NewChangeTracker(agent, "")
 		agent.changeTracker.Enable() // Start enabled by default
 
-		// Initialize embedding manager if enabled in config
-		if cfg := configManager.GetConfig(); cfg != nil && cfg.EmbeddingIndex != nil && cfg.EmbeddingIndex.Enabled {
-			agent.embeddingMgr = embedding.NewEmbeddingManager(cfg.EmbeddingIndex, workspaceRoot)
+		// Initialize embedding manager — enabled by default unless explicitly disabled.
+		if cfg := configManager.GetConfig(); cfg != nil {
+			ei := cfg.EmbeddingIndex
+			if ei == nil {
+				ei = &configuration.EmbeddingIndexConfig{Enabled: true, AutoIndex: true}
+			}
+			if ei.Enabled {
+				agent.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
+			}
 		}
 
 		return agent, nil
@@ -526,9 +532,15 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
 	}
 
-	// Initialize embedding manager if enabled in config
-	if cfg := configManager.GetConfig(); cfg != nil && cfg.EmbeddingIndex != nil && cfg.EmbeddingIndex.Enabled {
-		agent.embeddingMgr = embedding.NewEmbeddingManager(cfg.EmbeddingIndex, workspaceRoot)
+	// Initialize embedding manager — enabled by default unless explicitly disabled.
+	if cfg := configManager.GetConfig(); cfg != nil {
+		ei := cfg.EmbeddingIndex
+		if ei == nil {
+			ei = &configuration.EmbeddingIndexConfig{Enabled: true, AutoIndex: true}
+		}
+		if ei.Enabled {
+			agent.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
+		}
 	}
 
 	return agent, nil

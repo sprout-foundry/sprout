@@ -25,7 +25,7 @@ export interface MutationContext {
 /** @deprecated Use SubagentTypeInfo from services/api/types */
 export type SubagentTypeEntry = SubagentTypeInfo;
 
-export type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills';
+export type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills' | 'embeddings';
 
 export interface EditorPreferences {
   autoSaveEnabled: boolean;
@@ -53,6 +53,7 @@ export const SUB_TABS: { id: SettingsSubTab; label: string }[] = [
   { id: 'mcp', label: 'MCP' },
   { id: 'providers', label: 'Providers' },
   { id: 'skills', label: 'Skills' },
+  { id: 'embeddings', label: 'Embeddings' },
 ];
 
 export type { SproutSettings, ProviderOption };

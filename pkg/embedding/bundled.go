@@ -11,97 +11,89 @@ import (
 	ort "github.com/yalue/onnxruntime_go"
 )
 
+// Package-level ORT lifecycle management.
+// The ONNX Runtime environment is global and must be initialized once per process.
+var (
+	ortOnce    sync.Once
+	ortInitErr error
+)
+
 // BundledProvider is an EmbeddingProvider backed by a local ONNX model.
 // It loads the MiniLM model from a directory containing tokenizer.json and
 // the .onnx model file, and uses onnxruntime_go for inference.
 type BundledProvider struct {
 	mu        sync.Mutex
-	session   *ort.AdvancedSession
+	session   *ort.DynamicAdvancedSession
 	tokenizer *Tokenizer
 	dims      int
 	maxLen    int
-
-	// Single-example tensors (batch_size=1), reused across Embed() calls.
-	inputIDs   *ort.Tensor[int64]
-	inputMask  *ort.Tensor[int64]
-	outputVec  *ort.Tensor[float32]
 
 	closed bool
 }
 
 // NewBundledProvider creates a provider that loads models from modelDir.
 // ortLibPath is the path to the onnxruntime shared library (e.g., libonnxruntime.so).
-// The model file must be at modelDir/all-MiniLM-L6-v2-int8.onnx and
-// the tokenizer at modelDir/tokenizer.json.
+//
+// If modelDir is non-empty, the model and tokenizer are read from disk at
+// modelDir/all-MiniLM-L6-v2-int8.onnx and modelDir/tokenizer.json.
+// If modelDir is empty, the embedded model and tokenizer are used, so no
+// external files are needed at runtime.
 func NewBundledProvider(modelDir string, ortLibPath string) (*BundledProvider, error) {
 	const (
-		modelFile = "all-MiniLM-L6-v2-int8.onnx"
+		modelFile   = "all-MiniLM-L6-v2-int8.onnx"
 		tokenizerFile = "tokenizer.json"
-		dims       = 384
-		maxLen     = 128
+		dims        = 384
+		maxLen      = 128
 	)
 
-	ort.SetSharedLibraryPath(ortLibPath)
-	if err := ort.InitializeEnvironment(ort.WithLogLevelWarning()); err != nil {
-		return nil, fmt.Errorf("init onnxruntime: %w", err)
+	// Resolve ORT library path with fallback chain.
+	resolvedPath, err := resolveORTLibrary(ortLibPath)
+	if err != nil {
+		return nil, err
 	}
 
-	modelPath := filepath.Join(modelDir, modelFile)
-	tokenizerPath := filepath.Join(modelDir, tokenizerFile)
-
-	modelData, err := os.ReadFile(modelPath)
-	if err != nil {
-		ort.DestroyEnvironment()
-		return nil, fmt.Errorf("read model: %w", err)
+	// Initialize ORT environment once globally.
+	ortOnce.Do(func() {
+		ort.SetSharedLibraryPath(resolvedPath)
+		ortInitErr = ort.InitializeEnvironment(ort.WithLogLevelWarning())
+	})
+	if ortInitErr != nil {
+		return nil, fmt.Errorf("init onnxruntime: %w", ortInitErr)
 	}
 
-	tokenizerData, err := os.ReadFile(tokenizerPath)
-	if err != nil {
-		ort.DestroyEnvironment()
-		return nil, fmt.Errorf("read tokenizer: %w", err)
+	var modelData, tokenizerData []byte
+
+	if modelDir != "" {
+		// Read from disk (backward compatible).
+		modelPath := filepath.Join(modelDir, modelFile)
+		tokenizerPath := filepath.Join(modelDir, tokenizerFile)
+
+		modelData, err = os.ReadFile(modelPath)
+		if err != nil {
+			return nil, fmt.Errorf("read model: %w", err)
+		}
+		tokenizerData, err = os.ReadFile(tokenizerPath)
+		if err != nil {
+			return nil, fmt.Errorf("read tokenizer: %w", err)
+		}
+	} else {
+		// Use embedded model data.
+		modelData = modelONNX
+		tokenizerData = embeddedTokenizerJSON
 	}
 
 	tok, err := NewTokenizerJSON(tokenizerData, maxLen)
 	if err != nil {
-		ort.DestroyEnvironment()
 		return nil, fmt.Errorf("load tokenizer: %w", err)
 	}
 
-	// Create input/output tensors for batch_size=1
-	shape := ort.Shape{1, maxLen}
-	inputIDs, err := ort.NewEmptyTensor[int64](shape)
-	if err != nil {
-		ort.DestroyEnvironment()
-		return nil, fmt.Errorf("create input_ids tensor: %w", err)
-	}
-	inputMask, err := ort.NewEmptyTensor[int64](shape)
-	if err != nil {
-		inputIDs.Destroy()
-		ort.DestroyEnvironment()
-		return nil, fmt.Errorf("create attention_mask tensor: %w", err)
-	}
-	outputShape := ort.Shape{1, dims}
-	outputVec, err := ort.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		inputIDs.Destroy()
-		inputMask.Destroy()
-		ort.DestroyEnvironment()
-		return nil, fmt.Errorf("create output tensor: %w", err)
-	}
-
-	session, err := ort.NewAdvancedSessionWithONNXData(
+	session, err := ort.NewDynamicAdvancedSessionWithONNXData(
 		modelData,
 		[]string{"input_ids", "attention_mask"},
 		[]string{"937"},
-		[]ort.Value{inputIDs, inputMask},
-		[]ort.Value{outputVec},
 		nil,
 	)
 	if err != nil {
-		inputIDs.Destroy()
-		inputMask.Destroy()
-		outputVec.Destroy()
-		ort.DestroyEnvironment()
 		return nil, fmt.Errorf("create session: %w", err)
 	}
 
@@ -110,16 +102,27 @@ func NewBundledProvider(modelDir string, ortLibPath string) (*BundledProvider, e
 		tokenizer: tok,
 		dims:      dims,
 		maxLen:    maxLen,
-		inputIDs:  inputIDs,
-		inputMask: inputMask,
-		outputVec: outputVec,
 	}, nil
 }
 
 // Embed returns a L2-normalized 384-dim embedding vector for the given text.
 func (p *BundledProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	vecs, err := p.EmbedBatch(ctx, []string{text})
+	if err != nil {
+		return nil, err
+	}
+	return vecs[0], nil
+}
+
+// EmbedBatch returns L2-normalized embeddings for multiple texts.
+// Results are returned in the same order as input.
+func (p *BundledProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	if len(texts) == 0 {
+		return nil, nil
 	}
 
 	p.mu.Lock()
@@ -129,32 +132,43 @@ func (p *BundledProvider) Embed(ctx context.Context, text string) ([]float32, er
 		return nil, fmt.Errorf("provider is closed")
 	}
 
-	// Tokenize and fill input tensors
-	ids, mask := p.tokenizer.Tokenize(text)
-	copy(p.inputIDs.GetData(), ids)
-	copy(p.inputMask.GetData(), mask)
+	batchSize := len(texts)
+
+	// Tokenize all texts into padded input_ids and attention_mask
+	ids, mask, _ := p.tokenizer.TokenizeBatch(texts)
+	// ids and mask are []int64 of size batchSize * maxLen
+
+	// Create tensors with shape {batchSize, maxLen}
+	inputIDs, err := ort.NewTensor(ort.Shape{int64(batchSize), int64(p.maxLen)}, ids)
+	if err != nil {
+		return nil, fmt.Errorf("create input_ids tensor: %w", err)
+	}
+	defer inputIDs.Destroy()
+
+	inputMask, err := ort.NewTensor(ort.Shape{int64(batchSize), int64(p.maxLen)}, mask)
+	if err != nil {
+		return nil, fmt.Errorf("create attention_mask tensor: %w", err)
+	}
+	defer inputMask.Destroy()
+
+	// Output tensor with shape {batchSize, dims}
+	outputVec, err := ort.NewEmptyTensor[float32](ort.Shape{int64(batchSize), int64(p.dims)})
+	if err != nil {
+		return nil, fmt.Errorf("create output tensor: %w", err)
+	}
+	defer outputVec.Destroy()
 
 	// Run inference
-	if err := p.session.Run(); err != nil {
-		return nil, fmt.Errorf("run: %w", err)
+	if err := p.session.Run([]ort.Value{inputIDs, inputMask}, []ort.Value{outputVec}); err != nil {
+		return nil, fmt.Errorf("run batch: %w", err)
 	}
 
-	// Extract and normalize output
-	out := p.outputVec.GetData()
-	result := l2Normalize(out[:p.dims])
-	return result, nil
-}
-
-// EmbedBatch returns L2-normalized embeddings for multiple texts.
-// Results are returned in the same order as input.
-func (p *BundledProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
-	results := make([][]float32, 0, len(texts))
-	for _, text := range texts {
-		vec, err := p.Embed(ctx, text)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, vec)
+	// Extract and normalize results
+	out := outputVec.GetData()
+	results := make([][]float32, batchSize)
+	for i := 0; i < batchSize; i++ {
+		start := i * p.dims
+		results[i] = l2Normalize(out[start : start+p.dims])
 	}
 	return results, nil
 }
@@ -170,6 +184,8 @@ func (p *BundledProvider) Name() string {
 }
 
 // Close releases all resources held by the provider.
+// This only destroys the session; the global ORT environment is managed
+// separately via CleanupORT().
 func (p *BundledProvider) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -179,31 +195,20 @@ func (p *BundledProvider) Close() error {
 	}
 	p.closed = true
 
-	var firstErr error
 	if p.session != nil {
 		if err := p.session.Destroy(); err != nil {
-			firstErr = fmt.Errorf("destroy session: %w", err)
+			return fmt.Errorf("destroy session: %w", err)
 		}
 		p.session = nil
 	}
-	if p.inputIDs != nil {
-		p.inputIDs.Destroy()
-		p.inputIDs = nil
-	}
-	if p.inputMask != nil {
-		p.inputMask.Destroy()
-		p.inputMask = nil
-	}
-	if p.outputVec != nil {
-		p.outputVec.Destroy()
-		p.outputVec = nil
-	}
-	if err := ort.DestroyEnvironment(); err != nil {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("destroy environment: %w", err)
-		}
-	}
-	return firstErr
+	return nil
+}
+
+// CleanupORT destroys the global ONNX Runtime environment.
+// Call this once on process exit (e.g., via defer in main).
+// Do NOT call this while any BundledProvider is still active.
+func CleanupORT() error {
+	return ort.DestroyEnvironment()
 }
 
 // l2Normalize returns a unit vector in the same direction as v.

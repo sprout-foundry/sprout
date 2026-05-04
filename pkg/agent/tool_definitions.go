@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -405,6 +407,28 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleDeleteMemory,
 	})
 
+	// Register embedding_index tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "embedding_index",
+		Description: "Manage the embedding index for duplicate detection and semantic search. Use 'build' to create a full index, 'update' to incrementally update changed files, or 'status' to check index state.",
+		Parameters: []ParameterConfig{
+			{"operation", "string", true, []string{}, "Operation to perform: 'build' (full re-index), 'update' (incremental via git diff), or 'status' (check index state)"},
+		},
+		Handler: handleEmbeddingIndex,
+	})
+
+	// Register semantic_search tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "semantic_search",
+		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
+		Parameters: []ParameterConfig{
+			{"query", "string", true, []string{}, "Natural language description of what you're looking for"},
+			{"top_k", "int", false, []string{}, "Maximum results to return (default: 5)"},
+			{"threshold", "float64", false, []string{}, "Minimum similarity score 0.0-1.0 (default: 0.75)"},
+		},
+		Handler: handleSemanticSearch,
+	})
+
 	return registry
 }
 
@@ -531,18 +555,35 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	// Filesystem security errors (ErrOutsideWorkingDirectory) are caught and
 	// retried with user approval inside each handler (see tool_handlers_file.go,
 	// tool_handlers_structured.go) so there's no need for a second catch here.
+	var imgs []api.ImageData
+	var result string
+	var execErr error
+
 	if tool.HandlerImages != nil {
-		imgs, result, execErr := tool.HandlerImages(ctx, agent, validatedArgs)
+		imgs, result, execErr = tool.HandlerImages(ctx, agent, validatedArgs)
 		if execErr != nil {
 			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
 		}
-		return imgs, result, nil
+	} else {
+		result, execErr = tool.Handler(ctx, agent, validatedArgs)
+		if execErr != nil {
+			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
+		}
 	}
-	result, err := tool.Handler(ctx, agent, validatedArgs)
-	if err != nil {
-		return nil, result, fmt.Errorf("execute tool %q: %w", toolName, err)
+
+	// After successful tool execution, run embedding duplicate check for write tools.
+	if result != "" {
+		if shouldCheckDuplicates(toolName, agent) {
+			if path, ok := args["path"].(string); ok && path != "" {
+				warning := runDuplicateCheck(ctx, agent, path)
+				if warning != "" {
+					result = warning + "\n" + result
+				}
+			}
+		}
 	}
-	return nil, result, nil
+
+	return imgs, result, nil
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user
@@ -811,4 +852,85 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 	default:
 		return value, nil // No conversion needed for unknown types
 	}
+}
+
+// isWriteTool returns true if the given tool name is a file-write tool that
+// should trigger embedding duplicate detection after successful execution.
+var writeTools = map[string]bool{
+	"write_file":              true,
+	"edit_file":               true,
+	"write_structured_file":   true,
+	"patch_structured_file":   true,
+}
+
+// shouldCheckDuplicates determines whether the duplicate check should run
+// for the given tool and agent. It requires:
+//   - the tool is a file-write tool (write_file, edit_file, write_structured_file, patch_structured_file)
+//   - the agent has embedding_index enabled in its config
+//   - the agent has an EmbeddingManager initialized
+func shouldCheckDuplicates(toolName string, agent *Agent) bool {
+	if !writeTools[toolName] {
+		return false
+	}
+	if agent == nil {
+		return false
+	}
+	cfg := agent.GetConfig()
+	if cfg == nil || cfg.EmbeddingIndex == nil || !cfg.EmbeddingIndex.Enabled {
+		return false
+	}
+	if agent.GetEmbeddingManager() == nil {
+		return false
+	}
+	return true
+}
+
+// runDuplicateCheck executes an embedding-based duplicate check on the file
+// at filePath after it has been written. It reads the file from disk and
+// checks against the index. Returns a warning string if duplicates are found,
+// or empty string if not (or if the check fails).
+func runDuplicateCheck(ctx context.Context, agent *Agent, filePath string) string {
+	// Validate path is within workspace before reading (MUST_FIX #2: path traversal).
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return ""
+	}
+
+	workspaceRoot := agent.GetWorkspaceRoot()
+	if workspaceRoot == "" {
+		workspaceRoot, err = os.Getwd()
+		if err != nil {
+			return ""
+		}
+	}
+	absRoot, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return ""
+	}
+	if !strings.HasPrefix(absPath, absRoot+string(os.PathSeparator)) && absPath != absRoot {
+		return ""
+	}
+
+	em := agent.GetEmbeddingManager()
+	if em == nil {
+		return ""
+	}
+	contentBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		// Silently skip — file read failure shouldn't block the write result
+		return ""
+	}
+	content := string(contentBytes)
+	result, err := em.CheckDuplicates(ctx, filePath, content)
+	if err != nil {
+		// Silently skip — embedding init/check failure shouldn't block the write result
+		if agent.debug {
+			agent.debugLog("[EMBEDDING] duplicate check failed for %s: %v\n", filePath, err)
+		}
+		return ""
+	}
+	if result != nil && result.WarningText != "" {
+		return result.WarningText
+	}
+	return ""
 }

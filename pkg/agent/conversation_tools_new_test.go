@@ -29,6 +29,7 @@ func newTestHandlerForProvider(provider string) *ConversationHandler {
 }
 
 func TestSanitizeToolMessagesEmpty(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("")
 
 	tests := []struct {
@@ -52,6 +53,7 @@ func TestSanitizeToolMessagesEmpty(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesHappyPath(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("")
 
 	messages := []api.Message{
@@ -81,6 +83,7 @@ func TestSanitizeToolMessagesHappyPath(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesOrphanedToolResult(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("")
 
 	messages := []api.Message{
@@ -98,6 +101,7 @@ func TestSanitizeToolMessagesOrphanedToolResult(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesMissingToolCallId(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("")
 
 	messages := []api.Message{
@@ -117,6 +121,7 @@ func TestSanitizeToolMessagesMissingToolCallId(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesInterleavedUserMessages(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("")
 
 	messages := []api.Message{
@@ -141,6 +146,7 @@ func TestSanitizeToolMessagesInterleavedUserMessages(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesMultipleToolCallsOneMissingResult(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("")
 
 	messages := []api.Message{
@@ -168,6 +174,7 @@ func TestSanitizeToolMessagesMultipleToolCallsOneMissingResult(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesMinimaxSecondPass(t *testing.T) {
+	t.Parallel()
 	// Minimax does a second pass to catch orphaned tool results that the
 	// first pass might leave behind (e.g., if a tool result appears before
 	// its assistant message in a corrupted history).
@@ -205,6 +212,7 @@ func TestSanitizeToolMessagesMinimaxSecondPass(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesMinimaxDoubleOrphanSecondPass(t *testing.T) {
+	t.Parallel()
 	// Construct a pathological case where a tool result with an ID that
 	// happens to match a tool call seen in a *later* assistant message
 	// could pass the first pass but fail the second pass (since in the
@@ -231,6 +239,7 @@ func TestSanitizeToolMessagesMinimaxDoubleOrphanSecondPass(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesNonMinimaxNoSecondPass(t *testing.T) {
+	t.Parallel()
 	// Non-minimax providers should not run the second pass.
 	// The first pass behavior should be the final output.
 	ch := newTestHandlerForProvider("openai")
@@ -252,6 +261,7 @@ func TestSanitizeToolMessagesNonMinimaxNoSecondPass(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesAgentNil(t *testing.T) {
+	t.Parallel()
 	// When agent is nil, sanitization should still work (no debug logging).
 	ch := &ConversationHandler{agent: nil}
 
@@ -272,6 +282,7 @@ func TestSanitizeToolMessagesAgentNil(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesToolCallIdEmptyInAssistant(t *testing.T) {
+	t.Parallel()
 	// Tool calls with empty IDs in assistant should not be tracked.
 	ch := newTestHandlerForProvider("")
 
@@ -294,6 +305,7 @@ func TestSanitizeToolMessagesToolCallIdEmptyInAssistant(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesMultipleToolResultsPerCall(t *testing.T) {
+	t.Parallel()
 	// Edge case: same tool_call_id used multiple times in tool results.
 	// Each result consumes one entry from seenToolCalls, so only the first
 	// result should be kept (since we delete on match).
@@ -318,6 +330,7 @@ func TestSanitizeToolMessagesMultipleToolResultsPerCall(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesComplexConversation(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("deepseek")
 
 	messages := []api.Message{
@@ -351,6 +364,7 @@ func TestSanitizeToolMessagesComplexConversation(t *testing.T) {
 }
 
 func TestSanitizeToolMessagesDeepseekProvider(t *testing.T) {
+	t.Parallel()
 	ch := newTestHandlerForProvider("deepseek")
 
 	// DeepSeek does not get the second pass — only first pass sanitization.

@@ -8,6 +8,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // ---------------------------------------------------------------------------
@@ -474,14 +477,15 @@ Created: pkg/agent/another.go`,
 			},
 		},
 		{
-			name: "BUG_wrote_file_not_captured_starts_with_W",
+			name:  "wrote_file_not_captured_starts_with_W_uppercase",
 			stdout: `Wrote pkg/agent/output.txt`,
 			checkValue: func(t *testing.T, summary map[string]string) {
-				// TODO: fix extractSubagentSummary to handle "Wrote" lines (case 'W' not in switch).
-				// "Wrote" starts with 'W', but the source only enters the case for 'C'/'c' first
-				// chars — so this line is NOT captured. This test documents the buggy behavior.
-				if _, ok := summary["files"]; ok {
-					t.Errorf("expected NO 'files' key (Wrote starts with W, not C/c), got: %q", summary["files"])
+				// "Wrote" starts with uppercase 'W'. The fast-path switch only enters
+				// the 'C'/'c' branch, so uppercase "Wrote" falls through all cases and
+				// is NOT captured as a file change. This test documents the known gap.
+				_, ok := summary["files"]
+				if ok {
+					t.Errorf("expected NO 'files' key for \"Wrote\" (starts with W, no matching case), got values")
 				}
 			},
 		},
@@ -729,6 +733,976 @@ func TestMin(t *testing.T) {
 			got := min(tc.a, tc.b)
 			if got != tc.expected {
 				t.Errorf("min(%d, %d) = %d; want %d", tc.a, tc.b, got, tc.expected)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// validateDeepSeekToolCalls (conversation_messaging.go)
+// ---------------------------------------------------------------------------
+
+func TestValidateDeepSeekToolCalls(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name          string
+		shouldNotPanic bool
+		setupMessages  func() []api.Message
+	}{
+		{
+			name:          "empty messages",
+			shouldNotPanic: true,
+			setupMessages:  func() []api.Message { return []api.Message{} },
+		},
+		{
+			name:          "assistant with tool calls followed by matching tool results",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				tc := api.ToolCall{ID: "call_1", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
+				return []api.Message{
+					{Role: "user", Content: "search for something"},
+					{Role: "assistant", ToolCalls: []api.ToolCall{tc}},
+					{Role: "tool", ToolCallId: "call_1", Content: "search results"},
+					{Role: "assistant", Content: "response"},
+				}
+			},
+		},
+		{
+			name:          "assistant with multiple tool calls",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				tc1 := api.ToolCall{ID: "call_1", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
+				tc2 := api.ToolCall{ID: "call_2", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "read_file"}}
+				return []api.Message{
+					{Role: "user", Content: "do two things"},
+					{Role: "assistant", ToolCalls: []api.ToolCall{tc1, tc2}},
+					{Role: "tool", ToolCallId: "call_1", Content: "results 1"},
+					{Role: "tool", ToolCallId: "call_2", Content: "results 2"},
+				}
+			},
+		},
+		{
+			name:          "assistant with tool calls missing some tool results",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				tc1 := api.ToolCall{ID: "call_1", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
+				tc2 := api.ToolCall{ID: "call_2", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "read_file"}}
+				return []api.Message{
+					{Role: "user", Content: "search"},
+					{Role: "assistant", ToolCalls: []api.ToolCall{tc1, tc2}},
+					{Role: "tool", ToolCallId: "call_1", Content: "results 1"},
+				}
+			},
+		},
+		{
+			name:          "assistant without tool calls",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				return []api.Message{
+					{Role: "user", Content: "hello"},
+					{Role: "assistant", Content: "hi there"},
+				}
+			},
+		},
+	}
+	
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			handler := &ConversationHandler{}
+			handler.agent = &Agent{debug: false}
+			
+			messages := tc.setupMessages()
+			
+			defer func() {
+				if r := recover(); r != nil && tc.shouldNotPanic {
+					t.Errorf("validateDeepSeekToolCalls() panicked: %v", r)
+				}
+			}()
+			
+			handler.validateDeepSeekToolCalls(messages)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// validateMinimaxToolCalls (conversation_messaging.go)
+// ---------------------------------------------------------------------------
+
+func TestValidateMinimaxToolCalls(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name          string
+		shouldNotPanic bool
+		setupMessages  func() []api.Message
+	}{
+		{
+			name:          "empty messages",
+			shouldNotPanic: true,
+			setupMessages:  func() []api.Message { return []api.Message{} },
+		},
+		{
+			name:          "assistant with tool calls followed by matching tool results",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				tc := api.ToolCall{ID: "call_123", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
+				return []api.Message{
+					{Role: "user", Content: "search"},
+					{Role: "assistant", ToolCalls: []api.ToolCall{tc}},
+					{Role: "tool", ToolCallId: "call_123", Content: "results"},
+				}
+			},
+		},
+		{
+			name:          "assistant with multiple tool calls and matching results",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				tc1 := api.ToolCall{ID: "call_a", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search"}}
+				tc2 := api.ToolCall{ID: "call_b", Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "read_file"}}
+				return []api.Message{
+					{Role: "user", Content: "do things"},
+					{Role: "assistant", ToolCalls: []api.ToolCall{tc1, tc2}},
+					{Role: "tool", ToolCallId: "call_a", Content: "results A"},
+					{Role: "tool", ToolCallId: "call_b", Content: "results B"},
+				}
+			},
+		},
+		{
+			name:          "orphaned tool result before any assistant",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				return []api.Message{
+					{Role: "tool", ToolCallId: "orphan_call", Content: "orphan result"},
+					{Role: "user", Content: "search"},
+				}
+			},
+		},
+		{
+			name:          "assistant without tool calls",
+			shouldNotPanic: true,
+			setupMessages: func() []api.Message {
+				return []api.Message{
+					{Role: "user", Content: "hello"},
+					{Role: "assistant", Content: "hi there"},
+				}
+			},
+		},
+	}
+	
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			handler := &ConversationHandler{}
+			handler.agent = &Agent{debug: false}
+			
+			messages := tc.setupMessages()
+			
+			defer func() {
+				if r := recover(); r != nil && tc.shouldNotPanic {
+					t.Errorf("validateMinimaxToolCalls() panicked: %v", r)
+				}
+			}()
+			
+			handler.validateMinimaxToolCalls(messages)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// appendTransientMessages (conversation_messaging.go)
+// ---------------------------------------------------------------------------
+
+func TestAppendTransientMessages(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name          string
+		messages      []api.Message
+		transientMsgs []api.Message
+		wantCount     int
+	}{
+		{
+			name:          "no transient messages",
+			messages:      []api.Message{{Role: "user", Content: "hello"}},
+			transientMsgs: []api.Message{},
+			wantCount:     1,
+		},
+		{
+			name:          "one transient message",
+			messages:      []api.Message{{Role: "user", Content: "hello"}},
+			transientMsgs: []api.Message{{Role: "system", Content: "system supplement"}},
+			wantCount:     2,
+		},
+		{
+			name: "multiple transient messages",
+			messages: []api.Message{{Role: "user", Content: "hello"}},
+			transientMsgs: []api.Message{
+				{Role: "system", Content: "system supplement"},
+				{Role: "user", Content: "additional context"},
+			},
+			wantCount: 3,
+		},
+		{
+			name:          "empty base messages",
+			messages:      []api.Message{},
+			transientMsgs: []api.Message{{Role: "system", Content: "system"}},
+			wantCount:     1,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			handler := &ConversationHandler{}
+			handler.transientMessages = tt.transientMsgs
+			
+			got := handler.appendTransientMessages(tt.messages)
+			
+			if len(got) != tt.wantCount {
+				t.Errorf("appendTransientMessages() returned %d messages, want %d", len(got), tt.wantCount)
+			}
+			
+			// Verify transient messages are appended
+			if len(tt.transientMsgs) > 0 {
+				startTransient := len(tt.messages)
+				if startTransient+len(tt.transientMsgs) > len(got) {
+					t.Fatalf("unexpected message count")
+				}
+				
+				for i, tm := range tt.transientMsgs {
+					idx := startTransient + i
+					if got[idx].Role != tm.Role || got[idx].Content != tm.Content {
+						t.Errorf("transient message %d mismatch", i)
+					}
+				}
+			}
+			
+			// Verify transient buffer is cleared (set to nil)
+			if len(tt.transientMsgs) > 0 && handler.transientMessages != nil {
+				t.Errorf("transient messages buffer not cleared after append")
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// estimateTokens (conversation_messaging.go)
+// ---------------------------------------------------------------------------
+
+func TestEstimateTokensCoverage(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name     string
+		messages []api.Message
+		min      int
+		max      int
+	}{
+		{
+			name:     "empty messages",
+			messages: []api.Message{},
+			min:      0,
+			max:      10,
+		},
+		{
+			name: "simple user message",
+			messages: []api.Message{
+				{Role: "user", Content: "hello world"},
+			},
+			min: 10,
+			max: 50,
+		},
+		{
+			name: "multiple messages",
+			messages: []api.Message{
+				{Role: "user", Content: "first message"},
+				{Role: "assistant", Content: "response"},
+				{Role: "user", Content: "second message"},
+			},
+			min: 30,
+			max: 100,
+		},
+		{
+			name: "message with tool calls",
+			messages: []api.Message{
+				{
+					Role: "assistant",
+					ToolCalls: []api.ToolCall{
+						{Function: struct{ Name string `json:"name"`; Arguments string `json:"arguments"` }{Name: "search", Arguments: `{"query":"test"}`}},
+					},
+				},
+			},
+			min: 20,
+			max: 100,
+		},
+		{
+			name: "message with reasoning content",
+			messages: []api.Message{
+				{
+					Role:             "assistant",
+					Content:          "final answer",
+					ReasoningContent: "thinking about answer",
+				},
+			},
+			min: 15,
+			max: 80,
+		},
+		{
+			name: "long content message",
+			messages: []api.Message{
+				{
+					Role:    "user",
+					Content: "This is a much longer message that should generate more tokens " +
+						"when estimated. The token estimation is approximate and uses " +
+						"a simple character-based heuristic that divides by 4 to get rough tokens.",
+				},
+			},
+			min: 50,
+			max: 150,
+		},
+		{
+			name: "messages with images (no token impact)",
+			messages: []api.Message{
+				{
+					Role:    "user",
+					Content: "test",
+					Images:  []api.ImageData{{Type: "image/png", Base64: "abc"}},
+				},
+			},
+			min: 10,
+			max: 50,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			handler := &ConversationHandler{}
+			got := handler.estimateTokens(tt.messages)
+			
+			if got < tt.min {
+				t.Errorf("estimateTokens() = %d below minimum %d", got, tt.min)
+			}
+			if got > tt.max {
+				t.Errorf("estimateTokens() = %d above maximum %d", got, tt.max)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// extractShellCommand (conversation_optimizer.go)
+// ---------------------------------------------------------------------------
+
+func TestExtractShellCommand(t *testing.T) {
+	t.Parallel()
+	
+	co := &ConversationOptimizer{}
+	
+	tests := []struct {
+		name    string
+		content string
+		wantCmd string
+	}{
+		{
+			name:    "simple command",
+			content: "Tool call result for shell_command: ls -la",
+			wantCmd: "ls -la",
+		},
+		{
+			name:    "command with arguments",
+			content: "Tool call result for shell_command: git status --short",
+			wantCmd: "git status --short",
+		},
+		{
+			name:    "command with pipes",
+			content: "Tool call result for shell_command: cat file.txt | grep pattern",
+			wantCmd: "cat file.txt | grep pattern",
+		},
+		{
+			name:    "command with quotes",
+			content: `Tool call result for shell_command: echo "hello world"`,
+			wantCmd: `echo "hello world"`,
+		},
+		{
+			name:    "command with newlines after colon",
+			content: "Tool call result for shell_command:\nls -la\noutput",
+			wantCmd: "ls -la",
+		},
+		{
+			name:    "command with multiple spaces",
+			content: "Tool call result for shell_command:  ls    -la   ",
+			wantCmd: "ls    -la",
+		},
+		{
+			name:    "complex shell command",
+			content: `Tool call result for shell_command: find . -name "*.go" -type f | head -10`,
+			wantCmd: `find . -name "*.go" -type f | head -10`,
+		},
+		{
+			name:    "no command (missing prefix)",
+			content: "ls -la",
+			wantCmd: "",
+		},
+		{
+			name:    "empty content",
+			content: "",
+			wantCmd: "",
+		},
+		{
+			name:    "prefix with no command",
+			content: "Tool call result for shell_command:",
+			wantCmd: "",
+		},
+		{
+			name:    "different tool result",
+			content: "Tool call result for read_file: file.txt",
+			wantCmd: "",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotCmd := co.extractShellCommand(tt.content)
+			
+			if gotCmd != tt.wantCmd {
+				t.Errorf("extractShellCommand() = %q, want %q", gotCmd, tt.wantCmd)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// extractFilePath (conversation_optimizer.go)
+// ---------------------------------------------------------------------------
+
+func TestExtractFilePathCoverage(t *testing.T) {
+	t.Parallel()
+	
+	co := &ConversationOptimizer{}
+	
+	tests := []struct {
+		name     string
+		content  string
+		wantPath string
+	}{
+		{
+			name:     "simple file path",
+			content:  "Tool call result for read_file: test.txt",
+			wantPath: "test.txt",
+		},
+		{
+			name:     "relative path with directory",
+			content:  "Tool call result for read_file: src/main.go",
+			wantPath: "src/main.go",
+		},
+		{
+			name:     "absolute path",
+			content:  "Tool call result for read_file: /home/user/project/file.go",
+			wantPath: "/home/user/project/file.go",
+		},
+		{
+			name:     "path stops at whitespace (actual behavior)",
+			content:  "Tool call result for read_file: path/to/my file.txt",
+			wantPath: "path/to/my",
+		},
+		{
+			name:     "file extension",
+			content:  "Tool call result for read_file: README.md",
+			wantPath: "README.md",
+		},
+		{
+			name:     "hidden file",
+			content:  "Tool call result for read_file: .gitignore",
+			wantPath: ".gitignore",
+		},
+		{
+			name:     "no prefix - tool result",
+			content:  "ls -la",
+			wantPath: "",
+		},
+		{
+			name:     "empty content",
+			content:  "",
+			wantPath: "",
+		},
+		{
+			name:     "prefix with no path",
+			content:  "Tool call result for read_file:",
+			wantPath: "",
+		},
+		{
+			name:     "different tool",
+			content:  "Tool call result for write_file: test.txt",
+			wantPath: "",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			gotPath := co.extractFilePath(tt.content)
+			
+			if gotPath != tt.wantPath {
+				t.Errorf("extractFilePath() = %q, want %q", gotPath, tt.wantPath)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// normalizeSummaryEntry (conversation_optimizer.go)
+// ---------------------------------------------------------------------------
+
+func TestNormalizeSummaryEntryCoverage(t *testing.T) {
+	t.Parallel()
+	
+	co := &ConversationOptimizer{}
+	
+	tests := []struct {
+		name  string
+		entry string
+		want  string
+	}{
+		{
+			name:  "simple entry",
+			entry: "User request: hello",
+			want:  "User request: hello",
+		},
+		{
+			name:  "entry with leading/trailing whitespace",
+			entry: "  User request: hello  ",
+			want:  "User request: hello",
+		},
+		{
+			name:  "entry with internal multiple spaces",
+			entry: "User  request:    hello",
+			want:  "User request: hello",
+		},
+		{
+			name:  "entry with tabs and newlines",
+			entry: "\tUser\trequest:\thello\n",
+			want:  "User request: hello",
+		},
+		{
+			name:  "empty entry",
+			entry: "",
+			want:  "",
+		},
+		{
+			name:  "whitespace only entry",
+			entry: "   \t\n  ",
+			want:  "",
+		},
+		{
+			name:  "entry with special characters",
+			entry: "User request: test!@#$%^&*()",
+			want:  "User request: test!@#$%^&*()",
+		},
+		{
+			name:  "entry with unicode",
+			entry: "User request: 你好世界",
+			want:  "User request: 你好世界",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := co.normalizeSummaryEntry(tt.entry)
+			if got != tt.want {
+				t.Errorf("normalizeSummaryEntry() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// wrapCompactionSummaryWithLevel (conversation_optimizer.go)
+// ---------------------------------------------------------------------------
+
+func TestWrapCompactionSummaryWithLevelCoverage(t *testing.T) {
+	t.Parallel()
+	
+	co := &ConversationOptimizer{}
+	
+	tests := []struct {
+		name       string
+		messages   []api.Message
+		body       string
+		context    compactionContext
+		level      string
+		wantHeader string
+	}{
+		{
+			name:     "brief level",
+			messages: []api.Message{{Role: "user", Content: "test"}},
+			body:     "Summary text",
+			context:  compactionContext{},
+			level:    "brief",
+			wantHeader: "Compacted earlier conversation state (brief):\n" +
+				"- Summarized 1 earlier messages to preserve context headroom.\n",
+		},
+		{
+			name:     "summary level",
+			messages: []api.Message{{Role: "user", Content: "test"}, {Role: "assistant", Content: "response"}},
+			body:     "Summary text",
+			context:  compactionContext{},
+			level:    "summary",
+			wantHeader: "Compacted earlier conversation state (summary):\n" +
+				"- Summarized 2 earlier messages to preserve context headroom.\n",
+		},
+		{
+			name:     "detailed level",
+			messages: []api.Message{{Role: "user", Content: "test"}},
+			body:     "Detailed summary text",
+			context:  compactionContext{},
+			level:    "detailed",
+			wantHeader: "Compacted earlier conversation state (detailed):\n" +
+				"- Summarized 1 earlier messages to preserve context headroom.\n",
+		},
+		{
+			name:     "default level (unknown)",
+			messages: []api.Message{{Role: "user", Content: "test"}},
+			body:     "Summary text",
+			context:  compactionContext{},
+			level:    "unknown",
+			wantHeader: "Compacted earlier conversation state:\n" +
+				"- Summarized 1 earlier messages to preserve context headroom.\n",
+		},
+		{
+			name:     "empty body",
+			messages: []api.Message{{Role: "user", Content: "test"}},
+			body:     "",
+			context:  compactionContext{},
+			level:    "brief",
+			wantHeader: "",
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := co.wrapCompactionSummaryWithLevel(tt.messages, tt.body, tt.context, tt.level)
+			
+			if tt.wantHeader == "" {
+				if got != "" {
+					t.Errorf("wrapCompactionSummaryWithLevel() = %q, want empty string", got)
+				}
+				return
+			}
+			
+			if !strings.Contains(got, tt.wantHeader) {
+				t.Errorf("wrapCompactionSummaryWithLevel() does not contain expected header\n"+
+					"got:\n%s\n\nwant header:\n%s", got, tt.wantHeader)
+			}
+			
+			// Verify body is included
+			if tt.body != "" && !strings.Contains(got, tt.body) {
+				t.Errorf("wrapCompactionSummaryWithLevel() does not contain body")
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// filterToolsByName (conversation.go)
+// ---------------------------------------------------------------------------
+
+func TestFilterToolsByNameCoverage(t *testing.T) {
+	t.Parallel()
+	
+	makeTool := func(name string) api.Tool {
+		return api.Tool{Type: "function", Function: struct{ Name string `json:"name"`; Description string `json:"description"`; Parameters interface{} `json:"parameters"` }{Name: name}}
+	}
+	
+	tests := []struct {
+		name    string
+		tools   []api.Tool
+		allowed map[string]struct{}
+		want    []string
+	}{
+		{
+			name:    "filters tools by allowed set",
+			tools:   []api.Tool{makeTool("read_file"), makeTool("write_file"), makeTool("shell_command")},
+			allowed: map[string]struct{}{"read_file": {}, "shell_command": {}},
+			want:    []string{"read_file", "shell_command"},
+		},
+		{
+			name:    "empty allowed set returns empty",
+			tools:   []api.Tool{makeTool("read_file"), makeTool("write_file")},
+			allowed: map[string]struct{}{},
+			want:    []string{},
+		},
+		{
+			name:    "all tools allowed",
+			tools:   []api.Tool{makeTool("tool1"), makeTool("tool2"), makeTool("tool3")},
+			allowed: map[string]struct{}{"tool1": {}, "tool2": {}, "tool3": {}},
+			want:    []string{"tool1", "tool2", "tool3"},
+		},
+		{
+			name:    "no tools",
+			tools:   []api.Tool{},
+			allowed: map[string]struct{}{"tool1": {}},
+			want:    []string{},
+		},
+		{
+			name:    "nil tools",
+			tools:   nil,
+			allowed: map[string]struct{}{"tool1": {}},
+			want:    []string{},
+		},
+		{
+			name:    "partial match preserves order",
+			tools:   []api.Tool{makeTool("a"), makeTool("b"), makeTool("c"), makeTool("d")},
+			allowed: map[string]struct{}{"b": {}, "d": {}},
+			want:    []string{"b", "d"},
+		},
+		{
+			name:    "case sensitive matching",
+			tools:   []api.Tool{makeTool("Read_File"), makeTool("read_file")},
+			allowed: map[string]struct{}{"read_file": {}},
+			want:    []string{"read_file"},
+		},
+		{
+			name:    "single tool",
+			tools:   []api.Tool{makeTool("single")},
+			allowed: map[string]struct{}{"single": {}},
+			want:    []string{"single"},
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := filterToolsByName(tt.tools, tt.allowed)
+			
+			if len(got) != len(tt.want) {
+				t.Errorf("filterToolsByName() returned %d tools, want %d", len(got), len(tt.want))
+			}
+			
+			for i, wantName := range tt.want {
+				if i >= len(got) {
+					t.Errorf("missing tool %d: %s", i, wantName)
+					continue
+				}
+				if got[i].Function.Name != wantName {
+					t.Errorf("tool %d: got %q, want %q", i, got[i].Function.Name, wantName)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// makeAllowedToolSet (conversation.go)
+// ---------------------------------------------------------------------------
+
+func TestMakeAllowedToolSetFromZeroCoverage(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name      string
+		toolNames []string
+		wantSize  int
+		contains  []string
+		excludes  []string
+	}{
+		{
+			name:      "creates map from tool names",
+			toolNames: []string{"read_file", "write_file", "shell_command"},
+			wantSize:  3,
+			contains:  []string{"read_file", "write_file", "shell_command"},
+		},
+		{
+			name:      "empty slice returns empty map",
+			toolNames: []string{},
+			wantSize:  0,
+			contains:  []string{},
+		},
+		{
+			name:      "nil slice returns empty map",
+			toolNames: nil,
+			wantSize:  0,
+			contains:  []string{},
+		},
+		{
+			name:      "filters empty strings",
+			toolNames: []string{"read_file", "", "write_file", "  ", "\t"},
+			wantSize:  2,
+			contains:  []string{"read_file", "write_file"},
+			excludes:  []string{"", "  ", "\t"},
+		},
+		{
+			name:      "trims whitespace",
+			toolNames: []string{"  read_file  ", "\twrite_file\t", " shell_command "},
+			wantSize:  3,
+			contains:  []string{"read_file", "write_file", "shell_command"},
+		},
+		{
+			name:      "deduplicates",
+			toolNames: []string{"read_file", "read_file", "write_file", "read_file"},
+			wantSize:  2,
+			contains:  []string{"read_file", "write_file"},
+		},
+		{
+			name:      "single tool",
+			toolNames: []string{"single_tool"},
+			wantSize:  1,
+			contains:  []string{"single_tool"},
+		},
+		{
+			name:      "all empty strings",
+			toolNames: []string{"", "  ", "\t", "\n"},
+			wantSize:  0,
+			contains:  []string{},
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := makeAllowedToolSet(tt.toolNames)
+			
+			if len(got) != tt.wantSize {
+				t.Errorf("makeAllowedToolSet() returned map size %d, want %d", len(got), tt.wantSize)
+			}
+			
+			for _, name := range tt.contains {
+				if _, ok := got[name]; !ok {
+					t.Errorf("makeAllowedToolSet() map missing expected key %q", name)
+				}
+			}
+			
+			for _, name := range tt.excludes {
+				if _, ok := got[name]; ok {
+					t.Errorf("makeAllowedToolSet() map contains unexpected key %q", name)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// buildNonVisionImageToolPrompt (conversation.go)
+// ---------------------------------------------------------------------------
+
+func TestBuildNonVisionImageToolPromptCoverage(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name           string
+		query          string
+		paths          []string
+		wantContains   []string
+	}{
+		{
+			name:  "simple prompt with image path",
+			query: "analyze this image",
+			paths: []string{"/tmp/image.png"},
+			wantContains: []string{
+				"OCR Trigger Policy (MANDATORY)",
+				"active model is non-multimodal",
+				"analyze_image_content",
+				"analysis_mode=\"ocr\"",
+				"/tmp/image.png",
+				"Original user request:",
+				"analyze this image",
+			},
+		},
+		{
+			name:  "multiple image paths",
+			query: "look at these images",
+			paths: []string{"/tmp/img1.png", "/tmp/img2.jpg"},
+			wantContains: []string{
+				"analyze_image_content",
+				"/tmp/img1.png",
+				"/tmp/img2.jpg",
+			},
+		},
+		{
+			name:  "empty query",
+			query: "",
+			paths: []string{"/tmp/image.png"},
+			wantContains: []string{
+				"OCR Trigger Policy",
+				"/tmp/image.png",
+			},
+		},
+		{
+			name:  "empty paths",
+			query: "do something",
+			paths: []string{},
+			wantContains: []string{
+				"OCR Trigger Policy",
+				"Pasted image paths:",
+			},
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			a := &Agent{}
+			got := a.buildNonVisionImageToolPrompt(tt.query, tt.paths)
+			
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("buildNonVisionImageToolPrompt() does not contain %q\nGot:\n%s", want, got)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// getCurrentCustomProvider (conversation.go)
+// ---------------------------------------------------------------------------
+
+func TestGetCurrentCustomProviderCoverage(t *testing.T) {
+	t.Parallel()
+	
+	tests := []struct {
+		name          string
+		configManager *configuration.Manager
+		clientType    api.ClientType
+		wantFound     bool
+	}{
+		{
+			name:          "nil config manager",
+			configManager: nil,
+			clientType:    "openai",
+			wantFound:     false,
+		},
+		{
+			name:          "empty config manager",
+			configManager: &configuration.Manager{},
+			clientType:    "openai",
+			wantFound:     false,
+		},
+		{
+			name:          "case sensitive provider name",
+			configManager: &configuration.Manager{},
+			clientType:    "openai",
+			wantFound:     false,
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			a := &Agent{configManager: tt.configManager, clientType: tt.clientType}
+			got, found := a.getCurrentCustomProvider()
+			
+			if found != tt.wantFound {
+				t.Errorf("getCurrentCustomProvider() found = %v, want %v", found, tt.wantFound)
+			}
+			
+			if tt.wantFound && found && got == nil {
+				t.Errorf("getCurrentCustomProvider() returned nil when expected to be found")
 			}
 		})
 	}

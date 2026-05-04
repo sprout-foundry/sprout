@@ -20,6 +20,8 @@ func TestFormatDuplicateWarning(t *testing.T) {
 				File:      "file_a.go",
 				Name:      "ReadConfig",
 				Signature: "func ReadConfig(path string) string",
+				StartLine: 10,
+				EndLine:   20,
 			},
 			Similarity: 0.95,
 		},
@@ -29,6 +31,8 @@ func TestFormatDuplicateWarning(t *testing.T) {
 				File:      "file_b.go",
 				Name:      "LoadConfig",
 				Signature: "func LoadConfig(path string) string",
+				StartLine: 5,
+				EndLine:   15,
 			},
 			Similarity: 0.88,
 		},
@@ -36,33 +40,34 @@ func TestFormatDuplicateWarning(t *testing.T) {
 
 	result := FormatDuplicateWarning(matches)
 
-	// Verify structure of output
-	if !strings.Contains(result, "⚠ Potential duplicate detected") {
-		t.Error("expected warning header in output")
+	// Verify structure of output — new agent-internal format
+	if !strings.Contains(result, "[DUPLICATE CHECK]") {
+		t.Error("expected [DUPLICATE CHECK] header in output")
 	}
 	if !strings.Contains(result, "file_a.go:ReadConfig") {
 		t.Error("expected first match ID in output")
 	}
-	if !strings.Contains(result, "0.95") {
-		t.Error("expected first match similarity in output")
+	if !strings.Contains(result, "95%") {
+		t.Error("expected first match percentage (95%) in output")
 	}
 	if !strings.Contains(result, "func ReadConfig(path string) string") {
 		t.Error("expected first match signature in output")
 	}
+	if !strings.Contains(result, "file_a.go:10-20") {
+		t.Error("expected first match location in output")
+	}
 	if !strings.Contains(result, "file_b.go:LoadConfig") {
 		t.Error("expected second match ID in output")
 	}
-	if !strings.Contains(result, "0.88") {
-		t.Error("expected second match similarity in output")
+	if !strings.Contains(result, "88%") {
+		t.Error("expected second match percentage (88%) in output")
 	}
-	if !strings.Contains(result, "Consider whether the new code duplicates existing functionality") {
-		t.Error("expected trailing message in output")
+	if !strings.Contains(result, "Review the above. If your code serves a genuinely different purpose") {
+		t.Error("expected trailing guidance message in output")
 	}
 
 	// Verify ordering: higher similarity first
-	idx1 := strings.Index(result, "file_a.go:ReadConfig")
-	idx2 := strings.Contains(result, "file_b.go:LoadConfig")
-	if idx1 < 0 || !idx2 {
+	if !strings.Contains(result, "file_b.go:LoadConfig") {
 		t.Fatal("both matches should appear in output")
 	}
 	if strings.Index(result, "file_a.go:ReadConfig") > strings.Index(result, "file_b.go:LoadConfig") {
@@ -89,6 +94,8 @@ func TestFormatDuplicateWarning_SingleMatch(t *testing.T) {
 				ID:        "a.go:Foo",
 				Name:      "Foo",
 				Signature: "func Foo()",
+				StartLine: 1,
+				EndLine:   5,
 			},
 			Similarity: 0.92,
 		},
@@ -98,11 +105,14 @@ func TestFormatDuplicateWarning_SingleMatch(t *testing.T) {
 	if !strings.Contains(result, "a.go:Foo") {
 		t.Error("expected match ID in output")
 	}
-	if !strings.Contains(result, "0.92") {
-		t.Error("expected similarity in output")
+	if !strings.Contains(result, "92%") {
+		t.Error("expected match percentage in output")
 	}
 	if !strings.Contains(result, "func Foo()") {
 		t.Error("expected signature in output")
+	}
+	if !strings.Contains(result, "[DUPLICATE CHECK]") {
+		t.Error("expected [DUPLICATE CHECK] header")
 	}
 }
 

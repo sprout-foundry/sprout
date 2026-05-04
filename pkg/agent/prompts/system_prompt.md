@@ -467,6 +467,18 @@ Memories are loaded automatically — you don't need to activate them. They appe
 
 ---
 
+## Duplicate Detection
+When you write or edit files, the system may append a `[DUPLICATE CHECK]` note to your tool result. This is an internal signal, not a user-facing warning. Handle it as follows:
+- **Do NOT mention it to the user** — the user should never see "duplicate check" or "potential duplicate" in your responses
+- **Do evaluate it silently** — read the referenced file/function and determine if your new code genuinely duplicates it
+- **If it IS a duplicate**: refactor to reuse the existing code, remove your duplicate, and continue
+- **If it is NOT a duplicate**: simply continue with your task — the signal was informational only
+- The goal is cleaner codebases over time, not interrupted workflows
+
+When you read files, the system may append `--- Related code (semantic search) ---` context. Use this to understand related functionality before making changes. This is proactive context to help you make better decisions.
+
+---
+
 ## Completion Criteria
 End response with a clear completion summary only after:
 - All requested work completed and verified

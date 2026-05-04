@@ -1,10 +1,19 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import './SettingsPanel.css';
 import type { SproutSettings } from '../services/api';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
-import { SUB_TABS, type SettingsPanelProps } from './settings/types';
+import {
+  SECTION_GROUPS,
+  getSectionForSubsection,
+  scopeToLayer,
+  subsectionToLegacyTab,
+  type SettingsSubsection,
+  type SettingsSection,
+  type SettingsPanelProps,
+} from './settings/types';
 import { useSettingsState } from './settings/useSettingsState';
 import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
@@ -36,13 +45,50 @@ function SettingsPanel({
     settingsRef.current = settings;
   }, [settings]);
 
-  // Use custom hooks for state and mutations
+  /* ─── Collapsible section state ──────────────────────── */
+
+  const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(new Set());
+
+  const toggleSection = (sectionId: SettingsSection) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  };
+
+  /* ─── Custom hooks (must be called before any useEffects) ── */
+
   const state = useSettingsState(settings, onSettingsChanged, onRequestProviderSetup);
+
+  /* ─── Derive effective layer from active subsection ──── */
+
+  const activeSection = activeSubsection ? getSectionForSubsection(activeSubsection) : undefined;
+  const effectiveLayer = activeSection ? scopeToLayer(activeSection.scope) : 'session';
+
+  /* ─── Sync legacy activeSubTab to trigger fetch effects ── */
+
+  useEffect(() => {
+    if (activeSubsection) {
+      const legacyTab = subsectionToLegacyTab(activeSubsection);
+      state.setActiveSubTab(legacyTab);
+    }
+  }, [activeSubsection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    state.setConfigViewLayer(effectiveLayer);
+  }, [effectiveLayer]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const mutations = useSettingsMutation({
     settings,
     onSettingsChanged,
     addNotification: state.addNotification,
-    configViewLayer: state.configViewLayer,
+    configViewLayer: effectiveLayer,
     api: state.api,
     setProvenanceSources: state.setProvenanceSources,
     // MCP server state
@@ -97,7 +143,7 @@ function SettingsPanel({
     setLayerData: state.setLayerData,
   });
 
-  // Use field renderers hook
+  // Use field renderers hook — pass effectiveLayer for provenance/scoping
   // eslint-disable-next-line testing-library/render-result-naming-convention
   const fieldRenderers = useSettingsFieldRenderers({
     displaySettingsRef: state.displaySettingsRef,
@@ -108,27 +154,36 @@ function SettingsPanel({
     updateSetting: mutations.updateSetting,
     savingKey: mutations.savingKey,
     provenanceSources: state.provenanceSources,
-    configViewLayer: state.configViewLayer,
+    configViewLayer: effectiveLayer,
   });
 
-  // Determine which settings to display based on layer
+  // Determine which settings to display based on effective layer.
+  // Merge with session settings as fallback for missing fields.
   const activeSettings: SproutSettings | null =
-    state.configViewLayer !== 'session' && state.layerData
-      ? (state.layerData as unknown as SproutSettings)
+    effectiveLayer !== 'session' && state.layerData
+      ? ({ ...settings, ...state.layerData } as unknown as SproutSettings)
       : settings;
 
   // Update the display ref with active settings
   state.displaySettingsRef.current = activeSettings;
 
-  /* ─── Render tab content ───────────────────────────── */
+  /* ─── Render subsection content ──────────────────────── */
 
-  const renderContent = () => {
+  const renderSubsectionContent = (subsectionId: SettingsSubsection) => {
     if (!settings) {
       return <div className="settings-empty">Loading settings…</div>;
     }
 
-    switch (state.activeSubTab) {
-      case 'general':
+    switch (subsectionId) {
+      /* ── Agent section ─────────────────────────────── */
+      case 'agent-provider':
+        return (
+          <div className="settings-empty">
+            Provider &amp; Model selection — coming soon
+          </div>
+        );
+
+      case 'agent-general':
         return (
           <GeneralSettingsTab
             editorPreferences={editorPreferences}
@@ -139,7 +194,7 @@ function SettingsPanel({
           />
         );
 
-      case 'security':
+      case 'agent-behavior':
         return (
           <SecuritySettingsTab
             renderToggle={fieldRenderers.renderToggle}
@@ -148,20 +203,10 @@ function SettingsPanel({
           />
         );
 
-      case 'credentials':
-        return <CredentialsSettingsTab />;
-
-      case 'performance':
-        return (
-          <PerformanceSettingsTab
-            renderNumberInput={fieldRenderers.renderNumberInput}
-          />
-        );
-
-      case 'subagents':
+      case 'agent-subagents':
         return (
           <SubagentSettingsTab
-            settings={settings}
+            settings={activeSettings ?? settings}
             subagentProviders={state.subagentProviders}
             subagentTypes={state.subagentTypes}
             subagentSavingPersona={state.subagentSavingPersona}
@@ -176,27 +221,35 @@ function SettingsPanel({
           />
         );
 
-      case 'commit-review':
+      case 'agent-skills':
         return (
-          <CommitReviewSettingsTab
-            settings={settings}
-            commitReviewProviders={state.commitReviewProviders}
-            updateSetting={mutations.updateSetting}
+          <SkillsSettingsTab
+            settings={activeSettings ?? settings}
+            toggleSkill={mutations.toggleSkill}
           />
         );
 
-      case 'pdf-ocr':
+      /* ── Workspace section ─────────────────────────── */
+      case 'workspace-provider':
         return (
-          <OcrSettingsTab
+          <div className="settings-empty">
+            Provider &amp; Model selection — coming soon
+          </div>
+        );
+
+      case 'workspace-security':
+        return (
+          <SecuritySettingsTab
             renderToggle={fieldRenderers.renderToggle}
-            renderTextInput={fieldRenderers.renderTextInput}
+            renderNumberInput={fieldRenderers.renderNumberInput}
+            renderSelect={fieldRenderers.renderSelect}
           />
         );
 
-      case 'mcp':
+      case 'workspace-mcp':
         return (
           <MCPSettingsTab
-            settings={settings}
+            settings={activeSettings ?? settings}
             editingServer={state.editingServer}
             serverName={state.serverName}
             serverCommand={state.serverCommand}
@@ -234,10 +287,14 @@ function SettingsPanel({
           />
         );
 
-      case 'providers':
+      case 'workspace-credentials':
+        return <CredentialsSettingsTab />;
+
+      /* ── Environment section ───────────────────────── */
+      case 'env-providers':
         return (
           <ProviderSettingsTab
-            settings={settings}
+            settings={activeSettings ?? settings}
             onRequestProviderSetup={onRequestProviderSetup}
             editingProvider={state.editingProvider}
             providerName={state.providerName}
@@ -266,15 +323,34 @@ function SettingsPanel({
           />
         );
 
-      case 'skills':
+      case 'env-credentials':
+        return <CredentialsSettingsTab />;
+
+      case 'env-performance':
         return (
-          <SkillsSettingsTab
-            settings={settings}
-            toggleSkill={mutations.toggleSkill}
+          <PerformanceSettingsTab
+            renderNumberInput={fieldRenderers.renderNumberInput}
           />
         );
 
-      case 'embeddings':
+      case 'env-commit-review':
+        return (
+          <CommitReviewSettingsTab
+            settings={activeSettings ?? settings}
+            commitReviewProviders={state.commitReviewProviders}
+            updateSetting={mutations.updateSetting}
+          />
+        );
+
+      case 'env-ocr':
+        return (
+          <OcrSettingsTab
+            renderToggle={fieldRenderers.renderToggle}
+            renderTextInput={fieldRenderers.renderTextInput}
+          />
+        );
+
+      case 'env-embeddings':
         return (
           <EmbeddingSettingsTab
             renderToggle={fieldRenderers.renderToggle}
@@ -283,71 +359,76 @@ function SettingsPanel({
           />
         );
 
+      /* ── Editor section ────────────────────────────── */
+      case 'editor-preferences':
+        return (
+          <GeneralSettingsTab
+            editorPreferences={editorPreferences}
+            onEditorPreferenceChanged={onEditorPreferenceChanged}
+            renderToggle={fieldRenderers.renderToggle}
+            renderSelect={fieldRenderers.renderSelect}
+            renderTextareaInput={fieldRenderers.renderTextareaInput}
+          />
+        );
+
       default:
         return null;
     }
   };
 
-  /* ─── Main render ───────────────────────────────────────── */
+  /* ─── Main render ─────────────────────────────────────── */
 
   return (
     <div className="settings-panel">
-      {/* Sub-tab bar */}
-      <div className="settings-subtab-bar">
-        {SUB_TABS.map((tab) => (
+      {SECTION_GROUPS.map((section) => (
+        <div
+          key={section.id}
+          className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}
+        >
+          {/* Section header (clickable to toggle) */}
           <button
-            key={tab.id}
             type="button"
-            className={`settings-subtab ${state.activeSubTab === tab.id ? 'active' : ''}`}
-            onClick={() => state.setActiveSubTab(tab.id)}
+            className="settings-section-header"
+            onClick={() => toggleSection(section.id)}
+            aria-expanded={expandedSections.has(section.id)}
           >
-            {tab.label}
+            <span className="settings-section-label">{section.label}</span>
+            <span className={`settings-scope-badge scope-${section.scope}`}>
+              {section.scope}
+            </span>
+            <ChevronRight className="settings-section-chevron" size={14} />
           </button>
-        ))}
-        {fieldRenderers.renderSaving()}
-      </div>
 
-      {/* Config Scope Selector — applies to all tabs */}
-      <div className="config-scope-row">
-        <div className="config-scope-buttons">
-          {(['session', 'workspace', 'global'] as const).map((layer) => (
-            <button
-              key={layer}
-              type="button"
-              className={`layerscope-btn ${state.configViewLayer === layer ? 'active' : ''}`}
-              onClick={() => state.setConfigViewLayer(layer)}
-              disabled={state.layerLoading === layer}
-            >
-              {layer === 'session' ? 'Session' : layer === 'workspace' ? 'Workspace' : 'Global'}
-              {state.layerLoading === layer && <span style={{ marginLeft: 4, opacity: 0.5 }}>…</span>}
-            </button>
-          ))}
+          {/* Expanded body */}
+          {expandedSections.has(section.id) && (
+            <div className="settings-section-body">
+              <p className="settings-section-desc">{section.description}</p>
+
+              {/* Subsection buttons */}
+              <div className="settings-subsection-list">
+                {section.subsections.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    className={`settings-subsection-btn ${activeSubsection === sub.id ? 'active' : ''}`}
+                    onClick={() => setActiveSubsection(sub.id)}
+                  >
+                    {sub.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Subsection content area */}
+              <div className="settings-subsection-content">
+                {activeSubsection &&
+                  section.subsections.some((s) => s.id === activeSubsection) &&
+                  renderSubsectionContent(activeSubsection)}
+              </div>
+            </div>
+          )}
         </div>
-        <span className="config-scope-desc">
-          {state.configViewLayer === 'session' && 'Session overrides only'}
-          {state.configViewLayer === 'workspace' && 'Workspace config (shared across sessions)'}
-          {state.configViewLayer === 'global' && 'Global config (~/.config/sprout)'}
-        </span>
-        {state.layerError && (
-          <div className="config-scope-error">{state.layerError}</div>
-        )}
-        {state.configViewLayer === 'workspace' && state.layerData && Object.keys(state.layerData).length === 0 && (
-          <div className="config-scope-create">
-            <span>No workspace config found. </span>
-            <button
-              type="button"
-              className="config-scope-create-btn"
-              disabled={state.creatingWorkspaceConfig}
-              onClick={mutations.handleCreateWorkspaceConfig}
-            >
-              {state.creatingWorkspaceConfig ? 'Creating…' : 'Create from global'}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      {renderContent()}
+      ))}
+      {fieldRenderers.renderSaving()}
     </div>
   );
 }

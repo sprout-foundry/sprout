@@ -35,7 +35,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-013** Agent Settings Management (proposed)
 - **SP-014** Agent Terminal Sessions (active)
 - **SP-015** Cloud Platform Integration (partially implemented)
-- **SP-016** Embedding-Based Duplicate Detection (proposed)
+- **SP-016** Embedding Index — Duplicate Detection & Semantic Search (proposed)
 
 ## Testing
 

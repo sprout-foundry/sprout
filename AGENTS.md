@@ -35,6 +35,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-013** Agent Settings Management (proposed)
 - **SP-014** Agent Terminal Sessions (active)
 - **SP-015** Cloud Platform Integration (partially implemented)
+- **SP-016** Embedding-Based Duplicate Detection (proposed)
 
 ## Testing
 
@@ -42,6 +43,15 @@ these specifications first to ensure alignment with the project direction.
 go test ./...                   # Run unit tests
 python3 test_runner.py          # Run E2E tests
 ```
+
+### Test Isolation
+
+**Tests must never alter the working environment.** When writing or running tests, agents must ensure that test workflows do not leak side effects into the codebase, git state, or configuration.
+
+**Concrete risks to avoid:**
+- **Branch changes** — Tests that create or switch git branches can leave the repo on the wrong branch. Always clean up or run in isolated clones. A prior testing session accidentally created a `new-branch` that diverged from `main`, requiring manual cherry-picking to recover commits.
+- **Config/env mutation** — Tests that set environment variables (e.g., `SPROUT_CONFIG`, `LEDIT_CONFIG`) can leak between test cases. Always scope env changes with `t.Setenv()` and set *both* `SPROUT_CONFIG` and `LEDIT_CONFIG` to the same temp dir (see `test-isolation-pattern` memory for details).
+- **Uncommitted test artifacts** — Test files created during a session (e.g., `*_test.go` files exploring codebase structure) must not be left uncommitted in the working tree. Either commit them or remove them before finishing.
 
 ## Git Operations Policy
 

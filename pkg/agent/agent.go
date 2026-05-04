@@ -14,6 +14,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
@@ -109,6 +110,9 @@ type Agent struct {
 	// TerminalManager provides access to hidden PTY sessions for WebUI mode.
 	// When nil (CLI mode), shell commands use os/exec unchanged.
 	terminalManager tools.TerminalAccess
+
+	// Embedding index manager for duplicate detection on file writes.
+	embeddingMgr *embedding.EmbeddingManager
 }
 
 func isDebugEnvEnabled() bool {
@@ -159,6 +163,12 @@ func (a *Agent) Shutdown() {
 	if a.debugLogFile != nil {
 		_ = a.debugLogFile.Close()
 		a.debugLogFile = nil
+	}
+
+	// Close embedding manager resources
+	if a.embeddingMgr != nil {
+		_ = a.embeddingMgr.Close()
+		a.embeddingMgr = nil
 	}
 }
 
@@ -283,6 +293,11 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		// Initialize change tracker
 		agent.changeTracker = NewChangeTracker(agent, "")
 		agent.changeTracker.Enable() // Start enabled by default
+
+		// Initialize embedding manager if enabled in config
+		if cfg := configManager.GetConfig(); cfg != nil && cfg.EmbeddingIndex != nil && cfg.EmbeddingIndex.Enabled {
+			agent.embeddingMgr = embedding.NewEmbeddingManager(cfg.EmbeddingIndex, workspaceRoot)
+		}
 
 		return agent, nil
 	}
@@ -509,6 +524,11 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 
 	if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
 		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
+	}
+
+	// Initialize embedding manager if enabled in config
+	if cfg := configManager.GetConfig(); cfg != nil && cfg.EmbeddingIndex != nil && cfg.EmbeddingIndex.Enabled {
+		agent.embeddingMgr = embedding.NewEmbeddingManager(cfg.EmbeddingIndex, workspaceRoot)
 	}
 
 	return agent, nil
@@ -823,4 +843,10 @@ func (a *Agent) SetTerminalManager(tm tools.TerminalAccess) {
 // GetTerminalManager returns the terminal manager (may be nil in CLI mode).
 func (a *Agent) GetTerminalManager() tools.TerminalAccess {
 	return a.terminalManager
+}
+
+// GetEmbeddingManager returns the embedding index manager (may be nil if
+// embedding is not configured or enabled in the agent's config).
+func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
+	return a.embeddingMgr
 }

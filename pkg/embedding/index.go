@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -217,4 +219,137 @@ func codeUnitToRecord(u CodeUnit, embedding []float32, indexedAt time.Time) Vect
 		Hash:      u.Hash,
 		IndexedAt: indexedAt,
 	}
+}
+
+// UpdateFromGitDiff incrementally updates the index by examining files changed
+// since the last index build. It uses git diff to detect modified, added,
+// and deleted files. Deleted files have their records removed from the store,
+// while changed/new files are re-indexed.
+func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (*IndexStats, error) {
+	start := time.Now()
+	stats := &IndexStats{}
+
+	// Collect deleted files from both staged and unstaged diffs (SHOULD_FIX #8).
+	var deletedFiles []string
+	if files, err := runGit(repoRoot, "diff", "--name-only", "--diff-filter=D", "--cached"); err == nil {
+		deletedFiles = append(deletedFiles, files...)
+	}
+	if files, err := runGit(repoRoot, "diff", "--name-only", "--diff-filter=D"); err == nil {
+		deletedFiles = append(deletedFiles, files...)
+	}
+
+	// Filter deleted files to supported extensions only.
+	toDelete := make(map[string]bool)
+	for _, f := range deletedFiles {
+		f = filepath.Clean(f)
+		if f == "" || !isSupportedFile(f) {
+			continue
+		}
+		toDelete[f] = true
+	}
+
+	// Delete records for removed files.
+	for f := range toDelete {
+		if err := ctx.Err(); err != nil {
+			stats.Duration = time.Since(start)
+			return stats, fmt.Errorf("index: cancelled")
+		}
+		if err := m.store.DeleteByFile(f); err != nil {
+			log.Printf("index: skipping delete %s: %v", f, err)
+			continue
+		}
+		stats.FilesProcessed++
+	}
+
+	// Collect changed files from three git sources.
+	var changedFiles []string
+
+	// 1. Staged (cached) changes
+	files, err := runGit(repoRoot, "diff", "--name-only", "--cached")
+	if err != nil {
+		return nil, fmt.Errorf("index: git diff --cached: %w", err)
+	}
+	changedFiles = append(changedFiles, files...)
+
+	// 2. Working tree (unstaged) changes
+	files, err = runGit(repoRoot, "diff", "--name-only")
+	if err != nil {
+		return nil, fmt.Errorf("index: git diff: %w", err)
+	}
+	changedFiles = append(changedFiles, files...)
+
+	// 3. Untracked (new) files
+	files, err = runGit(repoRoot, "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, fmt.Errorf("index: git ls-files: %w", err)
+	}
+	changedFiles = append(changedFiles, files...)
+
+	// Deduplicate and filter to supported extensions.
+	// Skip files that are in the delete list (they've already been handled).
+	fileSet := make(map[string]bool)
+	for _, f := range changedFiles {
+		if f == "" {
+			continue
+		}
+		cleanPath := filepath.Clean(f)
+		if !isSupportedFile(f) {
+			continue
+		}
+		if toDelete[cleanPath] {
+			continue // already deleted
+		}
+		fileSet[cleanPath] = true
+	}
+
+	if len(fileSet) == 0 && len(toDelete) == 0 {
+		stats.Duration = time.Since(start)
+		return stats, nil
+	}
+
+	var errs []string
+	for f := range fileSet {
+		if err := ctx.Err(); err != nil {
+			stats.Duration = time.Since(start)
+			return stats, fmt.Errorf("index: cancelled")
+		}
+
+		if err := m.UpdateFile(ctx, f); err != nil {
+			log.Printf("index: skipping %s: %v", f, err)
+			errs = append(errs, f)
+			continue
+		}
+		stats.FilesProcessed++
+	}
+
+	if len(errs) > 0 {
+		return stats, fmt.Errorf("index: failed to update %d files: %v", len(errs), errs)
+	}
+
+	stats.Duration = time.Since(start)
+	return stats, nil
+}
+
+// runGit executes a git command in the given directory and returns the output
+// split into non-empty lines.
+func runGit(dir string, args ...string) ([]string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines, nil
+}
+
+// isSupportedFile returns true if the file path has a supported source-code extension.
+func isSupportedFile(path string) bool {
+	return strings.HasSuffix(path, ".go")
 }

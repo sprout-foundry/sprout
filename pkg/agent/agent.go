@@ -295,6 +295,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		agent.changeTracker.Enable() // Start enabled by default
 
 		// Initialize embedding manager — enabled by default unless explicitly disabled.
+		// Starts a background index build so the agent can use it for duplicate
+		// detection and context enrichment without waiting for a query.
 		if cfg := configManager.GetConfig(); cfg != nil {
 			ei := cfg.EmbeddingIndex
 			if ei == nil {
@@ -302,6 +304,9 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 			}
 			if ei.Enabled {
 				agent.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
+				if ei.AutoIndex && agent.embeddingMgr != nil {
+					go agent.embeddingMgr.AutoBuildWhenReady()
+				}
 			}
 		}
 
@@ -533,6 +538,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	}
 
 	// Initialize embedding manager — enabled by default unless explicitly disabled.
+	// Starts a background index build so the agent can use it for duplicate
+	// detection and context enrichment without waiting for a query.
 	if cfg := configManager.GetConfig(); cfg != nil {
 		ei := cfg.EmbeddingIndex
 		if ei == nil {
@@ -540,6 +547,9 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		}
 		if ei.Enabled {
 			agent.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
+			if ei.AutoIndex && agent.embeddingMgr != nil {
+				go agent.embeddingMgr.AutoBuildWhenReady()
+			}
 		}
 	}
 

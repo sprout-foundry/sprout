@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -177,11 +178,38 @@ func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) 
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
+
+	// Safety: skip if workspace is too large for auto-build.
+	files, err := WalkCodeFiles(m.workspaceRoot)
+	if err != nil {
+		return nil, fmt.Errorf("embedding: scan workspace: %w", err)
+	}
+	if len(files) > 5000 {
+		return nil, fmt.Errorf("embedding: workspace has %d files (max 5000 for auto-build)", len(files))
+	}
+
 	idx, err := m.snapshotIndexMgr()
 	if err != nil {
 		return nil, err
 	}
 	return idx.BuildIndex(ctx, m.workspaceRoot)
+}
+
+// AutoBuildWhenReady runs a background index build after a short delay.
+// This is called at agent startup so the index is ready for duplicate
+// detection and context enrichment without waiting for an explicit query.
+// Errors are logged but never fatal.
+func (m *EmbeddingManager) AutoBuildWhenReady() {
+	// Wait a few seconds so we don't compete with startup I/O.
+	time.Sleep(3 * time.Second)
+
+	ctx := context.Background()
+	stats, err := m.BuildIndex(ctx)
+	if err != nil {
+		// Not fatal — agent works fine without the index.
+		return
+	}
+	_ = stats
 }
 
 // UpdateFile incrementally updates the index for a single file.

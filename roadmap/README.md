@@ -27,4 +27,4 @@ architectural area, its current state, and open work.
 | SP-013 | [Agent Settings Management Tool](./SP-013-agent-settings-skill.md) | 📋 Spec |
 | SP-014 | [Agent Terminal Sessions — Hidden PTY Routing](./SP-014-agent-terminal-sessions.md) | ✅ Active |
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 📋 Spec (partially implemented) |
-| SP-016 | [Embedding-Based Duplicate Detection](./SP-016-embedding-duplicate-detection.md) | 📋 Spec |
+| SP-016 | [Embedding Index — Duplicate Detection & Semantic Search](./SP-016-embedding-duplicate-detection.md) | 📋 Spec |

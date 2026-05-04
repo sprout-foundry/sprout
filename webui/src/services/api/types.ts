@@ -259,6 +259,16 @@ export interface SproutSettings {
   };
   custom_providers: Record<string, CustomProviderConfig>;
   skills: Record<string, SkillConfig>;
+  embedding_index?: {
+    enabled: boolean;
+    provider: string;
+    ort_library_path: string;
+    model_dir: string;
+    auto_index: boolean;
+    similarity_threshold: number;
+    max_results: number;
+    exclude_paths: string[];
+  };
 }
 
 export interface HotkeyEntry {

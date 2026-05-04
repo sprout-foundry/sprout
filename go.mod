@@ -22,7 +22,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require golang.org/x/sync v0.20.0 // indirect
+require (
+	github.com/yalue/onnxruntime_go v1.30.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+)
 
 require (
 	filippo.io/hpke v0.4.0 // indirect

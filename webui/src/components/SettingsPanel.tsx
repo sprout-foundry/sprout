@@ -29,6 +29,7 @@ import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
+import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
 
 /* ─── Component ──────────────────────────────────────────────── */
 
@@ -185,9 +186,7 @@ function SettingsPanel({
 
       case 'agent-general':
         return (
-          <GeneralSettingsTab
-            editorPreferences={editorPreferences}
-            onEditorPreferenceChanged={onEditorPreferenceChanged}
+          <AgentBehaviorSettingsTab
             renderToggle={fieldRenderers.renderToggle}
             renderSelect={fieldRenderers.renderSelect}
             renderTextareaInput={fieldRenderers.renderTextareaInput}
@@ -237,12 +236,12 @@ function SettingsPanel({
           </div>
         );
 
-      case 'workspace-security':
+      case 'workspace-embeddings':
         return (
-          <SecuritySettingsTab
+          <EmbeddingSettingsTab
             renderToggle={fieldRenderers.renderToggle}
-            renderNumberInput={fieldRenderers.renderNumberInput}
-            renderSelect={fieldRenderers.renderSelect}
+            renderTextInput={fieldRenderers.renderTextInput}
+            updateSetting={mutations.updateSetting}
           />
         );
 
@@ -365,9 +364,6 @@ function SettingsPanel({
           <GeneralSettingsTab
             editorPreferences={editorPreferences}
             onEditorPreferenceChanged={onEditorPreferenceChanged}
-            renderToggle={fieldRenderers.renderToggle}
-            renderSelect={fieldRenderers.renderSelect}
-            renderTextareaInput={fieldRenderers.renderTextareaInput}
           />
         );
 

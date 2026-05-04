@@ -54,7 +54,7 @@ export type SettingsSubsection =
   // Agent (session scope)
   | 'agent-provider' | 'agent-general' | 'agent-behavior' | 'agent-subagents' | 'agent-skills'
   // Workspace (workspace scope)
-  | 'workspace-provider' | 'workspace-security' | 'workspace-mcp' | 'workspace-credentials'
+  | 'workspace-provider' | 'workspace-embeddings' | 'workspace-mcp' | 'workspace-credentials'
   // Environment (global scope)
   | 'env-providers' | 'env-credentials'   | 'env-performance' | 'env-commit-review' | 'env-ocr' | 'env-embeddings'// Editor
   | 'editor-preferences';
@@ -88,7 +88,7 @@ export const SECTION_GROUPS: SectionDef[] = [
     description: 'Settings for this project directory',
     subsections: [
       { id: 'workspace-provider', label: 'Provider & Model' },
-      { id: 'workspace-security', label: 'Security' },
+      { id: 'workspace-embeddings', label: 'Embeddings' },
       { id: 'workspace-mcp', label: 'MCP Servers' },
       { id: 'workspace-credentials', label: 'Credentials' },
     ],
@@ -142,7 +142,7 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'agent-subagents': 'subagents',
     'agent-skills': 'skills',
     'workspace-provider': 'general',
-    'workspace-security': 'security',
+    'workspace-embeddings': 'embeddings',
     'workspace-mcp': 'mcp',
     'workspace-credentials': 'credentials',
     'env-providers': 'providers',

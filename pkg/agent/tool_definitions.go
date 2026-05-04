@@ -575,9 +575,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	if result != "" {
 		if shouldCheckDuplicates(toolName, agent) {
 			if path, ok := args["path"].(string); ok && path != "" {
-				warning := runDuplicateCheck(ctx, agent, path)
-				if warning != "" {
-					result = warning + "\n" + result
+				note := runDuplicateCheck(ctx, agent, path)
+				if note != "" {
+					result = result + note
 				}
 			}
 		}

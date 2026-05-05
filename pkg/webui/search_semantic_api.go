@@ -127,13 +127,39 @@ func (ws *ReactWebServer) handleAPISemanticStatus(w http.ResponseWriter, r *http
 	em := ws.getEmbeddingManager(clientID)
 
 	if em == nil {
-		writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
-			Available:   false,
-			Initialized: false,
-			Building:    false,
-			RecordCount: 0,
-			Workspace:   ws.GetWorkspaceRoot(),
-		})
+		// No active agent session — check if embedding is enabled in config
+		// so the frontend can show "available" even when browsing without
+		// an active agent.
+		embeddingEnabled := false
+		if cm := ws.resolveConfigManagerQuietly(r); cm != nil {
+			cfg := cm.GetConfig()
+			if cfg != nil {
+				ei := cfg.EmbeddingIndex
+				if ei == nil {
+					// Nil means defaults apply: embedding is enabled by default
+					embeddingEnabled = true
+				} else {
+					embeddingEnabled = ei.Enabled
+				}
+			}
+		}
+		if embeddingEnabled {
+			writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
+				Available:   true,
+				Initialized: false,
+				Building:    false,
+				RecordCount: 0,
+				Workspace:   ws.GetWorkspaceRoot(),
+			})
+		} else {
+			writeJSON(w, http.StatusOK, EmbeddingIndexStatus{
+				Available:   false,
+				Initialized: false,
+				Building:    false,
+				RecordCount: 0,
+				Workspace:   ws.GetWorkspaceRoot(),
+			})
+		}
 		return
 	}
 

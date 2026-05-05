@@ -673,6 +673,7 @@ These are high-impact structural improvements identified through code evaluation
 
 [x] - TESTING: ~170 Go source files have zero test coverage — `pkg/agent/` (16 untested), `pkg/agent_tools/` (13 untested), `pkg/webui/` (20 untested), `pkg/mcp/` (7 untested)
 [x] - TESTING: ~170 Go source files have zero test coverage — `pkg/agent/` (16 untested), `pkg/agent_tools/` (13 untested), `pkg/webui/` (20 untested), `pkg/mcp/` (7 untested)
+[x] - TESTING: `packages/ui` has zero test coverage — 24 components, 1 test file with 19 tests
 [] - TESTING: `packages/ui` has zero test coverage — 24 components, 1 test file with 19 tests
 [] - TESTING: `webui/src/` has ~4% test coverage — 262 source files, 11 test files
 

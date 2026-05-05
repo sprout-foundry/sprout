@@ -37,6 +37,22 @@ export interface EditorPreferences {
   formatOnSaveEnabled?: boolean;
 }
 
+/** Props for rendering provider/model/persona selectors inside a section body */
+export interface AgentConfigProps {
+  selectedProvider: string;
+  selectedModel: string;
+  selectedPersona: string;
+  providers: Array<{ id: string; name: string }>;
+  availableModels: string[];
+  personas: Array<{ id: string; name: string }>;
+  isLoadingProviders: boolean;
+  isLoadingPersonas: boolean;
+  isConnected: boolean;
+  onProviderChange: (val: string) => void;
+  onModelChange: (val: string) => void;
+  onPersonaChange: (val: string) => void;
+}
+
 export interface SettingsPanelProps {
   settings: SproutSettings | null;
   onSettingsChanged: (settings: SproutSettings) => void;
@@ -44,6 +60,8 @@ export interface SettingsPanelProps {
   onRequestProviderSetup?: () => void;
   editorPreferences?: EditorPreferences | null;
   onEditorPreferenceChanged?: (key: string, value: unknown) => void;
+  /** Provider/model/persona data for the Agent section */
+  agentConfig?: AgentConfigProps | null;
 }
 
 /* ─── Hierarchical section model (SP-017) ──────────────────── */
@@ -52,11 +70,12 @@ export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor';
 
 export type SettingsSubsection =
   // Agent (session scope)
-  | 'agent-provider' | 'agent-general' | 'agent-behavior' | 'agent-subagents' | 'agent-skills'
+  | 'agent-general' | 'agent-behavior' | 'agent-subagents' | 'agent-skills'
   // Workspace (workspace scope)
-  | 'workspace-provider' | 'workspace-embeddings' | 'workspace-mcp'
+  | 'workspace-embeddings' | 'workspace-mcp'
   // Environment (global scope)
-  | 'env-providers' | 'env-performance' | 'env-commit-review' | 'env-ocr'// Editor
+  | 'env-providers' | 'env-performance' | 'env-commit-review' | 'env-ocr'
+  // Editor
   | 'editor-preferences';
 
 export interface SectionDef {
@@ -74,7 +93,6 @@ export const SECTION_GROUPS: SectionDef[] = [
     scope: 'session',
     description: 'How the agent behaves this session',
     subsections: [
-      { id: 'agent-provider', label: 'Provider & Model' },
       { id: 'agent-general', label: 'General' },
       { id: 'agent-behavior', label: 'Security' },
       { id: 'agent-subagents', label: 'Subagents' },
@@ -87,7 +105,6 @@ export const SECTION_GROUPS: SectionDef[] = [
     scope: 'workspace',
     description: 'Settings for this project directory',
     subsections: [
-      { id: 'workspace-provider', label: 'Provider & Model' },
       { id: 'workspace-embeddings', label: 'Embeddings' },
       { id: 'workspace-mcp', label: 'MCP Servers' },
     ],
@@ -133,12 +150,10 @@ export function scopeToLayer(scope: SectionDef['scope']): 'session' | 'workspace
  */
 export function subsectionToLegacyTab(subsectionId: SettingsSubsection): SettingsSubTab {
   const map: Record<SettingsSubsection, SettingsSubTab> = {
-    'agent-provider': 'general',
     'agent-general': 'general',
     'agent-behavior': 'security',
     'agent-subagents': 'subagents',
     'agent-skills': 'skills',
-    'workspace-provider': 'general',
     'workspace-embeddings': 'embeddings',
     'workspace-mcp': 'mcp',
     'env-providers': 'providers',

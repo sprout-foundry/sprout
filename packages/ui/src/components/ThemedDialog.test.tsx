@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+
 import { showThemedPrompt, showThemedConfirm, showThemedAlert } from './ThemedDialog';
 
 // ---------------------------------------------------------------------------
@@ -5,7 +7,7 @@ import { showThemedPrompt, showThemedConfirm, showThemedAlert } from './ThemedDi
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -14,7 +16,7 @@ beforeEach(() => {
 
 describe('showThemedPrompt', () => {
   it('resolves to the entered string when user provides input', async () => {
-    const promptMock = jest.spyOn(window, 'prompt').mockReturnValue('my input');
+    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue('my input');
 
     const result = await showThemedPrompt('Enter value:', {
       title: 'Test',
@@ -27,7 +29,7 @@ describe('showThemedPrompt', () => {
   });
 
   it('resolves to null when user cancels (prompt returns null)', async () => {
-    const promptMock = jest.spyOn(window, 'prompt').mockReturnValue(null);
+    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue(null);
 
     const result = await showThemedPrompt('Enter value:');
 
@@ -36,7 +38,7 @@ describe('showThemedPrompt', () => {
   });
 
   it('uses empty string as default when no options provided', async () => {
-    const promptMock = jest.spyOn(window, 'prompt').mockReturnValue('typed');
+    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue('typed');
 
     await showThemedPrompt('What?');
 
@@ -44,7 +46,7 @@ describe('showThemedPrompt', () => {
   });
 
   it('uses empty string as default when defaultValue is undefined', async () => {
-    const promptMock = jest.spyOn(window, 'prompt').mockReturnValue('typed');
+    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue('typed');
 
     await showThemedPrompt('What?', { title: 'No default' });
 
@@ -52,7 +54,7 @@ describe('showThemedPrompt', () => {
   });
 
   it('returns the input even if empty string', async () => {
-    const promptMock = jest.spyOn(window, 'prompt').mockReturnValue('');
+    const promptMock = vi.spyOn(window, 'prompt').mockReturnValue('');
 
     const result = await showThemedPrompt('Enter:');
 
@@ -66,7 +68,7 @@ describe('showThemedPrompt', () => {
 
 describe('showThemedConfirm', () => {
   it('resolves to true when user confirms', async () => {
-    const confirmMock = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const result = await showThemedConfirm('Are you sure?');
 
@@ -75,7 +77,7 @@ describe('showThemedConfirm', () => {
   });
 
   it('resolves to false when user cancels', async () => {
-    const confirmMock = jest.spyOn(window, 'confirm').mockReturnValue(false);
+    const confirmMock = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     const result = await showThemedConfirm('Delete this?');
 
@@ -84,7 +86,7 @@ describe('showThemedConfirm', () => {
   });
 
   it('calls confirm with the message regardless of options type', async () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const result = await showThemedConfirm('Warning!', {
       title: 'Confirm',
@@ -95,7 +97,7 @@ describe('showThemedConfirm', () => {
   });
 
   it('calls confirm with message for error type', async () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(false);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     await showThemedConfirm('Error occurred', { type: 'error' });
 
@@ -103,7 +105,7 @@ describe('showThemedConfirm', () => {
   });
 
   it('calls confirm with message for danger type', async () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(false);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     await showThemedConfirm('Danger zone', { type: 'danger' });
 
@@ -111,7 +113,7 @@ describe('showThemedConfirm', () => {
   });
 
   it('calls confirm with message for info type', async () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     await showThemedConfirm('Info message', { type: 'info' });
 
@@ -125,7 +127,7 @@ describe('showThemedConfirm', () => {
 
 describe('showThemedAlert', () => {
   it('calls window.alert with the message', async () => {
-    const alertMock = jest.spyOn(window, 'alert').mockImplementation(() => {});
+    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await showThemedAlert('Hello world');
 
@@ -133,7 +135,7 @@ describe('showThemedAlert', () => {
   });
 
   it('resolves after alert is shown', async () => {
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     const result = await showThemedAlert('Done');
 
@@ -141,7 +143,7 @@ describe('showThemedAlert', () => {
   });
 
   it('calls alert with message regardless of options type', async () => {
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await showThemedAlert('Success!', { type: 'success', title: 'Alert' });
 
@@ -149,7 +151,7 @@ describe('showThemedAlert', () => {
   });
 
   it('calls alert with message for warning type', async () => {
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await showThemedAlert('Warning', { type: 'warning' });
 
@@ -157,7 +159,7 @@ describe('showThemedAlert', () => {
   });
 
   it('calls alert with message for error type', async () => {
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await showThemedAlert('Error', { type: 'error' });
 
@@ -165,7 +167,7 @@ describe('showThemedAlert', () => {
   });
 
   it('calls alert with message for info type', async () => {
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await showThemedAlert('Info', { type: 'info' });
 
@@ -173,7 +175,7 @@ describe('showThemedAlert', () => {
   });
 
   it('works without any options', async () => {
-    jest.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'alert').mockImplementation(() => {});
 
     await showThemedAlert('Simple alert');
 

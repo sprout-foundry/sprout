@@ -4,6 +4,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import { GitFileSection, getStatusIcon } from './GitFileSection';
 
 // ---------------------------------------------------------------------------
@@ -72,7 +73,7 @@ describe('getStatusIcon', () => {
 
 describe('GitFileSection', () => {
   const isStaged = (path: string) => path.endsWith('.staged');
-  const onFileClick = jest.fn();
+  const onFileClick = vi.fn();
 
   beforeEach(() => {
     onFileClick.mockClear();

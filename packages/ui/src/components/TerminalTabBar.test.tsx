@@ -2,12 +2,14 @@
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
 
+import { vi } from 'vitest';
+
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 // ── Mocks before importing the component ────────────────────────────────
 
-jest.mock('./ContextMenu', () => {
+vi.mock('./ContextMenu', () => {
   function MockContextMenu({ isOpen, children, onClose, x, y }: any) {
     if (!isOpen) return null;
     return createElement('div', {
@@ -41,7 +43,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -65,11 +67,11 @@ describe('TerminalTabBar', () => {
   const defaultProps = {
     sessions: defaultSessions,
     activeSessionId: 's1',
-    onSwitch: jest.fn(),
-    onCreate: jest.fn(),
-    onClose: jest.fn(),
-    onRename: jest.fn(),
-    onTogglePin: jest.fn(),
+    onSwitch: vi.fn(),
+    onCreate: vi.fn(),
+    onClose: vi.fn(),
+    onRename: vi.fn(),
+    onTogglePin: vi.fn(),
   };
 
   it('renders tab bar with role=tablist', () => {
@@ -115,7 +117,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('calls onSwitch when tab is clicked', () => {
-    const onSwitch = jest.fn();
+    const onSwitch = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
@@ -139,7 +141,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('calls onCreate when new session button is clicked', () => {
-    const onCreate = jest.fn();
+    const onCreate = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
@@ -161,9 +163,9 @@ describe('TerminalTabBar', () => {
         createElement(TerminalTabBar, {
           sessions: defaultSessions,
           activeSessionId: 's1',
-          onSwitch: jest.fn(),
-          onClose: jest.fn(),
-          onRename: jest.fn(),
+          onSwitch: vi.fn(),
+          onClose: vi.fn(),
+          onRename: vi.fn(),
         })
       );
     });
@@ -201,7 +203,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('calls onClose when close button is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
@@ -232,7 +234,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('Enter key commits rename', () => {
-    const onRename = jest.fn();
+    const onRename = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
@@ -319,7 +321,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('context menu close calls onClose', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
@@ -356,15 +358,15 @@ describe('TerminalTabBar', () => {
   });
 
   it('context menu close is disabled when only one session', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
           sessions: [{ id: 'single', name: 'Solo', is_pinned: false }],
           activeSessionId: 'single',
-          onSwitch: jest.fn(),
+          onSwitch: vi.fn(),
           onClose,
-          onRename: jest.fn(),
+          onRename: vi.fn(),
         })
       );
     });
@@ -428,7 +430,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('inactive sessions are disabled in dropdown', () => {
-    const onAttachSession = jest.fn();
+    const onAttachSession = vi.fn();
     const attachableSessions: AttachableSession[] = [
       { id: 'agent1', name: 'Agent 1', status: 'active' },
       { id: 'agent2', name: 'Agent 2', status: 'inactive' },
@@ -452,7 +454,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('calls onAttachSession when active session is clicked', () => {
-    const onAttachSession = jest.fn();
+    const onAttachSession = vi.fn();
     const attachableSessions: AttachableSession[] = [
       { id: 'agent1', name: 'Agent 1', status: 'active' },
     ];
@@ -478,7 +480,7 @@ describe('TerminalTabBar', () => {
   });
 
   it('context menu toggle pin calls onTogglePin', () => {
-    const onTogglePin = jest.fn();
+    const onTogglePin = vi.fn();
     act(() => {
       root.render(
         createElement(TerminalTabBar, {
@@ -529,9 +531,9 @@ describe('TerminalTabBar', () => {
         createElement(TerminalTabBar, {
           sessions: [],
           activeSessionId: '',
-          onSwitch: jest.fn(),
-          onClose: jest.fn(),
-          onRename: jest.fn(),
+          onSwitch: vi.fn(),
+          onClose: vi.fn(),
+          onRename: vi.fn(),
         })
       );
     });

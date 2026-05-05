@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -36,19 +37,43 @@ func handleEmbeddingIndex(ctx context.Context, a *Agent, args map[string]interfa
 	}
 }
 
+// handleEmbeddingIndexBuild starts an index build in a background goroutine
+// so it does not block the HTTP handler. It returns immediately with a
+// confirmation message and emits progress events via the event bus as the
+// build proceeds.
 func handleEmbeddingIndexBuild(ctx context.Context, a *Agent, em *embedding.EmbeddingManager) (string, error) {
-	stats, err := em.BuildIndex(ctx)
-	if err != nil {
-		return "", fmt.Errorf("index build failed: %w", err)
-	}
+	// Run the build in the background via the manager's non-blocking API.
+	resultCh := em.BuildIndexBackground(ctx)
 
-	var sb strings.Builder
-	sb.WriteString("✅ Embedding index built successfully.\n")
-	sb.WriteString(fmt.Sprintf("  Files processed: %d\n", stats.FilesProcessed))
-	sb.WriteString(fmt.Sprintf("  Code units extracted: %d\n", stats.UnitsExtracted))
-	sb.WriteString(fmt.Sprintf("  Code units embedded: %d\n", stats.UnitsEmbedded))
-	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration.Round(time.Millisecond)))
-	return sb.String(), nil
+	// Publish a start event so the UI knows a build is underway.
+	a.PublishToolExecution("embedding_index", "build_started", map[string]interface{}{
+		"status":  "running",
+		"message": "Index build started in background",
+	})
+
+	// Launch a goroutine to collect the result and report it without blocking
+	// the HTTP response.
+	go func() {
+		result := <-resultCh
+		if result.Err != nil {
+			log.Printf("embedding: index build failed: %v", result.Err)
+			a.PublishToolExecution("embedding_index", "build_failed", map[string]interface{}{
+				"error": result.Err.Error(),
+			})
+			return
+		}
+
+		stats := result.Stats
+		a.PublishToolExecution("embedding_index", "build_completed", map[string]interface{}{
+			"filesProcessed":  stats.FilesProcessed,
+			"unitsExtracted":  stats.UnitsExtracted,
+			"unitsEmbedded":   stats.UnitsEmbedded,
+			"duration":        stats.Duration.String(),
+			"durationSeconds": stats.Duration.Seconds(),
+		})
+	}()
+
+	return "Index build started in background. Progress will be reported via events.", nil
 }
 
 func handleEmbeddingIndexUpdate(ctx context.Context, a *Agent, em *embedding.EmbeddingManager) (string, error) {

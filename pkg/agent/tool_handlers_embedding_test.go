@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -266,16 +267,20 @@ func TestHandleEmbeddingIndexBuild_InitError(t *testing.T) {
 	os.Unsetenv("ONNXRUNTIME_LIB")
 	agent.embeddingMgr = em
 
+	// The build now runs in background; handleEmbeddingIndexBuild returns
+	// immediately with a confirmation message. The Init failure will be
+	// reported via a build_failed event in the background goroutine.
 	result, err := handleEmbeddingIndexBuild(context.Background(), agent, em)
-	if err == nil {
-		t.Fatal("expected error when Init fails")
+	if err != nil {
+		t.Fatalf("handleEmbeddingIndexBuild should return immediately without error, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "index build failed") {
-		t.Errorf("expected 'index build failed' in error, got: %v", err)
+	if !strings.Contains(result, "background") {
+		t.Errorf("expected background message, got: %s", result)
 	}
-	if result != "" {
-		t.Errorf("expected empty result on error, got: %s", result)
-	}
+
+	// Wait briefly for the background goroutine to complete and verify
+	// the build_failed event was published.
+	time.Sleep(100 * time.Millisecond)
 }
 
 // ─── handleEmbeddingIndexUpdate error path ───

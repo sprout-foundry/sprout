@@ -466,12 +466,35 @@ export function useEditorFileIO(
       return;
     }
 
+    // ── Skip if same buffer already loaded ───────────────────────────
+    // This guard applies to ALL buffer types (file, chat, diff, review,
+    // workspace). Without it, non-file and workspace buffers would have
+    // their editor content replaced on every keystroke because
+    // updateBufferContent creates a new buffer object each time.
+    if (currentBufferIdRef.current === buffer.id) {
+      return;
+    }
+
+    // Set current buffer tracking BEFORE any early returns below
+    currentBufferIdRef.current = buffer.id;
+
+    // Skip if same buffer and same file already loaded (covers switching
+    // away and back to the same buffer).
+    if (
+      lastLoadedRef.current &&
+      lastLoadedRef.current.bufferId === buffer.id &&
+      lastLoadedRef.current.filePath === buffer.file.path
+    ) {
+      return;
+    }
+
+    lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
+
     if (buffer.kind !== 'file') {
       const nextContent = buffer.content || '';
       setLocalContent(nextContent);
       setSelectionInfo(null);
       setError(null);
-      lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
       if (viewRef.current) {
         viewRef.current.dispatch({
           changes: { from: 0, to: viewRef.current.state.doc.length, insert: nextContent },
@@ -490,8 +513,6 @@ export function useEditorFileIO(
       setLocalContent(nextContent);
       setSelectionInfo(null);
       setError(null);
-      lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
-      currentBufferIdRef.current = buffer.id;
       if (viewRef.current) {
         viewRef.current.dispatch({
           changes: { from: 0, to: viewRef.current.state.doc.length, insert: nextContent },
@@ -504,24 +525,6 @@ export function useEditorFileIO(
       return;
     }
 
-    // Skip if same buffer already tracked
-    if (currentBufferIdRef.current === buffer.id) {
-      return;
-    }
-
-    currentBufferIdRef.current = buffer.id;
-
-    // Skip if same buffer and same file already loaded
-    if (
-      lastLoadedRef.current &&
-      lastLoadedRef.current.bufferId === buffer.id &&
-      lastLoadedRef.current.filePath === buffer.file.path
-    ) {
-      return;
-    }
-
-    lastLoadedRef.current = { bufferId: buffer.id, filePath: buffer.file.path };
-
     // Skip loading content for binary/media buffers — they are rendered by
     // dedicated viewers that fetch the file themselves as blobs.
     const fileExt = buffer.file.ext?.toLowerCase();
@@ -532,7 +535,7 @@ export function useEditorFileIO(
     if (loadFileRef.current) {
       loadFileRef.current(buffer.file.path);
     }
-  }, [buffer?.id, buffer?.file?.path, buffer?.kind, buffer?.content, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buffer?.id, buffer?.file?.path, buffer?.kind, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── External file change listener ──────────────────────────────
   // Shows conflict dialog when the buffer has unsaved changes and the
@@ -643,7 +646,7 @@ export function useEditorFileIO(
 
     document.addEventListener('file_externally_modified', handleExternalChange);
     return () => document.removeEventListener('file_externally_modified', handleExternalChange);
-  }, [buffer, clearBufferExternallyModified, setBufferExternallyModified, openWorkspaceBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buffer?.id, buffer?.kind, buffer?.file?.path, clearBufferExternallyModified, setBufferExternallyModified, openWorkspaceBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-reload sync listener ──────────────────────────────────
   // Syncs the CodeMirror view when a clean buffer is auto-reloaded
@@ -701,7 +704,7 @@ export function useEditorFileIO(
 
     document.addEventListener('file:auto-reloaded', handleAutoReloaded);
     return () => document.removeEventListener('file:auto-reloaded', handleAutoReloaded);
-  }, [buffer, applyIndentDetection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buffer?.id, applyIndentDetection]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync original content to unsaved-line highlight extension ──
   useEffect(() => {

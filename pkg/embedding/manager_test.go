@@ -394,8 +394,16 @@ func TestEmbeddingManager_Init_FailsWithOnlyEnvVar_BadPath(t *testing.T) {
 	}
 	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
 
-	// Set env var to a non-existent path.
+	// Set env var to a non-existent path and disable download fallback so
+	// resolution must fail (we're testing the error path, not auto-download).
 	t.Setenv("ONNXRUNTIME_LIB", "/nonexistent/libonnx.so")
+	t.Setenv("SPROUT_NO_DOWNLOAD", "1")
+
+	// Override config dir to a temp dir without any cached ORT library,
+	// so our cache-first priority doesn't accidentally succeed.
+	tmpDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
 
 	err := mgr.Init(context.Background())
 	if err == nil {

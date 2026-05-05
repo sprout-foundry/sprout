@@ -3,6 +3,18 @@
    mounted inside .sidebar so all selectors are sidebar-scoped
    ================================================================ */
 
+/* ── Root container ─────────────────────────────────────────── */
+.sidebar .settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ── Credentials standalone panel ───────────────────────────── */
+.sidebar .settings-credentials-link {
+  margin-top: var(--space-3);
+}
+
 /* ── Collapsible sections ─────────────────────────────────── */
 .sidebar .settings-section {
   border: 1px solid var(--border-subtle);

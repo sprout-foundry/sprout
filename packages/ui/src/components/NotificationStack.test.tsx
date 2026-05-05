@@ -2,6 +2,8 @@
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
 
+import { vi } from 'vitest';
+
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import NotificationStack from './NotificationStack';
@@ -17,15 +19,15 @@ let root: Root;
 beforeEach(() => {
   // @ts-expect-error — assigning to undeclared globalThis property for React act() mode
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  jest.useFakeTimers();
+  vi.useFakeTimers();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  vi.useRealTimers();
   act(() => {
     root?.unmount();
   });
@@ -53,7 +55,7 @@ describe('NotificationStack', () => {
     act(() => {
       root.render(createElement(NotificationStack, {
         notifications: [],
-        onDismiss: jest.fn(),
+        onDismiss: vi.fn(),
       }));
     });
 
@@ -62,7 +64,7 @@ describe('NotificationStack', () => {
 
   it('renders notification-container when there are notifications', () => {
     const notifications = [makeNotification()];
-    const onDismiss = jest.fn();
+    const onDismiss = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationStack, {
@@ -79,7 +81,7 @@ describe('NotificationStack', () => {
     act(() => {
       root.render(createElement(NotificationStack, {
         notifications: [makeNotification()],
-        onDismiss: jest.fn(),
+        onDismiss: vi.fn(),
       }));
     });
 
@@ -93,7 +95,7 @@ describe('NotificationStack', () => {
       makeNotification({ id: 'n1', type: 'info', title: 'First', message: 'msg1' }),
       makeNotification({ id: 'n2', type: 'error', title: 'Second', message: 'msg2' }),
     ];
-    const onDismiss = jest.fn();
+    const onDismiss = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationStack, {
@@ -119,7 +121,7 @@ describe('NotificationStack', () => {
 
   it('passes onDismiss to child NotificationItems', () => {
     const notifications = [makeNotification({ id: 'test-dispatch' })];
-    const onDismiss = jest.fn();
+    const onDismiss = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationStack, {
@@ -135,7 +137,7 @@ describe('NotificationStack', () => {
 
     // Allow exit animation to complete
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onDismiss).toHaveBeenCalledWith('test-dispatch');
@@ -145,7 +147,7 @@ describe('NotificationStack', () => {
     act(() => {
       root.render(createElement(NotificationStack, {
         notifications: [makeNotification()],
-        onDismiss: jest.fn(),
+        onDismiss: vi.fn(),
         className: 'custom-overlay',
       }));
     });
@@ -158,7 +160,7 @@ describe('NotificationStack', () => {
     act(() => {
       root.render(createElement(NotificationStack, {
         notifications: [makeNotification()],
-        onDismiss: jest.fn(),
+        onDismiss: vi.fn(),
       }));
     });
 
@@ -174,13 +176,13 @@ describe('NotificationStack', () => {
     act(() => {
       root.render(createElement(NotificationStack, {
         notifications,
-        onDismiss: jest.fn(),
+        onDismiss: vi.fn(),
       }));
     });
 
     // The NotificationItem should auto-dismiss after 3s + exit animation
     // We can verify this by advancing timers
-    const onDismiss = jest.fn();
+    const onDismiss = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationStack, {
@@ -191,16 +193,16 @@ describe('NotificationStack', () => {
 
     // No auto-dismiss before duration
     act(() => {
-      jest.advanceTimersByTime(2999);
+      vi.advanceTimersByTime(2999);
     });
     expect(onDismiss).not.toHaveBeenCalled();
 
     // After duration
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
     expect(onDismiss).toHaveBeenCalledWith('dur-test');
   });
@@ -216,7 +218,7 @@ describe('NotificationStack', () => {
     act(() => {
       root.render(createElement(NotificationStack, {
         notifications,
-        onDismiss: jest.fn(),
+        onDismiss: vi.fn(),
       }));
     });
 
@@ -227,7 +229,7 @@ describe('NotificationStack', () => {
   });
 
   it('handles updates: removing a notification from the array', () => {
-    const onDismiss = jest.fn();
+    const onDismiss = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationStack, {

@@ -1,25 +1,26 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import FileTree from './FileTree';
 import type { FileTreeProps, FileTreeHandle } from './FileTree';
 import type { FileInfo } from '../types/file-tree';
 
 // ── Mock dependencies ────────────────────────────────────────────────
 
-jest.mock('./ThemedDialog', () => ({
-  showThemedConfirm: jest.fn().mockResolvedValue(true),
-  showThemedPrompt: jest.fn().mockResolvedValue('new-name'),
+vi.mock('./ThemedDialog', () => ({
+  showThemedConfirm: vi.fn().mockResolvedValue(true),
+  showThemedPrompt: vi.fn().mockResolvedValue('new-name'),
 }));
 
-jest.mock('../utils/log', () => ({
-  debugLog: jest.fn(),
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
 }));
 
-jest.mock('../utils/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/clipboard', () => ({
+  copyToClipboard: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../utils/fuzzyMatch', () => ({
+vi.mock('../utils/fuzzyMatch', () => ({
   fuzzyScore: (query: string, label: string) => {
     if (!query) return { score: 0, matches: [] };
     if (label.toLowerCase().includes(query.toLowerCase())) {
@@ -42,7 +43,7 @@ jest.mock('../utils/fuzzyMatch', () => ({
   },
 }));
 
-jest.mock('../hooks/useMultiSelect', () => {
+vi.mock('../hooks/useMultiSelect', () => {
   const createMock = () => {
     const state = {
       selectedPaths: new Set<string>(),
@@ -51,17 +52,17 @@ jest.mock('../hooks/useMultiSelect', () => {
       isBatchBusy: false,
     };
     const actions = {
-      togglePath: jest.fn(),
-      rangeSelect: jest.fn(),
-      clearSelection: jest.fn(),
-      selectAll: jest.fn(),
-      handleNormalClick: jest.fn(),
-      handleCtrlClick: jest.fn(),
-      handleShiftClick: jest.fn(),
-      isSelected: jest.fn().mockReturnValue(false),
-      setBatchProgress: jest.fn(),
-      setBatchBusy: jest.fn(),
-      setSelectedPaths: jest.fn(),
+      togglePath: vi.fn(),
+      rangeSelect: vi.fn(),
+      clearSelection: vi.fn(),
+      selectAll: vi.fn(),
+      handleNormalClick: vi.fn(),
+      handleCtrlClick: vi.fn(),
+      handleShiftClick: vi.fn(),
+      isSelected: vi.fn().mockReturnValue(false),
+      setBatchProgress: vi.fn(),
+      setBatchBusy: vi.fn(),
+      setSelectedPaths: vi.fn(),
     };
     return [state, actions];
   };
@@ -72,10 +73,10 @@ jest.mock('../hooks/useMultiSelect', () => {
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
-    getItem: jest.fn((key: string) => store[key] ?? null),
-    setItem: jest.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: jest.fn((key: string) => { delete store[key]; }),
-    clear: jest.fn(() => { store = {}; }),
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+    clear: vi.fn(() => { store = {}; }),
   };
 })();
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
@@ -102,7 +103,7 @@ describe('FileTree', () => {
       root.unmount();
     });
     container.remove();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   const makeFiles = (): FileInfo[] => [
@@ -114,7 +115,7 @@ describe('FileTree', () => {
   ];
 
   const baseProps: FileTreeProps = {
-    onFileSelect: jest.fn(),
+    onFileSelect: vi.fn(),
     files: makeFiles(),
   };
 
@@ -143,7 +144,7 @@ describe('FileTree', () => {
   });
 
   it('calls onFileSelect when a file is clicked', () => {
-    const onFileSelect = jest.fn();
+    const onFileSelect = vi.fn();
     const ref: { current: FileTreeHandle | null } = { current: null };
     act(() => {
       root.render(createElement(FileTree, {
@@ -166,7 +167,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -186,7 +187,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -200,7 +201,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: [],
       }));
     });
@@ -214,7 +215,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -232,7 +233,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -245,7 +246,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -258,7 +259,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -272,7 +273,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -286,7 +287,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });
@@ -306,7 +307,7 @@ describe('FileTree', () => {
     act(() => {
       root.render(createElement(FileTree, {
         ref,
-        onFileSelect: jest.fn(),
+        onFileSelect: vi.fn(),
         files: makeFiles(),
       }));
     });

@@ -4,6 +4,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import ContextMenu from './ContextMenu';
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -51,7 +52,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('ContextMenu', () => {
-  const onClose = jest.fn();
+  const onClose = vi.fn();
 
   it('returns null when isOpen is false', () => {
     act(() => {

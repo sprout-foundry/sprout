@@ -2,12 +2,14 @@
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
 
+import { vi } from 'vitest';
+
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 // ── Mocks before importing the component ────────────────────────────────
 
-jest.mock('./TerminalPane', () => {
+vi.mock('./TerminalPane', () => {
   function MockTerminalPane({ sessionId, fontSize, isActive, themePack, createConnection, createWasmShell }: any) {
     return createElement('div', {
       className: 'mock-terminal-pane',
@@ -18,7 +20,7 @@ jest.mock('./TerminalPane', () => {
   return { __esModule: true, default: MockTerminalPane };
 });
 
-jest.mock('./TerminalTabBar', () => {
+vi.mock('./TerminalTabBar', () => {
   function MockTerminalTabBar({ sessions, activeSessionId, onSwitch, onClose, onRename, onTogglePin, onCreate }: any) {
     return createElement('div', {
       className: 'mock-terminal-tab-bar',
@@ -36,8 +38,8 @@ jest.mock('./TerminalTabBar', () => {
   return { __esModule: true, default: MockTerminalTabBar };
 });
 
-jest.mock('../utils/log', () => ({
-  debugLog: jest.fn(),
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
 }));
 
 import Terminal from './Terminal';
@@ -50,10 +52,10 @@ let root: Root;
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   const mock = {
-    getItem: jest.fn((key: string) => store[key] ?? null),
-    setItem: jest.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: jest.fn((key: string) => { delete store[key]; }),
-    clear: jest.fn(() => { store = {}; }),
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+    clear: vi.fn(() => { store = {}; }),
   };
   // Expose store externally so tests can reset it
   Object.defineProperty(mock, 'store', {
@@ -77,7 +79,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   // @ts-expect-error — mock localStorage
   Object.defineProperty(window, 'localStorage', { value: localStorageMock, writable: true });
 });
@@ -92,10 +94,10 @@ afterEach(() => {
 // ── Tests: Terminal ──────────────────────────────────────────────────────
 
 describe('Terminal', () => {
-  let onToggleExpand: jest.Mock;
+  let onToggleExpand: vi.Mock;
 
   beforeEach(() => {
-    onToggleExpand = jest.fn();
+    onToggleExpand = vi.fn();
     // Reset the localStorage store between tests
     (localStorageMock as any).store = {};
   });

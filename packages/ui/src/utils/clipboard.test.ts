@@ -1,7 +1,8 @@
+import { vi } from 'vitest';
 import { copyToClipboard } from './clipboard';
 
 // Mock navigator.clipboard for testing
-const mockWriteText = jest.fn();
+const mockWriteText = vi.fn();
 const originalClipboard = (global as any).navigator?.clipboard;
 
 beforeEach(() => {

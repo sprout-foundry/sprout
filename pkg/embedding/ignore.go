@@ -1,8 +1,10 @@
 package embedding
 
 import (
+	"context"
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,22 +103,63 @@ func hasSupportedExtension(path string) bool {
 
 // WalkCodeFiles walks the directory tree rooted at root and returns all file
 // paths that should be indexed (i.e., those that pass ShouldIgnorePath). Only
-// files with recognized extensions (.go, .ts, .tsx, .js, .jsx, .mjs) are
+// files with recognized extensions (.go, .ts, .tsx, .js, .tsx, .mjs, .py) are
 // included. Directories matching Layer 1 skip patterns are pruned (no recursion).
-func WalkCodeFiles(root string) ([]string, error) {
+//
+// It accepts a context for cancellation and applies three protections:
+//  - A 30-second absolute timeout (WalkTimeout).
+//  - A maximum directory depth of 15 (MaxDepth).
+//  - A cap of 10,000 collected files (MaxFileCount).
+//
+// Progress is logged every ProgressInterval files.
+// If the context is cancelled or any limit is hit, the files collected so far
+// are returned with no error (partial result).
+func WalkCodeFiles(ctx context.Context, root string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(ctx, WalkTimeout)
+	defer cancel()
+
 	var files []string
+	root = filepath.Clean(root)
+
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		// Check context on every callback to exit early on timeout/cancellation.
+		if err := ctx.Err(); err != nil {
+			if err == context.DeadlineExceeded {
+				log.Printf("embedding: walk timed out after %d files (limit %d)", len(files), MaxFileCount)
+			} else {
+				log.Printf("embedding: walk cancelled after %d files: %v", len(files), err)
+			}
+			// Return the sentinel to stop the walk.
+			return ctx.Err()
+		}
+
 		if err != nil {
 			return nil // skip unreadable entries silently
 		}
 
-		// Prune directories that match Layer 1 skip list.
+		// Enforce maximum directory depth.
 		if d.IsDir() {
+			rel, rerr := filepath.Rel(root, path)
+			if rerr != nil {
+				return nil
+			}
+			depth := strings.Count(rel, string(filepath.Separator))
+			if depth >= MaxDepth {
+				return filepath.SkipDir
+			}
+
+			// Prune directories that match Layer 1 skip list.
 			name := d.Name()
 			if skipDirs[name] {
 				return filepath.SkipDir
 			}
 			return nil
+		}
+
+		// Enforce file count cap.
+		if len(files) >= MaxFileCount {
+			log.Printf("embedding: walk file limit reached (%d files), stopping walk", MaxFileCount)
+			return fmt.Errorf("embedding: walk file limit reached (%d)", MaxFileCount)
 		}
 
 		// Only collect recognized source files.
@@ -130,11 +173,27 @@ func WalkCodeFiles(root string) ([]string, error) {
 		}
 
 		files = append(files, path)
+
+		// Emit progress log every ProgressInterval files.
+		if len(files)%ProgressInterval == 0 {
+			log.Printf("embedding: walk progress: %d files collected", len(files))
+		}
+
 		return nil
 	})
+
+	// Walk returns context.Canceled, context.DeadlineExceeded, or our file-limit
+	// error when we stop early. In those cases we return the partial results.
 	if err != nil {
+		if err == context.Canceled || err == context.DeadlineExceeded {
+			return files, nil
+		}
+		if strings.Contains(err.Error(), "walk file limit reached") {
+			return files, nil
+		}
 		return nil, fmt.Errorf("embedding: walk %s: %w", root, err)
 	}
+
 	return files, nil
 }
 

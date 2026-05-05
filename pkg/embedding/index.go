@@ -56,7 +56,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	start := time.Now()
 	stats := &IndexStats{}
 
-	files, err := WalkCodeFiles(rootDir)
+	files, err := WalkCodeFiles(ctx, rootDir)
 	if err != nil {
 		return nil, fmt.Errorf("index: walk %s: %w", rootDir, err)
 	}
@@ -65,7 +65,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	for _, path := range files {
 		if err := ctx.Err(); err != nil {
 			stats.Duration = time.Since(start)
-			return stats, fmt.Errorf("index: cancelled")
+			return stats, fmt.Errorf("index: cancelled during file extraction")
 		}
 
 		units, err := ExtractFromFile(path, WithIncludeTests(m.opts.IncludeTests))
@@ -75,6 +75,11 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 		stats.FilesProcessed++
 		allUnits = append(allUnits, units...)
+
+		// Log progress every ProgressInterval files processed.
+		if stats.FilesProcessed%ProgressInterval == 0 {
+			log.Printf("index: extraction progress: %d files, %d units", stats.FilesProcessed, len(allUnits))
+		}
 	}
 
 	stats.UnitsExtracted = len(allUnits)
@@ -89,11 +94,16 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		return stats, fmt.Errorf("index: embed units: %w", err)
 	}
 
-	stats.UnitsEmbedded = len(records)
-
 	// Store in batches to avoid overwhelming the store.
+	// On context cancellation, store what we can and return partial results.
 	const storeBatch = 128
+	stored := 0
 	for i := 0; i < len(records); i += storeBatch {
+		if err := ctx.Err(); err != nil {
+			// Partial store — log and return what we have so far.
+			log.Printf("index: store interrupted after %d/%d records: %v", stored, len(records), err)
+			break
+		}
 		end := i + storeBatch
 		if end > len(records) {
 			end = len(records)
@@ -101,7 +111,10 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		if err := m.store.Store(records[i:end]); err != nil {
 			return stats, fmt.Errorf("index: store batch %d-%d: %w", i, end, err)
 		}
+		stored += end - i
 	}
+
+	stats.UnitsEmbedded = stored
 
 	stats.Duration = time.Since(start)
 	return stats, nil
@@ -157,13 +170,18 @@ func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, top
 }
 
 // embedUnits converts CodeUnits to text, batch-embeds, and returns VectorRecords.
+// On context cancellation (timeout), it returns partial results instead of an error
+// so that the caller can store whatever was processed so far.
 func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]VectorRecord, error) {
 	now := time.Now()
 	var records []VectorRecord
 
 	for i := 0; i < len(units); i += m.opts.BatchSize {
 		if err := ctx.Err(); err != nil {
-			return records, fmt.Errorf("index: cancelled during embedding")
+			// Graceful degradation: return partial results on timeout/cancellation.
+			log.Printf("index: embedding interrupted after %d records (%d total units): %v",
+				len(records), len(units), err)
+			return records, nil
 		}
 
 		end := i + m.opts.BatchSize
@@ -184,6 +202,11 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 
 		for j, u := range batch {
 			records = append(records, codeUnitToRecord(u, vecs[j], now))
+		}
+
+		// Log progress every ProgressInterval records embedded.
+		if len(records)%ProgressInterval == 0 {
+			log.Printf("index: embedding progress: %d/%d records", len(records), len(units))
 		}
 	}
 

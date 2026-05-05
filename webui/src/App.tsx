@@ -1469,6 +1469,7 @@ function App() {
               });
           return {
             ...prev,
+            isConnected: true,
             isProcessing: backendProcessing,
             queryProgress: backendProcessing ? prev.queryProgress : null,
             lastError: null,

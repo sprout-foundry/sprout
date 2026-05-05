@@ -39,6 +39,7 @@ function SettingsPanel({
   onRequestProviderSetup,
   editorPreferences,
   onEditorPreferenceChanged,
+  agentConfig,
 }: SettingsPanelProps): JSX.Element {
   // Track settings ref for async mutation callbacks
   const settingsRef = useRef<SproutSettings | null>(settings);
@@ -180,13 +181,6 @@ function SettingsPanel({
 
     switch (subsectionId) {
       /* ── Agent section ─────────────────────────────── */
-      case 'agent-provider':
-        return (
-          <div className="settings-empty">
-            Provider &amp; Model selection — coming soon
-          </div>
-        );
-
       case 'agent-general':
         return (
           <AgentBehaviorSettingsTab
@@ -232,13 +226,6 @@ function SettingsPanel({
         );
 
       /* ── Workspace section ─────────────────────────── */
-      case 'workspace-provider':
-        return (
-          <div className="settings-empty">
-            Provider &amp; Model selection — coming soon
-          </div>
-        );
-
       case 'workspace-embeddings':
         return (
           <EmbeddingSettingsTab
@@ -387,6 +374,67 @@ function SettingsPanel({
           {expandedSections.has(section.id) && (
             <div className="settings-section-body">
               <p className="settings-section-desc">{section.description}</p>
+
+              {/* Agent config selectors (Provider, Model, Persona) */}
+              {section.id === 'agent' && agentConfig && (
+                <div className="agent-config-body">
+                  <div className="config-item">
+                    <label htmlFor="provider-select">Provider:</label>
+                    <select
+                      id="provider-select"
+                      value={agentConfig.selectedProvider}
+                      onChange={(e) => agentConfig.onProviderChange(e.target.value)}
+                      disabled={!agentConfig.isConnected || agentConfig.isLoadingProviders}
+                      className="styled-select"
+                    >
+                      {agentConfig.providers.length === 0 && (
+                        <option value="">{agentConfig.isLoadingProviders ? 'Loading providers...' : 'No providers available'}</option>
+                      )}
+                      {agentConfig.providers.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="config-item">
+                    <label htmlFor="model-select">Model:</label>
+                    <select
+                      id="model-select"
+                      value={agentConfig.selectedModel}
+                      onChange={(e) => agentConfig.onModelChange(e.target.value)}
+                      disabled={!agentConfig.isConnected || agentConfig.availableModels.length === 0}
+                      className="styled-select"
+                    >
+                      {agentConfig.availableModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="config-item">
+                    <label htmlFor="persona-select">Persona:</label>
+                    <select
+                      id="persona-select"
+                      value={agentConfig.selectedPersona}
+                      onChange={(e) => agentConfig.onPersonaChange(e.target.value)}
+                      disabled={!agentConfig.isConnected || agentConfig.isLoadingPersonas}
+                      className="styled-select"
+                    >
+                      {agentConfig.isLoadingPersonas ? (
+                        <option value="">Loading personas...</option>
+                      ) : (
+                        agentConfig.personas.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Subsection buttons */}
               <div className="settings-subsection-list">

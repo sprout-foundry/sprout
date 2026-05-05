@@ -171,6 +171,39 @@ func (ws *ReactWebServer) getConfigManager(r *http.Request, w http.ResponseWrite
 	return cm
 }
 
+// resolveConfigManagerQuietly is like getConfigManager but does NOT write any
+// response to the http.ResponseWriter. It returns nil when the config manager
+// cannot be resolved (e.g. no agent, config dir unavailable).
+//
+// This is useful for read-only checks where writing an error response would
+// corrupt the response stream before the caller has a chance to send its own
+// response.
+func (ws *ReactWebServer) resolveConfigManagerQuietly(r *http.Request) *configuration.Manager {
+	clientID := ws.resolveClientID(r)
+	agentInst, err := ws.getClientAgent(clientID)
+	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
+		return agentInst.GetConfigManager()
+	}
+
+	// Fallback: create a config manager using layered approach.
+	configBase, configErr := configuration.GetConfigDir()
+	if configErr != nil {
+		return nil
+	}
+
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	var workspaceDir string
+	if workspaceRoot != "" {
+		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+	}
+
+	cm, createErr := configuration.NewManagerWithLayers(configBase, workspaceDir)
+	if createErr != nil {
+		return nil
+	}
+	return cm
+}
+
 // ---------------------------------------------------------------------------
 // Validation helpers
 // ---------------------------------------------------------------------------

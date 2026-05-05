@@ -347,27 +347,6 @@ function Sidebar({
     }
   }, [providers, selectedProvider, finalSelectedModel]);
 
-  const handleProviderChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const newProvider = e.target.value;
-    setSelectedProvider(newProvider);
-    onProviderChange?.(newProvider);
-  };
-
-  const handleModelChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const newModel = e.target.value;
-    // Only update if the model actually changed
-    if (newModel !== finalSelectedModel) {
-      setSelectedModelState(newModel);
-      onModelChange?.(newModel);
-    }
-  };
-
-  const handlePersonaChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const newPersona = e.target.value;
-    setSelectedPersonaState(newPersona);
-    onPersonaChange?.(newPersona);
-  };
-
   // Load personas from the backend
   useEffect(() => {
     if (!isConnected || !supportsSettings) return;
@@ -926,65 +905,7 @@ function Sidebar({
           </div>
         </div>
 
-        <div className="section">
-          <h4>Agent Config</h4>
-          <div className="config-item">
-            <label htmlFor="provider-select">Provider:</label>
-            <select
-              id="provider-select"
-              value={selectedProvider}
-              onChange={handleProviderChange}
-              disabled={!isConnected || isLoadingProviders}
-              className="styled-select"
-            >
-              {providers.length === 0 && (
-                <option value="">{isLoadingProviders ? 'Loading providers...' : 'No providers available'}</option>
-              )}
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="config-item">
-            <label htmlFor="model-select">Model:</label>
-            <select
-              id="model-select"
-              value={finalSelectedModel}
-              onChange={handleModelChange}
-              disabled={!isConnected || finalAvailableModels.length === 0}
-              className="styled-select"
-            >
-              {finalAvailableModels.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="config-item">
-            <label htmlFor="persona-select">Persona:</label>
-            <select
-              id="persona-select"
-              value={selectedPersonaState}
-              onChange={handlePersonaChange}
-              disabled={!isConnected || isLoadingPersonas}
-              className="styled-select"
-            >
-              {isLoadingPersonas ? (
-                <option value="">Loading personas...</option>
-              ) : (
-                personas.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        </div>
-
+        {/* Agent Config moved into SettingsPanel (Agent section body) */}
         <SettingsPanel
           settings={settings}
           onSettingsChanged={(s) => setSettings(s)}
@@ -994,6 +915,20 @@ function Sidebar({
             if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
             if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
             if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
+          }}
+          agentConfig={{
+            selectedProvider,
+            selectedModel: finalSelectedModel,
+            selectedPersona: selectedPersonaState,
+            providers: providers.map((p) => ({ id: p.id, name: p.name })),
+            availableModels: finalAvailableModels,
+            personas: personas.map((p) => ({ id: p.id, name: p.name })),
+            isLoadingProviders,
+            isLoadingPersonas,
+            isConnected,
+            onProviderChange: (val: string) => { setSelectedProvider(val); onProviderChange?.(val); },
+            onModelChange: (val: string) => { if (val !== finalSelectedModel) { setSelectedModelState(val); onModelChange?.(val); } },
+            onPersonaChange: (val: string) => { setSelectedPersonaState(val); onPersonaChange?.(val); },
           }}
         />
       </>

@@ -4,6 +4,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import CommandPalette, {
   type CommandDef,
 } from './CommandPalette';
@@ -28,7 +29,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -49,10 +50,10 @@ function setInputValue(input: HTMLInputElement, value: string) {
 // ---------------------------------------------------------------------------
 
 describe('CommandPalette', () => {
-  const onClose = jest.fn();
-  const onOpenFile = jest.fn();
-  const onExecuteCommand = jest.fn();
-  const onNavigateToLine = jest.fn();
+  const onClose = vi.fn();
+  const onOpenFile = vi.fn();
+  const onExecuteCommand = vi.fn();
+  const onNavigateToLine = vi.fn();
 
   const defaultCommands: CommandDef[] = [
     { id: 'cmd1', label: 'New File', category: 'File' },
@@ -228,8 +229,8 @@ describe('CommandPalette', () => {
   });
 
   it('triggers file search when searching in files mode', () => {
-    jest.useFakeTimers();
-    const searchFilesMock = jest.fn().mockResolvedValue([
+    vi.useFakeTimers();
+    const searchFilesMock = vi.fn().mockResolvedValue([
       { name: 'test.txt', path: 'src/test.txt', type: 'file' },
     ]);
 
@@ -250,16 +251,16 @@ describe('CommandPalette', () => {
 
     // Advance past the debounce delay (150ms) so the search fires
     act(() => {
-      jest.advanceTimersByTime(150);
+      vi.advanceTimersByTime(150);
     });
 
     expect(searchFilesMock).toHaveBeenCalled();
 
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it('calls onNavigateToLine when a symbol result is clicked', () => {
-    const searchSymbolsMock = jest.fn().mockReturnValue([
+    const searchSymbolsMock = vi.fn().mockReturnValue([
       { name: 'myFunction', kind: 'function', line: 42 },
     ]);
 

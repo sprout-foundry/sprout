@@ -1,7 +1,8 @@
+import { vi } from 'vitest';
 import { notificationBus } from './notificationBus';
 
 describe('notificationBus', () => {
-  let listeners: Array<jest.Mock>;
+  let listeners: Array<ReturnType<typeof vi.fn>>;
 
   beforeEach(() => {
     listeners = [];
@@ -14,7 +15,7 @@ describe('notificationBus', () => {
   });
 
   const createListener = () => {
-    const listener = jest.fn();
+    const listener = vi.fn();
     listeners.push(listener);
     return listener;
   };
@@ -77,10 +78,10 @@ describe('notificationBus', () => {
     });
 
     it('logs to console based on type', () => {
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleInfoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+      const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       notificationBus.notify('error', 'Error', 'Error message');
       expect(consoleErrorSpy).toHaveBeenCalledWith('[Notification] Error: Error message');
@@ -222,7 +223,7 @@ describe('notificationBus', () => {
 
   describe('multiple listeners', () => {
     it('all listeners receive events', () => {
-      const listeners: Array<jest.Mock> = [];
+      const listeners: Array<ReturnType<typeof vi.fn>> = [];
       for (let i = 0; i < 10; i++) {
         const listener = createListener();
         listeners.push(listener);

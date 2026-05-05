@@ -1,29 +1,30 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import CommandInput from './CommandInput';
 import type { CommandInputProps } from './CommandInput';
 
 // ── Mock dependencies ────────────────────────────────────────────────
 
-jest.mock('../utils/log', () => ({
+vi.mock('../utils/log', () => ({
   useLog: () => ({
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    info: jest.fn(),
-    success: jest.fn(),
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
   }),
-  debugLog: jest.fn(),
+  debugLog: vi.fn(),
 }));
 
-jest.mock('./command_input_history', () => ({
+vi.mock('./command_input_history', () => ({
   createEmptyState: () => ({ commands: [], index: -1, tempInput: '' }),
   dedupeCommands: (arr: string[]) => [...new Set(arr)],
-  loadCommandHistory: jest.fn().mockResolvedValue({ commands: [], index: -1, tempInput: '' }),
-  persistCommandHistory: jest.fn(),
+  loadCommandHistory: vi.fn().mockResolvedValue({ commands: [], index: -1, tempInput: '' }),
+  persistCommandHistory: vi.fn(),
 }));
 
-jest.mock('./QueuedMessagesPanel', () => {
+vi.mock('./QueuedMessagesPanel', () => {
   const MockPanel = ({ messages, onClose }: { messages: string[]; onClose: () => void }) => {
     return createElement('div', {
       'data-testid': 'queued-messages-panel',
@@ -40,17 +41,17 @@ jest.mock('./QueuedMessagesPanel', () => {
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
-    getItem: jest.fn((key: string) => store[key] ?? null),
-    setItem: jest.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: jest.fn((key: string) => { delete store[key]; }),
-    clear: jest.fn(() => { store = {}; }),
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+    clear: vi.fn(() => { store = {}; }),
   };
 })();
 Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 
 // ── Mock clipboard API ───────────────────────────────────────────────
 Object.defineProperty(global.navigator, 'clipboard', {
-  value: { writeText: jest.fn().mockResolvedValue(undefined) },
+  value: { writeText: vi.fn().mockResolvedValue(undefined) },
   writable: true,
 });
 
@@ -76,13 +77,13 @@ describe('CommandInput', () => {
       root.unmount();
     });
     container.remove();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   const baseProps: CommandInputProps = {
     value: '',
-    onChange: jest.fn(),
-    onSend: jest.fn(),
+    onChange: vi.fn(),
+    onSend: vi.fn(),
     placeholder: 'Ask me anything about your code...',
   };
 
@@ -107,7 +108,7 @@ describe('CommandInput', () => {
   });
 
   it('calls onSend when Enter is pressed (multiline mode)', () => {
-    const onSend = jest.fn();
+    const onSend = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -125,7 +126,7 @@ describe('CommandInput', () => {
   });
 
   it('inserts newline when Shift+Enter is pressed', () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -145,7 +146,7 @@ describe('CommandInput', () => {
   });
 
   it('sends message when form is submitted', () => {
-    const onSend = jest.fn();
+    const onSend = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -161,7 +162,7 @@ describe('CommandInput', () => {
   });
 
   it('does not send empty messages', () => {
-    const onSend = jest.fn();
+    const onSend = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -177,8 +178,8 @@ describe('CommandInput', () => {
   });
 
   it('clears input after sending', () => {
-    const onChange = jest.fn();
-    const onSend = jest.fn();
+    const onChange = vi.fn();
+    const onSend = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -196,7 +197,7 @@ describe('CommandInput', () => {
   });
 
   it('shows stop button when isProcessing is true', () => {
-    const onStop = jest.fn();
+    const onStop = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -220,7 +221,7 @@ describe('CommandInput', () => {
   });
 
   it('shows queue button when isProcessing and onQueue provided', () => {
-    const onQueue = jest.fn();
+    const onQueue = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
@@ -237,7 +238,7 @@ describe('CommandInput', () => {
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,
-        onQueue: jest.fn(),
+        onQueue: vi.fn(),
         isProcessing: false,
       }));
     });
@@ -257,7 +258,7 @@ describe('CommandInput', () => {
   });
 
   it('handles Escape key to clear input', () => {
-    const onChange = jest.fn();
+    const onChange = vi.fn();
     act(() => {
       root.render(createElement(CommandInput, {
         ...baseProps,

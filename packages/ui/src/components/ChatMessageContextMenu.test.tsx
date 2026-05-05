@@ -4,6 +4,7 @@
 
 import { act, createElement, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -66,7 +67,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('renders without crashing when no contextmenu is active', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     act(() => {
       // @ts-expect-error — createElement accepts children as rest args
@@ -84,7 +85,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('shows context menu when right-clicking on a message bubble', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     // Set up a message bubble inside the container
     const bubble = document.createElement('div');
@@ -115,7 +116,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('does not show context menu when clicking outside container', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     act(() => {
       root.render(
@@ -144,7 +145,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('shows Copy message button in the menu', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Hello world');
@@ -177,7 +178,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('shows Copy code block button when right-clicking inside a <pre>', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Here is code');
@@ -216,7 +217,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('does not show Copy code block button when right-clicking outside <pre>', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Just text');
@@ -248,7 +249,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('shows Insert at cursor button in the menu', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Insert me');
@@ -279,7 +280,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('calls onInsertAtCursor when Insert at cursor is clicked', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Insert text');
@@ -322,7 +323,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('does not show menu when text is selected (let native menu handle)', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Hello');
@@ -360,7 +361,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('closes menu on outside click', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Hello');
@@ -401,7 +402,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('closes menu on Escape key', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     const bubble = document.createElement('div');
     bubble.setAttribute('data-message-content', 'Hello');
@@ -440,12 +441,12 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('copies message content when Copy message is clicked', async () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     // Mock clipboard API
     Object.assign(navigator, {
       clipboard: {
-        writeText: jest.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -492,11 +493,11 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('copies code block when Copy code block is clicked', async () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     Object.assign(navigator, {
       clipboard: {
-        writeText: jest.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -547,11 +548,11 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('shows "Copied!" text after copying message', async () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     Object.assign(navigator, {
       clipboard: {
-        writeText: jest.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -601,7 +602,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('does not show menu when containerRef is null', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
     const nullRef = { current: null };
 
     act(() => {
@@ -625,7 +626,7 @@ describe('ChatMessageContextMenu', () => {
   });
 
   it('does not show menu when target has no data-message-content ancestor', () => {
-    const onInsertAtCursor = jest.fn();
+    const onInsertAtCursor = vi.fn();
 
     act(() => {
       root.render(

@@ -2,6 +2,8 @@
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
 
+import { vi } from 'vitest';
+
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { SproutProvider, useSproutAdapter } from './SproutAdapterContext';
@@ -14,8 +16,8 @@ import type { APIAdapter } from '../types/adapter';
 function createMockAdapter(overrides: Partial<APIAdapter> = {}): APIAdapter {
   return {
     name: 'TestAdapter',
-    fetch: jest.fn().mockResolvedValue({} as Response),
-    getWebSocketURL: jest.fn().mockReturnValue(null),
+    fetch: vi.fn().mockResolvedValue({} as Response),
+    getWebSocketURL: vi.fn().mockReturnValue(null),
     requiresBackendHealthCheck: false,
     fileOpsViaAPI: true,
     showOnboarding: true,
@@ -48,7 +50,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   latestContext = undefined;
 });
 
@@ -100,7 +102,7 @@ function requireCtx(): APIAdapter {
 describe('useSproutAdapter', () => {
   it('throws an error when used outside of SproutProvider', () => {
     // Suppress the expected console.error from React when the component throws
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Render TestConsumer WITHOUT the provider — the hook should throw
     expect(() => {

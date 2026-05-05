@@ -159,9 +159,13 @@ class WebSocketService {
 
       // Fire the reconnect callback so the application can sync state
       // (e.g., request fresh stats, check for stuck processing state).
+      // This MUST fire before the connection_status notification so that
+      // any state restoration (like isProcessing) happens before UI updates.
       if (isReconnect && this.onReconnectCallback) {
         this.onReconnectCallback();
       }
+
+      this.notifyCallbacks({ type: 'connection_status', data: { connected: true, reconnected: isReconnect, queuedMessageCount: this.pendingQueue.length } });
     };
 
     this.ws.onclose = (event) => {

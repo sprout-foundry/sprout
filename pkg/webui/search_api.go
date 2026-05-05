@@ -24,6 +24,13 @@ const (
 	maxSearchBodyBytes = 10 << 20 // 10 MiB
 	maxSearchResults   = 5000     // Hard cap on total matches
 	searchTimeout      = 30 * time.Second
+
+	// searchMaxDepth limits how deep the search walks into the directory tree
+	searchMaxDepth = 10
+
+	// searchMaxFileCount caps the total number of files walked during search
+	// to prevent runaway CPU on massive repos (>10000 files)
+	searchMaxFileCount = 10000
 )
 
 // SearchResult represents matches in a single file
@@ -178,11 +185,23 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 	totalMatches := 0
 	totalFiles := 0
 	truncated := false
+	filesWalked := 0
 
 	// Compile the search pattern
 	pattern, err := compileSearchPattern(query, caseSensitive, wholeWord, isRegex)
 	if err != nil {
 		return nil, 0, 0, false, fmt.Errorf("invalid search pattern: %w", err)
+	}
+
+	// Calculate the depth of the workspace root for relative depth tracking
+	rootRel, _ := filepath.Rel(workspaceRoot, workspaceRoot)
+	rootDepth := strings.Count(rootRel, string(filepath.Separator))
+
+	// Ensure hard timeout is enforced on the context
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, searchTimeout)
+		defer cancel()
 	}
 
 	// Walk the workspace directory
@@ -191,11 +210,27 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 			return nil // Skip inaccessible paths
 		}
 
-		// Check context deadline
+		// Check context deadline (hard timeout enforcement)
 		select {
 		case <-ctx.Done():
+			log.Printf("performSearch: context done after walking %d files (found %d matches): %v",
+				filesWalked, totalMatches, ctx.Err())
 			return ctx.Err()
 		default:
+		}
+
+		// Enforce max depth
+		relPath, _ := filepath.Rel(workspaceRoot, path)
+		depth := strings.Count(relPath, string(filepath.Separator)) + rootDepth
+		if d.IsDir() && depth > searchMaxDepth {
+			return filepath.SkipDir
+		}
+
+		// Enforce max file count to prevent runaway CPU on massive repos
+		if !d.IsDir() && filesWalked >= searchMaxFileCount {
+			truncated = true
+			log.Printf("performSearch: file count limit reached (%d files), stopping search", searchMaxFileCount)
+			return filepath.SkipAll
 		}
 
 		// Skip directories
@@ -216,6 +251,8 @@ func (ws *ReactWebServer) performSearch(ctx context.Context, workspaceRoot, quer
 
 			return nil
 		}
+
+		filesWalked++
 
 		// Skip binary files
 		if isBinaryFile(path) {

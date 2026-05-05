@@ -1,6 +1,7 @@
 package embedding
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -119,7 +120,7 @@ func TestWalkCodeFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "utils.js"), []byte("console.log(1)"), 0o644)
 	os.WriteFile(filepath.Join(dir, "data.txt"), []byte("not a source file"), 0o644)
 
-	files, err := WalkCodeFiles(dir)
+	files, err := WalkCodeFiles(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("WalkCodeFiles failed: %v", err)
 	}

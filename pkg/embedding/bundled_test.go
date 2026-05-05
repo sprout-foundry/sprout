@@ -63,8 +63,17 @@ func TestTokenizerBatch(t *testing.T) {
 func TestBundledProviderEmbed(t *testing.T) {
 	ortLib := os.Getenv("ONNXRUNTIME_LIB")
 	if ortLib == "" {
+		// Prefer cached (downloaded) library first, then try other locations.
+		cacheDir := ortCacheDir()
+		cached := filepath.Join(cacheDir, "libonnxruntime.so.1.25.1")
+		if _, err := os.Stat(cached); err == nil {
+			ortLib = cached
+		}
+	}
+	if ortLib == "" {
 		// Try common locations
 		candidates := []string{
+			"/tmp/onnxruntime-linux-aarch64-1.25.1/lib/libonnxruntime.so.1.25.1",
 			"/tmp/onnxruntime-linux-aarch64-1.22.0/lib/libonnxruntime.so.1.22.0",
 			"/tmp/onnxruntime-linux-aarch64-1.21.0/lib/libonnxruntime.so.1.21.0",
 			"/usr/local/lib/libonnxruntime.so",
@@ -109,7 +118,17 @@ func TestBundledProviderEmbed(t *testing.T) {
 func TestBundledProviderEmbedBatch(t *testing.T) {
 	ortLib := os.Getenv("ONNXRUNTIME_LIB")
 	if ortLib == "" {
+		// Prefer cached (downloaded) library first, then try other locations.
+		cacheDir := ortCacheDir()
+		cached := filepath.Join(cacheDir, "libonnxruntime.so.1.25.1")
+		if _, err := os.Stat(cached); err == nil {
+			ortLib = cached
+		}
+	}
+	if ortLib == "" {
+		// Try common locations
 		candidates := []string{
+			"/tmp/onnxruntime-linux-aarch64-1.25.1/lib/libonnxruntime.so.1.25.1",
 			"/tmp/onnxruntime-linux-aarch64-1.22.0/lib/libonnxruntime.so.1.22.0",
 			"/tmp/onnxruntime-linux-aarch64-1.21.0/lib/libonnxruntime.so.1.21.0",
 			"/usr/local/lib/libonnxruntime.so",
@@ -163,7 +182,17 @@ func TestBundledProviderEmbedBatch(t *testing.T) {
 func TestBundledProviderDeterminism(t *testing.T) {
 	ortLib := os.Getenv("ONNXRUNTIME_LIB")
 	if ortLib == "" {
+		// Prefer cached (downloaded) library first, then try other locations.
+		cacheDir := ortCacheDir()
+		cached := filepath.Join(cacheDir, "libonnxruntime.so.1.25.1")
+		if _, err := os.Stat(cached); err == nil {
+			ortLib = cached
+		}
+	}
+	if ortLib == "" {
+		// Try common locations
 		candidates := []string{
+			"/tmp/onnxruntime-linux-aarch64-1.25.1/lib/libonnxruntime.so.1.25.1",
 			"/tmp/onnxruntime-linux-aarch64-1.22.0/lib/libonnxruntime.so.1.22.0",
 			"/tmp/onnxruntime-linux-aarch64-1.21.0/lib/libonnxruntime.so.1.21.0",
 			"/usr/local/lib/libonnxruntime.so",

@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+
 // Stricter type-checking is enabled but React's createElement overloads don't
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
@@ -26,6 +28,8 @@ function parseMarkdownMinimal(
   while (remaining.length > 0) {
     // --- fenced code block: ```lang\n...\n``` ---
     const codeBlockMatch = remaining.match(/^```(\w*)\n([\s\S]*?)```/);
+    // --- same-line fenced code: ```code``` (no newline → inline) ---
+    const inlineFencedMatch = !codeBlockMatch ? remaining.match(/^```([^`\n]+)```/) : null;
     if (codeBlockMatch) {
       const lang = codeBlockMatch[1];
       const codeText = codeBlockMatch[2];
@@ -37,8 +41,7 @@ function parseMarkdownMinimal(
           createElement(components.code, {
             key: `codeblock-${results.length}`,
             className,
-            children: codeText,
-          })
+          }, codeText)
         );
       } else if (isBlock) {
         results.push(
@@ -62,6 +65,29 @@ function parseMarkdownMinimal(
       continue;
     }
 
+    // --- same-line fenced code: ```code``` (treated as inline code) ---
+    if (inlineFencedMatch) {
+      const codeText = inlineFencedMatch[1];
+      if (components && components.code) {
+        results.push(
+          createElement(components.code, {
+            key: `icode-inline-${results.length}`,
+            className: '',
+          }, codeText)
+        );
+      } else {
+        results.push(
+          createElement(
+            'code',
+            { key: `icode-inline-${results.length}`, className: 'inline-code' },
+            codeText
+          )
+        );
+      }
+      remaining = remaining.slice(inlineFencedMatch[0].length);
+      continue;
+    }
+
     // --- inline code: `code` ---
     const inlineCodeMatch = remaining.match(/^`([^`]+)`/);
     if (inlineCodeMatch) {
@@ -71,8 +97,7 @@ function parseMarkdownMinimal(
           createElement(components.code, {
             key: `icode-${results.length}`,
             className: '',
-            children: codeText,
-          })
+          }, codeText)
         );
       } else {
         results.push(
@@ -191,29 +216,39 @@ function parseMarkdownMinimal(
       continue;
     }
 
-    // --- table row: | cell | cell | ---
-    const tableMatch = remaining.match(/^(\|[^|]+\|+)(\n|$)/);
-    if (tableMatch && tableMatch[1].includes('|')) {
-      const row = tableMatch[1];
-      if (row.includes('---')) {
-        // separator row, skip
-        remaining = remaining.slice(tableMatch[0].length);
-        continue;
+    // --- table rows: collect consecutive | ... | lines into a single <table> ---
+    const tableRowRegex = /^\|.*\|(\n|$)/;
+    if (tableRowRegex.test(remaining)) {
+      // Collect all consecutive table rows
+      const allRows: string[] = [];
+      let tableRemaining = remaining;
+      while (tableRowRegex.test(tableRemaining)) {
+        const rowMatch = tableRemaining.match(/^(\|.*\|)(\n|$)/);
+        if (rowMatch) {
+          allRows.push(rowMatch[1]);
+          tableRemaining = tableRemaining.slice(rowMatch[0].length);
+        } else {
+          break;
+        }
       }
-      const cells = row
-        .split('|')
-        .filter((c) => c.trim() !== '')
-        .map((c) => c.trim());
-      results.push(
-        createElement('table', { key: `table-${results.length}` },
-          createElement('tr', { key: `tr-${results.length}` },
-            cells.map((cell: string, j: number) =>
-              createElement('td', { key: `td-${results.length}-${j}` }, cell)
+      // Build a single table element
+      const rows = allRows
+        .filter(r => !r.includes('---')) // skip separator rows
+        .map(r => r.split('|').filter(c => c.trim() !== '').map(c => c.trim()));
+      if (rows.length > 0) {
+        results.push(
+          createElement('table', { key: `table-${results.length}` },
+            ...rows.map((cells, ri) =>
+              createElement('tr', { key: `tr-${ri}` },
+                ...cells.map((cell: string, ci: number) =>
+                  createElement(ri === 0 ? 'th' : 'td', { key: `td-${ri}-${ci}` }, cell)
+                )
+              )
             )
           )
-        )
-      );
-      remaining = remaining.slice(tableMatch[0].length);
+        );
+      }
+      remaining = tableRemaining;
       continue;
     }
 
@@ -248,12 +283,38 @@ function parseMarkdownMinimal(
     }
 
     // --- plain text (consume until newline or next special char) ---
-    const plainMatch = remaining.match(/^(.*?)(?=\n|$)/s);
+    // Also consume a trailing newline to avoid infinite loops on bare \n.
+    const plainMatch = remaining.match(/^([^\n]*)\n?/);
     if (plainMatch) {
       const text = plainMatch[1];
       if (text.trim() !== '') {
+        // Split text on inline backtick code spans and interleave
+        const parts = text.split(/(`[^`]+`)/g);
+        const children: ReactNode[] = [];
+        for (const part of parts) {
+          if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+            const codeText = part.slice(1, -1);
+            if (components && components.code) {
+              children.push(
+                createElement(components.code, {
+                  key: `icode-${results.length}-${children.length}`,
+                  className: '',
+                }, codeText)
+              );
+            } else {
+              children.push(
+                createElement('code', {
+                  key: `icode-${results.length}-${children.length}`,
+                  className: 'inline-code',
+                }, codeText)
+              );
+            }
+          } else if (part) {
+            children.push(part);
+          }
+        }
         results.push(
-          createElement('p', { key: `p-${results.length}` }, text)
+          createElement('p', { key: `p-${results.length}` }, ...children)
         );
       }
       remaining = remaining.slice(plainMatch[0].length);
@@ -279,9 +340,9 @@ function MockMarkdown({
   return createElement('div', { 'data-testid': 'mock-markdown' }, rendered);
 }
 
-jest.mock('react-markdown', () => ({ __esModule: true, default: MockMarkdown }));
-jest.mock('remark-gfm', () => ({ default: [] }));
-jest.mock('remark-breaks', () => ({ default: [] }));
+vi.mock('react-markdown', () => ({ __esModule: true, default: MockMarkdown }));
+vi.mock('remark-gfm', () => ({ default: [] }));
+vi.mock('remark-breaks', () => ({ default: [] }));
 
 import MessageContent from './MessageContent';
 
@@ -298,7 +359,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -482,7 +543,7 @@ describe('MessageContent', () => {
   });
 
   it('renders local file links without target="_blank" and with editor event handler', () => {
-    const handler = jest.fn((e: any) => e.preventDefault());
+    const handler = vi.fn((e: any) => e.preventDefault());
     window.addEventListener('sprout:open-in-editor', handler);
 
     act(() => {

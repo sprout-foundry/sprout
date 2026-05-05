@@ -2,6 +2,8 @@
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
 
+import { vi } from 'vitest';
+
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import SelectionActionBar from './SelectionActionBar';
@@ -26,7 +28,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -45,7 +47,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 1,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 
@@ -59,7 +61,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 5,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 
@@ -72,7 +74,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 0,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 
@@ -84,7 +86,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 3,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 
@@ -97,7 +99,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 3,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 
@@ -109,7 +111,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 3,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 
@@ -118,7 +120,7 @@ describe('SelectionActionBar', () => {
   });
 
   it('calls onClear when clear button is clicked', () => {
-    const onClear = jest.fn();
+    const onClear = vi.fn();
 
     act(() => {
       root.render(createElement(SelectionActionBar, {
@@ -139,7 +141,7 @@ describe('SelectionActionBar', () => {
     act(() => {
       root.render(createElement(SelectionActionBar, {
         count: 2,
-        onClear: jest.fn(),
+        onClear: vi.fn(),
       }));
     });
 

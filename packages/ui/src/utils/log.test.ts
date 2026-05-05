@@ -1,20 +1,21 @@
+import { vi } from 'vitest';
 import { debugLog, error, warn, info, success, setMinLevel, getMinLevel, useLog, Levels } from './log';
 
 // Mock NotificationContext for useLog tests
-jest.mock('../contexts/NotificationContext', () => ({
-  useNotifications: jest.fn(() => ({
-    addNotification: jest.fn(),
+vi.mock('../contexts/NotificationContext', () => ({
+  useNotifications: vi.fn(() => ({
+    addNotification: vi.fn(),
   })),
 }));
 
 describe('debugLog', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     setMinLevel(0); // Reset to debug
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('logs to console when minLevel allows', () => {
@@ -55,12 +56,12 @@ describe('debugLog', () => {
 
 describe('error', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     setMinLevel(0);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('logs to console.error when minLevel allows', () => {
@@ -84,7 +85,7 @@ describe('error', () => {
   it('handles showNotification option', () => {
     setMinLevel(4);
     // This should log a warning about showNotification not being supported
-    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     error('Error message', { showNotification: true, title: 'Title', duration: 5000 });
     // The function logs error but warns about showNotification
     expect(console.error).toHaveBeenCalledWith('Error message');
@@ -94,12 +95,12 @@ describe('error', () => {
 
 describe('warn', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     setMinLevel(0);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('logs to console.warn when minLevel allows', () => {
@@ -123,12 +124,12 @@ describe('warn', () => {
 
 describe('info', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
     setMinLevel(0);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('logs to console.info when minLevel allows', () => {
@@ -152,12 +153,12 @@ describe('info', () => {
 
 describe('success', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     setMinLevel(0);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('logs to console.log with [SUCCESS] prefix', () => {
@@ -207,14 +208,14 @@ describe('setMinLevel and getMinLevel', () => {
 
 describe('log level hierarchy', () => {
   beforeEach(() => {
-    jest.spyOn(console, 'log').mockImplementation(() => {});
-    jest.spyOn(console, 'info').mockImplementation(() => {});
-    jest.spyOn(console, 'warn').mockImplementation(() => {});
-    jest.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it('logs only debug at level 0', () => {

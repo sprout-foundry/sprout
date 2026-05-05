@@ -4,6 +4,7 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import MessageBubble from './MessageBubble';
 import * as clipboard from '../utils/clipboard';
 
@@ -26,7 +27,7 @@ afterAll(() => {
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
-  jest.spyOn(clipboard, 'copyToClipboard').mockResolvedValue();
+  vi.spyOn(clipboard, 'copyToClipboard').mockResolvedValue();
   root = createRoot(container);
 });
 

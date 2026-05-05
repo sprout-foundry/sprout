@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import {
   createEmptyState,
   dedupeCommands,
@@ -134,7 +135,7 @@ describe('loadCommandHistory', () => {
 
     beforeEach(() => {
       mockApi = {
-        getChatHistory: jest.fn().mockResolvedValue(['api-cmd1', 'api-cmd2']),
+        getChatHistory: vi.fn().mockResolvedValue(['api-cmd1', 'api-cmd2']),
       };
     });
 
@@ -238,7 +239,7 @@ describe('persistCommandHistory', () => {
   it('handles localStorage errors gracefully', () => {
     // Mock localStorage.setItem to throw
     const originalSetItem = localStorage.setItem;
-    localStorage.setItem = jest.fn(() => {
+    localStorage.setItem = vi.fn(() => {
       throw new Error('localStorage error');
     });
 

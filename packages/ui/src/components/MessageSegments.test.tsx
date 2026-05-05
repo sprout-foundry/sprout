@@ -1,3 +1,5 @@
+import { vi } from 'vitest';
+
 // Stricter type-checking is enabled but React's createElement overloads don't
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
@@ -9,15 +11,15 @@ import { createRoot, type Root } from 'react-dom/client';
 // Note: markdown rendering is not tested here — MessageSegments delegates
 // to MessageContent which in turn uses react-markdown. This mock simply
 // passes children through so we can test MessageSegments' own logic.
-jest.mock('react-markdown', () => {
+vi.mock('react-markdown', () => {
   function MockMarkdown({ children }: { children: string }) {
     return createElement('div', {}, children);
   }
   return { __esModule: true, default: MockMarkdown };
 });
 
-jest.mock('remark-gfm', () => ({ default: [] }));
-jest.mock('remark-breaks', () => ({ default: [] }));
+vi.mock('remark-gfm', () => ({ default: [] }));
+vi.mock('remark-breaks', () => ({ default: [] }));
 
 import MessageSegments from './MessageSegments';
 import type { ToolRef } from '../types/chat';
@@ -42,7 +44,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -182,8 +184,8 @@ describe('MessageSegments', () => {
       { toolId: 't1', toolName: 'read_file', label: 'read_file(path="test.txt")' },
     ];
 
-    const getToolStatus = jest.fn(() => 'completed');
-    const onToolRefClick = jest.fn();
+    const getToolStatus = vi.fn(() => 'completed');
+    const onToolRefClick = vi.fn();
 
     act(() => {
       root.render(
@@ -208,7 +210,7 @@ describe('MessageSegments', () => {
       { toolId: 't2', toolName: 'write_file', label: 'write_file(path="out.txt")' },
     ];
 
-    const getToolStatus = jest.fn(() => 'error');
+    const getToolStatus = vi.fn(() => 'error');
 
     act(() => {
       root.render(
@@ -228,8 +230,8 @@ describe('MessageSegments', () => {
       { toolId: 't3', toolName: 'shell_command', label: 'shell_command(echo hello)' },
     ];
 
-    const onToolRefClick = jest.fn();
-    const getToolStatus = jest.fn(() => 'completed');
+    const onToolRefClick = vi.fn();
+    const getToolStatus = vi.fn(() => 'completed');
 
     act(() => {
       root.render(
@@ -254,8 +256,8 @@ describe('MessageSegments', () => {
       { toolId: 't4', toolName: 'read_file', label: 'read_file(path="test.txt")' },
     ];
 
-    const onToolRefClick = jest.fn();
-    const getToolStatus = jest.fn(() => 'completed');
+    const onToolRefClick = vi.fn();
+    const getToolStatus = vi.fn(() => 'completed');
 
     act(() => {
       root.render(
@@ -282,7 +284,7 @@ describe('MessageSegments', () => {
       { toolId: 't5', toolName: 'search_files', label: 'search_files(path="src")' },
     ];
 
-    const getToolStatus = jest.fn(() => 'completed');
+    const getToolStatus = vi.fn(() => 'completed');
 
     act(() => {
       root.render(
@@ -304,7 +306,7 @@ describe('MessageSegments', () => {
       { toolId: 't6', toolName: 'read_file', label: 'read_file(path="src/main.go")' },
     ];
 
-    const getToolStatus = jest.fn(() => 'completed');
+    const getToolStatus = vi.fn(() => 'completed');
 
     act(() => {
       root.render(
@@ -321,7 +323,7 @@ describe('MessageSegments', () => {
   });
 
   it('renders tool call as pill when no matching toolRef or status not done', () => {
-    const onToolClick = jest.fn();
+    const onToolClick = vi.fn();
 
     act(() => {
       root.render(
@@ -337,7 +339,7 @@ describe('MessageSegments', () => {
   });
 
   it('clicking a tool pill calls onToolClick with tool name', () => {
-    const onToolClick = jest.fn();
+    const onToolClick = vi.fn();
 
     act(() => {
       root.render(
@@ -356,8 +358,8 @@ describe('MessageSegments', () => {
   });
 
   it('clicking a tool pill with matching ref calls onToolRefClick instead', () => {
-    const onToolClick = jest.fn();
-    const onToolRefClick = jest.fn();
+    const onToolClick = vi.fn();
+    const onToolRefClick = vi.fn();
     const toolRefs: ToolRef[] = [
       { toolId: 't7', toolName: 'shell_command', label: 'shell_command(echo hi)' },
     ];
@@ -448,7 +450,7 @@ describe('MessageSegments', () => {
       { toolId: 't9', toolName: 'read_file', label: 'read_file(path="a.txt")' },
       // second tool_call has no matching ref
     ];
-    const getToolStatus = jest.fn(() => 'completed');
+    const getToolStatus = vi.fn(() => 'completed');
 
     // Add a text line between the two tool calls so they are parsed as
     // separate segments (the parser groups consecutive tool lines together).

@@ -2,6 +2,8 @@
 // cleanly accept children as a rest parameter in strict TS. We use targeted
 // suppressions on the specific call-sites that trigger errors.
 
+import { vi } from 'vitest';
+
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import NotificationItem from './NotificationItem';
@@ -17,15 +19,15 @@ let root: Root;
 beforeEach(() => {
   // @ts-expect-error — assigning to undeclared globalThis property for React act() mode
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  jest.useFakeTimers();
+  vi.useFakeTimers();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  vi.useRealTimers();
   act(() => {
     root?.unmount();
   });
@@ -42,7 +44,7 @@ describe('NotificationItem', () => {
     id: 'test-id',
     title: 'Test Title',
     message: 'Test message body',
-    onClose: jest.fn(),
+    onClose: vi.fn(),
   };
 
   it.each<NotificationType>(['info', 'success', 'warning', 'error'])(
@@ -158,7 +160,7 @@ describe('NotificationItem', () => {
   });
 
   it('calls onClose with correct id when dismiss button is clicked', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -175,14 +177,14 @@ describe('NotificationItem', () => {
 
     // After exit animation duration (200ms)
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).toHaveBeenCalledWith('test-id');
   });
 
   it('handles Escape key to close', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -198,14 +200,14 @@ describe('NotificationItem', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).toHaveBeenCalledWith('test-id');
   });
 
   it('handles Enter key to close', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -221,14 +223,14 @@ describe('NotificationItem', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).toHaveBeenCalledWith('test-id');
   });
 
   it('does not close on other key presses', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -245,14 +247,14 @@ describe('NotificationItem', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it('auto-dismisses after duration', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -265,19 +267,19 @@ describe('NotificationItem', () => {
 
     // Advance past auto-dismiss timer (3s) + exit animation (200ms)
     act(() => {
-      jest.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
     });
 
     // Close was triggered, now advance exit animation
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).toHaveBeenCalledWith('test-id');
   });
 
   it('does not auto-dismiss when duration is 0', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -289,14 +291,14 @@ describe('NotificationItem', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(10000);
+      vi.advanceTimersByTime(10000);
     });
 
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it('does not auto-dismiss when duration is negative', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -308,14 +310,14 @@ describe('NotificationItem', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(10000);
+      vi.advanceTimersByTime(10000);
     });
 
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it('uses default 5000ms duration when not specified', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -329,26 +331,26 @@ describe('NotificationItem', () => {
 
     // Advance to just before default timeout
     act(() => {
-      jest.advanceTimersByTime(4999);
+      vi.advanceTimersByTime(4999);
     });
 
     expect(onClose).not.toHaveBeenCalled();
 
     // Advance past default timeout
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
 
     // Exit animation
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).toHaveBeenCalledWith('test-id');
   });
 
   it('prevents multiple onClose calls (idempotent close)', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -368,7 +370,7 @@ describe('NotificationItem', () => {
     });
 
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     // Should only call once due to isClosingRef guard
@@ -376,7 +378,7 @@ describe('NotificationItem', () => {
   });
 
   it('clears auto-dismiss timer when manually closed', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -393,17 +395,17 @@ describe('NotificationItem', () => {
       btn?.click();
     });
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
 
     // Advance past where auto-dismiss would have fired
     act(() => {
-      jest.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(5000);
     });
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
 
     // Still only one call (auto-dismiss was cleared)
@@ -415,7 +417,7 @@ describe('NotificationItem', () => {
       root.render(createElement(NotificationItem, {
         ...baseProps,
         type: 'info',
-        onClose: jest.fn(),
+        onClose: vi.fn(),
       }));
     });
 
@@ -429,7 +431,7 @@ describe('NotificationItem', () => {
   });
 
   it('handles re-render with different id cleanly', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     act(() => {
       root.render(createElement(NotificationItem, {
@@ -464,7 +466,7 @@ describe('NotificationItem', () => {
         type: 'info',
         title: '',
         message: 'Message only',
-        onClose: jest.fn(),
+        onClose: vi.fn(),
       }));
     });
 

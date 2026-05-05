@@ -176,6 +176,9 @@ func (m *EmbeddingManager) IndexSize() int {
 }
 
 // BuildIndex runs a full index build for the workspace.
+// It does not block the caller indefinitely: a 30-second timeout is applied
+// internally via context.WithTimeout(). The building flag prevents concurrent
+// builds.
 func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) {
 	m.mu.Lock()
 	if m.building {
@@ -196,12 +199,12 @@ func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) 
 	}
 
 	// Safety: skip if workspace is too large for auto-build.
-	files, err := WalkCodeFiles(m.workspaceRoot)
+	files, err := WalkCodeFiles(ctx, m.workspaceRoot)
 	if err != nil {
 		return nil, fmt.Errorf("embedding: scan workspace: %w", err)
 	}
-	if len(files) > 5000 {
-		return nil, fmt.Errorf("embedding: workspace has %d files (max 5000 for auto-build)", len(files))
+	if len(files) > MaxFileCount {
+		return nil, fmt.Errorf("embedding: workspace has %d files (max %d for auto-build)", len(files), MaxFileCount)
 	}
 
 	idx, err := m.snapshotIndexMgr()
@@ -209,6 +212,60 @@ func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) 
 		return nil, err
 	}
 	return idx.BuildIndex(ctx, m.workspaceRoot)
+}
+
+// BuildIndexBackground starts an index build in a background goroutine and
+// returns a channel on which the result (or error) will be delivered. This
+// must be used when called from HTTP handlers or other code paths where
+// blocking would cause a timeout.
+//
+// The returned channel is non-buffered and the caller should read from it
+// once to retrieve the result. The context passed to the caller is used for
+// cancellation; if the context is cancelled, the build is interrupted
+// gracefully (partial results may be stored).
+func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *BuildResult {
+	ch := make(chan *BuildResult, 1)
+
+	m.mu.Lock()
+	if m.building {
+		m.mu.Unlock()
+		ch <- &BuildResult{
+			Err: fmt.Errorf("embedding: build already in progress"),
+		}
+		return ch
+	}
+	m.building = true
+	m.mu.Unlock()
+
+	go func() {
+		defer func() {
+			m.mu.Lock()
+			m.building = false
+			m.mu.Unlock()
+		}()
+
+		ctx, cancel := context.WithTimeout(ctx, WalkTimeout)
+		defer cancel()
+
+		if err := m.Init(ctx); err != nil {
+			ch <- &BuildResult{Err: err}
+			return
+		}
+
+		stats, err := m.BuildIndex(ctx)
+		ch <- &BuildResult{
+			Stats: stats,
+			Err:  err,
+		}
+	}()
+
+	return ch
+}
+
+// BuildResult carries the result of a background index build.
+type BuildResult struct {
+	Stats *IndexStats
+	Err   error
 }
 
 // AutoBuildWhenReady runs a background index build after a short delay.

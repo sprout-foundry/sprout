@@ -1,11 +1,12 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
 import Chat from './ChatPanel';
 import type { Message, ToolExecution, ChatProps } from '../types/chat';
 
 // ── Mock react-virtuoso ──────────────────────────────────────────────
 // Virtuoso is complex; we mock it to render items in a simple list.
-jest.mock('react-virtuoso', () => {
+vi.mock('react-virtuoso', () => {
   const React = require('react');
   const MockVirtuoso = React.forwardRef(({ data, itemContent, components }: { data: unknown[]; itemContent: (index: number, item: unknown) => JSX.Element; components?: { Header: () => JSX.Element | null; Footer: () => JSX.Element } }, ref) => {
     React.useImperativeHandle(ref, () => null as any);
@@ -21,7 +22,7 @@ jest.mock('react-virtuoso', () => {
 
 // ── Mock sub-components ──────────────────────────────────────────────
 // We mock these to avoid deep dependency chains in tests.
-jest.mock('./CommandInput', () => {
+vi.mock('./CommandInput', () => {
   const MockCommandInput = ({ value, onChange, onSend, placeholder, isProcessing, onStop }: {
     value?: string;
     onChange?: (v: string) => void;
@@ -54,30 +55,30 @@ jest.mock('./CommandInput', () => {
   return { __esModule: true, default: MockCommandInput };
 });
 
-jest.mock('./MessageSegments', () => ({
+vi.mock('./MessageSegments', () => ({
   __esModule: true,
   default: ({ content }: { content: string }) => createElement('div', { 'data-testid': 'message-segments' }, content),
 }));
 
-jest.mock('./MessageContent', () => ({
+vi.mock('./MessageContent', () => ({
   __esModule: true,
   default: ({ content }: { content: string }) => createElement('div', { 'data-testid': 'message-content' }, content),
 }));
 
-jest.mock('./MessageBubble', () => {
+vi.mock('./MessageBubble', () => {
   const MockMessageBubble = ({ children, type }: { children: React.ReactNode; type?: string; [key: string]: unknown }) => {
     return createElement('div', { className: 'message-bubble-mock', 'data-message-type': type }, children);
   };
   return { __esModule: true, default: MockMessageBubble };
 });
 
-jest.mock('./LiveLog', () => ({
+vi.mock('./LiveLog', () => ({
   __esModule: true,
   default: ({ lines }: { lines: { id: string; text: string; timestamp: Date }[] }) =>
     createElement('div', { 'data-testid': 'live-log' }, lines.length.toString()),
 }));
 
-jest.mock('./ChatMessageContextMenu', () => ({
+vi.mock('./ChatMessageContextMenu', () => ({
   __esModule: true,
   default: () => createElement('div', { 'data-testid': 'chat-context-menu-mock' }),
 }));
@@ -117,11 +118,11 @@ describe('Chat', () => {
 
   const baseProps: ChatProps = {
     messages: [],
-    onSendMessage: jest.fn(),
-    onQueueMessage: jest.fn(),
+    onSendMessage: vi.fn(),
+    onQueueMessage: vi.fn(),
     queuedMessagesCount: 0,
     inputValue: '',
-    onInputChange: jest.fn(),
+    onInputChange: vi.fn(),
   };
 
   it('renders welcome message when messages are empty and providerAvailable is not false', () => {
@@ -146,7 +147,7 @@ describe('Chat', () => {
   });
 
   it('shows Configure Provider button when providerAvailable is false and onRequestProviderSetup is provided', () => {
-    const setupMock = jest.fn();
+    const setupMock = vi.fn();
     act(() => {
       root.render(createElement(Chat, {
         ...baseProps,

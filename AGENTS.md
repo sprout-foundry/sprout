@@ -36,6 +36,11 @@ these specifications first to ensure alignment with the project direction.
 - **SP-014** Agent Terminal Sessions (active)
 - **SP-015** Cloud Platform Integration (partially implemented)
 - **SP-016** Embedding Index — Duplicate Detection & Semantic Search (proposed)
+- **SP-017** Settings Panel Rework (proposed)
+- **SP-018** Memory System (implemented)
+- **SP-019** Multi-Chat Sessions (implemented)
+- **SP-020** Trace/Dataset Mode (implemented)
+- **SP-021** Self-Review Tool (implemented)
 
 ## Testing
 

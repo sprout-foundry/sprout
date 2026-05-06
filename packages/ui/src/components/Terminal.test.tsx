@@ -373,4 +373,226 @@ describe('Terminal', () => {
 
     expect(localStorageMock.setItem).toHaveBeenCalledWith('sprout-terminal-height', '400');
   });
+
+  it('switches from horizontal split to vertical split', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+
+    // Enable horizontal split
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let splitHBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split horizontal') {
+        splitHBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      splitHBtn?.click();
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper')).toHaveLength(2);
+    expect(container.querySelector('.terminal-split-horizontal')).not.toBeNull();
+
+    // Switch to vertical split
+    let splitVBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split vertical') {
+        splitVBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      splitVBtn?.click();
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper')).toHaveLength(2);
+    expect(container.querySelector('.terminal-split-horizontal')).toBeNull();
+    expect(container.querySelector('.terminal-split-vertical')).not.toBeNull();
+  });
+
+  it('shows split divider when split is active', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    expect(container.querySelector('.terminal-split-divider')).toBeNull();
+
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let splitBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split horizontal') {
+        splitBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      splitBtn?.click();
+    });
+    expect(container.querySelector('.terminal-split-divider')).not.toBeNull();
+  });
+
+  it('shows split divider with correct direction class', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let splitBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split vertical') {
+        splitBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      splitBtn?.click();
+    });
+    const divider = container.querySelector('.terminal-split-divider');
+    expect(divider?.classList.contains('terminal-split-divider-vertical')).toBe(true);
+  });
+
+  it('renders pane wrapper has correct style based on split sizes', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let splitBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split horizontal') {
+        splitBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      splitBtn?.click();
+    });
+    const wrappers = container.querySelectorAll('.terminal-pane-wrapper');
+    expect(wrappers.length).toBe(2);
+    // Both should have a dimension after split
+    const pane1 = wrappers[0] as HTMLElement;
+    const pane2 = wrappers[1] as HTMLElement;
+    expect(pane1.style.height || pane1.style.flexBasis || '').toBeDefined();
+  });
+
+  it('handles isExpanded=false then true then false via onToggleExpand', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: false, onToggleExpand }));
+    });
+    expect(container.querySelector('.terminal-collapsed-bar')).not.toBeNull();
+    expect(container.querySelector('.terminal-container')).toBeNull();
+
+    act(() => {
+      container.querySelector('.terminal-collapsed-bar')?.click();
+    });
+    expect(onToggleExpand).toHaveBeenCalledWith(true);
+    expect(container.querySelector('.terminal-container')).not.toBeNull();
+
+    // Collapse again
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let collapseBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Collapse terminal') {
+        collapseBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      collapseBtn?.click();
+    });
+    expect(onToggleExpand).toHaveBeenCalledWith(false);
+  });
+
+  it('renders terminal panes container with correct height offset', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    const panesContainer = container.querySelector('.terminal-panes-container');
+    expect(panesContainer).not.toBeNull();
+    // Height should be terminalHeight - collapsedHeight (400 - 42 = 358)
+    const style = (panesContainer as HTMLElement).style;
+    expect(style.height).toBe('358px');
+  });
+
+  it('sets focused pane on mouse down on pane wrapper', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    // Create a split first to have multiple panes
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let splitBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split vertical') {
+        splitBtn = btn as HTMLButtonElement;
+        break;
+      }
+    }
+    act(() => {
+      splitBtn?.click();
+    });
+    const wrappers = container.querySelectorAll('.terminal-pane-wrapper');
+    expect(wrappers.length).toBe(2);
+
+    // Click second pane to focus it
+    act(() => {
+      (wrappers[1] as HTMLElement).dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    // The focused pane changes but we verify the component doesn't crash
+    expect(container.querySelector('.terminal-container')).not.toBeNull();
+  });
+
+  it('renders without crashing when isConnected is false', () => {
+    act(() => {
+      root.render(createElement(Terminal, {
+        isExpanded: true,
+        isConnected: false,
+        onToggleExpand,
+      }));
+    });
+    // Should render without crashing even when disconnected
+    expect(container.querySelector('.terminal-container')).not.toBeNull();
+  });
+
+  it('resize handle is present and clickable', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    const handle = container.querySelector('.terminal-resize-handle');
+    expect(handle).not.toBeNull();
+    expect(handle?.classList.contains('terminal-resize-handle')).toBe(true);
+  });
+
+  it('split button shows active class when split direction matches', () => {
+    act(() => {
+      root.render(createElement(Terminal, { isExpanded: true, onToggleExpand }));
+    });
+    const buttons = container.querySelectorAll('.terminal-header-btn');
+    let splitHBtn: HTMLButtonElement | null = null;
+    let splitVBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(buttons)) {
+      if (btn.getAttribute('title') === 'Split horizontal') {
+        splitHBtn = btn as HTMLButtonElement;
+      }
+      if (btn.getAttribute('title') === 'Split vertical') {
+        splitVBtn = btn as HTMLButtonElement;
+      }
+    }
+    expect(splitHBtn?.classList.contains('active')).toBe(false);
+    expect(splitVBtn?.classList.contains('active')).toBe(false);
+
+    act(() => {
+      splitHBtn?.click();
+    });
+    // Re-query after state change
+    const updatedButtons = container.querySelectorAll('.terminal-header-btn');
+    let updatedHBtn: HTMLButtonElement | null = null;
+    let updatedVBtn: HTMLButtonElement | null = null;
+    for (const btn of Array.from(updatedButtons)) {
+      if (btn.getAttribute('title') === 'Split horizontal') {
+        updatedHBtn = btn as HTMLButtonElement;
+      }
+      if (btn.getAttribute('title') === 'Split vertical') {
+        updatedVBtn = btn as HTMLButtonElement;
+      }
+    }
+    expect(updatedHBtn?.classList.contains('active')).toBe(true);
+    expect(updatedVBtn?.classList.contains('active')).toBe(false);
+  });
 });

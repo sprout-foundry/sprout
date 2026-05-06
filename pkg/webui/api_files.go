@@ -25,6 +25,30 @@ func (ws *ReactWebServer) gatherStats(r *http.Request) map[string]interface{} {
 	return ws.gatherStatsForClientID(ws.resolveClientID(r))
 }
 
+// wslToWindowsPath is a package-level conversion function set once during init.
+// On WSL systems it wraps "wslpath -w"; on non-WSL systems it is nil.
+// Using a func var avoids calling exec.LookPath("wslpath") on every request.
+var wslToWindowsPath func(linuxPath string) (string, error)
+
+// wslToWindowsPathFunc creates the actual conversion function used by wslToWindowsPath.
+func wslToWindowsPathFunc(linuxPath string) (string, error) {
+	// Use wslpath to convert Linux path to Windows UNC path.
+	// Handles /mnt/c/... → C:\... and /home/... → \\wsl.localhost\<distro>\...
+	out, err := exec.Command("wslpath", "-w", linuxPath).Output()
+	if err != nil {
+		return "", fmt.Errorf("wslpath -w %q: %w", linuxPath, err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func init() {
+	// Detect WSL and set up the path converter.
+	// WSL_DISTRO_NAME is set by the WSL runtime environment.
+	if os.Getenv("WSL_DISTRO_NAME") != "" && shellExists("wslpath") {
+		wslToWindowsPath = wslToWindowsPathFunc
+	}
+}
+
 // populateAgentStats populates a stats map with fields from the given agent instance.
 func populateAgentStats(stats map[string]interface{}, agentInst *agent.Agent) {
 	stats["provider"] = agentInst.GetProvider()
@@ -57,6 +81,7 @@ func populateAgentStats(stats map[string]interface{}, agentInst *agent.Agent) {
 	}
 	stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
 	stats["debug_mode"] = agentInst.IsDebugMode()
+	stats["embedding_index_enabled"] = agentInst.IsEmbeddingIndexEnabled()
 }
 
 func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]interface{} {
@@ -132,6 +157,7 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 	stats["provider"] = ""
 	stats["model"] = ""
 	stats["persona"] = ""
+	stats["embedding_index_enabled"] = false
 
 	// Add agent-specific stats if available
 	if agentInst != nil {
@@ -1199,11 +1225,20 @@ func (ws *ReactWebServer) handleAPIOpenInFileBrowser(w http.ResponseWriter, r *h
 			cmd = exec.Command("open", "-R", canonicalPath)
 		}
 	case shellExists("explorer.exe"):
-		// Windows / WSL
+		// Windows / WSL: convert Linux paths to Windows paths for WSL support.
+		// On native Windows, canonicalPath is already a Windows path so wslToWindowsPath
+		// returns it unchanged. On WSL, wslpath -w translates /home/... to
+		// \\wsl.localhost\<distro>\... and /mnt/c/... to C:\...
+		winPath := canonicalPath
+		if wslToWindowsPath != nil {
+			if converted, err := wslToWindowsPath(canonicalPath); err == nil {
+				winPath = converted
+			}
+		}
 		if isDir {
-			cmd = exec.Command("explorer.exe", canonicalPath)
+			cmd = exec.Command("explorer.exe", winPath)
 		} else {
-			cmd = exec.Command("explorer.exe", "/select,"+canonicalPath)
+			cmd = exec.Command("explorer.exe", "/select,"+winPath)
 		}
 	case shellExists("xdg-open"):
 		// Linux: open the containing directory (xdg-open can't select a file)

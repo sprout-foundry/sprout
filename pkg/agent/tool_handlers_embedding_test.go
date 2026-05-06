@@ -28,8 +28,8 @@ func TestHandleEmbeddingIndex_Status_NotEnabled(t *testing.T) {
 	if !strings.Contains(result, "not enabled") {
 		t.Errorf("expected 'not enabled' in result, got: %s", result)
 	}
-	if !strings.Contains(result, "embedding_index") {
-		t.Errorf("expected config instructions in result, got: %s", result)
+	if !strings.Contains(result, "/index") {
+		t.Errorf("expected /index command reference in result, got: %s", result)
 	}
 }
 

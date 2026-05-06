@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -294,21 +295,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		agent.changeTracker = NewChangeTracker(agent, "")
 		agent.changeTracker.Enable() // Start enabled by default
 
-		// Initialize embedding manager — enabled by default unless explicitly disabled.
-		// Starts a background index build so the agent can use it for duplicate
-		// detection and context enrichment without waiting for a query.
-		if cfg := configManager.GetConfig(); cfg != nil {
-			ei := cfg.EmbeddingIndex
-			if ei == nil {
-				ei = &configuration.EmbeddingIndexConfig{Enabled: true, AutoIndex: true}
-			}
-			if ei.Enabled {
-				agent.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
-				if ei.AutoIndex && agent.embeddingMgr != nil {
-					go agent.embeddingMgr.AutoBuildWhenReady()
-				}
-			}
-		}
+		// Restore embedding index if previously enabled for this workspace
+		agent.RestoreEmbeddingIndex()
 
 		return agent, nil
 	}
@@ -537,21 +525,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
 	}
 
-	// Initialize embedding manager — enabled by default unless explicitly disabled.
-	// Starts a background index build so the agent can use it for duplicate
-	// detection and context enrichment without waiting for a query.
-	if cfg := configManager.GetConfig(); cfg != nil {
-		ei := cfg.EmbeddingIndex
-		if ei == nil {
-			ei = &configuration.EmbeddingIndexConfig{Enabled: true, AutoIndex: true}
-		}
-		if ei.Enabled {
-			agent.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
-			if ei.AutoIndex && agent.embeddingMgr != nil {
-				go agent.embeddingMgr.AutoBuildWhenReady()
-			}
-		}
-	}
+	// Restore embedding index if previously enabled for this workspace
+	agent.RestoreEmbeddingIndex()
 
 	return agent, nil
 }
@@ -871,4 +846,129 @@ func (a *Agent) GetTerminalManager() tools.TerminalAccess {
 // embedding is not configured or enabled in the agent's config).
 func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	return a.embeddingMgr
+}
+
+// EnableEmbeddingIndex initializes the embedding manager and starts building
+// the index in the background. Call this when the user explicitly enables
+// indexing for the workspace (via /index command or UI toggle).
+// It persists the preference to the workspace config so it survives restarts.
+func (a *Agent) EnableEmbeddingIndex() error {
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return fmt.Errorf("no config available")
+	}
+
+	ei := cfg.EmbeddingIndex
+	if ei == nil {
+		ei = &configuration.EmbeddingIndexConfig{Enabled: true, AutoIndex: true}
+		cfg.EmbeddingIndex = ei
+	}
+	ei.Enabled = true
+	ei.AutoIndex = true
+
+	workspaceRoot := a.GetWorkspaceRoot()
+	if workspaceRoot == "" {
+		return fmt.Errorf("no workspace root available")
+	}
+
+	a.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
+	go a.embeddingMgr.AutoBuildWhenReady()
+
+	// Persist the preference to workspace config
+	a.persistEmbeddingIndexPreference(workspaceRoot, true)
+
+	return nil
+}
+
+// DisableEmbeddingIndex stops and cleans up the embedding manager.
+// It persists the preference to the workspace config so it stays disabled on restart.
+func (a *Agent) DisableEmbeddingIndex() {
+	if a.embeddingMgr != nil {
+		_ = a.embeddingMgr.Close()
+		a.embeddingMgr = nil
+	}
+
+	// Persist the preference to workspace config
+	workspaceRoot := a.GetWorkspaceRoot()
+	if workspaceRoot != "" {
+		a.persistEmbeddingIndexPreference(workspaceRoot, false)
+	}
+}
+
+// IsEmbeddingIndexEnabled returns whether the embedding index is currently active.
+func (a *Agent) IsEmbeddingIndexEnabled() bool {
+	return a.embeddingMgr != nil
+}
+
+// RestoreEmbeddingIndex checks if indexing was previously enabled for this
+// workspace and restores it. Called once during agent startup after workspace
+// root is known.
+func (a *Agent) RestoreEmbeddingIndex() {
+	workspaceRoot := a.GetWorkspaceRoot()
+	if workspaceRoot == "" {
+		return
+	}
+
+	wsCfgPath := configuration.GetWorkspaceConfigPath(workspaceRoot)
+	data, err := os.ReadFile(wsCfgPath)
+	if err != nil {
+		return // no workspace config = indexing not previously enabled
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return
+	}
+
+	// Check if embedding_index.enabled is set to true in workspace config
+	eiRaw, ok := raw["embedding_index"]
+	if !ok {
+		return
+	}
+
+	var eiConfig struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal(eiRaw, &eiConfig); err != nil {
+		return
+	}
+
+	if eiConfig.Enabled {
+		_ = a.EnableEmbeddingIndex()
+	}
+}
+
+// persistEmbeddingIndexPreference saves the indexing enabled/disabled state
+// to the workspace config file so it persists across sessions.
+func (a *Agent) persistEmbeddingIndexPreference(workspaceRoot string, enabled bool) {
+	wsCfgPath := configuration.GetWorkspaceConfigPath(workspaceRoot)
+	wsCfgDir := filepath.Dir(wsCfgPath)
+
+	// Ensure the .sprout directory exists
+	if err := os.MkdirAll(wsCfgDir, 0755); err != nil {
+		return
+	}
+
+	// Read existing config or start fresh
+	var existing map[string]interface{}
+	if data, err := os.ReadFile(wsCfgPath); err == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+	if existing == nil {
+		existing = make(map[string]interface{})
+	}
+
+	// Update the embedding_index section
+	eiMap, ok := existing["embedding_index"].(map[string]interface{})
+	if !ok {
+		eiMap = make(map[string]interface{})
+	}
+	eiMap["enabled"] = enabled
+	eiMap["auto_index"] = enabled
+	existing["embedding_index"] = eiMap
+
+	// Write back
+	if data, err := json.MarshalIndent(existing, "", "  "); err == nil {
+		_ = os.WriteFile(wsCfgPath, data, 0600)
+	}
 }

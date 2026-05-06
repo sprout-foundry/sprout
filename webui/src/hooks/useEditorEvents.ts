@@ -116,6 +116,7 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         if (viewRef.current) {
           viewRef.current.dispatch({
             selection: { anchor: 0, head: viewRef.current.state.doc.length },
+            annotations: [Transaction.addToHistory.of(false)],
           });
         }
       } else if (e.type === 'editor-format-document') {

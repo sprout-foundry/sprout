@@ -5,6 +5,7 @@ import CommandInput from './CommandInput';
 import { ChatMessageContextMenu } from '@sprout/ui';
 import { supportsSSH } from '../config/mode';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
+import { clientFetch } from '../services/clientSession';
 import {
   ChatFooter,
   ChatHeader,
@@ -121,6 +122,18 @@ function Chat(props: ChatProps): JSX.Element {
     [onInputChange],
   );
 
+  const handleToggleIndex = useCallback(async (enabled: boolean) => {
+    try {
+      await clientFetch('/api/embedding-index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+    } catch (e) {
+      console.error('Failed to toggle indexing:', e);
+    }
+  }, []);
+
   const showOffline = needsHealthCheck && backendReachable === false && !isProcessing && messages.length === 0;
 
   return (
@@ -219,6 +232,9 @@ function Chat(props: ChatProps): JSX.Element {
           onQueueMessageEdit={onQueueMessageEdit}
           onQueueReorder={onQueueReorder}
           onClearQueuedMessages={onClearQueuedMessages}
+          isIndexEnabled={!!(stats as Record<string, unknown>)?.embedding_index_enabled}
+          isIndexBuilding={!!(stats as Record<string, unknown>)?.embedding_index_building}
+          onToggleIndex={handleToggleIndex}
         />
       </div>
 

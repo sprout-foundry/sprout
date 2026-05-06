@@ -20,9 +20,8 @@ func handleEmbeddingIndex(ctx context.Context, a *Agent, args map[string]interfa
 
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "Embedding index is not enabled. To enable it, add this to your config:\n\n" +
-			"  embedding_index:\n    enabled: true\n    ort_library_path: /path/to/libonnxruntime.so\n\n" +
-			"Or set the ONNXRUNTIME_LIB environment variable to the path of the ONNX Runtime shared library.", nil
+		return "Embedding index is not enabled. Use the /index command to enable workspace indexing,\n" +
+			"or click the index badge in the UI.", nil
 	}
 
 	switch operation {
@@ -149,9 +148,8 @@ func handleSemanticSearch(ctx context.Context, a *Agent, args map[string]interfa
 
 	em := a.GetEmbeddingManager()
 	if em == nil {
-		return "Embedding index is not enabled. To enable it, add this to your config:\n\n" +
-			"  embedding_index:\n    enabled: true\n    ort_library_path: /path/to/libonnxruntime.so\n\n" +
-			"Or set the ONNXRUNTIME_LIB environment variable to the path of the ONNX Runtime shared library.", nil
+		return "Embedding index is not enabled. Use the /index command to enable workspace indexing,\n" +
+			"or click the index badge in the UI.", nil
 	}
 
 	results, err := em.QuerySimilar(ctx, query, topK, threshold)

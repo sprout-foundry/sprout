@@ -59,3 +59,53 @@ describe('generateUUID', () => {
     expect(uuids.size).toBe(count);
   });
 });
+
+describe('generateUUID fallback', () => {
+  it('uses fallback when crypto.randomUUID is not available', () => {
+    const originalRandomUUID = crypto.randomUUID;
+    // @ts-expect-error — intentionally deleting to test fallback
+    delete crypto.randomUUID;
+
+    try {
+      const uuid = generateUUID();
+      // Should still produce a valid v4 UUID via fallback
+      const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(uuid).toMatch(uuidV4Regex);
+      expect(uuid.length).toBe(36);
+    } finally {
+      crypto.randomUUID = originalRandomUUID;
+    }
+  });
+
+  it('fallback generates unique values across multiple calls', () => {
+    const originalRandomUUID = crypto.randomUUID;
+    // @ts-expect-error — intentionally deleting to test fallback
+    delete crypto.randomUUID;
+
+    try {
+      const uuids = new Set<string>();
+      for (let i = 0; i < 100; i++) {
+        uuids.add(generateUUID());
+      }
+      // All should be unique (statistically, random fallback should produce unique values)
+      expect(uuids.size).toBe(100);
+    } finally {
+      crypto.randomUUID = originalRandomUUID;
+    }
+  });
+
+  it('fallback generates valid version 4 UUID', () => {
+    const originalRandomUUID = crypto.randomUUID;
+    // @ts-expect-error — intentionally deleting to test fallback
+    delete crypto.randomUUID;
+
+    try {
+      const uuid = generateUUID();
+      expect(uuid[14]).toBe('4');
+      const variantChar = uuid[19].toLowerCase();
+      expect(['8', '9', 'a', 'b']).toContain(variantChar);
+    } finally {
+      crypto.randomUUID = originalRandomUUID;
+    }
+  });
+});

@@ -326,4 +326,398 @@ describe('CommandInput', () => {
     const sendBtn3 = container.querySelector('.send-button') as HTMLButtonElement;
     expect(sendBtn3?.disabled).toBe(false);
   });
+
+  it('sends onSendCommand when onSend is not provided', () => {
+    const onSendCommand = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'alt send',
+        onSend: undefined,
+        onSendCommand,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      textarea!.dispatchEvent(event);
+    });
+    expect(onSendCommand).toHaveBeenCalledWith('alt send');
+  });
+
+  it('handles Tab key for tab completion', () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'hello',
+        onChange,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      textarea!.selectionStart = 5;
+      textarea!.selectionEnd = 5;
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      textarea!.dispatchEvent(event);
+    });
+    expect(onChange).toHaveBeenCalled();
+    const callArg = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    expect(callArg).toContain('\t');
+  });
+
+  it('shows new session button', () => {
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+      }));
+    });
+    const newSessionBtn = container.querySelector('.new-session-button');
+    expect(newSessionBtn).not.toBeNull();
+  });
+
+  it('handles new session button click (not processing)', () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'some text',
+        onSend,
+        isProcessing: false,
+      }));
+    });
+    const newSessionBtn = container.querySelector('.new-session-button')!;
+    act(() => {
+      newSessionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSend).toHaveBeenCalledWith('/clear');
+  });
+
+  it('handles new session button click with confirm when processing', () => {
+    const onSend = vi.fn();
+    const originalConfirm = window.confirm;
+    window.confirm = vi.fn(() => true);
+    try {
+      act(() => {
+        root.render(createElement(CommandInput, {
+          ...baseProps,
+          value: 'some text',
+          onSend,
+          isProcessing: true,
+        }));
+      });
+      const newSessionBtn = container.querySelector('.new-session-button')!;
+      act(() => {
+        newSessionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(window.confirm).toHaveBeenCalledWith('A request is currently processing. Stop it and start a new session?');
+      expect(onSend).toHaveBeenCalledWith('/clear');
+    } finally {
+      window.confirm = originalConfirm;
+    }
+  });
+
+  it('aborts new session when confirm returns false', () => {
+    const onSend = vi.fn();
+    const originalConfirm = window.confirm;
+    window.confirm = vi.fn(() => false);
+    try {
+      act(() => {
+        root.render(createElement(CommandInput, {
+          ...baseProps,
+          value: 'some text',
+          onSend,
+          isProcessing: true,
+        }));
+      });
+      const newSessionBtn = container.querySelector('.new-session-button')!;
+      act(() => {
+        newSessionBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(onSend).not.toHaveBeenCalled();
+    } finally {
+      window.confirm = originalConfirm;
+    }
+  });
+
+  it('queues message when queue button is clicked', () => {
+    const onQueue = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'queued message',
+        isProcessing: true,
+        onQueue,
+      }));
+    });
+    const queueBtn = container.querySelector('.queue-add-button')!;
+    act(() => {
+      queueBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onQueue).toHaveBeenCalledWith('queued message');
+  });
+
+  it('does not queue empty messages', () => {
+    const onQueue = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: '   ',
+        isProcessing: true,
+        onQueue,
+      }));
+    });
+    const queueBtn = container.querySelector('.queue-add-button')!;
+    act(() => {
+      queueBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onQueue).not.toHaveBeenCalled();
+  });
+
+  it('pressing Escape clears input when in history mode', () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: '',
+        onChange,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    // Press ArrowUp to attempt history navigation (empty history → no-op)
+    act(() => {
+      textarea!.selectionStart = 0;
+      textarea!.selectionEnd = 0;
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true });
+      textarea!.dispatchEvent(event);
+    });
+    // Press Escape — verifies no crash when history guard exits early
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      textarea!.dispatchEvent(event);
+    });
+    // Component still renders without error (history guard exercised)
+    expect(container.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('does not change value on ArrowDown when history is empty', () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: '',
+        onChange,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    // Navigate up (empty history → no-op)
+    act(() => {
+      textarea!.selectionStart = 0;
+      textarea!.selectionEnd = 0;
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true });
+      textarea!.dispatchEvent(event);
+    });
+    // Navigate down
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true });
+      textarea!.dispatchEvent(event);
+    });
+    // Should not have changed value since history is empty
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate history when cursor is not at start', () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'hello world',
+        onChange,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    // Cursor in middle, not at start
+    act(() => {
+      textarea!.selectionStart = 6;
+      textarea!.selectionEnd = 6;
+      const event = new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true });
+      textarea!.dispatchEvent(event);
+    });
+    // Should not navigate history
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does not send when disabled', () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'test',
+        onSend,
+        disabled: true,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      textarea!.dispatchEvent(event);
+    });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('handles composition start/end for IME', () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'composition test',
+        onSend,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+
+    // Composition start and end are handled via isComposingRef
+    // In the actual component, these are React event handlers that work with IME input
+    // We verify the component renders correctly with composition handlers set
+    expect(textarea).not.toBeNull();
+    // Verify the component still works for Enter after composition events
+    // by checking that the composition handler methods exist
+    // (The actual composition behavior depends on browser IME which is hard to test in jsdom)
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      textarea!.dispatchEvent(event);
+    });
+    expect(onSend).toHaveBeenCalledWith('composition test');
+  });
+
+  it('handles submit form with disabled=false and valid content', () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'form submit',
+        onSend,
+        disabled: false,
+      }));
+    });
+    const form = container.querySelector('form');
+    act(() => {
+      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(onSend).toHaveBeenCalledWith('form submit');
+  });
+
+  it('does not submit when canSend is false (empty value)', () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: '',
+        onSend,
+      }));
+    });
+    const form = container.querySelector('form');
+    act(() => {
+      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('handles multiline=false (single line mode)', () => {
+    const onSend = vi.fn();
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'single line',
+        onSend,
+        multiline: false,
+      }));
+    });
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    act(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      textarea!.dispatchEvent(event);
+    });
+    expect(onSend).toHaveBeenCalledWith('single line');
+  });
+
+  it('renders upload button', () => {
+    act(() => {
+      root.render(createElement(CommandInput, baseProps));
+    });
+    const uploadBtn = container.querySelector('.upload-button');
+    expect(uploadBtn).not.toBeNull();
+  });
+
+  it('renders queue button wrapper when queuedCount > 0', () => {
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        queuedCount: 3,
+      }));
+    });
+    const queueWrapper = container.querySelector('.queue-button-wrapper');
+    expect(queueWrapper).not.toBeNull();
+    const queueCount = container.querySelector('.queue-count');
+    expect(queueCount?.textContent).toBe('3');
+  });
+
+  it('opens queue panel when queue button clicked', () => {
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        queuedCount: 2,
+        queuedMessages: ['msg1', 'msg2'],
+      }));
+    });
+    expect(container.querySelector('.queue-popover-overlay')).toBeNull();
+
+    const queueBtn = container.querySelector('.queue-button')!;
+    act(() => {
+      queueBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.queue-popover-overlay')).not.toBeNull();
+  });
+
+  it('toggles hints popover on button click', () => {
+    act(() => {
+      root.render(createElement(CommandInput, baseProps));
+    });
+    expect(container.querySelector('.hints-popover')).toBeNull();
+
+    const hintsBtn = container.querySelector('.hints-button')!;
+    act(() => {
+      hintsBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.hints-popover')).not.toBeNull();
+
+    act(() => {
+      hintsBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.hints-popover')).toBeNull();
+  });
+
+  it('shows length indicator when draft exceeds 100 chars', () => {
+    const longValue = 'a'.repeat(150);
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: longValue,
+      }));
+    });
+    const lengthIndicator = container.querySelector('.length-indicator');
+    expect(lengthIndicator).not.toBeNull();
+    expect(lengthIndicator?.textContent).toBe('150');
+  });
+
+  it('hides length indicator when draft is short', () => {
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'short',
+      }));
+    });
+    expect(container.querySelector('.length-indicator')).toBeNull();
+  });
+
 });

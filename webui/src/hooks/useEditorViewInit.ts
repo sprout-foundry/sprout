@@ -112,6 +112,11 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     actionsRef,
   } = options;
 
+  // Ref for openWorkspaceBuffer to avoid it being a dependency that causes
+  // EditorView recreation when other panes switch buffers.
+  const openWorkspaceBufferRef = useRef(openWorkspaceBuffer);
+  openWorkspaceBufferRef.current = openWorkspaceBuffer;
+
   useEffect(() => {
     if (!editorRef.current) return;
 
@@ -154,7 +159,10 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     // Do NOT add localContent to the dependency array below — doing so causes
     // the entire EditorView to be destroyed and recreated on every keystroke,
     // which breaks editing and resets scroll position.
-    const initContent = localContentRef.current;
+    // Use buffer content directly when creating the view to avoid stale content
+    // from a previous buffer. localContentRef may not have been updated yet
+    // when switching buffers because the buffer-load effect runs asynchronously.
+    const initContent = buffer?.content || localContentRef.current || '';
 
     const state = EditorState.create({
       doc: initContent,
@@ -185,7 +193,7 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
           const dotIndex = fileName.lastIndexOf('.');
           const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
 
-          openWorkspaceBuffer({
+          openWorkspaceBufferRef.current({
             kind: 'file',
             path: filePath,
             title: fileName,
@@ -240,7 +248,6 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     themePack,
     customHighlightStyle,
     localContentRef,
-    openWorkspaceBuffer,
     onCancelPendingFlush,
     onUpdate,
     settingsRef,

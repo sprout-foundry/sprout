@@ -5,7 +5,7 @@ import type {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info } from 'lucide-react';
+import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info, Database } from 'lucide-react';
 import { showThemedConfirm } from './ThemedDialog';
 import { useLog, debugLog } from '../utils/log';
 import './CommandInput.css';
@@ -37,6 +37,12 @@ interface CommandInputProps {
   onQueueMessageEdit?: (index: number, newText: string) => void;
   onQueueReorder?: (fromIndex: number, toIndex: number) => void;
   onClearQueuedMessages?: () => void;
+  /** Whether embedding indexing is enabled for the workspace */
+  isIndexEnabled?: boolean;
+  /** Whether indexing is currently building */
+  isIndexBuilding?: boolean;
+  /** Callback to toggle indexing on/off */
+  onToggleIndex?: (enabled: boolean) => void;
 }
 
 function CommandInput({
@@ -58,6 +64,9 @@ function CommandInput({
   onQueueMessageEdit,
   onQueueReorder,
   onClearQueuedMessages,
+  isIndexEnabled = false,
+  isIndexBuilding = false,
+  onToggleIndex,
 }: CommandInputProps): JSX.Element {
   const log = useLog();
   const [draftValue, setDraftValue] = useState(value);
@@ -825,6 +834,25 @@ function CommandInput({
       ) : null}
 
       <div className="input-actions">
+        {onToggleIndex !== undefined && (
+          <button
+            type="button"
+            className={`index-badge ${isIndexEnabled ? 'enabled' : 'disabled'}`}
+            onClick={() => onToggleIndex(!isIndexEnabled)}
+            data-tooltip={
+              isIndexEnabled
+                ? isIndexBuilding
+                  ? 'Building index...'
+                  : 'Indexing enabled — click to disable'
+                : 'Enable workspace indexing for semantic search'
+            }
+            aria-label={isIndexEnabled ? 'Disable workspace indexing' : 'Enable workspace indexing'}
+            aria-pressed={isIndexEnabled}
+          >
+            <Database size={14} />
+            {!isIndexEnabled && <span className="index-badge-slash" />}
+          </button>
+        )}
         <button
           type="button"
           className="upload-button"

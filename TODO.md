@@ -679,7 +679,7 @@ These are high-impact structural improvements identified through code evaluation
 
 ## Roadmap Hygiene
 
-[] - HYGIENE: Create roadmap specs for undocumented features — Memory system, multi-chat sessions, trace/dataset mode, and self_review tool all have zero roadmap coverage despite being fully implemented.
+[x] - HYGIENE: Create roadmap specs for undocumented features — Memory system, multi-chat sessions, trace/dataset mode, and self_review tool all have zero roadmap coverage despite being fully implemented.
 [] - HYGIENE: Deduplicate TODO.md — ~25 back-to-back duplicate entries across Editor Tier 3/4, SP-010, Credentials, Cloud, and AGENT-TERM sections.
 
 ---

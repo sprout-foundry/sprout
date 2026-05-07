@@ -4,7 +4,7 @@
  * A searchable command palette supporting commands, files, and symbols.
  * Fully props-driven — data fetching is handled by the host application.
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 import { debugLog } from '../utils/log';
@@ -92,6 +92,7 @@ function CommandPalette({
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const resultsListId = useId();
 
   // Reset on open
   useEffect(() => {
@@ -191,6 +192,16 @@ function CommandPalette({
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
         return;
       }
+      if (e.key === 'Home') {
+        e.preventDefault();
+        setSelectedIndex(0);
+        return;
+      }
+      if (e.key === 'End') {
+        e.preventDefault();
+        setSelectedIndex(results.length - 1);
+        return;
+      }
       if (e.key === 'Enter' && results.length > 0) {
         e.preventDefault();
         const result = results[selectedIndex];
@@ -212,7 +223,13 @@ function CommandPalette({
   if (!isOpen) return null;
 
   return (
-    <div className="command-palette-overlay" onClick={onClose}>
+    <div
+      className="command-palette-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+    >
       <div className="command-palette" onClick={(e) => e.stopPropagation()}>
         <div className="command-palette-input-row">
           <input
@@ -231,17 +248,36 @@ function CommandPalette({
                   ? 'Search symbols...'
                   : 'Type a command or search...'
             }
+            role="combobox"
+            aria-haspopup="listbox"
+            aria-expanded={true}
+            aria-controls={resultsListId}
+            aria-activedescendant={
+              results.length > 0 ? `command-palette-result-${selectedIndex}` : undefined
+            }
+            aria-autocomplete="list"
             autoFocus
           />
         </div>
-        <div className="command-palette-results" ref={listRef}>
+        <div
+          className="command-palette-results"
+          ref={listRef}
+          id={resultsListId}
+          role="listbox"
+          aria-label="Search results"
+        >
           {results.length === 0 && query && (
-            <div className="command-palette-empty">No results found</div>
+            <div className="command-palette-empty" role="status">
+              No results found
+            </div>
           )}
           {results.map((result, index) => (
             <div
+              id={`command-palette-result-${index}`}
               key={`${result.kind}-${result.commandId ?? result.filePath ?? index}`}
               className={`command-palette-item ${index === selectedIndex ? 'selected' : ''}`}
+              role="option"
+              aria-selected={index === selectedIndex}
               onClick={() => {
                 if (result.kind === 'command' && result.commandId) {
                   onExecuteCommand(result.commandId);
@@ -254,7 +290,7 @@ function CommandPalette({
               }}
             >
               <span className="command-palette-item-label">
-                <span className={`result-kind-badge ${result.kind}`}>
+                <span className={`result-kind-badge ${result.kind}`} aria-hidden="true">
                   {result.kind === 'command' ? '⌘' : result.kind === 'file' ? '📄' : 'ƒ'}
                 </span>
                 <span dangerouslySetInnerHTML={{ __html: result.highlightedLabel }} />

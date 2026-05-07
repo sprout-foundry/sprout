@@ -56,6 +56,22 @@ function byteSize(data: string): number {
 }
 
 /**
+ * Check if a character is a high surrogate (UTF-16 surrogate pair first half).
+ */
+function isHighSurrogate(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code >= 0xD800 && code <= 0xDBFF;
+}
+
+/**
+ * Check if a character is a low surrogate (UTF-16 surrogate pair second half).
+ */
+function isLowSurrogate(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return code >= 0xDC00 && code <= 0xDFFF;
+}
+
+/**
  * Truncate data from the beginning if it exceeds the maximum size.
  * Uses byte-accurate measurement for correct handling of multi-byte UTF-8.
  */
@@ -91,6 +107,25 @@ function truncateData(data: string): string {
   if (truncateAt === 0) {
     // Fallback: just cut at a safe byte boundary
     truncateAt = roughEstimate;
+
+    // Fix: avoid splitting UTF-16 surrogate pairs
+    // If truncateAt is in the middle of a surrogate pair, move past the high surrogate
+    if (truncateAt > 0 && truncateAt < data.length) {
+      const charAtPos = data[truncateAt];
+      const charBeforePos = data[truncateAt - 1];
+
+      // If the character at truncateAt is a low surrogate preceded by a high surrogate,
+      // skip past both to keep them together
+      if (isLowSurrogate(charAtPos) && isHighSurrogate(charBeforePos)) {
+        truncateAt = truncateAt - 1;
+      }
+      // If truncateAt lands on a high surrogate, skip past the low surrogate too
+      else if (isHighSurrogate(charAtPos) && truncateAt + 1 < data.length) {
+        if (isLowSurrogate(data[truncateAt + 1])) {
+          truncateAt = truncateAt + 2;
+        }
+      }
+    }
   }
 
   const truncated = data.slice(truncateAt);
@@ -104,8 +139,9 @@ function truncateData(data: string): string {
  * @param data - The serialized terminal content
  */
 export async function saveScrollback(sessionId: string, data: string): Promise<void> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDB();
+    db = await openDB();
 
     // Check and truncate if necessary (byte-accurate for multi-byte UTF-8)
     const size = byteSize(data);
@@ -121,8 +157,8 @@ export async function saveScrollback(sessionId: string, data: string): Promise<v
       timestamp: Date.now(),
     };
 
-    return new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
+    return await new Promise<void>((resolve, reject) => {
+      const transaction = db!.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.put(entry);
 
@@ -136,16 +172,12 @@ export async function saveScrollback(sessionId: string, data: string): Promise<v
         debugLog('[terminalScrollback] Saved scrollback for session:', sessionId, 'size:', dataToSave.length);
         resolve();
       };
-
-      transaction.onerror = () => {
-        const err = transaction.error;
-        debugLog('[terminalScrollback] Transaction error while saving scrollback:', err);
-        reject(err);
-      };
     });
   } catch (err) {
     // Silently catch and log errors - never block the terminal
     debugLog('[terminalScrollback] Error saving scrollback:', err);
+  } finally {
+    if (db) db.close();
   }
 }
 
@@ -155,11 +187,12 @@ export async function saveScrollback(sessionId: string, data: string): Promise<v
  * @returns The saved scrollback data, or null if not found or too old
  */
 export async function loadScrollback(sessionId: string): Promise<string | null> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDB();
+    db = await openDB();
 
-    return new Promise<string | null>((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readonly');
+    return await new Promise<string | null>((resolve, reject) => {
+      const transaction = db!.transaction(STORE_NAME, 'readonly');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.get(sessionId);
 
@@ -189,16 +222,12 @@ export async function loadScrollback(sessionId: string): Promise<string | null> 
         debugLog('[terminalScrollback] Loaded scrollback for session:', sessionId, 'size:', entry.data.length);
         resolve(entry.data);
       };
-
-      transaction.onerror = () => {
-        const err = transaction.error;
-        debugLog('[terminalScrollback] Transaction error while loading scrollback:', err);
-        reject(err);
-      };
     });
   } catch (err) {
     debugLog('[terminalScrollback] Error loading scrollback:', err);
     return null;
+  } finally {
+    if (db) db.close();
   }
 }
 
@@ -207,11 +236,12 @@ export async function loadScrollback(sessionId: string): Promise<string | null> 
  * @param sessionId - The terminal session ID
  */
 export async function deleteScrollback(sessionId: string): Promise<void> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDB();
+    db = await openDB();
 
-    return new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
+    return await new Promise<void>((resolve, reject) => {
+      const transaction = db!.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.delete(sessionId);
 
@@ -225,15 +255,11 @@ export async function deleteScrollback(sessionId: string): Promise<void> {
         debugLog('[terminalScrollback] Deleted scrollback for session:', sessionId);
         resolve();
       };
-
-      transaction.onerror = () => {
-        const err = transaction.error;
-        debugLog('[terminalScrollback] Transaction error while deleting scrollback:', err);
-        reject(err);
-      };
     });
   } catch (err) {
     debugLog('[terminalScrollback] Error deleting scrollback:', err);
+  } finally {
+    if (db) db.close();
   }
 }
 
@@ -242,13 +268,14 @@ export async function deleteScrollback(sessionId: string): Promise<void> {
  * Should be called on initialization to remove stale data.
  */
 export async function cleanupOldEntries(): Promise<void> {
+  let db: IDBDatabase | null = null;
   try {
-    const db = await openDB();
+    db = await openDB();
     const cutoffTime = Date.now() - MAX_AGE_MS;
     let deletedCount = 0;
 
-    return new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
+    return await new Promise<void>((resolve, reject) => {
+      const transaction = db!.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const index = store.index('timestamp');
 
@@ -275,14 +302,10 @@ export async function cleanupOldEntries(): Promise<void> {
           resolve();
         }
       };
-
-      transaction.onerror = () => {
-        const err = transaction.error;
-        debugLog('[terminalScrollback] Transaction error during cleanup:', err);
-        reject(err);
-      };
     });
   } catch (err) {
     debugLog('[terminalScrollback] Error cleaning up old entries:', err);
+  } finally {
+    if (db) db.close();
   }
 }

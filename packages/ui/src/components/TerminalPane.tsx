@@ -86,6 +86,10 @@ function TerminalPane({
       cursorBlink: true,
       convertEol: true,
       scrollback: 10000,
+      // Characters that delimit words for double-click selection.
+      // Default matches xterm.js upstream: space, parens, brackets, braces,
+      // quotes, comma, and backtick. Triple-click selects the entire line.
+      wordSeparator: ' ()[]{}\',"`',
       theme: {
         background: themePack?.terminal?.background ?? '#1e1e2e',
         foreground: themePack?.terminal?.foreground ?? '#cdd6f4',

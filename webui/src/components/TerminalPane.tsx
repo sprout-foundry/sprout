@@ -270,8 +270,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       if (wasmReverseSearchActiveRef.current) {
         // Handle multi-character paste
         if (data.length > 1) {
-          // Check for known escape sequences BEFORE treating as paste
-          if (data === '\x1b[D' || data === '\x1b[C') {
+          // Check for known escape sequences BEFORE treating as paste.
+          // Specific sequences (arrows, Home/End) exit search and place the
+          // matched command on the edit line with the correct cursor position.
+          // A generic \x1b catch-all below handles all other escape sequences
+          // (modifier variants like Ctrl+Arrow, Insert, Delete, etc.).
+          if (data.startsWith('\x1b[D') || data.startsWith('\x1b[C')) {
             // Left/Right arrow — exit search mode and put the found command on the line for editing
             wasmReverseSearchActiveRef.current = false;
             const result = wasmReverseSearchResultRef.current;
@@ -282,18 +286,18 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             rewriteWasmLine();
             return;
           }
-          if (data === '\x1b[H' || data === '\x1b[F') {
+          if (data.startsWith('\x1b[H') || data.startsWith('\x1b[F')) {
             // Home/End — exit search mode and put command on line
             wasmReverseSearchActiveRef.current = false;
             const result = wasmReverseSearchResultRef.current;
             wasmReverseSearchQueryRef.current = '';
             wasmReverseSearchIdxRef.current = -1;
             wasmLineRef.current = result || '';
-            wasmCursorRef.current = (data === '\x1b[H') ? 0 : wasmLineRef.current.length;
+            wasmCursorRef.current = (data.startsWith('\x1b[H')) ? 0 : wasmLineRef.current.length;
             rewriteWasmLine();
             return;
           }
-          if (data === '\x1b[A' || data === '\x1b[B') {
+          if (data.startsWith('\x1b[A') || data.startsWith('\x1b[B')) {
             // Up/Down — exit search, put command on line for editing
             wasmReverseSearchActiveRef.current = false;
             const result = wasmReverseSearchResultRef.current;
@@ -304,10 +308,25 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             rewriteWasmLine();
             return;
           }
-          // Genuine paste — append to search query
-          wasmReverseSearchQueryRef.current += data;
-          searchHistoryFrom(wasmHistoryRef.current.length - 1);
-          updateReverseSearchDisplay();
+          // Any other escape sequence (e.g. \x1b[1;5D for Ctrl+Left, \x1b[2~ for Insert)
+          // Exit search mode — these don't carry printable content.
+          if (data.startsWith('\x1b')) {
+            wasmReverseSearchActiveRef.current = false;
+            const result = wasmReverseSearchResultRef.current;
+            wasmReverseSearchQueryRef.current = '';
+            wasmReverseSearchIdxRef.current = -1;
+            wasmLineRef.current = result || '';
+            wasmCursorRef.current = wasmLineRef.current.length;
+            rewriteWasmLine();
+            return;
+          }
+          // Genuine paste — filter non-printable characters and append to search query
+          const printable = data.replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+          if (printable) {
+            wasmReverseSearchQueryRef.current += printable;
+            searchHistoryFrom(wasmHistoryRef.current.length - 1);
+            updateReverseSearchDisplay();
+          }
           return;
         }
 
@@ -700,6 +719,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         reverseSearchQueryRef.current = '';
         setReverseSearchVisible(false);
         setReverseSearchQuery('');
+        // Clear WASM reverse-search state to prevent stale mode on reactivation
+        wasmReverseSearchActiveRef.current = false;
+        wasmReverseSearchQueryRef.current = '';
+        wasmReverseSearchResultRef.current = '';
+        wasmReverseSearchIdxRef.current = -1;
         return;
       }
 
@@ -1240,6 +1264,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         const data = event.data as Record<string, unknown> | undefined;
         if (event.type === 'connection_status') {
           if (!data?.connected) {
+            // Clear reverse-i-search overlay state on disconnect
+            reverseSearchActiveRef.current = false;
+            reverseSearchQueryRef.current = '';
+            setReverseSearchVisible(false);
+            setReverseSearchQuery('');
             setPaneConnected(false);
             onConnectionChangeRef.current?.(false);
             xtermRef.current?.writeln('\r\nTerminal disconnected');
@@ -1274,6 +1303,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           setMatchIndex(undefined);
           setMatchCount(undefined);
           setSearchError(null);
+          // Clear reverse-i-search overlay state
+          reverseSearchActiveRef.current = false;
+          reverseSearchQueryRef.current = '';
+          setReverseSearchVisible(false);
+          setReverseSearchQuery('');
 
           const term = xtermRef.current;
           if (term) {
@@ -1297,6 +1331,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
           setPaneConnected(false);
           onConnectionChangeRef.current?.(false);
+
+          // Clear reverse-i-search overlay state
+          reverseSearchActiveRef.current = false;
+          reverseSearchQueryRef.current = '';
+          setReverseSearchVisible(false);
+          setReverseSearchQuery('');
 
           // Clean up the WebSocket connection for this dead session
           const service = terminalWSRef.current;

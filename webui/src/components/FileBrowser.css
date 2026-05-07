@@ -104,6 +104,10 @@
 
 .filebrowser-path-input:focus {
   outline: none;
+}
+
+.filebrowser-path-input:focus-visible {
+  outline: none;
   border-color: #007acc;
 }
 

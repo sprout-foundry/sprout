@@ -52,6 +52,11 @@
   outline: none;
 }
 
+.cm-rename-input:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline-offset: 2px;
+}
+
 /* Placeholder text style */
 .cm-rename-input::placeholder {
   color: var(--text-muted, #666);

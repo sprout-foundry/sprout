@@ -106,6 +106,10 @@
 
 .wt-chat-dialog-form-group input:focus {
   outline: none;
+}
+
+.wt-chat-dialog-form-group input:focus-visible {
+  outline: none;
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px var(--accent-color-opacity);
 }

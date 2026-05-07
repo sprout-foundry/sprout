@@ -139,6 +139,11 @@
   color: var(--text-muted);
 }
 
+.live-preview-editor:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline-offset: 2px;
+}
+
 /* SVG preview container */
 .live-preview-svg-container {
   display: flex;

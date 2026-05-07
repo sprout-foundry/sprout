@@ -55,6 +55,11 @@
   color: var(--toolbar-fg, #888);
 }
 
+.goto-symbol-input:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline-offset: 2px;
+}
+
 /* ── Scrollable symbol list ─────────────────────────────────────────────── */
 
 .goto-symbol-list {

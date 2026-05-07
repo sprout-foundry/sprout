@@ -42,7 +42,7 @@ import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
 import { supportsSettings } from '../config/mode';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
-import { type SectionTab } from '../hooks/useSidebarState';
+import { type SectionTab, SIDEBAR_DEFAULT_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -82,6 +82,11 @@ interface SidebarProps {
   selectedSection?: SectionTab;
   onSectionChange?: (section: SectionTab) => void;
   onFileClick?: (filePath: string, lineNumber?: number) => void;
+  sidebarWidth?: number;
+  sidebarWidthRef?: React.MutableRefObject<number>;
+  onSidebarWidthChange?: (width: number) => void;
+  onSidebarWidthPersist?: () => void;
+  onSidebarWidthReset?: () => void;
   // Legacy props for backward compatibility
   provider?: string;
   model?: string;
@@ -135,12 +140,7 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   'external-link': ExternalLink,
 };
 
-const SIDEBAR_MIN_WIDTH = 200;
-const SIDEBAR_MAX_WIDTH = 600;
-const SIDEBAR_DEFAULT_WIDTH = 288;
 const MAX_LOG_ROWS = 1000;
-
-const clampSidebarWidth = (value: number): number => Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 
 function Sidebar({
   isConnected,
@@ -164,6 +164,11 @@ function Sidebar({
   selectedSection,
   onSectionChange,
   onFileClick,
+  sidebarWidth,
+  sidebarWidthRef,
+  onSidebarWidthChange,
+  onSidebarWidthPersist,
+  onSidebarWidthReset,
   provider,
   model,
   logs,
@@ -190,12 +195,6 @@ function Sidebar({
     revealFile: (filePath: string) => void;
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const stored = localStorage.getItem('sprout-sidebar-width');
-    return stored ? clampSidebarWidth(Number(stored)) : SIDEBAR_DEFAULT_WIDTH;
-  });
-  const sidebarWidthRef = useRef(sidebarWidth);
-  sidebarWidthRef.current = sidebarWidth;
   const [selectedProvider, setSelectedProvider] = useState(provider || '');
   const [selectedModelState, setSelectedModelState] = useState(model || selectedModel || '');
   const [selectedPersonaState, setSelectedPersonaState] = useState<string>(
@@ -212,6 +211,10 @@ function Sidebar({
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
   const effectiveSelectedSection = selectedSection || 'git';
+  // Use props for width or fall back to default
+  const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
+  // Plain object fallback avoids calling useRef when the prop is not provided
+  const effectiveSidebarWidthRef = sidebarWidthRef ?? { current: effectiveSidebarWidth };
 
   // Sync persona state when stats change (e.g., from another client's persona change)
   useEffect(() => {
@@ -399,33 +402,29 @@ function Sidebar({
 
   const handleSidebarResize = useCallback(
     (delta: number) => {
-      const nextWidth = clampSidebarWidth(sidebarWidthRef.current + delta);
+      const nextWidth = clampSidebarWidth(effectiveSidebarWidthRef.current + delta);
 
       // Allow drag-to-expand behavior from collapsed mode.
       if (effectiveSidebarCollapsed) {
-        setSidebarWidth(nextWidth);
+        onSidebarWidthChange?.(nextWidth);
         if (delta > 0) {
           onSidebarToggle?.();
         }
         return;
       }
 
-      setSidebarWidth(nextWidth);
+      onSidebarWidthChange?.(nextWidth);
     },
-    [effectiveSidebarCollapsed, onSidebarToggle],
+    [effectiveSidebarCollapsed, onSidebarToggle, onSidebarWidthChange],
   );
 
   const handleSidebarResizeEnd = useCallback(() => {
-    setSidebarWidth((prev) => {
-      localStorage.setItem('sprout-sidebar-width', String(prev));
-      return prev;
-    });
-  }, []);
+    onSidebarWidthPersist?.();
+  }, [onSidebarWidthPersist]);
 
   const handleSidebarResizeReset = useCallback(() => {
-    setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
-    localStorage.setItem('sprout-sidebar-width', String(SIDEBAR_DEFAULT_WIDTH));
-  }, []);
+    onSidebarWidthReset?.();
+  }, [onSidebarWidthReset]);
 
   const handleSectionTabClick = (tab: SectionTab) => {
     if (effectiveSidebarCollapsed) {
@@ -1068,7 +1067,7 @@ function Sidebar({
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
       <div
         className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
-        style={effectiveSidebarCollapsed ? undefined : isMobile ? undefined : { width: `${sidebarWidth}px` }}
+        style={effectiveSidebarCollapsed ? undefined : isMobile ? undefined : { width: `${effectiveSidebarWidth}px` }}
       >
         {/* Pinned global header: instance selector */}
         <div className="sidebar-pinned-header">

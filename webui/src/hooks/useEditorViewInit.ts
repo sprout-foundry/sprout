@@ -159,10 +159,10 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     // Do NOT add localContent to the dependency array below — doing so causes
     // the entire EditorView to be destroyed and recreated on every keystroke,
     // which breaks editing and resets scroll position.
-    // Use buffer content directly when creating the view to avoid stale content
-    // from a previous buffer. localContentRef may not have been updated yet
-    // when switching buffers because the buffer-load effect runs asynchronously.
-    const initContent = buffer?.content || localContentRef.current || '';
+    // Use buffer content directly when creating the view. Do NOT fall back to
+    // localContentRef.current — it is stale from the previous buffer when
+    // switching files, corrupting the history baseline (undo reveals old file content).
+    const initContent = buffer?.content || '';
 
     const state = EditorState.create({
       doc: initContent,

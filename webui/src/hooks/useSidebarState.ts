@@ -2,14 +2,21 @@
  * Sidebar UI state with localStorage persistence.
  *
  * Manages: sidebar collapsed state, mobile detection, sidebar open/close
- * (mobile overlay), terminal expanded state, and active sidebar tab.
+ * (mobile overlay), terminal expanded state, active sidebar tab, and sidebar width.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { debugLog } from '../utils/log';
 
 export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
+
+export const SIDEBAR_MIN_WIDTH = 200;
+export const SIDEBAR_MAX_WIDTH = 600;
+export const SIDEBAR_DEFAULT_WIDTH = 288;
+
+export const clampSidebarWidth = (value: number): number =>
+  Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
 
 export interface UseSidebarStateReturn {
   isMobile: boolean;
@@ -17,6 +24,8 @@ export interface UseSidebarStateReturn {
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
   selectedSection: SectionTab;
+  sidebarWidth: number;
+  sidebarWidthRef: React.MutableRefObject<number>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
@@ -24,6 +33,9 @@ export interface UseSidebarStateReturn {
   handleSidebarToggle: () => void;
   setIsTerminalExpanded: (expanded: boolean) => void;
   setSelectedSection: (tab: SectionTab) => void;
+  setSidebarWidth: (width: number) => void;
+  persistSidebarWidth: () => void;
+  resetSidebarWidth: () => void;
 }
 
 function loadPersistedBoolean(key: string, fallback: boolean): boolean {
@@ -65,6 +77,20 @@ export function useSidebarState(): UseSidebarStateReturn {
     loadPersistedString('sprout-sidebar-active-tab', 'git' as SectionTab, VALID_SECTION_TABS),
   );
 
+  const [sidebarWidth, setSidebarWidthRaw] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('sprout-sidebar-width');
+      const parsed = stored ? Number(stored) : SIDEBAR_DEFAULT_WIDTH;
+      return clampSidebarWidth(parsed);
+    } catch (err) {
+      debugLog('[useSidebarState] failed to load sidebar width from localStorage:', err);
+      return SIDEBAR_DEFAULT_WIDTH;
+    }
+  });
+
+  const sidebarWidthRef = useRef(sidebarWidth);
+  sidebarWidthRef.current = sidebarWidth;
+
   const setSidebarCollapsed = useCallback((collapsed: boolean) => {
     try {
       window.localStorage.setItem('sprout-sidebar-collapsed', String(collapsed));
@@ -92,6 +118,33 @@ export function useSidebarState(): UseSidebarStateReturn {
     setSelectedSectionRaw(tab);
   }, []);
 
+  const setSidebarWidth = useCallback((width: number) => {
+    const clamped = clampSidebarWidth(width);
+    setSidebarWidthRaw(clamped);
+  }, []);
+
+  const persistSidebarWidth = useCallback(() => {
+    try {
+      window.localStorage.setItem('sprout-sidebar-width', String(sidebarWidthRef.current));
+    } catch (err) {
+      debugLog('[useSidebarState] failed to persist sidebar width:', err);
+    }
+  }, []);
+
+  const resetSidebarWidth = useCallback(() => {
+    try {
+      window.localStorage.setItem('sprout-sidebar-width', String(SIDEBAR_DEFAULT_WIDTH));
+    } catch (err) {
+      debugLog('[useSidebarState] failed to persist sidebar width reset:', err);
+    }
+    setSidebarWidthRaw(SIDEBAR_DEFAULT_WIDTH);
+  }, []);
+
+  // Keep the ref in sync with the state value for real-time drag operations
+  useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
+
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => !prev);
   }, []);
@@ -114,6 +167,8 @@ export function useSidebarState(): UseSidebarStateReturn {
     sidebarCollapsed,
     isTerminalExpanded,
     selectedSection,
+    sidebarWidth,
+    sidebarWidthRef,
     setIsMobile,
     setSidebarCollapsed,
     toggleSidebar,
@@ -121,5 +176,8 @@ export function useSidebarState(): UseSidebarStateReturn {
     handleSidebarToggle,
     setIsTerminalExpanded,
     setSelectedSection,
+    setSidebarWidth,
+    persistSidebarWidth,
+    resetSidebarWidth,
   };
 }

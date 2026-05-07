@@ -258,6 +258,20 @@ describe('filePathPattern', () => {
       const matches = getAllMatches('   ');
       expect(matches).toHaveLength(0);
     });
+
+    it('matches valid portion after space in ./my file.go:10', () => {
+      // Space is a boundary — regex matches "file.go:10" (the valid part after space)
+      const matches = getAllMatches('./my file.go:10');
+      expect(matches).toHaveLength(1);
+      expect(matches[0][0]).toBe('file.go:10');
+    });
+
+    it('matches valid portion after space in directory: ./my dir/file.go:10', () => {
+      // Space causes regex to see "dir/file.go:10" as valid subpath match
+      const matches = getAllMatches('./my dir/file.go:10');
+      expect(matches).toHaveLength(1);
+      expect(matches[0][0]).toBe('dir/file.go:10');
+    });
   });
 });
 
@@ -417,7 +431,7 @@ describe('registerTerminalFilePathLinks', () => {
     expect(getDispatchedEvents()).toHaveLength(1);
     const evt = getDispatchedEvents()[0];
     expect(evt.type).toBe('sprout:open-in-editor');
-    expect(evt.detail).toEqual({ path: 'main.go', lineNumber: 42 });
+    expect(evt.detail).toEqual({ path: 'main.go', lineNumber: 42, columnNumber: 10 });
   });
 
   it('strips leading ./ from path in event detail', () => {
@@ -434,7 +448,7 @@ describe('registerTerminalFilePathLinks', () => {
     expect(getDispatchedEvents()[0].detail).toEqual({ path: 'foo.go', lineNumber: 5 });
   });
 
-  it('does not include columnNumber in event detail', () => {
+  it('includes columnNumber in event detail when present', () => {
     const terminal = createMockTerminal(['./file.ts:10:20']);
     registerTerminalFilePathLinks(terminal);
 
@@ -444,8 +458,28 @@ describe('registerTerminalFilePathLinks', () => {
 
     links[0].activate(new MouseEvent('click'), './file.ts:10:20');
 
-    expect(getDispatchedEvents()[0].detail).toEqual({ path: 'file.ts', lineNumber: 10 });
-    expect(getDispatchedEvents()[0].detail.columnNumber).toBeUndefined();
+    expect(getDispatchedEvents()[0].detail).toEqual({
+      path: 'file.ts',
+      lineNumber: 10,
+      columnNumber: 20,
+    });
+  });
+
+  it('includes columnNumber as undefined in event detail when no column in match', () => {
+    const terminal = createMockTerminal(['./file.ts:10']);
+    registerTerminalFilePathLinks(terminal);
+
+    const links = getLinksFromProvider(terminal, 1) as Array<{
+      activate: (event: MouseEvent, text: string) => void;
+    }>;
+
+    links[0].activate(new MouseEvent('click'), './file.ts:10');
+
+    expect(getDispatchedEvents()[0].detail).toEqual({
+      path: 'file.ts',
+      lineNumber: 10,
+      columnNumber: undefined,
+    });
   });
 
   it('handles line with no file paths (returns undefined)', () => {

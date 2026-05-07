@@ -21,7 +21,9 @@ import type { Terminal, ILinkProvider, ILink, IDisposable } from '@xterm/xterm';
  * - (?::(\d+))? - Capture group 3: optional column number after colon
  * - (?=$|[\s),;:]) - Lookahead: must end at line end or before whitespace/delimiter/colon
  */
-export const filePathPattern = /(?<=^|[\s(])(\.?\/?(?:[\w.\/_-]+\/)?[\w_-]+\.[a-zA-Z][\w]*)(?::(\d+))(?::(\d+))?(?=$|[\s),;:])/g;
+const _originalPattern = /(?<=^|[\s(])(\.?\/?(?:[\w.\/_-]+\/)?[\w_-]+\.[a-zA-Z][\w]*)(?::(\d+))(?::(\d+))?(?=$|[\s),;:])/g;
+export const filePathPatternSource = _originalPattern.source;
+export const filePathPattern = new RegExp(filePathPatternSource, 'g');
 
 /**
  * Result of parsing a file path match from the terminal.
@@ -45,6 +47,12 @@ export function parseFilePathMatch(match: RegExpMatchArray): FilePathMatch {
   const lineNumber = parseInt(lineStr, 10);
   const columnNumber = colStr ? parseInt(colStr, 10) : undefined;
 
+  // Defensive: if somehow NaN occurs, default to lineNumber 1
+  // (regex guarantees \d+ digits-only, but being defensive here)
+  if (!Number.isFinite(lineNumber)) {
+    return { path, lineNumber: 1 };
+  }
+
   return { path, lineNumber, columnNumber };
 }
 
@@ -57,6 +65,9 @@ export function parseFilePathMatch(match: RegExpMatchArray): FilePathMatch {
  * @returns An IDisposable for cleanup (call dispose() to unregister)
  */
 export function registerTerminalFilePathLinks(terminal: Terminal): IDisposable {
+  // Create instance-local regex to avoid shared lastIndex state across terminal instances
+  const localFilePathPattern = new RegExp(filePathPatternSource, 'g');
+
   const linkProvider: ILinkProvider = {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
       // Get the line from the active buffer (0-indexed)
@@ -76,11 +87,11 @@ export function registerTerminalFilePathLinks(terminal: Terminal): IDisposable {
       const links: ILink[] = [];
 
       // Reset regex state before scanning
-      filePathPattern.lastIndex = 0;
+      localFilePathPattern.lastIndex = 0;
 
       let match: RegExpExecArray | null;
-      while ((match = filePathPattern.exec(lineText)) !== null) {
-        const { path, lineNumber } = parseFilePathMatch(match);
+      while ((match = localFilePathPattern.exec(lineText)) !== null) {
+        const { path, lineNumber, columnNumber } = parseFilePathMatch(match);
         const startIndex = match.index;
         const endIndex = startIndex + match[0].length;
 
@@ -94,7 +105,7 @@ export function registerTerminalFilePathLinks(terminal: Terminal): IDisposable {
           activate(_event: MouseEvent, _text: string): void {
             // Dispatch custom event to open the file in the editor
             const customEvent = new CustomEvent('sprout:open-in-editor', {
-              detail: { path, lineNumber },
+              detail: { path, lineNumber, columnNumber },
             });
             window.dispatchEvent(customEvent);
           },

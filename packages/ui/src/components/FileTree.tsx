@@ -1370,6 +1370,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           ref={fileListRef}
           role="tree"
           aria-label="File tree"
+          aria-multiselectable="true"
           tabIndex={-1}
           onKeyDown={handleFileListKeyDown}
           onContextMenu={(event) => {

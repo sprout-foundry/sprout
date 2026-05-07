@@ -96,9 +96,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ── Search functionality ────────────────────────────────────────────────
     const searchAddonRef = useRef<SearchAddon | null>(null);
     const searchBarRef = useRef<TerminalSearchBarHandle | null>(null);
+    const searchInitialQueryRef = useRef<string | null>(null);
     const [searchVisible, setSearchVisible] = useState(false);
     const [matchIndex, setMatchIndex] = useState<number | undefined>(undefined);
     const [matchCount, setMatchCount] = useState<number | undefined>(undefined);
+    const [searchError, setSearchError] = useState<string | null>(null);
 
     // Track whether the pane is currently mounted/active so the cleanup function
     // can distinguish between a temporary freeze and a permanent unmount.
@@ -660,6 +662,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
     // ── Search functionality handlers ────────────────────────────────────────
 
+    // Handle search errors from the search bar
+    const handleSearchError = useCallback((message: string | null) => {
+      setSearchError(message);
+    }, []);
+
     // Handle search requests from the search bar
     const handleSearch = useCallback(
       (options: TerminalSearchOptions, direction: 'next' | 'previous') => {
@@ -675,13 +682,15 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         };
 
         try {
+          setSearchError(null);
           if (direction === 'next') {
             searchAddon.findNext(query, searchOptions);
           } else {
             searchAddon.findPrevious(query, searchOptions);
           }
         } catch (err) {
-          debugLog('[TerminalPane] search error (invalid regex?):', err);
+          const message = err instanceof Error ? err.message : String(err);
+          setSearchError(message);
         }
       },
       [],
@@ -693,6 +702,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       searchAddonRef.current?.clearDecorations();
       setMatchIndex(undefined);
       setMatchCount(undefined);
+      setSearchError(null);
       xtermRef.current?.focus();
     }, []);
 
@@ -784,15 +794,16 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           }
           if (event.key.toLowerCase() === 'f') {
             event.preventDefault();
-            setSearchVisible((prev) => {
-              const next = !prev;
-              if (next) {
-                searchBarRef.current?.focusInput();
-              } else if (searchAddonRef.current) {
-                searchAddonRef.current.clearDecorations();
-              }
-              return next;
-            });
+            if (searchVisible) {
+              // Already visible — close it
+              searchAddonRef.current?.clearDecorations();
+              setSearchVisible(false);
+            } else {
+              // Capture selection before toggling visibility (ref is null during updater)
+              const sel = xtermRef.current?.getSelection();
+              searchInitialQueryRef.current = (sel && sel.trim()) ? sel.trim() : null;
+              setSearchVisible(true);
+            }
             return false;
           }
         }
@@ -922,6 +933,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           // Reattach: reset the terminal to prevent duplicating content
           // that was already displayed. The server sends its ring buffer
           // scrollback which we write into the fresh terminal.
+          // Close search bar and clear search state before reset
+          setSearchVisible(false);
+          searchAddonRef.current?.clearDecorations();
+          setMatchIndex(undefined);
+          setMatchCount(undefined);
+          setSearchError(null);
+
           const term = xtermRef.current;
           if (term) {
             term.reset();
@@ -1103,6 +1121,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           onClose={handleCloseSearch}
           matchIndex={matchIndex}
           matchCount={matchCount}
+          searchError={searchError}
+          onSearchError={handleSearchError}
+          initialQuery={searchInitialQueryRef.current}
         />
         <div
           className="terminal-pane-content"

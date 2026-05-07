@@ -262,7 +262,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         const hist = wasmHistoryRef.current;
         const currentIdx = wasmReverseSearchIdxRef.current;
         // Search starting from one position before current match
-        const startIndex = currentIdx > 0 ? currentIdx - 1 : hist.length - 1;
+        const startIndex = currentIdx >= 0 ? currentIdx - 1 : hist.length - 1;
         searchHistoryFrom(startIndex);
       };
 
@@ -384,16 +384,16 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           return;
         }
 
-        // Ctrl+C — cancel reverse-i-search
+        // Ctrl+C — cancel reverse-i-search and restore original line
         if (ch === '\x03') {
           term.write('^C\r\n');
           wasmReverseSearchActiveRef.current = false;
           wasmReverseSearchQueryRef.current = '';
           wasmReverseSearchResultRef.current = '';
           wasmReverseSearchIdxRef.current = -1;
-          wasmLineRef.current = '';
-          wasmCursorRef.current = 0;
-          writeWasmPrompt();
+          wasmLineRef.current = wasmSavedLineRef.current;
+          wasmCursorRef.current = wasmSavedCursorRef.current;
+          rewriteWasmLine();
           return;
         }
 
@@ -910,14 +910,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
       // Handle multi-character data (escape sequences or paste)
       if (data.length > 1) {
-        // Escape sequences (arrow keys, Home/End, etc.) — exit reverse-search mode
+        // Multi-character escape sequences (arrow keys, Home/End, etc.) are
+        // passed through to the PTY without cancelling the overlay. The PTY
+        // handles them natively in reverse-i-search mode. Only bare \x1b
+        // (Escape key, handled below as a single character) cancels the overlay.
         if (data.startsWith('\x1b')) {
-          if (reverseSearchActiveRef.current) {
-            reverseSearchActiveRef.current = false;
-            reverseSearchQueryRef.current = '';
-            setReverseSearchVisible(false);
-            setReverseSearchQuery('');
-          }
+          // Don't cancel overlay for arrow keys / navigaton sequences
           return;
         }
         // Multi-character paste in reverse-i-search mode

@@ -47,6 +47,8 @@ interface TerminalPaneProps {
   reattachSessionId?: string | null;
   /** Called when the PTY process exits (pty_exit event from backend). */
   onProcessExit?: () => void;
+  /** When true, automatically copies selected text to clipboard. */
+  copyOnSelect?: boolean;
 }
 
 interface TerminalContextMenuState {
@@ -60,7 +62,7 @@ interface TerminalContextMenuState {
 const EXPAND_RESIZE_DELAY_MS = 100; // Delay to allow terminal expand animation to progress before triggering resize
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId, onProcessExit }, ref) => {
+  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId, onProcessExit, copyOnSelect = false }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
     const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
@@ -131,6 +133,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const wasmHistoryIdxRef = useRef(-1);
     const wasmPromptRef = useRef('\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m~\x1b[0m$ ');
     const wasmInitializedRef = useRef(false);
+
+    // Ref for copy-on-select debounce timer
+    const copyOnSelectTimerRef = useRef<number | null>(null);
+    // Stabilize copyOnSelect so the xterm init effect doesn't recreate xterm on toggle
+    const copyOnSelectRef = useRef(copyOnSelect);
 
     const getTerminalTheme = useCallback(() => {
       return {
@@ -832,6 +839,35 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         }
       });
 
+      // Set up copy-on-select handler with debounce
+      const selectionChangeDisposable = term.onSelectionChange(() => {
+        if (copyOnSelectRef.current && term.hasSelection()) {
+          // Clear any pending copy timer
+          if (copyOnSelectTimerRef.current !== null) {
+            clearTimeout(copyOnSelectTimerRef.current);
+          }
+          // Set a new timer with 150ms debounce
+          copyOnSelectTimerRef.current = window.setTimeout(() => {
+            // Re-check in case feature was toggled off during debounce
+            if (!copyOnSelectRef.current) {
+              copyOnSelectTimerRef.current = null;
+              return;
+            }
+            try {
+              const selection = term.getSelection();
+              if (selection) {
+                copyToClipboard(selection).catch((err) => {
+                  debugLog('[TerminalPane] copy-on-select failed:', err);
+                });
+              }
+            } catch (err) {
+              debugLog('[TerminalPane] copy-on-select failed:', err);
+            }
+            copyOnSelectTimerRef.current = null;
+          }, 150);
+        }
+      });
+
       requestAnimationFrame(() => {
         fitAddon.fit();
         term.focus();
@@ -842,6 +878,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         linkProviderRef.current = null;
         // Dispose search results listener
         resultsDisposable.dispose();
+        // Dispose selection change listener
+        selectionChangeDisposable.dispose();
+        // Clear copy-on-select timer
+        if (copyOnSelectTimerRef.current !== null) {
+          clearTimeout(copyOnSelectTimerRef.current);
+          copyOnSelectTimerRef.current = null;
+        }
         // Remove wheel event listener
         if (container) {
           container.removeEventListener('wheel', handleWheel);
@@ -866,6 +909,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       xtermRef.current.options.fontSize = fontSize ?? FONT_SIZE_DEFAULT;
       requestAnimationFrame(() => fitAddonRef.current?.fit());
     }, [themePack.id, getTerminalTheme, getTerminalFontFamily, fontSize]);
+
+    // Keep copyOnSelect ref in sync
+    useEffect(() => {
+      copyOnSelectRef.current = copyOnSelect;
+    }, [copyOnSelect]);
 
     // Manage WebSocket connection lifecycle
     useEffect(() => {

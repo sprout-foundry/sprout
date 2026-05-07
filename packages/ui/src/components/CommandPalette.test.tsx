@@ -434,3 +434,286 @@ describe('CommandPalette', () => {
     expect(container.querySelector('.command-palette')).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: Accessibility
+// ---------------------------------------------------------------------------
+
+describe('Accessibility', () => {
+  const onClose = vi.fn();
+  const onOpenFile = vi.fn();
+  const onExecuteCommand = vi.fn();
+  const onNavigateToLine = vi.fn();
+
+  const defaultCommands: CommandDef[] = [
+    { id: 'cmd1', label: 'New File', category: 'File' },
+    { id: 'cmd2', label: 'Open File', category: 'File' },
+    { id: 'cmd3', label: 'Save', category: 'File' },
+  ];
+
+  const defaultProps = {
+    isOpen: true,
+    onClose,
+    onOpenFile,
+    onExecuteCommand,
+    onNavigateToLine,
+    commands: defaultCommands,
+  };
+
+  it('renders aria-live region with polite announcements when palette is open', () => {
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+    expect(liveRegion).not.toBeNull();
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
+    expect(liveRegion?.getAttribute('aria-atomic')).toBe('true');
+    expect(liveRegion?.getAttribute('role')).toBe('status');
+  });
+
+  it('has combobox input with correct ARIA attributes', () => {
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+    expect(input?.getAttribute('role')).toBe('combobox');
+    expect(input?.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(input?.getAttribute('aria-expanded')).toBe('true');
+    expect(input?.getAttribute('aria-autocomplete')).toBe('list');
+    expect(input?.getAttribute('aria-controls')).toBeTruthy();
+  });
+
+  it('updates aria-activedescendant when navigating with arrow keys', () => {
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    act(() => {
+      setInputValue(input, 'File');
+    });
+
+    // Initial state - aria-activedescendant should point to index 0
+    expect(input?.getAttribute('aria-activedescendant')).toBe('command-palette-result-0');
+
+    // Press ArrowDown to move to next result
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    // Should now point to index 1
+    expect(input?.getAttribute('aria-activedescendant')).toBe('command-palette-result-1');
+  });
+
+  it('announces "N results available" when results appear', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    act(() => {
+      setInputValue(input, 'File');
+    });
+
+    // Advance past the debounce delay (300ms)
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+    expect(liveRegion?.textContent).toMatch(/\d+ result(s)? available/);
+
+    vi.useRealTimers();
+  });
+
+  it('announces "No results found" when there are no matches', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    act(() => {
+      setInputValue(input, 'zzzznotfound');
+    });
+
+    // Advance past the debounce delay (300ms)
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+    expect(liveRegion?.textContent).toBe('No results found');
+
+    vi.useRealTimers();
+  });
+
+  it('announces selected item position when navigating with ArrowDown', () => {
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    act(() => {
+      setInputValue(input, 'File');
+    });
+
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+
+    // Press ArrowDown to move to next item
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    // Should announce the selected item with position and label (index 1)
+    expect(liveRegion?.textContent).toMatch(/2 of \d+,\s+\w+/);
+  });
+
+  it('has role="option" and aria-selected on each result item', () => {
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    act(() => {
+      setInputValue(input, 'New');
+    });
+
+    const items = container.querySelectorAll('.command-palette-item');
+    expect(items.length).toBeGreaterThan(0);
+
+    // First item should have aria-selected="true"
+    expect(items[0]?.getAttribute('role')).toBe('option');
+    expect(items[0]?.getAttribute('aria-selected')).toBe('true');
+
+    // Other items should have aria-selected="false"
+    if (items.length > 1) {
+      expect(items[1]?.getAttribute('role')).toBe('option');
+      expect(items[1]?.getAttribute('aria-selected')).toBe('false');
+    }
+  });
+
+  it('has role="listbox" and accessible label on results container', () => {
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const listbox = container.querySelector('.command-palette-results');
+    expect(listbox?.getAttribute('role')).toBe('listbox');
+    expect(listbox?.getAttribute('aria-label')).toBe('Search results');
+  });
+
+  it('clears announcement when query is cleared', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    // Type something that gets multiple results
+    act(() => {
+      setInputValue(input, 'File');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+    expect(liveRegion?.textContent).toMatch(/\d+ result(s)? available/);
+
+    // Clear the query
+    act(() => {
+      setInputValue(input, '');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // Announcement should be cleared
+    expect(liveRegion?.textContent).toBe('');
+
+    vi.useRealTimers();
+  });
+
+  it('does not overwrite selection announcement with count after navigation', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+
+    // Type a query that matches multiple commands
+    act(() => {
+      setInputValue(input, 'File');
+    });
+
+    // Advance past the count debounce so the count announcement fires
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(liveRegion?.textContent).toMatch(/\d+ result/);
+
+    // Navigate with ArrowDown — selection effect fires, updates announcement
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    // The live region should now show the selection announcement
+    expect(liveRegion?.textContent).toMatch(/2 of \d+,\s+\w+/);
+
+    // Advance past any remaining timers — selection should NOT be overwritten
+    // because the count effect only depends on [results.length, query] and those
+    // didn't change during navigation, so no new count timer was scheduled.
+    act(() => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // Selection announcement should still be present
+    expect(liveRegion?.textContent).toMatch(/2 of \d+,\s+\w+/);
+
+    vi.useRealTimers();
+  });
+
+  it('announces count again when user types new query after navigation', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    // Type a query, navigate, then type more
+    act(() => {
+      setInputValue(input, 'Fi');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // Navigate
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    // Live region should show selection announcement
+    const liveRegion = container.querySelector('.command-palette-sr-only');
+    expect(liveRegion?.textContent).toMatch(/\d+ of \d+/);
+
+    // Type a new character — triggers new count timer
+    act(() => {
+      setInputValue(input, 'Fil');
+    });
+
+    // Advance past debounce — count announcement should fire
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(liveRegion?.textContent).toMatch(/\d+ result(s)? available/);
+
+    vi.useRealTimers();
+  });
+});

@@ -499,6 +499,52 @@ describe('terminalScrollback', () => {
         expect(result.length).toBeLessThan(fullData.length);
       }
     });
+
+    it('preserves emoji and multi-byte characters during truncation', async () => {
+      // Build a large string with emojis (surrogate pairs) at regular intervals
+      const emojis = ['😀', '😎', '🚀', '💻', '🎉', '⭐', '🌟', '💡', '🔥', '❤️'];
+      const chunk = 'x'.repeat(100);
+      const chunks: string[] = [];
+
+      // Create data > 500KB with emojis throughout
+      let totalSize = 0;
+      let emojiIndex = 0;
+      while (totalSize < 600 * 1024) {
+        chunks.push(chunk);
+        chunks.push(emojis[emojiIndex % emojis.length]);
+        totalSize += chunk.length + emojis[emojiIndex % emojis.length].length;
+        emojiIndex++;
+      }
+
+      const bigDataWithEmojis = chunks.join('');
+      await saveScrollback('emoji-session', bigDataWithEmojis);
+
+      const result = await loadScrollback('emoji-session');
+      expect(result).not.toBeNull();
+
+      if (result) {
+        const encoder = new TextEncoder();
+        expect(encoder.encode(result).length).toBeLessThanOrEqual(500 * 1024);
+
+        // Verify that emojis are not corrupted - no orphaned surrogates
+        // We can check this by ensuring all emojis are still intact
+        for (const emoji of emojis) {
+          // The result should contain some instances of each emoji, or at least
+          // we shouldn't have any replacement characters indicating corruption
+          expect(result).not.toContain('�'); // Replacement character
+        }
+
+        // Count emojis in result to ensure many survived truncation
+        const emojiCount = emojis.reduce((count, emoji) => {
+          const regex = new RegExp(emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+          const matches = result.match(regex);
+          return count + (matches ? matches.length : 0);
+        }, 0);
+
+        // We should have at least some emojis in the truncated result
+        expect(emojiCount).toBeGreaterThan(0);
+      }
+    });
   });
 
   // ── 24h expiry ───────────────────────────────────────────────────────

@@ -762,7 +762,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-011 Phase 2: Add right-click context menu for terminal — Paste, Copy Selection (if text selected), Search, Clear Terminal, Split Pane, Select All. Reuses `ContextMenu` from `@sprout/ui`. `webui/src/components/TerminalContextMenu.tsx`
 [x] - SP-011 Phase 2: Add reverse-i-search (Ctrl+R) — Passthrough Ctrl+R to PTY shell (bash/zsh handle natively). Client-side display enhancement to show search prompt overlay. Future: client-side history search.
 [x] - SP-011 Phase 2: Add reverse-i-search (Ctrl+R) — Passthrough Ctrl+R to PTY shell (bash/zsh handle natively). Client-side display enhancement to show search prompt overlay. Future: client-side history search.
-[] - SP-011 Phase 3: Add scrollback persistence — Serialize terminal buffer on unmount to IndexedDB keyed by session ID. Restore on reconnect. Max 500KB per session, 24h auto-cleanup. `webui/src/services/terminalScrollback.ts`
+[x] - SP-011 Phase 3: Add scrollback persistence — Serialize terminal buffer on unmount to IndexedDB keyed by session ID. Restore on reconnect. Max 500KB per session, 24h auto-cleanup. `webui/src/services/terminalScrollback.ts`
 [x] - SP-011 Phase 3: Add double/triple click selection — Double-click: select word. Triple-click: select line. Configure `wordSeparator` option on xterm.js Terminal.
 
 ---

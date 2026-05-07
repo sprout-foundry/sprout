@@ -81,6 +81,16 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
     return `${days}d ago`;
   }, []);
 
+  // Focus management: focus the panel when it opens
+  useEffect(() => {
+    if (isOpen) {
+      // Use requestAnimationFrame to ensure the DOM element is rendered
+      requestAnimationFrame(() => {
+        panelRef.current?.focus();
+      });
+    }
+  }, [isOpen]);
+
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
@@ -124,6 +134,7 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
       role="dialog"
       aria-label="Notification center"
       aria-modal="false"
+      tabIndex={-1}
     >
       {/* Header */}
       <div className="notification-center-header">

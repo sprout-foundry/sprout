@@ -46,6 +46,16 @@ jest.mock('@xterm/addon-fit', () => ({
   FitAddon: jest.fn(() => mockFitAddon),
 }));
 
+jest.mock('@xterm/addon-search', () => ({
+  SearchAddon: jest.fn(() => ({
+    findNext: jest.fn(),
+    findPrevious: jest.fn(),
+    clearDecorations: jest.fn(),
+    onDidChangeResults: jest.fn(() => ({ dispose: jest.fn() })),
+    dispose: jest.fn(),
+  })),
+}));
+
 const mockService = {
   sendRawInput: jest.fn(),
   sendResize: jest.fn(),

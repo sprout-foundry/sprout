@@ -156,8 +156,16 @@ export function useSidebarState(): UseSidebarStateReturn {
   }, []);
 
   const handleSidebarToggle = useCallback(() => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  }, [sidebarCollapsed, setSidebarCollapsed]);
+    setSidebarCollapsedRaw((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem('sprout-sidebar-collapsed', String(next));
+      } catch (err) {
+        debugLog('[useSidebarState] failed to persist sidebar collapsed state:', err);
+      }
+      return next;
+    });
+  }, []);
 
   return {
     isMobile,

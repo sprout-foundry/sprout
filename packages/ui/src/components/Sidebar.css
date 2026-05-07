@@ -1182,6 +1182,42 @@
   color: var(--accent-fg);
 }
 
+/* ── Tablet responsive (769-1024px): icons-only sidebar ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .sidebar {
+    width: 48px !important;
+    min-width: 48px;
+  }
+
+  .sidebar .sidebar-icon-rail {
+    border-right: none;
+  }
+
+  .sidebar .sidebar-content-pane {
+    display: none;
+  }
+
+  .sidebar .sidebar-pinned-header {
+    justify-content: center;
+    padding: var(--space-4) 0;
+  }
+
+  .sidebar .sidebar-brand {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    background: transparent;
+  }
+
+  .sidebar .sidebar-brand-button {
+    width: 100%;
+  }
+
+  .sidebar .instance-selector {
+    display: none;
+  }
+}
+
 /* ── Mobile responsive ────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar-resize-wrapper {

@@ -49,7 +49,12 @@ interface AppContentProps {
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
   selectedSection: SectionTab;
+  sidebarWidth: number;
+  sidebarWidthRef: React.MutableRefObject<number>;
   onSectionChange: (section: SectionTab) => void;
+  onSidebarWidthChange: (width: number) => void;
+  onSidebarWidthPersist: () => void;
+  onSidebarWidthReset: () => void;
   stats: {
     queryCount: number;
     filesModified: number;
@@ -96,7 +101,12 @@ const AppContent: React.FC<AppContentProps> = ({
   sidebarCollapsed,
   isTerminalExpanded,
   selectedSection,
+  sidebarWidth,
+  sidebarWidthRef,
   onSectionChange,
+  onSidebarWidthChange,
+  onSidebarWidthPersist,
+  onSidebarWidthReset,
   stats,
   recentFiles,
   recentLogs,
@@ -1011,6 +1021,11 @@ const AppContent: React.FC<AppContentProps> = ({
         onSidebarToggle={onSidebarToggle}
         selectedSection={selectedSection}
         onSectionChange={onSectionChange}
+        sidebarWidth={sidebarWidth}
+        sidebarWidthRef={sidebarWidthRef}
+        onSidebarWidthChange={onSidebarWidthChange}
+        onSidebarWidthPersist={onSidebarWidthPersist}
+        onSidebarWidthReset={onSidebarWidthReset}
         onProviderChange={onProviderChange}
         gitPanel={{
           gitStatus,

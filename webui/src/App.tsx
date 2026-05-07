@@ -338,12 +338,17 @@ function App() {
     sidebarCollapsed,
     isTerminalExpanded,
     selectedSection,
+    sidebarWidth,
+    sidebarWidthRef,
     setSidebarCollapsed,
     toggleSidebar,
     closeSidebar,
     handleSidebarToggle,
     setIsTerminalExpanded,
     setSelectedSection,
+    setSidebarWidth,
+    persistSidebarWidth,
+    resetSidebarWidth,
   } = useSidebarState();
   const activeRequestsRef = useRef(0);
   const queuedMessagesRef = useRef<string[]>([]);
@@ -2056,7 +2061,12 @@ function App() {
                 sidebarCollapsed={sidebarCollapsed}
                 isTerminalExpanded={isTerminalExpanded}
                 selectedSection={selectedSection}
+                sidebarWidth={sidebarWidth}
+                sidebarWidthRef={sidebarWidthRef}
                 onSectionChange={setSelectedSection}
+                onSidebarWidthChange={setSidebarWidth}
+                onSidebarWidthPersist={persistSidebarWidth}
+                onSidebarWidthReset={resetSidebarWidth}
                 stats={stats}
                 recentFiles={recentFiles}
                 recentLogs={recentLogs}

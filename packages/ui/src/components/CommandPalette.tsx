@@ -308,7 +308,7 @@ function CommandPalette({
           aria-label="Search results"
         >
           {results.length === 0 && query && (
-            <div className="command-palette-empty" role="status">
+            <div className="command-palette-empty">
               No results found
             </div>
           )}
@@ -319,6 +319,8 @@ function CommandPalette({
               className={`command-palette-item ${index === selectedIndex ? 'selected' : ''}`}
               role="option"
               aria-selected={index === selectedIndex}
+              aria-setsize={results.length}
+              aria-posinset={index + 1}
               onClick={() => {
                 if (result.kind === 'command' && result.commandId) {
                   onExecuteCommand(result.commandId);

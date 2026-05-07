@@ -14,6 +14,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { FONT_SIZE_DEFAULT } from './terminalConstants';
 import TerminalSearchBar, { type TerminalSearchOptions, type TerminalSearchBarHandle } from './TerminalSearchBar';
 import TerminalContextMenu from './TerminalContextMenu';
+import ReverseSearchOverlay from './ReverseSearchOverlay';
 import {
   initWasmShell,
   type WasmShell,
@@ -96,6 +97,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const [matchIndex, setMatchIndex] = useState<number | undefined>(undefined);
     const [matchCount, setMatchCount] = useState<number | undefined>(undefined);
     const [searchError, setSearchError] = useState<string | null>(null);
+
+    // ── Reverse-i-Search overlay for PTY mode ────────────────────────────────
+    const reverseSearchActiveRef = useRef(false);
+    const reverseSearchQueryRef = useRef('');
+    const [reverseSearchVisible, setReverseSearchVisible] = useState(false);
+    const [reverseSearchQuery, setReverseSearchQuery] = useState('');
+    const reverseSearchTimerRef = useRef<number | null>(null);
 
     // Track whether the pane is currently mounted/active so the cleanup function
     // can distinguish between a temporary freeze and a permanent unmount.
@@ -687,6 +695,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         }
         wasmActiveRef.current = false;
         setWasmActive(false);
+        // Clear reverse-search state when switching to PTY mode
+        reverseSearchActiveRef.current = false;
+        reverseSearchQueryRef.current = '';
+        setReverseSearchVisible(false);
+        setReverseSearchQuery('');
         return;
       }
 
@@ -842,6 +855,98 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       xtermRef.current?.focus();
     }, []);
 
+    // ── PTY input handler with reverse-i-search tracking ─────────────────────
+
+    /** Batch reverse-search query updates to avoid excessive re-renders */
+    const scheduleReverseSearchUpdate = useCallback(() => {
+      if (reverseSearchTimerRef.current !== null) {
+        clearTimeout(reverseSearchTimerRef.current);
+      }
+      reverseSearchTimerRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setReverseSearchQuery(reverseSearchQueryRef.current);
+        }
+        reverseSearchTimerRef.current = null;
+      }, 20);
+    }, []);
+
+    /**
+     * Handle input for remote PTY sessions with reverse-i-search overlay support.
+     *
+     * When not in WASM mode, this monitors input for Ctrl+R (reverse-i-search) and
+     * maintains overlay state showing the search query. The overlay is purely visual
+     * and doesn't interfere with the actual PTY data flow.
+     */
+    const handlePtyInput = useCallback((data: string) => {
+      // Send data to PTY first (don't intercept)
+      terminalWSRef.current?.sendRawInput(data);
+
+      // Track reverse-i-search mode for the overlay
+      // Note: This is purely for visualization - the PTY handles Ctrl+R natively
+
+      // Handle multi-character data (escape sequences or paste)
+      if (data.length > 1) {
+        // Escape sequences (arrow keys, Home/End, etc.) — exit reverse-search mode
+        if (data.startsWith('\x1b')) {
+          if (reverseSearchActiveRef.current) {
+            reverseSearchActiveRef.current = false;
+            reverseSearchQueryRef.current = '';
+            setReverseSearchVisible(false);
+            setReverseSearchQuery('');
+          }
+          return;
+        }
+        // Multi-character paste in reverse-i-search mode
+        if (reverseSearchActiveRef.current) {
+          reverseSearchQueryRef.current += data;
+          scheduleReverseSearchUpdate();
+        }
+        return;
+      }
+
+      const ch = data;
+
+      // Ctrl+R — enter reverse-i-search mode OR find next match
+      if (ch === '\x12') {
+        if (!reverseSearchActiveRef.current) {
+          // First Ctrl+R: enter reverse-i-search mode
+          reverseSearchActiveRef.current = true;
+          reverseSearchQueryRef.current = '';
+          setReverseSearchVisible(true);
+          setReverseSearchQuery('');
+        }
+        // If already in reverse-search mode, the PTY handles finding the next match
+        // We just stay in the mode (don't clear the query)
+        return;
+      }
+
+      // Exit reverse-i-search on these keys
+      if (ch === '\r' || ch === '\n' || ch === '\x03' || ch === '\x1b') {
+        // Enter, Ctrl+C, or Escape
+        reverseSearchActiveRef.current = false;
+        reverseSearchQueryRef.current = '';
+        setReverseSearchVisible(false);
+        setReverseSearchQuery('');
+        return;
+      }
+
+      // Backspace in reverse-i-search mode
+      if (ch === '\x7f' || ch === '\b') {
+        if (reverseSearchActiveRef.current && reverseSearchQueryRef.current.length > 0) {
+          reverseSearchQueryRef.current = reverseSearchQueryRef.current.slice(0, -1);
+          scheduleReverseSearchUpdate();
+        }
+        return;
+      }
+
+      // Regular printable character while in reverse-i-search mode
+      if (reverseSearchActiveRef.current && (ch >= ' ' || ch === '\t')) {
+        reverseSearchQueryRef.current += ch;
+        scheduleReverseSearchUpdate();
+        return;
+      }
+    }, [scheduleReverseSearchUpdate]);
+
     // ── Context menu handlers for TerminalContextMenu ───────────────────────
 
     const getXTerminal = useCallback(() => xtermRef.current, []);
@@ -858,9 +963,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       if (wasmActiveRef.current) {
         handleWasmInput(text);
       } else {
-        terminalWSRef.current?.sendRawInput(text);
+        handlePtyInput(text);
       }
-    }, [handleWasmInput]);
+    }, [handleWasmInput, handlePtyInput]);
 
     const handleContextSearch = useCallback(() => {
       const sel = xtermRef.current?.getSelection();
@@ -962,7 +1067,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
               if (wasmActiveRef.current) {
                 handleWasmInput(text);
               } else {
-                terminalWSRef.current?.sendRawInput(text);
+                handlePtyInput(text);
               }
             }).catch((err) => {
               debugLog('[TerminalPane] clipboard paste failed:', err);
@@ -1000,7 +1105,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         if (wasmActiveRef.current) {
           handleWasmInput(data);
         } else {
-          terminalWSRef.current?.sendRawInput(data);
+          handlePtyInput(data);
         }
       });
 
@@ -1049,6 +1154,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         if (copyOnSelectTimerRef.current !== null) {
           clearTimeout(copyOnSelectTimerRef.current);
           copyOnSelectTimerRef.current = null;
+        }
+        // Clear reverse-search timer
+        if (reverseSearchTimerRef.current !== null) {
+          clearTimeout(reverseSearchTimerRef.current);
+          reverseSearchTimerRef.current = null;
         }
         // Remove wheel event listener
         if (container) {
@@ -1348,6 +1458,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           onClick={() => xtermRef.current?.focus()}
         >
           <div ref={xtermContainerRef} className="terminal-xterm" />
+          {!wasmActive && (
+            <ReverseSearchOverlay
+              query={reverseSearchQuery}
+              visible={reverseSearchVisible}
+            />
+          )}
         </div>
         {!paneConnected && !wasmActive && !wasmLoading && (
           <div className="terminal-status-inline">

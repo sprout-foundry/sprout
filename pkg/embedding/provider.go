@@ -76,6 +76,10 @@ type VectorRecord struct {
 
 	// IndexedAt is the time when the record was indexed.
 	IndexedAt time.Time `json:"indexedAt"`
+
+	// Type is the record type: "code_unit" for extracted code symbols, or "file" for full-file embeddings.
+	// Empty string for backward compatibility with legacy records (treated as "code_unit").
+	Type string `json:"type"`
 }
 
 // QueryResult pairs a VectorRecord with its similarity score for ranking.

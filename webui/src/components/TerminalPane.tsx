@@ -15,11 +15,11 @@ import { FONT_SIZE_DEFAULT } from './terminalConstants';
 import TerminalSearchBar, { type TerminalSearchOptions, type TerminalSearchBarHandle } from './TerminalSearchBar';
 import TerminalContextMenu from './TerminalContextMenu';
 import ReverseSearchOverlay from './ReverseSearchOverlay';
-import {
-  initWasmShell,
+import { initWasmShell,
   type WasmShell,
   type WasmShellResult,
 } from '../services/wasmShell';
+import { saveScrollback, loadScrollback, deleteScrollback, cleanupOldEntries } from '../services/terminalScrollback';
 
 export interface TerminalPaneHandle {
   clear: () => void;
@@ -1018,6 +1018,28 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         const service = terminalWSRef.current;
         if (!service) return;
 
+        // Save scrollback before disconnecting
+        const sessionId = service.getSessionId();
+        const term = xtermRef.current;
+        if (sessionId && term) {
+          try {
+            const buffer = term.buffer.active;
+            const lines: string[] = [];
+            for (let i = 0; i < buffer.length; i++) {
+              const line = buffer.getLine(i);
+              if (line) {
+                lines.push(line.translateToString(true));
+              }
+            }
+            const data = lines.join('\n');
+            saveScrollback(sessionId, data).catch((err) => {
+              debugLog('[TerminalPane] Failed to save scrollback in cleanup:', err);
+            });
+          } catch (err) {
+            debugLog('[TerminalPane] Failed to serialize scrollback in cleanup:', err);
+          }
+        }
+
         // Remove the event handler
         if (eventHandlerRef.current) {
           service.removeEvent(eventHandlerRef.current);
@@ -1166,6 +1188,27 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       return () => {
+        // Save scrollback before disposing xterm
+        const sessionId = terminalWSRef.current?.getSessionId();
+        if (sessionId && term) {
+          try {
+            const buffer = term.buffer.active;
+            const lines: string[] = [];
+            for (let i = 0; i < buffer.length; i++) {
+              const line = buffer.getLine(i);
+              if (line) {
+                lines.push(line.translateToString(true));
+              }
+            }
+            const data = lines.join('\n');
+            saveScrollback(sessionId, data).catch((err) => {
+              debugLog('[TerminalPane] Failed to save scrollback:', err);
+            });
+          } catch (err) {
+            debugLog('[TerminalPane] Failed to serialize scrollback:', err);
+          }
+        }
+
         linkProviderRef.current?.dispose();
         linkProviderRef.current = null;
         // Dispose search results listener
@@ -1272,6 +1315,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             xtermRef.current?.writeln('\r\nTerminal disconnected');
           }
         } else if (event.type === 'session_ready') {
+          const sessionId = service.getSessionId();
           setPaneConnected(true);
           onConnectionChangeRef.current?.(true);
           // Skip resize if we just restored — session_restored already sent it
@@ -1283,6 +1327,20 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           if (shouldAutoFocus) {
             hasAutoFocusedReadyRef.current = true;
           }
+
+          // On initial connect (non-reattach), check for client-side scrollback
+          if (sessionId && Date.now() - lastRestoreTimeRef.current >= 5000) {
+            loadScrollback(sessionId).then((clientScrollback) => {
+              if (clientScrollback && xtermRef.current) {
+                xtermRef.current.write(clientScrollback);
+                // Invalidate cache after successful restore
+                deleteScrollback(sessionId).catch(() => {});
+              }
+            }).catch((err) => {
+              debugLog('[TerminalPane] Failed to load client scrollback:', err);
+            });
+          }
+
           requestAnimationFrame(() => {
             sendResize();
             if (shouldAutoFocus) {
@@ -1308,11 +1366,26 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           setReverseSearchQuery('');
 
           const term = xtermRef.current;
+          const sessionId = service.getSessionId();
+
           if (term) {
             term.reset();
             const scrollback = (data?.scrollback as string) || '';
+
             if (scrollback) {
+              // Server provided scrollback - use it
               term.write(scrollback);
+            } else if (sessionId) {
+              // No server scrollback - check client-side scrollback
+              loadScrollback(sessionId).then((clientScrollback) => {
+                if (clientScrollback && xtermRef.current) {
+                  xtermRef.current.write(clientScrollback);
+                  // Invalidate cache after successful restore
+                  deleteScrollback(sessionId).catch(() => {});
+                }
+              }).catch((err) => {
+                debugLog('[TerminalPane] Failed to load client scrollback:', err);
+              });
             }
           }
           // Record restore time so session_ready and resize observer can
@@ -1468,6 +1541,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       return () => {
         isMountedRef.current = false;
       };
+    }, []);
+
+    // Clean up old scrollback entries on mount
+    useEffect(() => {
+      cleanupOldEntries().catch((err) => {
+        debugLog('[TerminalPane] Failed to cleanup old scrollback entries:', err);
+      });
     }, []);
 
     return (

@@ -92,6 +92,7 @@ function CommandPalette({
   const [mode, setMode] = useState<PaletteMode>(initialMode);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
+  const [ariaAnnouncement, setAriaAnnouncement] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const resultsListId = useId();
@@ -180,16 +181,34 @@ function CommandPalette({
     return items.sort((a, b) => b.score - a.score).slice(0, 50);
   }, [query, mode, commands, fileResults, onSearchSymbols]);
 
-  // Debounce aria-live announcements so rapid keystrokes don't queue up speech
-  const [announcedCount, setAnnouncedCount] = useState('');
+  // Announce selection changes when navigating with arrow keys.
+  // Only depend on selectedIndex, not results, to avoid firing on every result recomputation.
+  useEffect(() => {
+    // Only announce selection if we have results and a valid index
+    if (results.length === 0 || selectedIndex >= results.length) {
+      return;
+    }
+    const item = results[selectedIndex];
+    // Strip HTML from highlightedLabel for screen reader
+    const plainLabel = item.highlightedLabel.replace(/<[^>]*>/g, '');
+    const label = item.kind === 'command' && item.commandLabel
+      ? item.commandLabel
+      : item.kind === 'file' && item.fileName
+        ? item.fileName
+        : plainLabel;
+    setAriaAnnouncement(`${selectedIndex + 1} of ${results.length}, ${label}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIndex]);
+
+  // Debounce result-count announcements so rapid keystrokes don't queue up speech
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!query) {
-        setAnnouncedCount('');
+        setAriaAnnouncement('');
       } else if (results.length === 0) {
-        setAnnouncedCount('No results found');
+        setAriaAnnouncement('No results found');
       } else {
-        setAnnouncedCount(`${results.length} result${results.length === 1 ? '' : 's'} available`);
+        setAriaAnnouncement(`${results.length} result${results.length === 1 ? '' : 's'} available`);
       }
     }, 300);
     return () => clearTimeout(timer);
@@ -273,7 +292,9 @@ function CommandPalette({
             aria-expanded={true}
             aria-controls={resultsListId}
             aria-activedescendant={
-              results.length > 0 ? `command-palette-result-${selectedIndex}` : undefined
+              results.length > 0 && selectedIndex < results.length
+                ? `command-palette-result-${selectedIndex}`
+                : undefined
             }
             aria-autocomplete="list"
             autoFocus
@@ -332,7 +353,7 @@ function CommandPalette({
           aria-atomic="true"
           role="status"
         >
-          {announcedCount}
+          {ariaAnnouncement}
         </div>
       </div>
     </div>

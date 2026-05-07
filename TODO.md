@@ -135,23 +135,17 @@ These gaps were identified by cross-referencing the current editor implementatio
 #### Tier 3 — Small Custom Extensions (ViewPlugin/StateField, ~2-4 hours each)
 
 [x] - EDITOR: Add trailing whitespace highlighting — create a `trailingWhitespacePlugin` ViewPlugin in `webui/src/extensions/` that decorates trailing spaces and tabs on each line with a subtle background color (configurable via CSS variable). Lines with no trailing whitespace are unaffected. This is a standard feature in VS Code and Atom and helps catch whitespace-only diffs. Use viewport-decoration filtering for performance on large files.
-[x] - EDITOR: Add trailing whitespace highlighting — create a `trailingWhitespacePlugin` ViewPlugin in `webui/src/extensions/` that decorates trailing spaces and tabs on each line with a subtle background color (configurable via CSS variable). Lines with no trailing whitespace are unaffected. This is a standard feature in VS Code and Atom and helps catch whitespace-only diffs. Use viewport-decoration filtering for performance on large files.
 
-[x] - EDITOR: Add whitespace rendering mode (render tabs/spaces as visible characters) — create a `whitespaceRenderingPlugin` ViewPlugin that replaces tab characters with visible `→` symbols and trailing spaces with `·` dots. Add a setting entry to toggle between: "none" (default), "boundary" (only trailing whitespace), and "all" (all whitespace). VS Code exposes this as "Editor: Render Whitespace". Use decorations to overlay the special characters.
 [x] - EDITOR: Add whitespace rendering mode (render tabs/spaces as visible characters) — create a `whitespaceRenderingPlugin` ViewPlugin that replaces tab characters with visible `→` symbols and trailing spaces with `·` dots. Add a setting entry to toggle between: "none" (default), "boundary" (only trailing whitespace), and "all" (all whitespace). VS Code exposes this as "Editor: Render Whitespace". Use decorations to overlay the special characters.
 
 [x] - EDITOR: Add highlight for unsaved/modified lines — the diff gutter shows git changes, but there is no indicator for lines changed since the last save. Create a ViewPlugin that compares `EditorState.doc` against the buffer's `originalContent` (already tracked in `EditorManagerContext`) and adds a subtle background decoration to modified lines (similar to VS Code's minimap modified-region indicators, but inline). Use the existing `--diff-mod-color` CSS variable for visual consistency.
 
 [x] - EDITOR: Add selection length/count to the editor footer — currently the footer shows `Ln X, Col Y` for cursor position but nothing when text is selected. Display `Ln X, Col Y (Z selected)` where Z is the character count of the selection. When multiple selections exist, show `(N selections)`. This is a trivial computation from `view.state.selection` in the existing editor update listener.
-[x] - EDITOR: Add selection length/count to the editor footer — currently the footer shows `Ln X, Col Y` for cursor position but nothing when text is selected. Display `Ln X, Col Y (Z selected)` where Z is the character count of the selection. When multiple selections exist, show `(N selections)`. This is a trivial computation from `view.state.selection` in the existing editor update listener.
 
-[x] - EDITOR: Add file encoding and line ending indicator to the editor footer — display `UTF-8 · LF` or `UTF-8 · CRLF` in the pane footer. The line ending can be detected by scanning the document for `\r\n`. The encoding is typically UTF-8 but could be detected from the file read response if the API provides it. This is informational and low-effort.
 [x] - EDITOR: Add file encoding and line ending indicator to the editor footer — display `UTF-8 · LF` or `UTF-8 · CRLF` in the pane footer. The line ending can be detected by scanning the document for `\r\n`. The encoding is typically UTF-8 but could be detected from the file read response if the API provides it. This is informational and low-effort.
 
 [x] - EDITOR: Enhance the search panel with match-case, match-whole-word, and regex toggle buttons — currently the search panel (opened via Cmd/Ctrl+F) provides basic find/replace inputs but no toggles for case sensitivity, whole-word matching, or regex mode. These are standard in every search panel. The `@codemirror/search` package does not ship visible toggle UI, so build a small panel extension that sets `SearchConfig` via the search extension's reconfiguration.
-[x] - EDITOR: Enhance the search panel with match-case, match-whole-word, and regex toggle buttons — currently the search panel (opened via Cmd/Ctrl+F) provides basic find/replace inputs but no toggles for case sensitivity, whole-word matching, or regex mode. These are standard in every search panel. The `@codemirror/search` package does not ship visible toggle UI, so build a small panel extension that sets `SearchConfig` via the search extension's reconfiguration. (DUPLICATE — marked done; see line above)
 
-[x] - EDITOR: Fix Cmd/Ctrl+S priority when search panel is open — when the CodeMirror search panel is focused, pressing Cmd/Ctrl+S does not trigger save because the search panel's keybindings consume the event. Ensure the save key binding has higher priority (use `Prec.highest` or register the save keymap after the search keymap in the extensions array so it takes precedence). This was previously attempted (see `editor替换PanelKeymap`) but may still have edge cases.
 [x] - EDITOR: Fix Cmd/Ctrl+S priority when search panel is open — when the CodeMirror search panel is focused, pressing Cmd/Ctrl+S does not trigger save because the search panel's keybindings consume the event. Ensure the save key binding has higher priority (use `Prec.highest` or register the save keymap after the search keymap in the extensions array so it takes precedence). This was previously attempted (see `editor替换PanelKeymap`) but may still have edge cases.
 
 [x] - EDITOR: Ensure multi-cursor operations work in all editor states — while `EditorState.allowMultipleSelections.of(true)` is set and `Cmd+D` / `Cmd+click` work, verify that: (1) multi-cursor undo works correctly (each cursor's edits undo together as a single transaction), (2) paste into multi-cursor inserts at all cursors, (3) find-and-replace works with multiple selections, (4) line manipulation commands (move, duplicate, delete) handle multiple cursors gracefully. Add test coverage for multi-cursor edge cases.
@@ -159,11 +153,9 @@ These gaps were identified by cross-referencing the current editor implementatio
 #### Tier 4 — Medium Features (new files/panels, ~8-16 hours each)
 
 [x] - EDITOR: Add hover tooltips for type/signature documentation — when hovering over a token (variable, function, type), show a tooltip with the type signature and documentation. For TypeScript/JavaScript/Go, this can use the existing `apiService.getSemanticDefinition` or a new hover-API endpoint. Implement using `hoverTooltip()` from `@codemirror/tooltip` (already a transitive dependency via `@codemirror/autocomplete`). For non-LSP languages, fall back to showing basic token info or nothing. This is a core IDE feature and one of the most impactful improvements.
-[x] - EDITOR: Add hover tooltips for type/signature documentation — when hovering over a token (variable, function, type), show a tooltip with the type signature and documentation. For TypeScript/JavaScript/Go, this can use the existing `apiService.getSemanticDefinition` or a new hover-API endpoint. Implement using `hoverTooltip()` from `@codemirror/tooltip` (already a transitive dependency via `@codemirror/autocomplete`). For non-LSP languages, fall back to showing basic token info or nothing. This is a core IDE feature and one of the most impactful improvements.
 
 [x] - EDITOR: Add markdown live preview — when editing `.md` files, add a toggle button in the toolbar that opens a side-by-side preview pane rendering the markdown as HTML. Use `react-markdown` or the existing `marked` library. The preview should update live as the user types. Consider adding a split-view toggle (side-by-side vs. inline-rendered). This is essential for README editing and documentation work.
 
-[x] - EDITOR: Add document formatting (format-on-save) — integrate a formatting backend (Prettier via the Go server, or LSP `textDocument/formatting`) and add a "Format on Save" toggle in settings. When enabled, format the document before saving. Add a "Format Document" command to the command palette and a keybinding (Opt+Shift+F / Alt+Shift+F). This is one of the most commonly expected IDE features.
 [x] - EDITOR: Add document formatting (format-on-save) — integrate a formatting backend (Prettier via the Go server, or LSP `textDocument/formatting`) and add a "Format on Save" toggle in settings. When enabled, format the document before saving. Add a "Format Document" command to the command palette and a keybinding (Opt+Shift+F / Alt+Shift+F). This is one of the most commonly expected IDE features.
 
 [x] - EDITOR: Add LSP-aware rename (F2) — the current rename workflow is manual (find and replace). Implement F2 rename that uses the backend's semantic capabilities (for TS/JS/Go) or falls back to a find-and-replace dialog with preview for other languages. Add an input dialog at cursor position, show a rename preview with highlighting, and apply the change atomically.
@@ -173,12 +165,9 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - EDITOR: Add quick actions / refactor menu (Ctrl/Cmd+.) — when the cursor is on a line that has available code actions (from LSP or static analysis), show a lightbulb icon in the gutter and a menu (triggered by Ctrl+.) with actions like "Add import", "Extract function", "Fix all", etc. This is a defining IDE feature. Start with static analysis actions (missing imports, unused variables) and expand to LSP code actions.
 
 [x] - EDITOR: Add sticky scroll (pinned function/class headers) — when scrolling through a large file, the current function or class header should pin at the top of the viewport so the user always sees context. This is a feature in VS Code 2023+ and is very valuable for navigating large files. Implement as a ViewPlugin that: (1) uses the syntax tree to find the enclosing function/class at the viewport top, (2) renders a pinned/sticky decoration above the editor content, (3) updates on scroll and cursor movement.
-[x] - EDITOR: Add sticky scroll (pinned function/class headers) — when scrolling through a large file, the current function or class header should pin at the top of the viewport so the user always sees context. This is a feature in VS Code 2023+ and is very valuable for navigating large files. Implement as a ViewPlugin that: (1) uses the syntax tree to find the enclosing function/class at the viewport top, (2) renders a pinned/sticky decoration above the editor content, (3) updates on scroll and cursor movement.
 
 [x] - EDITOR: Add drag-and-drop text movement — implement proper drag-and-drop for text within the editor. Currently `dropCursor()` shows a visual indicator but there is no actual drag handler for text movement. Use `EditorView.domEventHandlers({ dragstart, dragover, drop })` to: (1) on dragstart, store the selected text and cursor position, (2) on drop, delete the dragged text from the source position and insert at the drop position. Hold Alt during drop to copy instead of move.
-[x] - EDITOR: Add drag-and-drop text movement — implement proper drag-and-drop for text within the editor. Currently `dropCursor()` shows a visual indicator but there is no actual drag handler for text movement. Use `EditorView.domEventHandlers({ dragstart, dragover, drop })` to: (1) on dragstart, store the selected text and cursor position, (2) on drop, delete the dragged text from the source position and insert at the drop position. Hold Alt during drop to copy instead of move.
 
-[x] - EDITOR: Add workspace-wide symbol search — the current "Go to Symbol" (`Cmd+Shift+O`) only searches within the current file. Add a "Go to Symbol in Workspace" command that queries the backend for symbols across all files in the project (leverages the existing semantic API). Show results grouped by file in the overlay.
 [x] - EDITOR: Add workspace-wide symbol search — the current "Go to Symbol" (`Cmd+Shift+O`) only searches within the current file. Add a "Go to Symbol in Workspace" command that queries the backend for symbols across all files in the project (leverages the existing semantic API). Show results grouped by file in the overlay.
 
 [x] - EDITOR: Improve the Go to Symbol overlay — add keyboard navigation (arrow keys to move between results), fuzzy matching for symbol names, display of symbol kind (function, class, variable, type) with icons, and show the enclosing scope path. Currently it does substring matching and basic rendering.
@@ -226,7 +215,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - REFACTOR: Break up `EditorManagerContext.tsx` (817 lines) — consider extracting buffer persistence (save/load) and buffer mutation operations into separate hooks or modules.
 [x] - CODE QUALITY: Adopt a frontend linting setup — currently there is no ESLint config file, no Prettier config, and only a minimal `eslintConfig` in package.json. For a React/TypeScript project of this size, a proper linting and formatting setup is essential for consistency.
 [x] - CODE QUALITY: Reduce excessive `console.error/warn` logging — there are 80+ `console.error` and `console.warn` calls scattered across frontend components. Many of these should be replaced with a proper logging service (the `utils/log.ts` file exists but is not widely used) to allow configurable log levels, filtering, and error reporting.
-[x] - CODE QUALITY: Reduce silent error swallowing — many catch blocks use `catch {}`, `catch { /* ignore */ }`, or `.catch(() => {})` which silently discard errors. At minimum, these should log at debug/warn level so issues are not invisible during development.
 [x] - CODE QUALITY: Reduce silent error swallowing — many catch blocks use `catch {}`, `catch { /* ignore */ }`, or `.catch(() => {})` which silently discard errors. At minimum, these should log at debug/warn level so issues are not invisible during development. (Go: 12 `_ =` sites across 8 files now log via log.Printf; TS already clean)
 [x] - CODE QUALITY: Improve test coverage across low-coverage packages — `pkg/credentials` (20.0%), `pkg/interfaces/types` (34.8%), `pkg/trace` (48.2%), `pkg/validation` (0%), `pkg/git` (65.9%) have notably low coverage. Several files in `cmd/` have 0% function coverage (copilot.go, plan.go, log.go, diag.go, review_staged.go, github_setup_prompt.go).
 [x] - CODE QUALITY: Use standardized error handling in Go — inconsistent patterns of `fmt.Errorf` vs `errors.New` vs returning bare errors across packages. Adopt a project-wide convention (e.g., always use `fmt.Errorf("context: %w", err)` for wrapped errors).
@@ -238,7 +226,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 [x] - UX: Add keyboard-accessible menu bar (File, Edit, View, Terminal, Help) — VS Code users expect a menu bar for discoverability of features that don't have hotkey assignments.
 [x] - UX: Add a welcome/Getting Started tab for new users — when the editor opens with no files, show helpful content instead of a blank pane.
 [x] - UX: Add file drag-and-drop from OS into the editor (open dropped files).
-[x] - UX: Add "Unsaved changes" indicator on close — when closing a tab or the browser window, warn if there are unsaved editor buffers.
 [x] - UX: Add "Unsaved changes" indicator on close — when closing a tab or the browser window, warn if there are unsaved editor buffers. (useUnsavedChangesWarning hook with beforeunload + tab close confirm dialog + document title indicator + tab dot indicator)
 [x] - UX: Add notifications for file changes detected on disk (when a file is modified externally, prompt the user to reload).
 [x] - UX: Add the ability to pin tabs to prevent accidental closure (type partially supported in `EditorBuffer` but no UI toggle for it).
@@ -262,7 +249,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 ### Architecture & Consolidation
 
 [x] - CREDENTIALS: Consolidate the three parallel credential paths into one — Currently there are three independent ways credentials are resolved: (1) `credentials.Resolve()` in `pkg/credentials/store.go` (env → stored file), (2) `configuration.ResolveProviderCredential()` in `pkg/configuration/provider_auth.go` (env → stored keys → env metadata), and (3) hardcoded `credentials.Resolve(provider, "PROVIDER_API_KEY")` calls scattered in `pkg/agent_api/interface.go` and `pkg/agent_api/models.go`. These should be unified into a single resolution function with a clear precedence chain, eliminating duplication and reducing the risk of inconsistent behavior.
-[x] - CREDENTIALS: Consolidate the three parallel credential paths into one — (duplicate; see above)
 [x] - CREDENTIALS: Remove hardcoded env var names from `pkg/agent_api/interface.go` — `IsProviderAvailable()` now delegates to `credentials.HasProviderCredential()`, which uses the unified resolution path.
 [x] - CREDENTIALS: Remove hardcoded env var names from `pkg/agent_api/models.go` — All model listing wrappers now use `credentials.ResolveProviderAPIKey()`. No `resolveCredentialValue()` exists.
 [x] - CREDENTIALS: `api_keys.go` `ReachableAPIKey` struct duplicates `ProviderAuthMetadata` — File and types removed; provider info driven by `ProviderAuthMetadata` + embedded provider configs.
@@ -324,7 +310,6 @@ These gaps were identified by cross-referencing the current editor implementatio
 ### Testing
 
 [x] - DESKTOP: Add desktop E2E smoke tests to CI — write a minimal Playwright or Spectron test suite that launches the packaged app in headless mode, opens a temp workspace, and asserts the UI loads and the backend health endpoint responds. Run on Linux in CI at minimum.
-[x] - DESKTOP: Add desktop E2E smoke tests to CI — write a minimal Playwright or Spectron test suite that launches the packaged app in headless mode, opens a temp workspace, and asserts the UI loads and the backend health endpoint responds. Run on Linux in CI at minimum. (duplicate of line above)
 
 ## Onboarding Flow Improvements
 
@@ -502,7 +487,6 @@ Three Python test runner scripts at the project root with overlapping purposes:
 [x] - CLOUD: Update `cmd/service_darwin.go` and `cmd/service_linux.go` to use `SPROUT_SERVICE=1` in launchd/systemd config (keep `LEDIT_SERVICE` as backward-compat alias)
 [x] - CLOUD: Rename WebUI types: `LeditInstance` → `SproutInstance`, `LeditSettings` → `SproutSettings`, `LeditConfigDir` → `SproutConfigDir`, `LeditLogo` → `SproutLogo`, `LeditLogoProps` → `SproutLogoProps` (in `webui/src/services/api.ts` and refs in Sidebar.tsx, AppContent.tsx, LocationSwitcher.tsx)
 [x] - CLOUD: Update `webui/package.json` name from `ledit-webui` to `sprout-webui`
-[x] - CLOUD: Update `webui/package.json` name from `ledit-webui` to `sprout-webui` (duplicate — already done on line above)
 [x] - CLOUD: Update all CLI help strings and comments referencing `ledit agent`, `ledit custom add`, `ledit service install` etc. to use `sprout` prefix (in `cmd/*.go` and `pkg/`)
 [x] - CLOUD: Update desktop/Electron branding: window title, app ID `dev.alantheprice.sprout`, `desktop/package.json` name/productName/build.appId
 [x] - CLOUD: Update install scripts `scripts/install.sh` and `scripts/install.ps1` with sprout binary name and GitHub URL paths
@@ -524,8 +508,6 @@ Three Python test runner scripts at the project root with overlapping purposes:
 ### 4. Service Mode: Bind Address, Origin Allowlist, and Auth Header Trust
 
 [x] - CLOUD: Add `--bind` flag and `SPROUT_BIND_ADDR` env var to control web UI listen address (default: `127.0.0.1`) — update `pkg/webui/server.go` to use configurable bind address
-[x] - CLOUD: Add `--bind` flag and `SPROUT_BIND_ADDR` env var to control web UI listen address (default: `127.0.0.1`) — update `pkg/webui/server.go` to use configurable bind address
-[x] - CLOUD: Add `SPROUT_ALLOWED_ORIGINS` env var (comma-separated) to origin-check middleware — accept listed origins in addition to localhost
 [x] - CLOUD: Add `SPROUT_ALLOWED_ORIGINS` env var (comma-separated) to origin-check middleware — accept listed origins in addition to localhost
 [x] - CLOUD: Add `SPROUT_TRUSTED_USER_HEADER` env var for auth header extraction in service mode — read user ID from a configurable header when `SPROUT_SERVICE=1`
 [x] - CLOUD: Add `GET /health` endpoint that is always accessible regardless of origin (for ALB health checks)
@@ -533,7 +515,6 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 ### 5. Git Diff Robustness — Handle Missing HEAD
 
-[x] - CLOUD: Update `emitJSONResult` in `cmd/agent_result.go` to handle missing HEAD (fall back to `git diff` without HEAD ref)
 [x] - CLOUD: Update `emitJSONResult` in `cmd/agent_result.go` to handle missing HEAD (fall back to `git diff` without HEAD ref)
 [x] - CLOUD: Include untracked new files in `files_modified` via `git ls-files --others --exclude-standard`
 [x] - CLOUD: Verify no duplicate entries in `files_modified` list
@@ -550,7 +531,6 @@ Three Python test runner scripts at the project root with overlapping purposes:
 
 [x] - CLOUD: Add `--dist` flag to `scripts/build-wasm.sh` that produces a self-contained distributable directory (webui build + WASM binary + version.json)
 [x] - CLOUD: Create `webui/src/config/mode.ts` feature flag module — read `REACT_APP_SPROUT_MODE` and export `isCloud`, `supportsSSH`, `supportsInstances`, `supportsLocalTerminal`, `supportsSettings` flags
-[x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [x] - CLOUD: Ensure the webui renders gracefully when no Go backend is reachable (shows a connection error message, but editor/file tree/terminal still load via WASM)
 [x] - CLOUD: Make `wasmShell.ts` paths configurable — accept optional `wasmUrl` and `wasmExecUrl` in `initWasmShell()` config parameter
@@ -641,7 +621,6 @@ These are high-impact structural improvements identified through code evaluation
 [x] - CONCURRENCY: Improve synchronization patterns in `pkg/agent/agent.go` and related packages — Fully addressed: (1) Sub-manager refactoring reduced Agent's direct mutex count from ~15 to 3 by encapsulating state into `AgentStateManager` (12 mutexes), `AgentOutputManager` (8), `AgentSecurityManager` (2), `AgentMCPManager` (1). (2) Added `sync.RWMutex` to `AgentStateManager` protecting messages, cost, tokens, LLM call count, context tokens, context warning, and current iteration fields. (3) Audited all field accesses in `CheckFileContentSecurity`, `ProcessQuery`, and tool handlers — moved `currentIteration` to StateManager with mutex protection, added `shellCommandHistoryMu` for shell command history map, protected `unsafeMode` in SecurityManager, protected `statsUpdateCallback` with `atomic.Value`. (4) Fixed pre-existing race in `pkg/utils/logger.go` global singleton. (5) Added 8 dedicated race detector tests in `concurrency_race_test.go` covering concurrent message access, metrics, iteration counter, shell history, task actions, stats callback, context tokens, and security manager. All tests pass with `go test -race`. Race detection is already in CI via `make test-coverage` which uses `-race` flag.
 
 [x] - OBSERVABILITY: Implement structured error taxonomy and diagnostic logging — Currently errors use ad-hoc `fmt.Errorf` wrapping without classification, making it hard for the Agent to implement intelligent retry/recovery logic. Create: (1) Error types package (`pkg/errors/types.go`) with categorized errors (`ErrTransientProvider`, `ErrSecurityViolation`, `ErrInvalidInput`, `ErrRateLimited`), (2) Structured logging interface that automatically attaches context (`sessionID`, `iteration`, `provider`, `model`) to all log entries, (3) Replace `fmt.Printf` debug statements with the structured logger. Target: 100% of errors in `pkg/agent/` use typed errors; debug logs include session context; Agent implements retry logic based on error type (transient = retry with backoff, security = stop and prompt).
-[x] - OBSERVABILITY: Implement structured error taxonomy and diagnostic logging — Currently errors use ad-hoc `fmt.Errorf` wrapping without classification, making it hard for the Agent to implement intelligent retry/recovery logic. Create: (1) Error types package (`pkg/errors/types.go`) with categorized errors (`ErrTransientProvider`, `ErrSecurityViolation`, `ErrInvalidInput`, `ErrRateLimited`), (2) Structured logging interface that automatically attaches context (`sessionID`, `iteration`, `provider`, `model`) to all log entries, (3) Replace `fmt.Printf` debug statements with the structured logger. Target: 100% of errors in `pkg/agent/` use typed errors; debug logs include session context; Agent implements retry logic based on error type (transient = retry with backoff, security = stop and prompt).
 
 [x] - PERSONA-TOOLS: Audit and extend persona tool access for `view_history`, `revision_id`, `rollback_changes`, and `self_review` — Decisions: (1) orchestrator → `self_review` + `view_history` + `rollback_changes` for scope validation, delegation awareness, and rollback capability. (2) code_reviewer → `self_review` for secondary review passes. (3) tester → `view_history` to inspect changes before writing tests. (4) repo_orchestrator → `self_review` added (already had history tools).
 
@@ -652,10 +631,7 @@ These are high-impact structural improvements identified through code evaluation
 [x] - FRONTEND: Decompose App.tsx (2,376 lines) — Extract state management into a reducer or context. Extract event handling into a dedicated `useEventHandler` hook. Target: App.tsx under 500 lines. `webui/src/App.tsx`
 [x] - FRONTEND: Decompose oversized components — SettingsPanel.tsx (2,019), LocationSwitcher.tsx (1,885), ContextPanel.tsx (1,829), Chat.tsx (760). Follow the EditorPane extraction pattern from SP-010.
 [x] - FRONTEND: Eliminate `any` types in critical paths — Define proper TypeScript interfaces for all event types and API responses. Enable `no-explicit-any` as `error` in ESLint. `webui/src/App.tsx`, `contexts/EditorManagerContext.tsx`, `services/api.ts`
-[x] - FRONTEND: Eliminate `any` types in critical paths — Define proper TypeScript interfaces for all event types and API responses. Enable `no-explicit-any` as `error` in ESLint. `webui/src/App.tsx`, `contexts/EditorManagerContext.tsx`, `services/api.ts`
 [x] - FRONTEND: Deduplicate types between webui and packages/ui — Define shared types in `packages/ui/src/types/` and import from webui. `Message`, `ToolExecution`, and other interfaces are defined independently in both packages.
-[x] - FRONTEND: Deduplicate types between webui and packages/ui — Define shared types in `packages/ui/src/types/` and import from webui. `Message`, `ToolExecution`, and other interfaces are defined independently in both packages.
-[x] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`
 [x] - FRONTEND: Promote ESLint rules from `warn` to `error` — Critical rules (`no-explicit-any`, `react-hooks/exhaustive-deps`, `no-unreachable`) produce warnings but don't block the build. `webui/.eslintrc.json`
 
 ## Backend Architecture
@@ -672,15 +648,13 @@ These are high-impact structural improvements identified through code evaluation
 ## Test Coverage
 
 [x] - TESTING: ~170 Go source files have zero test coverage — `pkg/agent/` (16 untested), `pkg/agent_tools/` (13 untested), `pkg/webui/` (20 untested), `pkg/mcp/` (7 untested)
-[x] - TESTING: ~170 Go source files have zero test coverage — `pkg/agent/` (16 untested), `pkg/agent_tools/` (13 untested), `pkg/webui/` (20 untested), `pkg/mcp/` (7 untested)
-[x] - TESTING: `packages/ui` has zero test coverage — 24 components, 1 test file with 19 tests
 [x] - TESTING: `packages/ui` has zero test coverage — 24 components, 1 test file with 19 tests
 [x] - TESTING: `webui/src/` has ~4% test coverage — 262 source files, 11 test files — improved to 323 source files, 29+ test files (811 new tests across 18 files covering utils, services, settings, context panel helpers, location switcher)
 
 ## Roadmap Hygiene
 
 [x] - HYGIENE: Create roadmap specs for undocumented features — Memory system, multi-chat sessions, trace/dataset mode, and self_review tool all have zero roadmap coverage despite being fully implemented.
-[] - HYGIENE: Deduplicate TODO.md — ~25 back-to-back duplicate entries across Editor Tier 3/4, SP-010, Credentials, Cloud, and AGENT-TERM sections.
+[x] - HYGIENE: Deduplicate TODO.md — removed 33 duplicate/near-duplicate entries across Editor Tier 3/4, SP-010, Credentials, Cloud, AGENT-TERM, Frontend, Testing, and Core Architecture sections.
 
 ---
 
@@ -714,7 +688,6 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 ### Implementation Steps
 
 [x] - AGENT-TERM (SP-008 Phase A): Add hidden session metadata to `TerminalSession` — Add `Hidden bool`, `Owner string`, `ChatID string`, `Name string`, `AutoClose bool` fields to `TerminalSession` in `terminal_types.go`. Add `CreateHiddenSession(id, owner, chatID string, opts ...SessionOption)` method to `TerminalManager`. Exclude hidden sessions from the default session listing returned by `ListSessions()` / `handleAPITerminalSessions`. Hidden sessions still participate in the inactive-session cleanup worker.
-[x] - AGENT-TERM (SP-008 Phase A): Add hidden session metadata to `TerminalSession` — Add `Hidden bool`, `Owner string`, `ChatID string`, `Name string`, `AutoClose bool` fields to `TerminalSession` in `terminal_types.go`. Add `CreateHiddenSession(id, owner, chatID string, opts ...SessionOption)` method to `TerminalManager`. Exclude hidden sessions from the default session listing returned by `ListSessions()` / `handleAPITerminalSessions`. Hidden sessions still participate in the inactive-session cleanup worker.
 
 [x] - AGENT-TERM (SP-008 Phase A): Implement synchronous command execution via PTY — Create `terminal_agent_exec.go` with `ExecuteCommandAndWait(ctx context.Context, session *TerminalSession, command string) (output string, exitCode int, err error)`. The function writes the command to the PTY, then uses a sentinel-based output capture pattern: (1) generate a unique marker UUID, (2) write `command && echo "__SPROUT_DONE__:$?" || echo "__SPROUT_DONE__:$?"` to PTY, (3) subscribe a temporary `termSub` to capture output, (4) scan output for the sentinel to detect completion and extract exit code, (5) strip the sentinel line from returned output. Fallback timeout (30s default) if sentinel never appears.
 
@@ -725,7 +698,6 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 [x] - AGENT-TERM (SP-008 Phase A): Add API endpoints for hidden session management — Create `api_agent_sessions.go` with: `GET /api/terminal/agent-sessions` (list hidden sessions with status + last N bytes of output), `POST /api/terminal/agent-sessions/{id}/attach` (promote to visible — clears `Hidden` flag so it appears in terminal tab bar), `GET /api/terminal/agent-sessions/{id}/output` (return accumulated ring buffer output as text). Register routes in `server.go`.
 
-[x] - AGENT-TERM (SP-008 Phase C): Add frontend Background Tasks panel — Create `BackgroundTasks.tsx` component: collapsible panel (in the terminal area or as a sidebar section) showing running background agent sessions. Each entry displays: session name (command prefix), status (running/exited), duration, last few lines of output preview, "Attach" button (promotes to terminal tab), "Kill" button (closes session). Auto-refreshes via polling or WebSocket events.
 [x] - AGENT-TERM (SP-008 Phase C): Add frontend Background Tasks panel — Create `BackgroundTasks.tsx` component: collapsible panel (in the terminal area or as a sidebar section) showing running background agent sessions. Each entry displays: session name (command prefix), status (running/exited), duration, last few lines of output preview, "Attach" button (promotes to terminal tab), "Kill" button (closes session). Auto-refreshes via polling or WebSocket events.
 
 [x] - AGENT-TERM (SP-008 Phase C): Add hidden session attachment in terminal UI — When a hidden session is promoted (via Background Tasks panel or agent-sessions API), it appears as a new tab in `Terminal.tsx` terminal tab bar. Use existing `reattach` flow with scrollback replay. The `TerminalTabBar.tsx` gains an "Agent Sessions" dropdown showing attachable hidden sessions.
@@ -759,17 +731,13 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 ## SP-010: Editor Modernization
 
 [x] - SP-010 Phase 1: Extract `useEditorExtensions` hook from EditorPane — Build CodeMirror extension set from buffer config (language, theme, settings). Target ~150 lines. `webui/src/hooks/useEditorExtensions.ts`
-[x] - SP-010 Phase 1: Extract `useEditorExtensions` hook from EditorPane — Build CodeMirror extension set from buffer config (language, theme, settings). Target ~300 lines. `webui/src/hooks/useEditorExtensions.ts` (duplicate entry — completed above; target raised to ~300 to accommodate compartment management and docs)
 [x] - SP-010 Phase 1: Extract `useEditorDiagnostics` hook from EditorPane — Diagnostic fetching, lint gutter updates, debounced 500ms. Target ~120 lines. `webui/src/hooks/useEditorDiagnostics.ts`
 [x] - SP-010 Phase 1: Extract `useEditorFileIO` hook from EditorPane — File load/save, external change detection, conflict resolution. Target ~200 lines. `webui/src/hooks/useEditorFileIO.ts`
 [x] - SP-010 Phase 1: Extract `useEditorScrollSync` hook from EditorPane — Scroll position persistence, cross-pane linked scrolling. Target ~100 lines. `webui/src/hooks/useEditorScrollSync.ts`
 [x] - SP-010 Phase 1: Extract `useEditorSymbols` hook from EditorPane — Symbol extraction, breadcrumb data. Fix: key to content changes, not cursor position. Target ~100 lines. `webui/src/hooks/useEditorSymbols.ts`
-[x] - SP-010 Phase 1: Extract `useEditorSymbols` hook from EditorPane — Symbol extraction, breadcrumb data. Fix: key to content changes, not cursor position. Target ~100 lines. `webui/src/hooks/useEditorSymbols.ts`
 [x] - SP-010 Phase 1: Extract `useEditorCursor` hook from EditorPane — Cursor position tracking, selection state. Target ~80 lines. `webui/src/hooks/useEditorCursor.ts`
 [x] - SP-010 Phase 1: Create `EditorCore` component — CodeMirror EditorView mount point + extension context. Target ~200 lines. `webui/src/components/EditorCore.tsx`
 [x] - SP-010 Phase 1: Create `EditorToolbarActions` component — Toolbar buttons (word wrap, format, etc.). Target ~150 lines. `webui/src/components/EditorToolbarActions.tsx`
-[x] - SP-010 Phase 1: Create `EditorToolbarActions` component — Toolbar buttons (word wrap, format, etc.). Target ~150 lines. `webui/src/components/EditorToolbarActions.tsx`
-[x] - SP-010 Phase 1: Reduce `EditorPane.tsx` to composition root — Wire extracted hooks and sub-components. Target under 400 lines.
 [x] - SP-010 Phase 1: Reduce `EditorPane.tsx` to composition root — Wire extracted hooks and sub-components. Target under 400 lines. (389 lines, dead event dispatches fixed, direct callbacks wired)
 [x] - SP-010 Phase 2: Create Error Lens extension — Show diagnostic messages inline at end of line via `Decoration.widget`. Debounced 150ms. `webui/src/extensions/errorLens.ts`
 [x] - SP-010 Phase 2: Verify and style word occurrence highlighting — `highlightSelectionMatches()` is imported; confirm it works, add custom highlight styling. `webui/src/extensions/wordHighlights.ts`
@@ -778,8 +746,6 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-010 Phase 3: Add React.memo to editor child components — Wrap EditorTabs, EditorBreadcrumb, EditorToolbar with React.memo to prevent unnecessary re-renders.
 [x] - SP-010 Phase 3: Add tab tooltips — Add `title` attribute to tab name showing full file path on hover. `webui/src/components/EditorTabs.tsx`
 [x] - SP-010 Phase 3: Remove 3-pane editor limit — Increase from 3 to 6 panes (configurable). Add minimum pane width enforcement. `webui/src/contexts/EditorManagerContext.tsx`
-[x] - SP-010 Phase 3: Remove 3-pane editor limit — Increase from 3 to 6 panes (configurable). Add minimum pane width enforcement. `webui/src/contexts/EditorManagerContext.tsx`
-[x] - SP-010 Phase 3: Add format-on-save option — Wire existing formatter service to save action. Opt-in via editor settings. `webui/src/components/EditorPane.tsx`
 [x] - SP-010 Phase 3: Add format-on-save option — Wire existing formatter service to save action. Opt-in via editor settings. `webui/src/components/EditorPane.tsx`
 
 ---

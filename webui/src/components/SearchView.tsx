@@ -44,6 +44,18 @@ interface SemanticSearchResult {
   end_line: number;
   language: string;
   similarity: number;
+  type: string;  // "code_unit" or "file"
+}
+
+interface SemanticSearchResponse {
+  results: SemanticSearchResult[];
+  duplicate_clusters: Array<{
+    files: string[];
+    similarity: number;
+  }>;
+  query: string;
+  total: number;
+  duration: string;
 }
 
 interface SearchViewProps {
@@ -75,6 +87,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const [truncated, setTruncated] = useState(false);
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[] | null>(null);
   const [semanticDuration, setSemanticDuration] = useState<string | null>(null);
+  const [duplicateClusters, setDuplicateClusters] = useState<Array<{files: string[]; similarity: number}> | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReplace, setShowReplace] = useState(false);
@@ -129,6 +142,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         setTruncated(false);
         setSemanticResults(null);
         setSemanticDuration(null);
+        setDuplicateClusters(null);
         setError(null);
         return;
       }
@@ -147,6 +161,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
 
           setSemanticResults(response.results || []);
           setSemanticDuration(response.duration || null);
+          setDuplicateClusters(response.duplicate_clusters || null);
           setResults(null);
         } else {
           // Text-based search mode
@@ -218,6 +233,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     setResults(null);
     setSemanticResults(null);
     setSemanticDuration(null);
+    setDuplicateClusters(null);
     setTotalMatches(0);
     setTotalFiles(0);
     setTruncated(false);
@@ -300,6 +316,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
       setResults(null);
       setSemanticResults(null);
       setSemanticDuration(null);
+      setDuplicateClusters(null);
       setTotalMatches(0);
       setTotalFiles(0);
       setTruncated(false);
@@ -454,6 +471,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
     setResults(null);
     setSemanticResults(null);
     setSemanticDuration(null);
+    setDuplicateClusters(null);
     setTotalMatches(0);
     setTotalFiles(0);
     setTruncated(false);
@@ -681,7 +699,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           ) : indexStatus.initialized ? (
             <>
               <span className="search-semantic-status-dot search-semantic-status-dot--active" />
-              {indexStatus.record_count.toLocaleString()} functions indexed
+              {indexStatus.record_count.toLocaleString()} items indexed
             </>
           ) : indexStatus.available ? (
             <>
@@ -787,6 +805,14 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         <div className="search-stats">
           {semanticResults.length} {semanticResults.length === 1 ? 'match' : 'matches'}
           {semanticDuration && <span className="search-stats-duration"> ({semanticDuration})</span>}
+        </div>
+      )}
+
+      {/* Duplicate cluster hint */}
+      {duplicateClusters && duplicateClusters.length > 0 && (
+        <div className="search-duplicate-hint">
+          <span className="search-duplicate-hint-icon">⑙</span>
+          <span>These results may share common code patterns across files.</span>
         </div>
       )}
 
@@ -923,51 +949,92 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         )}
 
         {semanticResults &&
-          semanticResults.map((result, idx) => (
-            <div
-              key={`${result.file}-${result.start_line}`}
-              className="search-semantic-result search-match-row search-match-row--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => handleFileClick(result.file, result.start_line)}
-              onMouseEnter={(e) => handleSemanticResultMouseEnter(e, result)}
-              onMouseLeave={handleSemanticResultMouseLeave}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleFileClick(result.file, result.start_line);
-                }
-              }}
-            >
-              <div className="search-semantic-result-main">
-                <span className="search-semantic-result-name">{result.name}</span>
-                {result.signature && (
-                  <span className="search-semantic-result-signature">{result.signature}</span>
-                )}
-              </div>
-              <div className="search-semantic-result-meta">
-                <span className="search-semantic-result-file">{getRelativePath(result.file)}</span>
-                <span className="search-semantic-result-lines">
-                  {result.start_line}–{result.end_line}
-                </span>
-                {result.language && (
-                  <span className="search-semantic-result-lang">{result.language}</span>
-                )}
-                <div className="search-semantic-result-similarity-bar">
-                  <div
-                    className="search-semantic-result-similarity-fill"
-                    style={{
-                      width: `${result.similarity * 100}%`,
-                      backgroundColor: result.similarity > 0.85 ? 'var(--accent-success)' : 'var(--accent-primary)',
-                    }}
-                  />
+          semanticResults.map((result, idx) => {
+            // File-level result: compact card without line numbers
+            if (result.type === 'file') {
+              return (
+                <div
+                  key={`file-${result.file}`}
+                  className="search-semantic-result search-semantic-result--file search-match-row search-match-row--clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleFileClick(result.file, 1)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleFileClick(result.file, 1);
+                    }
+                  }}
+                >
+                  <div className="search-semantic-result-main">
+                    <span className="search-semantic-result-name">File</span>
+                  </div>
+                  <div className="search-semantic-result-meta">
+                    <span className="search-semantic-result-file">{getRelativePath(result.file)}</span>
+                    <div className="search-semantic-result-similarity-bar">
+                      <div
+                        className="search-semantic-result-similarity-fill"
+                        style={{
+                          width: `${result.similarity * 100}%`,
+                          backgroundColor: result.similarity > 0.85 ? 'var(--accent-success)' : 'var(--accent-primary)',
+                        }}
+                      />
+                    </div>
+                    <span className="search-semantic-result-similarity">
+                      {(result.similarity * 100).toFixed(0)}%
+                    </span>
+                  </div>
                 </div>
-                <span className="search-semantic-result-similarity">
-                  {(result.similarity * 100).toFixed(0)}%
-                </span>
+              );
+            }
+
+            // Code-unit result: detailed view with line numbers and preview
+            return (
+              <div
+                key={`${result.file}-${result.start_line}`}
+                className="search-semantic-result search-match-row search-match-row--clickable"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleFileClick(result.file, result.start_line)}
+                onMouseEnter={(e) => handleSemanticResultMouseEnter(e, result)}
+                onMouseLeave={handleSemanticResultMouseLeave}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleFileClick(result.file, result.start_line);
+                  }
+                }}
+              >
+                <div className="search-semantic-result-main">
+                  <span className="search-semantic-result-name">{result.name}</span>
+                  {result.signature && (
+                    <span className="search-semantic-result-signature">{result.signature}</span>
+                  )}
+                </div>
+                <div className="search-semantic-result-meta">
+                  <span className="search-semantic-result-file">{getRelativePath(result.file)}</span>
+                  <span className="search-semantic-result-lines">
+                    {result.start_line}–{result.end_line}
+                  </span>
+                  {result.language && (
+                    <span className="search-semantic-result-lang">{result.language}</span>
+                  )}
+                  <div className="search-semantic-result-similarity-bar">
+                    <div
+                      className="search-semantic-result-similarity-fill"
+                      style={{
+                        width: `${result.similarity * 100}%`,
+                        backgroundColor: result.similarity > 0.85 ? 'var(--accent-success)' : 'var(--accent-primary)',
+                      }}
+                    />
+                  </div>
+                  <span className="search-semantic-result-similarity">
+                    {(result.similarity * 100).toFixed(0)}%
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
       </div>
 
       {/* Semantic hover preview tooltip */}

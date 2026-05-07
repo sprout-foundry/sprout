@@ -24,6 +24,8 @@ export interface UseEditorCursorOptions {
   bufferRef: React.RefObject<EditorBuffer | null | undefined>;
   /** From EditorManagerContext — updates cursor position in buffer state */
   updateBufferCursor: (bufferId: string, pos: { line: number; column: number }) => void;
+  /** Ref that tracks whether an external (non-user) content update is in flight */
+  isExternalUpdateRef: React.RefObject<boolean>;
 }
 
 export interface UseEditorCursorReturn {
@@ -43,12 +45,20 @@ export interface UseEditorCursorReturn {
  * local selection info state for UI display (e.g., footer status).
  */
 export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCursorReturn {
-  const { bufferRef, updateBufferCursor } = options;
+  const { bufferRef, updateBufferCursor, isExternalUpdateRef } = options;
 
   const [selectionInfo, setSelectionInfo] = useState<SelectionInfo | null>(null);
 
   const handleCursorUpdate = useCallback(
     (update: ViewUpdate) => {
+      // Skip cursor position saves during external content replacements
+      // (e.g., file reloads, auto-reload, initial loads) to avoid saving
+      // the wrong cursor position (post-replacement, usually line 1).
+      if (isExternalUpdateRef.current) return;
+
+      // Skip if selection hasn't changed (e.g., only viewport/scroll changed)
+      if (!update.selectionSet) return;
+
       // Update cursor position on ANY selection change (cursor moves, clicks, typing)
       if (update.selectionSet) {
         const buf = bufferRef.current;
@@ -83,7 +93,7 @@ export function useEditorCursor(options: UseEditorCursorOptions): UseEditorCurso
         }
       }
     },
-    [bufferRef, updateBufferCursor],
+    [bufferRef, updateBufferCursor, isExternalUpdateRef],
   );
 
   return { selectionInfo, setSelectionInfo, handleCursorUpdate };

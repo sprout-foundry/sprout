@@ -136,7 +136,7 @@ export default function EmbeddingSettingsTab({
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-error)' }}>
             <XCircle size={14} />
-            <span style={{ fontSize: '13px' }}>ONNX Runtime not found — install onnxruntime to enable</span>
+            <span style={{ fontSize: '13px' }}>Failed to initialize embedding provider</span>
           </div>
         )}
       </div>
@@ -145,13 +145,13 @@ export default function EmbeddingSettingsTab({
       <div className="settings-card" style={{ marginBottom: '16px' }}>
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           <div style={{ marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-primary)' }}>Provider:</span> bundled-minilm
+            <span style={{ color: 'var(--text-primary)' }}>Provider:</span> bundled-static
           </div>
           <div style={{ marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-primary)' }}>Model:</span> all-MiniLM-L6-v2 (INT8 quantized)
+            <span style={{ color: 'var(--text-primary)' }}>Model:</span> sprout-embed-gemma-128d (INT8 quantized)
           </div>
           <div>
-            <span style={{ color: 'var(--text-primary)' }}>Dimensions:</span> 384
+            <span style={{ color: 'var(--text-primary)' }}>Dimensions:</span> 128
           </div>
         </div>
       </div>

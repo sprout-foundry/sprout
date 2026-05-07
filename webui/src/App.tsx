@@ -17,6 +17,7 @@ import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
 import AskUserDialog from './components/AskUserDialog';
+import ModelSelectionModal from './components/ModelSelectionModal';
 import { WebSocketService } from './services/websocket';
 import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
 import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
@@ -327,6 +328,7 @@ function App() {
       securityApprovalRequest: null,
       securityPromptRequest: null,
       askUserRequest: null,
+      modelSelectionRequest: null,
     };
   });
 
@@ -451,6 +453,20 @@ function App() {
     });
     setState((prev) => ({ ...prev, askUserRequest: null }));
   }, [wsService]);
+
+  const handleModelSelectionResponse = useCallback((model: string) => {
+    // Send model_change event via WebSocket
+    wsService.sendEvent({
+      type: 'model_change',
+      data: { provider: state.provider, model },
+    });
+    // Update local state
+    setState((prev) => ({ ...prev, modelSelectionRequest: null }));
+  }, [wsService, state.provider]);
+
+  const handleModelSelectionClose = useCallback(() => {
+    setState((prev) => ({ ...prev, modelSelectionRequest: null }));
+  }, []);
 
   const selectedOnboardingProvider = useMemo(() => {
     return onboarding.providers.find((p) => p.id === onboarding.provider) || null;
@@ -1302,6 +1318,22 @@ function App() {
           activeRequestsRef.current -= 1;
         }
         const errorMessage = event.data?.message || 'Unknown error';
+        const errorCode = event.data?.code as string | undefined;
+
+        // Check for model_not_available error and show model selection modal
+        if (errorCode === 'model_not_available') {
+          setState(prev => ({
+            ...prev,
+            isProcessing: activeRequestsRef.current > 0,
+            queryProgress: null,
+            modelSelectionRequest: {
+              provider: prev.provider,
+            },
+            logs: [...prev.logs, logEntry]
+          }));
+          debugLog('[model-not-available] Model not available, showing selection modal');
+          break;
+        }
 
         // Rollback provider state if this was a failed provider_change request
         if (pendingProviderChangeRef.current) {
@@ -2125,6 +2157,13 @@ function App() {
                   requestId={state.askUserRequest.requestId}
                   question={state.askUserRequest.question}
                   onRespond={handleAskUserResponse}
+                />
+              )}
+              {state.modelSelectionRequest && (
+                <ModelSelectionModal
+                  provider={state.modelSelectionRequest.provider}
+                  onClose={handleModelSelectionClose}
+                  onSelectModel={handleModelSelectionResponse}
                 />
               )}
               {onboarding.open && (

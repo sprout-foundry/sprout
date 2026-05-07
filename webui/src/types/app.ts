@@ -98,6 +98,9 @@ export interface AppState {
     requestId: string;
     question: string;
   } | null;
+  modelSelectionRequest: {
+    provider: string;
+  } | null;
 }
 
 export interface OnboardingState {

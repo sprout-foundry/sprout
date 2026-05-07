@@ -310,6 +310,7 @@
 }
 
 .terminal-pane-content {
+  position: relative; /* contains absolutely-positioned children (reverse-search overlay) */
   flex: 1;
   overflow: hidden;
   display: flex;
@@ -742,4 +743,66 @@
 
 .terminal-search-counter.no-results {
   color: var(--accent-warning, #f4d56f);
+}
+
+/* ── Reverse-i-Search Overlay ───────────────────────────── */
+
+.terminal-reverse-search-overlay {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  pointer-events: none;
+  z-index: 10;
+  animation: reverseSearchFadeIn 0.15s ease-out;
+}
+
+@keyframes reverseSearchFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.terminal-reverse-search-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.terminal-reverse-search-icon {
+  color: var(--accent-success, #98c379);
+  flex-shrink: 0;
+}
+
+.terminal-reverse-search-label {
+  color: var(--accent-success, #98c379);
+  font-weight: 500;
+}
+
+.terminal-reverse-search-separator {
+  color: var(--text-muted);
+}
+
+.terminal-reverse-search-quote {
+  color: var(--accent-secondary, #56b6c2);
+}
+
+.terminal-reverse-search-query {
+  color: var(--text-primary);
+  font-weight: 500;
 }

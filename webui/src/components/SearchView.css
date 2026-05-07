@@ -138,6 +138,11 @@
 }
 
 .search-replace-input:focus {
+  outline: none;
+}
+
+.search-replace-input:focus-visible {
+  outline: none;
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }

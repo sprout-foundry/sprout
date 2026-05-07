@@ -27,6 +27,11 @@
 }
 
 .cm-search .cm-textfield:focus {
+  outline: none;
+}
+
+.cm-search .cm-textfield:focus-visible {
+  outline: none;
   border-color: var(--accent-primary, #6366f1);
   box-shadow: 0 0 0 1px var(--accent-primary, #6366f1);
 }
@@ -146,5 +151,10 @@
 }
 
 .cm-search .cm-search-invalid:focus {
+  outline: none;
+}
+
+.cm-search .cm-search-invalid:focus-visible {
+  outline: none;
   box-shadow: 0 0 0 1px var(--cm-search-invalid-border, #e74c3c) !important;
 }

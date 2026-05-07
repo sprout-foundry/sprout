@@ -63,7 +63,7 @@ interface WorkspacePaneProps {
   };
 }
 
-const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId }) => {
+const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(({ paneId, chatProps, reviewProps, diffState, perChatCache, activeChatId }) => {
   const { panes, buffers } = useEditorManager();
   const pane = panes.find((item) => item.id === paneId);
   const buffer = pane?.bufferId ? buffers.get(pane.bufferId) : null;
@@ -145,6 +145,8 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = ({ paneId, chatProps, review
     default:
       return <EditorPane paneId={paneId} />;
   }
-};
+});
+
+WorkspacePane.displayName = 'WorkspacePane';
 
 export default WorkspacePane;

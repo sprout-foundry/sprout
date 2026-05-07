@@ -46,6 +46,15 @@
   outline-offset: 2px;
 }
 
+.welcome-dismiss-btn:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.welcome-dismiss-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
 .welcome-header h1 {
   font-size: 28px;
   font-weight: 600;
@@ -227,6 +236,15 @@
 }
 
 .resource-card:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.resource-card:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.resource-card:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
 }

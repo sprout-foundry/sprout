@@ -93,6 +93,11 @@
 }
 
 .file-tree .file-tree-header .create-input:focus {
+  outline: none;
+}
+
+.file-tree .file-tree-header .create-input:focus-visible {
+  outline: none;
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }

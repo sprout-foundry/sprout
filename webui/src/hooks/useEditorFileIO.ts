@@ -108,6 +108,7 @@ export interface UseEditorFileIOReturn {
  * @param fetchDiagnosticsRef  - Ref to the diagnostics fetcher from useEditorDiagnostics
  * @param paneId      - The pane identifier
  * @param setters     - State setters from the host component
+ * @param isExternalUpdateRef - Ref to track external updates (required, created in EditorPane)
  */
 export function useEditorFileIO(
   viewRef: React.MutableRefObject<EditorView | null>,
@@ -118,6 +119,7 @@ export function useEditorFileIO(
   fetchDiagnosticsRef: React.MutableRefObject<(filePath: string, content: string, trigger?: 'edit' | 'save') => void>,
   paneId: string,
   setters: FileIOStateSetters,
+  isExternalUpdateRef: React.MutableRefObject<boolean>,
 ): UseEditorFileIOReturn {
   const {
     setLoading,
@@ -146,7 +148,7 @@ export function useEditorFileIO(
   const apiService = useRef(ApiService.getInstance()).current;
 
   // Tracks whether a non-user (external) content replacement is in flight
-  const isExternalUpdateRef = useRef<boolean>(false);
+  // (ref is passed in from EditorPane and shared with useEditorCursor)
 
   // Ref mirror for loadFile — avoids stale closure issues
   const loadFileRef = useRef<((filePath: string) => Promise<void>) | null>(null);
@@ -658,6 +660,11 @@ export function useEditorFileIO(
     const handleAutoReloaded = async (e: Event) => {
       const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
       if (detail.bufferId !== buffer.id) return;
+
+      // Skip if content hasn't actually changed to avoid resetting cursor/selection
+      // when the file content is the same as what's already in the editor.
+      const currentContent = viewRef.current?.state.doc.toString();
+      if (currentContent === detail.content) return;
 
       isExternalUpdateRef.current = true;
       try {

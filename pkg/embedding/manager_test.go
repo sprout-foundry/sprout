@@ -264,14 +264,15 @@ func TestEmbeddingManager_QuerySimilar_NotInitialized(t *testing.T) {
 		ORTLibraryPath: "/nonexistent/libonnx.so",
 	}
 	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
-	os.Unsetenv("ONNXRUNTIME_LIB")
 
+	// With the static provider, initialization succeeds even without ORT.
+	// Verify that querying works (returns empty results, no error).
 	results, err := mgr.QuerySimilar(context.Background(), "test query", 5, 0.5)
-	if err == nil {
-		t.Error("expected error when manager cannot initialize")
+	if err != nil {
+		t.Errorf("expected no error with static provider, got: %v", err)
 	}
-	if results != nil {
-		t.Error("expected nil results on error")
+	if len(results) != 0 {
+		t.Errorf("expected 0 results on empty index, got %d", len(results))
 	}
 }
 
@@ -344,17 +345,17 @@ func TestEmbeddingManager_BuildIndex_FailsWithoutORT(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &configuration.EmbeddingIndexConfig{
 		IndexDir:       dir,
-		ORTLibraryPath: "/nonexistent/libonnx.so",
 	}
-	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
-	os.Unsetenv("ONNXRUNTIME_LIB")
+	mgr := NewEmbeddingManager(cfg, dir)
 
+	// With the static provider, BuildIndex succeeds even without ORT.
+	// Verify it returns empty stats (no files to index in empty workspace).
 	stats, err := mgr.BuildIndex(context.Background())
-	if err == nil {
-		t.Error("expected error when ORT is not configured")
+	if err != nil {
+		t.Errorf("expected no error with static provider, got: %v", err)
 	}
-	if stats != nil {
-		t.Error("expected nil stats on error")
+	if stats == nil {
+		t.Error("expected non-nil stats")
 	}
 }
 
@@ -390,24 +391,15 @@ func TestEmbeddingManager_UpdateFromGitDiff_FailsWithoutORT(t *testing.T) {
 
 func TestEmbeddingManager_Init_FailsWithOnlyEnvVar_BadPath(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{
-		// No ORTLibraryPath set — will try env var.
+		IndexDir: t.TempDir(),
 	}
-	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
+	mgr := NewEmbeddingManager(cfg, t.TempDir())
 
-	// Set env var to a non-existent path and disable download fallback so
-	// resolution must fail (we're testing the error path, not auto-download).
-	t.Setenv("ONNXRUNTIME_LIB", "/nonexistent/libonnx.so")
-	t.Setenv("SPROUT_NO_DOWNLOAD", "1")
-
-	// Override config dir to a temp dir without any cached ORT library,
-	// so our cache-first priority doesn't accidentally succeed.
-	tmpDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tmpDir)
-	t.Setenv("LEDIT_CONFIG", tmpDir)
-
+	// With the static provider, initialization succeeds regardless of
+	// ORT configuration. Verify it initializes cleanly.
 	err := mgr.Init(context.Background())
-	if err == nil {
-		t.Error("expected error when ORT lib path doesn't exist")
+	if err != nil {
+		t.Errorf("expected no error with static provider, got: %v", err)
 	}
 }
 

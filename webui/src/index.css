@@ -122,10 +122,54 @@ summary:focus-visible {
   :root {
     --sprout-breakpoint: tablet;
   }
+
+  /* Responsive utility: hide on tablet */
+  .hide-tablet {
+    display: none !important;
+  }
+
+  /* Responsive typography for tablet */
+  body {
+    font-size: 13px;
+  }
+}
+
+/* Responsive utility: show on tablet and mobile (hidden on desktop >1024px) */
+@media (max-width: 1024px) {
+  .show-tablet-down {
+    display: initial;
+  }
+}
+
+@media (min-width: 1025px) {
+  .show-tablet-down {
+    display: none !important;
+  }
 }
 
 @media (max-width: 768px) {
   :root {
     --sprout-breakpoint: mobile;
+  }
+
+  /* Responsive utility: hide on mobile */
+  .hide-mobile {
+    display: none !important;
+  }
+
+  /* Responsive utility: show only on mobile (hidden on desktop >=769px) */
+  .show-mobile {
+    display: initial;
+  }
+
+  /* Responsive typography for mobile */
+  body {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 769px) {
+  .show-mobile {
+    display: none !important;
   }
 }

@@ -2,24 +2,28 @@
  * Sidebar UI state with localStorage persistence.
  *
  * Manages: sidebar collapsed state, mobile detection, sidebar open/close
- * (mobile overlay), and terminal expanded state.
+ * (mobile overlay), terminal expanded state, and active sidebar tab.
  */
 
 import { useState, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { debugLog } from '../utils/log';
 
+export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
+
 export interface UseSidebarStateReturn {
   isMobile: boolean;
   isSidebarOpen: boolean;
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
+  selectedSection: SectionTab;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   closeSidebar: () => void;
   handleSidebarToggle: () => void;
   setIsTerminalExpanded: (expanded: boolean) => void;
+  setSelectedSection: (tab: SectionTab) => void;
 }
 
 function loadPersistedBoolean(key: string, fallback: boolean): boolean {
@@ -31,6 +35,20 @@ function loadPersistedBoolean(key: string, fallback: boolean): boolean {
   }
 }
 
+function loadPersistedString<T extends string>(key: string, fallback: T, validValues: readonly T[]): T {
+  try {
+    const value = window.localStorage.getItem(key);
+    if (value && validValues.includes(value as T)) {
+      return value as T;
+    }
+  } catch (err) {
+    debugLog('[loadPersistedString] failed to read localStorage key:', key, err);
+  }
+  return fallback;
+}
+
+const VALID_SECTION_TABS: readonly SectionTab[] = ['git', 'logs', 'files', 'settings', 'search'] as const;
+
 export function useSidebarState(): UseSidebarStateReturn {
   const [isMobile, setIsMobile] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -41,6 +59,10 @@ export function useSidebarState(): UseSidebarStateReturn {
 
   const [isTerminalExpanded, setIsTerminalExpandedRaw] = useState(() =>
     loadPersistedBoolean('sprout-terminal-expanded', false),
+  );
+
+  const [selectedSection, setSelectedSectionRaw] = useState<SectionTab>(() =>
+    loadPersistedString('sprout-sidebar-active-tab', 'git' as SectionTab, VALID_SECTION_TABS),
   );
 
   const setSidebarCollapsed = useCallback((collapsed: boolean) => {
@@ -61,6 +83,15 @@ export function useSidebarState(): UseSidebarStateReturn {
     setIsTerminalExpandedRaw(expanded);
   }, []);
 
+  const setSelectedSection = useCallback((tab: SectionTab) => {
+    try {
+      window.localStorage.setItem('sprout-sidebar-active-tab', String(tab));
+    } catch (err) {
+      debugLog('[useSidebarState] failed to persist selected section:', err);
+    }
+    setSelectedSectionRaw(tab);
+  }, []);
+
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => !prev);
   }, []);
@@ -70,19 +101,25 @@ export function useSidebarState(): UseSidebarStateReturn {
   }, []);
 
   const handleSidebarToggle = useCallback(() => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  }, [sidebarCollapsed, setSidebarCollapsed]);
+    setSidebarCollapsedRaw((prev) => {
+      const next = !prev;
+      try { window.localStorage.setItem('sprout-sidebar-collapsed', String(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   return {
     isMobile,
     isSidebarOpen,
     sidebarCollapsed,
     isTerminalExpanded,
+    selectedSection,
     setIsMobile,
     setSidebarCollapsed,
     toggleSidebar,
     closeSidebar,
     handleSidebarToggle,
     setIsTerminalExpanded,
+    setSelectedSection,
   };
 }

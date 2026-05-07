@@ -116,3 +116,16 @@ summary:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Responsive breakpoint indicators ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --sprout-breakpoint: tablet;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sprout-breakpoint: mobile;
+  }
+}

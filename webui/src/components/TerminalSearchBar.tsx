@@ -10,6 +10,7 @@ export interface TerminalSearchOptions {
 
 export interface TerminalSearchBarHandle {
   focusInput: () => void;
+  setQuery: (query: string) => void;
 }
 
 interface TerminalSearchBarProps {
@@ -18,10 +19,13 @@ interface TerminalSearchBarProps {
   onClose: () => void;
   matchIndex?: number;
   matchCount?: number;
+  searchError?: string | null;
+  onSearchError?: (message: string | null) => void;
+  initialQuery?: string | null;
 }
 
 const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarProps>(
-  ({ visible, onSearch, onClose, matchIndex, matchCount }, ref) => {
+  ({ visible, onSearch, onClose, matchIndex, matchCount, searchError, onSearchError, initialQuery }, ref) => {
     const [query, setQuery] = useState('');
     const [caseSensitive, setCaseSensitive] = useState(false);
     const [regex, setRegex] = useState(false);
@@ -32,6 +36,9 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
     useImperativeHandle(ref, () => ({
       focusInput: () => {
         inputRef.current?.focus();
+      },
+      setQuery: (q: string) => {
+        setQuery(q);
       },
     }));
 
@@ -44,6 +51,10 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
         const outerRaf = requestAnimationFrame(() => {
           innerRaf = requestAnimationFrame(() => {
             inputRef.current?.focus();
+            // Apply initial query from terminal selection if provided
+            if (initialQuery) {
+              setQuery(initialQuery);
+            }
             inputRef.current?.select();
           });
         });
@@ -52,7 +63,7 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
           if (innerRaf) cancelAnimationFrame(innerRaf);
         };
       }
-    }, [visible]);
+    }, [visible, initialQuery]);
 
     // Handle search execution
     const executeSearch = useCallback((direction: 'next' | 'previous' = 'next') => {
@@ -71,10 +82,18 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
     // Handle input change
     const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
       setQuery(e.target.value);
+      if (searchError) {
+        onSearchError?.(null);
+      }
     };
 
     // Handle keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
       if (e.key === 'Enter') {
         e.preventDefault();
         executeSearch(e.shiftKey ? 'previous' : 'next');
@@ -148,13 +167,16 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
           <input
             ref={inputRef}
             type="search"
-            className="terminal-search-input"
+            className={`terminal-search-input ${searchError ? 'terminal-search-input-error' : ''}`}
             placeholder="Search in terminal..."
             value={query}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             aria-label="Search in terminal"
           />
+          {searchError && (
+            <span className="terminal-search-error">{searchError}</span>
+          )}
         </div>
 
         <div className="terminal-search-controls">
@@ -180,7 +202,10 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             <ChevronDown size={14} />
           </button>
 
-          <span className="terminal-search-counter" aria-live="polite">
+          <span
+            className={`terminal-search-counter ${matchCount === 0 && query.trim() ? 'no-results' : ''}`}
+            aria-live="polite"
+          >
             {getMatchCounter()}
           </span>
 
@@ -214,6 +239,7 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             className="terminal-search-close-btn"
             onClick={onClose}
             title="Close (Escape)"
+            aria-label="Close search"
             type="button"
           >
             <X size={14} />

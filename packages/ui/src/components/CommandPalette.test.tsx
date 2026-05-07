@@ -592,6 +592,36 @@ describe('Accessibility', () => {
       expect(items[1]?.getAttribute('role')).toBe('option');
       expect(items[1]?.getAttribute('aria-selected')).toBe('false');
     }
+
+    // Each option should have aria-setsize and aria-posinset
+    for (let i = 0; i < items.length; i++) {
+      expect(items[i]?.getAttribute('aria-setsize')).toBe(String(items.length));
+      expect(items[i]?.getAttribute('aria-posinset')).toBe(String(i + 1));
+    }
+  });
+
+  it('empty state div does not have role="status" to avoid double announcement', () => {
+    vi.useFakeTimers();
+    act(() => {
+      root.render(createElement(CommandPalette, { ...defaultProps }));
+    });
+    const input = container.querySelector('.command-palette-input') as HTMLInputElement;
+
+    act(() => {
+      setInputValue(input, 'zzzznotfound');
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // The empty state div should NOT have role="status" — the external aria-live
+    // region already handles the "No results found" announcement.
+    const emptyDiv = container.querySelector('.command-palette-empty');
+    expect(emptyDiv).not.toBeNull();
+    expect(emptyDiv?.hasAttribute('role')).toBe(false);
+
+    vi.useRealTimers();
   });
 
   it('has role="listbox" and accessible label on results container', () => {

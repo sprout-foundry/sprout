@@ -24,6 +24,7 @@ import type { AppState, PerChatState } from '../types/app';
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
 import { useNotifications } from '../contexts/NotificationContext';
+import { type SectionTab } from '../hooks/useSidebarState';
 
 const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
@@ -47,6 +48,8 @@ interface AppContentProps {
   isSidebarOpen: boolean;
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
+  selectedSection: SectionTab;
+  onSectionChange: (section: SectionTab) => void;
   stats: {
     queryCount: number;
     filesModified: number;
@@ -92,6 +95,8 @@ const AppContent: React.FC<AppContentProps> = ({
   isSidebarOpen,
   sidebarCollapsed,
   isTerminalExpanded,
+  selectedSection,
+  onSectionChange,
   stats,
   recentFiles,
   recentLogs,
@@ -1004,6 +1009,8 @@ const AppContent: React.FC<AppContentProps> = ({
         isMobile={isMobile}
         sidebarCollapsed={sidebarCollapsed}
         onSidebarToggle={onSidebarToggle}
+        selectedSection={selectedSection}
+        onSectionChange={onSectionChange}
         onProviderChange={onProviderChange}
         gitPanel={{
           gitStatus,

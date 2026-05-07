@@ -42,8 +42,7 @@ import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
 import { supportsSettings } from '../config/mode';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
-
-type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
+import { type SectionTab } from '../hooks/useSidebarState';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -80,6 +79,8 @@ interface SidebarProps {
   onMobileMenuToggle?: () => void;
   sidebarCollapsed?: boolean;
   onSidebarToggle?: () => void;
+  selectedSection?: SectionTab;
+  onSectionChange?: (section: SectionTab) => void;
   onFileClick?: (filePath: string, lineNumber?: number) => void;
   // Legacy props for backward compatibility
   provider?: string;
@@ -160,6 +161,8 @@ function Sidebar({
   onMobileMenuToggle,
   sidebarCollapsed,
   onSidebarToggle,
+  selectedSection,
+  onSectionChange,
   onFileClick,
   provider,
   model,
@@ -203,12 +206,12 @@ function Sidebar({
   const [providers, setProviders] = useState<ProviderOption[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
   const hasHydratedProviderStateRef = useRef(false);
-  const [selectedSection, setSelectedSection] = useState<SectionTab>('git');
   const [gitSubTab, setGitSubTab] = useState<'changes' | 'history' | 'worktrees'>('changes');
   const [settings, setSettings] = useState<SproutSettings | null>(null);
   const [settingsFocusTarget, setSettingsFocusTarget] = useState<'persona' | 'provider' | null>(null);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
+  const effectiveSelectedSection = selectedSection || 'git';
 
   // Sync persona state when stats change (e.g., from another client's persona change)
   useEffect(() => {
@@ -219,10 +222,10 @@ function Sidebar({
 
   // Reset active section if settings tab is selected but settings are not supported
   useEffect(() => {
-    if (selectedSection === 'settings' && !supportsSettings) {
-      setSelectedSection('files');
+    if (effectiveSelectedSection === 'settings' && !supportsSettings) {
+      onSectionChange?.('files');
     }
-  }, [selectedSection]);
+  }, [effectiveSelectedSection, supportsSettings, onSectionChange]);
 
   // Load settings on mount / connection
   useEffect(() => {
@@ -427,10 +430,10 @@ function Sidebar({
   const handleSectionTabClick = (tab: SectionTab) => {
     if (effectiveSidebarCollapsed) {
       // If collapsed, expand sidebar and switch to the section
-      setSelectedSection(tab);
+      onSectionChange?.(tab);
       onSidebarToggle?.();
     } else {
-      setSelectedSection(tab);
+      onSectionChange?.(tab);
     }
   };
 
@@ -440,16 +443,16 @@ function Sidebar({
       const detail = (e as CustomEvent).detail;
       if (detail?.commandId === 'open_search') {
         if (effectiveSidebarCollapsed) {
-          setSelectedSection('search');
+          onSectionChange?.('search');
           onSidebarToggle?.();
         } else {
-          setSelectedSection('search');
+          onSectionChange?.('search');
         }
       }
     };
     window.addEventListener('sprout:hotkey', handleHotkey);
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
-  }, [effectiveSidebarCollapsed, onSidebarToggle]);
+  }, [effectiveSidebarCollapsed, onSidebarToggle, onSectionChange]);
 
   // Handle reveal-in-explorer event
   useEffect(() => {
@@ -460,10 +463,10 @@ function Sidebar({
 
       // Switch to files tab — uncollapse if needed
       if (effectiveSidebarCollapsed) {
-        setSelectedSection('files');
+        onSectionChange?.('files');
         onSidebarToggle?.();
       } else {
-        setSelectedSection('files');
+        onSectionChange?.('files');
       }
 
       // If we have a file path, reveal it in the tree
@@ -477,7 +480,7 @@ function Sidebar({
 
     window.addEventListener('sprout:reveal-in-explorer', handleReveal);
     return () => window.removeEventListener('sprout:reveal-in-explorer', handleReveal);
-  }, [effectiveSidebarCollapsed, onSidebarToggle]);
+  }, [effectiveSidebarCollapsed, onSidebarToggle, onSectionChange]);
 
   interface OpenSettingsFocusEventDetail {
     focus?: 'persona' | 'provider';
@@ -502,13 +505,13 @@ function Sidebar({
       }
 
       // Switch to settings tab
-      setSelectedSection('settings');
+      onSectionChange?.('settings');
       setSettingsFocusTarget(focusTarget);
     };
 
     window.addEventListener('sprout:open-settings-focus', handleOpenSettingsFocus);
     return () => window.removeEventListener('sprout:open-settings-focus', handleOpenSettingsFocus);
-  }, [effectiveSidebarCollapsed, isMobile, onSidebarToggle, finalOnMobileMenuToggle]);
+  }, [effectiveSidebarCollapsed, isMobile, onSidebarToggle, finalOnMobileMenuToggle, onSectionChange]);
 
   // Focus the targeted settings control once it renders
   useEffect(() => {
@@ -537,10 +540,10 @@ function Sidebar({
 
   useEffect(() => {
     if (currentView === 'git') {
-      setSelectedSection('git');
+      onSectionChange?.('git');
       setGitSubTab('changes');
     }
-  }, [currentView]);
+  }, [currentView, onSectionChange]);
 
   const handleImportTheme = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -957,7 +960,7 @@ function Sidebar({
   };
 
   const renderContentPane = () => {
-    switch (selectedSection) {
+    switch (effectiveSelectedSection) {
       case 'git': {
         return (
           <>
@@ -1100,9 +1103,9 @@ function Sidebar({
                 <button
                   key={tab.id}
                   role="tab"
-                  aria-selected={selectedSection === tab.id}
+                  aria-selected={effectiveSelectedSection === tab.id}
                   aria-controls="sidebar-tabpanel"
-                  className={`rail-icon ${selectedSection === tab.id ? 'active' : ''}`}
+                  className={`rail-icon ${effectiveSelectedSection === tab.id ? 'active' : ''}`}
                   onClick={() => handleSectionTabClick(tab.id)}
                   title={tab.label}
                   aria-label={tab.label}
@@ -1147,9 +1150,9 @@ function Sidebar({
               {supportsSettings && (
                 <button
                   role="tab"
-                  aria-selected={selectedSection === 'settings'}
+                  aria-selected={effectiveSelectedSection === 'settings'}
                   aria-controls="sidebar-tabpanel"
-                  className={`rail-icon ${selectedSection === 'settings' ? 'active' : ''}`}
+                  className={`rail-icon ${effectiveSelectedSection === 'settings' ? 'active' : ''}`}
                   onClick={() => handleSectionTabClick('settings')}
                   title="Settings"
                   aria-label="Settings"
@@ -1159,9 +1162,9 @@ function Sidebar({
               )}
               <button
                 role="tab"
-                aria-selected={selectedSection === 'logs'}
+                aria-selected={effectiveSelectedSection === 'logs'}
                 aria-controls="sidebar-tabpanel"
-                className={`rail-icon ${selectedSection === 'logs' ? 'active' : ''}`}
+                className={`rail-icon ${effectiveSelectedSection === 'logs' ? 'active' : ''}`}
                 onClick={() => handleSectionTabClick('logs')}
                 title="Logs"
                 aria-label="Logs"

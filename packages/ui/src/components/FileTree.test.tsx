@@ -1285,4 +1285,195 @@ describe('FileTree', () => {
     expect(contextMenu?.querySelector('.context-menu-item')).not.toBeNull();
   });
 
+  // ── ARIA tree pattern tests ──────────────────────────────────────────
+
+  describe('ARIA tree pattern', () => {
+    it('has role="tree" with aria-label="File tree"', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      const tree = container.querySelector('[role="tree"]');
+      expect(tree).not.toBeNull();
+      expect(tree?.getAttribute('aria-label')).toBe('File tree');
+      expect(tree?.getAttribute('aria-multiselectable')).toBe('true');
+    });
+
+    it('has role="treeitem" on all file tree items', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      const items = container.querySelectorAll('.file-tree-item');
+      expect(items.length).toBeGreaterThan(0);
+      for (const item of items) {
+        expect(item.getAttribute('role')).toBe('treeitem');
+      }
+    });
+
+    it('has correct aria-level for root-level items', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      // Root level items (src dir and README.md) should have aria-level="1"
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      expect(srcDir.getAttribute('aria-level')).toBe('1');
+      const readme = container.querySelector('.file-tree-item.file[data-ext=".md"]')!;
+      expect(readme.getAttribute('aria-level')).toBe('1');
+    });
+
+    it('has correct aria-level for nested items after expanding directory', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      // Expand src directory
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      act(() => {
+        srcDir.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      // Child files inside src should have aria-level="2"
+      const tsFiles = container.querySelectorAll('.file-tree-item.file[data-ext=".ts"]');
+      for (const file of tsFiles) {
+        expect(file.getAttribute('aria-level')).toBe('2');
+      }
+    });
+
+    it('has correct aria-setsize and aria-posinset for root-level items', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      // Root has 2 items: src (pos 1) and README.md (pos 2)
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      expect(srcDir.getAttribute('aria-setsize')).toBe('2');
+      expect(srcDir.getAttribute('aria-posinset')).toBe('1');
+
+      const readme = container.querySelector('.file-tree-item.file[data-ext=".md"]')!;
+      expect(readme.getAttribute('aria-setsize')).toBe('2');
+      expect(readme.getAttribute('aria-posinset')).toBe('2');
+    });
+
+    it('has correct aria-setsize and aria-posinset for nested items', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      // Expand src directory to reveal its 2 children
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      act(() => {
+        srcDir.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      // src has 2 children (index.ts, utils.ts), both should have aria-setsize="2"
+      const tsFiles = container.querySelectorAll('.file-tree-item.file[data-ext=".ts"]');
+      expect(tsFiles.length).toBe(2);
+      expect(tsFiles[0].getAttribute('aria-setsize')).toBe('2');
+      expect(tsFiles[0].getAttribute('aria-posinset')).toBe('1');
+      expect(tsFiles[1].getAttribute('aria-setsize')).toBe('2');
+      expect(tsFiles[1].getAttribute('aria-posinset')).toBe('2');
+    });
+
+    it('has aria-expanded="false" for collapsed directories and "true" for expanded', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      // src directory is collapsed initially (rootPath='.')
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      expect(srcDir.getAttribute('aria-expanded')).toBe('false');
+      // Expand it
+      act(() => {
+        srcDir.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(srcDir.getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('does NOT have aria-expanded on non-directory file items', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      const readme = container.querySelector('.file-tree-item.file[data-ext=".md"]')!;
+      expect(readme.hasAttribute('aria-expanded')).toBe(false);
+    });
+
+    it('has tabIndex=0 on all tree items for keyboard focusability', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      const items = container.querySelectorAll('.file-tree-item');
+      for (const item of items) {
+        expect(item.getAttribute('tabindex')).toBe('0');
+      }
+    });
+
+    it('has role="group" on directory children containers when expanded', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          ...baseProps,
+        }));
+      });
+      // Children container should not exist when collapsed
+      let childrenGroup = container.querySelector('.file-tree-children');
+      expect(childrenGroup).toBeNull();
+      // Expand src directory
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      act(() => {
+        srcDir.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      // Children container should now exist with role="group"
+      childrenGroup = container.querySelector('.file-tree-children');
+      expect(childrenGroup).not.toBeNull();
+      expect(childrenGroup?.getAttribute('role')).toBe('group');
+    });
+
+    it('has aria-selected="true" on the selected file', () => {
+      const ref: { current: FileTreeHandle | null } = { current: null };
+      act(() => {
+        root.render(createElement(FileTree, {
+          ref,
+          onFileSelect: vi.fn(),
+          files: makeFiles(),
+          selectedFile: 'README.md',
+        }));
+      });
+      const readme = container.querySelector('.file-tree-item.file[data-ext=".md"]')!;
+      expect(readme.getAttribute('aria-selected')).toBe('true');
+      // Non-selected items should have aria-selected="false"
+      const srcDir = container.querySelector('.file-tree-item.directory[data-ext=""]')!;
+      expect(srcDir.getAttribute('aria-selected')).toBe('false');
+    });
+  });
+
 });

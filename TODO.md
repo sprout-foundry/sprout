@@ -773,7 +773,8 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-012 Phase 1: Add reduced-motion CSS — `@media (prefers-reduced-motion: reduce)` wrapper that disables all animations and transitions. `webui/src/index.css`
 [x] - SP-012 Phase 1: Add ARIA tree pattern to FileTree — Add `role="treeitem"`, `aria-expanded` to tree items. `webui/src/components/FileTree.tsx`
 [x] - SP-012 Phase 1: Add aria-live to CommandPalette — Results list announced to screen readers. `packages/ui/src/components/CommandPalette.tsx`
-[] - SP-012 Phase 1: Add role="log" to ChatPanel — Messages in a landmark region with aria-label. `packages/ui/src/components/ChatPanel.tsx`
+[x] - SP-012 Phase 1: Add role="log" to ChatPanel — Messages in a landmark region with aria-label. `packages/ui/src/components/ChatPanel.tsx`
+[x] - SP-012 Phase 1: Add role="log" to ChatPanel — Messages in a landmark region with aria-label. `packages/ui/src/components/ChatPanel.tsx`
 [] - SP-012 Phase 1: Add global focus indicators — `:focus-visible` outline on all interactive elements. Remove default outline for mouse users. `webui/src/index.css`
 [] - SP-012 Phase 2: Remove 3-pane editor limit — Allow up to 6 panes with minimum width enforcement. Persist pane count preference. `webui/src/contexts/EditorManagerContext.tsx`
 [] - SP-012 Phase 2: Ensure sidebar state persistence — Verify isCollapsed, activeTab, and width all persist to localStorage and survive page reload. `webui/src/hooks/useSidebarState.ts`

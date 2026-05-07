@@ -75,9 +75,14 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const { fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
 
-  const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({ bufferRef, updateBufferCursor });
+  // Shared ref that tracks whether an external (non-user) content update is in flight.
+  // This is passed to useEditorCursor to guard against saving cursor positions
+  // during external replacements (file reloads, auto-reload, initial loads).
+  const isExternalUpdateRef = useRef<boolean>(false);
 
-  const { handleSave, saveRef, isExternalUpdateRef } = useEditorFileIO(
+  const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({ bufferRef, updateBufferCursor, isExternalUpdateRef });
+
+  const { handleSave, saveRef } = useEditorFileIO(
     viewRef,
     buffer,
     bufferRef,
@@ -95,6 +100,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       setEditorUsesTabs: settings.setEditorUsesTabs,
       setLineEnding: settings.setLineEnding,
     },
+    isExternalUpdateRef,
   );
 
   const { handleScrollUpdate, cancelPendingFlush } = useEditorScrollSync({

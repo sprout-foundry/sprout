@@ -126,7 +126,7 @@ function createLPSyncPlugin(languageId: string) {
           if (langId) {
             LSPClientService.lspClientService.dispatchSyncToClient(langId);
           }
-        }, 500);
+        }, 200);
       }
 
       destroy(): void {

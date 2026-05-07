@@ -45,6 +45,8 @@ interface PaletteResult {
   symbolLine?: number;
   symbolKind?: string;
   scopePath?: string;
+  /** Stable unique key for React rendering */
+  key: string;
 }
 
 export interface CommandPaletteProps {
@@ -137,6 +139,7 @@ function CommandPalette({
             commandLabel: cmd.label,
             highlightedLabel: highlightMatches(cmd.label, result.matches),
             score: result.score,
+            key: `cmd-${cmd.id}`,
           });
         }
       }
@@ -153,6 +156,7 @@ function CommandPalette({
           fileDirectory: dir,
           highlightedLabel: highlightMatches(file.name, fuzzyScore(query, file.path).matches),
           score: fuzzyScore(query, file.path).score,
+          key: `file-${file.path}`,
         });
       }
     }
@@ -168,12 +172,28 @@ function CommandPalette({
           symbolLine: sym.line,
           symbolKind: sym.kind,
           scopePath: sym.scopePath,
+          key: `sym-${sym.name}-${sym.line}`,
         });
       }
     }
 
     return items.sort((a, b) => b.score - a.score).slice(0, 50);
   }, [query, mode, commands, fileResults, onSearchSymbols]);
+
+  // Debounce aria-live announcements so rapid keystrokes don't queue up speech
+  const [announcedCount, setAnnouncedCount] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!query) {
+        setAnnouncedCount('');
+      } else if (results.length === 0) {
+        setAnnouncedCount('No results found');
+      } else {
+        setAnnouncedCount(`${results.length} result${results.length === 1 ? '' : 's'} available`);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [results.length, query]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback(
@@ -274,7 +294,7 @@ function CommandPalette({
           {results.map((result, index) => (
             <div
               id={`command-palette-result-${index}`}
-              key={`${result.kind}-${result.commandId ?? result.filePath ?? index}`}
+              key={result.key}
               className={`command-palette-item ${index === selectedIndex ? 'selected' : ''}`}
               role="option"
               aria-selected={index === selectedIndex}
@@ -305,6 +325,14 @@ function CommandPalette({
               )}
             </div>
           ))}
+        </div>
+        <div
+          className="command-palette-sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+          role="status"
+        >
+          {announcedCount}
         </div>
       </div>
     </div>

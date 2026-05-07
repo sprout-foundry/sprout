@@ -461,9 +461,15 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return createErr
 	})
 	if err != nil {
+		if errors.Is(err, agent.ErrModelNotAvailable) {
+			return nil, agent.ErrModelNotAvailable
+		}
 		return nil, fmt.Errorf("create agent in workspace: %w", err)
 	}
 	if createErr != nil {
+		if errors.Is(createErr, agent.ErrModelNotAvailable) {
+			return nil, agent.ErrModelNotAvailable
+		}
 		return nil, fmt.Errorf("create agent: %w", createErr)
 	}
 
@@ -639,6 +645,9 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 
 	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, ws.withAgentWorkspace)
 	if err != nil {
+		if errors.Is(err, agent.ErrModelNotAvailable) {
+			return nil, agent.ErrModelNotAvailable
+		}
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}
 

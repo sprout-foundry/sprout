@@ -478,7 +478,10 @@ body {
   min-height: 0;
 }
 
-/* ── Tablet responsive (769-1024px) ── */
+/* ── Tablet responsive (769-1024px) ──
+ * Sidebar collapses to icons-only (handled in Sidebar.css).
+ * Editor and context panel stack vertically to fit narrow width.
+ */
 @media (min-width: 769px) and (max-width: 1024px) {
   .main-view-content {
     flex-direction: column;
@@ -516,9 +519,24 @@ body {
   .main-view-content > .context-panel:not(.context-panel-mobile) {
     display: none;
   }
+
+  /* Reduce split pane minimum sizes for narrower viewport */
+  .panes-container.layout-split-vertical .pane-wrapper {
+    min-width: 140px;
+  }
+
+  .panes-container.layout-split-horizontal .pane-wrapper {
+    min-height: 140px;
+  }
 }
 
+/* ── Mobile responsive (<768px) ──
+ * Single-panel view: only the active view is shown.
+ * Sidebar is a full-screen overlay toggled by the hamburger menu.
+ * Terminal expands to a full-screen overlay when opened.
+ */
 @media (max-width: 768px) {
+  /* Sidebar is a fixed overlay; main-view stays row for single-panel view */
   .main-view-content {
     flex-direction: row;
   }
@@ -548,8 +566,12 @@ body {
   }
 
   .pane-controls {
-    padding: var(--space-2) var(--space-3);
-    gap: var(--space-2);
+    flex-wrap: wrap;
+    padding: var(--space-3);
+  }
+
+  .pane-controls-mobile {
+    justify-content: space-between;
   }
 
   .pane-controls-left,
@@ -557,9 +579,45 @@ body {
     gap: var(--space-2);
   }
 
-  /* Full-screen terminal overlay on mobile */
+  .pane-control-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .pane-control-btn.compact {
+    flex: 0 0 auto;
+  }
+
+  /* Single-panel view: stack layout for narrow screens */
   .app {
     flex-direction: column;
+  }
+
+  /* Hide context panel inline on mobile; it uses a full-screen overlay instead */
+  .main-view-content > .context-panel:not(.context-panel-mobile) {
+    display: none;
+  }
+
+  /* Hide file tree wrapper on mobile — files accessible via sidebar overlay */
+  .filetree-wrapper {
+    display: none;
+  }
+
+  /* Force column layout for all split types on mobile */
+  .panes-container.layout-split-vertical,
+  .panes-container.layout-split-horizontal,
+  .panes-container.layout-split-grid {
+    flex-direction: column !important;
+  }
+
+  .panes-container .pane-wrapper {
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+
+  .pane-wrapper + .pane-wrapper {
+    border-top: 1px solid var(--border-subtle);
+    border-left: none;
   }
 }
 
@@ -907,45 +965,6 @@ body,
 
 .editor-pane-wrapper:not(.active):hover::before {
   background: var(--editor-pane-inactive-overlay-hover);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .filetree-wrapper {
-    display: none;
-  }
-
-  .panes-container {
-    flex-direction: column !important;
-  }
-
-  .pane-wrapper {
-    min-width: 100% !important;
-    flex: 1 !important;
-  }
-
-  .pane-wrapper:not(:first-child):not(:last-child) {
-    border-left: none;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .pane-controls {
-    flex-wrap: wrap;
-    padding: var(--space-3);
-  }
-
-  .pane-controls-mobile {
-    justify-content: space-between;
-  }
-
-  .pane-control-btn {
-    flex: 1;
-    justify-content: center;
-  }
-
-  .pane-control-btn.compact {
-    flex: 0 0 auto;
-  }
 }
 
 .onboarding-overlay {

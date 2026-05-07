@@ -231,6 +231,16 @@ class ApiService {
     }
   }
 
+  async getProviderModels(provider: string): Promise<{ provider: string; models: string[] }> {
+    const params = new URLSearchParams({ provider });
+    const response = await clientFetch(`/api/providers/models?${params.toString()}`);
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Failed to fetch models: HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   async testProviderConnection(provider: string): Promise<{ success: boolean; error?: string; model_count?: number }> {
     const response = await clientFetch(`/api/settings/credentials/${encodeURIComponent(provider)}/test`, {
       method: 'POST',

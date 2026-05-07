@@ -375,14 +375,19 @@ func TestCheckFileForDuplicates_DeduplicatesByID(t *testing.T) {
 	idx := NewIndexManager(provider, store, IndexOptions{BatchSize: 16, MaxBodyLen: 500})
 
 	// Content with two functions that will produce identical query embeddings.
+	// Each function is >= 5 lines to pass the trivial-function filter.
 	content := `package dup
 
-func FuncA() {
+func FuncA() int {
 	x := 1
+	y := 2
+	return x + y
 }
 
-func FuncB() {
-	y := 2
+func FuncB() int {
+	a := 3
+	b := 4
+	return a + b
 }
 `
 

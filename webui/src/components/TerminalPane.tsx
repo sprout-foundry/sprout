@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import ContextMenu from './ContextMenu';
 import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2, Terminal } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
+import type { IDisposable } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
@@ -10,6 +11,7 @@ import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import type { WsEvent } from '../services/websocket';
 import { useTheme } from '../contexts/ThemeContext';
 import { debugLog } from '../utils/log';
+import { registerTerminalFilePathLinks } from '../extensions/terminalFilePaths';
 import { copyToClipboard } from '../utils/clipboard';
 import { FONT_SIZE_DEFAULT } from './terminalConstants';
 import TerminalSearchBar, { type TerminalSearchOptions, type TerminalSearchBarHandle } from './TerminalSearchBar';
@@ -92,6 +94,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const lastRestoreTimeRef = useRef(0);
     const resizeTimerRef = useRef<number | null>(null);
     const expandTimeoutRef = useRef<number | null>(null);
+    const linkProviderRef = useRef<IDisposable | null>(null);
 
     // ── Search functionality ────────────────────────────────────────────────
     const searchAddonRef = useRef<SearchAddon | null>(null);
@@ -756,6 +759,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       term.loadAddon(searchAddon);
       term.open(xtermContainerRef.current);
 
+      linkProviderRef.current = registerTerminalFilePathLinks(term);
+
       // Add wheel event handler to prevent page scroll-chaining when the
       // terminal has scrollback content. xterm handles actual scrolling natively.
       const container = xtermContainerRef.current;
@@ -833,6 +838,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       });
 
       return () => {
+        linkProviderRef.current?.dispose();
+        linkProviderRef.current = null;
         // Dispose search results listener
         resultsDisposable.dispose();
         // Remove wheel event listener

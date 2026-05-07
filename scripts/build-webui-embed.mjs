@@ -74,6 +74,20 @@ if (!noBuild) {
     run('npm', ['install'], webuiDir);
   }
 
+  // Build workspace packages that the webui depends on via file: links.
+  // Their `prepare` scripts may not run reliably during npm install
+  // (npm ci skips prepare, and npm install behaviour varies by version),
+  // so we build them explicitly to ensure `dist/` exists before Vite
+  // resolves the `exports` fields in their package.json.
+  const pkgDirs = ['events', 'ui'].map(n => join(repoRoot, 'packages', n));
+  for (const pkgDir of pkgDirs) {
+    if (!existsSync(join(pkgDir, 'dist'))) {
+      console.log(`📦 Installing and building ${pkgDir}...`);
+      run('npm', ['install'], pkgDir);
+      run('npm', ['run', 'build'], pkgDir);
+    }
+  }
+
   console.log('🔨 Building React app with Vite...');
   // Vite doesn't need DISABLE_ESLINT_PLUGIN
   run('npm', ['run', 'build'], webuiDir, {

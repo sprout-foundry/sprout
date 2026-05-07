@@ -163,6 +163,11 @@
 }
 
 .themed-dialog-input:focus {
+  outline: none;
+}
+
+.themed-dialog-input:focus-visible {
+  outline: none;
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px var(--accent-primary-alpha);
 }
@@ -942,6 +947,11 @@
 }
 
 .ask-user-body textarea:focus {
+  outline: none;
+}
+
+.ask-user-body textarea:focus-visible {
+  outline: none;
   border-color: var(--border-focus);
   box-shadow: 0 0 0 2px var(--accent-primary-alpha);
 }

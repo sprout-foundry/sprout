@@ -85,6 +85,15 @@
   outline-offset: 2px;
 }
 
+.error-reset-button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.error-reset-button:focus-visible {
+  outline: 2px solid var(--primary, #007bff);
+  outline-offset: 2px;
+}
+
 .error-reset-button:active {
   transform: scale(0.98);
 }
@@ -112,6 +121,15 @@
 }
 
 .error-reload-button:focus {
+  outline: 2px solid var(--secondary, #6c757d);
+  outline-offset: 2px;
+}
+
+.error-reload-button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.error-reload-button:focus-visible {
   outline: 2px solid var(--secondary, #6c757d);
   outline-offset: 2px;
 }

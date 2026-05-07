@@ -15,8 +15,10 @@ export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 600;
 export const SIDEBAR_DEFAULT_WIDTH = 288;
 
-export const clampSidebarWidth = (value: number): number =>
-  Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
+export const clampSidebarWidth = (value: number): number => {
+  if (!Number.isFinite(value)) return SIDEBAR_DEFAULT_WIDTH;
+  return Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, value));
+};
 
 export interface UseSidebarStateReturn {
   isMobile: boolean;
@@ -154,12 +156,8 @@ export function useSidebarState(): UseSidebarStateReturn {
   }, []);
 
   const handleSidebarToggle = useCallback(() => {
-    setSidebarCollapsedRaw((prev) => {
-      const next = !prev;
-      try { window.localStorage.setItem('sprout-sidebar-collapsed', String(next)); } catch {}
-      return next;
-    });
-  }, []);
+    setSidebarCollapsed(!sidebarCollapsed);
+  }, [sidebarCollapsed, setSidebarCollapsed]);
 
   return {
     isMobile,

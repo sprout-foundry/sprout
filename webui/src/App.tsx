@@ -38,6 +38,7 @@ import {
 } from './services/chatSessions';
 import { debugLog } from './utils/log';
 import { trimMessages } from './utils/messageWindow';
+import { useSidebarState } from './hooks/useSidebarState';
 
 /** Extract a tool call identifier from opaque ToolExecution.details. */
 const getToolCallId = (details: unknown): string | undefined => {
@@ -330,10 +331,20 @@ function App() {
   });
 
   const [inputValue, setInputValue] = useState('');
-  const [isMobile, setIsMobile] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isTerminalExpanded, setIsTerminalExpanded] = useState(false);
+  const {
+    isMobile,
+    setIsMobile,
+    isSidebarOpen,
+    sidebarCollapsed,
+    isTerminalExpanded,
+    selectedSection,
+    setSidebarCollapsed,
+    toggleSidebar,
+    closeSidebar,
+    handleSidebarToggle,
+    setIsTerminalExpanded,
+    setSelectedSection,
+  } = useSidebarState();
   const activeRequestsRef = useRef(0);
   const queuedMessagesRef = useRef<string[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
@@ -404,11 +415,6 @@ function App() {
     queryCount: state.queryCount,
     filesModified: 0 // TODO: track modified files from buffers
   }), [state.queryCount]);
-
-  // Memoize sidebar toggle handler
-  const handleSidebarToggle = useCallback(() => {
-    setSidebarCollapsed(prev => !prev);
-  }, []);
 
   const wsService = WebSocketService.getInstance();
   const apiService = ApiService.getInstance();
@@ -2026,14 +2032,6 @@ function App() {
     debugLog('[term] Terminal output:', output);
   }, []);
 
-  const toggleSidebar = useCallback(() => {
-    setIsSidebarOpen(prev => !prev);
-  }, []);
-
-  const closeSidebar = useCallback(() => {
-    setIsSidebarOpen(false);
-  }, []);
-
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
@@ -2057,6 +2055,8 @@ function App() {
                 isSidebarOpen={isSidebarOpen}
                 sidebarCollapsed={sidebarCollapsed}
                 isTerminalExpanded={isTerminalExpanded}
+                selectedSection={selectedSection}
+                onSectionChange={setSelectedSection}
                 stats={stats}
                 recentFiles={recentFiles}
                 recentLogs={recentLogs}

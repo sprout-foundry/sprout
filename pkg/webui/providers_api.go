@@ -3,6 +3,7 @@ package webui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sort"
@@ -229,3 +230,63 @@ func (ws *ReactWebServer) publishProviderState(clientID string) {
 	stats["client_id"] = clientID
 	ws.eventBus.Publish(events.EventTypeMetricsUpdate, stats)
 }
+
+// handleGetModels handles GET /api/providers/models?provider=<provider_type>
+// Returns the list of available models for the given provider.
+func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
+	if provider == "" {
+		writeJSONError(w, http.StatusBadRequest, "provider parameter is required")
+		return
+	}
+
+	// Get config manager to map provider name to type
+	var configManager *configuration.Manager
+	agentInst, err := ws.getClientAgent(ws.resolveClientID(r))
+	if err == nil && agentInst != nil && agentInst.GetConfigManager() != nil {
+		configManager = agentInst.GetConfigManager()
+	} else {
+		cm, createErr := ws.getLayeredConfigManager(ws.resolveClientID(r))
+		if createErr != nil {
+			writeJSONError(w, http.StatusInternalServerError, "failed to create config manager")
+			return
+		}
+		configManager = cm
+	}
+
+	if configManager == nil {
+		writeJSONError(w, http.StatusInternalServerError, "config manager not available")
+		return
+	}
+
+	clientType, err := configManager.MapStringToClientType(provider)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	models, err := api.GetModelsForProvider(clientType)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list models: %v", err))
+		return
+	}
+
+	result := make([]map[string]interface{}, 0, len(models))
+	for _, m := range models {
+		result = append(result, map[string]interface{}{
+			"id":   m.ID,
+			"name": m.Name,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"models": result,
+		"total":  len(result),
+	})
+}
+

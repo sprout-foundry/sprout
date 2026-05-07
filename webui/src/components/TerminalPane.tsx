@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
-import ContextMenu from './ContextMenu';
-import { X, TriangleAlert, Copy, ClipboardPaste, Trash2, TextSelect, Link2, Terminal } from 'lucide-react';
+import { X, TriangleAlert, Terminal } from 'lucide-react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import type { IDisposable } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -15,6 +13,7 @@ import { registerTerminalFilePathLinks } from '../extensions/terminalFilePaths';
 import { copyToClipboard } from '../utils/clipboard';
 import { FONT_SIZE_DEFAULT } from './terminalConstants';
 import TerminalSearchBar, { type TerminalSearchOptions, type TerminalSearchBarHandle } from './TerminalSearchBar';
+import TerminalContextMenu from './TerminalContextMenu';
 import {
   initWasmShell,
   type WasmShell,
@@ -51,21 +50,12 @@ interface TerminalPaneProps {
   copyOnSelect?: boolean;
 }
 
-interface TerminalContextMenuState {
-  x: number;
-  y: number;
-  hasSelection: boolean;
-  hasLink: boolean;
-  linkUrl: string;
-}
-
 const EXPAND_RESIZE_DELAY_MS = 100; // Delay to allow terminal expand animation to progress before triggering resize
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId, onProcessExit, copyOnSelect = false }, ref) => {
     const { themePack } = useTheme();
     const [paneConnected, setPaneConnected] = useState(false);
-    const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null);
 
     // Stabilize callback props in refs so the WebSocket lifecycle effect doesn't
     // tear down / reconnect when a parent passes an inline callback.
@@ -574,102 +564,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       // process the wheel event for smooth, native scrolling.
     }, []);
 
-    // ── Context menu handlers ──
-    const closeContextMenu = useCallback(() => {
-      setContextMenu(null);
-    }, []);
-
-    const handleCopy = useCallback(() => {
-      const term = xtermRef.current;
-      if (term?.hasSelection()) {
-        copyToClipboard(term.getSelection()).catch((err) => {
-          debugLog('Clipboard access denied:', err);
-        });
-      }
-      closeContextMenu();
-    }, [closeContextMenu]);
-
-    const handlePaste = useCallback(async () => {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (wasmActiveRef.current) {
-          handleWasmInput(text);
-        } else {
-          terminalWSRef.current?.sendRawInput(text);
-        }
-      } catch (err) {
-        debugLog('[TerminalPane] clipboard readText failed:', err);
-        // Clipboard access denied
-      }
-      closeContextMenu();
-    }, [closeContextMenu, handleWasmInput]);
-
-    const handleClear = useCallback(() => {
-      xtermRef.current?.clear();
-      closeContextMenu();
-    }, [closeContextMenu]);
-
-    const handleSelectAll = useCallback(() => {
-      xtermRef.current?.selectAll();
-      closeContextMenu();
-    }, [closeContextMenu]);
-
-    const handleCopyLink = useCallback(() => {
-      if (contextMenu?.linkUrl) {
-        copyToClipboard(contextMenu.linkUrl);
-      }
-      closeContextMenu();
-    }, [contextMenu?.linkUrl, closeContextMenu]);
-
-    const handleContextMenu = useCallback((e: ReactMouseEvent) => {
-      e.preventDefault();
-      const term = xtermRef.current;
-      const hasSelection = term?.hasSelection() ?? false;
-
-      // Detect link under cursor
-      let hasLink = false;
-      let linkUrl = '';
-      const el = xtermContainerRef.current;
-      if (term && el) {
-        const rect = el.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          const cellWidth = rect.width / term.cols;
-          const cellHeight = rect.height / term.rows;
-          const cellX = Math.floor((e.clientX - rect.left) / cellWidth);
-          const cellY = Math.floor((e.clientY - rect.top) / cellHeight);
-          const buf = term.buffer.active;
-          const lineIdx = buf.baseY + cellY;
-          const line = buf.getLine(lineIdx);
-          if (line) {
-            let text = '';
-            for (let i = 0; i < line.length; i++) {
-              text += line.getCell(i)?.getChars() || '';
-            }
-            // eslint-disable-next-line no-useless-escape
-            const urlRegex = /https?:\/\/[\w\-._~:/?#\[\]@!$&'()*+,;=%]+/g;
-            let match;
-            while ((match = urlRegex.exec(text)) !== null) {
-              const start = match.index;
-              const end = start + match[0].length;
-              if (cellX >= start && cellX < end) {
-                hasLink = true;
-                linkUrl = match[0];
-                break;
-              }
-            }
-          }
-        }
-      }
-
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        hasSelection,
-        hasLink,
-        linkUrl,
-      });
-    }, []);
-
     // ── Search functionality handlers ────────────────────────────────────────
 
     // Handle search errors from the search bar
@@ -714,6 +608,45 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       setMatchCount(undefined);
       setSearchError(null);
       xtermRef.current?.focus();
+    }, []);
+
+    // ── Context menu handlers for TerminalContextMenu ───────────────────────
+
+    const getXTerminal = useCallback(() => xtermRef.current, []);
+
+    const hasXTermSelection = useCallback(() => xtermRef.current?.hasSelection() ?? false, []);
+
+    const handleContextCopy = useCallback((text: string) => {
+      copyToClipboard(text).catch((err) => {
+        debugLog('[TerminalPane] clipboard copy failed:', err);
+      });
+    }, []);
+
+    const handleContextPaste = useCallback((text: string) => {
+      if (wasmActiveRef.current) {
+        handleWasmInput(text);
+      } else {
+        terminalWSRef.current?.sendRawInput(text);
+      }
+    }, [handleWasmInput]);
+
+    const handleContextSearch = useCallback(() => {
+      const sel = xtermRef.current?.getSelection();
+      searchInitialQueryRef.current = (sel && sel.trim()) ? sel.trim() : null;
+      setSearchVisible(true);
+    }, []);
+
+    const handleContextClear = useCallback(() => {
+      xtermRef.current?.clear();
+    }, []);
+
+    const handleContextSelectAll = useCallback(() => {
+      xtermRef.current?.selectAll();
+    }, []);
+
+    const handleContextSplitPane = useCallback((direction: 'horizontal' | 'vertical') => {
+      const action = direction === 'horizontal' ? 'split_horizontal' : 'split_vertical';
+      window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: { action } }));
     }, []);
 
     // ── Expose methods to parent ─────────────────────────────────────────────
@@ -913,6 +846,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Keep copyOnSelect ref in sync
     useEffect(() => {
       copyOnSelectRef.current = copyOnSelect;
+      // Cancel any pending copy timer when feature is toggled off
+      if (!copyOnSelect && copyOnSelectTimerRef.current !== null) {
+        clearTimeout(copyOnSelectTimerRef.current);
+        copyOnSelectTimerRef.current = null;
+      }
     }, [copyOnSelect]);
 
     // Manage WebSocket connection lifecycle
@@ -1152,13 +1090,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       };
     }, []);
 
-    // Reset context menu when pane becomes inactive or unmounts
-    useEffect(() => {
-      if (!isActive) {
-        setContextMenu(null);
-      }
-    }, [isActive]);
-
     return (
       <div className="terminal-pane" ref={paneWrapperRef}>
         {showCloseButton && (
@@ -1183,7 +1114,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         <div
           className="terminal-pane-content"
           onClick={() => xtermRef.current?.focus()}
-          onContextMenu={handleContextMenu}
         >
           <div ref={xtermContainerRef} className="terminal-xterm" />
         </div>
@@ -1211,44 +1141,17 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
             Browser shell · Files persist in IndexedDB
           </div>
         )}
-        <ContextMenu
-          isOpen={contextMenu !== null}
-          x={contextMenu?.x ?? 0}
-          y={contextMenu?.y ?? 0}
-          onClose={closeContextMenu}
-        >
-          <button
-            className={`context-menu-item ${!contextMenu?.hasSelection ? 'disabled' : ''}`}
-            onClick={handleCopy}
-            disabled={!contextMenu?.hasSelection}
-            type="button"
-          >
-            <Copy size={13} />
-            <span className="menu-item-label">Copy</span>
-          </button>
-          <button className="context-menu-item" onClick={handlePaste} type="button">
-            <ClipboardPaste size={13} />
-            <span className="menu-item-label">Paste</span>
-          </button>
-          <div className="context-menu-divider" />
-          <button className="context-menu-item" onClick={handleClear} type="button">
-            <Trash2 size={13} />
-            <span className="menu-item-label">Clear Terminal</span>
-          </button>
-          <button className="context-menu-item" onClick={handleSelectAll} type="button">
-            <TextSelect size={13} />
-            <span className="menu-item-label">Select All</span>
-          </button>
-          {contextMenu?.hasLink && (
-            <>
-              <div className="context-menu-divider" />
-              <button className="context-menu-item" onClick={handleCopyLink} type="button">
-                <Link2 size={13} />
-                <span className="menu-item-label">Copy Link</span>
-              </button>
-            </>
-          )}
-        </ContextMenu>
+        <TerminalContextMenu
+          containerRef={xtermContainerRef}
+          getTerminal={getXTerminal}
+          hasSelection={hasXTermSelection}
+          onCopy={handleContextCopy}
+          onPaste={handleContextPaste}
+          onSearch={handleContextSearch}
+          onClear={handleContextClear}
+          onSelectAll={handleContextSelectAll}
+          onSplitPane={handleContextSplitPane}
+        />
       </div>
     );
   },

@@ -5,6 +5,7 @@ import (
 	crypto_rand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -181,12 +182,18 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 			created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
 			return createErr
 		}); err != nil {
+			if errors.Is(err, agent.ErrModelNotAvailable) {
+				return nil, agent.ErrModelNotAvailable
+			}
 			return nil, fmt.Errorf("create chat agent in workspace: %w", err)
 		}
 	} else {
 		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
 	}
 	if createErr != nil {
+		if errors.Is(createErr, agent.ErrModelNotAvailable) {
+			return nil, agent.ErrModelNotAvailable
+		}
 		return nil, fmt.Errorf("create chat agent: %w", createErr)
 	}
 

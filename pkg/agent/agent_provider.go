@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -14,6 +15,11 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"golang.org/x/term"
 )
+
+// ErrModelNotAvailable is returned when the configured model for the current provider
+// is not available. In daemon mode, this allows the web UI to detect the issue and
+// present a model selection UI rather than hard-failing.
+var ErrModelNotAvailable = errors.New("configured model is not available for this provider")
 
 // isNonInteractive returns true if the process is running in non-interactive
 // mode (stdin is not a terminal). Used to prevent blocking prompts when
@@ -109,20 +115,51 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	failedProviderName := api.GetProviderName(failedProvider)
 	fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
 
-	// Non-interactive mode cannot recover via prompt.
+	// Detect whether the failure is a model-not-found issue so we can offer
+	// the user the option to pick a different model on the same provider.
+	isModelError := isModelNotFoundError(startupErr)
+
+	// Non-interactive mode. In daemon mode (web UI), if the error is model-not-found,
+	// return a sentinel so the web UI can offer model selection. Otherwise fail.
 	if isNonInteractive() {
+		if isSSHDaemon() && isModelError {
+			return "", "", ErrModelNotAvailable
+		}
 		return "", "", agenterrors.NewProviderError(fmt.Sprintf("failed to initialize provider %s: Running in non-interactive mode. %s", failedProviderName, noninteractive.HelpHint), startupErr, "", "")
 	}
 
-	choice, err := promptProviderRecoveryChoice()
+	choice, err := promptProviderRecoveryChoice(isModelError)
 	if err != nil {
-		return "", "", agenterrors.NewProviderError("failed to read provider recovery choice", err, "", "")
+		return "", "", agenterrors.NewInvalidInputError("read user choice", err)
 	}
 
-	if choice == 2 {
+	if choice == 0 {
 		return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
 	}
 
+	// Choice 1 (or choice 2 when no model error): try a different model on the
+	// same provider. List available models and let the user pick one.
+	if choice == 1 && isModelError {
+		models, listErr := api.GetModelsForProvider(failedProvider)
+		if listErr != nil || len(models) == 0 {
+			fmt.Fprintf(os.Stderr, "[WARN] Failed to list models for %s: %v\n", failedProviderName, listErr)
+			fmt.Fprintf(os.Stderr, "Falling back to selecting a different provider.\n")
+			return recoverProviderBySwitching(configManager, failedProvider, failedProviderName, modelArg)
+		}
+		selectedModel, ok := promptModelSelection(models)
+		if !ok {
+			return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
+		}
+		return failedProvider, selectedModel, nil
+	}
+
+	// Choice 1 (no model error) or choice 2 (with model error): switch provider.
+	return recoverProviderBySwitching(configManager, failedProvider, failedProviderName, modelArg)
+}
+
+// recoverProviderBySwitching prompts the user to select a new provider and
+// returns the new provider type and model.
+func recoverProviderBySwitching(configManager *configuration.Manager, failedProvider api.ClientType, failedProviderName string, modelArg string) (api.ClientType, string, error) {
 	nextProvider, err := configManager.SelectNewProvider()
 	if err != nil {
 		return "", "", agenterrors.NewProviderError("failed to select provider", err, "", "")
@@ -136,25 +173,84 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	return nextProvider, nextModel, nil
 }
 
-func promptProviderRecoveryChoice() (int, error) {
+// isModelNotFoundError checks if the error indicates a model-not-found issue.
+func isModelNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "model not found") ||
+		strings.Contains(msg, "model not exist") ||
+		strings.Contains(msg, "invalid model") ||
+		strings.Contains(msg, "model.*not.*supported") ||
+		strings.Contains(msg, "unsupported model")
+}
+
+func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Fprintln(os.Stderr, "Options:")
-		fmt.Fprintln(os.Stderr, "  1. Select a different provider")
-		fmt.Fprintln(os.Stderr, "  2. Close")
-		fmt.Fprint(os.Stderr, "Choice (1-2): ")
+		if isModelError {
+			fmt.Fprintln(os.Stderr, "  1. Choose a different model on this provider")
+			fmt.Fprintln(os.Stderr, "  2. Select a different provider")
+			fmt.Fprintln(os.Stderr, "  0. Close")
+			fmt.Fprint(os.Stderr, "Choice (0-2): ")
+		} else {
+			fmt.Fprintln(os.Stderr, "  1. Select a different provider")
+			fmt.Fprintln(os.Stderr, "  0. Close")
+			fmt.Fprint(os.Stderr, "Choice (0-1): ")
+		}
 
 		input, err := reader.ReadString('\n')
 		if err != nil {
-			return 0, agenterrors.NewInvalidInputError("read user choice", err)
+			return -1, err
 		}
 
-		choice, err := strconv.Atoi(strings.TrimSpace(input))
-		if err != nil || choice < 1 || choice > 2 {
-			fmt.Fprintln(os.Stderr, "Please enter 1 or 2.")
+		parsed, err := strconv.Atoi(strings.TrimSpace(input))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Please enter a valid number.")
 			continue
 		}
 
-		return choice, nil
+		if isModelError {
+			if parsed >= 0 && parsed <= 2 {
+				return parsed, nil
+			}
+			fmt.Fprintln(os.Stderr, "Please enter 0, 1, or 2.")
+		} else {
+			if parsed >= 0 && parsed <= 1 {
+				return parsed, nil
+			}
+			fmt.Fprintln(os.Stderr, "Please enter 0 or 1.")
+		}
 	}
+}
+
+// promptModelSelection lists available models for a provider and lets the user
+// pick one. Returns the selected model ID and true, or ("", false) if the user
+// cancels.
+func promptModelSelection(models []api.ModelInfo) (string, bool) {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Fprintln(os.Stderr, "\nAvailable models:")
+	for i, m := range models {
+		fmt.Fprintf(os.Stderr, "  %2d. %s\n", i+1, m.ID)
+	}
+	fmt.Fprint(os.Stderr, "Select a model (number, or 0 to cancel): ")
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return "", false
+	}
+	idx, err := strconv.Atoi(strings.TrimSpace(input))
+	if err != nil || idx < 0 {
+		return "", false
+	}
+	if idx == 0 {
+		return "", false
+	}
+	if idx < 1 || idx > len(models) {
+		fmt.Fprintln(os.Stderr, "Invalid selection. Cancelling.")
+		return "", false
+	}
+	return models[idx-1].ID, true
 }

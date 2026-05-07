@@ -426,9 +426,9 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
-		// If no provider is configured (editor mode), update the config
-		// first so that a new agent can be created with the requested provider.
-		if errors.Is(err, ErrNoProviderConfigured) || (err != nil && isProviderConfigError(err)) {
+		// If no provider is configured (editor mode) or the configured model is not available,
+		// update the config first so that a new agent can be created with the requested provider.
+		if errors.Is(err, ErrNoProviderConfigured) || errors.Is(err, agent.ErrModelNotAvailable) || (err != nil && isProviderConfigError(err)) {
 			data, ok := msg["data"].(map[string]interface{})
 			if !ok {
 				_ = safeConn.WriteJSON(map[string]interface{}{
@@ -593,6 +593,17 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
+		// Return a specific error for model-not-found so the web UI can show model selection
+		if errors.Is(err, agent.ErrModelNotAvailable) {
+			_ = safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{
+					"message": "Configured model is not available",
+					"code":    "model_not_available",
+				},
+			})
+			return
+		}
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Agent is not available"},

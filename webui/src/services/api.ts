@@ -1871,6 +1871,11 @@ class ApiService {
       end_line: number;
       language: string;
       similarity: number;
+      type: string;  // "code_unit" or "file"
+    }>;
+    duplicate_clusters: Array<{
+      files: string[];
+      similarity: number;
     }>;
     query: string;
     total: number;

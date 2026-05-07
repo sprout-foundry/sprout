@@ -12,24 +12,38 @@ import (
 
 // skipDirs holds directory component names that should never be indexed.
 var skipDirs = map[string]bool{
+	// Package managers
 	"node_modules": true,
+	"vendor":       true,
+	// Version control
 	".git":         true,
+	// Python
 	"__pycache__":  true,
 	".tox":         true,
 	".venv":        true,
 	"venv":         true,
-	"dist":         true,
-	"build":        true,
-	"target":       true,
+	// JavaScript/Node
 	".next":        true,
 	".nuxt":        true,
 	"coverage":     true,
 	".cache":       true,
+	// Java/Kotlin
 	".gradle":      true,
 	".mvn":         true,
-	"vendor":       true,
+	// Build artifacts
+	"dist":         true,
+	"build":        true,
+	"out":          true,
+	"target":       true,
+	// IDE
 	".idea":        true,
 	".vscode":      true,
+	// Terraform
+	".terraform":   true,
+	// Sprout-specific
+	".ledit":       true, // Agent revision history / session data
+	".agent-i":     true, // Agent session data
+	".sprout":      true, // Sprout runtime data (run/embeddings)
 }
 
 // ShouldIgnorePath reports whether the given path should be excluded from
@@ -85,7 +99,7 @@ func layer1Ignore(path string) bool {
 }
 
 // supportedCodeExtensions lists file extensions that should be collected
-// during directory walks for indexing.
+// during directory walks for code-only indexing.
 var supportedCodeExtensions = map[string]bool{
 	".go":  true,
 	".ts":  true,
@@ -96,9 +110,75 @@ var supportedCodeExtensions = map[string]bool{
 	".py":  true,
 }
 
+// supportedIndexableExtensions lists all file extensions that should be collected
+// during directory walks for full indexing (code + non-code files).
+var supportedIndexableExtensions = map[string]bool{
+	// Code extensions (from supportedCodeExtensions)
+	".go":  true,
+	".ts":  true,
+	".tsx": true,
+	".js":  true,
+	".jsx": true,
+	".mjs": true,
+	".py":  true,
+
+	// Documentation
+	".md":  true,
+	".rst": true,
+	".txt": true,
+
+	// Configuration
+	".yaml": true,
+	".yml":  true,
+	".toml": true,
+	".json": true,
+	".xml":  true,
+
+	// Web/data
+	".html": true,
+	".css":  true,
+	".sql":  true,
+
+	// Shell scripts
+	".sh":   true,
+	".bash": true,
+	".zsh":  true,
+	".fish": true,
+
+	// Config/build
+	".env":    true,
+	".cfg":    true,
+	".ini":    true,
+	".conf":   true,
+	".gradle": true,
+	".cmake":  true,
+}
+
+// specialFilenames lists files without extensions that should be indexed.
+var specialFilenames = map[string]bool{
+	"Makefile":      true,
+	"Dockerfile":    true,
+	".dockerignore": true,
+	".gitignore":    true,
+	".env.example":  true,
+	"AGENTS.md":     true,
+}
+
 // hasSupportedExtension returns true if the file path has a recognized source-code extension.
 func hasSupportedExtension(path string) bool {
 	return supportedCodeExtensions[filepath.Ext(path)]
+}
+
+// hasIndexableExtension returns true if the file path has a recognized extension
+// for full indexing (code + non-code files).
+func hasIndexableExtension(path string) bool {
+	return supportedIndexableExtensions[filepath.Ext(path)]
+}
+
+// isSpecialFilename returns true if the file basename matches a special filename
+// (files without extensions that should be indexed).
+func isSpecialFilename(path string) bool {
+	return specialFilenames[filepath.Base(path)]
 }
 
 // WalkCodeFiles walks the directory tree rooted at root and returns all file
@@ -115,6 +195,33 @@ func hasSupportedExtension(path string) bool {
 // If the context is cancelled or any limit is hit, the files collected so far
 // are returned with no error (partial result).
 func WalkCodeFiles(ctx context.Context, root string) ([]string, error) {
+	return walkFiles(ctx, root, hasSupportedExtension, false)
+}
+
+// WalkAllIndexableFiles walks the directory tree rooted at root and returns all
+// file paths that should be indexed — both code files (for symbol extraction)
+// and non-code files (for file-level embedding). It includes all extensions
+// from supportedCodeExtensions plus supported non-code extensions (.md, .yaml,
+// .json, .sh, etc.) and special filenames (Makefile, Dockerfile, .gitignore, etc.).
+//
+// It accepts a context for cancellation and applies three protections:
+//  - A 30-second absolute timeout (WalkTimeout).
+//  - A maximum directory depth of 15 (MaxDepth).
+//  - A cap of 10,000 collected files (MaxFileCount).
+//
+// Progress is logged every ProgressInterval files.
+// If the context is cancelled or any limit is hit, the files collected so far
+// are returned with no error (partial result).
+func WalkAllIndexableFiles(ctx context.Context, root string) ([]string, error) {
+	return walkFiles(ctx, root, func(path string) bool {
+		return hasIndexableExtension(path) || isSpecialFilename(path)
+	}, true)
+}
+
+// walkFiles is the shared implementation for walking files with a custom
+// extension checker. The checkSpecial parameter indicates whether to check
+// special filenames in addition to extensions.
+func walkFiles(ctx context.Context, root string, extensionCheck func(path string) bool, checkSpecial bool) ([]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, WalkTimeout)
 	defer cancel()
 
@@ -162,8 +269,8 @@ func WalkCodeFiles(ctx context.Context, root string) ([]string, error) {
 			return fmt.Errorf("embedding: walk file limit reached (%d)", MaxFileCount)
 		}
 
-		// Only collect recognized source files.
-		if !hasSupportedExtension(path) {
+		// Only collect recognized source files (using the provided extension checker).
+		if !extensionCheck(path) {
 			return nil
 		}
 

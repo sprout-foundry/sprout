@@ -69,6 +69,21 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 		return &CheckDuplicatesResult{}, nil
 	}
 
+	// Filter out trivially small code units that generate false positives.
+	// Units with fewer than 5 lines (e.g., single-return getters, interface stubs)
+	// are structurally similar to many other small functions but are not meaningful duplicates.
+	var meaningful []CodeUnit
+	for _, u := range units {
+		if u.EndLine-u.StartLine+1 >= 5 {
+			meaningful = append(meaningful, u)
+		}
+	}
+	units = meaningful
+
+	if len(units) == 0 {
+		return &CheckDuplicatesResult{}, nil
+	}
+
 	// Query for each code unit and collect matches.
 	var allMatches []QueryResult
 	for _, u := range units {
@@ -113,6 +128,11 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 // extension so that ExtractFromFile can parse it, then extracts code units.
 // The temporary file is cleaned up after extraction.
 func extractFromContent(filePath string, content string) ([]CodeUnit, error) {
+	// Early return for empty content
+	if strings.TrimSpace(content) == "" {
+		return []CodeUnit{}, nil
+	}
+
 	// Create a temp file with the same extension as the target path so the
 	// extractor picks the right language parser.
 	tmpDir, err := os.MkdirTemp("", "embedding-check-*")
@@ -131,7 +151,17 @@ func extractFromContent(filePath string, content string) ([]CodeUnit, error) {
 		return nil, fmt.Errorf("write temp file: %w", err)
 	}
 
-	return ExtractFromFile(tmpPath)
+	units, err := ExtractFromFile(tmpPath)
+	if err != nil {
+		return nil, fmt.Errorf("extract from file: %w", err)
+	}
+
+	// Override File to use the intended target path, not the temp path
+	for i := range units {
+		units[i].File = filePath
+	}
+
+	return units, nil
 }
 
 // deduplicateMatches removes duplicate QueryResults based on Record.ID,

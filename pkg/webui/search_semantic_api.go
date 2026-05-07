@@ -23,14 +23,22 @@ type SemanticSearchResult struct {
 	EndLine    int     `json:"end_line"`
 	Language   string  `json:"language"`
 	Similarity float32 `json:"similarity"`
+	Type       string  `json:"type"`       // "code_unit" or "file"
+}
+
+// DuplicateCluster represents a group of files that have highly similar code units.
+type DuplicateCluster struct {
+	Files      []string `json:"files"`
+	Similarity float32  `json:"similarity"`
 }
 
 // SemanticSearchResponse is the JSON response for semantic search.
 type SemanticSearchResponse struct {
-	Results  []SemanticSearchResult `json:"results"`
-	Query    string                 `json:"query"`
-	Total    int                    `json:"total"`
-	Duration string                 `json:"duration"` // human-readable elapsed time
+	Results           []SemanticSearchResult `json:"results"`
+	Query             string                 `json:"query"`
+	Total             int                    `json:"total"`
+	Duration          string                 `json:"duration"` // human-readable elapsed time
+	DuplicateClusters []DuplicateCluster     `json:"duplicate_clusters"`
 }
 
 // handleAPISemanticSearch handles GET /api/search/semantic
@@ -69,10 +77,11 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 	em := ws.getEmbeddingManager(clientID)
 	if em == nil {
 		writeJSON(w, http.StatusOK, SemanticSearchResponse{
-			Results:  []SemanticSearchResult{},
-			Query:    query,
-			Total:    0,
-			Duration: "0ms",
+			Results:           []SemanticSearchResult{},
+			Query:             query,
+			Total:             0,
+			Duration:          "0ms",
+			DuplicateClusters: []DuplicateCluster{},
 		})
 		return
 	}
@@ -95,14 +104,19 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 			EndLine:    m.Record.EndLine,
 			Language:   m.Record.Language,
 			Similarity: m.Similarity,
+			Type:       m.Record.Type,
 		}
 	}
 
+	// Detect duplicate clusters from the results
+	duplicateClusters := detectDuplicateClusters(results)
+
 	writeJSON(w, http.StatusOK, SemanticSearchResponse{
-		Results:  results,
-		Query:    query,
-		Total:    len(results),
-		Duration: duration.String(),
+		Results:           results,
+		Query:             query,
+		Total:             len(results),
+		Duration:          duration.String(),
+		DuplicateClusters: duplicateClusters,
 	})
 }
 
@@ -327,4 +341,80 @@ func (ws *ReactWebServer) handleAPISemanticPreview(w http.ResponseWriter, r *htt
 		Snippet:    snippet,
 		TotalLines: len(lines),
 	})
+}
+
+// detectDuplicateClusters detects groups of files that have highly similar code units.
+// It builds clusters from results where different files have 2+ code_unit results with similarity >= 0.85.
+func detectDuplicateClusters(results []SemanticSearchResult) []DuplicateCluster {
+	// Build a map from file path to list of code_unit results from that file
+	fileResults := make(map[string][]SemanticSearchResult)
+	for _, result := range results {
+		// Skip file-level records - only cluster code_unit results
+		if result.Type == "file" {
+			continue
+		}
+		fileResults[result.File] = append(fileResults[result.File], result)
+	}
+
+	var clusters []DuplicateCluster
+
+	// For each pair of files that both have 2+ results with high similarity
+	files := make([]string, 0, len(fileResults))
+	for file := range fileResults {
+		files = append(files, file)
+	}
+
+	for i := 0; i < len(files); i++ {
+		for j := i + 1; j < len(files); j++ {
+			file1 := files[i]
+			file2 := files[j]
+			results1 := fileResults[file1]
+			results2 := fileResults[file2]
+
+			// Check if both files have 2+ results
+			if len(results1) < 2 || len(results2) < 2 {
+				continue
+			}
+
+			// Find the max similarity between any pair of results from different files
+			var maxSimilarity float32
+			hasHighSimilarity := false
+
+			for _, r1 := range results1 {
+				for _, r2 := range results2 {
+					if r1.Similarity >= 0.85 && r2.Similarity >= 0.85 {
+						// Both results have high similarity to the query
+						if r1.Similarity+r2.Similarity > maxSimilarity {
+							maxSimilarity = r1.Similarity + r2.Similarity
+						}
+						hasHighSimilarity = true
+					}
+				}
+			}
+
+			if hasHighSimilarity {
+				// Normalize to average similarity for the cluster
+				avgSimilarity := maxSimilarity / 2
+				clusters = append(clusters, DuplicateCluster{
+					Files:      []string{file1, file2},
+					Similarity: avgSimilarity,
+				})
+			}
+		}
+	}
+
+	// Sort clusters by similarity (highest first) and limit to top 5
+	if len(clusters) > 5 {
+		// Simple bubble sort for stability with small slices
+		for i := 0; i < len(clusters)-1; i++ {
+			for j := 0; j < len(clusters)-i-1; j++ {
+				if clusters[j].Similarity < clusters[j+1].Similarity {
+					clusters[j], clusters[j+1] = clusters[j+1], clusters[j]
+				}
+			}
+		}
+		clusters = clusters[:5]
+	}
+
+	return clusters
 }

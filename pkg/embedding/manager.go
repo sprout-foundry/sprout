@@ -16,7 +16,7 @@ import (
 // on first use, and caches them for subsequent calls.
 type EmbeddingManager struct {
 	mu            sync.Mutex
-	provider      *BundledProvider
+	provider      *StaticProvider
 	store         *JSONLFileStore
 	indexMgr      *IndexManager
 	initialized   bool
@@ -64,15 +64,8 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		m.config = &configuration.EmbeddingIndexConfig{}
 	}
 
-	// Resolve ORT library path. resolveORTLibrary handles config, env var,
-	// system paths, embedded extraction, and download fallback.
-	ortLibPath := m.config.ORTLibraryPath
-
-	modelDir := m.config.ModelDir
-	// If modelDir is empty, NewBundledProvider will use embedded model data.
-
-	// Initialize provider
-	provider, err := NewBundledProvider(modelDir, ortLibPath)
+	// Initialize static embedding provider (no CGO, no ONNX)
+	provider, err := NewStaticProvider()
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: init provider: %w", err)
 		return m.initError
@@ -113,8 +106,9 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	}
 
 	indexMgr := NewIndexManager(provider, store, IndexOptions{
-		BatchSize:  32,
-		MaxBodyLen: 2000,
+		BatchSize:      32,
+		MaxBodyLen:     2000,
+		IndexFileLevel: true,  // Enable file-level indexing by default
 	})
 
 	m.provider = provider

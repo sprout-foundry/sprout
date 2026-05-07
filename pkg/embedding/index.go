@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,10 @@ type IndexOptions struct {
 	BatchSize int
 	// MaxBodyLen truncates CodeUnit.Body to this many bytes before embedding (0 = no limit).
 	MaxBodyLen int
+	// IndexFileLevel controls whether non-code files (markdown, configs, etc.)
+	// are indexed at the file level. When true, files like README.md, package.json,
+	// Dockerfile, etc. are indexed as single records with Type="file".
+	IndexFileLevel bool
 }
 
 // IndexManager orchestrates code extraction, embedding, and storage.
@@ -52,27 +57,66 @@ func NewIndexManager(provider EmbeddingProvider, store VectorStore, opts IndexOp
 }
 
 // BuildIndex walks rootDir, extracts code units, embeds them, and stores them.
+// When IndexFileLevel is enabled, also indexes non-code files at the file level.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
 	start := time.Now()
 	stats := &IndexStats{}
 
-	files, err := WalkCodeFiles(ctx, rootDir)
+	// Choose the appropriate walk function based on file-level indexing flag
+	var files []string
+	var err error
+	if m.opts.IndexFileLevel {
+		files, err = WalkAllIndexableFiles(ctx, rootDir)
+	} else {
+		files, err = WalkCodeFiles(ctx, rootDir)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("index: walk %s: %w", rootDir, err)
 	}
 
 	var allUnits []CodeUnit
+	var fileExtractor *FileExtractor
+	if m.opts.IndexFileLevel {
+		// Initialize file extractor for non-code files
+		fileExtractor = NewFileExtractor(8000)
+	}
+
 	for _, path := range files {
 		if err := ctx.Err(); err != nil {
 			stats.Duration = time.Since(start)
 			return stats, fmt.Errorf("index: cancelled during file extraction")
 		}
 
-		units, err := ExtractFromFile(path, WithIncludeTests(m.opts.IncludeTests))
-		if err != nil {
-			log.Printf("index: skipping %s: %v", path, err)
+		// Determine if this is a code file or non-code file
+		isCodeFile := hasCodeExtension(path)
+		isIndexableFile := IsSupportedIndexableFile(path)
+
+		var units []CodeUnit
+		if isCodeFile {
+			// Use existing code extractor for code files
+			units, err = ExtractFromFile(path, WithIncludeTests(m.opts.IncludeTests))
+			if err != nil {
+				log.Printf("index: skipping %s: %v", path, err)
+				continue
+			}
+		} else if isIndexableFile {
+			// Use file extractor for non-code files
+			content, err := os.ReadFile(path)
+			if err != nil {
+				log.Printf("index: skipping %s: %v", path, err)
+				continue
+			}
+			units, err = fileExtractor.Extract(path, content)
+			if err != nil {
+				log.Printf("index: skipping %s: %v", path, err)
+				continue
+			}
+		} else {
+			// Should not happen if walk functions are correct, but skip anyway
 			continue
 		}
+
 		stats.FilesProcessed++
 		allUnits = append(allUnits, units...)
 
@@ -121,15 +165,39 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 }
 
 // UpdateFile re-indexes a single file: deletes old records, extracts, embeds, and stores.
+// Handles both code files (symbol extraction) and non-code files (file-level embedding)
+// when IndexFileLevel is enabled.
 func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	// Always delete old records first (handles deleted files too).
 	if err := m.store.DeleteByFile(filePath); err != nil {
 		return fmt.Errorf("index: delete file %s: %w", filePath, err)
 	}
 
-	units, err := ExtractFromFile(filePath, WithIncludeTests(m.opts.IncludeTests))
-	if err != nil {
-		return fmt.Errorf("index: extract %s: %w", filePath, err)
+	// Determine which extractor to use
+	isCodeFile := hasCodeExtension(filePath)
+	var units []CodeUnit
+	var err error
+
+	if isCodeFile {
+		// Use code extractor for code files
+		units, err = ExtractFromFile(filePath, WithIncludeTests(m.opts.IncludeTests))
+		if err != nil {
+			return fmt.Errorf("index: extract %s: %w", filePath, err)
+		}
+	} else if m.opts.IndexFileLevel && IsSupportedIndexableFile(filePath) {
+		// Use file extractor for non-code files when file-level indexing is enabled
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("index: read %s: %w", filePath, err)
+		}
+		ext := NewFileExtractor(8000)
+		units, err = ext.Extract(filePath, content)
+		if err != nil {
+			return fmt.Errorf("index: extract %s: %w", filePath, err)
+		}
+	} else {
+		// Not a supported file type for current indexing mode
+		return nil
 	}
 
 	if len(units) == 0 {
@@ -172,6 +240,8 @@ func (m *IndexManager) CheckDuplicates(ctx context.Context, codeText string, top
 // embedUnits converts CodeUnits to text, batch-embeds, and returns VectorRecords.
 // On context cancellation (timeout), it returns partial results instead of an error
 // so that the caller can store whatever was processed so far.
+// Detects file-level units (ID == file path) vs code units (ID == file:path) and
+// uses the appropriate converter to set the Type field correctly.
 func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]VectorRecord, error) {
 	now := time.Now()
 	var records []VectorRecord
@@ -201,7 +271,16 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 		}
 
 		for j, u := range batch {
-			records = append(records, codeUnitToRecord(u, vecs[j], now))
+			// Check if this is a file-level unit (ID == file path) or code unit (ID contains :)
+			// File-level units from FileExtractor have ID == File
+			// Code units from ExtractFromFile have ID == "file:functionName"
+			if u.ID == u.File {
+				// File-level unit
+				records = append(records, fileCodeUnitToRecord(u, vecs[j], now))
+			} else {
+				// Code unit
+				records = append(records, codeUnitToRecord(u, vecs[j], now))
+			}
 		}
 
 		// Log progress every ProgressInterval records embedded.
@@ -241,6 +320,35 @@ func codeUnitToRecord(u CodeUnit, embedding []float32, indexedAt time.Time) Vect
 		Embedding: embedding,
 		Hash:      u.Hash,
 		IndexedAt: indexedAt,
+		Type:      "code_unit", // All code unit records are type "code_unit"
+	}
+}
+
+// fileCodeUnitToRecord converts a file-level CodeUnit and its embedding into a VectorRecord.
+// Sets Type to "file" to distinguish it from code_unit records.
+func fileCodeUnitToRecord(u CodeUnit, embedding []float32, indexedAt time.Time) VectorRecord {
+	return VectorRecord{
+		ID:        u.ID,
+		File:      u.File,
+		Name:      u.Name,
+		Signature: strings.TrimSpace(u.Signature),
+		StartLine: u.StartLine,
+		EndLine:   u.EndLine,
+		Language:  u.Language,
+		Embedding: embedding,
+		Hash:      u.Hash,
+		IndexedAt: indexedAt,
+		Type:      "file", // File-level records have type "file"
+	}
+}
+
+// hasCodeExtension checks if a file path has a code extension (.go, .py, .ts, etc.).
+func hasCodeExtension(path string) bool {
+	switch filepath.Ext(path) {
+	case ".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -265,7 +373,7 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 	toDelete := make(map[string]bool)
 	for _, f := range deletedFiles {
 		f = filepath.Clean(f)
-		if f == "" || !isSupportedFile(f) {
+		if f == "" || !isSupportedFile(f, m.opts.IndexFileLevel) {
 			continue
 		}
 		toDelete[f] = true
@@ -316,7 +424,7 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 			continue
 		}
 		cleanPath := filepath.Clean(f)
-		if !isSupportedFile(f) {
+		if !isSupportedFile(f, m.opts.IndexFileLevel) {
 			continue
 		}
 		if toDelete[cleanPath] {
@@ -373,11 +481,25 @@ func runGit(dir string, args ...string) ([]string, error) {
 }
 
 // isSupportedFile returns true if the file path has a supported source-code extension.
-func isSupportedFile(path string) bool {
-	switch ext := filepath.Ext(path); ext {
-	case ".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py":
-		return true
-	default:
-		return false
+// When fileLevel is true, also includes non-code file extensions.
+func isSupportedFile(path string, fileLevel bool) bool {
+	ext := filepath.Ext(path)
+
+	// Always support code extensions
+	codeExts := map[string]bool{
+		".go": true, ".ts": true, ".tsx": true,
+		".js": true, ".jsx": true, ".mjs": true, ".py": true,
 	}
+	if codeExts[ext] {
+		return true
+	}
+
+	// When file-level indexing is enabled, also support non-code extensions
+	if fileLevel {
+		if IsSupportedIndexableFile(path) {
+			return true
+		}
+	}
+
+	return false
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type } from 'lucide-react';
+import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy } from 'lucide-react';
 import './Terminal.css';
 import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
 import { TerminalTabBar, type TerminalSession, type AttachableSession } from '@sprout/ui';
@@ -8,7 +8,7 @@ import { ApiService, type ShellInfo } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
-import { FONT_SIZE_DEFAULT } from './terminalConstants';
+import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT, COPY_ON_SELECT_STORAGE_KEY } from './terminalConstants';
 import BackgroundTasks from './BackgroundTasks';
 
 type SplitDirection = 'none' | 'horizontal' | 'vertical';
@@ -92,6 +92,18 @@ function Terminal({
     } catch (err) {
       debugLog('[Terminal] failed to read font size from localStorage:', err);
       return FONT_SIZE_DEFAULT;
+    }
+  });
+
+  // Copy-on-select
+  const [copyOnSelect, setCopyOnSelect] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return COPY_ON_SELECT_DEFAULT;
+    try {
+      const stored = localStorage.getItem(COPY_ON_SELECT_STORAGE_KEY);
+      return stored !== null ? stored === 'true' : COPY_ON_SELECT_DEFAULT;
+    } catch (err) {
+      debugLog('[Terminal] failed to read copy-on-select from localStorage:', err);
+      return COPY_ON_SELECT_DEFAULT;
     }
   });
 
@@ -301,6 +313,18 @@ function Terminal({
     } catch (err) {
       debugLog('[Terminal] failed to persist font size:', err);
     }
+  }, []);
+
+  const toggleCopyOnSelect = useCallback(() => {
+    setCopyOnSelect((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COPY_ON_SELECT_STORAGE_KEY, String(next));
+      } catch (err) {
+        debugLog('[Terminal] failed to persist copy-on-select:', err);
+      }
+      return next;
+    });
   }, []);
 
   const getFocusedPane = useCallback((): TerminalPaneData | null => {
@@ -786,6 +810,15 @@ function Terminal({
               <Rows2 size={16} />
             </button>
             <button
+              className={`terminal-btn copy-on-select-btn ${copyOnSelect ? 'copy-on-select-btn-active' : ''}`}
+              onClick={toggleCopyOnSelect}
+              title={`Copy on select: ${copyOnSelect ? 'enabled' : 'disabled'}`}
+              aria-label={`Toggle copy on select: currently ${copyOnSelect ? 'enabled' : 'disabled'}`}
+              aria-pressed={copyOnSelect}
+            >
+              <Copy size={16} />
+            </button>
+            <button
               className="terminal-btn toggle-btn"
               onClick={toggleExpanded}
               title={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
@@ -897,6 +930,7 @@ function Terminal({
                         preferredShell={sessionShellsRef.current.get(session.id) ?? null}
                         reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
                         fontSize={fontSize}
+                        copyOnSelect={copyOnSelect}
                         onProcessExit={() => handleProcessExit(pane.id, session.id)}
                       />
                     </div>

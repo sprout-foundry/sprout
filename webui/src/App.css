@@ -510,6 +510,12 @@ body {
   .top-view-current {
     max-width: 160px;
   }
+
+  /* On tablet, the context panel is hidden inline to avoid stacking below editor.
+     It can still be toggled open as a full-width overlay via the header button. */
+  .main-view-content > .context-panel:not(.context-panel-mobile) {
+    display: none;
+  }
 }
 
 @media (max-width: 768px) {

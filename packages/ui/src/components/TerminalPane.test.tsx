@@ -217,6 +217,7 @@ describe('TerminalPane', () => {
     expect(hoisted.getMockTerminalInstance().options.cursorBlink).toBe(true);
     expect(hoisted.getMockTerminalInstance().options.convertEol).toBe(true);
     expect(hoisted.getMockTerminalInstance().options.scrollback).toBe(10000);
+    expect(hoisted.getMockTerminalInstance().options.wordSeparator).toBe(" ()[]{}',\"`");
   });
 
   it('uses custom fontSize', () => {

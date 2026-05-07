@@ -8,14 +8,14 @@ static_dir="$PROJECT_ROOT/pkg/webui/static"
 
 # Always rebuild if node_modules or build dir missing
 [ ! -d "$webui_dir/node_modules" ] && exit 0
-[ ! -d "$webui_dir/build" ] && exit 0
+[ ! -d "$webui_dir/dist" ] && exit 0
 [ ! -d "$static_dir" ] && exit 0
 
 # Find the most recent source file modification time
 newest_src=$(find "$webui_dir/src" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.css" \) -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
 
 # Find the build directory modification time
-build_mtime=$(stat -c %Y "$webui_dir/build" 2>/dev/null || stat -f %m "$webui_dir/build" 2>/dev/null)
+build_mtime=$(stat -c %Y "$webui_dir/dist" 2>/dev/null || stat -f %m "$webui_dir/dist" 2>/dev/null)
 
 if [ -z "$newest_src" ]; then
     # No source files found, assume up-to-date

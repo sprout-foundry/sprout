@@ -11,6 +11,7 @@ import {
   Link2,
 } from 'lucide-react';
 import { ContextMenu } from '@sprout/ui';
+import { debugLog } from '../utils/log';
 
 interface TerminalMenuState {
   visible: boolean;
@@ -181,9 +182,10 @@ function TerminalContextMenu({
     const selection = term.getSelection();
     if (selection) {
       onCopy(selection);
+      showCopied('text');
+      timersRef.current.push(window.setTimeout(() => close(), 1200));
     }
-    close();
-  }, [getTerminal, hasSelection, onCopy, close]);
+  }, [getTerminal, hasSelection, onCopy, close, showCopied]);
 
   const handleCopyLink = useCallback(() => {
     if (!menu.linkUrl) return;
@@ -198,7 +200,7 @@ function TerminalContextMenu({
       onPaste(text);
       close();
     } catch (err) {
-      // Clipboard access denied - silently fail
+      debugLog('[TerminalContextMenu] paste failed:', err);
       close();
     }
   }, [onPaste, close]);
@@ -233,17 +235,21 @@ function TerminalContextMenu({
   return (
     <ContextMenu isOpen={menu.visible} x={menu.x} y={menu.y} onClose={close}>
       <button
-        className={`context-menu-item ${!hasSel ? 'disabled' : ''}`}
+        className="context-menu-item"
         onClick={handleCopy}
         disabled={!hasSel}
         type="button"
       >
         <Copy size={13} />
-        <span className="menu-item-label">Copy</span>
+        <span className="menu-item-label">
+          {copiedAction === 'text' ? 'Copied!' : 'Copy'}
+        </span>
+        <span className="menu-item-shortcut">Ctrl+Shift+C</span>
       </button>
       <button className="context-menu-item" onClick={handlePaste} type="button">
         <ClipboardPaste size={13} />
         <span className="menu-item-label">Paste</span>
+        <span className="menu-item-shortcut">Ctrl+Shift+V</span>
       </button>
       <button className="context-menu-item" onClick={handleSearch} type="button">
         <Search size={13} />

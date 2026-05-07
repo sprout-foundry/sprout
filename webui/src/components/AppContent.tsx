@@ -12,6 +12,7 @@ import EditorWithOutline from './EditorWithOutline';
 import Status from './Status';
 import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
+import NotificationCenter from './NotificationCenter';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { TasksPage, BillingPage, TeamPage } from './platform';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
@@ -22,6 +23,7 @@ import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
 import type { TodoItem, LogEntry } from '@sprout/ui';
 import { supportsLocalTerminal, supportsInstances } from '../config/mode';
+import { useNotifications } from '../contexts/NotificationContext';
 
 const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
@@ -143,6 +145,7 @@ const AppContent: React.FC<AppContentProps> = ({
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
+  const { notifications } = useNotifications();
 
   // Compute current todos: prefer state from todo_update events, fall back to parsing from TodoWrite tool executions
   const currentTodos = useMemo(() => {
@@ -179,7 +182,9 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
+  const notificationBellRef = useRef<HTMLDivElement>(null);
   const [instances, setInstances] = useState<SproutInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
@@ -1168,6 +1173,14 @@ const AppContent: React.FC<AppContentProps> = ({
             cursorPosition: currentBuffer.cursorPosition,
             languageOverride: currentBuffer.languageOverride,
           } : null}
+          notificationCount={notifications.length}
+          onToggleNotificationCenter={() => setIsNotificationCenterOpen(prev => !prev)}
+          notificationCenterRef={notificationBellRef}
+        />
+        <NotificationCenter
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
+          positionRef={notificationBellRef}
         />
       </div>
 

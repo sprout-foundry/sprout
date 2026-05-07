@@ -61,7 +61,7 @@
 }
 
 .notification-center-dismiss-all:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: color-mix(in srgb, var(--accent-primary, #3b82f6) 10%, transparent);
 }
 
 .notification-center-dismiss-all:focus {

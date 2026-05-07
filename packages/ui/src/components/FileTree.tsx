@@ -1092,7 +1092,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     };
 
     const renderFileTree = (fileList: FileInfo[], depth = 0): JSX.Element[] =>
-      fileList.map((file) => {
+      fileList.map((file, index) => {
         const isExpanded = isFiltering ? true : expandedDirs.has(file.path);
         const isSelected = (internalSelectedFile ?? selectedFile) === file.path;
         const isMultiSelected = multiActions.isSelected(file.path);
@@ -1176,6 +1176,9 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               onContextMenu={handleItemContextMenu}
               role="treeitem"
               tabIndex={0}
+              aria-level={depth + 1}
+              aria-setsize={fileList.length}
+              aria-posinset={index + 1}
               aria-selected={isSelected || isMultiSelected}
               aria-expanded={file.isDir ? isExpanded : undefined}
               onKeyDown={(event) => {
@@ -1257,7 +1260,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             </div>
 
             {file.isDir && isExpanded && (
-              <div className="file-tree-children">
+              <div className="file-tree-children" role="group">
                 {renderDraftRow(file.path, depth + 1)}
                 {Array.isArray(file.children) ? renderFileTree(file.children, depth + 1) : null}
               </div>

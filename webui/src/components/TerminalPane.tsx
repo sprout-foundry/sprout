@@ -1071,9 +1071,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         lineHeight: 1.2,
         letterSpacing: 0,
         scrollback: 5000,
+        // Characters that delimit words for double-click selection.
+        // Default matches xterm.js upstream: space, parens, brackets, braces,
+        // quotes, comma, and backtick. Triple-click selects the entire line.
+        wordSeparator: ' ()[]{}\',"`',
         theme: getTerminalTheme(),
       });
-
       const fitAddon = new FitAddon();
       const searchAddon = new SearchAddon();
       term.loadAddon(fitAddon);

@@ -551,3 +551,61 @@ describe.skip('TerminalPane context menu', () => {
     expect(getMenu()).toBeFalsy();
   });
 });
+
+// ── wordSeparator option ────────────────────────────────────────────
+
+describe('TerminalPane wordSeparator', () => {
+  let container: HTMLDivElement;
+  let root: any;
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // Re-assert Terminal constructor mock
+    const { Terminal } = require('@xterm/xterm');
+    Terminal.mockImplementation(() => mockTerm);
+
+    // Re-assert FitAddon constructor mock
+    const { FitAddon } = require('@xterm/addon-fit');
+    FitAddon.mockImplementation(() => mockFitAddon);
+
+    // Re-assert WebSocket mock service factory
+    const { TerminalWebSocketService } = require('../services/terminalWebSocket');
+    TerminalWebSocketService.createInstance.mockImplementation(() => mockService);
+
+    // Theme context
+    const { useTheme } = require('../contexts/ThemeContext');
+    useTheme.mockReturnValue({ themePack: { id: 'default' } });
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    jest.clearAllMocks();
+  });
+
+  it('passes wordSeparator option to Terminal constructor', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+    });
+    await flushPromises();
+
+    const { Terminal } = require('@xterm/xterm');
+    const calls = Terminal.mock.calls;
+    // Find the call that passed options (first arg is an object)
+    const optionsCall = calls.find(
+      (call: unknown[]) => call[0] && typeof call[0] === 'object'
+    );
+    expect(optionsCall).toBeDefined();
+    expect(optionsCall[0].wordSeparator).toBe(" ()[]{}',\"`");
+  });
+});

@@ -1216,6 +1216,11 @@
   .sidebar .instance-selector {
     display: none;
   }
+
+  /* Hide resize handle — sidebar width is locked at 48px on tablet */
+  .sidebar-resize-handle {
+    display: none;
+  }
 }
 
 /* ── Mobile responsive ────────────────────────────────────────── */

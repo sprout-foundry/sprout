@@ -39,7 +39,7 @@ export interface UseEditorScrollSyncReturn {
 /**
  * Hook for managing scroll position persistence and cross-pane linked scrolling.
  *
- * Throttles scroll position updates to ~100ms to avoid excessive React state updates
+ * Throttles scroll position updates to ~500ms to avoid excessive React state updates
  * that would starve the browser paint cycle. Uses rAF flush for final position capture.
  */
 export function useEditorScrollSync(options: UseEditorScrollSyncOptions): UseEditorScrollSyncReturn {
@@ -63,7 +63,7 @@ export function useEditorScrollSync(options: UseEditorScrollSyncOptions): UseEdi
       if (!scrollInfo) return;
 
       const now = performance.now();
-      if (now - lastScrollSyncTime.current < 100) return; // throttle: 100ms
+      if (now - lastScrollSyncTime.current < 500) return; // throttle: 500ms
 
       lastScrollSyncTime.current = now;
       updateBufferScroll(buf.id, { top: scrollInfo.scrollTop, left: scrollInfo.scrollLeft });

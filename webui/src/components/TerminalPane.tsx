@@ -124,6 +124,14 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     const wasmPromptRef = useRef('\x1b[1;36muser@sprout-wasm\x1b[0m:\x1b[1;34m~\x1b[0m$ ');
     const wasmInitializedRef = useRef(false);
 
+    // ── WASM reverse-i-search state ───────────────────────────────────────────
+    const wasmReverseSearchActiveRef = useRef(false);
+    const wasmReverseSearchQueryRef = useRef('');
+    const wasmReverseSearchResultRef = useRef('');
+    const wasmReverseSearchIdxRef = useRef(-1);
+    const wasmSavedLineRef = useRef('');
+    const wasmSavedCursorRef = useRef(0);
+
     // Ref for copy-on-select debounce timer
     const copyOnSelectTimerRef = useRef<number | null>(null);
     // Stabilize copyOnSelect so the xterm init effect doesn't recreate xterm on toggle
@@ -208,6 +216,215 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       const shell = wasmShellRef.current;
       if (!term || !shell) return;
 
+      // ── Reverse-i-search mode handling ────────────────────────────────────
+
+      // Helper to update the reverse-i-search display
+      const updateReverseSearchDisplay = () => {
+        term.write('\r\x1b[2K');
+        const query = wasmReverseSearchQueryRef.current;
+        const result = wasmReverseSearchResultRef.current;
+        const display = result || '\x1b[90m(no match)\x1b[0m';
+        term.write(`\x1b[1;32m(reverse-i-search)\x1b[0m'${query}': ${display}`);
+      };
+
+      // Helper to search history for a query starting from a given index
+      const searchHistoryFrom = (startIndex: number) => {
+        const query = wasmReverseSearchQueryRef.current.toLowerCase();
+        const hist = wasmHistoryRef.current;
+        if (!query) {
+          // Empty query — no search
+          wasmReverseSearchResultRef.current = '';
+          wasmReverseSearchIdxRef.current = -1;
+          return;
+        }
+        for (let i = startIndex; i >= 0; i--) {
+          if (hist[i].toLowerCase().includes(query)) {
+            wasmReverseSearchIdxRef.current = i;
+            wasmReverseSearchResultRef.current = hist[i];
+            return;
+        }
+        }
+        // No match found
+        wasmReverseSearchResultRef.current = '';
+        wasmReverseSearchIdxRef.current = -1;
+      };
+
+      // Helper to search for the next (earlier) match
+      const searchHistoryNext = () => {
+        const hist = wasmHistoryRef.current;
+        const currentIdx = wasmReverseSearchIdxRef.current;
+        // Search starting from one position before current match
+        const startIndex = currentIdx > 0 ? currentIdx - 1 : hist.length - 1;
+        searchHistoryFrom(startIndex);
+      };
+
+      // If in reverse-i-search mode, handle search-specific input
+      if (wasmReverseSearchActiveRef.current) {
+        // Handle multi-character paste
+        if (data.length > 1) {
+          // Check for known escape sequences BEFORE treating as paste
+          if (data === '\x1b[D' || data === '\x1b[C') {
+            // Left/Right arrow — exit search mode and put the found command on the line for editing
+            wasmReverseSearchActiveRef.current = false;
+            const result = wasmReverseSearchResultRef.current;
+            wasmReverseSearchQueryRef.current = '';
+            wasmReverseSearchIdxRef.current = -1;
+            wasmLineRef.current = result || '';
+            wasmCursorRef.current = wasmLineRef.current.length;
+            rewriteWasmLine();
+            return;
+          }
+          if (data === '\x1b[H' || data === '\x1b[F') {
+            // Home/End — exit search mode and put command on line
+            wasmReverseSearchActiveRef.current = false;
+            const result = wasmReverseSearchResultRef.current;
+            wasmReverseSearchQueryRef.current = '';
+            wasmReverseSearchIdxRef.current = -1;
+            wasmLineRef.current = result || '';
+            wasmCursorRef.current = (data === '\x1b[H') ? 0 : wasmLineRef.current.length;
+            rewriteWasmLine();
+            return;
+          }
+          if (data === '\x1b[A' || data === '\x1b[B') {
+            // Up/Down — exit search, put command on line for editing
+            wasmReverseSearchActiveRef.current = false;
+            const result = wasmReverseSearchResultRef.current;
+            wasmReverseSearchQueryRef.current = '';
+            wasmReverseSearchIdxRef.current = -1;
+            wasmLineRef.current = result || '';
+            wasmCursorRef.current = wasmLineRef.current.length;
+            rewriteWasmLine();
+            return;
+          }
+          // Genuine paste — append to search query
+          wasmReverseSearchQueryRef.current += data;
+          searchHistoryFrom(wasmHistoryRef.current.length - 1);
+          updateReverseSearchDisplay();
+          return;
+        }
+
+        const ch = data;
+
+        // Enter — accept the match and execute it
+        if (ch === '\r' || ch === '\n') {
+          term.write('\r\n');
+          wasmReverseSearchActiveRef.current = false;
+          const result = wasmReverseSearchResultRef.current;
+          // Clear search state
+          wasmReverseSearchQueryRef.current = '';
+          wasmReverseSearchIdxRef.current = -1;
+
+          if (result) {
+            // Put the matched command into the line buffer so it gets added to history
+            wasmLineRef.current = result;
+            wasmCursorRef.current = result.length;
+            wasmReverseSearchResultRef.current = '';
+
+            // Execute (without re-adding to history since result came from history)
+            wasmHistoryIdxRef.current = wasmHistoryRef.current.length;
+            try {
+              const shellResult: WasmShellResult = shell.executeCommand(result);
+              if (shellResult.stdout) {
+                term.write(shellResult.stdout.replace(/\r?\n/g, '\r\n'));
+              }
+              if (shellResult.stderr) {
+                term.write('\x1b[31m' + shellResult.stderr.replace(/\r?\n/g, '\r\n') + '\x1b[0m');
+              }
+            } catch (err) {
+              term.write(`\x1b[31mError: ${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`);
+            }
+            wasmLineRef.current = '';
+            wasmCursorRef.current = 0;
+          } else {
+            wasmLineRef.current = '';
+            wasmCursorRef.current = 0;
+            wasmReverseSearchResultRef.current = '';
+          }
+          writeWasmPrompt();
+          return;
+        }
+
+        // Escape — cancel reverse-i-search and return to normal prompt
+        if (ch === '\x1b') {
+          wasmReverseSearchActiveRef.current = false;
+          wasmReverseSearchQueryRef.current = '';
+          wasmReverseSearchResultRef.current = '';
+          wasmReverseSearchIdxRef.current = -1;
+          // Restore saved line instead of clearing
+          wasmLineRef.current = wasmSavedLineRef.current;
+          wasmCursorRef.current = wasmSavedCursorRef.current;
+          rewriteWasmLine();
+          return;
+        }
+
+        // Ctrl+C — cancel reverse-i-search
+        if (ch === '\x03') {
+          term.write('^C\r\n');
+          wasmReverseSearchActiveRef.current = false;
+          wasmReverseSearchQueryRef.current = '';
+          wasmReverseSearchResultRef.current = '';
+          wasmReverseSearchIdxRef.current = -1;
+          wasmLineRef.current = '';
+          wasmCursorRef.current = 0;
+          writeWasmPrompt();
+          return;
+        }
+
+        // Ctrl+R — search for next earlier match
+        if (ch === '\x12') {
+          searchHistoryNext();
+          updateReverseSearchDisplay();
+          return;
+        }
+
+        // Backspace — remove last character from query
+        if (ch === '\x7f' || ch === '\b') {
+          const query = wasmReverseSearchQueryRef.current;
+          if (query.length > 0) {
+            wasmReverseSearchQueryRef.current = query.slice(0, -1);
+            searchHistoryFrom(wasmHistoryRef.current.length - 1);
+            updateReverseSearchDisplay();
+          }
+          return;
+        }
+
+        // Ctrl+A/Ctrl+E — exit search mode and put command on line
+        if (ch === '\x01' || ch === '\x05') {
+          wasmReverseSearchActiveRef.current = false;
+          const result = wasmReverseSearchResultRef.current;
+          wasmReverseSearchQueryRef.current = '';
+          wasmReverseSearchIdxRef.current = -1;
+          wasmLineRef.current = result || '';
+          wasmCursorRef.current = result?.length || 0;
+          if (ch === '\x01') {
+            wasmCursorRef.current = 0;
+          }
+          rewriteWasmLine();
+          return;
+        }
+
+        // Regular printable character — append to search query and search
+        if (ch >= ' ' || ch === '\t') {
+          wasmReverseSearchQueryRef.current += ch;
+          searchHistoryFrom(wasmHistoryRef.current.length - 1);
+          updateReverseSearchDisplay();
+          return;
+        }
+
+        // Any other control character — exit search mode and handle normally
+        // (will be processed in the normal mode section below)
+        wasmReverseSearchActiveRef.current = false;
+        wasmReverseSearchQueryRef.current = '';
+        wasmReverseSearchIdxRef.current = -1;
+        const result = wasmReverseSearchResultRef.current;
+        wasmLineRef.current = result || '';
+        wasmCursorRef.current = wasmLineRef.current.length;
+        rewriteWasmLine();
+        // Fall through to normal handling for the control character
+      }
+
+      // ── Normal WASM mode handling (not in reverse-i-search) ───────────────
+
       // Handle multi-character paste (length > 1) — just insert directly
       if (data.length > 1) {
         if (data === '\r' || data === '\n') {
@@ -224,6 +441,21 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       }
 
       const ch = data;
+
+      if (ch === '\x12') {
+        // Ctrl+R — enter reverse-i-search mode
+        // Save current line buffer before entering search
+        wasmSavedLineRef.current = wasmLineRef.current;
+        wasmSavedCursorRef.current = wasmCursorRef.current;
+        wasmReverseSearchActiveRef.current = true;
+        wasmReverseSearchQueryRef.current = '';
+        wasmReverseSearchResultRef.current = '';
+        wasmReverseSearchIdxRef.current = -1;
+        // Clear current line and show search prompt
+        term.write('\r\x1b[2K');
+        term.write('\x1b[1;32m(reverse-i-search)\x1b[0m\'\': ');
+        return;
+      }
 
       if (ch === '\r' || ch === '\n') {
         // Enter — execute command
@@ -305,10 +537,10 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       }
 
       if (ch === '\x1b') {
-        // Escape sequence start — the next onData calls will deliver [A, [B, etc.
-        // xterm.js bundles these, so we handle arrow codes here directly.
-        // Arrow keys arrive as \x1b[A, \x1b[B, \x1b[C, \x1b[D, \x1b[H, \x1b[F
-        // But onData already delivers the full sequence, so we handle below.
+        // Escape — clear current line (exit to empty prompt)
+        wasmLineRef.current = '';
+        wasmCursorRef.current = 0;
+        rewriteWasmLine();
         return;
       }
 

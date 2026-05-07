@@ -529,6 +529,11 @@
 }
 
 .tab .chat-tab-rename-input:focus {
+  outline: none;
+}
+
+.tab .chat-tab-rename-input:focus-visible {
+  outline: none;
   border-color: var(--accent-primary);
 }
 

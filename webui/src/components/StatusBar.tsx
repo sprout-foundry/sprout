@@ -1,5 +1,5 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
-import { useMemo, useRef, type RefObject } from 'react';
+import { useMemo, useRef } from 'react';
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import './StatusBar.css';
@@ -19,7 +19,7 @@ interface WebuiStatusBarProps {
   indentation?: string;
   notificationCount?: number;
   onToggleNotificationCenter?: () => void;
-  notificationCenterRef?: RefObject<HTMLDivElement>;
+  notificationCenterRef?: React.RefObject<HTMLDivElement>;
 }
 
 // Simple SVG icon for notification bell (similar to existing inline SVGs)

@@ -58,6 +58,14 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
     clearNotifications();
   }, [clearNotifications]);
 
+  // Refresh timestamps every minute while panel is open
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
+
   // Cleanup copy timer on unmount
   useEffect(() => {
     return () => {
@@ -151,7 +159,7 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
       </div>
 
       {/* Content */}
-      <div className="notification-center-content">
+      <div className="notification-center-content" aria-live="polite">
         {notifications.length === 0 ? (
           <div className="notification-center-empty">
             <div className="notification-center-empty-icon" aria-hidden="true">🔔</div>
@@ -172,7 +180,7 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
                 {/* Content */}
                 <div className="notification-center-item-content">
                   <div className="notification-center-item-header">
-                    <h3 className="notification-center-item-title">{notification.title}</h3>
+                    <span className="notification-center-item-title">{notification.title}</span>
                     <span className="notification-center-item-time">
                       {formatRelativeTime(notification.createdAt)}
                     </span>
@@ -186,8 +194,8 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
                     className="notification-center-item-copy"
                     onClick={() => handleCopyMessage(notification.id, notification.message)}
                     type="button"
-                    aria-label="Copy message"
-                    title="Copy message"
+                    aria-label={copiedId === notification.id ? 'Copied' : 'Copy message'}
+                    title={copiedId === notification.id ? 'Copied' : 'Copy message'}
                   >
                     {copiedId === notification.id ? 'Copied!' : '📋'}
                   </button>

@@ -611,6 +611,17 @@ describe('Button attributes', () => {
     expect(copyBtn?.getAttribute('title')).toBe('Copy message');
   });
 
+  it('copy button updates aria-label and title to "Copied" after clicking', async () => {
+    mockNotifications = [makeNotification({ id: 'notif-1', message: 'Copy me' })];
+    renderNotificationCenter({ isOpen: true });
+    const copyBtn = container.querySelector('.notification-center-item-copy');
+    await act(async () => {
+      copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(copyBtn?.getAttribute('aria-label')).toBe('Copied');
+    expect(copyBtn?.getAttribute('title')).toBe('Copied');
+  });
+
   it('dismiss button has correct aria-label and title', () => {
     mockNotifications = [makeNotification()];
     renderNotificationCenter({ isOpen: true });

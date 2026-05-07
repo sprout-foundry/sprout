@@ -20,7 +20,18 @@ export default defineConfig(({ mode: _mode }) => {
       // Without this, symlinked workspace packages (e.g. @sprout/events)
       // that have their own node_modules/react cause a duplicate React
       // bundle, breaking hooks (useMemo is null at runtime).
-      dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
+      dedupe: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        '@codemirror/view',
+        '@codemirror/state',
+        '@codemirror/language',
+        '@codemirror/commands',
+        '@codemirror/autocomplete',
+        '@codemirror/search',
+        '@codemirror/lint',
+      ],
     },
     
     // Build configuration

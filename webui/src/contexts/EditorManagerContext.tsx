@@ -650,11 +650,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 }, []);// Update buffer cursor position
   const updateBufferCursor = useCallback((bufferId: string, position: { line: number; column: number }) => {
     setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, cursorPosition: position });
+      const buffer = prev.get(bufferId);
+      if (!buffer) return prev;
+      // Skip update if cursor position hasn't changed to avoid unnecessary re-renders
+      if (buffer.cursorPosition?.line === position.line && buffer.cursorPosition?.column === position.column) {
+        return prev;
       }
+      const newBuffers = new Map(prev);
+      newBuffers.set(bufferId, { ...buffer, cursorPosition: position });
       return newBuffers;
     });
   }, []);
@@ -662,11 +665,14 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Update buffer scroll position
   const updateBufferScroll = useCallback((bufferId: string, position: { top: number; left: number }) => {
     setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, scrollPosition: position });
+      const buffer = prev.get(bufferId);
+      if (!buffer) return prev;
+      // Skip update if scroll position hasn't changed to avoid unnecessary re-renders
+      if (buffer.scrollPosition?.top === position.top && buffer.scrollPosition?.left === position.left) {
+        return prev;
       }
+      const newBuffers = new Map(prev);
+      newBuffers.set(bufferId, { ...buffer, scrollPosition: position });
       return newBuffers;
     });
   }, []);
@@ -674,11 +680,10 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
   // Set buffer modified state
   const setBufferModified = useCallback((bufferId: string, isModified: boolean) => {
     setBuffers(prev => {
+      const buffer = prev.get(bufferId);
+      if (!buffer || buffer.isModified === isModified) return prev;
       const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, isModified });
-      }
+      newBuffers.set(bufferId, { ...buffer, isModified });
       return newBuffers;
     });
   }, []);

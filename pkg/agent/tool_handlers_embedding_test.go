@@ -110,7 +110,7 @@ func TestHandleSemanticSearch_NotEnabled(t *testing.T) {
 	if !strings.Contains(result, "not enabled") {
 		t.Errorf("expected 'not enabled' in result, got: %s", result)
 	}
-	if !strings.Contains(result, "embedding_index") {
+	if !strings.Contains(result, "Embedding index") {
 		t.Errorf("expected config instructions, got: %s", result)
 	}
 }
@@ -152,29 +152,23 @@ func TestHandleSemanticSearch_WithResults(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Set up embedding manager.
+	// Set up embedding manager with a temp directory.
 	dir := t.TempDir()
-	store, err := embedding.NewJSONLFileStore(dir + "/index.jsonl")
-	if err != nil {
-		t.Fatalf("failed to create store: %v", err)
-	}
-	defer store.Close()
-
-	// Since we can't initialize the manager without ORT, test that
-	// QuerySimilar returns an error (Init fails).
 	em := embedding.NewEmbeddingManager(nil, dir)
 	agent.embeddingMgr = em
-	os.Unsetenv("ONNXRUNTIME_LIB")
 
+	// With StaticProvider, Init succeeds without ORT.
+	// QuerySimilar runs on an empty index and returns a "no results" message.
 	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
 		"query": "user authentication",
 	})
-	if err == nil {
-		t.Fatal("expected error when Init fails")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "" {
-		t.Errorf("expected empty result on error, got: %s", result)
+	if !strings.Contains(result, "No semantically similar code found") {
+		t.Errorf("expected no-results message, got: %s", result)
 	}
+	_ = dir // suppress unused warning — temp dir cleaned up by t.TempDir
 }
 
 // ─── shouldCheckDuplicates tests ───

@@ -221,9 +221,10 @@ const AppContent: React.FC<AppContentProps> = ({
     window.localStorage.setItem('sprout.contextPanel.width', String(Math.round(panelWidth)));
   }, [panelWidth]);
 
-  // Keep a stable ref to the current buffers map to avoid infinite loops in effects
+  // Keep a stable ref to the current buffers map to avoid infinite loops in effects.
+  // Direct render-side sync ensures buffersRef.current is always up-to-date.
   const buffersRef = useRef(buffers);
-  useEffect(() => { buffersRef.current = buffers; }, [buffers]);
+  buffersRef.current = buffers;
 
   // Sync chat sessions → editor buffers: update the initial chat buffer with the active
   // session's ID, and open additional buffers for other sessions.
@@ -437,13 +438,13 @@ const AppContent: React.FC<AppContentProps> = ({
     if (!activePaneId || index < 0) {
       return;
     }
-    const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+    const paneBuffers = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
     const target = paneBuffers[index];
     if (target) {
       switchPane(activePaneId);
       switchToBuffer(target.id);
     }
-  }, [activePaneId, buffers, switchPane, switchToBuffer]);
+  }, [activePaneId, switchPane, switchToBuffer]);
 
   const handleFocusPaneIndex = useCallback((index: number) => {
     if (index < panes.length) {

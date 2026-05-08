@@ -218,7 +218,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onFindAllReferences: semantic.handleFindAllReferences,
   }), [semantic.handleGoToDefinition, semantic.handleFindAllReferences]);
 
-  const contextMenu = useEditorContextMenu(buffer, viewRef, contextMenuCallbacks);
+  const contextMenu = useEditorContextMenu(buffer, bufferRef, viewRef, contextMenuCallbacks);
 
   const lsp = useEditorLSP(buffer, setBufferLanguageOverride);
 

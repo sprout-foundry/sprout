@@ -35,7 +35,8 @@ import EditorContextMenu from './EditorContextMenu';
 import WelcomeTab from './WelcomeTab';
 import BinaryFileViewer from './BinaryFileViewer';
 import MediaViewer from './MediaViewer';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { Skeleton } from '@sprout/ui';
 import './EditorPane.css';
 
 interface EditorPaneProps {
@@ -379,9 +380,22 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       />
 
       {loading && (
-        <div className="loading-indicator">
-          <Loader2 size={16} className="spinner" />
-          <span>Loading file...</span>
+        <div className="editor-skeleton" role="status" aria-label="Loading file">
+          <div className="editor-skeleton-line-numbers">
+            {Array.from({ length: 25 }, (_, i) => (
+              <Skeleton key={i} width="32px" height="14px" />
+            ))}
+          </div>
+          <div className="editor-skeleton-content">
+            {Array.from({ length: 25 }, (_, i) => (
+              <Skeleton
+                key={i}
+                width={`${40 + Math.floor((i * 53) % 60)}%`}
+                height="14px"
+              />
+            ))}
+          </div>
+          <span className="sr-only">Loading file...</span>
         </div>
       )}
 

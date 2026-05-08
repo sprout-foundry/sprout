@@ -378,3 +378,31 @@
   overflow: hidden;
   min-width: 0;
 }
+
+/* ── Editor Skeleton Loading ─────────────────────────────────── */
+
+.editor-skeleton {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.editor-skeleton-line-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0;
+  width: 52px;
+  min-width: 52px;
+  align-items: flex-end;
+  padding-right: 12px;
+  background: var(--editor-gutter-bg, var(--bg-tertiary));
+}
+
+.editor-skeleton-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0 8px 16px;
+  flex: 1;
+}

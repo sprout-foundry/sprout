@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { ApiService } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import { Pencil, Plus, Trash2, Lock, RefreshCw, ChevronDown, ChevronRight, Key } from 'lucide-react';
+import { Skeleton } from '@sprout/ui';
 import { debugLog } from '../utils/log';
 import './SettingsPanel.css';
 
@@ -315,8 +316,19 @@ function CredentialsSettingsTab(): JSX.Element {
 
   if (loading) {
     return (
-      <div className="section">
-        <div className="settings-empty">Loading credentials…</div>
+      <div className="section" role="status" aria-label="Loading credentials">
+        <div className="settings-skeleton">
+          <Skeleton width="140px" height="20px" radius="4px" />
+          <div className="settings-skeleton-grid">
+            {Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="settings-skeleton-row">
+                <Skeleton width="100px" height="16px" />
+                <Skeleton width="220px" height="32px" radius="4px" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <span className="sr-only">Loading credentials...</span>
       </div>
     );
   }

@@ -382,3 +382,130 @@ func TestBuildSecurityPrompt_NotEmbeddingTool(t *testing.T) {
 	// security prompt's switch statement, so they should not produce special output.
 	// This is more of a sanity check.
 }
+
+// ─── handleSemanticSearch — parameter validation and response formatting ───
+
+func TestHandleSemanticSearch_TopKInt(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// No embedding manager → returns "not enabled" message regardless of top_k.
+	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
+		"query":    "test",
+		"top_k":    20, // int
+		"threshold": float64(0.8),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error with nil manager: %v", err)
+	}
+	if !strings.Contains(result, "not enabled") {
+		t.Errorf("expected 'not enabled' message, got: %s", result)
+	}
+}
+
+func TestHandleSemanticSearch_TopKFloat64(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// top_k passed as float64 (common from JSON) should be accepted.
+	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
+		"query": "test",
+		"top_k":   float64(3), // float64
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "not enabled") {
+		t.Errorf("expected 'not enabled' message, got: %s", result)
+	}
+}
+
+func TestHandleSemanticSearch_ThresholdFloat32(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
+		"query":    "test",
+		"threshold": float32(0.5), // float32
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "not enabled") {
+		t.Errorf("expected 'not enabled' message, got: %s", result)
+	}
+}
+
+func TestHandleSemanticSearch_ThresholdInt(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
+		"query":    "test",
+		"threshold": 1, // int
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(result, "not enabled") {
+		t.Errorf("expected 'not enabled' message, got: %s", result)
+	}
+}
+
+func TestHandleSemanticSearch_NoResultsMessage(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Set up embedding manager with StaticProvider (no ORT needed).
+	dir := t.TempDir()
+	em := embedding.NewEmbeddingManager(nil, dir)
+	agent.embeddingMgr = em
+
+	// Query on empty index returns "no results" message.
+	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
+		"query": "find me",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "No semantically similar code found") {
+		t.Errorf("expected no-results message, got: %s", result)
+	}
+	if !strings.Contains(result, "find me") {
+		t.Errorf("expected query in message, got: %s", result)
+	}
+	_ = dir // t.TempDir cleanup
+}
+
+func TestHandleSemanticSearch_QueryInNoResults(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	em := embedding.NewEmbeddingManager(nil, dir)
+	agent.embeddingMgr = em
+
+	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
+		"query":     "find me",
+		"threshold": float64(0.5),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// The no-results message should include the query and the threshold.
+	if !strings.Contains(result, "find me") {
+		t.Errorf("expected query 'find me' in response, got: %s", result)
+	}
+	if !strings.Contains(result, "0.50") {
+		t.Errorf("expected threshold 0.50 in response, got: %s", result)
+	}
+	_ = dir
+}
+
+// Note: Clustering is performed at the webui layer (handleAPISemanticSearch)
+// via detectDuplicateClusters(), not at the agent layer. The agent's
+// handleSemanticSearch formats results as plain text without cluster information.
+// Tests for cluster_id assignment and duplicate cluster detection belong in
+// pkg/webui/search_semantic_api_test.go.

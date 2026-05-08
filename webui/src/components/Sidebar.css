@@ -23,7 +23,7 @@
   position: relative;
   z-index: 100;
   overflow: hidden;
-  transition: width 0.2s ease;
+  transition: width 200ms var(--ease-out);
 }
 
 .sidebar.resizing {

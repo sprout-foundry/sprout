@@ -5,6 +5,7 @@ import './ResizeHandle.css';
 interface ResizeHandleProps {
   direction: 'horizontal' | 'vertical'; // Direction of the split line
   onResize: (delta: number, totalDelta: number) => void; // Called with incremental and total pixel delta during drag
+  onResizeStart?: () => void; // Called when drag starts
   onResizeEnd?: () => void; // Called when drag ends
   onDoubleClick?: () => void; // Called when handle is double-clicked
   className?: string;
@@ -21,6 +22,7 @@ interface ResizeHandleProps {
 function ResizeHandle({
   direction,
   onResize,
+  onResizeStart,
   onResizeEnd,
   onDoubleClick,
   className = '',
@@ -83,6 +85,9 @@ function ResizeHandle({
       dragStartPos.current = { x: e.clientX, y: e.clientY };
       lastDragPos.current = { x: e.clientX, y: e.clientY };
 
+      // Notify drag start
+      onResizeStart?.();
+
       // Add global event listeners for drag
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
@@ -91,8 +96,7 @@ function ResizeHandle({
       document.body.style.userSelect = 'none';
       document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize';
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [direction],
+    [direction, onResizeStart],
   );
 
   // Cleanup on unmount

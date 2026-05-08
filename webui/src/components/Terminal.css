@@ -10,7 +10,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   z-index: 100;
-  transition: height 0.2s ease;
+  transition: height 200ms var(--ease-out);
 }
 
 .terminal-container.collapsed {
@@ -165,7 +165,8 @@
 }
 
 .terminal-container.collapsed .terminal-body {
-  display: none;
+  visibility: hidden;
+  overflow: hidden;
 }
 
 /* ── Pane container ──────────────────────────────────────── */

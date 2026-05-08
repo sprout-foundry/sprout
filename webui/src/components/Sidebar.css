@@ -31,7 +31,7 @@
 }
 
 .sidebar.collapsed {
-  width: 48px !important; /* always icon-rail width when collapsed */
+  width: 48px;
   min-width: 48px;
 }
 

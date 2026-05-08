@@ -42,7 +42,7 @@ import LocationSwitcher from './LocationSwitcher';
 import WorktreePanel from './WorktreePanel';
 import { supportsSettings } from '../config/mode';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
-import { type SectionTab, SIDEBAR_DEFAULT_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
+import { type SectionTab, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_COLLAPSED_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
 
 interface SidebarProps {
   isConnected: boolean;
@@ -1074,7 +1074,7 @@ function Sidebar({
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
       <div
         className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
-        style={effectiveSidebarCollapsed ? undefined : isMobile ? undefined : { width: `${effectiveSidebarWidth}px` }}
+        style={isMobile ? undefined : { width: `${effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : effectiveSidebarWidth}px` }}
       >
         {/* Pinned global header: instance selector */}
         <div className="sidebar-pinned-header">

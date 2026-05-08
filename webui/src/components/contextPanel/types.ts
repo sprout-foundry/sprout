@@ -146,6 +146,8 @@ export const PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 export const PANEL_TAB_KEY = 'sprout.contextPanel.tab';
 export const PANEL_MIN = 280;
 export const PANEL_MAX = 760;
+/** Width of the side-rail-only collapsed context panel (px). Must match .context-panel.collapsed width in ContextPanel.css. */
+export const PANEL_COLLAPSED_WIDTH = 52;
 export const MOBILE_LAYOUT_MAX_WIDTH = 768;
 
 export type ChatTabId = 'subagents' | 'tools' | 'changes' | 'tasks' | 'status' | 'sessions';

@@ -8,7 +8,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 0;
   overflow: hidden;
-  transition: width 0.2s ease;
+  transition: width 200ms var(--ease-out);
 }
 
 .context-panel.resizing {

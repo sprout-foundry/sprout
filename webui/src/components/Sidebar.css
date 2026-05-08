@@ -364,6 +364,12 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  animation: sidebarContentFadeIn 200ms var(--ease-out);
+}
+
+@keyframes sidebarContentFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .sidebar .content-pane-header {

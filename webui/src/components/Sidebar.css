@@ -358,6 +358,7 @@
 }
 
 /* ── Content pane ─────────────────────────────────────────────── */
+/* Fade content faster than the width transition (150ms vs 200ms) for a snappier collapse feel */
 .sidebar .sidebar-content-pane {
   flex: 1;
   display: flex;
@@ -365,7 +366,7 @@
   min-width: 0;
   overflow: hidden;
   opacity: 1;
-  transition: opacity 200ms var(--ease-out);
+  transition: opacity 150ms var(--ease-out);
 }
 
 .sidebar.collapsed .sidebar-content-pane {

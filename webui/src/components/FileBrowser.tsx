@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Folder, File, ArrowUp, X, FolderOpen } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
+import { Skeleton } from '@sprout/ui';
 import './FileBrowser.css';
 
 export interface FileNode {
@@ -185,7 +186,19 @@ function FileBrowser({
         {/* File List */}
         <div className="filebrowser-content">
           {loading ? (
-            <div className="filebrowser-loading">Loading...</div>
+            <div className="filebrowser-loading" role="status" aria-label="Loading files">
+              <div className="filebrowser-skeleton">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <div key={i} className="filebrowser-skeleton-item">
+                    <Skeleton width="16px" height="16px" radius="4px" />
+                    <div className="filebrowser-skeleton-info">
+                      <Skeleton width={`${60 + Math.floor((i * 47) % 40)}%`} height="14px" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <span className="sr-only">Loading files...</span>
+            </div>
           ) : error ? (
             <div className="filebrowser-error">{error}</div>
           ) : (

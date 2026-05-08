@@ -14,6 +14,8 @@ export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search';
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 600;
 export const SIDEBAR_DEFAULT_WIDTH = 288;
+/** Width of the icon-rail-only collapsed sidebar (px). Must match .sidebar.collapsed width in Sidebar.css. */
+export const SIDEBAR_COLLAPSED_WIDTH = 48;
 
 export const clampSidebarWidth = (value: number): number => {
   if (!Number.isFinite(value)) return SIDEBAR_DEFAULT_WIDTH;

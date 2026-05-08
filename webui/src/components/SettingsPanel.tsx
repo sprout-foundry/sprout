@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import './SettingsPanel.css';
 import type { SproutSettings } from '../services/api';
+import { Skeleton } from '@sprout/ui';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
@@ -176,7 +177,23 @@ function SettingsPanel({
 
   const renderSubsectionContent = (subsectionId: SettingsSubsection) => {
     if (!settings) {
-      return <div className="settings-empty">Loading settings…</div>;
+      return (
+        <div className="settings-skeleton" role="status" aria-label="Loading settings">
+          <div className="settings-skeleton-rows">
+            {Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="settings-skeleton-row">
+                <div className="settings-skeleton-label">
+                  <Skeleton width={`${30 + Math.floor((i * 53) % 40)}%`} height="12px" />
+                </div>
+                <div className="settings-skeleton-input">
+                  <Skeleton width="100%" height="30px" radius="6px" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <span className="sr-only">Loading settings...</span>
+        </div>
+      );
     }
 
     switch (subsectionId) {

@@ -448,6 +448,40 @@ func MergeConfig(base, override *Config) *Config {
 		}
 	}
 
+	// Merge EmbeddingIndex
+	if override.EmbeddingIndex != nil {
+		if result.EmbeddingIndex == nil {
+			result.EmbeddingIndex = &EmbeddingIndexConfig{}
+		}
+		if override.EmbeddingIndex.Enabled {
+			result.EmbeddingIndex.Enabled = override.EmbeddingIndex.Enabled
+		}
+		if override.EmbeddingIndex.Provider != "" {
+			result.EmbeddingIndex.Provider = override.EmbeddingIndex.Provider
+		}
+		if override.EmbeddingIndex.ORTLibraryPath != "" {
+			result.EmbeddingIndex.ORTLibraryPath = override.EmbeddingIndex.ORTLibraryPath
+		}
+		if override.EmbeddingIndex.ModelDir != "" {
+			result.EmbeddingIndex.ModelDir = override.EmbeddingIndex.ModelDir
+		}
+		if override.EmbeddingIndex.IndexDir != "" {
+			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir
+		}
+		if override.EmbeddingIndex.SimilarityThreshold > 0 {
+			result.EmbeddingIndex.SimilarityThreshold = override.EmbeddingIndex.SimilarityThreshold
+		}
+		if override.EmbeddingIndex.MaxResults > 0 {
+			result.EmbeddingIndex.MaxResults = override.EmbeddingIndex.MaxResults
+		}
+		if override.EmbeddingIndex.AutoIndex {
+			result.EmbeddingIndex.AutoIndex = override.EmbeddingIndex.AutoIndex
+		}
+		if len(override.EmbeddingIndex.ExcludePaths) > 0 {
+			result.EmbeddingIndex.ExcludePaths = append([]string{}, override.EmbeddingIndex.ExcludePaths...)
+		}
+	}
+
 	// Merge CustomProviders
 	if len(override.CustomProviders) > 0 {
 		if result.CustomProviders == nil {

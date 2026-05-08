@@ -2,6 +2,7 @@ package tools
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 )
 
@@ -131,8 +132,9 @@ func TestVisionCacheStats(t *testing.T) {
 			t.Errorf("cached_results = %v, want 3", stats["cached_results"])
 		}
 		// 0.01 + 0.02 + 0.015 = 0.045
-		if stats["estimated_savings"] != 0.045 {
-			t.Errorf("estimated_savings = %v, want 0.045", stats["estimated_savings"])
+		got := stats["estimated_savings"].(float64)
+		if math.Abs(got-0.045) > 1e-9 {
+			t.Errorf("estimated_savings = %v, want 0.045", got)
 		}
 	})
 

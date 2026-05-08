@@ -116,6 +116,12 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  animation: contextPanelContentFadeIn 200ms var(--ease-out);
+}
+
+@keyframes contextPanelContentFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .side-panel-header {

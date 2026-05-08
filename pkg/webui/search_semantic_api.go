@@ -16,20 +16,23 @@ import (
 
 // SemanticSearchResult represents a single semantic search match.
 type SemanticSearchResult struct {
-	File       string  `json:"file"`
-	Name       string  `json:"name"`       // function/method name
-	Signature  string  `json:"signature"`  // full function signature
-	StartLine  int     `json:"start_line"`
-	EndLine    int     `json:"end_line"`
-	Language   string  `json:"language"`
-	Similarity float32 `json:"similarity"`
-	Type       string  `json:"type"`       // "code_unit" or "file"
+	File       string    `json:"file"`
+	Name       string    `json:"name"`       // function/method name
+	Signature  string    `json:"signature"`  // full function signature
+	StartLine  int       `json:"start_line"`
+	EndLine    int       `json:"end_line"`
+	Language   string    `json:"language"`
+	Similarity float32   `json:"similarity"`
+	Type       string    `json:"type"`       // "code_unit" or "file"
+	Embedding  []float32 `json:"-"`  // used only for server-side pairwise comparison; not sent to client
+	ClusterId  int       `json:"cluster_id,omitempty"` // 0 = not in a cluster, 1+ = cluster group
 }
 
 // DuplicateCluster represents a group of files that have highly similar code units.
 type DuplicateCluster struct {
 	Files      []string `json:"files"`
-	Similarity float32  `json:"similarity"`
+	Similarity float32  `json:"similarity"` // average pairwise similarity
+	Count      int      `json:"count"`      // number of results in cluster
 }
 
 // SemanticSearchResponse is the JSON response for semantic search.
@@ -105,6 +108,7 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 			Language:   m.Record.Language,
 			Similarity: m.Similarity,
 			Type:       m.Record.Type,
+			Embedding:  m.Record.Embedding,
 		}
 	}
 
@@ -343,78 +347,165 @@ func (ws *ReactWebServer) handleAPISemanticPreview(w http.ResponseWriter, r *htt
 	})
 }
 
-// detectDuplicateClusters detects groups of files that have highly similar code units.
-// It builds clusters from results where different files have 2+ code_unit results with similarity >= 0.85.
+// detectDuplicateClusters detects groups of code units that are highly similar to each other.
+// It computes actual pairwise cosine similarity between result embeddings.
+// Clusters are formed using a greedy union-find approach: if A~B and B~C, they're all in the same cluster.
+// Cluster threshold: pairwise cosine similarity >= 0.90
+// Only code_unit results from different files are clustered.
+//
+// NOTE: This function mutates the input results slice by assigning ClusterId fields.
+// The caller must ensure the slice is not shared or cached.
 func detectDuplicateClusters(results []SemanticSearchResult) []DuplicateCluster {
-	// Build a map from file path to list of code_unit results from that file
-	fileResults := make(map[string][]SemanticSearchResult)
-	for _, result := range results {
-		// Skip file-level records - only cluster code_unit results
-		if result.Type == "file" {
-			continue
+	const clusterThreshold = float32(0.90)
+
+	// Filter code_unit results and assign indices
+	codeUnits := []int{} // indices into results array
+	for i := range results {
+		if results[i].Type == "code_unit" {
+			codeUnits = append(codeUnits, i)
 		}
-		fileResults[result.File] = append(fileResults[result.File], result)
 	}
 
-	var clusters []DuplicateCluster
-
-	// For each pair of files that both have 2+ results with high similarity
-	files := make([]string, 0, len(fileResults))
-	for file := range fileResults {
-		files = append(files, file)
+	if len(codeUnits) < 2 {
+		return nil
 	}
 
-	for i := 0; i < len(files); i++ {
-		for j := i + 1; j < len(files); j++ {
-			file1 := files[i]
-			file2 := files[j]
-			results1 := fileResults[file1]
-			results2 := fileResults[file2]
+	// Union-Find data structure for clustering
+	parent := make([]int, len(codeUnits))
+	rank := make([]int, len(codeUnits))
+	for i := range parent {
+		parent[i] = i
+		rank[i] = 0
+	}
 
-			// Check if both files have 2+ results
-			if len(results1) < 2 || len(results2) < 2 {
+	// Find with path compression
+	var find func(x int) int
+	find = func(x int) int {
+		if parent[x] != x {
+			parent[x] = find(parent[x])
+		}
+		return parent[x]
+	}
+
+	// Union by rank
+	union := func(x, y int) {
+		px, py := find(x), find(y)
+		if px == py {
+			return
+		}
+		if rank[px] < rank[py] {
+			parent[px] = py
+		} else if rank[px] > rank[py] {
+			parent[py] = px
+		} else {
+			parent[py] = px
+			rank[px]++
+		}
+	}
+
+	// Compute pairwise similarity and union similar results
+	// Track similarities for computing average later
+	type pairSimilarity struct {
+		a, b       int // indices into codeUnits
+		similarity float32
+	}
+	var similarPairs []pairSimilarity
+
+	for i := 0; i < len(codeUnits); i++ {
+		for j := i + 1; j < len(codeUnits); j++ {
+			idxI, idxJ := codeUnits[i], codeUnits[j]
+			resultI := results[idxI]
+			resultJ := results[idxJ]
+
+			// Only compare results from different files
+			if resultI.File == resultJ.File {
 				continue
 			}
 
-			// Find the max similarity between any pair of results from different files
-			var maxSimilarity float32
-			hasHighSimilarity := false
-
-			for _, r1 := range results1 {
-				for _, r2 := range results2 {
-					if r1.Similarity >= 0.85 && r2.Similarity >= 0.85 {
-						// Both results have high similarity to the query
-						if r1.Similarity+r2.Similarity > maxSimilarity {
-							maxSimilarity = r1.Similarity + r2.Similarity
-						}
-						hasHighSimilarity = true
-					}
-				}
-			}
-
-			if hasHighSimilarity {
-				// Normalize to average similarity for the cluster
-				avgSimilarity := maxSimilarity / 2
-				clusters = append(clusters, DuplicateCluster{
-					Files:      []string{file1, file2},
-					Similarity: avgSimilarity,
-				})
+			// Compute pairwise cosine similarity between embeddings
+			sim := embedding.CosineSimilarity(resultI.Embedding, resultJ.Embedding)
+			if sim >= clusterThreshold {
+				union(i, j)
+				similarPairs = append(similarPairs, pairSimilarity{a: i, b: j, similarity: sim})
 			}
 		}
 	}
 
-	// Sort clusters by similarity (highest first) and limit to top 5
-	if len(clusters) > 5 {
-		// Simple bubble sort for stability with small slices
-		for i := 0; i < len(clusters)-1; i++ {
-			for j := 0; j < len(clusters)-i-1; j++ {
-				if clusters[j].Similarity < clusters[j+1].Similarity {
-					clusters[j], clusters[j+1] = clusters[j+1], clusters[j]
-				}
-			}
-		}
-		clusters = clusters[:5]
+	if len(similarPairs) == 0 {
+		return nil
 	}
 
-	return clusters
+	// Group results by cluster
+	clusters := make(map[int][]int) // root -> list of codeUnit indices
+	for i := range codeUnits {
+		root := find(i)
+		clusters[root] = append(clusters[root], i)
+	}
+
+	// Build duplicate clusters, filtering by size (must have 2+ results from 2+ files)
+	var duplicateClusters []DuplicateCluster
+	nextClusterId := 1
+
+	for root, members := range clusters {
+		if len(members) < 2 {
+			continue
+		}
+
+		// Check if cluster has results from 2+ different files
+		filesMap := make(map[string]bool)
+		for _, idx := range members {
+			filesMap[results[codeUnits[idx]].File] = true
+		}
+		if len(filesMap) < 2 {
+			continue
+		}
+
+		// Compute average similarity for this cluster
+		var totalSim float32
+		var pairCount int
+		for _, pair := range similarPairs {
+			if find(pair.a) == root || find(pair.b) == root {
+				totalSim += pair.similarity
+				pairCount++
+			}
+		}
+		avgSim := float32(0)
+		if pairCount > 0 {
+			avgSim = totalSim / float32(pairCount)
+		}
+
+		// Collect files in this cluster
+		files := make([]string, 0, len(filesMap))
+		for file := range filesMap {
+			files = append(files, file)
+		}
+
+		duplicateClusters = append(duplicateClusters, DuplicateCluster{
+			Files:      files,
+			Similarity: avgSim,
+			Count:      len(members),
+		})
+
+		// Assign ClusterId to each result in the cluster
+		for _, idx := range members {
+			results[codeUnits[idx]].ClusterId = nextClusterId
+		}
+		nextClusterId++
+	}
+
+	// Sort clusters by similarity (highest first)
+	for i := 0; i < len(duplicateClusters)-1; i++ {
+		for j := 0; j < len(duplicateClusters)-i-1; j++ {
+			if duplicateClusters[j].Similarity < duplicateClusters[j+1].Similarity {
+				duplicateClusters[j], duplicateClusters[j+1] = duplicateClusters[j+1], duplicateClusters[j]
+			}
+		}
+	}
+
+	// Limit to top 5 clusters
+	if len(duplicateClusters) > 5 {
+		duplicateClusters = duplicateClusters[:5]
+	}
+
+	return duplicateClusters
 }

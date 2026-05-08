@@ -377,20 +377,19 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             </button>
           </div>
 
-          {!state.panelCollapsed && (
-            <div className="side-panel-content">
-              <div className="side-panel-header">
-                <div className="side-panel-title">
-                  {activeTab.icon}
-                  <h4>{activeTab.label}</h4>
-                </div>
-                <div className="side-panel-header-actions">
-                  <span className="tool-count">{activeTab.count}</span>
-                </div>
+          {/* Content — always rendered; CSS handles fade-out on collapse */}
+          <div className="side-panel-content" {...(state.panelCollapsed ? { inert: true, 'aria-hidden': true } : {})}>
+            <div className="side-panel-header">
+              <div className="side-panel-title">
+                {activeTab.icon}
+                <h4>{activeTab.label}</h4>
               </div>
-              <div className="side-panel-body">{renderTabContent()}</div>
+              <div className="side-panel-header-actions">
+                <span className="tool-count">{activeTab.count}</span>
+              </div>
             </div>
-          )}
+            <div className="side-panel-body">{renderTabContent()}</div>
+          </div>
         </aside>
       )}
     </>

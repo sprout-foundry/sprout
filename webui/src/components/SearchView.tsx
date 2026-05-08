@@ -45,17 +45,21 @@ interface SemanticSearchResult {
   language: string;
   similarity: number;
   type: string;  // "code_unit" or "file"
+  cluster_id?: number;  // 0 or undefined = not clustered, 1+ = cluster group
 }
 
 interface SemanticSearchResponse {
   results: SemanticSearchResult[];
-  duplicate_clusters: Array<{
-    files: string[];
-    similarity: number;
-  }>;
+  duplicate_clusters: DuplicateCluster[];
   query: string;
   total: number;
   duration: string;
+}
+
+interface DuplicateCluster {
+  files: string[];
+  similarity: number;
+  count?: number;  // number of results in this cluster (may be undefined from backend)
 }
 
 interface SearchViewProps {
@@ -87,7 +91,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const [truncated, setTruncated] = useState(false);
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[] | null>(null);
   const [semanticDuration, setSemanticDuration] = useState<string | null>(null);
-  const [duplicateClusters, setDuplicateClusters] = useState<Array<{files: string[]; similarity: number}> | null>(null);
+  const [duplicateClusters, setDuplicateClusters] = useState<DuplicateCluster[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReplace, setShowReplace] = useState(false);
@@ -105,6 +109,9 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
 
   // Build progress state
   const [isBuilding, setIsBuilding] = useState(false);
+
+  // Cluster expansion state
+  const [clustersExpanded, setClustersExpanded] = useState(true);
 
   // Hover preview state
   const [previewData, setPreviewData] = useState<{
@@ -808,11 +815,35 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
         </div>
       )}
 
-      {/* Duplicate cluster hint */}
+      {/* Duplicate cluster summary */}
       {duplicateClusters && duplicateClusters.length > 0 && (
-        <div className="search-duplicate-hint">
-          <span className="search-duplicate-hint-icon">⑙</span>
-          <span>These results may share common code patterns across files.</span>
+        <div className="search-duplicate-summary">
+          <button
+            className="search-duplicate-summary-header"
+            onClick={() => setClustersExpanded(!clustersExpanded)}
+            title={clustersExpanded ? 'Collapse cluster info' : 'Expand cluster info'}
+          >
+            {clustersExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <span className="search-duplicate-summary-icon">⑙</span>
+            <span>
+              {duplicateClusters.reduce((sum, c) => sum + (c.count ?? c.files.length), 0)} result{duplicateClusters.reduce((sum, c) => sum + (c.count ?? c.files.length), 0) === 1 ? '' : 's'} share similar patterns across{' '}
+              {new Set(duplicateClusters.flatMap(c => c.files)).size} file{new Set(duplicateClusters.flatMap(c => c.files)).size === 1 ? '' : 's'}
+            </span>
+          </button>
+          {clustersExpanded && (
+            <div className="search-duplicate-summary-content">
+              {duplicateClusters.map((cluster, idx) => (
+                <div key={idx} className="search-duplicate-cluster-item">
+                  <span className="search-duplicate-cluster-label">
+                    Cluster {idx + 1}: ~{(cluster.similarity * 100).toFixed(0)}% similar — {cluster.count ?? cluster.files.length} result{(cluster.count ?? cluster.files.length) === 1 ? '' : 's'}
+                  </span>
+                  <span className="search-duplicate-cluster-files">
+                    {cluster.files.map(f => getRelativePath(f)).join(', ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -952,10 +983,11 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
           semanticResults.map((result, idx) => {
             // File-level result: compact card without line numbers
             if (result.type === 'file') {
+              const hasCluster = result.cluster_id && result.cluster_id > 0;
               return (
                 <div
                   key={`file-${result.file}`}
-                  className="search-semantic-result search-semantic-result--file search-match-row search-match-row--clickable"
+                  className={`search-semantic-result search-semantic-result--file search-match-row search-match-row--clickable ${hasCluster ? 'search-semantic-result--clustered' : ''}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => handleFileClick(result.file, 1)}
@@ -983,16 +1015,22 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
                     <span className="search-semantic-result-similarity">
                       {(result.similarity * 100).toFixed(0)}%
                     </span>
+                    {hasCluster && (
+                      <span className="search-semantic-result-cluster-badge" title={`Cluster ${result.cluster_id}`}>
+                        {result.cluster_id}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
             }
 
-            // Code-unit result: detailed view with line numbers and preview
+                        // Code-unit result: detailed view with line numbers and preview
+            const hasCluster = result.cluster_id && result.cluster_id > 0;
             return (
               <div
                 key={`${result.file}-${result.start_line}`}
-                className="search-semantic-result search-match-row search-match-row--clickable"
+                className={`search-semantic-result search-match-row search-match-row--clickable ${hasCluster ? 'search-semantic-result--clustered' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => handleFileClick(result.file, result.start_line)}
@@ -1031,10 +1069,14 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
                   <span className="search-semantic-result-similarity">
                     {(result.similarity * 100).toFixed(0)}%
                   </span>
+                  {hasCluster && (
+                    <span className="search-semantic-result-cluster-badge" title={`Cluster ${result.cluster_id}`}>
+                      {result.cluster_id}
+                    </span>
+                  )}
                 </div>
               </div>
-            );
-          })}
+            );})}
       </div>
 
       {/* Semantic hover preview tooltip */}

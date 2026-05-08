@@ -100,6 +100,8 @@ export { default as TerminalTabBar } from './components/TerminalTabBar';
 export { default as Sidebar } from './components/Sidebar';
 export { default as CommandPalette } from './components/CommandPalette';
 export { default as Editor } from './components/Editor';
+export { Skeleton, SkeletonText } from './components/Skeleton';
+export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
 
 // ── Dialogs ───────────────────────────────────────────────────────────
 export { showThemedAlert, showThemedConfirm, showThemedPrompt } from './components/ThemedDialog';

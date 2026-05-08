@@ -154,7 +154,7 @@ describe('GitPanel', () => {
     });
 
     expect(container.querySelector('.git-sidebar-panel')).not.toBeNull();
-    expect(container.querySelector('.empty')?.textContent).toBe('Loading git status…');
+    expect(container.querySelector('.git-skeleton')).not.toBeNull();
   });
 
   it('shows empty state when gitStatus is null', () => {

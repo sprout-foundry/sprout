@@ -514,19 +514,49 @@ body {
     max-width: 160px;
   }
 
-  /* On tablet, the context panel is hidden inline to avoid stacking below editor.
-     It can still be toggled open as a full-width overlay via the header button. */
-  .main-view-content > .context-panel:not(.context-panel-mobile) {
+  /* Context panel can be toggled open as an overlay on tablet.
+     The .context-panel-mobile class is applied when opened via header button.
+     Otherwise, it's hidden to avoid stacking below editor by default. */
+  .main-view-content > .context-panel:not(.context-panel-mobile):not(.context-panel-tablet-overlay) {
     display: none;
   }
 
-  /* Reduce split pane minimum sizes for narrower viewport */
+  /* Context panel overlay for tablet: right-side drawer taking ~50% width */
+  .context-panel-tablet-overlay {
+    position: fixed !important;
+    top: 35px; /* Below header bar */
+    right: 0;
+    bottom: var(--sprout-terminal-reserved-height);
+    width: 50%;
+    z-index: 800;
+    border-left: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-elevated);
+    display: flex !important;
+    animation: slideInDrawer 0.2s var(--ease-out);
+  }
+
+  /* Tablet overlay backdrop */
+  .context-panel-backdrop {
+    position: fixed;
+    inset: 0;
+    top: 35px;
+    bottom: var(--sprout-terminal-reserved-height);
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 750;
+  }
+
+  /* Reduce split pane minimum sizes for narrower viewport (~700px effective width after sidebar) */
   .panes-container.layout-split-vertical .pane-wrapper {
-    min-width: 140px;
+    min-width: 120px;
   }
 
   .panes-container.layout-split-horizontal .pane-wrapper {
-    min-height: 140px;
+    min-height: 120px;
+  }
+
+  /* Add safe-area padding for tablets with notches */
+  .app {
+    padding-top: env(safe-area-inset-top);
   }
 }
 
@@ -593,6 +623,11 @@ body {
     flex-direction: column;
   }
 
+  /* Prevent pull-to-refresh interference on mobile */
+  .main-content {
+    overscroll-behavior: contain;
+  }
+
   /* Hide context panel inline on mobile; it uses a full-screen overlay instead */
   .main-view-content > .context-panel:not(.context-panel-mobile) {
     display: none;
@@ -613,11 +648,29 @@ body {
   .panes-container .pane-wrapper {
     min-width: 0 !important;
     flex: 1 !important;
+    min-height: 200px; /* Reasonable minimum height for stacked panes */
   }
 
   .pane-wrapper + .pane-wrapper {
     border-top: 1px solid var(--border-subtle);
     border-left: none;
+  }
+
+  /* Mobile overlay with safe-area-inset support for full coverage */
+  .mobile-overlay {
+    position: fixed;
+    inset: 0;
+    top: env(safe-area-inset-top);
+    left: env(safe-area-inset-left);
+    right: env(safe-area-inset-right);
+    bottom: env(safe-area-inset-bottom);
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 900;
+  }
+
+  /* Add safe-area padding to header bar for notched phones */
+  .header-bar {
+    padding-top: env(safe-area-inset-top, 0);
   }
 }
 
@@ -1490,4 +1543,18 @@ button.primary.success {
 .onboarding-card-close:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ── Animations ── */
+
+/* Slide-in from right for tablet overlays */
+@keyframes slideInDrawer {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

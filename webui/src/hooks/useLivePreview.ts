@@ -8,7 +8,7 @@
  * Target: ~80 lines
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { EditorBuffer } from '../types/editor';
 
 // ---------------------------------------------------------------------------
@@ -46,25 +46,33 @@ export function useLivePreview(
   }) => void,
   paneId: string,
 ): UseLivePreviewReturn {
+  // Keep refs to avoid unstable deps in useCallback (buffer and localContent change every keystroke)
+  const bufferRef = useRef(buffer);
+  bufferRef.current = buffer;
+  const localContentRef = useRef(localContent);
+  localContentRef.current = localContent;
+
   const openLivePreview = useCallback(() => {
-    if (!buffer || !buffer.file) return;
+    const buf = bufferRef.current;
+    if (!buf || !buf.file) return;
     const lang = isSvgFile ? 'svg' : 'html';
     openWorkspaceBuffer({
       kind: 'file',
-      path: `__workspace/live-preview:${buffer.file.path}`,
-      title: `${buffer.file.name} Live Preview`,
-      content: localContent || buffer.content || '',
+      path: `__workspace/live-preview:${buf.file.path}`,
+      title: `${buf.file.name} Live Preview`,
+      content: localContentRef.current || buf.content || '',
       ext: `.${lang}.preview`,
       metadata: {
         previewKind: lang,
-        sourcePath: buffer.file.path,
-        sourceName: buffer.file.name,
+        sourcePath: buf.file.path,
+        sourceName: buf.file.name,
       },
     });
-  }, [buffer, isSvgFile, isHtmlFile, localContent, openWorkspaceBuffer]);
+  }, [isSvgFile, isHtmlFile, openWorkspaceBuffer]);
 
   const openLivePreviewInSplit = useCallback(() => {
-    if (!buffer || !buffer.file) return;
+    const buf = bufferRef.current;
+    if (!buf || !buf.file) return;
     const lang = isSvgFile ? 'svg' : 'html';
     const newPaneId = splitPane(paneId, 'vertical');
     if (!newPaneId) {
@@ -74,18 +82,18 @@ export function useLivePreview(
     setTimeout(() => {
       openWorkspaceBuffer({
         kind: 'file',
-        path: `__workspace/live-preview:${buffer.file.path}`,
-        title: `${buffer.file.name} Live Preview`,
-        content: localContent || buffer.content || '',
+        path: `__workspace/live-preview:${buf.file.path}`,
+        title: `${buf.file.name} Live Preview`,
+        content: localContentRef.current || buf.content || '',
         ext: `.${lang}.preview`,
         metadata: {
           previewKind: lang,
-          sourcePath: buffer.file.path,
-          sourceName: buffer.file.name,
+          sourcePath: buf.file.path,
+          sourceName: buf.file.name,
         },
       });
     }, 100);
-  }, [buffer, isSvgFile, isHtmlFile, localContent, openWorkspaceBuffer, splitPane, paneId, openLivePreview]);
+  }, [isSvgFile, isHtmlFile, openWorkspaceBuffer, splitPane, paneId, openLivePreview]);
 
   return {
     openLivePreview,

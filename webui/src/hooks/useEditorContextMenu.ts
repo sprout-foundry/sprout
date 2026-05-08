@@ -54,12 +54,14 @@ export interface UseEditorContextMenuCallbacks {
 /**
  * Hook that manages context menu state and handlers.
  *
- * @param buffer - Current buffer
+ * @param buffer - Current buffer (kept for legacy compatibility but not used in deps)
+ * @param bufferRef - Ref to current buffer (avoids callback instability on content changes)
  * @param viewRef - Ref to CodeMirror EditorView
  * @param callbacks - Optional callbacks for semantic actions
  */
 export function useEditorContextMenu(
-  buffer: EditorBuffer | null | undefined,
+  _buffer: EditorBuffer | null | undefined,
+  bufferRef: React.RefObject<EditorBuffer | null | undefined>,
   viewRef: React.MutableRefObject<EditorView | null>,
   callbacks?: UseEditorContextMenuCallbacks,
 ): UseEditorContextMenuReturn {
@@ -86,15 +88,16 @@ export function useEditorContextMenu(
   }, []);
 
   const getLanguageId = useCallback((): string => {
-    if (!buffer || !buffer.file || buffer.file.isDir) return '';
-    if (buffer.kind !== 'file') return '';
+    const buf = bufferRef.current;
+    if (!buf || !buf.file || buf.file.isDir) return '';
+    if (buf.kind !== 'file') return '';
     const langId = resolveLanguageId(
-      buffer.languageOverride,
-      buffer.file.ext?.replace(/^\./, ''),
-      buffer.file.name,
+      buf.languageOverride,
+      buf.file.ext?.replace(/^\./, ''),
+      buf.file.name,
     ).languageId ?? '';
     return langId;
-  }, [buffer]);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Context menu handlers
@@ -104,13 +107,14 @@ export function useEditorContextMenu(
     (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!buffer || !buffer.file || buffer.file.isDir) return;
-      if (buffer.kind !== 'file') return;
+      const buf = bufferRef.current;
+      if (!buf || !buf.file || buf.file.isDir) return;
+      if (buf.kind !== 'file') return;
       const hasSelection = !!viewRef.current && !viewRef.current.state.selection.main.empty;
       const langId = getLanguageId();
       setContextMenu({ x: e.clientX, y: e.clientY, hasSelection, languageId: langId });
     },
-    [buffer, viewRef, getLanguageId],
+    [viewRef, getLanguageId],
   );
 
   const handleCopySelection = useCallback(() => {
@@ -124,31 +128,34 @@ export function useEditorContextMenu(
   }, [viewRef, hideContextMenu]);
 
   const handleRevealInExplorer = useCallback(() => {
-    if (!buffer || !buffer.file) return;
+    const buf = bufferRef.current;
+    if (!buf || !buf.file) return;
     window.dispatchEvent(
       new CustomEvent('sprout:reveal-in-explorer', {
-        detail: { path: buffer.file.path },
+        detail: { path: buf.file.path },
       }),
     );
     hideContextMenu();
-  }, [buffer, hideContextMenu]);
+  }, [hideContextMenu]);
 
   const handleCopyRelativePath = useCallback(() => {
-    if (!buffer || !buffer.file) return;
-    copyToClipboard(buffer.file.path).catch((err) => {
+    const buf = bufferRef.current;
+    if (!buf || !buf.file) return;
+    copyToClipboard(buf.file.path).catch((err) => {
       debugLog('Clipboard write failed for relative path:', err);
     });
     hideContextMenu();
-  }, [buffer, hideContextMenu]);
+  }, [hideContextMenu]);
 
   const handleCopyAbsolutePath = useCallback(() => {
-    if (!buffer || !buffer.file) return;
+    const buf = bufferRef.current;
+    if (!buf || !buf.file) return;
     const root = workspaceRoot.replace(/\/+$/, '');
-    copyToClipboard(`${root}/${buffer.file.path}`).catch((err) => {
+    copyToClipboard(`${root}/${buf.file.path}`).catch((err) => {
       debugLog('Clipboard write failed for absolute path:', err);
     });
     hideContextMenu();
-  }, [buffer, workspaceRoot, hideContextMenu]);
+  }, [workspaceRoot, hideContextMenu]);
 
   const handleGoToDefinitionFromMenu = useCallback(() => {
     hideContextMenu();

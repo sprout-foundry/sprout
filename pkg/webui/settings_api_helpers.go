@@ -77,6 +77,7 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"disable_thinking":              cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
+		"embedding_index":                cfg.EmbeddingIndex,
 	}
 	return out
 }

@@ -918,6 +918,20 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		cfg.CustomProviders = providers
 	}
 
+	// EmbeddingIndex — *EmbeddingIndexConfig, use JSON marshal/unmarshal
+	if v, ok := patch["embedding_index"]; ok {
+		knownKeys["embedding_index"] = true
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid embedding_index config: %w", err)
+		}
+		var ei configuration.EmbeddingIndexConfig
+		if err := json.Unmarshal(raw, &ei); err != nil {
+			return nil, fmt.Errorf("invalid embedding_index config: %w", err)
+		}
+		cfg.EmbeddingIndex = &ei
+	}
+
 	// SubagentTypes — map[string]SubagentType
 	if v, ok := patch["subagent_types"]; ok {
 		knownKeys["subagent_types"] = true

@@ -782,4 +782,4 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-012 Phase 2: Add responsive layout breakpoints — Tablet (768-1024px): sidebar icons-only, stack editor/chat. Mobile (< 768px): single-panel view, full-screen terminal overlay. `webui/src/index.css`, `webui/src/App.css`
 [x] - SP-012 Phase 2: Add responsive layout breakpoints — Tablet (768-1024px): sidebar icons-only, stack editor/chat. Mobile (< 768px): single-panel view, full-screen terminal overlay. `webui/src/index.css`, `webui/src/App.css`
 [x] - SP-012 Phase 2: Add loading skeletons — Replace loading spinners with skeleton screens for file tree, chat history, editor, and settings panel.
-[] - SP-012 Phase 2: Add panel collapse animations — Smooth 200ms transitions on sidebar collapse, context panel resize, terminal toggle.
+[x] - SP-012 Phase 2: Add panel collapse animations — Smooth 200ms transitions on sidebar collapse, context panel resize, terminal toggle.

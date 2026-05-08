@@ -125,6 +125,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     setBufferModified,
   });
 
+  // Wrap onUpdate in a ref so the init effect doesn't re-run on every keystroke.
+  // onUpdate's identity changes whenever localContent changes (it's in the dep array
+  // of useEditorUpdate), which would destroy/recreate the EditorView and reset
+  // scroll position, losing user focus. Using a ref stabilizes the dependency.
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+
   const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(
     hotkeys,
     viewRef,
@@ -244,7 +251,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     localContentRef,
     openWorkspaceBuffer,
     onCancelPendingFlush: cancelPendingFlush,
-    onUpdate,
+    onUpdateRef,
     settingsRef,
     actionsRef,
   });

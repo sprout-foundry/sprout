@@ -642,6 +642,90 @@
   border: none;
 }
 
+/* ── Duplicate Cluster Summary ───────────────────────────────── */
+
+.search-duplicate-summary {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.search-duplicate-summary-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease-out);
+  text-align: left;
+  font-size: 11px;
+}
+
+.search-duplicate-summary-header:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.search-duplicate-summary-icon {
+  color: rgba(245, 158, 11, 0.8);
+}
+
+.search-duplicate-summary-content {
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: 1px solid rgba(245, 158, 11, 0.15);
+}
+
+.search-duplicate-cluster-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 0;
+}
+
+.search-duplicate-cluster-item:not(:last-child) {
+  border-bottom: 1px solid rgba(245, 158, 11, 0.1);
+}
+
+.search-duplicate-cluster-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.search-duplicate-cluster-files {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Semantic Result Cluster Indicator ─────────────────────── */
+
+.search-semantic-result--clustered {
+  border-left: 3px solid rgba(245, 158, 11, 0.5);
+}
+
+.search-semantic-result-cluster-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
 /* ── Semantic Similarity Bar ────────────────────────────────── */
 
 .search-semantic-result-similarity-bar {

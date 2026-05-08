@@ -298,3 +298,51 @@
   border: 1px solid var(--border-default, #30363d);
   background: var(--bg-primary, #0d1117);
 }
+
+/* ── Skeleton loading states ───────────────────────────────────── */
+
+.context-panel-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Sessions skeleton */
+.sessions-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sessions-skeleton-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary, #161b22);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle, #21262d);
+}
+
+.sessions-skeleton-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sessions-skeleton-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sessions-skeleton-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sessions-skeleton-meta {
+  display: flex;
+  align-items: center;
+}

@@ -669,6 +669,33 @@
   animation: settings-spin 1s linear infinite;
 }
 
+/* ── Skeleton loading state ───────────────────────────────────── */
+.sidebar .settings-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .settings-skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sidebar .settings-skeleton-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sidebar .settings-skeleton-label {
+  padding: 0;
+  min-height: 16px;
+}
+
+.sidebar .settings-skeleton-input {
+  min-height: 30px;
+}
+
 /* ── Mobile tweaks ───────────────────────────────────────────── */
 @media (max-width: 768px) {
   .sidebar .settings-section-header {

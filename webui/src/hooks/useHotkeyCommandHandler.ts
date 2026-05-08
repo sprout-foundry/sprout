@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import { showThemedConfirm } from '../components/ThemedDialog';
@@ -74,6 +74,10 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     buffers,
   } = options;
 
+  // Keep ref to buffers to avoid recreating the effect on every keystroke
+  const buffersRef = useRef<Map<string, EditorBuffer>>(buffers);
+  buffersRef.current = buffers;
+
   useEffect(() => {
     const handleHotkey = async (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -105,7 +109,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           break;
         case 'toggle_explorer': {
           // Reveal the active file's path in the file tree explorer
-          const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
+          const activeBuffer = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
           const filePath =
             activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
               ? activeBuffer.file.path
@@ -169,7 +173,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           break;
         case 'focus_next_tab': {
           if (!activePaneId) break;
-          const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+          const paneBuffers = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
           if (paneBuffers.length <= 1) break;
           const currentIdx = activeBufferId ? paneBuffers.findIndex((b) => b.id === activeBufferId) : -1;
           const nextIdx = currentIdx + 1 < paneBuffers.length ? currentIdx + 1 : 0;
@@ -181,7 +185,7 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         }
         case 'focus_prev_tab': {
           if (!activePaneId) break;
-          const paneBuffersPrev = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+          const paneBuffersPrev = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
           if (paneBuffersPrev.length <= 1) break;
           const currentIdx = activeBufferId ? paneBuffersPrev.findIndex((b) => b.id === activeBufferId) : -1;
           const prevIdx = currentIdx - 1 >= 0 ? currentIdx - 1 : paneBuffersPrev.length - 1;
@@ -320,6 +324,5 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
     onSwitchPane,
     activeBufferId,
     activePaneId,
-    buffers,
   ]);
 }

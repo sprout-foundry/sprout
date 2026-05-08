@@ -1180,12 +1180,10 @@ function Sidebar({
             </div>
           </div>
 
-          {/* Content Pane (only when expanded) */}
-          {!effectiveSidebarCollapsed && (
-            <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel">
-              <div className="content-pane-scroll">{renderContentPane()}</div>
-            </div>
-          )}
+          {/* Content Pane — always rendered; CSS handles fade-out on collapse */}
+          <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel" {...(effectiveSidebarCollapsed ? { inert: true, 'aria-hidden': true } : {})}>
+            <div className="content-pane-scroll">{renderContentPane()}</div>
+          </div>
         </div>
       </div>
       {!isMobile && (

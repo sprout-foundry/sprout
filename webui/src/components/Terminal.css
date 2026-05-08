@@ -10,7 +10,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   z-index: 100;
-  transition: height 0.28s ease;
+  transition: height 0.2s ease;
 }
 
 .terminal-container.collapsed {

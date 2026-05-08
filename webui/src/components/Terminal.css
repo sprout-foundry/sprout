@@ -162,12 +162,12 @@
   overflow: hidden;
   /* min-height: 0 lets flex shrink correctly; the parent flex column provides the real height */
   min-height: 0;
-  transition: opacity 200ms var(--ease-out);
+  /* Fade content slightly before height transition completes for smoother perceived UX */
+  transition: opacity 150ms var(--ease-out);
 }
 
 .terminal-container.collapsed .terminal-body {
   opacity: 0;
-  overflow: hidden;
   pointer-events: none;
 }
 

@@ -746,7 +746,7 @@ function Terminal({
       ]
         .filter(Boolean)
         .join(' ')}
-      style={isExpanded ? { height: `${terminalHeight}px` } : undefined}
+      style={{ height: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
     >
       {isExpanded && (
         <div

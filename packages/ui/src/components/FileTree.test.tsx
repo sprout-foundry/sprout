@@ -436,9 +436,9 @@ describe('FileTree', () => {
         onFetchFiles,
       }));
     });
-    // Initial load should trigger loading
-    const loadingIndicator = container.querySelector('.loading-indicator');
-    expect(loadingIndicator).not.toBeNull();
+    // Initial load should trigger skeleton
+    const skeleton = container.querySelector('.file-tree-skeleton');
+    expect(skeleton).not.toBeNull();
   });
 
   it('shows error message when onFetchFiles fails', async () => {

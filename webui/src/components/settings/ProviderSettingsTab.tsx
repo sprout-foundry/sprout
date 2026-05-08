@@ -1,4 +1,5 @@
 import { Pencil, Plus, Trash2, Cog } from 'lucide-react';
+import { SkeletonText } from '@sprout/ui';
 import type { SproutSettings } from '../../services/api';
 
 interface ProviderSettingsTabProps {
@@ -50,7 +51,10 @@ export default function ProviderSettingsTab({
       <div className="current-provider-section">
         <h4>Current Provider</h4>
         {loadingProviderInfo ? (
-          <div className="settings-loading">Loading...</div>
+          <div className="settings-skeleton" role="status" aria-label="Loading provider info">
+            <SkeletonText lines={3} gap="12px" lineHeight="20px" />
+            <span className="sr-only">Loading provider info...</span>
+          </div>
         ) : currentProviderInfo ? (
           <div className="current-provider-info">
             <div className="current-provider-detail">

@@ -1,6 +1,7 @@
 import { RotateCcw } from 'lucide-react';
 import type { SessionEntry } from './types';
 import { formatRelativeTime } from './helpers';
+import { Skeleton } from '@sprout/ui';
 
 interface SessionsTabProps {
   sessions: SessionEntry[];
@@ -30,7 +31,28 @@ export function SessionsTab({
       {sessionRestoreError && <div className="history-error-inline">{sessionRestoreError}</div>}
 
       {isLoadingSessions ? (
-        <div className="context-panel-empty">Loading sessions...</div>
+        <div className="context-panel-loading" role="status" aria-label="Loading sessions">
+          <div className="sessions-skeleton">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="sessions-skeleton-item">
+                <div className="sessions-skeleton-summary">
+                  <div className="sessions-skeleton-main">
+                    <Skeleton width={`${40 + Math.floor((i * 53) % 50)}%`} height="14px" />
+                    <Skeleton width="48px" height="12px" />
+                  </div>
+                  <div className="sessions-skeleton-stats">
+                    <Skeleton width="48px" height="12px" />
+                    <Skeleton width="52px" height="12px" />
+                  </div>
+                </div>
+                <div className="sessions-skeleton-meta">
+                  <Skeleton width={`${30 + Math.floor((i * 37) % 40)}%`} height="12px" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <span className="sr-only">Loading sessions...</span>
+        </div>
       ) : sessions.length === 0 ? (
         <div className="context-panel-empty">No saved sessions found.</div>
       ) : (

@@ -118,7 +118,11 @@
   flex-direction: column;
 }
 
-.filebrowser-loading,
+.filebrowser-loading {
+  display: block;
+  padding: 0;
+}
+
 .filebrowser-error,
 .filebrowser-empty {
   display: flex;
@@ -253,7 +257,7 @@
   background: #666;
 }
 
-/* Animation */
+/* ── Animation ───────────────────────────────────────────────────── */
 .filebrowser-overlay {
   animation: fadeIn 0.15s ease-out;
 }
@@ -280,4 +284,23 @@
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* ── Skeleton loading state ─────────────────────────────────────── */
+.filebrowser-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.filebrowser-skeleton-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid #333;
+}
+
+.filebrowser-skeleton-info {
+  flex: 1;
+  min-width: 0;
+  margin-left: 12px;
 }

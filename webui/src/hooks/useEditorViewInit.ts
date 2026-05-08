@@ -72,7 +72,8 @@ export interface UseEditorViewInitOptions {
   localContentRef: React.MutableRefObject<string>;
   openWorkspaceBuffer: (buffer: { kind: 'file' | 'chat' | 'diff' | 'review' | 'compare'; path: string; title: string; ext?: string }) => void;
   onCancelPendingFlush: () => void;
-  onUpdate?: (update: ViewUpdate) => void;
+  /** Ref to the update handler — stable identity avoids EditorView recreation on every keystroke */
+  onUpdateRef: React.MutableRefObject<(update: ViewUpdate) => void>;
   /** Ref to settings — stable identity avoids EditorView recreation */
   settingsRef: React.MutableRefObject<EditorViewInitSettings>;
   /** Ref to actions — stable identity avoids EditorView recreation */
@@ -107,7 +108,7 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     localContentRef,
     openWorkspaceBuffer,
     onCancelPendingFlush,
-    onUpdate,
+    onUpdateRef,
     settingsRef,
     actionsRef,
   } = options;
@@ -129,10 +130,13 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     const keymaps = keymapsRef.current;
     const actions = actionsRef.current;
 
-    // Create update listener if onUpdate callback provided
-    const updateListener = onUpdate ? CMEditorView.updateListener.of((update: ViewUpdate) => {
-      onUpdate(update);
-    }) : null;
+    // Create update listener reading from stable ref — avoids EditorView
+    // recreation when the callback identity changes on every keystroke.
+    const updateListener = onUpdateRef.current
+      ? CMEditorView.updateListener.of((update: ViewUpdate) => {
+          onUpdateRef.current(update);
+        })
+      : null;
 
     const extensions = buildExtensions({
       paneId,
@@ -249,7 +253,7 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
     customHighlightStyle,
     localContentRef,
     onCancelPendingFlush,
-    onUpdate,
+    onUpdateRef,
     settingsRef,
     keymapsRef,
     actionsRef,

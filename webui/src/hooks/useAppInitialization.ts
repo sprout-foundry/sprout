@@ -29,6 +29,7 @@ export interface UseAppInitializationOptions {
   loadChatSessions: () => void;
   setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
+  setIsTablet: Dispatch<SetStateAction<boolean>>;
   setState: Dispatch<SetStateAction<AppState>>;
   /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
   handleReconnect: () => void;
@@ -40,6 +41,7 @@ export function useAppInitialization({
   loadChatSessions,
   setRecentFiles,
   setIsMobile,
+  setIsTablet,
   setState,
   handleReconnect,
 }: UseAppInitializationOptions): void {
@@ -110,11 +112,14 @@ export function useAppInitialization({
     const statsInterval = setInterval(loadStats, 5000);
 
     // Check for mobile screen size
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
+    // Check viewport breakpoints (mobile < 768px, tablet 769-1024px)
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      setIsMobile(w <= 768);
+      setIsTablet(w >= 769 && w <= 1024);
     };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    checkBreakpoints();
+    window.addEventListener('resize', checkBreakpoints);
 
     // Snapshot ref value for cleanup (ref.current in cleanup triggers exhaustive-deps)
     const timeoutId = connectionTimeoutRef.current;
@@ -127,9 +132,9 @@ export function useAppInitialization({
       events.removeEvent(handleEvent);
       events.onReconnect(null);
       events.disconnect();
-      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('resize', checkBreakpoints);
       clearInterval(statsInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile are stable useState setters; connectionTimeoutRef is a stable ref; events/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile, setIsTablet are stable useState setters; connectionTimeoutRef is a stable ref; events/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
   }, [handleEvent, loadChatSessions]);
 }

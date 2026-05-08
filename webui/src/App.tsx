@@ -335,7 +335,9 @@ function App() {
   const [inputValue, setInputValue] = useState('');
   const {
     isMobile,
+    isTablet,
     setIsMobile,
+    setIsTablet,
     isSidebarOpen,
     sidebarCollapsed,
     isTerminalExpanded,
@@ -1631,13 +1633,15 @@ function App() {
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
 
-    // Check for mobile screen size
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
+    // Check viewport breakpoints (mobile < 768px, tablet 769-1024px)
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      setIsMobile(w <= 768);
+      setIsTablet(w >= 769 && w <= 1024);
     };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+
+    checkBreakpoints();
+    window.addEventListener('resize', checkBreakpoints);
 
     // Cleanup
     return () => {
@@ -1652,7 +1656,7 @@ function App() {
       wsService.removeEvent(handleEvent);
       wsService.onReconnect(null);
       wsService.disconnect();
-      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('resize', checkBreakpoints);
       clearInterval(statsInterval);
     };
   }, [handleEvent, handleReconnect, wsService, apiService, loadChatSessions]);
@@ -2089,6 +2093,7 @@ function App() {
                 inputValue={inputValue}
                 onInputChange={setInputValue}
                 isMobile={isMobile}
+                isTablet={isTablet}
                 isSidebarOpen={isSidebarOpen}
                 sidebarCollapsed={sidebarCollapsed}
                 isTerminalExpanded={isTerminalExpanded}

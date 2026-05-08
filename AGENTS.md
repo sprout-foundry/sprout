@@ -2,6 +2,14 @@
 
 This file provides guidance to AI agents working on code in this repository.
 
+## Subagent Execution Policy
+
+**Always use serialized subagents, never parallel.** Use `run_subagent` for
+delegated work. Do NOT use `run_parallel_subagents` — parallel execution has
+caused file conflicts and build failures due to overlapping edits.
+
+Run subagents sequentially: test after code, review after test, fix after review.
+
 ## Build Verification Requirement
 
 **You MUST run `make build-all` after making any code changes.** This builds both the React UI (deployed into Go embed) and the Go binary. A successful build confirms:

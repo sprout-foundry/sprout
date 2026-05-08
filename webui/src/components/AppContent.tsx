@@ -45,6 +45,7 @@ interface AppContentProps {
   inputValue: string;
   onInputChange: React.Dispatch<React.SetStateAction<string>>;
   isMobile: boolean;
+  isTablet: boolean;
   isSidebarOpen: boolean;
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
@@ -97,6 +98,7 @@ const AppContent: React.FC<AppContentProps> = ({
   inputValue,
   onInputChange,
   isMobile,
+  isTablet,
   isSidebarOpen,
   sidebarCollapsed,
   isTerminalExpanded,
@@ -1159,6 +1161,12 @@ const AppContent: React.FC<AppContentProps> = ({
           </div>
           {showContextSidebar && !PLATFORM_VIEWS.has(state.currentView) && (
             <ErrorBoundary panelName="Context Panel">
+            {isTablet && !isContextPanelCollapsed && (
+              <div
+                className="context-panel-backdrop"
+                onClick={() => contextPanelRef.current?.closePanel()}
+              />
+            )}
             <ContextPanel
               ref={contextPanelRef}
               context="chat"
@@ -1172,6 +1180,7 @@ const AppContent: React.FC<AppContentProps> = ({
               lastError={state.lastError}
               queryProgress={state.queryProgress}
               isMobileLayout={isMobile}
+              isTabletLayout={isTablet}
               onMobileOpenChange={setIsContextPanelMobileOpen}
               onCollapsedChange={setIsContextPanelCollapsed}
               panelWidth={panelWidth}

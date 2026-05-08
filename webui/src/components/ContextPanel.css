@@ -28,13 +28,21 @@
   cursor: col-resize;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    opacity 100ms var(--ease-out);
   flex-shrink: 0;
 }
 
 .context-panel-resizer:hover {
   background: var(--bg-surface);
   border-color: var(--border-strong);
+}
+
+.context-panel.collapsed .context-panel-resizer {
+  opacity: 0;
+  pointer-events: none;
+  /* Fade faster than width transition so resizer disappears early during collapse */
+  transition: opacity 100ms var(--ease-out);
 }
 
 .context-panel-tools-list {
@@ -117,7 +125,7 @@
   display: flex;
   flex-direction: column;
   opacity: 1;
-  transition: opacity 200ms var(--ease-out);
+  transition: opacity 150ms var(--ease-out);
 }
 
 .context-panel.collapsed .side-panel-content {

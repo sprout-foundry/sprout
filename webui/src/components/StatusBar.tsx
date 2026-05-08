@@ -73,11 +73,13 @@ function StatusBar({
     return buffer.kind.charAt(0).toUpperCase() + buffer.kind.slice(1);
   }, [buffer]);
 
-  // Line ending — detected from buffer content
+  // Line ending — detected from buffer content.
+  // Depends on `buffer?.file` reference (stable across keystrokes, changes on file
+  // switch or external reload) rather than `buffer?.content` (changes every keystroke).
   const lineEnding = useMemo(() => {
     const result = detectLineEnding(buffer?.content || '');
     return result.lineEnding;
-  }, [buffer?.content]);
+  }, [buffer?.file, buffer?.kind]);
 
   const bellIconRef = useRef<HTMLDivElement>(null);
 

@@ -23,6 +23,11 @@
   position: relative;
   z-index: 100;
   overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.sidebar.resizing {
+  transition: none !important;
 }
 
 .sidebar.collapsed {

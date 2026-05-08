@@ -30,6 +30,7 @@ interface UseContextPanelStateReturn {
   setExpandedSubagents: React.Dispatch<React.SetStateAction<Set<string>>>;
   toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   startResize: (e: ReactMouseEvent<HTMLDivElement>) => void;
+  isResizing: boolean;
   toggleToolExpansion: (toolId: string) => void;
   toggleQueryGroup: (queryId: number) => void;
   toggleSubagentExpansion: (toolId: string) => void;
@@ -54,6 +55,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
   const [expandedQueries, setExpandedQueries] = useState<Set<number>>(new Set());
   const [expandedSubagents, setExpandedSubagents] = useState<Set<string>>(new Set());
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const toolRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isChat = props.context === 'chat';
@@ -109,6 +111,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     (e: ReactMouseEvent<HTMLDivElement>) => {
       e.preventDefault();
       setPanelCollapsed(false);
+      setIsResizing(true);
       const startX = e.clientX;
       const startWidth = panelWidth;
 
@@ -122,6 +125,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
       };
 
       const onMouseUp = () => {
+        setIsResizing(false);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
         document.removeEventListener('mousemove', onMouseMove);
@@ -180,6 +184,7 @@ export function useContextPanelState(props: ContextPanelProps): UseContextPanelS
     setExpandedSubagents,
     toolRefs,
     startResize,
+    isResizing,
     toggleToolExpansion,
     toggleQueryGroup,
     toggleSubagentExpansion,

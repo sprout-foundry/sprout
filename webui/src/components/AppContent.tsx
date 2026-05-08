@@ -505,7 +505,7 @@ const AppContent: React.FC<AppContentProps> = ({
           // ensures the sidebar is open and switched to the files tab.
           // If no active file, dispatch with no path so the sidebar just
           // opens to files without highlighting anything.
-          const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
+          const activeBuffer = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
           const filePath = activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
             ? activeBuffer.file.path
             : null;
@@ -561,7 +561,7 @@ const AppContent: React.FC<AppContentProps> = ({
     
     window.addEventListener('sprout:hotkey', handleHotkey);
     return () => window.removeEventListener('sprout:hotkey', handleHotkey);
-  }, [activeBufferId, buffers, closeBuffer, focusTabIndex, handleFocusPaneIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
+  }, [activeBufferId, closeBuffer, focusTabIndex, handleFocusPaneIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
 
   // Handler to open hotkeys config in editor
   const handleOpenHotkeysConfig = useCallback(() => {

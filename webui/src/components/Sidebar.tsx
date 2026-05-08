@@ -208,6 +208,7 @@ function Sidebar({
   const [gitSubTab, setGitSubTab] = useState<'changes' | 'history' | 'worktrees'>('changes');
   const [settings, setSettings] = useState<SproutSettings | null>(null);
   const [settingsFocusTarget, setSettingsFocusTarget] = useState<'persona' | 'provider' | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const apiService = ApiService.getInstance();
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
   const effectiveSelectedSection = selectedSection || 'git';
@@ -418,7 +419,13 @@ function Sidebar({
     [effectiveSidebarCollapsed, onSidebarToggle, onSidebarWidthChange],
   );
 
+  // .resizing class disables CSS transitions during drag to prevent lag
+  const handleSidebarResizeStart = useCallback(() => {
+    setIsResizing(true);
+  }, []);
+
   const handleSidebarResizeEnd = useCallback(() => {
+    setIsResizing(false);
     onSidebarWidthPersist?.();
   }, [onSidebarWidthPersist]);
 
@@ -1066,7 +1073,7 @@ function Sidebar({
   return (
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
       <div
-        className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''}`}
+        className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
         style={effectiveSidebarCollapsed ? undefined : isMobile ? undefined : { width: `${effectiveSidebarWidth}px` }}
       >
         {/* Pinned global header: instance selector */}
@@ -1185,6 +1192,7 @@ function Sidebar({
         <ResizeHandle
           direction="horizontal"
           onResize={handleSidebarResize}
+          onResizeStart={handleSidebarResizeStart}
           onResizeEnd={handleSidebarResizeEnd}
           onDoubleClick={handleSidebarResizeReset}
           className="sidebar-resize-handle"

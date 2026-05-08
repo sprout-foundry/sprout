@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import { useHotkeyCommandHandler } from './useHotkeyCommandHandler';
 
@@ -60,6 +60,12 @@ export function useHotkeyIntegration({
   onOpenCommandPalette,
   maxPanes = 6,
 }: UseHotkeyIntegrationOptions) {
+  // Keep refs to avoid unstable deps in useCallback (buffers Map changes on every keystroke)
+  const buffersRef = useRef(buffers);
+  buffersRef.current = buffers;
+  const panesRef = useRef(panes);
+  panesRef.current = panes;
+
   const handlePrimaryViewChange = useCallback(
     (view: 'chat' | 'editor' | 'git') => {
       if (view === 'chat') {
@@ -80,29 +86,30 @@ export function useHotkeyIntegration({
   const focusTabIndex = useCallback(
     (index: number) => {
       if (!activePaneId || index < 0) return;
-      const paneBuffers = Array.from(buffers.values()).filter((buffer) => buffer.paneId === activePaneId);
+      const paneBuffers = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
       const target = paneBuffers[index];
       if (target) {
         switchPane(activePaneId);
         switchToBuffer(target.id);
       }
     },
-    [activePaneId, buffers, switchPane, switchToBuffer],
+    [activePaneId, switchPane, switchToBuffer],
   );
 
   const handleFocusPaneIndex = useCallback(
     (index: number) => {
-      if (index < panes.length) {
+      const currentPanes = panesRef.current;
+      if (index < currentPanes.length) {
         // Focus existing pane
-        switchPane(panes[index].id);
+        switchPane(currentPanes[index].id);
         return;
       }
       // index >= panes.length — need to split to create more panes
-      if (panes.length < maxPanes) {
+      if (currentPanes.length < maxPanes) {
         // Split from the active pane (or last pane)
-        const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
+        const sourcePaneId = activePaneId || currentPanes[currentPanes.length - 1]?.id;
         if (!sourcePaneId) return;
-        const direction = panes.length === 1 ? 'vertical' : 'horizontal';
+        const direction = currentPanes.length === 1 ? 'vertical' : 'horizontal';
         const newPaneId = splitPane(sourcePaneId, direction);
         if (newPaneId) {
           // Update pane sizes to 50/50
@@ -113,7 +120,7 @@ export function useHotkeyIntegration({
         }
       }
     },
-    [panes, activePaneId, splitPane, switchPane, updatePaneSize],
+    [activePaneId, splitPane, switchPane, updatePaneSize],
   );
 
   const handleNewFile = useCallback(() => {

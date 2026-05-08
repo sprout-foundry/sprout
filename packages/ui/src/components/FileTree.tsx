@@ -38,6 +38,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 import { debugLog } from '../utils/log';
 import { useMultiSelect, flattenVisibleFiles } from '../hooks/useMultiSelect';
+import { Skeleton } from './Skeleton';
 
 import type { FileInfo } from '../types/file-tree';
 export type { FileInfo };
@@ -1348,11 +1349,18 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
         ) : null}
 
         {loading ? (
-          <div className="loading-indicator">
-            <div className="spinner">
-              <Zap size={16} />
+          <div className="file-tree-skeleton" role="status" aria-label="Loading file tree">
+            <div className="file-tree-skeleton-header">
+              <Skeleton width="80px" height="14px" />
+              <Skeleton width="24px" height="24px" radius="4px" />
             </div>
-            <span>Loading...</span>
+            {Array.from({ length: 12 }, (_, i) => (
+              <div key={i} className="file-tree-skeleton-row" style={{ paddingLeft: `${8 + (i % 3) * 16}px` }}>
+                <Skeleton width="16px" height="16px" radius="3px" />
+                <Skeleton width={`${60 + Math.floor((i * 37) % 40)}%`} height="14px" />
+              </div>
+            ))}
+            <span className="sr-only">Loading file tree...</span>
           </div>
         ) : null}
 

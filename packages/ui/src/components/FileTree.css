@@ -231,6 +231,38 @@
   font-size: 12px;
 }
 
+/* File tree skeleton */
+.file-tree-skeleton {
+  padding: var(--space-2) 0;
+}
+
+.file-tree-skeleton-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.file-tree-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* File rows */
 .file-tree .file-list {
   flex: 1;

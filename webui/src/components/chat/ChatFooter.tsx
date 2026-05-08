@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Zap, AlertTriangle } from 'lucide-react';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
+import { SkeletonText } from '@sprout/ui';
 import type { ToolExecution, SubagentActivity } from './types';
 
 interface ChatFooterProps {
@@ -52,12 +53,10 @@ export function ChatFooter({
 
   if (isProcessing && filteredToolExecutions.length === 0 && !queryProgress && !hasSubagentActivity) {
     elements.push(
-      <div key="processing" className="processing-indicator">
+      <div key="processing" className="processing-indicator" role="status" aria-label="Processing request">
         <div className="processing-content">
-          <div className="processing-spinner">
-            <Zap size={14} />
-          </div>
-          <div className="processing-text">Processing your request...</div>
+          <SkeletonText lines={2} gap="6px" lineHeight="14px" lastLineWidth="40%" />
+          <span className="sr-only">Processing your request...</span>
         </div>
       </div>,
     );

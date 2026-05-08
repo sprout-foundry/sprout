@@ -22,6 +22,7 @@ import type { FileSection } from '../types/git-types';
 import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
 import type { GitFile, GitStatusData } from '../types/git-types';
 import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
+import { Skeleton, SkeletonText } from './Skeleton';
 import './GitPanel.css';
 
 // Re-export types so existing consumers (tests, Sidebar, etc.) don't break.
@@ -151,8 +152,17 @@ function GitSidebarPanel({
 
   if (isLoading) {
     return (
-      <div className="git-sidebar-panel">
-        <div className="empty">Loading git status…</div>
+      <div className="git-sidebar-panel" role="status" aria-label="Loading git status">
+        <div className="git-skeleton">
+          <Skeleton height="28px" radius="4px" />
+          <div className="git-skeleton-actions">
+            <Skeleton width="60px" height="24px" radius="4px" />
+            <Skeleton width="60px" height="24px" radius="4px" />
+            <Skeleton width="60px" height="24px" radius="4px" />
+          </div>
+          <SkeletonText lines={4} gap="6px" lineHeight="24px" />
+        </div>
+        <span className="sr-only">Loading git status...</span>
       </div>
     );
   }

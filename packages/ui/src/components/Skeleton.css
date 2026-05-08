@@ -1,0 +1,14 @@
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary, #21262d) 25%,
+    var(--bg-secondary, #161b22) 50%,
+    var(--bg-tertiary, #21262d) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-text {
+  width: 100%;
+}

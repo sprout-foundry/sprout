@@ -204,7 +204,7 @@ body {
   background: var(--app-shell-bg);
   overflow: hidden;
   position: relative;
-  transition: padding-bottom 0.2s ease;
+  transition: padding-bottom 200ms var(--ease-out);
 }
 
 .main-content {

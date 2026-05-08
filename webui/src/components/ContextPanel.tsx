@@ -27,6 +27,7 @@ import type {
   ToolExecution,
   PanelTab,
 } from './contextPanel/types';
+import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 
 import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useRevisionManager } from './contextPanel/useRevisionManager';
@@ -349,9 +350,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${state.isResizing ? ' resizing' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}${isTabletLayout && !state.panelCollapsed ? ' context-panel-tablet-overlay' : ''}`}
           aria-label="Context panel"
           style={
-            !state.panelCollapsed && !isMobileLayout && !isTabletLayout
-              ? { width: `${state.panelWidth}px` }
-              : undefined
+            isMobileLayout || isTabletLayout
+              ? undefined
+              : { width: `${state.panelCollapsed ? PANEL_COLLAPSED_WIDTH : state.panelWidth}px` }
           }
           ref={state.panelContainerRef}
         >

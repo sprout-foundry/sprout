@@ -45,6 +45,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const isChat = props.context === 'chat';
   const chatProps = isChat ? (props as ChatContextPanelProps) : null;
   const isMobileLayout = props.isMobileLayout ?? false;
+  const isTabletLayout = props.isTabletLayout ?? false;
 
   // ── Hooks ──────────────────────────────────────────────────────────
 
@@ -334,7 +335,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   return (
     <>
-      {!state.panelCollapsed && !isMobileLayout && (
+      {!state.panelCollapsed && !isMobileLayout && !isTabletLayout && (
         <div
           className="context-panel-resizer"
           onMouseDown={state.startResize}
@@ -343,12 +344,12 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           aria-label="Resize context panel"
         />
       )}
-      {isMobileLayout && state.panelCollapsed ? null : (
+      {(isMobileLayout && state.panelCollapsed) || (isTabletLayout && state.panelCollapsed) ? null : (
         <aside
-          className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}`}
+          className={`context-panel ${state.panelCollapsed ? 'collapsed' : ''}${isMobileLayout ? ' context-panel-mobile' : ''}${isTabletLayout && !state.panelCollapsed ? ' context-panel-tablet-overlay' : ''}`}
           aria-label="Context panel"
           style={
-            !state.panelCollapsed && !isMobileLayout
+            !state.panelCollapsed && !isMobileLayout && !isTabletLayout
               ? { width: `${state.panelWidth}px` }
               : undefined
           }

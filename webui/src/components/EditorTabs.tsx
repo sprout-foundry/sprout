@@ -286,6 +286,8 @@ function EditorTabs({
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const batchCloseTargetsRef = useRef<string[]>([]);
+  const buffersRef = useRef(buffers);
+  buffersRef.current = buffers;
 
   // ── Inline rename state for chat tabs ─────────────────────────
   const [renamingBufferId, setRenamingBufferId] = useState<string | null>(null);
@@ -309,11 +311,13 @@ function EditorTabs({
   }, [panes]);
 
   // Preserve insertion order, filter by paneId with pinned-chat exception.
+  // Uses buffersRef.current to avoid re-computing on every keystroke (the Map
+  // identity changes even when its contents are identical).
   const bufferList = useMemo(() => {
-    const values = Array.from(buffers.values());
+    const values = Array.from(buffersRef.current.values());
     if (!paneId) return values;
     return values.filter((buffer) => buffer.paneId === paneId);
-  }, [buffers, paneId]);
+  }, [buffersRef, paneId]);
 
   useEffect(() => {
     if (!activeBufferId) {

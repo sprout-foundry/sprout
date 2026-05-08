@@ -170,15 +170,22 @@ export function useLayoutPersistence({
     initBeforeUnloadFlush();
   }, []);
 
-  // Save layout snapshot on every relevant state change (skip first render)
+  // Save layout snapshot on relevant state changes (skip first render).
+  // Use buffersRef to avoid re-running on every keystroke (Map identity changes
+  // on content updates). Only save when layout-relevant properties actually differ.
   const hasFirstRenderCompletedRef = useRef(false);
+  // Track previous layout fingerprint to avoid redundant localStorage writes.
+  const prevLayoutFingerprintRef = useRef<string>('');
+
   useEffect(() => {
     if (!hasFirstRenderCompletedRef.current) {
       hasFirstRenderCompletedRef.current = true;
       return;
     }
+
+    const allBuffers = buffersRef.current;
     const validPaneIds = new Set(panesRef.current.map((p) => p.id));
-    const fileBuffers = Array.from(buffers.entries()).filter(
+    const fileBuffers = Array.from(allBuffers.entries()).filter(
       ([, b]) => b.kind === 'file' && !b.file.path.startsWith('__workspace/'),
     );
 
@@ -193,7 +200,7 @@ export function useLayoutPersistence({
       return;
     }
 
-    const activeBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
+    const activeBuffer = activeBufferId ? allBuffers.get(activeBufferId) : null;
     const activeBufferFilePath =
       activeBuffer?.kind === 'file' && activeBuffer.file.path && !activeBuffer.file.path.startsWith('__workspace/')
         ? activeBuffer.file.path
@@ -207,15 +214,30 @@ export function useLayoutPersistence({
       scrollPosition: b.scrollPosition,
     }));
 
-    const snapshot: LayoutSnapshot = {
-      version: 1,
+    // Build a fingerprint of layout-relevant state to skip redundant saves.
+    const fingerprint = JSON.stringify({
       activePaneId,
       activeBufferFilePath,
-      buffers: snapshotBuffers,
+      bufferCount: snapshotBuffers.length,
       bufferOrder: snapshotBuffers.map((b) => b.filePath),
-    };
-    saveLayoutSnapshot(snapshot);
-  }, [buffers, activePaneId, activeBufferId, panesRef]);
+    });
+
+    // Only write to localStorage when the buffer layout actually changed
+    // (files opened/closed, active file switched, pane switched).
+    // Cursor/scroll positions are captured on every render but only persisted
+    // when the layout fingerprint changes, avoiding excessive localStorage I/O.
+    if (fingerprint !== prevLayoutFingerprintRef.current) {
+      prevLayoutFingerprintRef.current = fingerprint;
+      const snapshot: LayoutSnapshot = {
+        version: 1,
+        activePaneId,
+        activeBufferFilePath,
+        buffers: snapshotBuffers,
+        bufferOrder: snapshotBuffers.map((b) => b.filePath),
+      };
+      saveLayoutSnapshot(snapshot);
+    }
+  }, [activePaneId, activeBufferId, buffersRef, panesRef]);
 
   // Cleanup on unmount
   useEffect(() => {

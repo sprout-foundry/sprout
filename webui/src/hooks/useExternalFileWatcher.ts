@@ -173,9 +173,18 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
   }, []);
 
   // Auto-start/stop based on whether there are file buffers.
+  // Use a ref to track the previous watchable path count so we only call
+  // setRunning when the count actually changes. This avoids re-running on
+  // every keystroke (buffer Map identity changes on content updates, but the
+  // set of watchable paths only changes when files are opened/closed).
+  const prevWatchableCountRef = useRef(0);
   useEffect(() => {
-    setRunning(getWatchablePaths(buffers).length > 0);
-  }, [buffers]);
+    const count = getWatchablePaths(buffersRef.current).length;
+    if (count !== prevWatchableCountRef.current) {
+      prevWatchableCountRef.current = count;
+      setRunning(count > 0);
+    }
+  }); // No deps — reads buffersRef.current each render, but only updates state when count changes
 
   return { startWatching, stopWatching, forceCheck };
 }

@@ -22,6 +22,7 @@ export const clampSidebarWidth = (value: number): number => {
 
 export interface UseSidebarStateReturn {
   isMobile: boolean;
+  isTablet: boolean;
   isSidebarOpen: boolean;
   sidebarCollapsed: boolean;
   isTerminalExpanded: boolean;
@@ -29,6 +30,7 @@ export interface UseSidebarStateReturn {
   sidebarWidth: number;
   sidebarWidthRef: React.MutableRefObject<number>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
+  setIsTablet: Dispatch<SetStateAction<boolean>>;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
   closeSidebar: () => void;
@@ -65,6 +67,7 @@ const VALID_SECTION_TABS: readonly SectionTab[] = ['git', 'logs', 'files', 'sett
 
 export function useSidebarState(): UseSidebarStateReturn {
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [sidebarCollapsed, setSidebarCollapsedRaw] = useState(() =>
@@ -169,6 +172,7 @@ export function useSidebarState(): UseSidebarStateReturn {
 
   return {
     isMobile,
+    isTablet,
     isSidebarOpen,
     sidebarCollapsed,
     isTerminalExpanded,
@@ -176,6 +180,7 @@ export function useSidebarState(): UseSidebarStateReturn {
     sidebarWidth,
     sidebarWidthRef,
     setIsMobile,
+    setIsTablet,
     setSidebarCollapsed,
     toggleSidebar,
     closeSidebar,

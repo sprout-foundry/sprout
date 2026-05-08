@@ -82,6 +82,7 @@ export interface ContextPanelBaseProps {
   className?: string;
   style?: CSSProperties;
   isMobileLayout?: boolean;
+  isTabletLayout?: boolean;
   panelWidth?: number;
   onPanelWidthChange?: (width: number) => void;
   onMobileOpenChange?: (open: boolean) => void;

@@ -11,6 +11,10 @@
   transition: width 0.2s ease;
 }
 
+.context-panel.resizing {
+  transition: none !important;
+}
+
 .context-panel.collapsed {
   width: 52px;
 }

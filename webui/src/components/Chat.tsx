@@ -124,11 +124,15 @@ function Chat(props: ChatProps): JSX.Element {
 
   const handleToggleIndex = useCallback(async (enabled: boolean) => {
     try {
-      await clientFetch('/api/embedding-index', {
+      const response = await clientFetch('/api/embedding-index', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       });
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Failed to toggle indexing:', response.status, text);
+      }
     } catch (e) {
       console.error('Failed to toggle indexing:', e);
     }

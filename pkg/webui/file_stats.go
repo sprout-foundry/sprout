@@ -159,38 +159,7 @@ func (ws *ReactWebServer) gatherStatsForClientIDLocked(clientID string) map[stri
 
 	// Add agent-specific stats if available
 	if agentInst != nil {
-		stats["provider"] = agentInst.GetProvider()
-		stats["model"] = agentInst.GetModel()
-		// persona is "" when the default orchestrator is active (no override applied).
-		// The frontend hides the badge when empty to avoid showing "Orchestrator" for the default state.
-		stats["persona"] = agentInst.GetActivePersona()
-		stats["session_id"] = agentInst.GetSessionID()
-		stats["total_tokens"] = agentInst.GetTotalTokens()
-		stats["prompt_tokens"] = agentInst.GetPromptTokens()
-		stats["completion_tokens"] = agentInst.GetCompletionTokens()
-		stats["cached_tokens"] = agentInst.GetCachedTokens()
-		stats["cache_efficiency"] = float64(0)
-		if totalTokens := agentInst.GetTotalTokens(); totalTokens > 0 {
-			stats["cache_efficiency"] = float64(agentInst.GetCachedTokens()) / float64(totalTokens) * 100
-		}
-		stats["cached_cost_savings"] = agentInst.GetCachedCostSavings()
-		stats["current_context_tokens"] = agentInst.GetCurrentContextTokens()
-		stats["max_context_tokens"] = agentInst.GetMaxContextTokens()
-		stats["context_usage_percent"] = float64(0)
-		if maxTokens := agentInst.GetMaxContextTokens(); maxTokens > 0 {
-			stats["context_usage_percent"] = float64(agentInst.GetCurrentContextTokens()) / float64(maxTokens) * 100
-		}
-		stats["context_warning_issued"] = agentInst.GetContextWarningIssued()
-		stats["total_cost"] = agentInst.GetTotalCost()
-		stats["last_tps"] = agentInst.GetLastTPS()
-		stats["current_iteration"] = agentInst.GetCurrentIteration()
-		if agentInst.GetMaxIterations() == 0 {
-			stats["max_iterations"] = "unlimited"
-		} else {
-			stats["max_iterations"] = agentInst.GetMaxIterations()
-		}
-		stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
-		stats["debug_mode"] = agentInst.IsDebugMode()
+		populateAgentStats(stats, agentInst)
 	} else {
 		// Agent hasn't been lazily created yet. Fall back to the configured
 		// provider/model from user settings so the frontend doesn't flash

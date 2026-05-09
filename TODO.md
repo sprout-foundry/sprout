@@ -783,3 +783,93 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-012 Phase 2: Add responsive layout breakpoints — Tablet (768-1024px): sidebar icons-only, stack editor/chat. Mobile (< 768px): single-panel view, full-screen terminal overlay. `webui/src/index.css`, `webui/src/App.css`
 [x] - SP-012 Phase 2: Add loading skeletons — Replace loading spinners with skeleton screens for file tree, chat history, editor, and settings panel.
 [x] - SP-012 Phase 2: Add panel collapse animations — Smooth 200ms transitions on sidebar collapse, context panel resize, terminal toggle.
+
+---
+
+## Codebase Audit Findings
+
+### Critical — File Size (Policy: <500 lines)
+
+[x] - REFACTOR: Split `App.tsx` (2,377 lines) into: `useWebSocketEventHandler` hook, `useChatSessionManager` hook, `useOnboardingState` hook, `OnboardingDialog.tsx` component — currently combines event handling (~800 lines of switch/case), OnboardingDialog UI (~600 lines), chat CRUD, localStorage persistence, and utilities in a single component causing full-tree re-renders. `webui/src/App.tsx`
+[] - REFACTOR: Split `websocket.go` (1,334 lines) into: `safe_conn.go` (SafeConn wrapper), `websocket_handler.go` (main handler), `terminal_websocket.go` (terminal WS), `websocket_message_handlers.go` (message routing), `websocket_security_handlers.go` (approval/provider change). `pkg/webui/websocket.go`
+[] - REFACTOR: Split `api_files.go` (1,270 lines) into: `file_stats.go`, `file_ops.go` (create/delete/rename), `file_read_write.go`, `file_consent.go`, `file_browser.go`, `git_status_helpers.go`. `pkg/webui/api_files.go`
+[] - REFACTOR: Split `agent.go` (974 lines) into: `agent_creation.go` (NewAgent and factory), `agent_lifecycle.go` (Shutdown/interrupt), `agent_getters.go` (Get* methods), `agent_embedding.go` (embedding index mgmt). `pkg/agent/agent.go`
+[] - REFACTOR: Split `conversation_handler.go` (761 lines) — extract `processResponse` god method (~300 lines, 15 returns) into `handleToolCalls`, `handleFinishReason`, `handleBlankIteration`, `handleIncompleteResponse`. `pkg/agent/conversation_handler.go`
+[] - REFACTOR: Split `settings_api_general.go` (1,021 lines) by settings domain (editor, terminal, git, appearance, agent behavior). `pkg/webui/settings_api_general.go`
+[] - REFACTOR: Split `git_api_status.go` (929 lines) into status, stash, branches, and ref handling. `pkg/webui/git_api_status.go`
+[] - REFACTOR: Split `server.go` (734 lines) — extract routing into separate handler files, reduce single-file responsibility. `pkg/webui/server.go`
+[] - REFACTOR: Split `security.go` (1,154 lines) into: `security_classifier.go` (ClassifyToolCall/SecurityResult types), `shell_patterns.go` (safe/caution/dangerous whitelists), `shell_utils.go` (stripQuotedSections, maxRisk). `pkg/agent_tools/security.go`
+[] - REFACTOR: Split `subagent.go` (760 lines) — deduplicate `RunSubagent` and `spawnSubagent` (~90% identical subprocess spawning), extract shared spawn helper. `pkg/agent_tools/subagent.go`
+[] - REFACTOR: Split `TerminalPane.tsx` (1,631 lines) — separate session state, scrollback, and tab management. `webui/src/components/TerminalPane.tsx`
+[] - REFACTOR: Split `AppContent.tsx` (1,299 lines) — passes 50+ props; extract `EditorWorkspace`, `HeaderBar`, `ContextSidebar` subcomponents. `webui/src/components/AppContent.tsx`
+[] - REFACTOR: Split `Sidebar.tsx` (1,203 lines) — contains FileTree + SearchView + Git panel + Settings + Provider selection. `webui/src/components/Sidebar.tsx`
+[] - REFACTOR: Split `EditorManagerContext.tsx` (1,266 lines) — 35+ action methods and 15+ state vars in single context; split into `BufferManagerContext`, `PaneManagerContext`, `EditorSettingsContext`. `webui/src/contexts/EditorManagerContext.tsx`
+[] - REFACTOR: Split `CommandInput.tsx` (974 lines) — separate input handling, image upload, and submit logic. `webui/src/components/CommandInput.tsx`
+[] - REFACTOR: Split `EditorTabs.tsx` (973 lines) — separate tab management from drag reorder logic. `webui/src/components/EditorTabs.tsx`
+[] - REFACTOR: Split `SearchView.tsx` (1,168 lines). `webui/src/components/SearchView.tsx`
+[] - REFACTOR: Split `CommandPalette.tsx` (896 lines). `webui/src/components/CommandPalette.tsx`
+[] - REFACTOR: Split `cloudAdapter.ts` (919 lines) by routing layer, or document that size is justified by clean layering. `webui/src/services/cloudAdapter.ts`
+[] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
+[] - REFACTOR: Split `api.ts` (2,007 lines) by domain — partial split exists (`gitApi.ts`, `terminalApi.ts`, etc.) but main file remains monolithic. `webui/src/services/api.ts`
+[] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
+[] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
+[] - REFACTOR: Deduplicate `populateAgentStats` copied inline in `gatherStatsForClientIDLocked` (~30 lines duplicated). `pkg/webui/api_files.go`
+[] - REFACTOR: Deduplicate agent creation paths — test client and production client paths duplicate ~40 lines (sub-manager creation, agent struct, output router, debug logger, history load, embedding restore) — extract common init helper. `pkg/agent/agent.go`
+[] - REFACTOR: Deduplicate exit code extraction in `shell.go` (lines 78-88 identical to 124-133) — extract `extractExitCode(err error) int`. `pkg/agent_tools/shell.go`
+[] - REFACTOR: Deduplicate formatting logic between `ViewHistory` and `RollbackChanges` (~50% duplicated grouping/formatting) — extract shared `formatRevision`. `pkg/agent_tools/history.go`
+
+### Performance
+
+[] - PERFORMANCE: Fix localStorage writes on every stream tick in App.tsx — `state.messages` in effect deps causes localStorage write on every `stream_chunk` event (per character); throttle to only persist on `query_completed`. `webui/src/hooks/useAppStatePersistence.ts:55-70`
+[] - PERFORMANCE: Cap unbounded `logs` array in App.tsx state — every event appends to logs; `recentLogs` slices last 1000 for display but full array never shrinks; cap with `logs: [...prev.logs.slice(-1000), newEntry]` in setState. `webui/src/hooks/useWebSocketEventHandler.ts`
+[] - PERFORMANCE: Memoize `EditorManagerContext` value object (35+ fields) with `useMemo` — currently recreated every render causing all consumers to re-render. `webui/src/contexts/EditorManagerContext.tsx`
+[] - PERFORMANCE: Add `React.memo` to `AppContent`, `Sidebar`, and `TerminalPane` — currently re-render on every App.tsx state update. `webui/src/components/AppContent.tsx`, `webui/src/components/Sidebar.tsx`, `webui/src/components/TerminalPane.tsx`
+[] - PERFORMANCE: Fix duplicate `connection_status` event in websocket.ts `onopen` — `notifyCallbacks` fires twice in succession causing two unnecessary state updates. `webui/src/services/websocket.ts`
+[] - PERFORMANCE: Reduce `handleEvent` setState fan-out in App.tsx — every event creates new AppState via spread, triggering full subtree diff; split state into independent slices (messages, logs, todos, etc.) to minimize re-render scope. `webui/src/hooks/useWebSocketEventHandler.ts:649-710`
+
+### Security
+
+[] - SECURITY: Add HTTP security headers to all responses — missing `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy`, `Referrer-Policy`; add as middleware on the HTTP mux. `pkg/webui/server.go`
+[] - SECURITY: Add optional authentication for service mode — zero auth on any API endpoint; for localhost-only this is acceptable but `SPROUT_TRUSTED_USER_HEADER` implies service mode; add `SPROUT_AUTH_TOKEN` env var check for write endpoints. `pkg/webui/server.go`
+[] - SECURITY: Sanitize SVG content before `dangerouslySetInnerHTML` in SvgPreview — raw SVG can contain `<script>` or event handlers; strip or validate before rendering. `webui/src/components/SvgPreview.tsx:333`
+[] - SECURITY: Add user ID filtering to WebSocket event routing in service mode — `shouldForwardEventToConnection` filters by `client_id`/`chat_id` but not `userID`; in multi-tenant service mode events could leak between users. `pkg/webui/websocket.go:210`
+[] - SECURITY: Use cryptographic random for WebSocket session IDs — currently `fmt.Sprintf("ws_%d", time.Now().UnixNano())` is predictable; use `crypto/rand` + `hex.EncodeToString`. `pkg/webui/websocket.go:155`
+[] - SECURITY: Add strict input validation for WebSocket messages — `handleWebSocketMessage` accepts arbitrary JSON and extracts fields without type-safe structs; could accept oversized or malicious payloads. `pkg/webui/websocket.go`
+[] - SECURITY: Add runtime defense-in-depth to file tool handlers — `read.go`, `write.go`, `edit.go` delegate all path safety to `filesystem.SafeResolvePathWithBypass`; add local path validation as secondary check. `pkg/agent_tools/read.go:43`, `pkg/agent_tools/write.go:15`, `pkg/agent_tools/edit.go:83`
+[] - SECURITY: Add content size limits to `edit.go` and `write.go` — `read.go` caps at 80KB/10MB but edit/write have no limits; LLM could write megabytes in a single operation. `pkg/agent_tools/edit.go`, `pkg/agent_tools/write.go`
+[] - SECURITY: Fix pipe-to-shell detection bypass in `security.go` — `echo 'test'| bash` (no space before pipe) evades the classifier; add pattern for `\|bash` without leading space. `pkg/agent_tools/security.go:169-178`
+[] - SECURITY: Tighten `isSafeShellCommand` to validate target paths — whitelists `rm`, `mv`, `chmod`, `chown` without verifying the target path is within workspace; `rm -rf /tmp/../etc/` matches safe prefix but targets dangerous path. `pkg/agent_tools/security.go:304-437`
+[] - SECURITY: Validate git `args` parameter in `ExecuteGitOperation` — `args` passed directly to `exec.Command("git", ...)` without validation; agent could inject `--upload-pack` or other dangerous flags. `pkg/agent_tools/git.go:100-127`
+[] - SECURITY: Validate `TodoWrite` status/priority against known values — `ValidTodos` map exists but is never checked; invalid status/priority accepted silently. `pkg/agent_tools/todo.go:26`
+[] - SECURITY: Add path validation to `SaveStateToFile` — filename not validated before write; could write state files anywhere. `pkg/agent/state.go`
+
+### TypeScript Quality
+
+[] - TYPESCRIPT: Replace `handleEvent(event: any)` with typed `WsEvent` — entire 800-line event handler is untyped; `WsEvent` type should exist in events. `webui/src/hooks/useWebSocketEventHandler.ts:649`
+[] - TYPESCRIPT: Replace `(message: any)` and `(edit: any)` casts in localStorage deserialization with proper partial types — typed `Message` and `FileEdit` interfaces exist but aren't used. `webui/src/hooks/useAppStatePersistence.ts:30-40`
+[] - TYPESCRIPT: Replace `(stats: any)` casts where typed `StatsResponse` exists — 3 locations in App.tsx. `webui/src/hooks/useWebSocketEventHandler.ts:492,693`
+[] - TYPESCRIPT: Replace `(response.chat_session as any).active_query` with proper type — unsafe type assertion for non-typed field. `webui/src/hooks/useChatSessionManager.ts:144`
+[] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
+[] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
+[] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
+
+### Test Quality
+
+[] - TESTING: Fix 208 frontend test failures from Jest→Vitest migration — tests using `jest.fn()`, `jest.spyOn()`, `jest.useFakeTimers()`, `jest.clearAllMocks()` fail with `ReferenceError: jest is not defined`; migrate to Vitest equivalents (`vi.fn()`, `vi.spyOn()`, etc.). `webui/src/utils/log.test.tsx` and others
+[] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/`
+[] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
+[] - TESTING: Add tests for `pkg/lsp/semantic` (6.2% coverage) — nearly untested. `pkg/lsp/semantic/`
+[] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
+[] - TESTING: Add tests for `pkg/lsp/proxy` (15.6% coverage). `pkg/lsp/proxy/`
+[] - TESTING: Add tests for `pkg/spec`, `pkg/types`, `pkg/ui` — packages with no tests. `pkg/spec/`, `pkg/types/`, `pkg/ui/`
+[] - TESTING: Migrate 26 test files from `os.Setenv` + `defer` to `t.Setenv()` — `t.Setenv` auto-cleans on test completion; manual defer can leak on panic. Affects: `cmd/coverage_utils_test.go`, `pkg/credentials/encrypt_test.go`, `pkg/credentials/keyring_test.go`, and 23 others.
+[] - TESTING: Fix ~30 test files setting `LEDIT_CONFIG` without also setting `SPROUT_CONFIG` — `envutil.GetEnvSimple("CONFIG")` checks `SPROUT_CONFIG` first; if only `LEDIT_CONFIG` is set, the `SPROUT_CONFIG` value from a previous test leaks. Set both to same temp dir. `pkg/configuration/*_test.go`, `pkg/credentials/*_test.go`, `pkg/mcp/*_test.go`
+[] - TESTING: Improve coverage for `pkg/webui` (46.8%), `pkg/configuration` (48.0%), `pkg/agent_tools` (51.0%), `pkg/security` (51.2%), `pkg/agent_api` (44.8%) — all in the 40-52% range.
+
+### Structural
+
+[] - STRUCTURAL: Replace global singleton managers with dependency injection — `NewReactWebServer` sets global `ApprovalManager` and `AskUserManager` via package-level setters; prevents parallel testing and creates hidden coupling. `pkg/webui/server.go:117-124`
+[] - STRUCTURAL: Use `defer cleanup()` instead of manual cleanup calls in `binary_fetch.go` — cleanup called at 3 error points but not deferred; new error paths would leak temp files. `pkg/agent_tools/binary_fetch.go:120-135`
+[] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
+[] - STRUCTURAL: Add `initSubManagers` safety net as explicit `NewTestAgent()` factory — lazy initialization is a safety net for tests creating bare `&Agent{}`; formalize as dedicated test factory. `pkg/agent/agent.go`
+[] - STRUCTURAL: Add `make build-all` to CI/automation to catch frontend build failures early — per AGENTS.md, `make build-all` is required after code changes but may not be in CI.

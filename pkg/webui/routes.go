@@ -9,20 +9,52 @@ import (
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 )
 
-// setupRoutes registers all HTTP handlers on a new ServeMux.
 func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", ws.handleIndex)
-	// /ssh/{encodedSessionKey}/ is a reverse proxy to the SSH tunnel backend.
-	// Registered before /ws and /terminal so the ServeMux prefix match works.
+	// /ssh/ is a reverse proxy registered before /ws and /terminal so prefix match works.
 	mux.HandleFunc("/ssh/", ws.handleSSHProxy)
+
+	ws.registerCoreRoutes(mux)
+	ws.registerTerminalRoutes(mux, ctx)
+	ws.registerQueryRoutes(mux)
+	ws.registerDiagnosticsRoutes(mux)
+	ws.registerFileRoutes(mux)
+	ws.registerSettingsRoutes(mux)
+	ws.registerWorkspaceRoutes(mux)
+	ws.registerGitRoutes(mux)
+	ws.registerSessionRoutes(mux)
+	ws.registerSearchRoutes(mux)
+
+	return mux
+}
+
+func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/ws", ws.handleWebSocket)
 	mux.HandleFunc("/terminal", ws.handleTerminalWebSocket)
-	// LSP proxy WebSocket — bridges @codemirror/lsp-client to language servers
-	ws.lspManager = lspproxy.NewManager(ctx)
-	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
-	mux.HandleFunc("/api/lsp/status", ws.handleLSPStatus)
+	mux.HandleFunc("/static/", ws.handleStaticFiles)
+	mux.HandleFunc("/assets/", ws.handleAssets)
+	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
+	mux.HandleFunc("/manifest.json", ws.handleManifest)
+	mux.HandleFunc("/browserconfig.xml", ws.handleBrowserConfig)
+	mux.HandleFunc("/asset-manifest.json", ws.handleAssetManifest)
+	mux.HandleFunc("/icon-192.png", ws.handleIcon192)
+	mux.HandleFunc("/icon-512.png", ws.handleIcon512)
+	mux.HandleFunc("/logo-mark.svg", ws.handleLogoMark)
+	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+			"port":   ws.port,
+			"uptime": time.Since(ws.startTime).String(),
+		})
+	})
+}
+
+func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/query", ws.handleAPIQuery)
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
@@ -32,6 +64,9 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)
 	mux.HandleFunc("/api/proxy/chat/status", ws.handleAPIProxyChatStatus)
 	mux.HandleFunc("/api/proxy/stats", ws.handleAPIProxyStats)
+}
+
+func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/stats", ws.handleAPIStats)
 	mux.HandleFunc("/api/embedding-index", ws.handleAPIEmbeddingIndex)
 	mux.HandleFunc("/api/costs/summary", ws.handleCostsSummary)
@@ -39,9 +74,12 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/costs/detail", ws.handleCostsDetail)
 	mux.HandleFunc("/api/providers", ws.handleAPIProviders)
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
-	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)
-	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
-	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
+	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
+	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
+	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
+}
+
+func (ws *ReactWebServer) registerFileRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/files", ws.handleAPIFiles)
 	mux.HandleFunc("/api/files/prettier-config", ws.handleAPIGetPrettierConfig)
 	mux.HandleFunc("/api/create", ws.handleAPICreateFile)
@@ -52,14 +90,13 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/file", ws.handleAPIFile)
 	mux.HandleFunc("/api/file/consent", ws.handleAPIFileConsent)
 	mux.HandleFunc("/api/file/check-modified", ws.handleAPIFileCheckModified)
-	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
-	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
-	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
+}
+
+func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/onboarding/status", ws.handleAPIOnboardingStatus)
+	mux.HandleFunc("/api/onboarding/complete", ws.handleAPIOnboardingComplete)
+	mux.HandleFunc("/api/onboarding/skip", ws.handleAPIOnboardingSkip)
 	mux.HandleFunc("/api/config", ws.handleAPIConfig)
-	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
-	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
-	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
-	// Settings API
 	mux.HandleFunc("/api/settings", ws.handleAPISettings)
 	mux.HandleFunc("/api/settings/mcp", ws.handleAPISettingsMCP)
 	mux.HandleFunc("/api/settings/mcp/servers/", ws.handleAPISettingsMCPServers)
@@ -70,11 +107,26 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
 	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
 	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)
-	// Hotkeys API
 	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
 	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
 	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
-	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
+}
+
+func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
+	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
+	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
+	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
+	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
+	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
+	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
+	mux.HandleFunc("/api/instances/ssh-launch-status", ws.handleAPISSHLaunchStatus)
+	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
+	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
+	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
+}
+
+func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/git/status", ws.handleAPIGitStatus)
 	mux.HandleFunc("/api/git/stage", ws.handleAPIGitStage)
 	mux.HandleFunc("/api/git/unstage", ws.handleAPIGitUnstage)
@@ -102,27 +154,26 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/git/log", ws.handleAPIGitLog)
 	mux.HandleFunc("/api/git/commit/show", ws.handleAPIGitCommitShow)
 	mux.HandleFunc("/api/git/commit/show/file", ws.handleAPIGitCommitFileDiff)
-	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
-	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
-	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)
-	mux.HandleFunc("/api/instances/ssh-open", ws.handleAPISSHOpen)
-	mux.HandleFunc("/api/instances/ssh-launch-status", ws.handleAPISSHLaunchStatus)
-	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
-	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
-	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
+}
+
+func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context.Context) {
+	ws.lspManager = lspproxy.NewManager(ctx)
+	mux.HandleFunc("/api/lsp/ws", lspproxy.BridgeHandler(ws.lspManager, ws.upgrader, ws.workspaceRoot))
+	mux.HandleFunc("/api/lsp/status", ws.handleLSPStatus)
+	mux.HandleFunc("/api/terminal/history", ws.handleTerminalHistory)
+	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
+	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
+	mux.HandleFunc("/api/terminal/agent-sessions", ws.handleAPIAgentSessions)
+	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionActions)
+}
+
+func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
+	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
 	mux.HandleFunc("/api/history/changelog", ws.handleAPIHistoryChangelog)
 	mux.HandleFunc("/api/history/revision", ws.handleAPIHistoryRevision)
 	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
 	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
-	mux.HandleFunc("/api/terminal/sessions", ws.handleAPITerminalSessions)
-	mux.HandleFunc("/api/terminal/shells", ws.handleAPITerminalShells)
-	// Agent sessions API (background PTY sessions for long-running commands)
-	mux.HandleFunc("/api/terminal/agent-sessions", ws.handleAPIAgentSessions)
-	mux.HandleFunc("/api/terminal/agent-sessions/", ws.handleAPIAgentSessionActions) // trailing slash for sub-path matching
-	// Session API
-	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
-	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
-	// Chat sessions API (multi-chat support within a tab)
 	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
 	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
 	mux.HandleFunc("/api/chat-sessions/create-in-worktree", ws.handleAPIChatSessionCreateInWorktree)
@@ -135,9 +186,10 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
 	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
 	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
-	// Chat session worktree API
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
-	// Search API
+}
+
+func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search", ws.handleAPIQuerySearch)
 	mux.HandleFunc("/api/search/semantic/status", ws.handleAPISemanticStatus)
 	mux.HandleFunc("/api/search/semantic/build", ws.handleAPISemanticBuild)
@@ -145,27 +197,4 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	mux.HandleFunc("/api/search/semantic", ws.handleAPISemanticSearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)
-	mux.HandleFunc("/static/", ws.handleStaticFiles)
-	mux.HandleFunc("/assets/", ws.handleAssets)
-	mux.HandleFunc("/sw.js", ws.handleServiceWorker)
-	mux.HandleFunc("/manifest.json", ws.handleManifest)
-	mux.HandleFunc("/browserconfig.xml", ws.handleBrowserConfig)
-	mux.HandleFunc("/asset-manifest.json", ws.handleAssetManifest)
-	mux.HandleFunc("/icon-192.png", ws.handleIcon192)
-	mux.HandleFunc("/icon-512.png", ws.handleIcon512)
-	mux.HandleFunc("/logo-mark.svg", ws.handleLogoMark)
-	mux.HandleFunc("/favicon.ico", ws.handleFavicon)
-
-	// Health check endpoint for connectivity verification
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "ok",
-			"port":   ws.port,
-			"uptime": time.Since(ws.startTime).String(),
-		})
-	})
-
-	return mux
 }

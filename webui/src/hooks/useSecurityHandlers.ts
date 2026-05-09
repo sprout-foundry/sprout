@@ -1,5 +1,5 @@
 /**
- * Security approval and prompt handlers.
+ * Security approval, prompt, askUser, and modelSelection handlers.
  *
  * These handlers use the eventsProvider prop directly rather than the
  * useEvents() hook, keeping the dependency explicit and testable.
@@ -12,16 +12,21 @@ import type { AppState } from '../types/app';
 
 export interface UseSecurityHandlersOptions {
   eventsProvider: LocalEventsProvider;
+  provider: string;
   setState: Dispatch<SetStateAction<AppState>>;
 }
 
 export interface UseSecurityHandlersReturn {
   handleSecurityApprovalResponse: (requestId: string, approved: boolean) => void;
   handleSecurityPromptResponse: (requestId: string, response: boolean) => void;
+  handleAskUserResponse: (requestId: string, response: string) => void;
+  handleModelSelectionResponse: (model: string) => void;
+  handleModelSelectionClose: () => void;
 }
 
 export function useSecurityHandlers({
   eventsProvider,
+  provider,
   setState,
 }: UseSecurityHandlersOptions): UseSecurityHandlersReturn {
   const handleSecurityApprovalResponse = useCallback(
@@ -48,8 +53,39 @@ export function useSecurityHandlers({
     [eventsProvider, setState],
   );
 
+  const handleAskUserResponse = useCallback(
+    (requestId: string, response: string) => {
+      if (!eventsProvider.isConnected()) return;
+      eventsProvider.sendEvent({
+        type: 'ask_user_response',
+        data: { request_id: requestId, response },
+      });
+      setState((prev) => ({ ...prev, askUserRequest: null }));
+    },
+    [eventsProvider, setState],
+  );
+
+  const handleModelSelectionResponse = useCallback(
+    (model: string) => {
+      if (!eventsProvider.isConnected()) return;
+      eventsProvider.sendEvent({
+        type: 'model_change',
+        data: { provider, model },
+      });
+      setState((prev) => ({ ...prev, modelSelectionRequest: null }));
+    },
+    [eventsProvider, provider, setState],
+  );
+
+  const handleModelSelectionClose = useCallback(() => {
+    setState((prev) => ({ ...prev, modelSelectionRequest: null }));
+  }, [setState]);
+
   return {
     handleSecurityApprovalResponse,
     handleSecurityPromptResponse,
+    handleAskUserResponse,
+    handleModelSelectionResponse,
+    handleModelSelectionClose,
   };
 }

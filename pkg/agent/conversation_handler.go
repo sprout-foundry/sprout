@@ -313,64 +313,15 @@ func (ch *ConversationHandler) processResponse(resp *api.ChatResponse) bool {
 	}
 	ch.agent.debugLog("[search] Content length: %d, preview: %q\n", len(ctx.contentUsed), contentPreview)
 
-	// Prepare and normalize tool calls
 	ch.prepareToolCalls(choice, &ctx)
+	ch.recordAssistantMessage(&ctx)
 
-	ctx.turn.ToolCalls = append(ctx.turn.ToolCalls, ctx.toolCalls...)
-
-	// Preserve tool calls (with generated IDs if needed) so tool outputs remain linked
-	var toolCallsSnapshot []api.ToolCall
-	if len(ctx.toolCalls) > 0 {
-		toolCallsSnapshot = make([]api.ToolCall, len(ctx.toolCalls))
-		copy(toolCallsSnapshot, ctx.toolCalls)
-	}
-
-	// Add to conversation history
-	assistantMsg := api.Message{
-		Role:             "assistant",
-		Content:          ctx.contentUsed,
-		ReasoningContent: ctx.reasoningContent,
-		ToolCalls:        toolCallsSnapshot,
-	}
-	if assistantMsg.Role != "" {
-		ch.agent.state.AddMessage(assistantMsg)
-	}
-
-	// Execute tools if present
 	if len(ctx.toolCalls) > 0 {
 		decision := ch.handleToolCalls(&ctx)
 		return ch.finalizeTurn(ctx.turn, decision == responseDecideStop)
 	}
 
-	// If no tool_calls came back but the content suggests attempted tool usage,
-	// try to parse and execute them using fallback parser
-	if !ch.responseValidator.ValidateToolCalls(ctx.contentUsed) {
-		return ch.handleMalformedToolCalls(ctx.contentUsed, ctx.turn, ctx.parserErrors)
-	}
-
-	// Handle finish reason (empty or non-empty)
-	if decision := ch.handleFinishReasonDispatch(&ctx, choice); decision != responseDecideFallThrough {
-		return ch.finalizeTurn(ctx.turn, decision == responseDecideStop)
-	}
-
-	// Handle blank/repetitive iterations
-	if decision := ch.handleBlankOrRepetitiveIteration(&ctx); decision != responseDecideFallThrough {
-		return ch.finalizeTurn(ctx.turn, decision == responseDecideStop)
-	}
-
-	// Final check for incomplete responses
-	if ch.responseValidator.IsIncomplete(ctx.contentUsed) {
-		ch.agent.debugLog("[WARN] Response appears incomplete, asking model to continue\n")
-		ch.handleIncompleteResponse()
-		ctx.turn.GuardrailTrigger = "incomplete response reminder"
-		ch.updateTurnRecord(ctx.contentUsed, nil, ctx.parserErrors, ctx.fallbackUsed, ctx.fallbackOutput)
-		return ch.finalizeTurn(ctx.turn, false)
-	}
-
-	// Response doesn't look incomplete — respect the model's judgment
-	ch.agent.debugLog("[...] Model response continuing conversation\n")
-	ch.updateTurnRecord(ctx.contentUsed, nil, ctx.parserErrors, ctx.fallbackUsed, ctx.fallbackOutput)
-	return ch.finalizeTurn(ctx.turn, false)
+	return ch.handleNoToolContent(&ctx, choice)
 }
 
 

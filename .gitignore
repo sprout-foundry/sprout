@@ -148,7 +148,5 @@ storybook-static
 pkg/embedding/staticmodel/
 
 # Old ONNX model files (replaced by static_model.bin)
-pkg/embedding/models/all-MiniLM-L6-v2-int8.onnx
-pkg/embedding/models/tokenizer.json
-pkg/embedding/models/vocab.txt
+pkg/embedding/models/
 pkg/embedding/staticmodel/mkembed

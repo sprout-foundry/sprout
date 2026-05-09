@@ -13,9 +13,23 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
+
+// ErrShellTimeoutPromoted is returned when a shell command times out and is
+// automatically promoted to a background session. The caller should return
+// the promotion message to the LLM instead of treating this as a failure.
+type ErrShellTimeoutPromoted struct {
+	SessionID string
+	Command   string
+	Message   string
+}
+
+func (e *ErrShellTimeoutPromoted) Error() string {
+	return e.Message
+}
 
 // ExecuteShellCommand executes a shell command with safety checks
 func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
@@ -67,22 +81,21 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 
 	// NOTE: Security validation is handled by the static classifier in security.go, invoked at the tool registry level
 
-	// Create command with context
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh"
-	}
-	cmd := exec.CommandContext(ctx, shell, "-c", command)
-
-	// Explicitly set working directory to the workspace carried on the context.
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
-		cmd.Dir = wd
-	} else if wd, err := os.Getwd(); err == nil {
-		cmd.Dir = wd
-	}
-
 	if streamOutput {
 		// STREAMING MODE: Use pipes for real-time output
+		// Use exec.CommandContext to respect context cancellation
+		shell := os.Getenv("SHELL")
+		if shell == "" {
+			shell = "/bin/sh"
+		}
+		cmd := exec.CommandContext(ctx, shell, "-c", command)
+
+		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+			cmd.Dir = wd
+		} else if wd, err := os.Getwd(); err == nil {
+			cmd.Dir = wd
+		}
+
 		// Get pipes for stdout and stderr
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -145,34 +158,111 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	}
 
 	// SILENT MODE: Capture output without streaming (for LLM tool calls)
-	// CombinedOutput returns stdout+stderr together
-	outputBytes, err := cmd.CombinedOutput()
+	// Use exec.Command (not CommandContext) so we control the timeout behavior.
+	// When the timeout fires, we promote to background instead of killing.
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", command)
 
-	// Get the exit code for status reporting
-	exitCode := 0
+	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		cmd.Dir = wd
+	} else if wd, err := os.Getwd(); err == nil {
+		cmd.Dir = wd
+	}
+
+	// Use a pipe to capture output while allowing timeout detection
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		// Check if it's an exit error (command ran but failed)
-		if exitError, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-				exitCode = status.ExitStatus()
+		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+	cmd.Stderr = cmd.Stdout // merge stderr into stdout
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// Read output in background
+	var outputBuf bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		io.Copy(&outputBuf, stdout)
+		done <- cmd.Wait()
+	}()
+
+	// Wait for completion, timeout, or context cancellation
+	// Use 115 seconds to fire before the tool executor's 2-minute deadline
+	const foregroundTimeout = 115 * time.Second
+	timer := time.NewTimer(foregroundTimeout)
+	defer timer.Stop()
+
+	select {
+	case waitErr := <-done:
+		// Command completed (success or failure)
+		exitCode := 0
+		if waitErr != nil {
+			// Check if it's an exit error (command ran but failed)
+			if exitError, ok := waitErr.(*exec.ExitError); ok {
+				if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+					exitCode = status.ExitStatus()
+				}
 			}
 		}
+		output := outputBuf.String()
+
+		// For LLM tool calls, truncate output to 2 lines
+		truncatedOutput := truncateOutput(output, 2)
+
+		// Print truncated output to terminal unless we're in tests/CI.
+		if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
+			fmt.Printf("%s\n", truncatedOutput)
+		}
+
+		// Build the final output with status header
+		finalOutput := buildShellOutputWithStatus(output, command, exitCode, waitErr)
+
+		return finalOutput, nil
+
+	case <-timer.C:
+		// Timeout — promote to background if possible
+		if tm := TerminalManagerFromContext(ctx); tm != nil {
+			// Kill the os/exec process — we'll start a fresh one in background PTY
+			cmd.Process.Kill()
+			<-done // wait for goroutine to finish
+
+			// Start the command in a background PTY session
+			bgSessionID, bgErr := tm.ExecuteCommandInBackground(context.Background(), "default", command)
+			if bgErr == nil {
+				msg := fmt.Sprintf(
+					"Command timed out after 2 minutes and has been automatically moved to a background process.\n\n"+
+						"Session ID: %s\n"+
+						"Command: %s\n\n"+
+						"The command is still running in the background. You can:\n"+
+						"- Check accumulated output so far: use shell_command with check_background=\"%s\"\n"+
+						"- Stop it: use shell_command with stop_background=\"%s\"\n\n"+
+						"Decide whether to wait for it to finish or stop it and try a different approach.",
+					bgSessionID, command, bgSessionID, bgSessionID,
+				)
+				return "", &ErrShellTimeoutPromoted{
+					SessionID: bgSessionID,
+					Command:   command,
+					Message:   msg,
+				}
+			}
+			// Background start failed — fall through to kill
+		}
+		// No TerminalManager or background start failed — kill the process
+		cmd.Process.Kill()
+		<-done
+		return "", fmt.Errorf("command timed out after %s", foregroundTimeout)
+
+	case <-ctx.Done():
+		// Context cancelled (user interrupt or tool executor timeout)
+		cmd.Process.Kill()
+		<-done
+		return "", ctx.Err()
 	}
-
-	output := string(outputBytes)
-
-	// For LLM tool calls, truncate output to 2 lines
-	truncatedOutput := truncateOutput(output, 2)
-
-	// Print truncated output to terminal unless we're in tests/CI.
-	if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
-		fmt.Printf("%s\n", truncatedOutput)
-	}
-
-	// Build the final output with status header
-	finalOutput := buildShellOutputWithStatus(output, command, exitCode, err)
-
-	return finalOutput, nil
 }
 
 func shouldPrintCapturedShellPreview() bool {

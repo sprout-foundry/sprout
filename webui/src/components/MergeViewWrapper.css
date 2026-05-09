@@ -137,6 +137,19 @@
   border-color: var(--accent-error);
 }
 
+.merge-view-controls .btn-undo,
+.merge-view-controls .btn-redo {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.merge-view-controls .sbs-nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .merge-view-controls .btn-prev,
 .merge-view-controls .btn-next {
   background: var(--bg-primary);

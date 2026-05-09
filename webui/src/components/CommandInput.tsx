@@ -97,6 +97,24 @@ function CommandInput({
   const uploadInProgressRef = useRef<Set<string>>(new Set());
   const isComposingRef = useRef(false);
 
+  // Optimistic state for the index toggle — provides immediate visual feedback
+  // while waiting for the stats poll to confirm. Reset whenever the prop changes.
+  const [optimisticIndexEnabled, setOptimisticIndexEnabled] = useState<boolean | null>(null);
+  const effectiveIndexEnabled = optimisticIndexEnabled !== null ? optimisticIndexEnabled : isIndexEnabled;
+
+  // Sync optimistic state back to prop when it catches up
+  useEffect(() => {
+    if (optimisticIndexEnabled !== null && optimisticIndexEnabled === isIndexEnabled) {
+      setOptimisticIndexEnabled(null);
+    }
+  }, [optimisticIndexEnabled, isIndexEnabled]);
+
+  const handleToggleIndexClick = useCallback(() => {
+    const next = !effectiveIndexEnabled;
+    setOptimisticIndexEnabled(next);
+    onToggleIndex?.(next);
+  }, [effectiveIndexEnabled, onToggleIndex]);
+
   useEffect(() => {
     if (value === draftValue) {
       return;
@@ -837,20 +855,20 @@ function CommandInput({
         {onToggleIndex !== undefined && (
           <button
             type="button"
-            className={`index-badge ${isIndexEnabled ? 'enabled' : 'disabled'}`}
-            onClick={() => onToggleIndex(!isIndexEnabled)}
+            className={`index-badge ${effectiveIndexEnabled ? 'enabled' : 'disabled'}`}
+            onClick={handleToggleIndexClick}
             data-tooltip={
-              isIndexEnabled
+              effectiveIndexEnabled
                 ? isIndexBuilding
                   ? 'Building index...'
                   : 'Indexing enabled — click to disable'
                 : 'Enable workspace indexing for semantic search'
             }
-            aria-label={isIndexEnabled ? 'Disable workspace indexing' : 'Enable workspace indexing'}
-            aria-pressed={isIndexEnabled}
+            aria-label={effectiveIndexEnabled ? 'Disable workspace indexing' : 'Enable workspace indexing'}
+            aria-pressed={effectiveIndexEnabled}
           >
             <Database size={14} />
-            {!isIndexEnabled && <span className="index-badge-slash" />}
+            {!effectiveIndexEnabled && <span className="index-badge-slash" />}
           </button>
         )}
         <button

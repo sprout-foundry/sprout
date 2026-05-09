@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ErrorBoundary from './components/ErrorBoundary';
 import AppContent from './components/AppContent';
 import UIManager from './components/UIManager';
 import Notification from './components/Notification';
 import UpdateNotification from './components/UpdateNotification';
+import OnboardingDialog from './components/OnboardingDialog';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
@@ -19,56 +20,17 @@ import SecurityPromptDialog from './components/SecurityPromptDialog';
 import AskUserDialog from './components/AskUserDialog';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import { WebSocketService } from './services/websocket';
-import { ApiService, OnboardingEnvironment, OnboardingProviderOption } from './services/api';
-import { clientFetch, getTabWorkspacePath, getWebUIClientId } from './services/clientSession';
-import type { AppState, PerChatState } from './types/app';
-import type {
-  Message,
-  ToolExecution,
-  LogEntry,
-  SubagentActivity,
-} from '@sprout/ui';
-import { ensureCompletedAssistantMessage } from './utils/chatCompletion';
-import {
-  type ChatSession,
-  listChatSessions,
-  createChatSession,
-  deleteChatSession,
-  renameChatSession,
-  switchChatSession,
-} from './services/chatSessions';
+import { ApiService } from './services/api';
+import { clientFetch, getTabWorkspacePath } from './services/clientSession';
+import type { AppState } from './types/app';
 import { debugLog } from './utils/log';
-import { trimMessages } from './utils/messageWindow';
 import { useSidebarState } from './hooks/useSidebarState';
+import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
+import { useChatSessionManager } from './hooks/useChatSessionManager';
+import useOnboarding from './hooks/useOnboarding';
 
-/** Extract a tool call identifier from opaque ToolExecution.details. */
-const getToolCallId = (details: unknown): string | undefined => {
-  if (details && typeof details === 'object') {
-    const d = details as Record<string, unknown>;
-    const id = d.tool_call_id ?? d.id;
-    return typeof id === 'string' ? id : undefined;
-  }
-  return undefined;
-};
+// ── Service Worker Registration ────────────────────────────────────────
 
-/**
- * Generate a unique message ID with browser compatibility fallback.
- * Uses crypto.randomUUID() if available (modern browsers), otherwise falls back
- * to a timestamp-based random string for older browser support.
- */
-const generateMessageId = (): string => {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    try {
-      return crypto.randomUUID();
-    } catch {
-      // Fall through to fallback if crypto.randomUUID fails
-    }
-  }
-  // Fallback for older browsers: timestamp + random suffix
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-};
-
-// Service Worker Registration
 const registerServiceWorker = async () => {
   if (!('serviceWorker' in navigator)) {
     return null;
@@ -123,26 +85,14 @@ const registerServiceWorker = async () => {
   return null;
 };
 
-
-interface OnboardingState {
-  checking: boolean;
-  open: boolean;
-  reason: string;
-  providers: OnboardingProviderOption[];
-  environment: OnboardingEnvironment | null;
-  provider: string;
-  model: string;
-  apiKey: string;
-  showAllProviders: boolean;
-  submitting: boolean;
-  platformActionMessage: string | null;
-  error: string | null;
-}
+// ── Constants ───────────────────────────────────────────────────────────
 
 const APP_STATE_STORAGE_KEY = 'ledit:webui:state:v2';
 const INSTANCE_PID_STORAGE_KEY = 'ledit:webui:instancePid';
 const INSTANCE_SWITCH_RESET_KEY = 'ledit:webui:instanceSwitchReset';
 const MAX_PERSISTED_LOGS = 1000;
+
+// ── Helpers ────────────────────────────────────────────────────────────
 
 const getUIContextScope = (): string => {
   if (typeof window === 'undefined') {
@@ -186,74 +136,6 @@ const parseDate = (value: unknown): Date => {
   return new Date();
 };
 
-const AGENT_CHAT_LEAK_PATTERNS: RegExp[] = [
-  /^\[\d+\s*-\s*\d+%\]\s*executing tool/i,
-  /executing tool\s*\[[^\]]+\]/i,
-  /\bTodoWrite\b/i,
-  /\btodos=\d+/i,
-  /\[\s*\]=\d+\s*\[~\]=\d+\s*\[x\]=\d+\s*\[-\]=\d+/i,
-  /^Subagent:\s*\[\d+\s*-\s*\d+%\]/i,
-];
-
-const shouldSuppressAgentMessageInChat = (message: string): boolean => {
-  const line = message.trim();
-  if (!line) {
-    return true;
-  }
-  return AGENT_CHAT_LEAK_PATTERNS.some((pattern) => pattern.test(line));
-};
-
-const extractToolNameFromToolLogTarget = (target: string): string | null => {
-  if (!target) return null;
-  const trimmed = target.trim();
-  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null;
-  const inner = trimmed.slice(1, -1).trim();
-  if (!inner) return null;
-  const firstToken = inner.split(/\s+/, 1)[0] || '';
-  return firstToken || null;
-};
-
-const TODO_STATUSES = new Set(['pending', 'in_progress', 'completed', 'cancelled']);
-
-const normalizeTodoList = (
-  rawTodos: unknown
-): Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }> => {
-  if (!Array.isArray(rawTodos)) {
-    return [];
-  }
-
-  const normalized: Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }> = [];
-  const seen = new Set<string>();
-
-  rawTodos.forEach((item, idx) => {
-    if (!item || typeof item !== 'object') {
-      return;
-    }
-
-    const t = item as Record<string, unknown>;
-    const rawContent = typeof t.content === 'string' ? t.content.trim() : '';
-    const rawStatus = typeof t.status === 'string' ? t.status.trim() : '';
-    const rawID = typeof t.id === 'string' ? t.id.trim() : '';
-
-    // Strict validation: reject entries that don't look like real todos.
-    if (!rawContent || !TODO_STATUSES.has(rawStatus)) {
-      return;
-    }
-
-    const status = rawStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled';
-    const id = rawID || `todo-${idx}-${rawStatus}-${rawContent.slice(0, 48)}`;
-    const dedupeKey = `${id}::${status}::${rawContent}`;
-    if (seen.has(dedupeKey)) {
-      return;
-    }
-    seen.add(dedupeKey);
-
-    normalized.push({ id, content: rawContent, status });
-  });
-
-  return normalized;
-};
-
 const loadPersistedAppState = (): Partial<AppState> | null => {
   if (typeof window === 'undefined' || !window.localStorage) {
     return null;
@@ -273,7 +155,7 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
     }
 
     const parsed = JSON.parse(raw);
-    const parsedMessages: Message[] = Array.isArray(parsed.messages)
+    const parsedMessages = Array.isArray(parsed.messages)
         ? parsed.messages.map((message: any) => ({
             ...message,
             timestamp: parseDate(message?.timestamp),
@@ -300,6 +182,8 @@ const loadPersistedAppState = (): Partial<AppState> | null => {
     return null;
   }
 };
+
+// ── App Component ─────────────────────────────────────────────────────
 
 function App() {
   const [state, setState] = useState<AppState>(() => {
@@ -333,6 +217,9 @@ function App() {
   });
 
   const [inputValue, setInputValue] = useState('');
+  const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
+  const [gitRefreshToken, setGitRefreshToken] = useState(0);
+
   const {
     isMobile,
     isTablet,
@@ -344,7 +231,6 @@ function App() {
     selectedSection,
     sidebarWidth,
     sidebarWidthRef,
-    setSidebarCollapsed,
     toggleSidebar,
     closeSidebar,
     handleSidebarToggle,
@@ -354,27 +240,69 @@ function App() {
     persistSidebarWidth,
     resetSidebarWidth,
   } = useSidebarState();
+
+  // ── Refs ───────────────────────────────────────────────────────
+
   const activeRequestsRef = useRef(0);
   const queuedMessagesRef = useRef<string[]>([]);
   const activeChatIdRef = useRef<string | null>(null);
   activeChatIdRef.current = state.activeChatId;
-  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
-  const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
-  const [gitRefreshToken, setGitRefreshToken] = useState(0);
-  const [onboarding, setOnboarding] = useState<OnboardingState>({
-    checking: true,
-    open: false,
-    reason: '',
-    providers: [],
-    environment: null,
-    provider: '',
-    model: '',
-    apiKey: '',
-    showAllProviders: false,
-    submitting: false,
-    platformActionMessage: null,
-    error: null,
+  const pendingProviderRef = useRef<string>(state.provider);
+  const pendingProviderChangeRef = useRef<boolean>(false);
+  const pendingProviderChangeValueRef = useRef<string | null>(null);
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastConnectionStateRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    pendingProviderRef.current = state.provider;
+  }, [state.provider]);
+
+  // ── Hooks ───────────────────────────────────────────────────────
+
+  const wsService = WebSocketService.getInstance();
+  const apiService = ApiService.getInstance();
+
+  const wsEventHandlerRefs: import('./hooks/useWebSocketEventHandler').UseWebSocketEventHandlerRefs = {
+    activeRequestsRef,
+    activeChatIdRef,
+    pendingProviderRef,
+    pendingProviderChangeRef,
+    pendingProviderChangeValueRef,
+    connectionTimeoutRef,
+    lastConnectionStateRef,
+  };
+
+  const { handleEvent, handleReconnect } = useWebSocketEventHandler({
+    setState,
+    refs: wsEventHandlerRefs,
+    apiService,
   });
+
+  const chatManager = useChatSessionManager({
+    setState,
+    activeRequestsRef,
+    activeChatIdRef,
+    queuedMessagesRef,
+    setInputValue,
+    isProcessing: state.isProcessing,
+  });
+
+  const {
+    onboarding,
+    selectedProvider,
+    recommendedProviders,
+    advancedProviders,
+    windowsGuidance,
+    refreshProviderList,
+    onProviderChange,
+    onComplete,
+    onSkip,
+    onInstallWsl,
+    onInstallGitBash,
+    updateOnboarding,
+  } = useOnboarding();
+
+  // ── Persistence Effect ────────────────────────────────────────────
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -416,6 +344,8 @@ function App() {
     state.fileEdits,
   ]);
 
+  // ── Memos ───────────────────────────────────────────────────────
+
   // Keep a larger client-side log buffer available to the sidebar logs view.
   const recentLogs = useMemo(() => state.logs.slice(-MAX_PERSISTED_LOGS), [state.logs]);
 
@@ -425,10 +355,8 @@ function App() {
     filesModified: 0 // TODO: track modified files from buffers
   }), [state.queryCount]);
 
-  const wsService = WebSocketService.getInstance();
-  const apiService = ApiService.getInstance();
+  // ── Security Dialog Handlers ─────────────────────────────────────
 
-  // Security approval/prompt response handlers
   const handleSecurityApprovalResponse = useCallback((requestId: string, approved: boolean) => {
     if (!wsService.isConnected()) return;
     wsService.sendEvent({
@@ -470,1477 +398,8 @@ function App() {
     setState((prev) => ({ ...prev, modelSelectionRequest: null }));
   }, []);
 
-  const selectedOnboardingProvider = useMemo(() => {
-    return onboarding.providers.find((p) => p.id === onboarding.provider) || null;
-  }, [onboarding.provider, onboarding.providers]);
+  // ── Model/Provider/View Change Handlers ──────────────────────────
 
-  const recommendedOnboardingProviders = useMemo(() => {
-    return onboarding.providers.filter((p) => p.recommended);
-  }, [onboarding.providers]);
-
-  const advancedOnboardingProviders = useMemo(() => {
-    return onboarding.providers.filter((p) => !p.recommended);
-  }, [onboarding.providers]);
-
-  const windowsOnboardingGuidance = useMemo(() => {
-    const env = onboarding.environment;
-    if (!env) {
-      return null;
-    }
-
-    const isWindowsHost = env.host_platform === 'windows' || env.runtime_platform === 'windows';
-    if (!isWindowsHost) {
-      return null;
-    }
-
-    if (env.backend_mode === 'wsl') {
-      return {
-        tone: 'success',
-        title: 'WSL mode is already active',
-        body: 'This window is already using a WSL backend, which is the recommended setup for terminals, shell tools, and repo workflows on Windows.',
-        checklist: [
-          'Keep repos inside the WSL filesystem when practical.',
-          'Use native Windows mode only when you specifically need Windows-only tools.',
-          env.has_git_bash ? 'Git Bash is also available as a native Windows fallback.' : 'Git Bash is optional and only needed if you plan to use the native Windows backend.',
-        ],
-        canInstallWsl: false,
-        canInstallGitBash: !env.has_git_bash,
-      };
-    }
-
-    return {
-      tone: env.has_wsl ? 'warning' : 'info',
-      title: env.has_wsl ? 'Recommended: use WSL for the best Windows experience' : 'Recommended: install WSL before relying on shell-heavy workflows',
-      body: env.has_wsl
-        ? 'Native Windows mode can handle some tasks, but this app is built around Unix-style terminal behavior. WSL is the intended path.'
-        : 'This app expects Unix-style shell and terminal behavior. WSL gives the best compatibility for chat tools, shell commands, and git workflows.',
-      checklist: [
-        env.has_wsl ? 'Reopen the project through the WSL-backed desktop mode when possible.' : 'Install WSL with an Ubuntu distro, then reopen the project through the WSL-backed desktop mode.',
-        env.has_git_bash ? 'Git Bash is installed and can help with native Windows shell commands.' : 'Install Git for Windows if you want Git Bash as a native-Windows fallback for shell commands.',
-        'Expect the native Windows backend to be less complete than the WSL path for terminal behavior.',
-      ],
-      canInstallWsl: !env.has_wsl,
-      canInstallGitBash: !env.has_git_bash,
-    };
-  }, [onboarding.environment]);
-
-  // Debounce connection status updates to prevent flashing
-  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastConnectionStateRef = useRef<boolean>(false);
-
-  const refreshOnboardingStatus = useCallback(async () => {
-    setOnboarding((prev) => ({ ...prev, checking: true, error: null }));
-    try {
-      const status = await apiService.getOnboardingStatus();
-      const providers = Array.isArray(status.providers) ? status.providers : [];
-      const preferredProvider = status.current_provider
-        || providers.find((p) => p.recommended)?.id
-        || providers[0]?.id
-        || '';
-      const providerInfo = providers.find((p) => p.id === preferredProvider) || providers[0];
-      const preferredModel = status.current_model || providerInfo?.recommended_model || providerInfo?.models?.[0] || '';
-      setOnboarding({
-        checking: false,
-        open: !!status.setup_required,
-        reason: status.reason || '',
-        providers,
-        environment: status.environment || null,
-        provider: preferredProvider,
-        model: preferredModel,
-        apiKey: '',
-        showAllProviders: false,
-        submitting: false,
-        platformActionMessage: null,
-        error: null,
-      });
-    } catch (error) {
-      setOnboarding((prev) => ({
-        ...prev,
-        checking: false,
-        open: true,
-        showAllProviders: false,
-        platformActionMessage: null,
-        error: error instanceof Error ? error.message : 'Failed to check setup status',
-      }));
-    }
-  }, [apiService]);
-
-  const pendingProviderRef = useRef<string>(state.provider);
-  const pendingProviderChangeRef = useRef<boolean>(false);
-  const pendingProviderChangeValueRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    pendingProviderRef.current = state.provider;
-  }, [state.provider]);
-
-  const loadChatSessions = useCallback(async () => {
-    try {
-      const response = await listChatSessions();
-      const activeChatId = response.active_chat_id || null;
-      // Load message history for the currently active chat so history shows on first load
-      let initialMessages: Message[] = [];
-      if (activeChatId) {
-        try {
-          const switchResp = await switchChatSession(activeChatId);
-          initialMessages = switchResp.chat_session.messages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
-            .map((m, i) => ({
-              id: `chat-${activeChatId}-${i}`,
-              type: m.role as 'user' | 'assistant',
-              content: typeof m.content === 'string' ? m.content : '',
-              timestamp: new Date(),
-              ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-            }));
-          // Eagerly update the ref in case this is the initial load
-          if (!activeChatIdRef.current) {
-            activeChatIdRef.current = activeChatId;
-          }
-        } catch (e) {
-          debugLog('[chat] Failed to load initial messages:', e);
-        }
-      }
-      setState(prev => ({
-        ...prev,
-        chatSessions: response.chat_sessions,
-        activeChatId: prev.activeChatId || activeChatId,
-        // Only set initial messages if we have none yet (don't clobber live messages)
-        messages: prev.messages.length === 0 && initialMessages.length > 0
-          ? trimMessages(initialMessages)
-          : prev.messages,
-      }));
-    } catch (error) {
-      debugLog('[chat] Failed to load chat sessions:', error);
-    }
-  }, []);
-
-  const handleActiveChatChange = useCallback(async (id: string) => {
-    const currentId = activeChatIdRef.current;
-    if (currentId === id) return; // Already active
-
-    // Update the ref immediately so WebSocket events for the new chat are
-    // accepted and events for the old chat are filtered during the switch.
-    activeChatIdRef.current = id;
-
-    // Phase 1: instant UI update from cache — no blank flash while API loads.
-    // Saves the outgoing chat's full state (including messages) and restores
-    // the incoming chat's previously-cached state atomically.
-    setState(prev => {
-      const cached = prev.perChatCache[id];
-      const newCache = currentId ? {
-        ...prev.perChatCache,
-        [currentId]: {
-          messages: trimMessages(prev.messages),
-          toolExecutions: prev.toolExecutions,
-          fileEdits: prev.fileEdits,
-          subagentActivities: prev.subagentActivities,
-          currentTodos: prev.currentTodos,
-          queryProgress: prev.queryProgress,
-          lastError: prev.lastError,
-          isProcessing: prev.isProcessing,
-          provider: prev.provider,
-          model: prev.model,
-          queryCount: prev.queryCount,
-        },
-      } : prev.perChatCache;
-      const restoredIsProcessing = cached?.isProcessing ?? false;
-      // Sync the requests counter with cached processing state so the Chat
-      // input/stop-button reflects the correct state without waiting for the
-      // backend response.
-      activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
-      return {
-        ...prev,
-        // Use id optimistically — overwritten by response.active_chat_id below
-        activeChatId: id,
-        messages: cached?.messages ?? [],
-        isProcessing: restoredIsProcessing,
-        toolExecutions: cached?.toolExecutions ?? [],
-        fileEdits: cached?.fileEdits ?? [],
-        subagentActivities: cached?.subagentActivities ?? [],
-        currentTodos: cached?.currentTodos ?? [],
-        queryProgress: cached?.queryProgress ?? null,
-        lastError: cached?.lastError ?? null,
-        perChatCache: newCache,
-      };
-    });
-
-    try {
-      const response = await switchChatSession(id);
-      const backendMessages: Message[] = (response.chat_session.messages ?? [])
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m, i) => ({
-          id: `chat-${id}-${i}`,
-          type: m.role as 'user' | 'assistant',
-          content: typeof m.content === 'string' ? m.content : '',
-          timestamp: new Date(),
-          ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-        }));
-
-      // Use backend active_query as the authoritative source of truth for
-      // isProcessing — it knows whether the query actually completed, even
-      // if we missed the query_completed WebSocket event while on another chat.
-      const backendIsActive = !!(response.chat_session as any).active_query;
-
-      setState(prev => {
-        // Only update messages if backend has equal or more messages than what's
-        // already shown from cache. If backend has fewer (query still in flight
-        // so AgentState not yet synced), keep the cache messages which include
-        // the optimistically-added user message and any streamed chunks.
-        const useBackendMessages = backendMessages.length >= prev.messages.length;
-        const finalIsProcessing = backendIsActive;
-        activeRequestsRef.current = finalIsProcessing ? 1 : 0;
-        return {
-          ...prev,
-          activeChatId: response.active_chat_id,
-          messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
-          isProcessing: finalIsProcessing,
-        };
-      });
-
-      // Refresh session list to reflect updated active state
-      const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
-    } catch (error) {
-      // Rollback the eagerly-updated ref so subsequent switches aren't confused
-      activeChatIdRef.current = currentId;
-      debugLog('[chat] Failed to switch chat session:', error);
-    }
-  }, []);
-
-  // Keep the old name as an alias for internal use
-  const handleSwitchChat = handleActiveChatChange;
-
-  const handleCreateChat = useCallback(async (): Promise<string | null> => {
-    try {
-      const response = await createChatSession();
-      const newId = response.chat_session.id;
-      const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
-      return newId;
-    } catch (error) {
-      debugLog('[chat] Failed to create chat session:', error);
-      const message = error instanceof Error ? error.message : 'Failed to create new chat';
-      setState(prev => ({ ...prev, lastError: message }));
-      return null;
-    }
-  }, []);
-
-  const handleDeleteChat = useCallback(async (id: string) => {
-    try {
-      await deleteChatSession(id);
-      if (id === activeChatIdRef.current) {
-        const sessionsResp = await listChatSessions();
-        if (sessionsResp.chat_sessions.length > 0) {
-          await handleSwitchChat(sessionsResp.active_chat_id);
-        } else {
-          setState(prev => ({ ...prev, chatSessions: [], activeChatId: null, messages: [] }));
-        }
-      } else {
-        const sessionsResp = await listChatSessions();
-        setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
-      }
-    } catch (error) {
-      debugLog('[chat] Failed to delete chat session:', error);
-    }
-  }, [handleSwitchChat]);
-
-  const handleRenameChat = useCallback(async (id: string, name: string) => {
-    try {
-      await renameChatSession(id, name);
-      const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
-    } catch (error) {
-      debugLog('[chat] Failed to rename chat session:', error);
-    }
-  }, []);
-
-  const handleEvent = useCallback((event: any) => {
-    // Filter out ping events and webpack dev server events early to prevent console spam
-    const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
-    if (filteredEvents.includes(event.type)) {
-      return; // Don't process these events
-    }
-
-    // Per-chat event filtering: only process message events for the active chat
-    const perChatEvents = new Set(['query_started', 'stream_chunk', 'query_completed', 'query_progress', 'tool_start', 'tool_end', 'todo_update', 'subagent_activity', 'agent_message', 'error']);
-    if (perChatEvents.has(event.type) && event.data?.chat_id && activeChatIdRef.current && event.data.chat_id !== activeChatIdRef.current) {
-      return; // event is for a different chat session
-    }
-
-    debugLog('[msg] Received event:', event.type, event.data);
-
-    // Create log entry for all events
-    const logEntry: LogEntry = {
-      id: `${Date.now()}-${Math.random()}`,
-      type: event.type,
-      timestamp: new Date(),
-      data: event.data,
-      level: 'info',
-      category: 'system'
-    };
-
-    // Determine log level and category based on event type
-    switch(event.type) {
-      case 'connection_status':
-        if (event.data?.client_id && event.data.client_id !== getWebUIClientId()) {
-          break;
-        }
-        logEntry.category = 'system';
-        logEntry.level = event.data.connected ? 'success' : 'warning';
-        const incomingSessionId = typeof event.data?.session_id === 'string' ? event.data.session_id : null;
-
-        // Debounce connection status updates to prevent rapid re-renders
-        const newConnectionState = event.data.connected;
-        const phase = newConnectionState
-          ? (event.data?.reconnected ? 'reconnected' : 'connected')
-          : (event.data?.reconnecting ? 'reconnecting' : 'disconnected');
-
-        // Only update if state actually changed
-        if (newConnectionState !== lastConnectionStateRef.current) {
-          // Clear any pending timeout
-          if (connectionTimeoutRef.current) {
-            clearTimeout(connectionTimeoutRef.current);
-          }
-
-          // Debounce the state update
-          connectionTimeoutRef.current = setTimeout(() => {
-            lastConnectionStateRef.current = newConnectionState;
-            setState(prev => ({
-              ...prev,
-              // NOTE:
-              // WebSocket `session_id` is a transport connection id (ws_<timestamp>),
-              // not a chat session id. Track the latest value so reconnects are visible.
-              sessionId: incomingSessionId || prev.sessionId,
-              isConnected: newConnectionState,
-              stats: {
-                ...prev.stats,
-                connection_phase: phase,
-                transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
-              },
-              logs: [...prev.logs, logEntry]
-            }));
-          }, 300); // Wait 300ms to confirm the connection state is stable
-        }
-        debugLog('[link] Connection status updated:', newConnectionState);
-        break;
-
-      case 'query_started':
-        logEntry.category = 'query';
-        logEntry.level = 'info';
-        const startedQuery = event.data?.query || '';
-        setState(prev => ({
-          ...prev,
-          isProcessing: true,
-          lastError: null,
-          queryCount: prev.queryCount + 1,
-          messages: [...prev.messages, {
-            id: generateMessageId(),
-            type: 'user',
-            content: startedQuery,
-            timestamp: new Date()
-          }],
-          toolExecutions: [], // Clear previous tool executions
-          fileEdits: [],      // Clear previous file edits for current-run status metrics
-          subagentActivities: [],
-          queryProgress: null, // Clear previous progress
-          currentTodos: [],    // Clear previous todos
-          logs: [...prev.logs, logEntry]
-        }));
-        debugLog('[>>] Query started:', startedQuery);
-        break;
-
-      case 'query_progress':
-        setState(prev => ({
-          ...prev,
-          queryProgress: event.data
-        }));
-        debugLog('[>>] Query progress:', event.data);
-        break;
-
-      case 'stream_chunk':
-        logEntry.category = 'stream';
-        logEntry.level = 'info';
-        
-        const chunkContent = event.data.chunk || '';
-        const chunkType = event.data.content_type || 'assistant_text';
-        
-        setState(prev => {
-          const newMessages = [...prev.messages];
-          const lastMessage = newMessages[newMessages.length - 1];
-          if (lastMessage && lastMessage.type === 'assistant') {
-            if (chunkType === 'reasoning') {
-              // Append to reasoning field
-              newMessages[newMessages.length - 1] = {
-                ...lastMessage,
-                reasoning: (lastMessage.reasoning || '') + chunkContent
-              };
-            } else {
-              // Append to content field (default behavior)
-              newMessages[newMessages.length - 1] = {
-                ...lastMessage,
-                content: lastMessage.content + chunkContent
-              };
-            }
-          } else {
-            // Create new assistant message
-            const newMsg: Message = {
-              id: generateMessageId(),
-              type: 'assistant',
-              content: chunkType === 'reasoning' ? '' : chunkContent,
-              timestamp: new Date(),
-            };
-            if (chunkType === 'reasoning') {
-              newMsg.reasoning = chunkContent;
-            }
-            newMessages.push(newMsg);
-          }
-          return {
-            ...prev,
-            messages: newMessages
-          };
-        });
-        break;
-
-      case 'query_completed':
-        logEntry.category = 'query';
-        logEntry.level = 'success';
-        if (activeRequestsRef.current > 0) {
-          activeRequestsRef.current -= 1;
-        }
-        const completedQuery = String(event.data?.query || '').trim().toLowerCase();
-        const completedResponse = event.data?.response;
-        const wasClearCommand = completedQuery === '/clear';
-        if (wasClearCommand) {
-          queuedMessagesRef.current = [];
-          setQueuedMessagesCount(0);
-        }
-        setState(prev => {
-          let nextMessages = wasClearCommand
-            ? []
-            : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
-                id: generateMessageId(),
-                type: 'assistant',
-                content: responseText,
-                timestamp: new Date()
-              }));
-
-          // Deduplication: some thinking models emit their entire response via the
-          // reasoning_content field with no separate content field. The backend fallback
-          // (GetResponse) copies reasoning→content so conversation history is intact, and
-          // ensureCompletedAssistantMessage then fills message.content from that same text.
-          // This causes the identical text to appear in both the Reasoning dropdown and the
-          // main chat area. When they match, clear reasoning so the answer shows only once
-          // in the main chat (not in a collapsed dropdown that users have to expand).
-          if (!wasClearCommand && nextMessages.length > 0) {
-            const lastMsg = nextMessages[nextMessages.length - 1] as Message;
-            if (
-              lastMsg.type === 'assistant' &&
-              lastMsg.reasoning?.trim() &&
-              lastMsg.content?.trim() &&
-              lastMsg.content === lastMsg.reasoning
-            ) {
-              nextMessages = [
-                ...nextMessages.slice(0, -1),
-                { ...lastMsg, reasoning: undefined },
-              ];
-            }
-          }
-
-          // Cap messages array to bound memory for long sessions.
-          // Only trim on clear completions (not during streaming).
-          if (!wasClearCommand) {
-            nextMessages = trimMessages(nextMessages);
-          }
-
-          return {
-            ...prev,
-            messages: nextMessages,
-            currentTodos: wasClearCommand ? [] : prev.currentTodos,
-            isProcessing: activeRequestsRef.current > 0,
-            lastError: null,
-            queryProgress: null,
-            toolExecutions: wasClearCommand
-              ? []
-              : prev.toolExecutions.map((tool) => {
-                  if (tool.status === 'started' || tool.status === 'running') {
-                    return {
-                      ...tool,
-                      status: 'completed',
-                      endTime: tool.endTime || new Date()
-                    };
-                  }
-                  return tool;
-                }),
-            logs: [...prev.logs, logEntry]
-          };
-        });
-        debugLog('[OK] Query completed');
-        break;
-
-      case 'tool_start':
-        logEntry.category = 'tool';
-        logEntry.level = 'info';
-        setState(prev => {
-          const toolCallID = String(event.data?.tool_call_id || '');
-          const toolName = String(event.data?.tool_name || 'unknown_tool');
-          const rawArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
-          const displayName = String(event.data?.display_name || toolName);
-          const persona = typeof event.data?.persona === 'string' ? event.data.persona : undefined;
-          const isSubagent = !!event.data?.is_subagent;
-          const subagentType: ToolExecution['subagentType'] = event.data?.subagent_type === 'parallel'
-            ? 'parallel'
-            : isSubagent ? 'single' : undefined;
-
-          // Ensure the last assistant message ends with a newline so the tool
-          // pill and any subsequent streamed text start on their own line.
-          const messagesWithNewline = prev.messages.map((msg, idx) => {
-            if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
-              return { ...msg, content: msg.content + '\n' };
-            }
-            return msg;
-          });
-
-          // Check if we already have this tool from a legacy tool_execution event
-          const existingIdx = prev.toolExecutions.findIndex(t => {
-            const existingID = getToolCallId(t.details) || t.id;
-            return toolCallID && existingID === toolCallID;
-          });
-
-          if (existingIdx >= 0) {
-            // Update existing with richer start data
-            const updated = [...prev.toolExecutions];
-            updated[existingIdx] = {
-              ...updated[existingIdx],
-              tool: toolName,
-              status: 'started',
-              startTime: updated[existingIdx].startTime, // keep existing start time
-              message: displayName,
-              arguments: updated[existingIdx].arguments || rawArgs,
-              details: event.data,
-              persona: updated[existingIdx].persona || persona,
-              subagentType: updated[existingIdx].subagentType || subagentType,
-            };
-            const messages = [...messagesWithNewline];
-            for (let i = messages.length - 1; i >= 0; i -= 1) {
-              const msg = messages[i];
-              if (msg.type !== 'assistant') continue;
-              const toolRefs = Array.isArray(msg.toolRefs) ? [...msg.toolRefs] : [];
-              if (!toolRefs.some((ref) => ref.toolId === updated[existingIdx].id)) {
-                toolRefs.push({
-                  toolId: updated[existingIdx].id,
-                  toolName,
-                  label: displayName,
-                  parallel: subagentType === 'parallel' || undefined,
-                });
-                messages[i] = { ...msg, toolRefs };
-              }
-              break;
-            }
-            return { ...prev, messages, toolExecutions: updated, logs: [...prev.logs, logEntry] };
-          }
-
-          // Add new tool execution from rich start event
-          const newTool: ToolExecution = {
-            id: toolCallID || `${toolName}-${Date.now()}`,
-            tool: toolName,
-            status: 'started',
-            message: displayName,
-            startTime: new Date(),
-            details: event.data,
-            arguments: rawArgs,
-            persona,
-            subagentType,
-          };
-          const messages = [...messagesWithNewline];
-          for (let i = messages.length - 1; i >= 0; i -= 1) {
-            const msg = messages[i];
-            if (msg.type !== 'assistant') continue;
-            const toolRefs = Array.isArray(msg.toolRefs) ? [...msg.toolRefs] : [];
-            if (!toolRefs.some((ref) => ref.toolId === newTool.id)) {
-              toolRefs.push({
-                toolId: newTool.id,
-                toolName,
-                label: displayName,
-                parallel: subagentType === 'parallel' || undefined,
-              });
-              messages[i] = { ...msg, toolRefs };
-            }
-            break;
-          }
-
-          return {
-            ...prev,
-            messages,
-            toolExecutions: [...prev.toolExecutions, newTool],
-            logs: [...prev.logs, logEntry]
-          };
-        });
-        debugLog('[tool] Tool start:', event.data?.tool_name);
-        break;
-
-      case 'tool_end':
-        logEntry.category = 'tool';
-        logEntry.level = event.data?.status === 'failed' ? 'error' : 'info';
-        setState(prev => {
-          const toolCallID = String(event.data?.tool_call_id || '');
-          const status: ToolExecution['status'] = event.data?.status === 'failed' ? 'error' : 'completed';
-          const result = event.data?.result != null ? String(event.data.result) : undefined;
-          const error = event.data?.error != null ? String(event.data.error) : undefined;
-
-          let matched = false;
-          const updatedExecutions = prev.toolExecutions.map(t => {
-            const existingID = getToolCallId(t.details) || t.id;
-            const match = toolCallID && existingID === toolCallID;
-            if (!match) {
-              // Also try matching by tool name + no end time (for backward compat)
-              const nameMatch = !toolCallID && t.tool === event.data?.tool_name && !t.endTime;
-              if (!nameMatch) return t;
-            }
-            matched = true;
-
-            return {
-              ...t,
-              status,
-              endTime: new Date(),
-              result: t.result || result || error,
-              details: event.data,
-              arguments: t.arguments,  // preserve arguments from tool_start
-            };
-          });
-
-          if (!matched) {
-            const fallbackExecution: ToolExecution = {
-              id: toolCallID || `${event.data?.tool_name || 'tool'}-${Date.now()}`,
-              tool: String(event.data?.tool_name || 'unknown_tool'),
-              status,
-              message: String(event.data?.display_name || event.data?.tool_name || 'Tool'),
-              startTime: new Date(),
-              endTime: new Date(),
-              details: event.data,
-              arguments: event.data?.arguments != null ? String(event.data.arguments) : undefined,
-              result: result || error,
-            };
-            return {
-              ...prev,
-              toolExecutions: [...prev.toolExecutions, fallbackExecution],
-              logs: [...prev.logs, logEntry]
-            };
-          }
-
-          // Ensure the last assistant message ends with a newline so any
-          // subsequent streamed text starts on its own line after the tool.
-          const messagesAfterTool = prev.messages.map((msg, idx) => {
-            if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
-              return { ...msg, content: msg.content + '\n' };
-            }
-            return msg;
-          });
-
-          return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
-        });
-        debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
-        break;
-
-      case 'subagent_activity':
-        logEntry.category = 'tool';
-        logEntry.level = 'info';
-        setState(prev => {
-          const activity: SubagentActivity = {
-            id: String(event.id || `${Date.now()}-${Math.random()}`),
-            toolCallId: String(event.data?.tool_call_id || ''),
-            toolName: String(event.data?.tool_name || 'run_subagent'),
-            phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' ? event.data.phase : 'output',
-            message: String(event.data?.message || '').trim(),
-            timestamp: new Date(),
-            taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
-            persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
-            isParallel: event.data?.is_parallel === true,
-            provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
-            model: typeof event.data?.model === 'string' ? event.data.model : undefined,
-            taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
-            failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
-          };
-
-          if (!activity.message) {
-            return { ...prev, logs: [...prev.logs, logEntry] };
-          }
-
-          return {
-            ...prev,
-            subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-            logs: [...prev.logs, logEntry]
-          };
-        });
-        break;
-
-      case 'agent_message':
-        {
-          // Handle agent system messages from the backend
-          let category = String(event.data?.category || 'info');
-          const message = String(event.data?.message || '');
-
-          // Clean ANSI codes from the message
-          const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();
-          const suppressInChat = shouldSuppressAgentMessageInChat(cleanedMsg);
-
-          // Auto-classify info messages by content pattern so important ones render in chat
-          if (category === 'info') {
-            if (/^\[FAIL\]|\[!!\]/.test(cleanedMsg)) {
-              category = 'error';
-            } else if (/^\[WARN\]|\[~\]|\[!\]/.test(cleanedMsg)) {
-              category = 'warning';
-            } else if (/^\[OK\]|\[edit\]|\[chart\]/.test(cleanedMsg)) {
-              category = 'info_rendered'; // meaningful info that should render
-            }
-          }
-
-          if (category === 'tool_log' && cleanedMsg) {
-            // Tool logs are operational breadcrumbs from the router.
-            // Do not create synthetic tool execution rows from these logs; rich
-            // tool_start/tool_end events are the source of truth for tool state.
-            logEntry.category = 'tool';
-            logEntry.level = 'info';
-
-            const toolAction = String(event.data?.action || 'tool');
-            const toolTarget = String(event.data?.target || '');
-            const parsedToolName = extractToolNameFromToolLogTarget(toolTarget);
-
-            setState(prev => {
-              // Best effort: if this log says a tool is executing, mark its
-              // most recent started row as running (without adding a duplicate row).
-              if (/^executing tool$/i.test(toolAction) && parsedToolName) {
-                let touched = false;
-                const updated = [...prev.toolExecutions];
-                for (let i = updated.length - 1; i >= 0; i--) {
-                  const row = updated[i];
-                  if (row.tool !== parsedToolName || row.endTime) continue;
-                  if (row.status !== 'running') {
-                    updated[i] = { ...row, status: 'running' };
-                  }
-                  touched = true;
-                  break;
-                }
-                if (touched) {
-                  return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
-                }
-              }
-
-              return { ...prev, logs: [...prev.logs, logEntry] };
-            });
-          } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
-            // Warning/error messages are operational notices, not model reasoning.
-            logEntry.category = 'system';
-            logEntry.level = category === 'error' ? 'error' : 'warning';
-
-            setState(prev => {
-              const newMessages = [...prev.messages];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage && lastMessage.type === 'assistant') {
-                const prefixedMsg = category === 'error'
-                  ? `\n\nWarning: ${cleanedMsg}`
-                  : `\n\nNote: ${cleanedMsg}`;
-                newMessages[newMessages.length - 1] = {
-                  ...lastMessage,
-                  content: (lastMessage.content || '') + prefixedMsg
-                };
-              }
-              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
-            });
-          } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
-            // Meaningful info messages should render in chat, but not inside reasoning.
-            logEntry.category = 'system';
-            logEntry.level = 'info';
-
-            setState(prev => {
-              const newMessages = [...prev.messages];
-              const lastMessage = newMessages[newMessages.length - 1];
-              if (lastMessage && lastMessage.type === 'assistant') {
-                newMessages[newMessages.length - 1] = {
-                  ...lastMessage,
-                  content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}`
-                };
-              }
-              return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
-            });
-          }
-          // For plain 'info' (unclassified): silently skip rendering in WebUI.
-          // These include blank lines, iteration markers, context pruning messages, etc.
-          // The meaningful assistant content comes through stream_chunk events.
-          break;
-        }
-
-      case 'todo_update':
-        logEntry.category = 'tool';
-        logEntry.level = 'info';
-        const normalizedTodos = normalizeTodoList(event.data?.todos);
-        setState(prev => ({
-          ...prev,
-          currentTodos: normalizedTodos,
-          logs: [...prev.logs, logEntry]
-        }));
-        break;
-
-      case 'file_changed':
-        logEntry.category = 'file';
-        logEntry.level = 'info';
-        setState(prev => {
-          const newLogs = [...prev.logs, logEntry];
-
-          // Track file edits
-          const newFileEdit = {
-            path: event.data.path || event.data.file_path || 'Unknown',
-            action: event.data.action || event.data.operation || 'edited',
-            timestamp: new Date(),
-            linesAdded: event.data.lines_added,
-            linesDeleted: event.data.lines_deleted
-          };
-
-          // Add to file edits (keep last 50)
-          const updatedFileEdits = [...prev.fileEdits, newFileEdit].slice(-50);
-
-          return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
-        });
-        debugLog('[edit] File changed:', event.data.path);
-        break;
-
-      case 'terminal_output':
-        logEntry.category = 'system';
-        logEntry.level = 'info';
-        // Handle terminal output - this will be processed by the Terminal component
-        setState(prev => ({
-          ...prev,
-          logs: [...prev.logs, logEntry]
-        }));
-        debugLog('[term] Terminal output received:', event.data);
-        break;
-
-      case 'error':
-        logEntry.category = 'system';
-        logEntry.level = 'error';
-        if (activeRequestsRef.current > 0) {
-          activeRequestsRef.current -= 1;
-        }
-        const errorMessage = event.data?.message || 'Unknown error';
-        const errorCode = event.data?.code as string | undefined;
-
-        // Check for model_not_available error and show model selection modal
-        if (errorCode === 'model_not_available') {
-          setState(prev => ({
-            ...prev,
-            isProcessing: activeRequestsRef.current > 0,
-            queryProgress: null,
-            modelSelectionRequest: {
-              provider: prev.provider,
-            },
-            logs: [...prev.logs, logEntry]
-          }));
-          debugLog('[model-not-available] Model not available, showing selection modal');
-          break;
-        }
-
-        // Rollback provider state if this was a failed provider_change request
-        if (pendingProviderChangeRef.current) {
-          pendingProviderChangeRef.current = false;
-          pendingProviderChangeValueRef.current = null;
-          setState(prev => ({
-            ...prev,
-            isProcessing: activeRequestsRef.current > 0,
-            queryProgress: null,
-            lastError: errorMessage,
-            messages: trimMessages([...prev.messages, {
-              id: generateMessageId(),
-              type: 'assistant',
-              content: `[FAIL] Error: ${errorMessage}`,
-              timestamp: new Date()
-            }]),
-            logs: [...prev.logs, logEntry]
-          }));
-          // Fetch fresh provider state from backend to ensure sync
-          apiService.getStats().then((stats: any) => {
-            if (stats) {
-              setState(prev => ({
-                ...prev,
-                provider: stats.provider || prev.provider,
-                model: stats.model || prev.model,
-              }));
-            }
-          }).catch((err) => {
-            debugLog('[App] Failed to sync provider state after error:', {
-              error: err instanceof Error ? err.message : String(err),
-              stack: err instanceof Error ? err.stack : undefined,
-              currentProvider: state.provider,
-              pendingProvider: pendingProviderRef.current,
-              isProviderChangePending: pendingProviderChangeRef.current
-            });
-          });
-        } else {
-          setState(prev => ({
-            ...prev,
-            isProcessing: activeRequestsRef.current > 0,
-            queryProgress: null,
-            lastError: errorMessage,
-            messages: trimMessages([...prev.messages, {
-              id: generateMessageId(),
-              type: 'assistant',
-              content: `[FAIL] Error: ${errorMessage}`,
-              timestamp: new Date()
-            }]),
-            logs: [...prev.logs, logEntry]
-          }));
-        }
-        console.error('[FAIL] Error event:', event.data);
-        break;
-
-      case 'metrics_update':
-        logEntry.category = 'system';
-        logEntry.level = 'info';
-
-        // Clear pending provider change flag if we receive a metrics update that
-        // corresponds to the change we're waiting for. This prevents race conditions
-        // where a metrics update from an unrelated source clears our pending flag.
-        if (pendingProviderChangeRef.current && event.data?.provider === pendingProviderChangeValueRef.current) {
-          pendingProviderChangeRef.current = false;
-          pendingProviderChangeValueRef.current = null;
-        }
-
-        setState(prev => ({
-          ...prev,
-          provider: event.data?.provider || prev.provider,
-          model: event.data?.model || prev.model,
-          stats: {
-            ...prev.stats,
-            ...event.data
-          },
-          logs: [...prev.logs, logEntry]
-        }));
-        break;
-
-      case 'workspace_changed':
-        logEntry.category = 'system';
-        logEntry.level = 'info';
-        debugLog('[workspace] Workspace changed:', event.data);
-        if (!event.data?.client_id || event.data.client_id === getWebUIClientId()) {
-          window.location.reload();
-        }
-        break;
-
-      case 'security_approval_request':
-        logEntry.category = 'system';
-        logEntry.level = 'warning';
-        // Skip status echo events that would briefly re-show the dialog
-        if (event.data?.status === 'responded') break;
-        if (event.data) {
-          setState((prev) => ({
-            ...prev,
-            securityApprovalRequest: {
-              requestId: String(event.data.request_id || ''),
-              toolName: String(event.data.tool_name || ''),
-              riskLevel: String(event.data.risk_level || 'CAUTION'),
-              reasoning: String(event.data.reasoning || ''),
-              command: event.data.command != null ? String(event.data.command) : undefined,
-              riskType: event.data.risk_type != null ? String(event.data.risk_type) : undefined,
-              target: event.data.target != null ? String(event.data.target) : undefined,
-            },
-            logs: [...prev.logs, logEntry],
-          }));
-        }
-        debugLog('[security] Approval request:', event.data?.tool_name, event.data?.risk_level);
-        break;
-
-      case 'security_prompt_request':
-        logEntry.category = 'system';
-        logEntry.level = 'warning';
-        // Skip status echo events
-        if (event.data?.status === 'responded') break;
-        if (!event.data?.prompt) break;
-        setState((prev) => ({
-          ...prev,
-          securityPromptRequest: {
-            requestId: String(event.data.request_id || ''),
-            prompt: String(event.data.prompt || ''),
-            filePath: event.data.file_path != null ? String(event.data.file_path) : undefined,
-            concern: event.data.concern != null ? String(event.data.concern) : undefined,
-          },
-          logs: [...prev.logs, logEntry],
-        }));
-        debugLog('[security] Prompt request:', event.data?.file_path, event.data?.concern);
-        break;
-
-      case 'ask_user_request':
-        logEntry.category = 'system';
-        logEntry.level = 'info';
-        if (event.data?.status === 'responded') break;
-        if (!event.data?.question) break;
-        setState((prev) => ({
-          ...prev,
-          askUserRequest: {
-            requestId: String(event.data.request_id || ''),
-            question: String(event.data.question || ''),
-          },
-          logs: [...prev.logs, logEntry],
-        }));
-        debugLog('[ask_user] Question:', event.data?.question);
-        break;
-
-      default:
-        // Handle any unknown event types
-        logEntry.level = 'warning';
-        setState(prev => ({
-          ...prev,
-          logs: [...prev.logs, logEntry]
-        }));
-        debugLog('[?] Unknown event type:', event.type, event.data);
-    }
-  }, []);
-
-  const handleReconnect = useCallback(() => {
-    debugLog('[reconnect] syncing state after websocket reconnect');
-    apiService.getStats()
-      .then((stats: any) => {
-        const backendProcessing = stats?.is_processing === true;
-        activeRequestsRef.current = backendProcessing ? 1 : 0;
-        setState((prev) => {
-          const nextToolExecutions = backendProcessing
-            ? prev.toolExecutions
-            : prev.toolExecutions.map((tool) => {
-                if (tool.status === 'started' || tool.status === 'running') {
-                  return {
-                    ...tool,
-                    status: 'error' as const,
-                    endTime: tool.endTime || new Date(),
-                    result: 'Interrupted while connection was paused/reconnecting',
-                  };
-                }
-                return tool;
-              });
-          return {
-            ...prev,
-            isConnected: true,
-            isProcessing: backendProcessing,
-            queryProgress: backendProcessing ? prev.queryProgress : null,
-            lastError: null,
-            toolExecutions: nextToolExecutions,
-            stats: {
-              ...prev.stats,
-              ...stats,
-              connection_phase: 'reconnected',
-            },
-          };
-        });
-      })
-      .catch((error) => {
-        debugLog('[reconnect] failed to sync backend state:', error);
-      });
-  }, [apiService]);
-
-  useEffect(() => {
-    refreshOnboardingStatus().catch(() => {});
-  }, [refreshOnboardingStatus]);
-
-  useEffect(() => {
-    // Register Service Worker for PWA functionality
-    registerServiceWorker();
-
-    // Initialize WebSocket connection
-    wsService.connect();
-    wsService.onEvent(handleEvent);
-    wsService.onReconnect(handleReconnect);
-
-    // Load initial stats
-    const loadStats = () => {
-      apiService.getStats().then((stats: any) => {
-        setState(prev => ({
-          ...prev,
-          provider: stats.provider,
-          model: stats.model,
-          stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : stats
-        }));
-      }).catch(console.error);
-    };
-
-    // Load recent files
-    const loadFiles = () => {
-      apiService.getFiles().then((response: any) => {
-        if (response && response.files) {
-          // Convert files array to expected format
-          const files = response.files.map((file: any) => ({
-            path: file.path || file.name,
-            modified: false
-          }));
-          setRecentFiles(files);
-        }
-      }).catch(console.error);
-    };
-
-    const restoreStartupState = async () => {
-      try {
-        const workspace = await apiService.getWorkspace();
-        const workspaceRoot = String(workspace?.workspace_root || '').trim();
-        const daemonRoot = String(workspace?.daemon_root || '').trim();
-        if (workspaceRoot && daemonRoot && workspaceRoot === daemonRoot) {
-          const savedWorkspace = getTabWorkspacePath().trim();
-          if (savedWorkspace && savedWorkspace !== workspaceRoot) {
-            // A previous workspace was explicitly chosen — restore it silently.
-            try {
-              await apiService.setWorkspace(savedWorkspace);
-              return;
-            } catch (restoreError) {
-              debugLog('[startup] failed to auto-restore saved workspace:', restoreError);
-            }
-          }
-          // Only prompt when there is genuinely no prior choice. If savedWorkspace
-          // equals workspaceRoot the user intentionally set their workspace to the
-          // daemon root (e.g. home dir) — don't interrupt them with the picker.
-          if (!savedWorkspace) {
-            window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
-          }
-        }
-      } catch (error) {
-        debugLog('[startup] workspace check failed:', error);
-      }
-
-      try {
-        const sessionsResponse = await apiService.getSessions('current');
-        const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
-        const currentSessionId = String(sessionsResponse?.current_session_id || '');
-        const currentSession = sessions.find((item: any) => String(item?.session_id || '') === currentSessionId);
-        const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
-        if (!currentHasMessages) {
-          const restorable = sessions.find((item: any) =>
-            String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
-          );
-          if (restorable?.session_id) {
-            const restored = await apiService.restoreSession(String(restorable.session_id));
-            if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
-              window.dispatchEvent(
-                new CustomEvent('ledit:session-restored', {
-                  detail: { messages: restored.messages },
-                }),
-              );
-            }
-          }
-        }
-      } catch (error) {
-        debugLog('[startup] session restore check failed:', error);
-      }
-    };
-
-    // Load initial stats/files/sessions and then reconcile workspace/session startup.
-    loadStats();
-    loadFiles();
-    loadChatSessions();
-    restoreStartupState().catch(() => {});
-
-    // Set up periodic stats updates
-    const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
-
-    // Check viewport breakpoints (mobile < 768px, tablet 769-1024px)
-    const checkBreakpoints = () => {
-      const w = window.innerWidth;
-      setIsMobile(w <= 768);
-      setIsTablet(w >= 769 && w <= 1024);
-    };
-
-    checkBreakpoints();
-    window.addEventListener('resize', checkBreakpoints);
-
-    // Cleanup
-    return () => {
-      // Clear any pending connection timeout
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-      }
-      // Reset refs to their default values
-      connectionTimeoutRef.current = null;
-      pendingProviderChangeRef.current = false;
-      pendingProviderChangeValueRef.current = null;
-      wsService.removeEvent(handleEvent);
-      wsService.onReconnect(null);
-      wsService.disconnect();
-      window.removeEventListener('resize', checkBreakpoints);
-      clearInterval(statsInterval);
-    };
-  }, [handleEvent, handleReconnect, wsService, apiService, loadChatSessions]);
-
-  // Listen for session-restored events from Chat.tsx to populate messages
-  useEffect(() => {
-    const handleSessionRestored = (event: Event) => {
-      const customEvent = event as CustomEvent<{ messages: Array<{ role: string; content: string }> }>;
-      const rawMessages = customEvent.detail?.messages;
-      if (!Array.isArray(rawMessages)) return;
-
-      // Map backend Message format { role, content } to frontend Message format { id, type, content, timestamp }
-      // Only include user and assistant messages (skip system/tool)
-      const restoredMessages: Message[] = rawMessages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m, i) => ({
-          id: `restored-${i}`,
-          type: m.role as 'user' | 'assistant',
-          content: typeof m.content === 'string' ? m.content : '',
-          timestamp: new Date()
-        }));
-
-      if (restoredMessages.length > 0) {
-        setState(prev => ({
-          ...prev,
-          messages: trimMessages(restoredMessages),
-          toolExecutions: [],
-          fileEdits: [],
-          subagentActivities: [],
-          currentTodos: [],
-          queryProgress: null,
-          lastError: null,
-          isProcessing: false,
-        }));
-      }
-    };
-
-    window.addEventListener('ledit:session-restored', handleSessionRestored);
-    return () => window.removeEventListener('ledit:session-restored', handleSessionRestored);
-  }, []);
-
-  const handleSendMessage = useCallback(async (message: string, options?: { allowConcurrent?: boolean }) => {
-    if (!message.trim()) return;
-    const trimmedMessage = message.trim();
-    const isClearCommand = trimmedMessage.toLowerCase() === '/clear';
-    const allowConcurrent = options?.allowConcurrent === true;
-
-    // Recovery path: /clear should always unblock the UI, even if a previous
-    // request got stuck and stop/clear could not complete via normal flow.
-    if (isClearCommand && !allowConcurrent && activeRequestsRef.current > 0) {
-      try {
-        await apiService.stopQuery();
-      } catch (error) {
-        debugLog('[chat] stopQuery failed during /clear recovery:', error);
-      }
-
-      activeRequestsRef.current = 0;
-      queuedMessagesRef.current = [];
-      setQueuedMessagesCount(0);
-
-      setState((prev) => ({
-        ...prev,
-        isProcessing: false,
-        lastError: null,
-        queryProgress: null,
-        messages: [],
-        toolExecutions: [],
-        fileEdits: [],
-        subagentActivities: [],
-        currentTodos: [],
-      }));
-
-      try {
-        await apiService.sendQuery('/clear', activeChatIdRef.current ?? undefined);
-      } catch (error) {
-        // Local recovery already succeeded; surface backend failure without
-        // re-locking the UI.
-        const errorMsg = error instanceof Error ? error.message : 'Failed to send clear command';
-        setState((prev) => ({
-          ...prev,
-          lastError: errorMsg,
-          messages: [
-            ...prev.messages,
-            {
-              id: generateMessageId(),
-              type: 'assistant',
-              content: `[FAIL] Error: ${errorMsg}`,
-              timestamp: new Date(),
-            },
-          ],
-        }));
-      }
-
-      setInputValue('');
-      return;
-    }
-
-    if (!allowConcurrent && activeRequestsRef.current > 0) {
-      setState(prev => ({
-        ...prev,
-        lastError: null,
-        messages: trimMessages([...prev.messages, {
-          id: generateMessageId(),
-          type: 'user',
-          content: trimmedMessage,
-          timestamp: new Date()
-        }])
-      }));
-      await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-      setInputValue('');
-      return;
-    }
-    activeRequestsRef.current += 1;
-
-    // Clear any previous errors and set processing state
-    setState(prev => ({
-      ...prev,
-      isProcessing: true,
-      lastError: null
-    }));
-
-    try {
-      debugLog('[>>] Sending message:', trimmedMessage);
-      await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-      setInputValue('');
-      debugLog('[OK] Message sent successfully');
-    } catch (error) {
-      console.error('[FAIL] Failed to send message:', error);
-      if (activeRequestsRef.current > 0) {
-        activeRequestsRef.current -= 1;
-      }
-      const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
-      setState(prev => ({
-        ...prev,
-        isProcessing: activeRequestsRef.current > 0,
-        lastError: `Failed to send message: ${errorMsg}`,
-        messages: trimMessages([...prev.messages, {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }])
-      }));
-    }
-  }, [apiService]);
-
-  const handleQueueMessage = useCallback((message: string) => {
-    const trimmed = message.trim();
-    if (!trimmed) return;
-    queuedMessagesRef.current.push(trimmed);
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
-  }, []);
-
-  const handleStopProcessing = useCallback(async () => {
-    try {
-      await apiService.stopQuery();
-      activeRequestsRef.current = 0;
-      queuedMessagesRef.current = [];
-      setQueuedMessagesCount(0);
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        queryProgress: null,
-        lastError: null,
-      }));
-    } catch (error) {
-      // Force-local recovery so the UI never remains permanently stuck.
-      activeRequestsRef.current = 0;
-      queuedMessagesRef.current = [];
-      setQueuedMessagesCount(0);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        queryProgress: null,
-        lastError: errorMsg,
-        messages: trimMessages([...prev.messages, {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }])
-      }));
-    }
-  }, [apiService]);
-
-  useEffect(() => {
-    if (state.isProcessing || activeRequestsRef.current > 0) {
-      return;
-    }
-    if (queuedMessagesRef.current.length === 0) {
-      return;
-    }
-
-    const next = queuedMessagesRef.current.shift();
-    setQueuedMessagesCount(queuedMessagesRef.current.length);
-    if (!next) return;
-
-    handleSendMessage(next).catch((error) => {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
-      setState(prev => ({
-        ...prev,
-        lastError: `Failed to send queued message: ${errorMsg}`,
-        messages: trimMessages([...prev.messages, {
-          id: generateMessageId(),
-          type: 'assistant',
-          content: `[FAIL] Error: ${errorMsg}`,
-          timestamp: new Date()
-        }])
-      }));
-    });
-  }, [state.isProcessing, handleSendMessage]);
-
-  const handleOnboardingProviderChange = useCallback((providerID: string) => {
-    setOnboarding((prev) => {
-      const provider = prev.providers.find((p) => p.id === providerID);
-      return {
-        ...prev,
-        provider: providerID,
-        model: provider?.recommended_model || provider?.models?.[0] || '',
-        apiKey: '',
-        error: null,
-      };
-    });
-  }, []);
-
-  const handleCompleteOnboarding = useCallback(async () => {
-    if (!onboarding.provider) {
-      setOnboarding((prev) => ({ ...prev, error: 'Select a provider first.' }));
-      return;
-    }
-    if (selectedOnboardingProvider?.requires_api_key && !selectedOnboardingProvider.has_credential && !onboarding.apiKey.trim()) {
-      setOnboarding((prev) => ({ ...prev, error: 'API key is required for this provider.' }));
-      return;
-    }
-
-    setOnboarding((prev) => ({ ...prev, submitting: true, error: null }));
-    try {
-      const response = await apiService.completeOnboarding({
-        provider: onboarding.provider,
-        model: onboarding.model || undefined,
-        api_key: onboarding.apiKey.trim() || undefined,
-      });
-      setState((prev) => ({
-        ...prev,
-        provider: response.provider || prev.provider,
-        model: response.model || prev.model,
-      }));
-      setOnboarding((prev) => ({
-        ...prev,
-        open: false,
-        submitting: false,
-        apiKey: '',
-      }));
-    } catch (error) {
-      setOnboarding((prev) => ({
-        ...prev,
-        submitting: false,
-        error: error instanceof Error ? error.message : 'Failed to complete setup',
-      }));
-    }
-  }, [apiService, onboarding.apiKey, onboarding.model, onboarding.provider, selectedOnboardingProvider]);
-
-  const handleInstallWsl = useCallback(async () => {
-    const desktopBridge = (window as any).sproutDesktop;
-    if (!desktopBridge?.installWsl) {
-      setOnboarding((prev) => ({ ...prev, platformActionMessage: 'WSL installation is only available from the desktop app.' }));
-      return;
-    }
-    const result = await desktopBridge.installWsl();
-    setOnboarding((prev) => ({ ...prev, platformActionMessage: result?.message || 'Started WSL setup.' }));
-  }, []);
-
-  const handleInstallGitBash = useCallback(async () => {
-    const desktopBridge = (window as any).sproutDesktop;
-    if (!desktopBridge?.installGitForWindows) {
-      setOnboarding((prev) => ({ ...prev, platformActionMessage: 'Git Bash installation is only available from the desktop app.' }));
-      return;
-    }
-    const result = await desktopBridge.installGitForWindows();
-    setOnboarding((prev) => ({ ...prev, platformActionMessage: result?.message || 'Started Git for Windows setup.' }));
-  }, []);
-
-  
   const handleModelChange = useCallback((model: string) => {
     debugLog('Model changed to:', model);
     const provider = pendingProviderRef.current || state.provider;
@@ -1975,6 +434,8 @@ function App() {
       currentView: view
     }));
   }, []);
+
+  // ── Git Handlers ─────────────────────────────────────────────────
 
   const handleGitCommit = useCallback(async (message: string, files: string[]) => {
     debugLog('Git commit:', message, files);
@@ -2069,9 +530,150 @@ function App() {
   }, []);
 
   const handleTerminalOutput = useCallback((output: string) => {
-    // You could handle terminal output here if needed
     debugLog('[term] Terminal output:', output);
   }, []);
+
+  // ── Effects ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    registerServiceWorker().catch(console.error);
+
+    const loadStats = async () => {
+      try {
+        const stats = await apiService.getStats();
+        setState(prev => ({
+          ...prev,
+          provider: stats.provider || prev.provider,
+          model: stats.model || prev.model,
+        }));
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    };
+
+    const loadFiles = async () => {
+      try {
+        const files = await apiService.getFiles();
+        const filesMap = (files?.files as unknown as Record<string, { modified?: boolean }>) || {};
+        const fileList = Object.keys(filesMap).map((path) => ({
+          path,
+          modified: filesMap[path]?.modified || false
+        }));
+        setRecentFiles(fileList);
+      } catch (error) {
+        console.error('Failed to load files:', error);
+      }
+    };
+
+    const restoreStartupState = async () => {
+      try {
+        const workspace = await apiService.getWorkspace();
+        const workspaceRoot = String(workspace?.workspace_root || '').trim();
+        const daemonRoot = String(workspace?.daemon_root || '').trim();
+        if (workspaceRoot && daemonRoot && workspaceRoot === daemonRoot) {
+          const savedWorkspace = getTabWorkspacePath().trim();
+          if (savedWorkspace && savedWorkspace !== workspaceRoot) {
+            // A previous workspace was explicitly chosen — restore it silently.
+            try {
+              await apiService.setWorkspace(savedWorkspace);
+              return;
+            } catch (restoreError) {
+              debugLog('[startup] failed to auto-restore saved workspace:', restoreError);
+            }
+          }
+          // Only prompt when there is genuinely no prior choice. If savedWorkspace
+          // equals workspaceRoot the user intentionally set their workspace to the
+          // daemon root (e.g. home dir) — don't interrupt them with the picker.
+          if (!savedWorkspace) {
+            window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+          }
+        }
+      } catch (error) {
+        debugLog('[startup] workspace check failed:', error);
+      }
+
+      try {
+        const sessionsResponse = await apiService.getSessions('current');
+        const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
+        const currentSessionId = String(sessionsResponse?.current_session_id || '');
+        const currentSession = sessions.find((item: any) => String(item?.session_id || '') === currentSessionId);
+        const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
+        if (!currentHasMessages) {
+          const restorable = sessions.find((item: any) =>
+            String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+          );
+          if (restorable?.session_id) {
+            const restored = await apiService.restoreSession(String(restorable.session_id));
+            if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+              window.dispatchEvent(
+                new CustomEvent('ledit:session-restored', {
+                  detail: { messages: restored.messages },
+                }),
+              );
+            }
+          }
+        }
+      } catch (error) {
+        debugLog('[startup] session restore check failed:', error);
+      }
+    };
+
+    // Load initial stats/files/sessions and then reconcile workspace/session startup.
+    loadStats();
+    loadFiles();
+
+    // Initialize WebSocket connection
+    wsService.connect();
+    wsService.onEvent(handleEvent);
+    wsService.onReconnect(handleReconnect);
+
+    chatManager.loadChatSessions();
+    restoreStartupState().catch(() => {});
+
+    // Set up periodic stats updates
+    const statsInterval = setInterval(loadStats, 5000); // Update every 5 seconds
+
+    // Check viewport breakpoints (mobile < 768px, tablet 769-1024px)
+    const checkBreakpoints = () => {
+      const w = window.innerWidth;
+      setIsMobile(w <= 768);
+      setIsTablet(w >= 769 && w <= 1024);
+    };
+
+    checkBreakpoints();
+    window.addEventListener('resize', checkBreakpoints);
+
+    // Cleanup
+    return () => {
+      // Clear any pending connection timeout
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
+      // Reset refs to their default values
+      connectionTimeoutRef.current = null;
+      pendingProviderChangeRef.current = false;
+      pendingProviderChangeValueRef.current = null;
+      wsService.removeEvent(handleEvent);
+      wsService.onReconnect(null);
+      wsService.disconnect();
+      window.removeEventListener('resize', checkBreakpoints);
+      clearInterval(statsInterval);
+    };
+  }, [handleEvent, handleReconnect, wsService, apiService, chatManager.loadChatSessions, setIsMobile, setIsTablet]);
+
+  // ── Onboarding Completion Handler ────────────────────────────────
+
+  const handleCompleteOnboarding = useCallback(async () => {
+    await onComplete((vals) => {
+      setState(prev => ({
+        ...prev,
+        provider: vals.provider,
+        model: vals.model,
+      }));
+    });
+  }, [onComplete]);
+
+  // ── Render ───────────────────────────────────────────────────────
 
   return (
     <ErrorBoundary
@@ -2114,10 +716,10 @@ function App() {
                 onViewChange={handleViewChange}
                 onModelChange={handleModelChange}
                 onProviderChange={handleProviderChange}
-                onSendMessage={handleSendMessage}
-                onQueueMessage={handleQueueMessage}
-                onStopProcessing={handleStopProcessing}
-                queuedMessagesCount={queuedMessagesCount}
+                onSendMessage={chatManager.handleSendMessage}
+                onQueueMessage={chatManager.handleQueueMessage}
+                onStopProcessing={chatManager.handleStopProcessing}
+                queuedMessagesCount={chatManager.queuedMessagesCount}
                 onGitCommit={handleGitCommit}
                 onGitAICommit={handleGitAICommit}
                 onGitStage={handleGitStage}
@@ -2128,10 +730,10 @@ function App() {
                 isConnected={state.isConnected}
                 chatSessions={state.chatSessions}
                 activeChatId={state.activeChatId}
-                onActiveChatChange={handleActiveChatChange}
-                onCreateChat={handleCreateChat}
-                onDeleteChat={handleDeleteChat}
-                onRenameChat={handleRenameChat}
+                onActiveChatChange={chatManager.handleActiveChatChange}
+                onCreateChat={chatManager.handleCreateChat}
+                onDeleteChat={chatManager.handleDeleteChat}
+                onRenameChat={chatManager.handleRenameChat}
                 perChatCache={state.perChatCache}
               />
               <Notification />
@@ -2171,197 +773,20 @@ function App() {
                   onSelectModel={handleModelSelectionResponse}
                 />
               )}
-              {onboarding.open && (
-                <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="Set up Sprout">
-                  <div className="onboarding-card">
-                    <h2>Set Up Sprout</h2>
-                    <p>
-                      {onboarding.reason === 'missing_provider_credential'
-                        ? 'The selected provider is missing credentials.'
-                        : 'Choose a provider and model to get started.'}
-                    </p>
-
-                    {windowsOnboardingGuidance && (
-                      <div className={`onboarding-platform-panel ${windowsOnboardingGuidance.tone}`}>
-                        <div className="onboarding-platform-title">{windowsOnboardingGuidance.title}</div>
-                        <div className="onboarding-platform-body">{windowsOnboardingGuidance.body}</div>
-                        <ul className="onboarding-platform-list">
-                          {windowsOnboardingGuidance.checklist.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                        <div className="onboarding-platform-actions">
-                          {windowsOnboardingGuidance.canInstallWsl && (
-                            <button
-                              type="button"
-                              className="onboarding-platform-btn"
-                              onClick={handleInstallWsl}
-                              disabled={onboarding.submitting || onboarding.checking}
-                            >
-                              Install WSL
-                            </button>
-                          )}
-                          {windowsOnboardingGuidance.canInstallGitBash && (
-                            <button
-                              type="button"
-                              className="onboarding-platform-btn"
-                              onClick={handleInstallGitBash}
-                              disabled={onboarding.submitting || onboarding.checking}
-                            >
-                              Install Git Bash
-                            </button>
-                          )}
-                        </div>
-                        <div className="onboarding-provider-links onboarding-platform-links">
-                          <a href="https://learn.microsoft.com/windows/wsl/install" target="_blank" rel="noreferrer">Install WSL</a>
-                          <a href="https://gitforwindows.org/" target="_blank" rel="noreferrer">Install Git Bash</a>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="onboarding-step-title">1. Choose an inference provider</div>
-                    <div className="onboarding-provider-grid">
-                      {recommendedOnboardingProviders.map((providerOption) => (
-                        <button
-                          key={providerOption.id}
-                          type="button"
-                          className={`onboarding-provider-card ${onboarding.provider === providerOption.id ? 'selected' : ''}`}
-                          onClick={() => handleOnboardingProviderChange(providerOption.id)}
-                          disabled={onboarding.submitting || onboarding.checking}
-                        >
-                          <span className="onboarding-provider-name">{providerOption.name}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {advancedOnboardingProviders.length > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          className="onboarding-toggle-btn"
-                          onClick={() => setOnboarding((prev) => ({ ...prev, showAllProviders: !prev.showAllProviders }))}
-                          disabled={onboarding.submitting || onboarding.checking}
-                        >
-                          {onboarding.showAllProviders ? 'Hide other providers' : 'Show other providers'}
-                        </button>
-
-                        {onboarding.showAllProviders && (
-                          <>
-                            <label htmlFor="onboarding-provider">Other Providers</label>
-                            <select
-                              id="onboarding-provider"
-                              value={onboarding.provider}
-                              onChange={(e) => handleOnboardingProviderChange(e.target.value)}
-                              disabled={onboarding.submitting || onboarding.checking}
-                            >
-                              {onboarding.providers.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                  {p.requires_api_key && !p.has_credential ? ' (API key required)' : ''}
-                                </option>
-                              ))}
-                            </select>
-                          </>
-                        )}
-                      </>
-                    )}
-
-                    {selectedOnboardingProvider && (
-                      <div className="onboarding-provider-summary">
-                        <div className="onboarding-provider-summary-title">{selectedOnboardingProvider.name}</div>
-                        <div className="onboarding-provider-summary-body">{selectedOnboardingProvider.setup_hint || selectedOnboardingProvider.description}</div>
-                        <div className="onboarding-provider-links">
-                          {selectedOnboardingProvider.docs_url && (
-                            <a href={selectedOnboardingProvider.docs_url} target="_blank" rel="noreferrer">Docs</a>
-                          )}
-                          {selectedOnboardingProvider.signup_url && (
-                            <a href={selectedOnboardingProvider.signup_url} target="_blank" rel="noreferrer">Get API access</a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="onboarding-step-title">2. Choose a model</div>
-                    <label htmlFor="onboarding-model">Model</label>
-                    <input
-                      id="onboarding-model"
-                      value={onboarding.model}
-                      onChange={(e) => setOnboarding((prev) => ({ ...prev, model: e.target.value }))}
-                      placeholder="Enter model name"
-                      list="onboarding-models"
-                      disabled={onboarding.submitting || onboarding.checking}
-                    />
-                    <datalist id="onboarding-models">
-                      {(selectedOnboardingProvider?.models || []).map((modelName) => (
-                        <option key={modelName} value={modelName} />
-                      ))}
-                    </datalist>
-
-                    {selectedOnboardingProvider?.recommended_model && (
-                      <div className="onboarding-note">
-                        Recommended model: <strong>{selectedOnboardingProvider.recommended_model}</strong>
-                        {selectedOnboardingProvider.recommended_model_why ? ` — ${selectedOnboardingProvider.recommended_model_why}` : ''}
-                        {onboarding.model !== selectedOnboardingProvider.recommended_model && (
-                          <>
-                            {' '}
-                            <button
-                              type="button"
-                              className="onboarding-inline-action"
-                              onClick={() => setOnboarding((prev) => ({ ...prev, model: selectedOnboardingProvider.recommended_model, error: null }))}
-                              disabled={onboarding.submitting || onboarding.checking}
-                            >
-                              Use recommended model
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {selectedOnboardingProvider?.requires_api_key && !selectedOnboardingProvider?.has_credential && (
-                      <>
-                        <div className="onboarding-step-title">3. Add your API key</div>
-                        <label htmlFor="onboarding-api-key">{selectedOnboardingProvider.api_key_label || 'API Key'}</label>
-                        <input
-                          id="onboarding-api-key"
-                          type="password"
-                          value={onboarding.apiKey}
-                          onChange={(e) => setOnboarding((prev) => ({ ...prev, apiKey: e.target.value }))}
-                          placeholder="Paste API key"
-                          disabled={onboarding.submitting || onboarding.checking}
-                        />
-                        {selectedOnboardingProvider.api_key_help && (
-                          <div className="onboarding-help">{selectedOnboardingProvider.api_key_help}</div>
-                        )}
-                      </>
-                    )}
-
-                    {selectedOnboardingProvider?.requires_api_key && selectedOnboardingProvider?.has_credential && (
-                      <div className="onboarding-note">Credential already configured for this provider.</div>
-                    )}
-
-                    {onboarding.error && <div className="onboarding-error">{onboarding.error}</div>}
-                    {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
-
-                    <div className="onboarding-actions">
-                      <button
-                        type="button"
-                        onClick={refreshOnboardingStatus}
-                        disabled={onboarding.submitting}
-                      >
-                        Refresh
-                      </button>
-                      <button
-                        type="button"
-                        className="primary"
-                        onClick={handleCompleteOnboarding}
-                        disabled={onboarding.submitting || onboarding.checking}
-                      >
-                        {onboarding.submitting ? 'Saving...' : 'Complete Setup'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <OnboardingDialog
+                onboarding={onboarding}
+                selectedProvider={selectedProvider}
+                recommendedProviders={recommendedProviders}
+                advancedProviders={advancedProviders}
+                windowsGuidance={windowsGuidance}
+                onProviderChange={onProviderChange}
+                onComplete={handleCompleteOnboarding}
+                onSkip={onSkip}
+                onRefresh={refreshProviderList}
+                onInstallWsl={onInstallWsl}
+                onInstallGitBash={onInstallGitBash}
+                updateOnboarding={updateOnboarding}
+              />
             </UIManager>
           </EditorManagerProvider>
         </HotkeyProvider>

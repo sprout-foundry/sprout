@@ -6,7 +6,7 @@ import (
 )
 
 // handleMalformedToolCalls attempts to parse and execute tool calls from malformed content
-func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn TurnEvaluation, parserErrors []string) bool {
+func (ch *ConversationHandler) handleMalformedToolCalls(content string, turn *TurnEvaluation, parserErrors []string) bool {
 	ch.agent.debugLog("[tool] Attempting to parse malformed tool calls from content\n")
 
 	// Defensive nil check for fallbackParser

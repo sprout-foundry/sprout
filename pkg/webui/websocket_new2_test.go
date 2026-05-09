@@ -26,7 +26,7 @@ func TestNewSafeConn2(t *testing.T) {
 			t.Error("NewSafeConn() should set the conn field to the provided connection")
 		}
 
-		if safeConn.closed {
+		if safeConn.closed.Load() {
 			t.Error("NewSafeConn() should initialize closed to false")
 		}
 	})
@@ -348,7 +348,7 @@ func TestSafeConnInitialState2(t *testing.T) {
 	safeConn := NewSafeConn(conn)
 
 	t.Run("closed is initially false", func(t *testing.T) {
-		if safeConn.closed {
+		if safeConn.closed.Load() {
 			t.Error("NewSafeConn() should initialize closed to false")
 		}
 	})
@@ -381,7 +381,7 @@ func TestSafeConnNilConnEdgeCases2(t *testing.T) {
 		// After recovery, the closed flag is set and a nil error is returned
 		// The important thing is: no test panic
 		_ = err
-		if !safeConn.closed {
+		if !safeConn.closed.Load() {
 			t.Error("expected closed=true after WriteJSON on nil conn triggers panic recovery")
 		}
 	})

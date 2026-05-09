@@ -195,7 +195,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		// Instead of treating it as a tool failure, we need to signal the LLM to re-verify
 		//
 		// SECURITY BOUNDARY NOTE: The underlying classification in
-		// pkg/agent_tools/security.go is purely string-based heuristics with known
+		// pkg/agent_tools/security_classifier.go is purely string-based heuristics with known
 		// limitations (no filesystem access, no symlink resolution, no env variable
 		// expansion). This caution flow is a defense-in-depth layer, not a security
 		// boundary. Actual enforcement relies on the user's filesystem permissions,

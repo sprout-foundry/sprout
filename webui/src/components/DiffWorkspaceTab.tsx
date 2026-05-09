@@ -62,6 +62,12 @@ function DiffWorkspaceTab({
 
   const docs = useMemo(() => parseUnifiedDiffToDocuments(diffText), [diffText]);
 
+  // Stable reference to avoid recreating MergeView on every render
+  const collapseConfig = useMemo(
+    () => (collapseUnchanged ? { margin: 4, minSize: 3 } : undefined),
+    [collapseUnchanged],
+  );
+
   return (
     <div className="workspace-tab workspace-diff-tab">
       <div className="workspace-tab-header">
@@ -132,7 +138,7 @@ function DiffWorkspaceTab({
               fileName={path}
               aLabel="Before"
               bLabel="After"
-              collapseUnchanged={collapseUnchanged ? { margin: 4, minSize: 3 } : undefined}
+              collapseUnchanged={collapseConfig}
             />
           </div>
         ) : (

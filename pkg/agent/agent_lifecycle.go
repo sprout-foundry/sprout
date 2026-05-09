@@ -11,7 +11,6 @@ func (a *Agent) Shutdown() {
 	if a == nil {
 		return
 	}
-	a.initSubManagers()
 
 	// Save command history to configuration before shutdown.
 	if a.state != nil {
@@ -21,10 +20,12 @@ func (a *Agent) Shutdown() {
 	}
 
 	// Stop MCP servers (best-effort)
-	if mgr := a.mcpSub.GetManager(); mgr != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		_ = mgr.StopAll(ctx)
-		cancel()
+	if a.mcpSub != nil {
+		if mgr := a.mcpSub.GetManager(); mgr != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = mgr.StopAll(ctx)
+			cancel()
+		}
 	}
 
 	// Cancel interrupt context
@@ -33,9 +34,11 @@ func (a *Agent) Shutdown() {
 	}
 
 	// Close async output worker
-	if ch := a.output.GetAsyncOutput(); ch != nil {
-		close(ch)
-		a.output.SetAsyncOutput(nil)
+	if a.output != nil {
+		if ch := a.output.GetAsyncOutput(); ch != nil {
+			close(ch)
+			a.output.SetAsyncOutput(nil)
+		}
 	}
 
 	// Close debug log file

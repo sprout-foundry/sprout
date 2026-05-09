@@ -48,9 +48,165 @@ type GitFile struct {
 	Staged bool   `json:"staged,omitempty"`
 }
 
-func (ws *ReactWebServer) gitCommand(args ...string) *exec.Cmd {
-	return ws.gitCommandForWorkspace(ws.workspaceRoot, args...)
+// getGitStatus parses git status output for the default workspace
+func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
+	return ws.getGitStatusForWorkspace(ws.workspaceRoot)
 }
+
+func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitStatus, error) {
+	// Check if we're in a git repository
+	cmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
+	if err := cmd.Run(); err != nil {
+		// Not in a git repository
+		return &GitStatus{
+			Branch:    "",
+			Staged:    []GitFile{},
+			Modified:  []GitFile{},
+			Untracked: []GitFile{},
+			Truncated: false,
+		}, nil
+	}
+
+	// Get branch and tracking info
+	status := &GitStatus{}
+
+	// Get current branch
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "branch", "--show-current")
+	output, err := cmd.Output()
+	if err == nil {
+		status.Branch = strings.TrimSpace(string(output))
+	}
+
+	// Get ahead/behind info
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "rev-list", "--count", "--left-right", "@{u}...HEAD")
+	output, err = cmd.Output()
+	if err == nil {
+		parts := strings.Fields(string(output))
+		if len(parts) == 2 {
+			fmt.Sscanf(parts[0], "%d", &status.Behind)
+			fmt.Sscanf(parts[1], "%d", &status.Ahead)
+		}
+	}
+
+	// Get staged changes.
+	// Use tab-separated parsing so file names with spaces are preserved.
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status", "--cached")
+	output, err = cmd.Output()
+	if err == nil {
+		allStaged := []GitFile{}
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			if statusChar, path, ok := parseNameStatusLine(line); ok {
+				allStaged = append(allStaged, GitFile{
+					Path:   path,
+					Status: statusChar,
+					Staged: true,
+				})
+			}
+		}
+		if len(allStaged) > maxFilesPerSection {
+			status.Staged = allStaged[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Staged = allStaged
+		}
+	}
+
+	// Get unstaged changes.
+	// Use tab-separated parsing so file names with spaces are preserved.
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "diff", "--name-status")
+	output, err = cmd.Output()
+	if err == nil {
+		allModified := []GitFile{}
+		allDeleted := []GitFile{}
+		allRenamed := []GitFile{}
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			if statusChar, path, ok := parseNameStatusLine(line); ok {
+				if statusChar == "M" {
+					allModified = append(allModified, GitFile{
+						Path:   path,
+						Status: "M",
+						Staged: false,
+					})
+				} else if statusChar == "D" {
+					allDeleted = append(allDeleted, GitFile{
+						Path:   path,
+						Status: "D",
+						Staged: false,
+					})
+				} else if statusChar == "A" {
+					allModified = append(allModified, GitFile{
+						Path:   path,
+						Status: "A",
+						Staged: false,
+					})
+				} else if statusChar == "R" {
+					allRenamed = append(allRenamed, GitFile{
+						Path:   path,
+						Status: "R",
+						Staged: false,
+					})
+				}
+			}
+		}
+		if len(allModified) > maxFilesPerSection {
+			status.Modified = allModified[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Modified = allModified
+		}
+		if len(allDeleted) > maxFilesPerSection {
+			status.Deleted = allDeleted[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Deleted = allDeleted
+		}
+		if len(allRenamed) > maxFilesPerSection {
+			status.Renamed = allRenamed[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Renamed = allRenamed
+		}
+	}
+
+	// Get untracked files
+	cmd = ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--others", "--exclude-standard")
+	output, err = cmd.Output()
+	if err == nil {
+		allUntracked := []GitFile{}
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			if line == "" {
+				continue
+			}
+			allUntracked = append(allUntracked, GitFile{
+				Path:   strings.TrimSpace(line),
+				Status: "?",
+				Staged: false,
+			})
+		}
+		if len(allUntracked) > maxFilesPerSection {
+			status.Untracked = allUntracked[:maxFilesPerSection]
+			status.Truncated = true
+		} else {
+			status.Untracked = allUntracked
+		}
+	}
+
+	return status, nil
+}
+
+// getAllGitFiles converts status to single file list for backward compatibility
+func getAllGitFiles(status *GitStatus) []GitFile {
+	files := []GitFile{}
+	files = append(files, status.Staged...)
+	files = append(files, status.Modified...)
+	files = append(files, status.Untracked...)
+	files = append(files, status.Deleted...)
+	files = append(files, status.Renamed...)
+	return files
+}
+
+// Maximum number of files to return per section in git status to prevent UI hangs
+const maxFilesPerSection = 500
 
 func (ws *ReactWebServer) gitCommandForWorkspace(workspaceRoot string, args ...string) *exec.Cmd {
 	cmd := exec.Command("git", args...)
@@ -129,10 +285,6 @@ func containsPath(files []GitFile, path string) bool {
 	return false
 }
 
-func (ws *ReactWebServer) gitDiffAllowExitOne(args ...string) (string, error) {
-	return ws.gitDiffAllowExitOneForWorkspace(ws.workspaceRoot, args...)
-}
-
 func (ws *ReactWebServer) gitDiffAllowExitOneForWorkspace(workspaceRoot string, args ...string) (string, error) {
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
@@ -156,15 +308,11 @@ func truncateDiffOutput(diff string, maxBytes int) string {
 	return diff[:maxBytes] + "\n\n... [diff truncated]"
 }
 
-func gitOutputString(ws *ReactWebServer, args ...string) (string, error) {
-	return gitOutputStringForWorkspace(ws, ws.workspaceRoot, args...)
-}
-
 func gitOutputStringForWorkspace(ws *ReactWebServer, workspaceRoot string, args ...string) (string, error) {
 	cmd := ws.gitCommandForWorkspace(workspaceRoot, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("git diff: %w: %s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("git: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return strings.TrimSpace(string(output)), nil
 }

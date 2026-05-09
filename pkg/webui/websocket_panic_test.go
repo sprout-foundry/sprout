@@ -112,11 +112,11 @@ func TestWritePanicError_MarksConnectionClosed(t *testing.T) {
 		defer conn.Close()
 
 		sc := NewSafeConn(conn)
-		if sc.closed {
+		if sc.closed.Load() {
 			t.Error("SafeConn should not be closed before WritePanicError")
 		}
 		sc.WritePanicError("session", "loc", "panic")
-		if !sc.closed {
+		if !sc.closed.Load() {
 			t.Error("SafeConn should be closed after WritePanicError")
 		}
 	}))
@@ -134,7 +134,7 @@ func TestWritePanicError_MarksConnectionClosed(t *testing.T) {
 // writes to a closed SafeConn.
 func TestSafeConn_WriteJSON_IgnoresClosed(t *testing.T) {
 	sc := NewSafeConn(nil) // nil conn, but we only test the closed flag
-	sc.closed = true
+	sc.closed.Store(true)
 	err := sc.WriteJSON(map[string]string{"test": "data"})
 	if err != nil {
 		t.Errorf("WriteJSON on closed conn should return nil, got %v", err)
@@ -266,7 +266,7 @@ func TestSafeConn_WritePanicError_HandlesDoublePanic(t *testing.T) {
 	// This should not panic — the defensive recover inside WritePanicError
 	// should catch the nil pointer dereference
 	sc.WritePanicError("session", "loc", "test panic value")
-	if !sc.closed {
+	if !sc.closed.Load() {
 		t.Error("expected SafeConn to be marked closed after WritePanicError")
 	}
 }
@@ -344,7 +344,7 @@ func newTestEventBus() *events.EventBus {
 // concurrent close without panic.
 func TestSafeConn_WriteJSON_WithConcurrentClose(t *testing.T) {
 	sc := NewSafeConn(nil)
-	sc.closed = true
+	sc.closed.Store(true)
 
 	var wg sync.WaitGroup
 	wg.Add(2)

@@ -3,9 +3,9 @@
  *
  * Runs a single useEffect on mount that registers the service worker,
  * opens the WebSocket connection, loads initial stats/files/chat
- * sessions, and sets up the periodic stats polling and mobile
- * resize listener. Returns nothing — this is a fire-and-forget
- * initialisation hook.
+ * sessions, restores the workspace/session startup state, and sets up
+ * the periodic stats polling and mobile resize listener.
+ * Returns nothing — this is a fire-and-forget initialisation hook.
  */
 
 import { useEffect } from 'react';
@@ -13,9 +13,11 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
+import { getTabWorkspacePath } from '../services/clientSession';
+import { debugLog } from '../utils/log';
 import type { AppState } from '../types/app';
 import { useLog } from '../utils/log';
-import { useEvents } from '../contexts/EventsContext';
+import type { LocalEventsProvider } from '../services/localEventsProvider';
 import type { SproutEvent } from '../types/events';
 
 interface RecentFile {
@@ -24,6 +26,7 @@ interface RecentFile {
 }
 
 export interface UseAppInitializationOptions {
+  eventsProvider: LocalEventsProvider;
   handleEvent: (event: SproutEvent) => void;
   connectionTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   loadChatSessions: () => void;
@@ -36,6 +39,7 @@ export interface UseAppInitializationOptions {
 }
 
 export function useAppInitialization({
+  eventsProvider,
   handleEvent,
   connectionTimeoutRef,
   loadChatSessions,
@@ -46,7 +50,6 @@ export function useAppInitialization({
   handleReconnect,
 }: UseAppInitializationOptions): void {
   const log = useLog();
-  const events = useEvents();
   const apiService = ApiService.getInstance();
 
   useEffect(() => {
@@ -54,9 +57,9 @@ export function useAppInitialization({
     registerServiceWorker();
 
     // Initialize WebSocket connection
-    events.connect();
-    events.onEvent(handleEvent);
-    events.onReconnect(handleReconnect);
+    eventsProvider.connect();
+    eventsProvider.onEvent(handleEvent);
+    eventsProvider.onReconnect(handleReconnect);
 
     // Load initial stats
     const loadStats = () => {
@@ -108,6 +111,61 @@ export function useAppInitialization({
     // Load initial chat sessions
     loadChatSessions();
 
+    // Restore workspace and session startup state
+    const restoreStartupState = async () => {
+      try {
+        const workspace = await apiService.getWorkspace();
+        const workspaceRoot = String(workspace?.workspace_root || '').trim();
+        const daemonRoot = String(workspace?.daemon_root || '').trim();
+        if (workspaceRoot && daemonRoot && workspaceRoot === daemonRoot) {
+          const savedWorkspace = getTabWorkspacePath().trim();
+          if (savedWorkspace && savedWorkspace !== workspaceRoot) {
+            // A previous workspace was explicitly chosen — restore it silently.
+            try {
+              await apiService.setWorkspace(savedWorkspace);
+              return;
+            } catch (restoreError) {
+              debugLog('[startup] failed to auto-restore saved workspace:', restoreError);
+            }
+          }
+          // Only prompt when there is genuinely no prior choice. If savedWorkspace
+          // equals workspaceRoot the user intentionally set their workspace to the
+          // daemon root (e.g. home dir) — don't interrupt them with the picker.
+          if (!savedWorkspace) {
+            window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+          }
+        }
+      } catch (error) {
+        debugLog('[startup] workspace check failed:', error);
+      }
+
+      try {
+        const sessionsResponse = await apiService.getSessions('current');
+        const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
+        const currentSessionId = String(sessionsResponse?.current_session_id || '');
+        const currentSession = sessions.find((item: any) => String(item?.session_id || '') === currentSessionId);
+        const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
+        if (!currentHasMessages) {
+          const restorable = sessions.find((item: any) =>
+            String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+          );
+          if (restorable?.session_id) {
+            const restored = await apiService.restoreSession(String(restorable.session_id));
+            if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+              window.dispatchEvent(
+                new CustomEvent('ledit:session-restored', {
+                  detail: { messages: restored.messages },
+                }),
+              );
+            }
+          }
+        }
+      } catch (error) {
+        debugLog('[startup] session restore check failed:', error);
+      }
+    };
+    restoreStartupState().catch(() => {});
+
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000);
 
@@ -129,12 +187,12 @@ export function useAppInitialization({
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      events.removeEvent(handleEvent);
-      events.onReconnect(null);
-      events.disconnect();
+      eventsProvider.removeEvent(handleEvent);
+      eventsProvider.onReconnect(null);
+      eventsProvider.disconnect();
       window.removeEventListener('resize', checkBreakpoints);
       clearInterval(statsInterval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile, setIsTablet are stable useState setters; connectionTimeoutRef is a stable ref; events/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
-  }, [handleEvent, loadChatSessions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile, setIsTablet are stable useState setters; connectionTimeoutRef is a stable ref; eventsProvider/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
+  }, [handleEvent, loadChatSessions, eventsProvider]);
 }

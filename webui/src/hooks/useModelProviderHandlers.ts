@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { debugLog } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
@@ -16,18 +16,25 @@ import type { AppState } from '../types/app';
 export interface UseModelProviderHandlersOptions {
   state: AppState;
   setState: Dispatch<SetStateAction<AppState>>;
+  /** Shared refs for tracking pending provider changes across hooks. */
+  pendingProviderChangeRef?: MutableRefObject<boolean>;
+  pendingProviderChangeValueRef?: MutableRefObject<string | null>;
 }
 
 export interface UseModelProviderHandlersReturn {
   handleModelChange: (model: string) => void;
   handleProviderChange: (provider: string) => void;
-  handleViewChange: (view: 'chat' | 'editor' | 'git') => void;
+  handleViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
   handlePersonaChange: (persona: string) => void;
+  /** Refs exposed for sharing with other hooks (e.g., WS event handler). */
+  pendingProviderRef: MutableRefObject<string>;
 }
 
 export function useModelProviderHandlers({
   state,
   setState,
+  pendingProviderChangeRef,
+  pendingProviderChangeValueRef,
 }: UseModelProviderHandlersOptions): UseModelProviderHandlersReturn {
   const events = useEvents();
 
@@ -61,6 +68,12 @@ export function useModelProviderHandlers({
     (provider: string) => {
       debugLog('Provider changed to:', provider);
       pendingProviderRef.current = provider;
+      if (pendingProviderChangeRef) {
+        pendingProviderChangeRef.current = true;
+      }
+      if (pendingProviderChangeValueRef) {
+        pendingProviderChangeValueRef.current = provider;
+      }
       setState((prev) => ({
         ...prev,
         provider,
@@ -74,7 +87,7 @@ export function useModelProviderHandlers({
     [events],
   );
 
-  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git') => {
+  const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     setState((prev) => ({
       ...prev,
       currentView: view,
@@ -94,5 +107,5 @@ export function useModelProviderHandlers({
     [events],
   );
 
-  return { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange };
+  return { handleModelChange, handleProviderChange, handleViewChange, handlePersonaChange, pendingProviderRef };
 }

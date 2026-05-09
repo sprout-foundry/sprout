@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -108,6 +109,7 @@ func (a *Agent) persistEmbeddingIndexPreference(workspaceRoot string, enabled bo
 
 	// Ensure the .sprout directory exists
 	if err := os.MkdirAll(wsCfgDir, 0755); err != nil {
+		log.Printf("Failed to create embedding index config directory %s: %v", wsCfgDir, err)
 		return
 	}
 
@@ -131,6 +133,10 @@ func (a *Agent) persistEmbeddingIndexPreference(workspaceRoot string, enabled bo
 
 	// Write back
 	if data, err := json.MarshalIndent(existing, "", "  "); err == nil {
-		_ = os.WriteFile(wsCfgPath, data, 0600)
+		if err := os.WriteFile(wsCfgPath, data, 0600); err != nil {
+			log.Printf("Failed to write embedding index config to %s: %v", wsCfgPath, err)
+		}
+	} else {
+		log.Printf("Failed to marshal embedding index config: %v", err)
 	}
 }

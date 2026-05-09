@@ -795,7 +795,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `api_files.go` (1,270 lines) into: `file_stats.go`, `file_ops.go` (create/delete/rename), `file_read_write.go`, `file_consent.go`, `file_browser.go`, `git_status_helpers.go`. `pkg/webui/api_files.go`
 [x] - REFACTOR: Split `agent.go` (974 lines) into: `agent_creation.go` (NewAgent and factory), `agent_lifecycle.go` (Shutdown/interrupt), `agent_getters.go` (Get* methods), `agent_embedding.go` (embedding index mgmt). `pkg/agent/agent.go`
 [x] - REFACTOR: Split `conversation_handler.go` (761 lines) — extract `processResponse` god method (~300 lines, 15 returns) into `handleToolCalls`, `handleFinishReason`, `handleBlankIteration`, `handleIncompleteResponse`. `pkg/agent/conversation_handler.go`
-[] - REFACTOR: Split `settings_api_general.go` (1,021 lines) by settings domain (editor, terminal, git, appearance, agent behavior). `pkg/webui/settings_api_general.go`
+[x] - REFACTOR: Split `settings_api_general.go` (1,021 lines) by settings domain (editor, terminal, git, appearance, agent behavior). `pkg/webui/settings_api_general.go`
 [] - REFACTOR: Split `git_api_status.go` (929 lines) into status, stash, branches, and ref handling. `pkg/webui/git_api_status.go`
 [] - REFACTOR: Split `server.go` (734 lines) — extract routing into separate handler files, reduce single-file responsibility. `pkg/webui/server.go`
 [] - REFACTOR: Split `security.go` (1,154 lines) into: `security_classifier.go` (ClassifyToolCall/SecurityResult types), `shell_patterns.go` (safe/caution/dangerous whitelists), `shell_utils.go` (stripQuotedSections, maxRisk). `pkg/agent_tools/security.go`

@@ -2,11 +2,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"time"
-
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Shutdown attempts to gracefully stop background work and child processes
@@ -18,9 +14,11 @@ func (a *Agent) Shutdown() {
 	a.initSubManagers()
 
 	// Save command history to configuration before shutdown.
-	a.state.GetHistoryMutex().Lock()
-	a.saveHistoryToConfig()
-	a.state.GetHistoryMutex().Unlock()
+	if a.state != nil {
+		a.state.GetHistoryMutex().Lock()
+		a.saveHistoryToConfig()
+		a.state.GetHistoryMutex().Unlock()
+	}
 
 	// Stop MCP servers (best-effort)
 	if mgr := a.mcpSub.GetManager(); mgr != nil {
@@ -64,18 +62,4 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 // (e.g., tool execution) can derive from it and respect user cancellations.
 func (a *Agent) InterruptCtx() context.Context {
 	return a.interruptCtx
-}
-
-// GenerateResponse generates a simple response using the current model without tool calls
-func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
-	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking
-	if err != nil {
-		return "", agenterrors.NewProviderError("failed to generate response", err, a.GetProvider(), a.GetModel())
-	}
-
-	if len(resp.Choices) == 0 {
-		return "", agenterrors.NewProviderError(fmt.Sprintf("no response generated for %d messages", len(messages)), nil, a.GetProvider(), a.GetModel())
-	}
-
-	return resp.Choices[0].Message.Content, nil
 }

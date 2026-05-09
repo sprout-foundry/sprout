@@ -82,6 +82,11 @@ func populateAgentStats(stats map[string]interface{}, agentInst *agent.Agent) {
 	stats["streaming_enabled"] = agentInst.IsStreamingEnabled()
 	stats["debug_mode"] = agentInst.IsDebugMode()
 	stats["embedding_index_enabled"] = agentInst.IsEmbeddingIndexEnabled()
+	if em := agentInst.GetEmbeddingManager(); em != nil {
+		stats["embedding_index_building"] = em.IsBuilding()
+		stats["embedding_index_initialized"] = em.IsInitialized()
+		stats["embedding_index_size"] = em.IndexSize()
+	}
 }
 
 func (ws *ReactWebServer) gatherStatsForClientID(clientID string) map[string]interface{} {

@@ -207,7 +207,7 @@ func TestSecurityCautionVsDangerousBoundary(t *testing.T) {
 // TestSecurityCautionWorkflowIntegration documents and verifies the complete
 // security caution workflow that flows through multiple components:
 //
-//  1. ClassifyToolCall (pkg/agent_tools/security.go) → classifies risk
+//  1. ClassifyToolCall (pkg/agent_tools/security_classifier.go) → classifies risk
 //  2. ExecuteTool (pkg/agent/tool_definitions.go) → returns "security caution:" error for non-interactive CAUTION
 //  3. Tool executor (pkg/agent/tool_executor_sequential.go) → detects prefix, returns SECURITY_CAUTION_REQUIRED
 //  4. LLM sees the message → can re-assert safety and retry, ask user, or abort

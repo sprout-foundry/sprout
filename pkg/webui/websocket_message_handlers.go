@@ -12,13 +12,7 @@ import (
 
 func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
 	// Use the active chat's agent for provider changes.
-	activeChatID := ""
-	ws.mutex.RLock()
-	var ctx *webClientContext
-	if ctx = ws.clientContexts[clientID]; ctx != nil {
-		activeChatID = ctx.getActiveChatID()
-	}
-	ws.mutex.RUnlock()
+	ctx, activeChatID := ws.getActiveChatContext(clientID)
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
@@ -179,13 +173,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 
 func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
 	// Use the active chat's agent for model changes.
-	activeChatID := ""
-	ws.mutex.RLock()
-	var ctx *webClientContext
-	if ctx = ws.clientContexts[clientID]; ctx != nil {
-		activeChatID = ctx.getActiveChatID()
-	}
-	ws.mutex.RUnlock()
+	ctx, activeChatID := ws.getActiveChatContext(clientID)
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
@@ -301,13 +289,7 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 // handlePersonaChangeMessage handles persona change requests from the webui.
 func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
 	// Use the active chat's agent for persona changes.
-	activeChatID := ""
-	ws.mutex.RLock()
-	var ctx *webClientContext
-	if ctx = ws.clientContexts[clientID]; ctx != nil {
-		activeChatID = ctx.getActiveChatID()
-	}
-	ws.mutex.RUnlock()
+	ctx, activeChatID := ws.getActiveChatContext(clientID)
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {

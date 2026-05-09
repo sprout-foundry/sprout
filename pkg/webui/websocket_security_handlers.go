@@ -16,12 +16,7 @@ import (
 func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
 	// Route to the currently active chat's agent, since the security dialog
 	// is always shown in the context of the active chat view.
-	activeChatID := ""
-	ws.mutex.RLock()
-	if ctx := ws.clientContexts[clientID]; ctx != nil {
-		activeChatID = ctx.getActiveChatID()
-	}
-	ws.mutex.RUnlock()
+	_, activeChatID := ws.getActiveChatContext(clientID)
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {

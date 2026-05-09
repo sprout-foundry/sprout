@@ -110,6 +110,20 @@ func sanitizeClientID(id string) string {
 	return id
 }
 
+// getActiveChatContext returns the client context and active chat ID for a given client ID.
+// This is a convenience method to reduce repetitive mutex locking boilerplate in message handlers.
+// Returns (nil, "") if the client context does not exist.
+func (ws *ReactWebServer) getActiveChatContext(clientID string) (*webClientContext, string) {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	ctx := ws.clientContexts[clientID]
+	var chatID string
+	if ctx != nil {
+		chatID = ctx.getActiveChatID()
+	}
+	return ctx, chatID
+}
+
 func (ws *ReactWebServer) getOrCreateClientContext(clientID string) *webClientContext {
 	clientID = strings.TrimSpace(clientID)
 	if clientID == "" {

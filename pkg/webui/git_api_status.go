@@ -4,12 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 )
-
-const maxDiffBytes = 200000
 
 // handleAPIGitStatus handles git status requests
 func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Request) {
@@ -29,109 +24,5 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 		"message": "success",
 		"status":  status,
 		"files":   getAllGitFiles(status), // Backward compatibility
-	})
-}
-
-// handleAPIGitDiff handles git diff requests for a specific file
-func (ws *ReactWebServer) handleAPIGitDiff(w http.ResponseWriter, r *http.Request) {
-	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	reqPath := normalizeGitPath(r.URL.Query().Get("path"))
-	if reqPath == "" {
-		http.Error(w, "Path is required", http.StatusBadRequest)
-		return
-	}
-
-	// Convert absolute paths to workspace-relative for git operations.
-	reqPath = makeGitRelativePath(reqPath, workspaceRoot)
-
-	// Return empty diffs gracefully when not in a git repository.
-	checkCmd := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--git-dir")
-	if err := checkCmd.Run(); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message":       "success",
-			"path":          reqPath,
-			"has_staged":    false,
-			"has_unstaged":  false,
-			"staged_diff":   "",
-			"unstaged_diff": "",
-			"diff":          "No diff available for this file.",
-		})
-		return
-	}
-
-	stagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--cached", "--", reqPath)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get staged diff: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	unstagedDiff, err := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--", reqPath)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get unstaged diff: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// For untracked files, generate a synthetic diff against /dev/null.
-	if strings.TrimSpace(stagedDiff) == "" && strings.TrimSpace(unstagedDiff) == "" {
-		absPath := reqPath
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(workspaceRoot, absPath)
-		}
-		// Only try the synthetic diff if the file actually exists on disk
-		// (it may be clean/committed, in which case we just return empty diffs).
-		if _, statErr := os.Stat(absPath); statErr == nil {
-			// Check if the file is tracked by git. If it is, skip the synthetic diff.
-			cmd := ws.gitCommandForWorkspace(workspaceRoot, "ls-files", "--error-unmatch", "--", reqPath)
-			if cmd.Run() != nil {
-				// File is not tracked, so it's untracked - generate synthetic diff
-				untrackedDiff, untrackedErr := ws.gitDiffAllowExitOneForWorkspace(workspaceRoot, "diff", "--no-index", "--", "/dev/null", reqPath)
-				if untrackedErr == nil {
-					unstagedDiff = untrackedDiff
-				}
-			}
-			// If the file IS tracked, we leave diffs empty (file is clean)
-		}
-	}
-
-	stagedDiff = truncateDiffOutput(stagedDiff, maxDiffBytes)
-	unstagedDiff = truncateDiffOutput(unstagedDiff, maxDiffBytes)
-
-	var combined strings.Builder
-	if strings.TrimSpace(stagedDiff) != "" {
-		combined.WriteString("### Staged changes\n")
-		combined.WriteString(stagedDiff)
-		if !strings.HasSuffix(stagedDiff, "\n") {
-			combined.WriteString("\n")
-		}
-	}
-	if strings.TrimSpace(unstagedDiff) != "" {
-		if combined.Len() > 0 {
-			combined.WriteString("\n")
-		}
-		combined.WriteString("### Unstaged changes\n")
-		combined.WriteString(unstagedDiff)
-		if !strings.HasSuffix(unstagedDiff, "\n") {
-			combined.WriteString("\n")
-		}
-	}
-	if combined.Len() == 0 {
-		combined.WriteString("No diff available for this file.")
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":       "success",
-		"path":          reqPath,
-		"has_staged":    strings.TrimSpace(stagedDiff) != "",
-		"has_unstaged":  strings.TrimSpace(unstagedDiff) != "",
-		"staged_diff":   stagedDiff,
-		"unstaged_diff": unstagedDiff,
-		"diff":          combined.String(),
 	})
 }

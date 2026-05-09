@@ -111,3 +111,111 @@ func isBenignRedirection(cmd string) bool {
 		strings.Contains(lower, "> /dev/stdout") || strings.Contains(lower, ">> /dev/stdout") ||
 		strings.Contains(lower, "> /dev/stderr") || strings.Contains(lower, ">> /dev/stderr")
 }
+
+// getShellCommandReasoning returns a human-readable reasoning string
+func getShellCommandReasoning(cmd string, risk SecurityRisk) string {
+	switch risk {
+	case SecuritySafe:
+		return "Read-only or safe workspace operation"
+	case SecurityCaution:
+		if containsPrivilegedPackageInstall(cmd) {
+			return "Privileged package installation requested - review before continuing"
+		}
+		return "Potentially risky operation - review carefully"
+	case SecurityDangerous:
+		return "Dangerous operation detected - may cause data loss or system damage"
+	default:
+		return "Unknown operation type"
+	}
+}
+
+// getShellCommandRiskType returns a risk category string for user-facing messages
+func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) string {
+	if risk != SecurityDangerous {
+		return ""
+	}
+
+	cmdLower := strings.ToLower(cmd)
+
+	// rm -rf . or ~ or / or * or .git — mass deletion (check this first for specificity)
+	for _, pattern := range []string{"rm -rf .", "rm -rf ~", "rm -rf /", "rm -rf *", "rm -rf .git"} {
+		if strings.HasPrefix(cmdLower, pattern) {
+			return "mass_deletion"
+		}
+	}
+
+	// rm -rf of source/project directories (more specific than general dir deletion)
+	for _, pattern := range []string{
+		"rm -rf src/", "rm -rf src ", "rm -rf lib/", "rm -rf lib ",
+		"rm -rf app/", "rm -rf app ", "rm -rf pkg/", "rm -rf pkg ",
+		"rm -rf tests/", "rm -rf tests ", "rm -rf spec/", "rm -rf spec ",
+		"rm -rf include/", "rm -rf include ", "rm -rf pages/", "rm -rf pages ",
+		"rm -rf components/", "rm -rf components ",
+	} {
+		if strings.HasPrefix(cmdLower, pattern) {
+			return "source_code_destruction"
+		}
+	}
+
+	// rm -rf of arbitrary directories (general directory deletion)
+	// Check this last, after more specific patterns above
+	if (strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ")) && !isSafeRmRfPrefix(cmdLower) {
+		return "directory_deletion"
+	}
+
+	if strings.HasPrefix(cmdLower, "sudo ") {
+		return "privilege_escalation"
+	}
+	if strings.Contains(cmd, "chmod 777") || strings.Contains(cmd, "chmod 666") {
+		return "insecure_permissions"
+	}
+	if (strings.Contains(cmd, "curl") || strings.Contains(cmd, "wget")) &&
+		(strings.Contains(cmd, "| bash") || strings.Contains(cmd, "| sh")) {
+		return "remote_code_execution"
+	}
+	if strings.HasPrefix(cmdLower, "eval ") || cmd == "eval" {
+		return "arbitrary_code_execution"
+	}
+	if strings.HasPrefix(cmdLower, "git push --force") || strings.HasPrefix(cmdLower, "git push -f") {
+		return "destructive_git_operation"
+	}
+	if strings.HasPrefix(cmdLower, "git branch -d") || strings.HasPrefix(cmdLower, "git branch -D") {
+		return "destructive_git_operation"
+	}
+	if strings.Contains(cmd, "() { :|: }") || strings.Contains(cmd, "fork bomb") {
+		return "system_instability"
+	}
+	if strings.HasPrefix(cmdLower, "killall -9") {
+		return "system_instability"
+	}
+	if strings.HasPrefix(cmd, "mkfs") {
+		return "disk_destruction"
+	}
+	if strings.HasPrefix(cmd, "fdisk") || strings.HasPrefix(cmd, "parted") || strings.HasPrefix(cmd, "gparted") {
+		return "disk_destruction"
+	}
+	if strings.Contains(cmd, "dd if=/dev/zero") || strings.Contains(cmd, "dd if=/dev/urandom") ||
+		strings.Contains(cmd, "dd of=/dev/sda") || strings.Contains(cmd, "dd of=/dev/sdb") ||
+		strings.Contains(cmd, "dd of=/dev/nvme") {
+		return "disk_destruction"
+	}
+	// Output redirection to system directories
+	for _, dir := range []string{"/etc/", "/usr/", "/bin/", "/sbin/", "/var/", "/opt/", "/boot/", "/root/"} {
+		if strings.Contains(cmd, "> "+dir) || strings.Contains(cmd, ">> "+dir) {
+			return "system_integrity"
+		}
+	}
+	if (strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">> /dev/")) &&
+		!strings.Contains(cmd, "> /dev/null") && !strings.Contains(cmd, ">> /dev/null") &&
+		!strings.Contains(cmd, "> /dev/stdout") && !strings.Contains(cmd, ">> /dev/stdout") &&
+		!strings.Contains(cmd, "> /dev/stderr") && !strings.Contains(cmd, ">> /dev/stderr") {
+		return "system_integrity"
+	}
+
+	// Fall back to generic critical system operation for anything caught by isCriticalSystemOperation
+	if isCritical {
+		return "critical_system_operation"
+	}
+
+	return ""
+}

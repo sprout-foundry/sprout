@@ -30,11 +30,15 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 	safeConn := NewSafeConn(conn)
 	defer safeConn.Close()
 
+	// Resolve client ID for panic cleanup (terminal connections typically have empty clientID)
+	clientID := ws.resolveClientID(r)
+
 	// Panic recovery - now safeConn is available
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Terminal WebSocket handler panic: %v", r)
 			safeConn.WritePanicError(sessionID, "terminal handler", r)
+			ws.cleanupAfterPanic(clientID, sessionID)
 		}
 	}()
 

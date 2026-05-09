@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/websocket"
 )
@@ -12,50 +13,49 @@ import (
 type SafeConn struct {
 	conn    *websocket.Conn
 	writeMu sync.Mutex
-	closed  bool
+	closed  atomic.Bool
 }
 
 // NewSafeConn creates a new safe connection wrapper
 func NewSafeConn(conn *websocket.Conn) *SafeConn {
 	return &SafeConn{
-		conn:   conn,
-		closed: false,
+		conn: conn,
 	}
 }
 
 // WriteJSON safely writes JSON to the WebSocket connection
 func (sc *SafeConn) WriteJSON(v interface{}) error {
-	if sc.closed {
+	if sc.closed.Load() {
 		return nil // Silently ignore writes to closed connections
 	}
 
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
 
-	if sc.closed {
+	if sc.closed.Load() {
 		return nil
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("WebSocket write panic recovered: %v", r)
-			sc.closed = true
+			sc.closed.Store(true)
 		}
 	}()
 
 	return sc.conn.WriteJSON(v)
 }
 
-// writeDirectJSON writes JSON directly to the underlying WebSocket connection,
+// writeDirectJSONLocked writes JSON directly to the underlying WebSocket connection,
 // bypassing the closed check. Used only during panic recovery to ensure
 // termination events reach the client even after the connection is marked closed.
 // Has its own panic recovery since it may be called from recover() paths.
 //
 // Preconditions: sc.writeMu must be held by caller.
-func (sc *SafeConn) writeDirectJSON(v interface{}) {
+func (sc *SafeConn) writeDirectJSONLocked(v interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("WebSocket writeDirectJSON panicked: %v", r)
+			log.Printf("WebSocket writeDirectJSONLocked panicked: %v", r)
 		}
 	}()
 	_ = sc.conn.WriteJSON(v)
@@ -64,7 +64,7 @@ func (sc *SafeConn) writeDirectJSON(v interface{}) {
 // Close closes the underlying connection
 func (sc *SafeConn) Close() error {
 	sc.writeMu.Lock()
-	sc.closed = true
+	sc.closed.Store(true)
 	sc.writeMu.Unlock()
 	return sc.conn.Close()
 }
@@ -82,10 +82,10 @@ func (sc *SafeConn) WritePanicError(sessionID, location string, r interface{}) {
 	log.Printf("WebSocket panic in %s (session %s): %v", location, sessionID, r)
 	sc.writeMu.Lock()
 	defer sc.writeMu.Unlock()
-	sc.closed = true
+	sc.closed.Store(true)
 
 	// Send error event directly so the client knows what happened.
-	sc.writeDirectJSON(map[string]interface{}{
+	sc.writeDirectJSONLocked(map[string]interface{}{
 		"type": "error",
 		"data": map[string]string{
 			"message":    fmt.Sprintf("Internal error in %s", location),
@@ -98,7 +98,7 @@ func (sc *SafeConn) WritePanicError(sessionID, location string, r interface{}) {
 	// state (e.g. hide the "running" spinner). The normal write path (WriteJSON)
 	// silently drops events on closed connections, and since we just set
 	// sc.closed = true, only a direct write guarantees delivery.
-	sc.writeDirectJSON(map[string]interface{}{
+	sc.writeDirectJSONLocked(map[string]interface{}{
 		"type": "session_terminated",
 		"data": map[string]interface{}{
 			"session_id": sessionID,

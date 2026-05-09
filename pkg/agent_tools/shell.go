@@ -79,7 +79,7 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		}
 	}
 
-	// NOTE: Security validation is handled by the static classifier in security.go, invoked at the tool registry level
+	// NOTE: Security validation is handled by the static classifier in security_classifier.go, invoked at the tool registry level
 
 	if streamOutput {
 		// STREAMING MODE: Use pipes for real-time output

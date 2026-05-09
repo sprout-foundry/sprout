@@ -120,7 +120,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 			})
 			return
 		}
-		file.Close()
+		defer file.Close()
 	}
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(canonicalPath, "created", ""))

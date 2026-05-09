@@ -315,6 +315,65 @@ func (ch *ConversationHandler) handleBlankOrRepetitiveIteration(ctx *responseCon
 	return responseDecideFallThrough
 }
 
+// recordAssistantMessage appends tool calls to the turn record and
+// constructs an assistant message, snapshotting tool calls so that
+// tool outputs remain properly linked.
+func (ch *ConversationHandler) recordAssistantMessage(ctx *responseContext) {
+	ctx.turn.ToolCalls = append(ctx.turn.ToolCalls, ctx.toolCalls...)
+
+	// Preserve tool calls (with generated IDs if needed) so tool outputs remain linked
+	var toolCallsSnapshot []api.ToolCall
+	if len(ctx.toolCalls) > 0 {
+		toolCallsSnapshot = make([]api.ToolCall, len(ctx.toolCalls))
+		copy(toolCallsSnapshot, ctx.toolCalls)
+	}
+
+	assistantMsg := api.Message{
+		Role:             "assistant",
+		Content:          ctx.contentUsed,
+		ReasoningContent: ctx.reasoningContent,
+		ToolCalls:        toolCallsSnapshot,
+	}
+	if assistantMsg.Role != "" {
+		ch.agent.state.AddMessage(assistantMsg)
+	}
+}
+
+// handleNoToolContent handles the path when the LLM response contained no tool calls.
+// It delegates to the malformed handler, finish reason dispatcher, blank iteration
+// handler, and final incomplete-response check. Returns the finalizeTurn result.
+func (ch *ConversationHandler) handleNoToolContent(ctx *responseContext, choice api.Choice) bool {
+	// If no tool_calls came back but the content suggests attempted tool usage,
+	// try to parse and execute them using fallback parser
+	if !ch.responseValidator.ValidateToolCalls(ctx.contentUsed) {
+		return ch.handleMalformedToolCalls(ctx.contentUsed, &ctx.turn, ctx.parserErrors)
+	}
+
+	// Handle finish reason (empty or non-empty)
+	if decision := ch.handleFinishReasonDispatch(ctx, choice); decision != responseDecideFallThrough {
+		return ch.finalizeTurn(ctx.turn, decision == responseDecideStop)
+	}
+
+	// Handle blank/repetitive iterations
+	if decision := ch.handleBlankOrRepetitiveIteration(ctx); decision != responseDecideFallThrough {
+		return ch.finalizeTurn(ctx.turn, decision == responseDecideStop)
+	}
+
+	// Final check for incomplete responses
+	if ch.responseValidator.IsIncomplete(ctx.contentUsed) {
+		ch.agent.debugLog("[WARN] Response appears incomplete, asking model to continue\n")
+		ch.handleIncompleteResponse()
+		ctx.turn.GuardrailTrigger = "incomplete response reminder"
+		ch.updateTurnRecord(ctx.contentUsed, nil, ctx.parserErrors, ctx.fallbackUsed, ctx.fallbackOutput)
+		return ch.finalizeTurn(ctx.turn, false)
+	}
+
+	// Response doesn't look incomplete — respect the model's judgment
+	ch.agent.debugLog("[...] Model response continuing conversation\n")
+	ch.updateTurnRecord(ctx.contentUsed, nil, ctx.parserErrors, ctx.fallbackUsed, ctx.fallbackOutput)
+	return ch.finalizeTurn(ctx.turn, false)
+}
+
 // normalizeToolCallsForExecution normalizes tool calls for execution: parses
 // and repairs arguments, normalizes the Type field to "function".
 func normalizeToolCallsForExecution(toolCalls []api.ToolCall) ([]api.ToolCall, []api.ToolCall) {

@@ -20,7 +20,7 @@ func TestHandleMalformedToolCalls_NilFallbackParser(t *testing.T) {
 	turn := TurnEvaluation{}
 	parserErrors := []string{"initial error"}
 
-	result := ch.handleMalformedToolCalls("some malformed content", turn, parserErrors)
+	result := ch.handleMalformedToolCalls("some malformed content", &turn, parserErrors)
 
 	if result != false {
 		t.Error("expected false return value")
@@ -33,7 +33,7 @@ func TestHandleMalformedToolCalls_FallbackParserReturnsNil(t *testing.T) {
 	ch := NewConversationHandler(agent)
 
 	// Content that has no tool call patterns → fallback parser returns nil
-	result := ch.handleMalformedToolCalls("just plain text with no tool calls", TurnEvaluation{}, nil)
+	result := ch.handleMalformedToolCalls("just plain text with no tool calls", &TurnEvaluation{}, nil)
 
 	if result != false {
 		t.Error("expected false return value")
@@ -52,7 +52,7 @@ func TestHandleMalformedToolCalls_FallbackParserReturnsEmptyToolCalls(t *testing
 		"arguments": "not a real tool"
 	}
 	`
-	result := ch.handleMalformedToolCalls(content, TurnEvaluation{}, []string{"parser failed"})
+	result := ch.handleMalformedToolCalls(content, &TurnEvaluation{}, []string{"parser failed"})
 
 	if result != false {
 		t.Error("expected false return value")
@@ -73,7 +73,7 @@ func TestHandleMalformedToolCalls_SuccessWithKnownTool(t *testing.T) {
 	// shell_command is a known tool, so the fallback parser should pick it up
 	content := `shell_command {"command": "echo hello"}`
 
-	result := ch.handleMalformedToolCalls(content, TurnEvaluation{}, nil)
+	result := ch.handleMalformedToolCalls(content, &TurnEvaluation{}, nil)
 
 	// Should return false (continue conversation)
 	if result != false {
@@ -104,7 +104,7 @@ func TestHandleMalformedToolCalls_WithCodeBlock(t *testing.T) {
 	// Content with code block containing tool_calls pattern
 	content := "```json\n{\"tool_calls\":[{\"id\":\"abc\",\"type\":\"function\",\"function\":{\"name\":\"shell_command\",\"arguments\":\"{\\\"command\\\":\\\"ls\\\"}\"}}]}\n```"
 
-	result := ch.handleMalformedToolCalls(content, TurnEvaluation{}, nil)
+	result := ch.handleMalformedToolCalls(content, &TurnEvaluation{}, nil)
 
 	// Should return false (continue conversation)
 	if result != false {
@@ -117,7 +117,7 @@ func TestHandleMalformedToolCalls_EmptyContent(t *testing.T) {
 	defer agent.Shutdown()
 	ch := NewConversationHandler(agent)
 
-	result := ch.handleMalformedToolCalls("", TurnEvaluation{}, nil)
+	result := ch.handleMalformedToolCalls("", &TurnEvaluation{}, nil)
 
 	if result != false {
 		t.Error("expected false return value for empty content")
@@ -138,7 +138,7 @@ func TestHandleMalformedToolCalls_TentativeRejectionReset(t *testing.T) {
 	// Use a code block format that the fallback parser can parse
 	content := "```json\n{\"tool_calls\":[{\"id\":\"tc1\",\"type\":\"function\",\"function\":{\"name\":\"shell_command\",\"arguments\":\"{\\\"command\\\":\\\"echo test\\\"}\"}}]}\n```"
 
-	ch.handleMalformedToolCalls(content, TurnEvaluation{}, nil)
+	ch.handleMalformedToolCalls(content, &TurnEvaluation{}, nil)
 
 	// After successful fallback parsing, tentativeRejectionCount should be reset
 	if ch.tentativeRejectionCount != 0 {

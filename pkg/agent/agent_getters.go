@@ -249,7 +249,7 @@ func (a *Agent) GetValidator() *validation.Validator {
 	return a.validator
 }
 
-// SetTraceSessionsets the trace session for dataset collection
+// SetTraceSession sets the trace session for dataset collection
 func (a *Agent) SetTraceSession(traceSession interface{}) {
 	a.traceSession = traceSession
 	a.state.SetTraceSession(traceSession)

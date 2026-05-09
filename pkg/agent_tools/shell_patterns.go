@@ -256,3 +256,211 @@ func isSafeShellCommand(cmd string) bool {
 
 	return false
 }
+
+// isDangerousPattern checks for dangerous patterns
+func isDangerousPattern(cmd string) bool {
+	cmdLower := strings.ToLower(cmd)
+	if strings.HasPrefix(cmd, "eval ") || cmd == "eval" {
+		return true
+	}
+	if strings.HasPrefix(cmd, "sudo ") && !isPrivilegedPackageInstall(cmd) {
+		return true
+	}
+	if strings.Contains(cmd, "chmod 777") || strings.Contains(cmd, "chmod 666") {
+		return true
+	}
+
+	// Pipe-to-shell patterns are checked in classifyChainedCommand on the
+	// full command string (with quoted sections stripped). No need to check
+	// again here on individual command parts — any | remaining in a part
+	// after chain splitting is inside quotes (e.g., grep regex alternation).
+
+	// curl/wget piped to shell
+	if (strings.Contains(cmd, "curl") || strings.Contains(cmd, "wget")) &&
+		(strings.Contains(cmd, "| bash") || strings.Contains(cmd, "| sh")) {
+		return true
+	}
+
+	// Dangerous git operations
+	dangerousGit := []string{"git push --force", "git push -f", "git branch -D", "git branch -d", "git clean -ff", "git clean -fd", "git clean -ffd"}
+	for _, op := range dangerousGit {
+		if strings.HasPrefix(cmd, op) {
+			return true
+		}
+	}
+
+	// Check for rm -rf or rm -fr (case-insensitive) - default to dangerous
+	// Check if an rm -rf target is safe (O(1) map lookup)
+	if isSafeRmRfPrefix(cmdLower) {
+		return false
+	}
+	// All other rm -rf commands not in the safe allowlist are dangerous
+	if strings.HasPrefix(cmdLower, "rm -rf ") || strings.HasPrefix(cmdLower, "rm -fr ") {
+		return true
+	}
+
+	// Dangerous system operations
+	dangerousSys := []string{"mkfs", "dd if=/dev/zero", "dd if=/dev/urandom", "fdisk", "parted", "gparted", "init 0", "init 6", "reboot", "shutdown -h"}
+	for _, op := range dangerousSys {
+		if strings.Contains(cmd, op) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isCautionPattern checks for caution-level patterns.
+// This is deliberately minimal — almost everything is SAFE now.
+// Only true deletion operations remain as CAUTION (never DANGEROUS).
+func isCautionPattern(cmd string) bool {
+	cautionPatterns := []string{
+		"rm ",       // single file deletion (rm without -rf flag; rm -rf commands use safeRmRfPrefixes whitelist)
+		"docker rm", // container deletion
+	}
+
+	for _, pattern := range cautionPatterns {
+		if strings.HasPrefix(cmd, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func isPrivilegedPackageInstall(cmd string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(cmd))
+	installPrefixes := []string{
+		"sudo apt-get install",
+		"sudo apt install",
+		"sudo yum install",
+		"sudo dnf install",
+		"sudo brew install",
+		"sudo snap install",
+		"sudo flatpak install",
+		"sudo apk add",
+	}
+	for _, prefix := range installPrefixes {
+		if normalized == prefix || strings.HasPrefix(normalized, prefix+" ") {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPrivilegedPackageInstall(cmd string) bool {
+	parts := strings.FieldsFunc(cmd, func(r rune) bool {
+		return r == ';' || r == '|'
+	})
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		subparts := strings.Split(part, "&&")
+		for _, sub := range subparts {
+			for _, candidate := range strings.Split(sub, "||") {
+				if isPrivilegedPackageInstall(candidate) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// safeRmRfPrefixes is a set of safe "rm -rf " (and "rm -fr ") command prefixes
+// for common development cleanup tasks (e.g., node_modules, build artifacts).
+// Only commands matching these exact prefixes bypass DANGEROUS classification.
+//
+// Uses map[string]bool for O(1) lookup instead of linear slice scan.
+// Each entry must explicitly include both "rm -rf dir/" and "rm -rf dir "
+// variants because "rm -rf dir" (no trailing char) is intentionally left
+// unmatched and classified as DANGEROUS for safety.
+//
+// See package-level documentation for limitations of this prefix-based approach
+// (no symlink following, no path normalization, no env variable expansion, etc.).
+var safeRmRfPrefixes = map[string]bool{
+	// Build artifacts and caches
+	"rm -rf node_modules/": true, "rm -rf node_modules ": true,
+	"rm -rf vendor/": true,       "rm -rf vendor ": true,
+	"rm -rf dist/": true,         "rm -rf dist ": true,
+	"rm -rf build/": true,        "rm -rf build ": true,
+	"rm -rf target/": true,       "rm -rf target ": true,
+	"rm -rf bin/": true,          "rm -rf bin ": true,
+	// Python caches
+	"rm -rf __pycache__/": true,  "rm -rf __pycache__ ": true,
+	// Dotfile caches and tool dirs
+	"rm -rf .cache/": true,       "rm -rf .cache ": true,
+	"rm -rf .gradle/": true,       "rm -rf .gradle ": true,
+	"rm -rf .next/": true,         "rm -rf .next ": true,
+	"rm -rf .npm/": true,          "rm -rf .npm ": true,
+	"rm -rf .yarn/": true,         "rm -rf .yarn ": true,
+	"rm -rf .pnpm/": true,         "rm -rf .pnpm ": true,
+	"rm -rf .m2/": true,           "rm -rf .m2 ": true,
+	"rm -rf .ivy/": true,          "rm -rf .ivy ": true,
+	"rm -rf .sbt/": true,          "rm -rf .sbt ": true,
+	"rm -rf .parcel-cache/": true, "rm -rf .parcel-cache ": true,
+	"rm -rf .turbo/": true,        "rm -rf .turbo ": true,
+	"rm -rf .nuxt/": true,         "rm -rf .nuxt ": true,
+	"rm -rf .output/": true,       "rm -rf .output ": true,
+	"rm -rf .astro/": true,        "rm -rf .astro ": true,
+	"rm -rf .svelte-kit/": true,   "rm -rf .svelte-kit ": true,
+	"rm -rf .sass-cache/": true,   "rm -rf .sass-cache ": true,
+	"rm -rf .stylelintcache/": true, "rm -rf .stylelintcache ": true,
+	"rm -rf .eslintcache/": true,  "rm -rf .eslintcache ": true,
+	"rm -rf .swc/": true,          "rm -rf .swc ": true,
+	"rm -rf .vercel/": true,       "rm -rf .vercel ": true,
+	"rm -rf .netlify/": true,      "rm -rf .netlify ": true,
+	"rm -rf .firebase/": true,     "rm -rf .firebase ": true,
+	"rm -rf .serverless/": true,   "rm -rf .serverless ": true,
+	// Infrastructure/DevOps dots
+	"rm -rf .terraform/": true,    "rm -rf .terraform ": true,
+	"rm -rf .aws/": true,          "rm -rf .aws ": true,
+	"rm -rf .kube/": true,         "rm -rf .kube ": true,
+	"rm -rf .docker/": true,       "rm -rf .docker ": true,
+	"rm -rf .docker-compose/": true, "rm -rf .docker-compose ": true,
+	// IDE/editor config dirs
+	"rm -rf .idea/": true,         "rm -rf .idea ": true,
+	"rm -rf .vscode/": true,       "rm -rf .vscode ": true,
+	"rm -rf .project/": true,      "rm -rf .project ": true,
+	"rm -rf .settings/": true,     "rm -rf .settings ": true,
+	"rm -rf .metadata/": true,     "rm -rf .metadata ": true,
+	// Virtual environments
+	"rm -rf venv/": true,          "rm -rf venv ": true,
+	"rm -rf .venv/": true,         "rm -rf .venv ": true,
+}
+
+// isSafeRmRfPrefix checks if a lowercased command matches one of the safe
+// rm -rf prefixes in O(1). It checks both "rm -rf " and "rm -fr " variants.
+func isSafeRmRfPrefix(cmdLower string) bool {
+	// Only check if it's an rm -rf command at all
+	if !strings.HasPrefix(cmdLower, "rm -rf ") && !strings.HasPrefix(cmdLower, "rm -fr ") {
+		return false
+	}
+
+	// Normalize to "rm -rf " for map lookup
+	normalized := cmdLower
+	if strings.HasPrefix(cmdLower, "rm -fr ") {
+		normalized = "rm -rf " + cmdLower[len("rm -fr "):]
+	}
+
+	// Try direct map lookup — covers exact matches like "rm -rf node_modules/"
+	if safeRmRfPrefixes[normalized] {
+		return true
+	}
+
+	// For commands like "rm -rf node_modules/sub/path", check each possible
+	// prefix by scanning for "/" or " " in the target. Since map lookups are O(1),
+	// this is still bounded by path depth (typically <10 characters to scan).
+	for i := len("rm -rf "); i < len(normalized); i++ {
+		c := normalized[i]
+		if c == '/' || c == ' ' {
+			prefix := normalized[:i+1] // include the separator for exact map match
+			if safeRmRfPrefixes[prefix] {
+				return true
+			}
+			break // only check the first path component
+		}
+	}
+	return false
+}

@@ -9,6 +9,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/prompts"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -303,4 +304,18 @@ func (a *Agent) GetTerminalManager() tools.TerminalAccess {
 // embedding is not configured or enabled in the agent's config).
 func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	return a.embeddingMgr
+}
+
+// GenerateResponse generates a simple response using the current model without tool calls
+func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
+	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking
+	if err != nil {
+		return "", agenterrors.NewProviderError("failed to generate response", err, a.GetProvider(), a.GetModel())
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", agenterrors.NewProviderError(fmt.Sprintf("no response generated for %d messages", len(messages)), nil, a.GetProvider(), a.GetModel())
+	}
+
+	return resp.Choices[0].Message.Content, nil
 }

@@ -10,7 +10,7 @@ import {
 } from '@codemirror/merge';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
 import { EditorState, Extension } from '@codemirror/state';
-import { defaultKeymap } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import { getLanguageExtensions, detectLanguage } from '../extensions/languageRegistry';
@@ -61,6 +61,10 @@ export interface MergeViewWrapperProps {
  *
  * In side-by-side mode, content changes update the editors in-place via
  * EditorView.dispatch() to avoid DOM teardown and scroll-position loss.
+ *
+ * The content sync effect tracks user edits (reverts) and does not overwrite
+ * them when props re-render — it only syncs when the prop content actually
+ * changes from the parent.
  */
 export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   originalContent,
@@ -85,13 +89,15 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const editorViewRef = useRef<EditorView | null>(null);
   // Track whether the side-by-side view has been created
   const sideBySideCreatedRef = useRef(false);
+  // Track the last prop content we synced, so we don't overwrite user edits
+  const lastSyncedContentRef = useRef<{ original: string; modified: string }>({ original: '', modified: '' });
   const [hunkInfo, setHunkInfo] = useState<{ current: number; total: number } | null>(null);
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   // Build base extensions shared by both panes
-  const buildBaseExtensions = useCallback(() => {
+  const buildBaseExtensions = useCallback((editable?: boolean) => {
     const syntaxStyle = isDark ? oneDarkHighlightStyle : defaultHighlightStyle;
     const extensions: Extension[] = [
       lineNumbers(),
@@ -108,12 +114,22 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
       }
     }
 
-    if (readOnly) {
+    if (readOnly && !editable) {
       extensions.push(EditorState.readOnly.of(true));
     }
 
     return extensions;
   }, [fileName, isDark, readOnly]);
+
+  // Build extensions for the editable pane B in side-by-side mode.
+  // Includes history for Ctrl+Z / Ctrl+Shift+Z support and revert keybindings.
+  const buildEditableExtensions = useCallback(() => {
+    const extensions = buildBaseExtensions(true);
+    // Add history so reverts can be undone/redone
+    extensions.push(history());
+    extensions.push(keymap.of(historyKeymap));
+    return extensions;
+  }, [buildBaseExtensions]);
 
   // Build unified mode extensions (closure captures originalContent)
   const buildUnifiedExtensions = useCallback(() => {
@@ -196,6 +212,22 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     }
   }, [updateSbsHunkInfo]);
 
+  const handleSbsUndo = useCallback(() => {
+    if (mergeViewRef.current?.b) undo(mergeViewRef.current.b);
+  }, []);
+
+  const handleSbsRedo = useCallback(() => {
+    if (mergeViewRef.current?.b) redo(mergeViewRef.current.b);
+  }, []);
+
+  const handleUnifiedUndo = useCallback(() => {
+    if (editorViewRef.current) undo(editorViewRef.current);
+  }, []);
+
+  const handleUnifiedRedo = useCallback(() => {
+    if (editorViewRef.current) redo(editorViewRef.current);
+  }, []);
+
   // Reset hunk info when mode changes
   useEffect(() => {
     if (mode !== 'side-by-side') setHunkInfo(null);
@@ -210,11 +242,21 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     containerRef.current.replaceChildren();
     sideBySideCreatedRef.current = false;
 
-    const baseExtensions = buildBaseExtensions();
+    // Pane A: read-only (original document)
+    const aExtensions = buildBaseExtensions(false);
+    // Pane B: editable with history for revert support
+    const bExtensions = buildEditableExtensions();
 
     // Add hunk navigation keymaps to both panes
-    const sbsExtensions = [
-      ...baseExtensions,
+    const aKeymaps = [
+      ...aExtensions,
+      keymap.of([
+        { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
+        { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
+      ]),
+    ];
+    const bKeymaps = [
+      ...bExtensions,
       keymap.of([
         { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
         { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
@@ -222,8 +264,8 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     ];
 
     const mv = new MergeView({
-      a: EditorState.create({ doc: originalContent, extensions: sbsExtensions }),
-      b: EditorState.create({ doc: modifiedContent, extensions: sbsExtensions }),
+      a: EditorState.create({ doc: originalContent, extensions: aKeymaps }),
+      b: EditorState.create({ doc: modifiedContent, extensions: bKeymaps }),
       parent: containerRef.current,
       orientation: 'a-b',
       revertControls: 'a-to-b',
@@ -234,6 +276,7 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
 
     mergeViewRef.current = mv;
     sideBySideCreatedRef.current = true;
+    lastSyncedContentRef.current = { original: originalContent, modified: modifiedContent };
 
     // Attach hunk tracking listeners to pane B after MergeView is created
     let cleanupListeners: (() => void) | undefined;
@@ -267,26 +310,32 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     };
     // Only recreate when structural config changes; content updates handled separately
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, buildBaseExtensions, highlightChanges, gutter, collapseUnchanged, sideBySideNavigation, updateSbsHunkInfo]);
+  }, [mode, buildBaseExtensions, buildEditableExtensions, highlightChanges, gutter, collapseUnchanged, sideBySideNavigation, updateSbsHunkInfo]);
 
-  // Update side-by-side content in-place without tearing down the MergeView
+  // Update side-by-side content in-place without tearing down the MergeView.
+  // Uses a ref to track the last prop content that was synced, so user edits
+  // (reverts) are not overwritten when the component re-renders with the same
+  // prop values.
   useEffect(() => {
     if (mode !== 'side-by-side' || !mergeViewRef.current || !sideBySideCreatedRef.current) return;
 
     const mv = mergeViewRef.current;
     const a = mv.a;
     const b = mv.b;
+    const synced = lastSyncedContentRef.current;
 
-    const aChanged = a.state.doc.toString() !== originalContent;
-    const bChanged = b.state.doc.toString() !== modifiedContent;
+    // Only update if the prop content has actually changed from what we last synced
+    const aNeedsUpdate = originalContent !== synced.original;
+    const bNeedsUpdate = modifiedContent !== synced.modified;
 
-    if (aChanged || bChanged) {
-      if (aChanged) {
+    if (aNeedsUpdate || bNeedsUpdate) {
+      if (aNeedsUpdate) {
         a.dispatch({ changes: { from: 0, to: a.state.doc.length, insert: originalContent } });
       }
-      if (bChanged) {
+      if (bNeedsUpdate) {
         b.dispatch({ changes: { from: 0, to: b.state.doc.length, insert: modifiedContent } });
       }
+      lastSyncedContentRef.current = { original: originalContent, modified: modifiedContent };
       // Update hunk info after content change
       setTimeout(updateSbsHunkInfo, 50);
     }
@@ -300,9 +349,14 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     if (mode !== 'unified' || !containerRef.current) return;
     containerRef.current.replaceChildren();
 
+    const extensions = buildUnifiedExtensions();
+    // Add history for undo/redo support
+    extensions.push(history());
+    extensions.push(keymap.of(historyKeymap));
+
     const state = EditorState.create({
       doc: modifiedContent,
-      extensions: buildUnifiedExtensions(),
+      extensions,
     });
 
     const view = new EditorView({ state, parent: containerRef.current });
@@ -332,14 +386,25 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
           <span className="sbs-hunk-info">
             {hunkInfo ? `${hunkInfo.current}/${hunkInfo.total} changes` : 'No changes'}
           </span>
-          <button type="button" className="btn-prev" onClick={handleSbsPrevChunk} title="Previous Change (Alt+Up)">
-            Prev
-            <span className="shortcut-hint">Alt+Up</span>
-          </button>
-          <button type="button" className="btn-next" onClick={handleSbsNextChunk} title="Next Change (Alt+Down)">
-            Next
-            <span className="shortcut-hint">Alt+Down</span>
-          </button>
+          <div className="sbs-nav-buttons">
+            <button type="button" className="btn-prev" onClick={handleSbsPrevChunk} title="Previous Change (Alt+Up)">
+              Prev
+              <span className="shortcut-hint">Alt+Up</span>
+            </button>
+            <button type="button" className="btn-next" onClick={handleSbsNextChunk} title="Next Change (Alt+Down)">
+              Next
+              <span className="shortcut-hint">Alt+Down</span>
+            </button>
+            <span className="btn-separator">|</span>
+            <button type="button" className="btn-undo" onClick={handleSbsUndo} title="Undo Revert (Ctrl+Z)">
+              Undo
+              <span className="shortcut-hint">Ctrl+Z</span>
+            </button>
+            <button type="button" className="btn-redo" onClick={handleSbsRedo} title="Redo Revert (Ctrl+Shift+Z)">
+              Redo
+              <span className="shortcut-hint">Ctrl+⇧+Z</span>
+            </button>
+          </div>
         </div>
       )}
       {mode === 'unified' && mergeControls && (
@@ -351,6 +416,15 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
           <button type="button" className="btn-next" onClick={handleNextChunk} title="Next Change (Alt+Down)">
             Next
             <span className="shortcut-hint">Alt+Down</span>
+          </button>
+          <span className="btn-separator">|</span>
+          <button type="button" className="btn-undo" onClick={handleUnifiedUndo} title="Undo (Ctrl+Z)">
+            Undo
+            <span className="shortcut-hint">Ctrl+Z</span>
+          </button>
+          <button type="button" className="btn-redo" onClick={handleUnifiedRedo} title="Redo (Ctrl+Shift+Z)">
+            Redo
+            <span className="shortcut-hint">Ctrl+⇧+Z</span>
           </button>
           <span className="btn-separator">|</span>
           <button type="button" className="btn-reject" onClick={handleReject} title="Reject Change">

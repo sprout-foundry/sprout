@@ -18,7 +18,7 @@ export interface PaneBridge {
   setActivePaneId: (id: string | null) => void;
   setPanes: React.Dispatch<React.SetStateAction<EditorPane[]>>;
   switchPane: (paneId: string) => void;
-  closeBuffer: (bufferId: string) => void;
+  closeBuffer: (bufferId: string) => void | Promise<void>;
   moveBufferToPane: (bufferId: string, paneId: string) => void;
 }
 
@@ -47,7 +47,7 @@ interface BufferManagerContextValue {
     bLabel?: string;
     title?: string;
   }) => string;
-  closeBuffer: (bufferId: string) => void;
+  closeBuffer: (bufferId: string) => void | Promise<void>;
   reorderBuffers: (sourceBufferId: string, targetBufferId: string) => void;
   moveBufferToPane: (bufferId: string, paneId: string) => void;
   switchToBuffer: (bufferId: string) => void;
@@ -282,7 +282,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     paneBridge.setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [activateBuffer, paneBridge.panes, switchToBuffer, paneBridge]);
+  }, [activateBuffer, switchToBuffer]);
 
   // Open workspace buffer
   const openWorkspaceBuffer = useCallback((options: {
@@ -319,7 +319,13 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
         });
         return next;
       });
-      activateBuffer(bufferId);
+      // Navigate to the buffer's existing pane if it's in a different pane
+      if (buffer.paneId && buffer.paneId !== paneBridge.activePaneId) {
+        paneBridge.setActivePaneId(buffer.paneId);
+        switchToBuffer(bufferId);
+      } else {
+        activateBuffer(bufferId);
+      }
       return bufferId;
     }
 
@@ -697,15 +703,18 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   }, [saveBuffer]);
 
   // Close a buffer
-  const closeBuffer = useCallback((bufferId: string) => {
+  const closeBuffer = useCallback(async (bufferId: string) => {
     const buffer = buffersRef.current.get(bufferId);
     if (!buffer) return;
     if (buffer.isClosable === false) return;
 
     if (buffer.isModified && isAutoSaveEnabled) {
-      saveBuffer(bufferId).catch(err => {
+      try {
+        await saveBuffer(bufferId);
+      } catch (err) {
         console.error('Failed to save buffer before closing:', bufferId, err);
-      });
+        return; // Block close on save failure
+      }
     }
 
     const remain = Array.from(buffersRef.current.values())

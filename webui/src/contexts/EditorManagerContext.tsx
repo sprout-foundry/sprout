@@ -15,9 +15,9 @@ import { PaneBridge } from './BufferManagerContext';
 // Re-export constants and hooks for backward compatibility
 // ---------------------------------------------------------------------------
 
-export { MAX_PANES, useEditorSettings } from './EditorSettingsContext';
-export { MIN_PANE_WIDTH_PERCENT, normalizePaneSize, usePaneManager } from './PaneManagerContext';
-export { useBufferManager, type PaneBridge } from './BufferManagerContext';
+export { MAX_PANES, DEFAULT_MAX_PANES, useEditorSettings, EditorSettingsProvider } from './EditorSettingsContext';
+export { MIN_PANE_WIDTH_PERCENT, normalizePaneSize, usePaneManager, PaneManagerProvider } from './PaneManagerContext';
+export { useBufferManager, type PaneBridge, BufferManagerProvider } from './BufferManagerContext';
 
 // ---------------------------------------------------------------------------
 // Combined Interface (matches original EditorManagerContextValue)
@@ -65,7 +65,7 @@ interface EditorManagerContextValue {
     bLabel?: string;
     title?: string;
   }) => string;
-  closeBuffer: (bufferId: string) => void;
+  closeBuffer: (bufferId: string) => void | Promise<void>;
   reorderBuffers: (sourceBufferId: string, targetBufferId: string) => void;
   moveBufferToPane: (bufferId: string, paneId: string) => void;
   closePane: (paneId: string) => void;
@@ -141,7 +141,7 @@ const PaneToBufferProvider: React.FC<{
 }> = ({ children, settings }) => {
   // Need to get closeBuffer from BufferManager first, but BufferManager needs PaneBridge
   // Use ref pattern to break circular dependency
-  const closeBufferRef = React.useRef<((bufferId: string) => void) | null>(null);
+  const closeBufferRef = React.useRef<((bufferId: string) => void | Promise<void>) | null>(null);
 
   return (
     <PaneManagerProvider maxPanes={settings.maxPanes} closeBuffer={(id) => closeBufferRef.current?.(id)}>
@@ -159,7 +159,7 @@ const PaneToBufferBridge: React.FC<{
     isFormatOnSaveEnabled: boolean;
     autoSaveInterval: number;
   };
-  closeBufferRef: React.MutableRefObject<((bufferId: string) => void) | null>;
+  closeBufferRef: React.MutableRefObject<((bufferId: string) => void | Promise<void>) | null>;
 }> = ({ children, settings, closeBufferRef }) => {
   const pane = usePaneContext();
 
@@ -206,7 +206,7 @@ const PaneToBufferBridge: React.FC<{
 
 const CombinedContextProvider: React.FC<{
   children: ReactNode;
-  closeBufferRef: React.MutableRefObject<((bufferId: string) => void) | null>;
+  closeBufferRef: React.MutableRefObject<((bufferId: string) => void | Promise<void>) | null>;
 }> = ({ children, closeBufferRef }) => {
   const settings = useSettings();
   const pane = usePaneContext();
@@ -215,7 +215,7 @@ const CombinedContextProvider: React.FC<{
   // Store closeBuffer for PaneManager to use
   closeBufferRef.current = buffer.closeBuffer;
 
-  const value: EditorManagerContextValue = {
+  const value = React.useMemo<EditorManagerContextValue>(() => ({
     // From BufferManager
     buffers: buffer.buffers,
     openFile: buffer.openFile,
@@ -267,7 +267,54 @@ const CombinedContextProvider: React.FC<{
     setFormatOnSaveEnabled: settings.setFormatOnSaveEnabled,
     maxPanes: settings.maxPanes,
     setMaxPanes: settings.setMaxPanes,
-  };
+  }), [
+    buffer.buffers,
+    buffer.openFile,
+    buffer.openWorkspaceBuffer,
+    buffer.openCompareBuffer,
+    buffer.closeBuffer,
+    buffer.reorderBuffers,
+    buffer.moveBufferToPane,
+    buffer.switchToBuffer,
+    buffer.updateBufferContent,
+    buffer.updateBufferCursor,
+    buffer.updateBufferScroll,
+    buffer.updateBufferMetadata,
+    buffer.updateBufferTitle,
+    buffer.saveBuffer,
+    buffer.setBufferModified,
+    buffer.setBufferOriginalContent,
+    buffer.setBufferExternallyModified,
+    buffer.clearBufferExternallyModified,
+    buffer.setBufferLanguageOverride,
+    buffer.saveAllBuffers,
+    buffer.toggleBufferPin,
+    buffer.setBufferPinned,
+    buffer.setBufferClosable,
+    buffer.reloadBufferFromDisk,
+    pane.panes,
+    pane.paneLayout,
+    pane.activePaneId,
+    pane.activeBufferId,
+    pane.paneSizes,
+    pane.isLinkedScrollEnabled,
+    pane.closePane,
+    pane.switchPane,
+    pane.splitPane,
+    pane.closeSplit,
+    pane.setPaneLayout,
+    pane.updatePaneSize,
+    pane.toggleLinkedScroll,
+    settings.isAutoSaveEnabled,
+    settings.setAutoSaveEnabled,
+    settings.whitespaceRenderingMode,
+    settings.setWhitespaceRenderingMode,
+    settings.autoSaveInterval,
+    settings.isFormatOnSaveEnabled,
+    settings.setFormatOnSaveEnabled,
+    settings.maxPanes,
+    settings.setMaxPanes,
+  ]);
 
   return (
     <EditorManagerContext.Provider value={value}>

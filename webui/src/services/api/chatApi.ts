@@ -5,10 +5,12 @@
 import { UploadImageResponse } from './types';
 
 export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: string): Promise<void> {
+  const reqBody: Record<string, string> = { query };
+  if (chatId) reqBody.chat_id = chatId;
   const response = await fetchFn('/api/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, chat_id: chatId }),
+    body: JSON.stringify(reqBody),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Query failed' }));
@@ -19,7 +21,7 @@ export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: s
 export async function uploadImage(fetchFn: typeof fetch, file: File | Blob): Promise<UploadImageResponse> {
   const formData = new FormData();
   formData.append('image', file);
-  const response = await fetchFn('/api/upload-image', { method: 'POST', body: formData });
+  const response = await fetchFn('/api/upload/image', { method: 'POST', body: formData });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Upload failed' }));
     throw new Error(data.message || data.error || 'Failed to upload image');
@@ -28,10 +30,12 @@ export async function uploadImage(fetchFn: typeof fetch, file: File | Blob): Pro
 }
 
 export async function steerQuery(fetchFn: typeof fetch, query: string, chatId?: string): Promise<void> {
+  const reqBody: Record<string, string> = { query };
+  if (chatId) reqBody.chat_id = chatId;
   const response = await fetchFn('/api/query/steer', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, chat_id: chatId }),
+    body: JSON.stringify(reqBody),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Steer failed' }));
@@ -40,6 +44,6 @@ export async function steerQuery(fetchFn: typeof fetch, query: string, chatId?: 
 }
 
 export async function stopQuery(fetchFn: typeof fetch): Promise<void> {
-  const response = await fetchFn('/api/stop', { method: 'POST' });
+  const response = await fetchFn('/api/query/stop', { method: 'POST' });
   if (!response.ok) throw new Error('Failed to stop query');
 }

@@ -46,7 +46,7 @@ export async function checkoutGitBranch(fetchFn: typeof fetch, branch: string): 
 }
 
 export async function createGitBranch(fetchFn: typeof fetch, name: string): Promise<GitBranchResponse> {
-  const response = await fetchFn('/api/git/branch', {
+  const response = await fetchFn('/api/git/branch/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -151,7 +151,7 @@ export async function createCommit(fetchFn: typeof fetch, message: string, files
 }
 
 export async function generateCommitMessage(fetchFn: typeof fetch): Promise<GitCommitMessageResponse> {
-  const response = await fetchFn('/api/git/generate-commit-message', {
+  const response = await fetchFn('/api/git/commit-message', {
     method: 'POST',
   });
   if (!response.ok) {
@@ -170,22 +170,22 @@ export async function getGitLog(fetchFn: typeof fetch, limit: number, offset: nu
 }
 
 export async function getGitCommitDetail(fetchFn: typeof fetch, hash: string): Promise<GitCommitDetailResponse> {
-  const response = await fetchFn(`/api/git/commit/${encodeURIComponent(hash)}`);
+  const response = await fetchFn(`/api/git/commit/show?hash=${encodeURIComponent(hash)}`);
   if (!response.ok) throw new Error('Failed to fetch commit detail');
   return response.json();
 }
 
 export async function getGitCommitFileDiff(fetchFn: typeof fetch, hash: string, path: string): Promise<GitCommitFileDiffResponse> {
-  const response = await fetchFn(`/api/git/commit/${encodeURIComponent(hash)}/diff/${encodeURIComponent(path)}`);
+  const response = await fetchFn(`/api/git/commit/show/file?hash=${encodeURIComponent(hash)}&path=${encodeURIComponent(path)}`);
   if (!response.ok) throw new Error('Failed to fetch commit file diff');
   return response.json();
 }
 
 export async function checkoutGitCommit(fetchFn: typeof fetch, commitHash: string): Promise<{ message: string }> {
-  const response = await fetchFn('/api/git/checkout-commit', {
+  const response = await fetchFn('/api/git/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ commit_hash: commitHash }),
+    body: JSON.stringify({ branch: commitHash }),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({ message: 'Checkout commit failed' }));

@@ -87,6 +87,11 @@ export interface ProviderOption {
   models: string[];
 }
 
+export interface ProviderModelsResponse {
+  provider: string;
+  models: string[];
+}
+
 export interface OnboardingProviderOption {
   id: string;
   name: string;
@@ -595,6 +600,55 @@ export interface SearchReplaceResponse {
   preview: boolean;
 }
 
+export interface SemanticSearchOptions {
+  top_k?: number;
+  threshold?: number;
+}
+
+export interface SemanticSearchResult {
+  file: string;
+  name: string;
+  signature: string;
+  start_line: number;
+  end_line: number;
+  language: string;
+  similarity: number;
+  type: string;  // "code_unit" or "file"
+}
+
+export interface SemanticSearchDuplicateCluster {
+  files: string[];
+  similarity: number;
+}
+
+export interface SemanticSearchResponse {
+  results: SemanticSearchResult[];
+  duplicate_clusters: SemanticSearchDuplicateCluster[];
+  query: string;
+  total: number;
+  duration: string;
+}
+
+export interface SemanticSearchStatusResponse {
+  available: boolean;
+  initialized: boolean;
+  building: boolean;
+  record_count: number;
+  workspace: string;
+  init_error?: string;
+}
+
+export interface SemanticSearchPreviewResponse {
+  file: string;
+  start_line: number;
+  snippet: Array<{
+    line_number: number;
+    content: string;
+    is_context: boolean;
+  }>;
+  total_lines: number;
+}
+
 // ── Editor types ────────────────────────────────────────────────────
 
 export interface DiagnosticEntry {
@@ -684,6 +738,41 @@ export interface SemanticCodeActionsResponse {
   method: string;
   capabilities: SemanticCapabilities & { hover: boolean; rename: boolean; references: boolean; code_actions: boolean };
   code_actions?: Array<{ title: string; kind: string; edits: Array<{ filePath: string; from: number; to: number; newText: string }> }> | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticInlayHintsResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities & { inlay_hints: boolean };
+  inlay_hints?: Array<{ from: number; to: number; label: string; kind: 'type' | 'parameter' | 'none' }> | null;
+  duration_ms?: number;
+  error?: string;
+  version: string;
+}
+
+export interface SemanticSignatureHelpResponse {
+  message: string;
+  path: string;
+  language_id: string;
+  method: string;
+  capabilities: SemanticCapabilities & { hover: boolean; signature_help: boolean };
+  signature_help?: {
+    signatures: Array<{
+      label: string;
+      documentation?: string;
+      parameters: Array<{
+        label: string;
+        documentation?: string;
+      }>;
+    }>;
+    activeSignature: number;
+    activeParameter: number;
+  } | null;
   duration_ms?: number;
   error?: string;
   version: string;

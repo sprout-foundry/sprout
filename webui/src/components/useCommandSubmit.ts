@@ -42,6 +42,26 @@ export function useCommandSubmit({
   isComposingRef,
   disabled,
 }: UseCommandSubmitOptions): UseCommandSubmitReturn {
+  const buildCommandWithImages = useCallback(
+    (baseCommand: string) => {
+      const trimmed = baseCommand.trim();
+      const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
+      if (uploadedImages.length === 0) return trimmed;
+      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
+      return `${imagePaths}\n\n${trimmed}`;
+    },
+    [attachedImages],
+  );
+
+  const resetAndFocus = useCallback(() => {
+    updateValue('', { start: 0, end: 0 });
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    }, 100);
+  }, [updateValue, inputRef]);
+
   // Helper to call onSend/onSendCommand with a command string
   const commandRef = useCallback(
     async (command: string) => {
@@ -53,15 +73,10 @@ export function useCommandSubmit({
         onSendCommand(command);
       }
 
-      updateValue('', { start: 0, end: 0 });
-
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, 100);
+      // Clear textarea and focus back to input
+      resetAndFocus();
     },
-    [onSend, onSendCommand, updateValue, resetHistoryNavigation, inputRef],
+    [onSend, onSendCommand, resetHistoryNavigation, resetAndFocus],
   );
 
   const handleSend = async () => {
@@ -69,12 +84,7 @@ export function useCommandSubmit({
     if (textareaValue.trim() === '') return;
 
     // Build query with image paths
-    let commandToSend = textareaValue.trim();
-    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
-    if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
-      commandToSend = `${imagePaths}\n\n${commandToSend}`;
-    }
+    const commandToSend = buildCommandWithImages(textareaValue);
 
     // Reset history navigation
     resetHistoryNavigation();
@@ -88,48 +98,34 @@ export function useCommandSubmit({
 
     void saveToHistory(commandToSend);
 
-    // Clear textarea using onChange for controlled component
-    updateValue('', { start: 0, end: 0 });
-
     // Clear attached images and revoke URLs
     clearImages();
 
-    // Focus back to input
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 100);
+    // Clear textarea and focus back to input
+    resetAndFocus();
   };
 
   const handleQueue = async () => {
+    if (isComposingRef.current) return;
     const textareaValue = draftValue;
     if (textareaValue.trim() === '') return;
 
     // Build query with image paths
-    let commandToQueue = textareaValue.trim();
-    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
-    if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
-      commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
-    }
+    const commandToQueue = buildCommandWithImages(textareaValue);
 
     resetHistoryNavigation();
     onQueue?.(commandToQueue);
     void saveToHistory(commandToQueue);
-    updateValue('', { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
     clearImages();
 
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 100);
+    // Clear textarea and focus back to input
+    resetAndFocus();
   };
 
   const handleNewSession = useCallback(async () => {
+    if (isComposingRef.current) return;
     if (isProcessing) {
       const confirmed = await showThemedConfirm('A request is currently processing. Stop it and start a new session?', {
         type: 'warning',

@@ -1,44 +1,32 @@
-import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
-import { Menu, X, Columns2, Rows2, PanelRightOpen, PanelRightClose, MessageSquarePlus } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Menu, PanelRightClose } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
-import WorkspaceBar from './WorkspaceBar';
 import Terminal from './Terminal';
-import EditorTabs from './EditorTabs';
-import WorkspacePane from './WorkspacePane';
-import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
-import ResizeHandle from './ResizeHandle';
-import EditorWithOutline from './EditorWithOutline';
 import Status from './Status';
-import MenuBar from './MenuBar';
 import StatusBar from './StatusBar';
 import NotificationCenter from './NotificationCenter';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
-import { TasksPage, BillingPage, TeamPage } from './platform';
-import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
-import { ApiService, SproutInstance } from '../services/api';
+import HeaderBar from './HeaderBar';
+import EditorWorkspace from './EditorWorkspace';
+import ContextSidebar from './ContextSidebar';
+import { useEditorManager } from '../contexts/EditorManagerContext';
+import { ApiService } from '../services/api';
 import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
+import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
+import { useInstances } from '../hooks/useInstances';
+import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
+import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
+import { useActiveChatTab } from '../hooks/useActiveChatTab';
+import { useFileHandler } from '../hooks/useFileHandler';
+import { useCurrentTodos } from '../hooks/useCurrentTodos';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
 import type { TodoItem, LogEntry } from '@sprout/ui';
-import { supportsLocalTerminal, supportsInstances } from '../config/mode';
+import { supportsLocalTerminal } from '../config/mode';
 import { useNotifications } from '../contexts/NotificationContext';
 import { type SectionTab } from '../hooks/useSidebarState';
-
-const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
-const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
-const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
-
-const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
-
-const toPaneFlex = (weight: number): React.CSSProperties => ({
-  flexGrow: weight,
-  flexShrink: 1,
-  flexBasis: 0,
-  minWidth: 0,
-  minHeight: 0,
-});
 
 interface AppContentProps {
   state: AppState;
@@ -80,11 +68,10 @@ interface AppContentProps {
   onGitDiscard: (files: string[]) => Promise<void>;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isConnected: boolean;
-  // Backend reachability (cloud mode)
   backendReachable?: boolean;
   onRetryConnection?: () => void;
   chatSessions?: ChatSession[];
-  activeChatId?: string | null;
+  activeChatId: string | null;
   perChatCache?: Record<string, PerChatState>;
   onActiveChatChange?: (id: string) => void;
   onTerminalOutput?: (output: string) => void;
@@ -94,530 +81,52 @@ interface AppContentProps {
 }
 
 const AppContent: React.FC<AppContentProps> = ({
-  state,
-  inputValue,
-  onInputChange,
-  isMobile,
-  isTablet,
-  isSidebarOpen,
-  sidebarCollapsed,
-  isTerminalExpanded,
-  selectedSection,
-  sidebarWidth,
-  sidebarWidthRef,
-  onSectionChange,
-  onSidebarWidthChange,
-  onSidebarWidthPersist,
-  onSidebarWidthReset,
-  stats,
-  recentFiles,
-  recentLogs,
-  gitRefreshToken,
-  onSidebarToggle,
-  onToggleSidebar,
-  onCloseSidebar,
-  onViewChange,
-  onModelChange,
-  onProviderChange,
-  onSendMessage,
-  onQueueMessage,
-  onStopProcessing,
-  queuedMessagesCount,
-  onGitCommit,
-  onGitAICommit,
-  onGitStage,
-  onGitUnstage,
-  onGitDiscard,
-  onTerminalExpandedChange,
-  isConnected,
-  backendReachable,
-  onRetryConnection,
-  chatSessions,
-  activeChatId,
-  perChatCache,
-  onActiveChatChange,
-  onCreateChat,
-  onDeleteChat,
-  onRenameChat,
+  state, inputValue, onInputChange, isMobile, isTablet, isSidebarOpen,
+  sidebarCollapsed, isTerminalExpanded, selectedSection, sidebarWidth,
+  sidebarWidthRef, onSectionChange, onSidebarWidthChange, onSidebarWidthPersist,
+  onSidebarWidthReset, stats, recentFiles, recentLogs, gitRefreshToken,
+  onSidebarToggle, onToggleSidebar, onCloseSidebar, onViewChange, onModelChange,
+  onProviderChange, onSendMessage, onQueueMessage, onStopProcessing,
+  queuedMessagesCount, onGitCommit, onGitAICommit, onGitStage, onGitUnstage,
+  onGitDiscard, onTerminalExpandedChange, isConnected, backendReachable,
+  onRetryConnection, chatSessions, activeChatId, perChatCache,
+  onActiveChatChange, onCreateChat, onDeleteChat, onRenameChat,
 }) => {
-  const {
-    panes,
-    paneLayout,
-    activePaneId,
-    activeBufferId,
-    buffers,
-    switchPane,
-    switchToBuffer,
-    splitPane,
-    closeSplit,
-    closePane,
-    closeBuffer,
-    openFile,
-    openWorkspaceBuffer,
-    paneSizes,
-    updatePaneSize,
-    updateBufferMetadata,
-    updateBufferTitle,
-    maxPanes,
-  } = useEditorManager();
+  const { buffers, activeBufferId, openFile, openWorkspaceBuffer, updateBufferTitle, updateBufferMetadata, closeBuffer } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   const { notifications } = useNotifications();
-
-  // Compute current todos: prefer state from todo_update events, fall back to parsing from TodoWrite tool executions
-  const currentTodos = useMemo(() => {
-    // Prefer directly-provided todos from structured todo_update events
-    if (state.currentTodos && state.currentTodos.length > 0) {
-      return state.currentTodos;
-    }
-
-    // Fallback: find the most recent TodoWrite tool execution and parse its arguments
-    const todoWrites = state.toolExecutions
-      .filter(t => t.tool === 'TodoWrite')
-      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-
-    if (todoWrites.length === 0) return [];
-
-    const latest = todoWrites[0];
-    try {
-      if (latest.arguments) {
-        const args = JSON.parse(latest.arguments);
-        if (Array.isArray(args.todos)) {
-          return args.todos.map((todo: { id?: string; content?: string; status?: string }) => ({
-            id: todo.id || `${todo.content ?? ''}-${todo.status ?? ''}`,
-            content: todo.content || '',
-            status: (['pending', 'in_progress', 'completed', 'cancelled'].includes(todo.status ?? '') ? (todo.status ?? 'pending') : 'pending') as 'pending' | 'in_progress' | 'completed' | 'cancelled'
-          }));
-        }
-      }
-    } catch { /* ignore */ }
-
-    return [];
-  }, [state.currentTodos, state.toolExecutions]);
-
-  // Command palette state
+  const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
-  const [isContextPanelMobileOpen, setIsContextPanelMobileOpen] = useState(false);
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
-  const [hotkeysConfigPath, setHotkeysConfigPath] = useState<string | null>(null);
   const notificationBellRef = useRef<HTMLDivElement>(null);
-  const [instances, setInstances] = useState<SproutInstance[]>([]);
-  const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
-  const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
-  const [panelWidth, setPanelWidth] = useState(() => {
-    if (typeof window === 'undefined') return 360;
-    const storedWidth = Number(window.localStorage.getItem('sprout.contextPanel.width'));
-    if (Number.isFinite(storedWidth) && storedWidth >= 260 && storedWidth <= 600) {
-      return storedWidth;
-    }
-    return 360;
-  });
-
-  const [nestedSplit, setNestedSplit] = useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem('sprout.contextPanel.width', String(Math.round(panelWidth)));
-  }, [panelWidth]);
-
-  // Keep a stable ref to the current buffers map to avoid infinite loops in effects.
-  // Direct render-side sync ensures buffersRef.current is always up-to-date.
+  const hotkeysConfigPath = useHotkeysConfig(apiService, isConnected);
+  const { instances, selectedInstancePID, isSwitchingInstance, onInstanceChange: handleInstanceChange } = useInstances({ apiService, isConnected });
   const buffersRef = useRef(buffers);
   buffersRef.current = buffers;
 
-  // Sync chat sessions → editor buffers: update the initial chat buffer with the active
-  // session's ID, and open additional buffers for other sessions.
-  useEffect(() => {
-    if (!chatSessions || chatSessions.length === 0) return;
-    const currentBuffers = buffersRef.current;
-    chatSessions.forEach(session => {
-      const existing = Array.from(currentBuffers.values()).find(
-        b => b.kind === 'chat' && b.metadata?.chatId === session.id
-      );
-      if (existing) {
-        // Update tab title if the session was renamed
-        if (existing.file.name !== (session.name || 'Chat')) {
-          updateBufferTitle(existing.id, session.name || 'Chat');
-        }
-        return;
-      }
-      // If this is the active session and the initial chat buffer has no chatId yet, claim it
-      const initialBuf = currentBuffers.get('buffer-chat');
-      if (session.id === activeChatId && initialBuf && !initialBuf.metadata?.chatId) {
-        updateBufferMetadata('buffer-chat', { chatId: session.id });
-        updateBufferTitle('buffer-chat', session.name || 'Chat');
-      } else {
-        openWorkspaceBuffer({
-          kind: 'chat',
-          path: `__workspace/chat/${session.id}`,
-          title: session.name || 'Chat',
-          isPinned: session.is_default ?? false,
-          isClosable: !(session.is_default ?? false),
-          metadata: { chatId: session.id },
-        });
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatSessions, activeChatId]);
-
-  // Detect when the user switches to a different chat tab and notify parent
-  useEffect(() => {
-    if (!activeBufferId) return;
-    const activeBuf = buffersRef.current.get(activeBufferId);
-    if (activeBuf?.kind === 'chat' && activeBuf.metadata?.chatId) {
-      const chatId = activeBuf.metadata.chatId as string;
-      if (chatId !== activeChatId && onActiveChatChange) {
-        onActiveChatChange(chatId);
-      }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeBufferId]);
   const initialViewSyncRef = useRef(false);
 
-  // Load hotkeys config path on mount
-  useEffect(() => {
-    if (!isConnected) return;
-    apiService.getHotkeys().then(config => {
-      if (config.path) setHotkeysConfigPath(config.path);
-    }).catch(() => {});
-  }, [isConnected, apiService]);
-
-  useEffect(() => {
-    if (!supportsInstances || !isConnected) {
-      return;
-    }
-
-    let cancelled = false;
-    let timer: NodeJS.Timeout | null = null;
-
-    const loadInstances = async () => {
-      try {
-        const data = await apiService.getInstances();
-        if (cancelled) {
-          return;
-        }
-        setInstances(data.instances || []);
-        const currentPort = Number(window.location.port || 0);
-        const currentInstance =
-          (data.instances || []).find((instance) => instance.port === currentPort) ||
-          (data.instances || []).find((instance) => instance.is_current) ||
-          (data.instances || []).find((instance) => instance.pid === data.active_host_pid);
-        const nextPID = currentInstance?.pid || 0;
-        if (nextPID > 0) {
-          setSelectedInstancePID(nextPID);
-          window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(nextPID));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to fetch instances:', error);
-        }
-      }
-      if (!cancelled) {
-        timer = setTimeout(loadInstances, 2000);
-      }
-    };
-
-    loadInstances();
-    return () => {
-      cancelled = true;
-      if (timer) {
-        clearTimeout(timer);
-      }
-    };
-  }, [apiService, isConnected]);
-  const {
-    gitStatus,
-    gitBranches,
-    workspaceRoot,
-    commitMessage,
-    setCommitMessage,
-    selectedFiles,
-    activeDiffSelectionKey,
-    activeDiffPath,
-    activeDiff,
-    diffMode,
-    isDiffLoading,
-    diffError,
-    isGitLoading,
-    isGitActing,
-    isGeneratingCommitMessage,
-    gitActionError,
-    gitActionWarning,
-    isReviewLoading,
-    isReviewFixing,
-    reviewError,
-    reviewFixResult,
-    reviewFixLogs,
-    reviewFixSessionID,
-    deepReview,
-    handleToggleFileSelection,
-    handleToggleSectionSelection,
-    clearSelectedFiles,
-    handleSelectFiles,
-    handlePreviewGitFile,
-    handleStageSelected,
-    handleUnstageSelected,
-    handleDiscardSelected,
-    handleStageFile,
-    handleUnstageFile,
-    handleDiscardFile,
-    handleSectionAction,
-    handleGitCommitClick,
-    handleGenerateCommitMessage,
-    handleRunReview,
-    handleFixFromReview,
-    handleDiffModeChange,
-    handleCheckoutBranch,
-    handleCreateBranch,
-    handlePull,
-    handlePush,
-    handleLoadCommits,
-    handleLoadCommitDetail,
-    handleLoadCommitFileDiff,
-    handleCheckoutCommit,
-    handleRevertCommit,
-    refreshGitStatus,
-  } = useGitWorkspace({
-    fetchFn: sproutFetch,
-    gitRefreshToken,
-    selectedGitFilePath: null,
-    onViewChange,
-    onGitCommit,
-    onGitAICommit,
-    onGitStage,
-    onGitUnstage,
-    onGitDiscard,
-    openWorkspaceBuffer,
-  });
-
-  const handleInstanceChange = useCallback(async (pid: number) => {
-    if (!supportsInstances) return;
-    if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
-      return;
-    }
-
-    setIsSwitchingInstance(true);
-    try {
-      const targetInstance = instances.find((instance) => instance.pid === pid);
-      if (!targetInstance || !targetInstance.port) {
-        throw new Error('Selected instance is unavailable');
-      }
-
-      window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
-      window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
-      const nextURL = new URL(window.location.href);
-      nextURL.port = String(targetInstance.port);
-      window.location.assign(nextURL.toString());
-    } catch (error) {
-      console.error('Failed to switch instance:', error);
-      setIsSwitchingInstance(false);
-    }
-  }, [instances, selectedInstancePID]);
+  useChatSessionsSync({ chatSessions, activeChatId, buffersRef, updateBufferTitle, updateBufferMetadata, openWorkspaceBuffer });
+  useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
   const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     if (view === 'chat') {
-      openWorkspaceBuffer({
-        kind: 'chat',
-        path: '__workspace/chat',
-        title: 'Chat',
-        ext: '.chat',
-        isPinned: true,
-        isClosable: false,
-      });
+      openWorkspaceBuffer({ kind: 'chat', path: '__workspace/chat', title: 'Chat', ext: '.chat', isPinned: true, isClosable: false });
     }
     onViewChange(view);
   }, [onViewChange, openWorkspaceBuffer]);
 
-  // Handle navigation from the outline panel — dispatch event that EditorPane listens for
+  const { handleFileClick } = useFileHandler({ onViewChange, openFile });
+
   const handleOutlineNavigateToSymbol = useCallback((line: number) => {
     document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
   }, []);
 
-  const focusTabIndex = useCallback((index: number) => {
-    if (!activePaneId || index < 0) {
-      return;
-    }
-    const paneBuffers = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
-    const target = paneBuffers[index];
-    if (target) {
-      switchPane(activePaneId);
-      switchToBuffer(target.id);
-    }
-  }, [activePaneId, switchPane, switchToBuffer]);
-
-  const handleFocusPaneIndex = useCallback((index: number) => {
-    if (index < panes.length) {
-      // Focus existing pane
-      switchPane(panes[index].id);
-      return;
-    }
-    // index >= panes.length — need to split to create more panes
-    if (panes.length < maxPanes) {
-      // Split from the active pane (or last pane)
-      const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
-      if (!sourcePaneId) return;
-      const direction = panes.length === 1 ? 'vertical' : 'horizontal';
-      const newPaneId = splitPane(sourcePaneId, direction);
-      if (newPaneId) {
-        // Initial 1→2 split: apply nested layout sizing
-        if (panes.length === 1) {
-          updatePaneSize(`group:${sourcePaneId}`, 50);
-          updatePaneSize(`nested:${sourcePaneId}`, 50);
-        }
-        // Focus the new pane
-        switchPane(newPaneId);
-      }
-    }
-  }, [panes, activePaneId, splitPane, switchPane, updatePaneSize, maxPanes]);
-
-  // Listen for hotkey custom events
-  useEffect(() => {
-    const handleHotkey = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.commandId) return;
-      
-      switch (detail.commandId) {
-        case 'command_palette':
-          setCommandPaletteMode('all');
-          setIsCommandPaletteOpen(prev => !prev);
-          break;
-        case 'new_file':
-          openWorkspaceBuffer({
-            kind: 'file',
-            path: `__workspace/untitled-${Date.now()}`,
-            title: 'Untitled',
-            ext: '',
-            isClosable: true,
-          });
-          onViewChange('editor');
-          break;
-        case 'toggle_sidebar':
-          onSidebarToggle();
-          break;
-        case 'toggle_terminal':
-          if (supportsLocalTerminal) {
-            onTerminalExpandedChange(!isTerminalExpanded);
-          }
-          break;
-        case 'toggle_explorer': {
-          // Reveal the active file's path in the file tree explorer.
-          // Always dispatch the reveal-in-explorer event — the Sidebar handler
-          // ensures the sidebar is open and switched to the files tab.
-          // If no active file, dispatch with no path so the sidebar just
-          // opens to files without highlighting anything.
-          const activeBuffer = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
-          const filePath = activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
-            ? activeBuffer.file.path
-            : null;
-
-          window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: filePath ?? '' } }));
-          break;
-        }
-        case 'quick_open':
-          setCommandPaletteMode('files');
-          setIsCommandPaletteOpen(true);
-          break;
-        case 'switch_to_chat':
-          handlePrimaryViewChange('chat');
-          break;
-        case 'switch_to_editor':
-          handlePrimaryViewChange('editor');
-          break;
-        case 'switch_to_git':
-          handlePrimaryViewChange('git');
-          break;
-        case 'focus_split_1':
-          handleFocusPaneIndex(0);
-          break;
-        case 'focus_split_2':
-          handleFocusPaneIndex(1);
-          break;
-        case 'focus_split_3':
-          handleFocusPaneIndex(2);
-          break;
-        case 'focus_split_4':
-          handleFocusPaneIndex(3);
-          break;
-        case 'focus_split_5':
-          handleFocusPaneIndex(4);
-          break;
-        case 'focus_split_6':
-          handleFocusPaneIndex(5);
-          break;
-        case 'close_editor':
-          if (activeBufferId) {
-            closeBuffer(activeBufferId);
-          }
-          break;
-        case 'editor_workspace_symbol':
-          document.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol'));
-          break;
-        case 'editor_goto_symbol':
-          setCommandPaletteMode('symbols');
-          setIsCommandPaletteOpen(true);
-          break;
-      }
-    };
-    
-    window.addEventListener('sprout:hotkey', handleHotkey);
-    return () => window.removeEventListener('sprout:hotkey', handleHotkey);
-  }, [activeBufferId, closeBuffer, focusTabIndex, handleFocusPaneIndex, handlePrimaryViewChange, onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, openWorkspaceBuffer, onViewChange]);
-
-  // Handler to open hotkeys config in editor
-  const handleOpenHotkeysConfig = useCallback(() => {
-    if (!hotkeysConfigPath) return;
-    const fileName = hotkeysConfigPath.split('/').pop() || 'hotkeys.json';
-    const extensionIndex = fileName.lastIndexOf('.');
-    const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-    
-    openFile({
-      path: hotkeysConfigPath,
-      name: fileName,
-      isDir: false,
-      size: 0,
-      modified: 0,
-      ext: fileExt,
-    });
-    
-    // Ensure we're in editor view
-    onViewChange('editor');
-    setIsCommandPaletteOpen(false);
-  }, [hotkeysConfigPath, openFile, onViewChange]);
-
-  // Listen for open hotkeys config event
-  useEffect(() => {
-    const handleOpenHotkeys = () => {
-      handleOpenHotkeysConfig();
-    };
-    window.addEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
-    return () => window.removeEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
-  }, [handleOpenHotkeysConfig]);
-
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
-  const contextPanelRef = useRef<ContextPanelHandle>(null);
+  const contextPanelRef = useRef<any>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
-  const [isContextPanelCollapsed, setIsContextPanelCollapsed] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-    return window.localStorage.getItem(CONTEXT_PANEL_COLLAPSED_KEY) === '1';
-  });
-  const canSplit = panes.length < maxPanes;
-  const canCloseSplit = panes.length > 1;
-
-  useEffect(() => {
-    if (!isMobile || !showContextSidebar) {
-      setIsContextPanelMobileOpen(false);
-    }
-  }, [isMobile, showContextSidebar]);
-
-  useEffect(() => {
-    // Clear nested split when we don't have exactly 3 panes
-    if (panes.length !== 3 && nestedSplit) {
-      setNestedSplit(null);
-    }
-  }, [nestedSplit, panes.length]);
 
   useEffect(() => {
     if (initialViewSyncRef.current) {
@@ -633,40 +142,10 @@ const AppContent: React.FC<AppContentProps> = ({
     }
   }, [currentBuffer, onViewChange, state.currentView]);
 
-  const handleFileClick = useCallback((filePath: string, lineNumber?: number) => {
-    const segments = filePath.split('/').filter(Boolean);
-    const fileName = segments[segments.length - 1] || filePath;
-    const extensionIndex = fileName.lastIndexOf('.');
-    const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-    const openInEditor = () => {
-      onViewChange('editor');
-      openFile({
-        path: filePath,
-        name: fileName,
-        isDir: false,
-        size: 0,
-        modified: 0,
-        ext: fileExt
-      });
-    };
-
-    openInEditor();
-    if (typeof lineNumber === 'number') {
-      setTimeout(() => {
-        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line: lineNumber } }));
-      }, 100);
-    }
-  }, [onViewChange, openFile]);
-
-  // Listen for file-path link clicks from markdown / tool output
-  useEffect(() => {
-    const handleOpenInEditor = (e: Event) => {
-      const { path, lineNumber } = (e as CustomEvent<{ path: string; lineNumber?: number }>).detail;
-      if (path) handleFileClick(path, lineNumber);
-    };
-    window.addEventListener('sprout:open-in-editor', handleOpenInEditor);
-    return () => window.removeEventListener('sprout:open-in-editor', handleOpenInEditor);
-  }, [handleFileClick]);
+  const handleToggleContextPanel = () => {
+    if (!contextPanelRef.current) return;
+    window.dispatchEvent(new CustomEvent('toggle-context-panel'));
+  };
 
   const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {
     onViewChange('editor');
@@ -677,430 +156,151 @@ const AppContent: React.FC<AppContentProps> = ({
       ext: '.diff',
       metadata: {
         sourcePath: options.path,
-        diff: {
-          message: 'success',
-          path: options.path,
-          has_staged: false,
-          has_unstaged: false,
-          staged_diff: '',
-          unstaged_diff: '',
-          diff: options.diff,
-        },
+        diff: { message: 'success', path: options.path, has_staged: false, has_unstaged: false, staged_diff: '', unstaged_diff: '', diff: options.diff },
         diffMode: 'combined',
         modeOptions: ['combined'],
         title: options.title,
-      }
+      },
     });
   }, [onViewChange, openWorkspaceBuffer]);
 
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
-    if (!activePaneId) {
-      return;
-    }
+  const { handleOpenHotkeysConfig } = useAppContentHotkeys({
+    activeBufferId, buffersRef, onSidebarToggle, onTerminalExpandedChange,
+    isTerminalExpanded, openWorkspaceBuffer, onViewChange, handlePrimaryViewChange,
+    closeBuffer, setCommandPaletteMode, setIsCommandPaletteOpen,
+    hotkeysConfigPath, openFile,
+  });
 
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) {
-      return;
-    }
+  const {
+    gitStatus, gitBranches, workspaceRoot, selectedFiles, activeDiffSelectionKey,
+    activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, isGitLoading,
+    isGitActing, isGeneratingCommitMessage, gitActionError, gitActionWarning,
+    isReviewLoading, isReviewFixing, reviewError, reviewFixResult, reviewFixLogs,
+    reviewFixSessionID, deepReview, handleToggleFileSelection,
+    handleToggleSectionSelection, clearSelectedFiles, handleSelectFiles,
+    handlePreviewGitFile, handleStageSelected, handleUnstageSelected,
+    handleDiscardSelected, handleStageFile, handleUnstageFile, handleDiscardFile,
+    handleSectionAction, handleGitCommitClick, handleGenerateCommitMessage,
+    handleRunReview, handleFixFromReview, handleDiffModeChange, handleCheckoutBranch,
+    handleCreateBranch, handlePull, handlePush, handleLoadCommits,
+    handleLoadCommitDetail, handleLoadCommitFileDiff, handleCheckoutCommit,
+    handleRevertCommit, refreshGitStatus, commitMessage, setCommitMessage,
+  } = useGitWorkspace({
+    fetchFn: sproutFetch, gitRefreshToken, selectedGitFilePath: null,
+    onViewChange, onGitCommit, onGitAICommit, onGitStage, onGitUnstage,
+    onGitDiscard, openWorkspaceBuffer,
+  });
 
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
-
-  const handleCloseAllSplits = useCallback(() => {
-    if (nestedSplit) {
-      // When a nested split is active, close just the nested pane (3 → 2 panes)
-      closePane(nestedSplit.nestedPaneId);
-      setNestedSplit(null);
-    } else {
-      // No nested split — close all splits (2 → 1 pane)
-      closeSplit();
-    }
-  }, [closeSplit, closePane, nestedSplit]);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dragStartSizeRef = useRef<Map<string, number>>(new Map());
-  const isPaneDraggingRef = useRef<Set<string>>(new Set());
-
-  const handlePaneResize = useCallback((sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) => (_deltaPixels: number, totalDeltaPixels: number) => {
-    if (!containerRef.current) return;
-
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const isVertical = axis === 'horizontal';
-    const containerSize = isVertical ? containerRect.width : containerRect.height;
-    const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
-
-    // Capture size at drag start to avoid accumulation bugs.
-    // Only capture on first event of each drag; leaks from interrupted
-    // drags are handled by overwriting on the next drag's first event.
-    if (!isPaneDraggingRef.current.has(sizeKey)) {
-      isPaneDraggingRef.current.add(sizeKey);
-      dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
-    }
-    const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
-    const maxAllowed = 100 - MIN_PANE_WIDTH_PERCENT * Math.max(0, Object.keys(paneSizes).filter(k => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:')).length - 1);
-    const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
-    updatePaneSize(sizeKey, newSize);
-  }, [paneSizes, updatePaneSize]);
-
-  const handlePaneResizeEnd = useCallback((sizeKey: string) => () => {
-    isPaneDraggingRef.current.delete(sizeKey);
-    dragStartSizeRef.current.delete(sizeKey);
-  }, []);
-
-  const showResizeHandles = panes.length > 1;
-
-  const renderSplitControls = (paneId: string) => {
-    return (
-    <div className="split-controls split-controls-embedded">
-      {paneId === activePaneId && onCreateChat && (
-        <button
-          onClick={async () => {
-            const newId = await onCreateChat();
-            if (newId) {
-              openWorkspaceBuffer({
-                kind: 'chat',
-                path: `__workspace/chat/${newId}`,
-                title: 'New Chat',
-                isPinned: false,
-                isClosable: true,
-                metadata: { chatId: newId },
-              });
-            }
-          }}
-          className="pane-control-btn compact"
-          title="New chat"
-          aria-label="New chat"
-        >
-          <MessageSquarePlus size={13} />
-        </button>
-      )}
-      {paneId === activePaneId && canCloseSplit && (
-        <button
-          onClick={handleCloseAllSplits}
-          className="pane-control-btn compact"
-          title="Close split panes"
-          aria-label="Close split panes"
-        >
-          <X size={13} />
-        </button>
-      )}
-      {paneId === activePaneId && canSplit && (
-        <button
-          onClick={() => handleSplitRequest('vertical')}
-          className="pane-control-btn compact"
-          title="Split vertically"
-          aria-label="Split vertically"
-        >
-          <Columns2 size={14} />
-        </button>
-      )}
-      {paneId === activePaneId && canSplit && (
-        <button
-          onClick={() => handleSplitRequest('horizontal')}
-          className="pane-control-btn compact"
-          title="Split horizontally"
-          aria-label="Split horizontally"
-        >
-          <Rows2 size={14} />
-        </button>
-      )}
-    </div>
-    );
+  const chatProps = {
+    messages: state.messages, onSendMessage, onQueueMessage,
+    queuedMessagesCount, inputValue, onInputChange,
+    isProcessing: state.isProcessing, lastError: state.lastError,
+    toolExecutions: state.toolExecutions,
+    queryProgress: state.queryProgress, currentTodos, onStopProcessing,
+    onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+    stats: state.stats, isConnected: state.isConnected, backendReachable,
+    onRetryConnection,
   };
-
-  const renderPaneById = (paneId: string, style?: React.CSSProperties) => {
-    const pane = panes.find((item) => item.id === paneId);
-    if (!pane) {
-      return null;
-    }
-
-    return (
-      <PaneWrapper key={pane.id} style={style}>
-        <div className="pane-shell">
-          <EditorTabs
-            paneId={pane.id}
-            compact
-            actions={renderSplitControls(pane.id)}
-          />
-          <EditorPaneWrapper
-            isActive={pane.id === activePaneId}
-            onClick={() => switchPane(pane.id)}
-          >
-            <EditorPaneComponent
-              paneId={pane.id}
-              isActive={pane.id === activePaneId}
-              onClick={() => switchPane(pane.id)}
-              perChatCache={perChatCache}
-              activeChatId={activeChatId}
-              chatProps={{
-                messages: state.messages,
-                onSendMessage,
-                onQueueMessage,
-                queuedMessagesCount,
-                inputValue,
-                onInputChange,
-                isProcessing: state.isProcessing,
-                lastError: state.lastError,
-                toolExecutions: state.toolExecutions,
-                queryProgress: state.queryProgress,
-                currentTodos,
-                onStopProcessing,
-                onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
-                stats: state.stats,
-                isConnected: state.isConnected,
-                backendReachable,
-                onRetryConnection,
-              }}
-              reviewProps={{
-                review: deepReview,
-                reviewError,
-                reviewFixResult,
-                reviewFixLogs,
-                reviewFixSessionID,
-                isReviewLoading,
-                isReviewFixing,
-                onFixFromReview: handleFixFromReview,
-              }}
-              diffState={{
-                activeDiffPath,
-                activeDiff,
-                diffMode,
-                isDiffLoading,
-                diffError,
-                onDiffModeChange: handleDiffModeChange,
-              }}
-            />
-          </EditorPaneWrapper>
-        </div>
-      </PaneWrapper>
-    );
+  const reviewProps = {
+    review: deepReview, reviewError, reviewFixResult, reviewFixLogs,
+    reviewFixSessionID, isReviewLoading, isReviewFixing,
+    onFixFromReview: handleFixFromReview,
   };
-
-  const renderPaneLayout = () => {
-    if (panes.length === 0) {
-      return null;
-    }
-
-    if (panes.length < 3 || !nestedSplit) {
-      if (panes.length === 1) {
-        return renderPaneById(panes[0].id, toPaneFlex(1));
-      }
-
-      if (panes.length === 2) {
-        const [firstPane, secondPane] = panes;
-        const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-        const firstPaneSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50));
-        const secondPaneSize = 100 - firstPaneSize;
-
-        return (
-          <>
-            {renderPaneById(firstPane.id, toPaneFlex(firstPaneSize))}
-            <ResizeHandle
-              direction={splitAxis}
-              onResize={handlePaneResize(firstPane.id, splitAxis)}
-              onResizeEnd={handlePaneResizeEnd(firstPane.id)}
-            />
-            {renderPaneById(secondPane.id, toPaneFlex(secondPaneSize))}
-          </>
-        );
-      }
-
-      return (
-        <>
-          {(() => {
-            const rawSizes = panes.map(p => paneSizes[p.id] || (100 / panes.length));
-            const totalSize = rawSizes.reduce((a, b) => a + b, 0);
-            return (
-              <>
-                {panes.map((pane, index) => {
-                  const paneSize = normalizePaneSize(rawSizes[index], totalSize);
-                  const isLast = index === panes.length - 1;
-                  const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-
-                  return (
-                    <React.Fragment key={pane.id}>
-                      {renderPaneById(pane.id, toPaneFlex(paneSize))}
-                      {showResizeHandles && !isLast && (
-                        <ResizeHandle
-                          direction={splitAxis}
-                          onResize={handlePaneResize(pane.id, splitAxis)}
-                          onResizeEnd={handlePaneResizeEnd(pane.id)}
-                        />
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </>
-            );
-          })()}
-        </>
-      );
-    }
-
-    const hostPane = panes.find((pane) => pane.id === nestedSplit.hostPaneId);
-    const nestedPane = panes.find((pane) => pane.id === nestedSplit.nestedPaneId);
-    const siblingPane = panes.find((pane) => pane.id !== nestedSplit.hostPaneId && pane.id !== nestedSplit.nestedPaneId);
-    if (!hostPane || !nestedPane || !siblingPane) {
-      return null;
-    }
-
-    const rootDirection = paneLayout === 'split-horizontal' ? 'column' : 'row';
-    const nestedDirection = nestedSplit.direction === 'horizontal' ? 'column' : 'row';
-    const hostIsFirst = panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
-    const rootSizeKey = `group:${hostPane.id}`;
-    const nestedSizeKey = `nested:${hostPane.id}`;
-    const groupSize = paneSizes[rootSizeKey] || 50;
-    const nestedSize = paneSizes[nestedSizeKey] || 50;
-    const rootHandleDirection = rootDirection === 'row' ? 'horizontal' : 'vertical';
-    const nestedHandleDirection = nestedDirection === 'row' ? 'horizontal' : 'vertical';
-
-    const nestedGroup = (
-      <div
-        className={`nested-pane-group nested-pane-group-${nestedDirection}`}
-        style={toPaneFlex(groupSize)}
-      >
-        {renderPaneById(hostPane.id, toPaneFlex(nestedSize))}
-        <ResizeHandle
-          direction={nestedHandleDirection}
-          onResize={handlePaneResize(nestedSizeKey, nestedHandleDirection)}
-          onResizeEnd={handlePaneResizeEnd(nestedSizeKey)}
-        />
-        {renderPaneById(nestedPane.id, toPaneFlex(100 - nestedSize))}
-      </div>
-    );
-
-    return (
-      <div className={`nested-pane-layout nested-pane-layout-${rootDirection}`}>
-        {hostIsFirst ? nestedGroup : renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize))}
-        <ResizeHandle
-          direction={rootHandleDirection}
-          onResize={handlePaneResize(rootSizeKey, rootHandleDirection, !hostIsFirst)}
-          onResizeEnd={handlePaneResizeEnd(rootSizeKey)}
-        />
-        {hostIsFirst ? renderPaneById(siblingPane.id, toPaneFlex(100 - groupSize)) : nestedGroup}
-      </div>
-    );
+  const diffState = {
+    activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError,
+    onDiffModeChange: handleDiffModeChange,
   };
 
   return (
     <div className="app">
       {isMobile && isSidebarOpen && (
-        <div
-          className="mobile-overlay"
-          onClick={onCloseSidebar}
-        />
+        <div className="mobile-overlay" onClick={onCloseSidebar} />
       )}
-
       <ErrorBoundary panelName="Sidebar">
-      <Sidebar
-        isConnected={state.isConnected}
-        instances={instances}
-        selectedInstancePID={selectedInstancePID}
-        isSwitchingInstance={isSwitchingInstance}
-        onInstanceChange={handleInstanceChange}
-        provider={state.provider}
-        model={state.model}
-        selectedModel={state.model}
-        onModelChange={onModelChange}
-        currentView={state.currentView}
-        onViewChange={onViewChange}
-        onFileClick={handleFileClick}
-        stats={stats}
-        recentFiles={recentFiles}
-        recentLogs={recentLogs}
-        isMobileMenuOpen={isSidebarOpen}
-        onMobileMenuToggle={onToggleSidebar}
-        isMobile={isMobile}
-        sidebarCollapsed={sidebarCollapsed}
-        onSidebarToggle={onSidebarToggle}
-        selectedSection={selectedSection}
-        onSectionChange={onSectionChange}
-        sidebarWidth={sidebarWidth}
-        sidebarWidthRef={sidebarWidthRef}
-        onSidebarWidthChange={onSidebarWidthChange}
-        onSidebarWidthPersist={onSidebarWidthPersist}
-        onSidebarWidthReset={onSidebarWidthReset}
-        onProviderChange={onProviderChange}
-        gitPanel={{
-          gitStatus,
-          gitBranches,
-          workspaceRoot,
-          selectedFiles,
-          activeDiffSelectionKey,
-          commitMessage,
-          isLoading: isGitLoading,
-          isActing: isGitActing,
-          isGeneratingCommitMessage,
-          isReviewLoading,
-          actionError: gitActionError,
-          actionWarning: gitActionWarning,
-          onCommitMessageChange: setCommitMessage,
-          onGenerateCommitMessage: handleGenerateCommitMessage,
-          onCommit: handleGitCommitClick,
-          onRunReview: handleRunReview,
-          onCheckoutBranch: handleCheckoutBranch,
-          onCreateBranch: handleCreateBranch,
-          onPull: handlePull,
-          onPush: handlePush,
-          onRefresh: refreshGitStatus,
-          onToggleFileSelection: handleToggleFileSelection,
-          onToggleSectionSelection: handleToggleSectionSelection,
-          onClearSelection: clearSelectedFiles,
-          onSelectFiles: handleSelectFiles,
-          onPreviewFile: handlePreviewGitFile,
-          onStageSelected: handleStageSelected,
-          onUnstageSelected: handleUnstageSelected,
-          onDiscardSelected: handleDiscardSelected,
-          onStageFile: handleStageFile,
-          onUnstageFile: handleUnstageFile,
-          onDiscardFile: handleDiscardFile,
-          onSectionAction: handleSectionAction,
-          onOpenFile: handleFileClick,
-          onLoadCommits: handleLoadCommits,
-          onLoadCommitDetail: handleLoadCommitDetail,
-          onLoadCommitFileDiff: handleLoadCommitFileDiff,
-          onCheckoutCommit: handleCheckoutCommit,
-          onRevertCommit: handleRevertCommit,
-          openWorkspaceBuffer,
-        }}
-      />
+        <Sidebar
+          isConnected={state.isConnected}
+          instances={instances}
+          selectedInstancePID={selectedInstancePID}
+          isSwitchingInstance={isSwitchingInstance}
+          onInstanceChange={handleInstanceChange}
+          provider={state.provider}
+          model={state.model}
+          selectedModel={state.model}
+          onModelChange={onModelChange}
+          currentView={state.currentView}
+          onViewChange={onViewChange}
+          onFileClick={handleFileClick}
+          stats={stats}
+          recentFiles={recentFiles}
+          recentLogs={recentLogs}
+          isMobileMenuOpen={isSidebarOpen}
+          onMobileMenuToggle={onToggleSidebar}
+          isMobile={isMobile}
+          sidebarCollapsed={sidebarCollapsed}
+          onSidebarToggle={onSidebarToggle}
+          selectedSection={selectedSection}
+          onSectionChange={onSectionChange}
+          sidebarWidth={sidebarWidth}
+          sidebarWidthRef={sidebarWidthRef}
+          onSidebarWidthChange={onSidebarWidthChange}
+          onSidebarWidthPersist={onSidebarWidthPersist}
+          onSidebarWidthReset={onSidebarWidthReset}
+          onProviderChange={onProviderChange}
+          gitPanel={{
+            gitStatus,
+            gitBranches,
+            workspaceRoot,
+            selectedFiles,
+            activeDiffSelectionKey,
+            commitMessage,
+            isLoading: isGitLoading,
+            isActing: isGitActing,
+            isGeneratingCommitMessage,
+            isReviewLoading,
+            actionError: gitActionError,
+            actionWarning: gitActionWarning,
+            onCommitMessageChange: setCommitMessage,
+            onGenerateCommitMessage: handleGenerateCommitMessage,
+            onCommit: handleGitCommitClick,
+            onRunReview: handleRunReview,
+            onCheckoutBranch: handleCheckoutBranch,
+            onCreateBranch: handleCreateBranch,
+            onPull: handlePull,
+            onPush: handlePush,
+            onRefresh: refreshGitStatus,
+            onToggleFileSelection: handleToggleFileSelection,
+            onToggleSectionSelection: handleToggleSectionSelection,
+            onClearSelection: clearSelectedFiles,
+            onSelectFiles: handleSelectFiles,
+            onPreviewFile: handlePreviewGitFile,
+            onStageSelected: handleStageSelected,
+            onUnstageSelected: handleUnstageSelected,
+            onDiscardSelected: handleDiscardSelected,
+            onStageFile: handleStageFile,
+            onUnstageFile: handleUnstageFile,
+            onDiscardFile: handleDiscardFile,
+            onSectionAction: handleSectionAction,
+            onOpenFile: handleFileClick,
+            onLoadCommits: handleLoadCommits,
+            onLoadCommitDetail: handleLoadCommitDetail,
+            onLoadCommitFileDiff: handleLoadCommitFileDiff,
+            onCheckoutCommit: handleCheckoutCommit,
+            onRevertCommit: handleRevertCommit,
+            openWorkspaceBuffer,
+          }}
+        />
       </ErrorBoundary>
-      <div className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}>
-        <div className="header-bar">
-          <MenuBar />
-          <div className="header-bar-actions">
-            {!isMobile && showContextSidebar && (
-              <button
-                className="header-context-toggle-btn"
-                onClick={() => {
-                  if (isContextPanelCollapsed) {
-                    contextPanelRef.current?.openTab('subagents');
-                    return;
-                  }
-                  contextPanelRef.current?.closePanel();
-                }}
-                aria-label={isContextPanelCollapsed ? 'Open context panel' : 'Close context panel'}
-                title={isContextPanelCollapsed ? 'Open context panel' : 'Close context panel'}
-              >
-                {isContextPanelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
-              </button>
-            )}
-            <WorkspaceBar
-              isConnected={state.isConnected}
-              isMobile={isMobile}
-              isMobileMenuOpen={isSidebarOpen}
-            />
-          </div>
-        </div>
+      <div
+        className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
+      >
+        <HeaderBar
+          isMobile={isMobile}
+          isSidebarOpen={isSidebarOpen}
+          showContextSidebar={showContextSidebar}
+          isConnected={state.isConnected}
+          onToggleSidebar={onToggleSidebar}
+          onToggleContextPanel={handleToggleContextPanel}
+        />
         <div className="main-view-content">
           <div className="editor-view">
             {isMobile && (
@@ -1116,95 +316,60 @@ const AppContent: React.FC<AppContentProps> = ({
                 {showContextSidebar && (
                   <button
                     className="top-mobile-context-btn"
-                    onClick={() => {
-                      if (isContextPanelMobileOpen) {
-                        contextPanelRef.current?.closePanel();
-                        return;
-                      }
-                      contextPanelRef.current?.openTab('subagents');
-                    }}
-                    aria-label={isContextPanelMobileOpen ? 'Close context panel' : 'Open context panel'}
-                    title={isContextPanelMobileOpen ? 'Close context panel' : 'Open context panel'}
+                    onClick={handleToggleContextPanel}
+                    aria-label="Toggle context panel"
+                    title="Toggle context panel"
                   >
-                    {isContextPanelMobileOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                    <PanelRightClose size={16} />
                   </button>
                 )}
               </div>
             )}
-
-            {/* Render platform pages or editor workspace */}
             <ErrorBoundary panelName="Editor">
-            {state.currentView === 'tasks' ? (
-              <TasksPage />
-            ) : state.currentView === 'billing' ? (
-              <BillingPage />
-            ) : state.currentView === 'team' ? (
-              <TeamPage />
-            ) : (
-              <EditorWithOutline
-                content={currentBuffer?.content || ''}
-                fileExtension={currentBuffer?.file?.ext}
-                cursorLine={currentBuffer?.cursorPosition?.line || 0}
-                isFileOpen={currentBuffer?.kind === 'file'}
-                onNavigateToSymbol={handleOutlineNavigateToSymbol}
-              >
-                <div className={`editor-workspace ${paneLayout}`}>
-                  <div
-                    ref={containerRef}
-                    className={`panes-container layout-${paneLayout}`}
-                  >
-                    {renderPaneLayout()}
-                  </div>
-                </div>
-              </EditorWithOutline>
-            )}
+              <EditorWorkspace
+                currentView={state.currentView}
+                perChatCache={perChatCache}
+                activeChatId={activeChatId}
+                onCreateChat={onCreateChat}
+                chatProps={chatProps}
+                reviewProps={reviewProps}
+                diffState={diffState}
+                handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
+              />
             </ErrorBoundary>
           </div>
-          {showContextSidebar && !PLATFORM_VIEWS.has(state.currentView) && (
-            <ErrorBoundary panelName="Context Panel">
-            {isTablet && !isContextPanelCollapsed && (
-              <div
-                className="context-panel-backdrop"
-                onClick={() => contextPanelRef.current?.closePanel()}
-              />
-            )}
-            <ContextPanel
-              ref={contextPanelRef}
-              context="chat"
-              toolExecutions={state.toolExecutions}
-              fileEdits={state.fileEdits}
-              logs={state.logs}
-              subagentActivities={state.subagentActivities}
-              currentTodos={currentTodos}
-              messages={state.messages}
-              isProcessing={state.isProcessing}
-              lastError={state.lastError}
-              queryProgress={state.queryProgress}
-              isMobileLayout={isMobile}
-              isTabletLayout={isTablet}
-              onMobileOpenChange={setIsContextPanelMobileOpen}
-              onCollapsedChange={setIsContextPanelCollapsed}
-              panelWidth={panelWidth}
-              onPanelWidthChange={setPanelWidth}
-              onOpenRevisionDiff={handleOpenRevisionDiff}
-              onLoadRevisionHistory={() => apiService.getChangelog()}
-              onLoadSessions={() => apiService.getSessions()}
-              onRestoreSession={(sessionId) => apiService.restoreSession(sessionId)}
-              onLoadRevisionDetails={(revisionId) => apiService.getRevisionDetails(revisionId)}
-            />
-            </ErrorBoundary>
-          )}
+          <ContextSidebar
+            isMobile={isMobile}
+            isTablet={isTablet}
+            showContextSidebar={showContextSidebar}
+            contextPanelRef={contextPanelRef}
+            currentView={state.currentView}
+            toolExecutions={state.toolExecutions}
+            fileEdits={state.fileEdits}
+            logs={state.logs}
+            subagentActivities={state.subagentActivities}
+            currentTodos={currentTodos}
+            messages={state.messages}
+            isProcessing={state.isProcessing}
+            lastError={state.lastError}
+            queryProgress={state.queryProgress}
+            onOpenRevisionDiff={handleOpenRevisionDiff}
+          />
         </div>
         <Status isConnected={state.isConnected} stats={state.stats} />
         <StatusBar
           branch={gitBranches.current || gitStatus?.branch}
-          buffer={currentBuffer ? {
-            kind: currentBuffer.kind,
-            file: currentBuffer.file,
-            content: currentBuffer.content,
-            cursorPosition: currentBuffer.cursorPosition,
-            languageOverride: currentBuffer.languageOverride,
-          } : null}
+          buffer={
+            currentBuffer
+              ? {
+                  kind: currentBuffer.kind,
+                  file: currentBuffer.file,
+                  content: currentBuffer.content,
+                  cursorPosition: currentBuffer.cursorPosition,
+                  languageOverride: currentBuffer.languageOverride,
+                }
+              : null
+          }
           notificationCount={notifications.length}
           onToggleNotificationCenter={() => setIsNotificationCenterOpen(prev => !prev)}
           notificationCenterRef={notificationBellRef}
@@ -1215,16 +380,11 @@ const AppContent: React.FC<AppContentProps> = ({
           positionRef={notificationBellRef}
         />
       </div>
-
       {supportsLocalTerminal && (
         <ErrorBoundary panelName="Terminal">
-        <Terminal
-          isExpanded={isTerminalExpanded}
-          onToggleExpand={onTerminalExpandedChange}
-        />
+          <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
       )}
-
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
@@ -1232,14 +392,7 @@ const AppContent: React.FC<AppContentProps> = ({
           const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
           const extensionIndex = fileName.lastIndexOf('.');
           const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
-          openFile({
-            path: filePath,
-            name: fileName,
-            isDir: false,
-            size: 0,
-            modified: 0,
-            ext: fileExt,
-          });
+          openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
         }}
         onToggleSidebar={onSidebarToggle}
         onToggleTerminal={supportsLocalTerminal ? () => onTerminalExpandedChange(!isTerminalExpanded) : () => {}}
@@ -1250,47 +403,6 @@ const AppContent: React.FC<AppContentProps> = ({
         }}
         activeBufferContent={currentBuffer?.content}
         activeBufferFileExtension={currentBuffer?.file?.ext}
-      />
-    </div>
-  );
-};
-
-const PaneWrapper: React.FC<{children: React.ReactNode, style?: React.CSSProperties}> = ({ children, style }) => (
-  <div className="pane-wrapper" style={style}>{children}</div>
-);
-
-const EditorPaneWrapper: React.FC<{children: React.ReactNode, isActive?: boolean, onClick?: () => void}> = ({ children, isActive, onClick }) => {
-  return (
-    <div
-      className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
-      onClick={!isActive ? onClick : undefined}
-      tabIndex={isActive ? -1 : 0}
-      onFocus={() => isActive && (onClick?.())}
-    >
-      {children}
-    </div>
-  );
-};
-
-const EditorPaneComponent: React.FC<{
-  paneId: string;
-  isActive?: boolean;
-  onClick?: () => void;
-  perChatCache?: Record<string, PerChatState>;
-  activeChatId?: string | null;
-  chatProps: React.ComponentProps<typeof WorkspacePane>['chatProps'];
-  reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
-  diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
-}> = ({ paneId, onClick, perChatCache, activeChatId, chatProps, reviewProps, diffState }) => {
-  return (
-    <div className="editor-pane-host" onClick={onClick}>
-      <WorkspacePane
-        paneId={paneId}
-        perChatCache={perChatCache}
-        activeChatId={activeChatId}
-        chatProps={chatProps}
-        reviewProps={reviewProps}
-        diffState={diffState}
       />
     </div>
   );

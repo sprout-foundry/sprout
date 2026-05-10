@@ -801,7 +801,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `security.go` (1,154 lines) into: `security_classifier.go` (ClassifyToolCall/SecurityResult types), `shell_patterns.go` (safe/caution/dangerous whitelists), `shell_utils.go` (stripQuotedSections, maxRisk). `pkg/agent_tools/security.go`
 [x] - REFACTOR: Split `subagent.go` (760 lines) — deduplicate `RunSubagent` and `spawnSubagent` (~90% identical subprocess spawning), extract shared spawn helper. `pkg/agent_tools/subagent.go`
 [x] - REFACTOR: Split `TerminalPane.tsx` (1,631 lines) — separate session state, scrollback, and tab management. `webui/src/components/TerminalPane.tsx`
-[] - REFACTOR: Split `AppContent.tsx` (1,299 lines) — passes 50+ props; extract `EditorWorkspace`, `HeaderBar`, `ContextSidebar` subcomponents. `webui/src/components/AppContent.tsx`
+[x] - REFACTOR: Split `AppContent.tsx` (1,299 lines → 395 lines) — extracted `EditorWorkspace`, `HeaderBar`, `ContextSidebar` subcomponents and 7 custom hooks. `webui/src/components/AppContent.tsx`
 [] - REFACTOR: Split `Sidebar.tsx` (1,203 lines) — contains FileTree + SearchView + Git panel + Settings + Provider selection. `webui/src/components/Sidebar.tsx`
 [] - REFACTOR: Split `EditorManagerContext.tsx` (1,266 lines) — 35+ action methods and 15+ state vars in single context; split into `BufferManagerContext`, `PaneManagerContext`, `EditorSettingsContext`. `webui/src/contexts/EditorManagerContext.tsx`
 [] - REFACTOR: Split `CommandInput.tsx` (974 lines) — separate input handling, image upload, and submit logic. `webui/src/components/CommandInput.tsx`

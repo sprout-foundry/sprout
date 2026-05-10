@@ -1,9 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { X, TriangleAlert, Terminal } from 'lucide-react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { useTheme } from '../contexts/ThemeContext';
-import { debugLog } from '../utils/log';
-import { copyToClipboard } from '../utils/clipboard';
 import TerminalSearchBar from './TerminalSearchBar';
 import TerminalContextMenu from './TerminalContextMenu';
 import ReverseSearchOverlay from './ReverseSearchOverlay';
@@ -14,6 +12,9 @@ import { useTerminalScrollback } from '../hooks/useTerminalScrollback';
 import { useTerminalSearch } from '../hooks/useTerminalSearch';
 import { useTerminalXTerm } from '../hooks/useTerminalXTerm';
 import { useTerminalSession } from '../hooks/useTerminalSession';
+import { useReverseSearch } from '../hooks/useReverseSearch';
+import { useTerminalResize } from '../hooks/useTerminalResize';
+import { useTerminalContextMenu } from '../hooks/useTerminalContextMenu';
 
 export interface TerminalPaneHandle {
   clear: () => void;
@@ -45,18 +46,9 @@ interface TerminalPaneProps {
   copyOnSelect?: boolean;
 }
 
-const EXPAND_RESIZE_DELAY_MS = 100;
-
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId, onProcessExit, copyOnSelect = false }, ref) => {
     const { themePack } = useTheme();
-
-    // ── Reverse-i-search overlay state (PTY mode, visual only) ──────
-    const reverseSearchActiveRef = useRef(false);
-    const reverseSearchQueryRef = useRef('');
-    const reverseSearchTimerRef = useRef<number | null>(null);
-    const [reverseSearchVisible, setReverseSearchVisible] = useState(false);
-    const [reverseSearchQuery, setReverseSearchQuery] = useState('');
 
     // ── Search state (needed before hooks so we can wire callbacks) ──
     const searchAddonRef = useRef<import('@xterm/addon-search').SearchAddon | null>(null);
@@ -107,85 +99,17 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     const terminalWSRefForPty = useRef<import('../services/terminalWebSocket').TerminalWebSocketService | null>(null);
 
-    /** Batch reverse-search query updates to avoid excessive re-renders */
-    const scheduleReverseSearchUpdate = useCallback(() => {
-      if (reverseSearchTimerRef.current !== null) {
-        clearTimeout(reverseSearchTimerRef.current);
-      }
-      reverseSearchTimerRef.current = window.setTimeout(() => {
-        setReverseSearchQuery(reverseSearchQueryRef.current);
-        reverseSearchTimerRef.current = null;
-      }, 20);
-    }, []);
-
-    /**
-     * Handle input for remote PTY sessions with reverse-i-search overlay support.
-     *
-     * When not in WASM mode, this monitors input for Ctrl+R (reverse-i-search) and
-     * maintains overlay state showing the search query. The overlay is purely visual
-     * and doesn't interfere with the actual PTY data flow.
-     */
-    const handlePtyInput = useCallback((data: string) => {
-      terminalWSRefForPty.current?.sendRawInput(data);
-
-      if (data.length > 1) {
-        if (data.startsWith('\x1b')) {
-          return;
-        }
-        if (reverseSearchActiveRef.current) {
-          reverseSearchQueryRef.current += data;
-          scheduleReverseSearchUpdate();
-        }
-        return;
-      }
-
-      const ch = data;
-
-      if (ch === '\x12') {
-        if (!reverseSearchActiveRef.current) {
-          reverseSearchActiveRef.current = true;
-          reverseSearchQueryRef.current = '';
-          setReverseSearchVisible(true);
-          setReverseSearchQuery('');
-        }
-        return;
-      }
-
-      if (ch === '\r' || ch === '\n' || ch === '\x03' || ch === '\x1b') {
-        reverseSearchActiveRef.current = false;
-        reverseSearchQueryRef.current = '';
-        setReverseSearchVisible(false);
-        setReverseSearchQuery('');
-        return;
-      }
-
-      if (ch === '\x7f' || ch === '\b') {
-        if (reverseSearchActiveRef.current && reverseSearchQueryRef.current.length > 0) {
-          reverseSearchQueryRef.current = reverseSearchQueryRef.current.slice(0, -1);
-          scheduleReverseSearchUpdate();
-        }
-        return;
-      }
-
-      if (reverseSearchActiveRef.current && (ch >= ' ' || ch === '\t')) {
-        reverseSearchQueryRef.current += ch;
-        scheduleReverseSearchUpdate();
-        return;
-      }
-    }, [scheduleReverseSearchUpdate]);
+    const {
+      reverseSearchVisible,
+      reverseSearchQuery,
+      handlePtyInput,
+      resetReverseSearch,
+    } = useReverseSearch({
+      terminalWSRef: terminalWSRefForPty,
+    });
 
     // ═══════════════════════════════════════════════════════════════════
-    // 5. Reverse search reset helper
-    // ═══════════════════════════════════════════════════════════════════
-    const resetReverseSearch = useCallback(() => {
-      reverseSearchActiveRef.current = false;
-      reverseSearchQueryRef.current = '';
-      setReverseSearchVisible(false);
-      setReverseSearchQuery('');
-    }, []);
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 6. xterm initialization hook
+    // 5. xterm initialization hook
     // ═══════════════════════════════════════════════════════════════════
     const onData = useCallback((data: string) => {
       if (wasmActiveRef.current) {
@@ -302,64 +226,14 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     // 8. Resize observer (wires session sendResize with xterm layout)
     // ═══════════════════════════════════════════════════════════════════
-    const resizeTimerRef = useRef<number | null>(null);
-    const expandTimeoutRef = useRef<number | null>(null);
-    const isMountedRef = useRef(true);
-
-    useEffect(() => {
-      if (!isActive || !paneConnected) return;
-
-      const schedule = () => {
-        if (resizeTimerRef.current !== null) window.clearTimeout(resizeTimerRef.current);
-        resizeTimerRef.current = window.setTimeout(sendResize, 80);
-      };
-
-      // Skip the immediate resize if we just restored from a reattach — the
-      // session_restored handler already sent a resize to avoid duplicate
-      // SIGWINCH events that cause prompt line duplication.
-      if (Date.now() - lastRestoreTimeRef.current > 5000) {
-        schedule();
-      }
-      window.addEventListener('resize', schedule);
-
-      let observer: ResizeObserver | null = null;
-      if ('ResizeObserver' in window) {
-        observer = new ResizeObserver(schedule);
-        if (paneWrapperRef.current) observer.observe(paneWrapperRef.current);
-        if (xtermContainerRef.current) observer.observe(xtermContainerRef.current);
-      }
-
-      return () => {
-        window.removeEventListener('resize', schedule);
-        observer?.disconnect();
-        if (resizeTimerRef.current !== null) {
-          window.clearTimeout(resizeTimerRef.current);
-          resizeTimerRef.current = null;
-        }
-      };
-    }, [isActive, paneConnected, sendResize, paneWrapperRef, xtermContainerRef]);
-
-    // Listen for terminal expand event
-    useEffect(() => {
-      if (!isActive || !paneConnected) return;
-
-      const handleExpand = () => {
-        expandTimeoutRef.current = window.setTimeout(() => {
-          if (isMountedRef.current) {
-            sendResize();
-          }
-        }, EXPAND_RESIZE_DELAY_MS);
-      };
-
-      window.addEventListener('sprout-terminal-expand', handleExpand);
-      return () => {
-        window.removeEventListener('sprout-terminal-expand', handleExpand);
-        if (expandTimeoutRef.current !== null) {
-          window.clearTimeout(expandTimeoutRef.current);
-          expandTimeoutRef.current = null;
-        }
-      };
-    }, [isActive, paneConnected, sendResize]);
+    useTerminalResize({
+      isActive,
+      paneConnected,
+      sendResize,
+      paneWrapperRef,
+      xtermContainerRef,
+      lastRestoreTimeRef,
+    });
 
     // ═══════════════════════════════════════════════════════════════════
     // 9. Expose methods to parent via useImperativeHandle
@@ -393,46 +267,24 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     // 10. Context menu handlers
     // ═══════════════════════════════════════════════════════════════════
-    const getXTerminal = useCallback(() => xtermRef.current, []);
-    const hasXTermSelection = useCallback(() => xtermRef.current?.hasSelection() ?? false, []);
-    const handleContextCopy = useCallback((text: string) => {
-      copyToClipboard(text).catch((err) => {
-        debugLog('[TerminalPane] clipboard copy failed:', err);
-      });
-    }, []);
-    const handleContextPaste = useCallback((text: string) => {
-      if (wasmActiveRef.current) {
-        handleWasmInput(text);
-      } else {
-        handlePtyInput(text);
-      }
-    }, [handleWasmInput, handlePtyInput, wasmActiveRef]);
-    const handleContextClear = useCallback(() => {
-      xtermRef.current?.clear();
-    }, []);
-    const handleContextSelectAll = useCallback(() => {
-      xtermRef.current?.selectAll();
-    }, []);
-    const handleContextSplitPane = useCallback((direction: 'horizontal' | 'vertical') => {
-      const action = direction === 'horizontal' ? 'split_horizontal' : 'split_vertical';
-      window.dispatchEvent(new CustomEvent('sprout:terminal-action', { detail: { action } }));
-    }, []);
+    const {
+      getXTerminal,
+      hasXTermSelection,
+      handleContextCopy,
+      handleContextPaste,
+      handleContextClear,
+      handleContextSelectAll,
+      handleContextSplitPane,
+    } = useTerminalContextMenu({
+      xtermRef,
+      wasmActiveRef,
+      handleWasmInput,
+      handlePtyInput,
+    });
 
     // ═══════════════════════════════════════════════════════════════════
     // Render
     // ═══════════════════════════════════════════════════════════════════
-
-    // Cleanup reverse search timer on unmount
-    useEffect(() => {
-      return () => {
-        if (reverseSearchTimerRef.current !== null) {
-          clearTimeout(reverseSearchTimerRef.current);
-          reverseSearchTimerRef.current = null;
-        }
-        isMountedRef.current = false;
-      };
-    }, []);
-
     return (
       <div className="terminal-pane" ref={paneWrapperRef}>
         {showCloseButton && (

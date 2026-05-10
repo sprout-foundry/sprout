@@ -176,13 +176,16 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({
     setPaneLayoutState(layout);
 
     if (layout === 'single') {
+      const primary = panes.find(p => p.position === 'primary');
       setPanes(prev => {
-        const primary = prev.find(p => p.position === 'primary');
-        return primary ? [primary] : prev;
+        const p = prev.find(pp => pp.position === 'primary');
+        return p ? [p] : prev;
       });
-      activePaneId && setActivePaneId(activePaneId);
+      if (primary) {
+        setActivePaneId(primary.id);
+      }
     }
-  }, [activePaneId]);
+  }, [panes]);
 
   const moveBufferToPane = useCallback((bufferId: string, paneId: string) => {
     setPanes((prev) => prev.map((pane) => {

@@ -22,6 +22,12 @@ export function useImageUpload({ inputRef }: UseImageUploadOptions) {
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
 
+  // Keep ref in sync with state for cleanup on unmount
+  const imagesRef = useRef<AttachedImage[]>([]);
+  useEffect(() => {
+    imagesRef.current = attachedImages;
+  }, [attachedImages]);
+
   const previewImage = previewImageId
     ? attachedImages.find((img) => img.id === previewImageId) || null
     : null;
@@ -93,9 +99,11 @@ export function useImageUpload({ inputRef }: UseImageUploadOptions) {
   // Clear all images and revoke URLs
   const clearImages = useCallback(() => {
     setAttachedImages((prev) => {
-      prev.forEach((img) => URL.revokeObjectURL(img.preview));
-      // Clean up upload tracking ref
-      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
+      prev.forEach((img) => {
+        URL.revokeObjectURL(img.preview);
+        // Clean up upload tracking ref
+        uploadInProgressRef.current.delete(img.id);
+      });
       return [];
     });
     setPreviewImageId(null);
@@ -145,6 +153,14 @@ export function useImageUpload({ inputRef }: UseImageUploadOptions) {
     window.addEventListener('keydown', handlePreviewEscape);
     return () => window.removeEventListener('keydown', handlePreviewEscape);
   }, [previewImageId]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((img) => URL.revokeObjectURL(img.preview));
+      uploadInProgressRef.current.clear();
+    };
+  }, []);
 
   return {
     attachedImages,

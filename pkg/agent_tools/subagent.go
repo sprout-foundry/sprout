@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -33,6 +34,32 @@ const DefaultSubagentTimeout = 0 // 0 means no timeout
 
 // Default max tokens for subagent execution
 const DefaultSubagentMaxTokens = 2_000_000 // 2M tokens default budget
+
+// subagentSpawnConfig holds configuration for spawning a subagent process
+type subagentSpawnConfig struct {
+	Ctx              context.Context // Caller-managed context (with optional timeout/budget cancel)
+	WorkspaceRoot    string
+	Prompt           string
+	Model            string
+	Provider         string
+	SystemPromptPath string
+	SystemPromptText string
+	Persona          string
+	StreamCallback   StreamCallback
+	TaskID           string // empty for single subagent, set for parallel
+	CallerMethod     string // for structured logging
+	EnvExtras        []string
+}
+
+// subagentSpawnResult holds the result of a subagent spawn operation
+type subagentSpawnResult struct {
+	Stdout    string
+	Stderr    string
+	ExitCode  int
+	Completed bool
+	TimedOut  bool
+	Err       error
+}
 
 // GetSubagentTimeout returns the configured timeout for subagent execution.
 // It reads from SPROUT_SUBAGENT_TIMEOUT environment variable if set.
@@ -93,6 +120,268 @@ func GetSubagentMaxTokens() int {
 	return DefaultSubagentMaxTokens
 }
 
+// spawnSubagentProcess is the shared helper that spawns a subagent process.
+// It handles all the common logic for building and executing the subagent command.
+//
+// Parameters:
+//   - config: Configuration struct with all spawn parameters
+//
+// Returns the result of the subagent execution.
+func spawnSubagentProcess(config subagentSpawnConfig) subagentSpawnResult {
+	// Generate a unique task ID for tracking
+	taskID := config.TaskID
+	if taskID == "" {
+		taskID = fmt.Sprintf("task-%d", time.Now().UnixNano())
+	}
+
+	// Build command: sprout agent with the given prompt
+	args := []string{"agent"}
+
+	// Add persona prompt override, preferring inline text if provided
+	if config.SystemPromptText != "" {
+		args = append(args, "--system-prompt-str", config.SystemPromptText)
+	} else if config.SystemPromptPath != "" {
+		args = append(args, "--system-prompt", config.SystemPromptPath)
+	}
+
+	// Add provider/model if specified
+	if config.Provider != "" {
+		args = append(args, "--provider", config.Provider)
+		if config.Model != "" {
+			args = append(args, "--model", config.Model)
+		}
+	} else if config.Model != "" {
+		args = append(args, "--model", config.Model)
+	}
+
+	args = append(args, "--prompt-stdin")
+
+	// Use the currently running sprout binary path to ensure consistency
+	sproutPath, err := os.Executable()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=get_executable_failed details=%v",
+			config.CallerMethod, taskID, err)
+		return subagentSpawnResult{
+			Err: fmt.Errorf("failed to get current executable path: %w", err),
+		}
+	}
+
+	// Create stdin pipe to pass the prompt to the subagent (avoids ARG_MAX limits)
+	promptReader, promptWriter, err := os.Pipe()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=stdin_pipe_failed details=%v",
+			config.CallerMethod, taskID, err)
+		return subagentSpawnResult{
+			Err: fmt.Errorf("failed to create stdin pipe for prompt: %w", err),
+		}
+	}
+
+	// Create pipes for stdout and stderr to enable streaming
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
+			config.CallerMethod, taskID, err)
+		promptReader.Close()
+		promptWriter.Close()
+		return subagentSpawnResult{
+			Err: fmt.Errorf("failed to create stdout pipe: %w", err),
+		}
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
+			config.CallerMethod, taskID, err)
+		promptReader.Close()
+		promptWriter.Close()
+		stdoutReader.Close()
+		stdoutWriter.Close()
+		return subagentSpawnResult{
+			Err: fmt.Errorf("failed to create stderr pipe: %w", err),
+		}
+	}
+
+	cmd := exec.CommandContext(config.Ctx, sproutPath, args...)
+
+	// Pass the prompt via stdin (child reads it with --prompt-stdin)
+	cmd.Stdin = promptReader
+
+	// Explicitly set working directory to the caller workspace so subagents do not
+	// depend on the process-global cwd.
+	if config.WorkspaceRoot != "" {
+		cmd.Dir = config.WorkspaceRoot
+	} else if wd, err := os.Getwd(); err == nil {
+		cmd.Dir = wd
+	}
+
+	// Build environment: base vars + config extras
+	cmd.Env = append(os.Environ(),
+		"SPROUT_FROM_AGENT=1",
+		"LEDIT_FROM_AGENT=1",
+		"SPROUT_SUBAGENT=1",
+		"LEDIT_SUBAGENT=1",
+	)
+
+	if config.Persona != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_PERSONA="+config.Persona, "LEDIT_PERSONA="+config.Persona)
+	}
+
+	if debug := configuration.GetEnvSimple("DEBUG"); debug != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_DEBUG="+debug, "LEDIT_DEBUG="+debug)
+	}
+
+	if unsafe := configuration.GetEnvSimple("UNSAFE_MODE"); unsafe != "" {
+		cmd.Env = append(cmd.Env, "SPROUT_UNSAFE_MODE="+unsafe, "LEDIT_UNSAFE_MODE="+unsafe)
+	}
+
+	// Add any extra environment variables from config
+	cmd.Env = append(cmd.Env, config.EnvExtras...)
+
+	// Also collect full output for return value
+	var stdoutBuffer, stderrBuffer bytes.Buffer
+
+	// Set up multi-writers: write to both buffer and pipe for streaming
+	cmd.Stdout = io.MultiWriter(&stdoutBuffer, stdoutWriter)
+	cmd.Stderr = io.MultiWriter(&stderrBuffer, stderrWriter)
+
+	// Start the command (non-blocking)
+	if err = cmd.Start(); err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=start_failed details=%v",
+			config.CallerMethod, taskID, err)
+		promptReader.Close()
+		promptWriter.Close()
+		stdoutReader.Close()
+		stdoutWriter.Close()
+		stderrReader.Close()
+		stderrWriter.Close()
+		return subagentSpawnResult{
+			Err: fmt.Errorf("failed to start subagent: %w", err),
+		}
+	}
+
+	// Write the prompt to stdin and close the write end
+	if _, err := promptWriter.Write([]byte(config.Prompt)); err != nil {
+		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=prompt_write_failed details=%v\n",
+			config.CallerMethod, taskID, err)
+	}
+	promptWriter.Close()
+
+	// Close the stdin read end in the parent (child has its own copy)
+	promptReader.Close()
+
+	// Stream output in real-time if callback provided
+	var wg sync.WaitGroup
+	if config.StreamCallback != nil {
+		// Stream stdout (with task ID for parallel subagents)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner := bufio.NewScanner(stdoutReader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				config.StreamCallback(line, taskID)
+			}
+		}()
+
+		// Stream stderr (with task ID for parallel subagents)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner := bufio.NewScanner(stderrReader)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if line != "" {
+					config.StreamCallback("STDERR: "+line, taskID)
+				}
+			}
+		}()
+	} else {
+		// No callback, just drain the pipes to prevent blocking
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			io.Copy(&stdoutBuffer, stdoutReader)
+		}()
+		go func() {
+			defer wg.Done()
+			io.Copy(&stderrBuffer, stderrReader)
+		}()
+	}
+
+	// Wait for the command to complete
+	err = cmd.Wait()
+
+	// Close the write ends of the pipes to signal EOF to readers
+	// This is critical - otherwise the pipe-draining goroutines will block indefinitely
+	stdoutWriter.Close()
+	stderrWriter.Close()
+
+	// Wait for all streaming to complete
+	wg.Wait()
+
+	// Close readers
+	stdoutReader.Close()
+	stderrReader.Close()
+
+	// Determine exit code and status
+	exitCode := 0
+	completed := true
+	timedOut := false
+
+	if err != nil {
+		if config.Ctx.Err() == context.DeadlineExceeded {
+			// Timeout occurred
+			exitCode = 124
+			timedOut = true
+			log.Printf("[SUBAGENT_TIMEOUT] method=%s task_id=%s", config.CallerMethod, taskID)
+		} else if exitError, ok := err.(*exec.ExitError); ok {
+			// Command ran but exited with non-zero status
+			exitCode = exitError.ExitCode()
+			log.Printf("[SUBAGENT_FAILED] method=%s task_id=%s exit_code=%d",
+				config.CallerMethod, taskID, exitCode)
+		} else {
+			// Couldn't start the command (e.g., sprout not found)
+			exitCode = -1
+			completed = false
+			log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=exec_failed details=%v",
+				config.CallerMethod, taskID, err)
+		}
+	}
+
+	// Log completion
+	if exitCode == 0 {
+		log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=success",
+			config.CallerMethod, taskID)
+	} else if completed {
+		if timedOut {
+			log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=timeout exit_code=%d",
+				config.CallerMethod, taskID, exitCode)
+		} else {
+			log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=non_zero_exit exit_code=%d",
+				config.CallerMethod, taskID, exitCode)
+		}
+	}
+
+	if !completed && err != nil {
+		return subagentSpawnResult{
+			Stdout:    stdoutBuffer.String(),
+			Stderr:    stderrBuffer.String(),
+			ExitCode:  exitCode,
+			Completed: completed,
+			TimedOut:  timedOut,
+			Err:       err,
+		}
+	}
+
+	return subagentSpawnResult{
+		Stdout:    stdoutBuffer.String(),
+		Stderr:    stderrBuffer.String(),
+		ExitCode:  exitCode,
+		Completed: completed,
+		TimedOut:  timedOut,
+		Err:       nil,
+	}
+}
+
 // RunSubagent spawns an agent subprocess, waits for completion, and returns all output.
 // This enables the planner agent to delegate work to execution sub-agents, wait for them
 // to complete, and immediately retrieve their output for evaluation.
@@ -111,10 +400,14 @@ func GetSubagentMaxTokens() int {
 //     → spawns another subagent for follow-up
 //
 // Parameters:
+//   - workspaceRoot: The workspace directory for the subagent
 //   - prompt: The task/prompt for the subagent
 //   - model: Optional model override (e.g., "qwen/qwen-coder-32b")
 //   - provider: Optional provider override (e.g., "openrouter")
-//   - systemPrompt: Optional path to system prompt file for specialized personas
+//   - streamCallback: Optional callback for real-time output streaming
+//   - systemPromptPath: Optional path to system prompt file for specialized personas
+//   - systemPromptText: Optional inline system prompt text (takes precedence over systemPromptPath)
+//   - persona: Optional persona identifier (e.g., "coder", "planner")
 //
 // Returns map containing:
 //   - stdout: Combined stdout output
@@ -122,36 +415,8 @@ func GetSubagentMaxTokens() int {
 //   - exit_code: Process exit code (0 for success)
 //   - completed: true if process ran to completion (always true for blocking mode)
 //   - timed_out: true if the subprocess was terminated due to timeout (always false with no timeout)
+//   - budget_exceeded: true if the subprocess was terminated due to token budget exceeded
 func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCallback StreamCallback, systemPromptPath, systemPromptText, persona string) (map[string]string, error) {
-	// Build command: sprout agent with the given prompt
-	args := []string{"agent"}
-
-	// Add persona prompt override, preferring inline text if provided.
-	if systemPromptText != "" {
-		args = append(args, "--system-prompt-str", systemPromptText)
-	} else if systemPromptPath != "" {
-		args = append(args, "--system-prompt", systemPromptPath)
-	}
-
-	// Add provider/model if specified
-	if provider != "" {
-		args = append(args, "--provider", provider)
-		if model != "" {
-			args = append(args, "--model", model)
-		}
-	} else if model != "" {
-		args = append(args, "--model", model)
-	}
-
-	args = append(args, "--prompt-stdin")
-
-	// Use the currently running sprout binary path to ensure consistency
-	// This avoids issues where exec.LookPath might find a different binary
-	sproutPath, err := os.Executable()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current executable path: %w", err)
-	}
-
 	// Create context (with optional timeout)
 	timeout := GetSubagentTimeout()
 	maxTokens := GetSubagentMaxTokens()
@@ -161,12 +426,11 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 	if timeout > 0 {
 		// Only create timeout context if explicitly configured
 		ctx, cancel = context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 	} else {
 		// No timeout - create cancelable context for token budget monitoring
 		ctx, cancel = context.WithCancel(context.Background())
-		defer cancel()
 	}
+	defer cancel()
 
 	// Create temporary metrics file for token budget monitoring
 	metricsFile := ""
@@ -182,115 +446,6 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 		}
 	}
 
-	// Create stdin pipe to pass the prompt to the subagent (avoids ARG_MAX limits)
-	promptReader, promptWriter, err := os.Pipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdin pipe for prompt: %w", err)
-	}
-
-	// Create pipes for stdout and stderr to enable streaming
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		promptReader.Close()
-		promptWriter.Close()
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	stderrReader, stderrWriter, err := os.Pipe()
-	if err != nil {
-		promptReader.Close()
-		promptWriter.Close()
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	cmd := exec.CommandContext(ctx, sproutPath, args...)
-
-	// Pass the prompt via stdin (child reads it with --prompt-stdin)
-	cmd.Stdin = promptReader
-
-	// Explicitly set working directory to the caller workspace so subagents do not
-	// depend on the process-global cwd.
-	if workspaceRoot != "" {
-		cmd.Dir = workspaceRoot
-	} else if wd, err := os.Getwd(); err == nil {
-		cmd.Dir = wd
-	}
-	cmd.Env = append(os.Environ(), "SPROUT_FROM_AGENT=1", "LEDIT_FROM_AGENT=1", "SPROUT_SUBAGENT=1", "LEDIT_SUBAGENT=1")
-	if persona != "" {
-		cmd.Env = append(cmd.Env, "SPROUT_PERSONA="+persona, "LEDIT_PERSONA="+persona)
-	}
-	if debug := configuration.GetEnvSimple("DEBUG"); debug != "" {
-		cmd.Env = append(cmd.Env, "SPROUT_DEBUG="+debug, "LEDIT_DEBUG="+debug)
-	}
-	if unsafe := configuration.GetEnvSimple("UNSAFE_MODE"); unsafe != "" {
-		cmd.Env = append(cmd.Env, "SPROUT_UNSAFE_MODE="+unsafe, "LEDIT_UNSAFE_MODE="+unsafe)
-	}
-
-	// Also collect full output for return value
-	var stdoutBuffer, stderrBuffer bytes.Buffer
-
-	// Set up multi-writers: write to both buffer and pipe for streaming
-	// We create a combined writer that sends output to both the buffer (for collection)
-	// and the pipe (for streaming). The pipe's write end must stay open.
-	cmd.Stdout = io.MultiWriter(&stdoutBuffer, stdoutWriter)
-	cmd.Stderr = io.MultiWriter(&stderrBuffer, stderrWriter)
-
-	// Start the command (non-blocking)
-	if err = cmd.Start(); err != nil {
-		promptReader.Close()
-		promptWriter.Close()
-		return nil, fmt.Errorf("failed to start subagent: %w", err)
-	}
-
-	// Write the prompt to stdin and close the write end
-	if _, err := promptWriter.Write([]byte(prompt)); err != nil {
-		log.Printf("[SUBAGENT] Failed to write prompt to stdin: %v\n", err)
-	}
-	promptWriter.Close()
-
-	// Close the stdin read end in the parent (child has its own copy)
-	promptReader.Close()
-
-	// Stream output in real-time if callback provided
-	var wg sync.WaitGroup
-	if streamCallback != nil {
-		// Stream stdout
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(stdoutReader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				// Stream the line to the callback
-				streamCallback(line, "")
-			}
-		}()
-
-		// Stream stderr
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(stderrReader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				// Stream stderr lines with a prefix to distinguish them
-				if line != "" {
-					streamCallback("STDERR: "+line, "")
-				}
-			}
-		}()
-	} else {
-		// No callback, just drain the pipes to prevent blocking
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			io.Copy(&stdoutBuffer, stdoutReader)
-		}()
-		go func() {
-			defer wg.Done()
-			io.Copy(&stderrBuffer, stderrReader)
-		}()
-	}
-
 	// Monitor token budget if enabled
 	var budgetExceeded bool
 	if metricsFile != "" && maxTokens > 0 {
@@ -304,8 +459,8 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 					tokens, _, _ := readSubagentMetrics(metricsFile)
 					if tokens >= maxTokens {
 						log.Printf("[SUBAGENT] Token budget exceeded: %d >= %d, cancelling subagent\n", tokens, maxTokens)
-						cancel() // Cancel the subagent context
 						budgetExceeded = true
+						cancel() // Cancel the subagent context
 						return
 					}
 				case <-monitorDone:
@@ -318,46 +473,36 @@ func RunSubagent(workspaceRoot string, prompt, model, provider string, streamCal
 		defer close(monitorDone)
 	}
 
-	// Wait for the command to complete
-	err = cmd.Wait()
+	// Build spawn config
+	config := subagentSpawnConfig{
+		Ctx:              ctx,
+		WorkspaceRoot:    workspaceRoot,
+		Prompt:           prompt,
+		Model:            model,
+		Provider:         provider,
+		SystemPromptPath: systemPromptPath,
+		SystemPromptText: systemPromptText,
+		Persona:          persona,
+		StreamCallback:   streamCallback,
+		TaskID:           "", // Empty for single subagent
+		CallerMethod:     "RunSubagent",
+	}
 
-	// Close the write ends of the pipes to signal EOF to readers
-	// This is critical - otherwise the pipe-draining goroutines will block indefinitely
-	stdoutWriter.Close()
-	stderrWriter.Close()
+	// Spawn the subagent process
+	result := spawnSubagentProcess(config)
 
-	// Wait for all streaming to complete
-	wg.Wait()
-
-	// Close readers
-	stdoutReader.Close()
-	stderrReader.Close()
-
-	// Determine exit code and timeout status
-	exitCode := 0
-	timedOut := false
-
-	if err != nil {
-		if timeout > 0 && ctx.Err() == context.DeadlineExceeded {
-			// Timeout occurred (only if timeout was configured)
-			exitCode = 124
-			timedOut = true
-		} else if budgetExceeded {
-			// Token budget exceeded - cancel the subagent
-			exitCode = 125 // Custom exit code for budget exceeded
-		} else if exitError, ok := err.(*exec.ExitError); ok {
-			// Command ran but exited with non-zero status
-			exitCode = exitError.ExitCode()
-		} else {
-			// Couldn't start the command (e.g., sprout not found)
-			exitCode = -1
-		}
+	// Override exit code and timed_out if budget exceeded
+	exitCode := result.ExitCode
+	timedOut := result.TimedOut
+	if budgetExceeded {
+		exitCode = 125
+		timedOut = false // Don't report timeout if budget exceeded
 	}
 
 	// Return all output with exit status and timeout/budget indicator
 	return map[string]string{
-		"stdout":          stdoutBuffer.String(),
-		"stderr":          stderrBuffer.String(),
+		"stdout":          result.Stdout,
+		"stderr":          result.Stderr,
 		"exit_code":       fmt.Sprintf("%d", exitCode),
 		"completed":       "true",
 		"timed_out":       fmt.Sprintf("%t", timedOut),
@@ -375,12 +520,14 @@ type ParallelSubagentTask struct {
 
 // ParallelSubagentResult represents the result of a single parallel subagent run
 type ParallelSubagentResult struct {
-	ID        string
-	Stdout    string
-	Stderr    string
-	ExitCode  int
-	Completed bool
-	Error     error
+	ID             string
+	Stdout         string
+	Stderr         string
+	ExitCode       int
+	Completed      bool
+	TimedOut       bool
+	BudgetExceeded bool
+	Error          error
 }
 
 // RunParallelSubagents spawns multiple agent subprocesses in parallel, waits for all to complete,
@@ -390,6 +537,7 @@ type ParallelSubagentResult struct {
 // Example use case: Writing production code and test cases simultaneously
 //
 // Parameters:
+//   - workspaceRoot: The workspace directory for the subagents
 //   - tasks: List of subagent tasks to run in parallel
 //   - noTimeout: If true, uses context.Background() (no timeout). If false, respects GetSubagentTimeout()
 //   - streamCallback: Optional callback for real-time output streaming
@@ -403,18 +551,67 @@ func RunParallelSubagents(workspaceRoot string, tasks []ParallelSubagentTask, no
 	var wg sync.WaitGroup
 	results := make(chan *ParallelSubagentResult, len(tasks))
 
-	// Determine the caller method for logging
-	callerMethod := "RunParallelSubagents"
-
-	// Launch all subagents in parallel goroutines using the shared helper
+	// Launch all subagents in parallel goroutines
 	for _, task := range tasks {
 		wg.Add(1)
 		go func(t ParallelSubagentTask) {
 			defer wg.Done()
 
-			// Use spawnSubagent helper with the provided noTimeout flag and stream callback
-			result := spawnSubagent(workspaceRoot, t, noTimeout, callerMethod, streamCallback)
-			results <- result
+			// Create context based on noTimeout flag
+			var ctx context.Context
+			if noTimeout {
+				ctx = context.Background()
+			} else {
+				timeout := GetSubagentTimeout()
+				if timeout > 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(context.Background(), timeout)
+					defer cancel()
+				} else {
+					ctx = context.Background()
+				}
+			}
+
+			// Build spawn config
+			config := subagentSpawnConfig{
+				Ctx:              ctx,
+				WorkspaceRoot:    workspaceRoot,
+				Prompt:           t.Prompt,
+				Model:            t.Model,
+				Provider:         t.Provider,
+				SystemPromptPath: "", // Parallel subagents don't use system prompts
+				SystemPromptText: "",
+				Persona:          "", // Parallel subagents don't use personas
+				StreamCallback:   streamCallback,
+				TaskID:           t.ID,
+				CallerMethod:     "RunParallelSubagents",
+			}
+
+			// Spawn the subagent process
+			result := spawnSubagentProcess(config)
+
+			// Convert to ParallelSubagentResult
+			if result.Err != nil {
+				results <- &ParallelSubagentResult{
+					ID:             t.ID,
+					Error:          result.Err,
+					ExitCode:       -1,
+					Completed:      false,
+					TimedOut:       false,
+					BudgetExceeded: false,
+				}
+			} else {
+				results <- &ParallelSubagentResult{
+					ID:             t.ID,
+					Stdout:         result.Stdout,
+					Stderr:         result.Stderr,
+					ExitCode:       result.ExitCode,
+					Completed:      result.Completed,
+					TimedOut:       result.TimedOut,
+					BudgetExceeded: false, // Parallel subagents don't have budget monitoring
+					Error:          nil,
+				}
+			}
 		}(task)
 	}
 
@@ -427,291 +624,26 @@ func RunParallelSubagents(workspaceRoot string, tasks []ParallelSubagentTask, no
 	for result := range results {
 		if result.Error != nil {
 			outputMap[result.ID] = map[string]string{
-				"error":     result.Error.Error(),
-				"exit_code": "-1",
-				"completed": "false",
-				"timed_out": "false",
+				"error":           result.Error.Error(),
+				"exit_code":       "-1",
+				"completed":       "false",
+				"timed_out":       "false",
+				"budget_exceeded": "false",
 			}
 			continue
 		}
 
-		timedOut := result.ExitCode == -1 && result.Completed
-
 		outputMap[result.ID] = map[string]string{
-			"stdout":    result.Stdout,
-			"stderr":    result.Stderr,
-			"exit_code": fmt.Sprintf("%d", result.ExitCode),
-			"completed": fmt.Sprintf("%t", result.Completed),
-			"timed_out": fmt.Sprintf("%t", timedOut),
+			"stdout":           result.Stdout,
+			"stderr":           result.Stderr,
+			"exit_code":        fmt.Sprintf("%d", result.ExitCode),
+			"completed":        fmt.Sprintf("%t", result.Completed),
+			"timed_out":        fmt.Sprintf("%t", result.TimedOut),
+			"budget_exceeded":  fmt.Sprintf("%t", result.BudgetExceeded),
 		}
 	}
 
 	return outputMap, nil
-}
-
-// spawnSubagent is a shared helper that spawns a single subagent subprocess.
-// It handles all the common logic for building and executing the subagent command.
-//
-// Parameters:
-//   - task: The subagent task to run
-//   - noTimeout: If true, use context.Background() (no timeout). If false, respect GetSubagentTimeout()
-//   - callerMethod: Name of the calling method for audit logging (e.g., "RunParallelSubagents")
-//   - streamCallback: Optional callback for real-time output streaming
-//
-// Returns the result of the subagent execution.
-func spawnSubagent(workspaceRoot string, task ParallelSubagentTask, noTimeout bool, callerMethod string, streamCallback StreamCallback) *ParallelSubagentResult {
-	// Generate a unique task ID for tracking
-	taskID := task.ID
-	if taskID == "" {
-		taskID = fmt.Sprintf("task-%d", time.Now().UnixNano())
-	}
-
-	// Log spawn event
-	log.Printf("[SUBAGENT_SPAWN] method=%s task_id=%s model=%s provider=%s timeout=%v",
-		callerMethod, taskID, task.Model, task.Provider, !noTimeout)
-
-	// Build command: sprout agent with the given prompt
-	args := []string{"agent"}
-
-	// Add provider/model if specified
-	if task.Provider != "" {
-		args = append(args, "--provider", task.Provider)
-		if task.Model != "" {
-			args = append(args, "--model", task.Model)
-		}
-	} else if task.Model != "" {
-		args = append(args, "--model", task.Model)
-	}
-
-	args = append(args, "--prompt-stdin")
-
-	// Use the currently running sprout binary path to ensure consistency
-	sproutPath, err := os.Executable()
-	if err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=get_executable_failed details=%v",
-			callerMethod, taskID, err)
-		return &ParallelSubagentResult{
-			ID:    taskID,
-			Error: fmt.Errorf("failed to get current executable path: %w", err),
-		}
-	}
-
-	// Create context based on noTimeout flag
-	var ctx context.Context
-	var cancel context.CancelFunc
-
-	if noTimeout {
-		ctx = context.Background()
-	} else {
-		timeout := GetSubagentTimeout()
-		if timeout > 0 {
-			ctx, cancel = context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-		} else {
-			ctx = context.Background()
-		}
-	}
-
-	// Create stdin pipe to pass the prompt to the subagent (avoids ARG_MAX limits)
-	promptReader, promptWriter, err := os.Pipe()
-	if err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=stdin_pipe_failed details=%v",
-			callerMethod, taskID, err)
-		return &ParallelSubagentResult{
-			ID:    taskID,
-			Error: fmt.Errorf("failed to create stdin pipe for prompt: %w", err),
-		}
-	}
-
-	// Create pipes for stdout and stderr to enable streaming
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
-			callerMethod, taskID, err)
-		promptReader.Close()
-		promptWriter.Close()
-		return &ParallelSubagentResult{
-			ID:    taskID,
-			Error: fmt.Errorf("failed to create stdout pipe: %w", err),
-		}
-	}
-	stderrReader, stderrWriter, err := os.Pipe()
-	if err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=pipe_creation_failed details=%v",
-			callerMethod, taskID, err)
-		promptReader.Close()
-		promptWriter.Close()
-		return &ParallelSubagentResult{
-			ID:    taskID,
-			Error: fmt.Errorf("failed to create stderr pipe: %w", err),
-		}
-	}
-
-	cmd := exec.CommandContext(ctx, sproutPath, args...)
-
-	// Pass the prompt via stdin (child reads it with --prompt-stdin)
-	cmd.Stdin = promptReader
-
-	// Explicitly set working directory to the caller workspace so subagents do not
-	// depend on the process-global cwd.
-	if workspaceRoot != "" {
-		cmd.Dir = workspaceRoot
-	} else if wd, err := os.Getwd(); err == nil {
-		cmd.Dir = wd
-	}
-
-	// Propagate important environment variables to subagent processes
-	cmd.Env = append(os.Environ(), "SPROUT_FROM_AGENT=1", "LEDIT_FROM_AGENT=1", "SPROUT_SUBAGENT=1", "LEDIT_SUBAGENT=1")
-	if debug := configuration.GetEnvSimple("DEBUG"); debug != "" {
-		cmd.Env = append(cmd.Env, "SPROUT_DEBUG="+debug, "LEDIT_DEBUG="+debug)
-	}
-	if unsafe := configuration.GetEnvSimple("UNSAFE_MODE"); unsafe != "" {
-		cmd.Env = append(cmd.Env, "SPROUT_UNSAFE_MODE="+unsafe, "LEDIT_UNSAFE_MODE="+unsafe)
-	}
-
-	// Also collect full output for return value
-	var stdoutBuffer, stderrBuffer bytes.Buffer
-
-	// Set up multi-writers: write to both buffer and pipe for streaming
-	// We create a combined writer that sends output to both the buffer (for collection)
-	// and the pipe (for streaming). The pipe's write end must stay open.
-	cmd.Stdout = io.MultiWriter(&stdoutBuffer, stdoutWriter)
-	cmd.Stderr = io.MultiWriter(&stderrBuffer, stderrWriter)
-
-	// Start the command (non-blocking)
-	if err = cmd.Start(); err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=start_failed details=%v",
-			callerMethod, taskID, err)
-		promptReader.Close()
-		promptWriter.Close()
-		return &ParallelSubagentResult{
-			ID:    taskID,
-			Error: fmt.Errorf("failed to start subagent: %w", err),
-		}
-	}
-
-	// Write the prompt to stdin and close the write end
-	if _, err := promptWriter.Write([]byte(task.Prompt)); err != nil {
-		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=prompt_write_failed details=%v\n",
-			callerMethod, taskID, err)
-	}
-	promptWriter.Close()
-
-	// Close the stdin read end in the parent (child has its own copy)
-	promptReader.Close()
-
-	// Close the write ends of the pipes in the parent process after Start
-	// The child process has its own copies, so it's safe to close ours
-	// NOTE: Don't close these yet - the MultiWriter needs them to stay open
-	// They will be closed automatically when the process exits
-
-	// Stream output in real-time if callback provided
-	var wg sync.WaitGroup
-	if streamCallback != nil {
-		// Stream stdout with task ID prefix
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(stdoutReader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				// Stream the line with task ID for parallel subagents
-				streamCallback(line, taskID)
-			}
-		}()
-
-		// Stream stderr with task ID prefix
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(stderrReader)
-			for scanner.Scan() {
-				line := scanner.Text()
-				// Stream stderr lines with a prefix to distinguish them
-				if line != "" {
-					streamCallback("STDERR: "+line, taskID)
-				}
-			}
-		}()
-	} else {
-		// No callback, just drain the pipes to prevent blocking
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			io.Copy(&stdoutBuffer, stdoutReader)
-		}()
-		go func() {
-			defer wg.Done()
-			io.Copy(&stderrBuffer, stderrReader)
-		}()
-	}
-
-	// Wait for the command to complete
-	err = cmd.Wait()
-
-	// Close the write ends of the pipes to signal EOF to readers
-	// This is critical - otherwise the pipe-draining goroutines will block indefinitely
-	stdoutWriter.Close()
-	stderrWriter.Close()
-
-	// Wait for all streaming to complete
-	wg.Wait()
-
-	// Close readers
-	stdoutReader.Close()
-	stderrReader.Close()
-
-	// Determine exit code and timeout status
-	exitCode := 0
-	completed := true
-
-	if err != nil {
-		if !noTimeout && ctx.Err() == context.DeadlineExceeded {
-			// Timeout occurred (only if timeout was configured)
-			exitCode = 124
-			log.Printf("[SUBAGENT_TIMEOUT] method=%s task_id=%s", callerMethod, taskID)
-		} else if exitError, ok := err.(*exec.ExitError); ok {
-			// Command ran but exited with non-zero status
-			exitCode = exitError.ExitCode()
-			log.Printf("[SUBAGENT_FAILED] method=%s task_id=%s exit_code=%d",
-				callerMethod, taskID, exitCode)
-		} else {
-			// Couldn't start the command (e.g., sprout not found)
-			exitCode = -1
-			completed = false
-			log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=exec_failed details=%v",
-				callerMethod, taskID, err)
-		}
-	}
-
-	// Log completion
-	if exitCode == 0 {
-		log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=success",
-			callerMethod, taskID)
-	} else if completed {
-		log.Printf("[SUBAGENT_COMPLETE] method=%s task_id=%s status=non_zero_exit exit_code=%d",
-			callerMethod, taskID, exitCode)
-	}
-
-	if !completed && err != nil {
-		return &ParallelSubagentResult{
-			ID:        taskID,
-			Stdout:    stdoutBuffer.String(),
-			Stderr:    stderrBuffer.String(),
-			ExitCode:  exitCode,
-			Completed: completed,
-			Error:     err,
-		}
-	}
-
-	return &ParallelSubagentResult{
-		ID:        taskID,
-		Stdout:    stdoutBuffer.String(),
-		Stderr:    stderrBuffer.String(),
-		ExitCode:  exitCode,
-		Completed: completed,
-		Error:     nil,
-	}
 }
 
 // readSubagentMetrics reads token usage from a metrics file

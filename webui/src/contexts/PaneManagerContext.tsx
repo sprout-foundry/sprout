@@ -52,7 +52,7 @@ export const usePaneManager = () => {
 interface PaneManagerProviderProps {
   children: ReactNode;
   maxPanes: number;
-  closeBuffer: (bufferId: string) => void;
+  closeBuffer: (bufferId: string) => void | Promise<void>;
 }
 
 export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({ 

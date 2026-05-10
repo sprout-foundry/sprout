@@ -1,149 +1,26 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import type { EditorBuffer, EditorPane, PaneLayout, PaneSize, EditorFileEntry } from '../types/editor';
-import { showThemedPrompt, showThemedConfirm } from '@sprout/ui';
-import { type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
-import { debugLog } from '../utils/log';
-import { useSproutFetch } from './SproutAdapterContext';
+import React, { createContext, useContext, type ReactNode } from 'react';
+import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
+import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 
 // ---------------------------------------------------------------------------
-// Pane configuration constants
+// Import sub-contexts
 // ---------------------------------------------------------------------------
 
-export const MAX_PANES = 6;
-export const MIN_PANE_WIDTH_PERCENT = 8;
-export const DEFAULT_MAX_PANES = 6; // Default configurable max panes
-
-/** Normalize pane sizes so they sum to exactly 100 */
-export function normalizePaneSize(size: number, total: number): number {
-  if (total === 0) return size;
-  return (size / total) * 100;
-}
+import { EditorSettingsProvider, useEditorSettings as useSettings } from './EditorSettingsContext';
+import { PaneManagerProvider, usePaneManager as usePaneContext } from './PaneManagerContext';
+import { BufferManagerProvider, useBufferManager as useBufferContext } from './BufferManagerContext';
+import { PaneBridge } from './BufferManagerContext';
 
 // ---------------------------------------------------------------------------
-// Adapter-agnostic file write helpers (consent flow for external paths)
-// These are module-level so they don't get recreated on every render.
+// Re-export constants for backward compatibility
 // ---------------------------------------------------------------------------
 
-const consentTokenHeader = 'X-Sprout-Consent-Token';
+export { MAX_PANES } from './EditorSettingsContext';
+export { MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from './PaneManagerContext';
 
-interface ConsentRequiredError {
-  code: string;
-  path: string;
-  operation: 'read' | 'write';
-  error?: string;
-}
-
-interface ConsentTokenResponse {
-  token: string;
-  path: string;
-  operation: 'read' | 'write';
-  expires_at: string;
-}
-
-async function parseConsentRequired(response: Response): Promise<ConsentRequiredError | null> {
-  if (response.status !== 403) {
-    return null;
-  }
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    return null;
-  }
-
-  try {
-    const body = (await response.json()) as Partial<ConsentRequiredError>;
-    if (body.code === 'external_path_consent_required' && body.path && body.operation) {
-      return {
-        code: body.code,
-        path: body.path,
-        operation: body.operation,
-        error: body.error,
-      };
-    }
-  } catch (err) {
-    debugLog('[parseConsentRequired] failed to parse consent response:', err);
-    return null;
-  }
-
-  return null;
-}
-
-async function issueConsent(
-  fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-  path: string,
-  operation: 'read' | 'write'
-): Promise<string> {
-  const response = await fetchFn('/api/file/consent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path, operation }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to grant external ${operation} access: ${response.statusText}`);
-  }
-
-  const data = (await response.json()) as ConsentTokenResponse;
-  return data.token;
-}
-
-async function withConsentRetry(
-  request: () => Promise<Response>,
-  path: string,
-  operation: 'read' | 'write',
-  retryWithToken: (token: string) => Promise<Response>,
-  fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-): Promise<Response> {
-  const initial = await request();
-  const consent = await parseConsentRequired(initial);
-  if (!consent) {
-    return initial;
-  }
-
-  const approved = await showThemedConfirm(
-    `External file ${operation} requested.\n\nPath: ${consent.path}\n\nAllow this one-time access?`,
-    { title: 'External File Access', type: 'warning' },
-  );
-  if (!approved) {
-    throw new Error(`External file ${operation} canceled by user: ${consent.path}`);
-  }
-
-  const token = await issueConsent(fetchFn, path, operation);
-  return retryWithToken(token);
-}
-
-/**
- * Write a file using the provided fetch function (adapter-aware).
- * Handles the consent flow for external paths (403 → prompt → retry with token).
- */
-async function writeFileWithFetch(
-  fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-  filePath: string,
-  content: string
-): Promise<Response> {
-  const baseUrl = `/api/file?path=${encodeURIComponent(filePath)}`;
-  const body = JSON.stringify({ content });
-
-  return withConsentRetry(
-    () => fetchFn(baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    }),
-    filePath,
-    'write',
-    (token) => fetchFn(baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        [consentTokenHeader]: token,
-      },
-      body,
-    }),
-    fetchFn,
-  );
-}
+// ---------------------------------------------------------------------------
+// Combined Interface (matches original EditorManagerContextValue)
+// ---------------------------------------------------------------------------
 
 interface EditorManagerContextValue {
   buffers: Map<string, EditorBuffer>;
@@ -155,15 +32,20 @@ interface EditorManagerContextValue {
   setAutoSaveEnabled: (enabled: boolean) => void;
   whitespaceRenderingMode: WhitespaceRenderingMode;
   setWhitespaceRenderingMode: (mode: WhitespaceRenderingMode) => void;
-  autoSaveInterval: number; // milliseconds
-  paneSizes: PaneSize; // Track pane sizes for resizable split panes
+  autoSaveInterval: number;
+  paneSizes: PaneSize;
   isFormatOnSaveEnabled: boolean;
   setFormatOnSaveEnabled: (enabled: boolean) => void;
-  maxPanes: number; // Configurable max panes for UI (capped at MAX_PANES)
+  maxPanes: number;
   setMaxPanes: (n: number) => void;
-
-  // Actions
-  openFile: (file: EditorFileEntry) => string; // Returns buffer ID
+  openFile: (file: {
+    name: string;
+    path: string;
+    isDir: boolean;
+    size: number;
+    modified: number;
+    ext?: string;
+  }) => string;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
     path: string;
@@ -203,7 +85,7 @@ interface EditorManagerContextValue {
   clearBufferExternallyModified: (bufferId: string) => void;
   setBufferLanguageOverride: (bufferId: string, languageId: string | null) => void;
   saveAllBuffers: () => Promise<void>;
-  updatePaneSize: (paneId: string, size: number) => void; // Update pane size
+  updatePaneSize: (paneId: string, size: number) => void;
   isLinkedScrollEnabled: boolean;
   toggleLinkedScroll: () => void;
   toggleBufferPin: (bufferId: string) => void;
@@ -227,1035 +109,157 @@ interface EditorManagerProviderProps {
 }
 
 export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ children }) => {
-  const [buffers, setBuffers] = useState<Map<string, EditorBuffer>>(() => {
-    const chatBuffer: EditorBuffer = {
-      id: 'buffer-chat',
-      kind: 'chat',
-      file: {
-        name: 'Chat',
-        path: '__workspace/chat',
-        isDir: false,
-        size: 0,
-        modified: 0,
-        ext: '.chat'
-      },
-      content: '',
-      originalContent: '',
-      cursorPosition: { line: 0, column: 0 },
-      scrollPosition: { top: 0, left: 0 },
-      isModified: false,
-      isActive: true,
-      paneId: 'pane-1',
-      isPinned: true,
-      isClosable: false,
-      metadata: { chatId: null as string | null }
-    };
+  return (
+    <EditorSettingsProvider>
+      <SettingsToPaneProvider>
+        {children}
+      </SettingsToPaneProvider>
+    </EditorSettingsProvider>
+  );
+};
 
-    return new Map([[chatBuffer.id, chatBuffer]]);
-  });
-  const [panes, setPanes] = useState<EditorPane[]>([
-    { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' }
+// Internal component to bridge Settings -> Pane -> Buffer
+const SettingsToPaneProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const settings = useSettings();
+
+  return (
+    <PaneToBufferProvider settings={settings}>
+      {children}
+    </PaneToBufferProvider>
+  );
+};
+
+const PaneToBufferProvider: React.FC<{
+  children: ReactNode;
+  settings: {
+    maxPanes: number;
+    isAutoSaveEnabled: boolean;
+    isFormatOnSaveEnabled: boolean;
+    autoSaveInterval: number;
+  };
+}> = ({ children, settings }) => {
+  // Need to get closeBuffer from BufferManager first, but BufferManager needs PaneBridge
+  // Use ref pattern to break circular dependency
+  const closeBufferRef = React.useRef<((bufferId: string) => void) | null>(null);
+
+  return (
+    <PaneManagerProvider maxPanes={settings.maxPanes} closeBuffer={(id) => closeBufferRef.current?.(id)}>
+      <PaneToBufferBridge settings={settings} closeBufferRef={closeBufferRef}>
+        {children}
+      </PaneToBufferBridge>
+    </PaneManagerProvider>
+  );
+};
+
+const PaneToBufferBridge: React.FC<{
+  children: ReactNode;
+  settings: {
+    isAutoSaveEnabled: boolean;
+    isFormatOnSaveEnabled: boolean;
+    autoSaveInterval: number;
+  };
+  closeBufferRef: React.MutableRefObject<((bufferId: string) => void) | null>;
+}> = ({ children, settings, closeBufferRef }) => {
+  const pane = usePaneContext();
+
+  const paneBridge: PaneBridge = React.useMemo(() => ({
+    activePaneId: pane.activePaneId,
+    activeBufferId: pane.activeBufferId,
+    panes: pane.panes,
+    setActiveBufferId: pane.setActiveBufferId,
+    setActivePaneId: pane.setActivePaneId,
+    setPanes: pane.setPanes,
+    switchPane: pane.switchPane,
+    closeBuffer: (id: string) => closeBufferRef.current?.(id),
+    moveBufferToPane: pane.moveBufferToPane,
+  }), [
+    pane.activePaneId,
+    pane.activeBufferId,
+    pane.panes,
+    pane.setActiveBufferId,
+    pane.setActivePaneId,
+    pane.setPanes,
+    pane.switchPane,
+    pane.moveBufferToPane,
   ]);
-  const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
-  const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
-  const [activeBufferId, setActiveBufferId] = useState<string | null>('buffer-chat');
-  const [isAutoSaveEnabled, setIsAutoSaveEnabledState] = useState(true);
-  const setAutoSaveEnabled = useCallback((enabled: boolean) => setIsAutoSaveEnabledState(enabled), []);
-  const [whitespaceRenderingMode, setWhitespaceRenderingModeState] = useState<WhitespaceRenderingMode>(() => {
-    try {
-      const stored = localStorage.getItem('editor:whitespace-rendering');
-      if (stored === 'boundary' || stored === 'all' || stored === 'none') return stored;
-      return 'none';
-    } catch (err) {
-      return 'none';
-    }
-  });
-  const setWhitespaceRenderingMode = useCallback((mode: WhitespaceRenderingMode) => {
-    setWhitespaceRenderingModeState(mode);
-    try {
-      localStorage.setItem('editor:whitespace-rendering', mode);
-    } catch (err) {
-      // Ignore localStorage errors
-    }
-  }, []);
-  const [isFormatOnSaveEnabled, setIsFormatOnSaveEnabledState] = useState(() => {
-    try {
-      const stored = localStorage.getItem('editor.format-on-save');
-      return stored === 'true';
-    } catch (err) {
-      return false;
-    }
-  });
-  const setFormatOnSaveEnabled = useCallback((enabled: boolean) => {
-    setIsFormatOnSaveEnabledState(enabled);
-    try {
-      localStorage.setItem('editor.format-on-save', String(enabled));
-    } catch (err) {
-      // Ignore localStorage errors
-    }
-  }, []);
-  const [autoSaveInterval] = useState(30000); // 30 seconds
-  const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 }); // Initial sizes in percentage
-  const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
-  const [maxPanes, setMaxPanesState] = useState<number>(() => {
-    try {
-      const stored = localStorage.getItem('editor.max-panes');
-      if (stored) {
-        const parsed = parseInt(stored, 10);
-        // Clamp to range [2, MAX_PANES]
-        if (!isNaN(parsed) && parsed >= 2 && parsed <= MAX_PANES) {
-          return parsed;
-        }
-      }
-      return DEFAULT_MAX_PANES;
-    } catch (err) {
-      return DEFAULT_MAX_PANES;
-    }
-  });
-  const setMaxPanes = useCallback((n: number) => {
-    // Clamp to range [2, MAX_PANES]
-    const clamped = Math.max(2, Math.min(MAX_PANES, n));
-    setMaxPanesState(clamped);
-    try {
-      localStorage.setItem('editor.max-panes', String(clamped));
-    } catch (err) {
-      // Ignore localStorage errors
-    }
-  }, []);
 
-  // Keep a ref to the latest buffers Map so async closures don't read stale data
-  const buffersRef = useRef(buffers);
-  useEffect(() => {
-    buffersRef.current = buffers;
-  }, [buffers]);
-
-  // Keep a ref to the latest activePaneId so callbacks don't read stale closure values
-  const activePaneIdRef = useRef(activePaneId);
-  useEffect(() => {
-    activePaneIdRef.current = activePaneId;
-  }, [activePaneId]);
-
-  // Activate a buffer (display in active pane)
-  const sproutFetch = useSproutFetch();
-
-  const activateBuffer = useCallback((bufferId: string) => {
-    const currentActivePane = activePaneIdRef.current;
-    setActiveBufferId(bufferId);
-
-    // Update buffers
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        // Deactivate previous active buffer for this pane, but keep paneId
-        if (currentActivePane) {
-          Array.from(newBuffers.entries()).forEach(([id, buf]) => {
-            if (buf.paneId === currentActivePane && id !== bufferId) {
-              newBuffers.set(id, { ...buf, isActive: false });
-            }
-          });
-        }
-        // Activate new buffer
-        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: currentActivePane });
-      }
-      return newBuffers;
-    });
-
-    // Update pane
-    setPanes(prev => prev.map(pane =>
-      pane.id === currentActivePane
-        ? { ...pane, bufferId }
-        : pane
-    ));
-  }, []);
-
-  // Switch to a different buffer in the active pane
-  const switchToBuffer = useCallback((bufferId: string) => {
-    const existingBuffer = buffersRef.current.get(bufferId);
-    if (!existingBuffer) {
-      return;
-    }
-
-    const currentPaneId = activePaneIdRef.current;
-
-    if (existingBuffer.paneId && existingBuffer.paneId !== currentPaneId) {
-      setActivePaneId(existingBuffer.paneId);
-      setActiveBufferId(bufferId);
-      setBuffers(prev => {
-        const next = new Map(prev);
-        Array.from(next.entries()).forEach(([id, buf]) => {
-          if (buf.paneId === existingBuffer.paneId) {
-            next.set(id, { ...buf, isActive: id === bufferId });
-          }
-        });
-        return next;
-      });
-      setPanes(prev => prev.map(pane =>
-        pane.id === existingBuffer.paneId ? { ...pane, bufferId } : pane
-      ));
-      return;
-    }
-
-    setActiveBufferId(bufferId);
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      // Deactivate all buffers in this pane, activate the target (keep paneId)
-      Array.from(newBuffers.entries()).forEach(([id, buf]) => {
-        if (buf.paneId === currentPaneId) {
-          newBuffers.set(id, { ...buf, isActive: id === bufferId });
-        }
-      });
-      const buffer = newBuffers.get(bufferId);
-      if (buffer) {
-        newBuffers.set(bufferId, { ...buffer, isActive: true, paneId: currentPaneId });
-      }
-      return newBuffers;
-    });
-    setPanes(prev => prev.map(pane =>
-      pane.id === currentPaneId ? { ...pane, bufferId } : pane
-    ));
-  }, []);
-
-  // Open a file in an editor pane
-  const openFile = useCallback((file: EditorFileEntry) => {
-    const filePath = file.path;
-
-    // Check if file is already open in a buffer
-    const currentBuffers = buffersRef.current;
-    const currentActivePane = activePaneIdRef.current;
-    const existingBuffer = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === filePath);
-    if (existingBuffer) {
-      const [bufferId, buffer] = existingBuffer;
-      // If buffer is already in a pane, switch to that pane and activate properly
-      if (buffer.paneId) {
-        const pane = panes.find(p => p.id === buffer.paneId);
-        if (pane) {
-          switchToBuffer(bufferId);
-          return bufferId;
-        }
-      }
-      // Otherwise activate in current pane
-      activateBuffer(bufferId);
-      return bufferId;
-    }
-
-    // Create new buffer
-    const bufferId = `buffer-${Date.now()}`;
-    const newBuffer: EditorBuffer = {
-      id: bufferId,
-      kind: 'file',
-      file: file,
-      content: '',
-      originalContent: '',
-      cursorPosition: { line: 0, column: 0 },
-      scrollPosition: { top: 0, left: 0 },
-      isModified: false,
-      isActive: true,
-      paneId: currentActivePane
-    };
-
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      // Deactivate previous buffer in the active pane, but keep paneId
-      newBuffers.forEach((existing, key) => {
-        if (key !== bufferId && existing.paneId === currentActivePane) {
-          newBuffers.set(key, { ...existing, isActive: false });
-        }
-      });
-      newBuffers.set(bufferId, newBuffer);
-      return newBuffers;
-    });
-
-    // Assign to active pane
-    setPanes(prev => prev.map(pane =>
-      pane.id === currentActivePane
-        ? { ...pane, bufferId }
-        : pane
-    ));
-
-    setActiveBufferId(bufferId);
-
-    return bufferId;
-  }, [activateBuffer, panes, switchToBuffer]);
-
-  // Helper to find the rightmost pane for chat placement
-  const getRightmostPane = useCallback((paneList: EditorPane[]) => {
-    if (paneList.length === 0) return null;
-    // Position order: primary=0, secondary=1, tertiary=2, quaternary=3, quinary=4, senary=5
-    const positionOrder: Record<string, number> = {
-      'primary': 0,
-      'secondary': 1,
-      'tertiary': 2,
-      'quaternary': 3,
-      'quinary': 4,
-      'senary': 5
-    };
-    return paneList.reduce((rightmost, pane) => {
-      const rightmostOrder = positionOrder[rightmost.position as string] ?? 0;
-      const paneOrder = positionOrder[pane.position as string] ?? 0;
-      return paneOrder > rightmostOrder ? pane : rightmost;
-    }, paneList[0]);
-  }, []);
-
-  const openWorkspaceBuffer = useCallback((options: {
-    kind: 'chat' | 'diff' | 'review' | 'file' | 'compare';
-    path: string;
-    title: string;
-    content?: string;
-    ext?: string;
-    isPinned?: boolean;
-    isClosable?: boolean;
-    metadata?: Record<string, unknown>;
-  }) => {
-    const currentBuffers = buffersRef.current;
-    const existingBufferEntry = Array.from(currentBuffers.entries()).find(([_, buffer]) => buffer.file.path === options.path);
-
-    if (existingBufferEntry) {
-      const [bufferId, buffer] = existingBufferEntry;
-      setBuffers(prev => {
-        const next = new Map(prev);
-        next.set(bufferId, {
-          ...buffer,
-          kind: options.kind,
-          file: {
-            ...buffer.file,
-            name: options.title,
-            path: options.path,
-            ext: options.ext || buffer.file.ext,
-          },
-          content: options.content ?? buffer.content,
-          originalContent: options.content ?? buffer.originalContent,
-          isPinned: options.isPinned ?? buffer.isPinned,
-          isClosable: options.isClosable ?? buffer.isClosable,
-          metadata: options.metadata ?? buffer.metadata,
-        });
-        return next;
-      });
-      activateBuffer(bufferId);
-      return bufferId;
-    }
-
-    // For chat buffers, place them in the rightmost pane for better UX with context panel
-    const targetPane = options.kind === 'chat' ? getRightmostPane(panes) : panes.find(p => p.id === activePaneId);
-    const targetPaneId = targetPane?.id ?? activePaneId;
-
-    const bufferId = `buffer-${options.kind}-${Date.now()}`;
-    const newBuffer: EditorBuffer = {
-      id: bufferId,
-      kind: options.kind,
-      file: {
-        name: options.title,
-        path: options.path,
-        isDir: false,
-        size: 0,
-        modified: 0,
-        ext: options.ext,
-      },
-      content: options.content ?? '',
-      originalContent: options.content ?? '',
-      cursorPosition: { line: 0, column: 0 },
-      scrollPosition: { top: 0, left: 0 },
-      isModified: false,
-      isActive: true,
-      paneId: targetPaneId,
-      isPinned: options.isPinned ?? false,
-      isClosable: options.isClosable ?? !options.isPinned,
-      metadata: options.metadata ?? {},
-    };
-
-    setBuffers(prev => {
-      const next = new Map(prev);
-      // Deactivate previous buffer(s) in the target pane, but keep paneId
-      next.forEach((existing, key) => {
-        if (key !== bufferId && existing.paneId === targetPaneId) {
-          next.set(key, { ...existing, isActive: false });
-        }
-      });
-      next.set(bufferId, newBuffer);
-      return next;
-    });
-
-    // Assign buffer to target pane and activate that pane
-    setPanes(prev => prev.map(pane =>
-      pane.id === targetPaneId
-        ? { ...pane, bufferId }
-        : pane
-    ));
-
-    // Switch to the target pane and activate the buffer
-    setActivePaneId(targetPaneId);
-    setActiveBufferId(bufferId);
-
-    return bufferId;
-  }, [activePaneId, activateBuffer, getRightmostPane, panes]);
-
-  // Convenience helper to open a compare buffer (renders CompareTab in WorkspacePane)
-  const openCompareBuffer = useCallback((options: {
-    originalContent: string;
-    modifiedContent: string;
-    fileName: string;
-    aLabel?: string;
-    bLabel?: string;
-    title?: string;
-  }) => {
-    const bufferTitle = options.title || `Compare: ${options.fileName}`;
-    const bufferPath = `__workspace/compare/${options.fileName}-${Date.now()}`;
-
-    return openWorkspaceBuffer({
-      kind: 'compare',
-      path: bufferPath,
-      title: bufferTitle,
-      metadata: {
-        originalContent: options.originalContent,
-        modifiedContent: options.modifiedContent,
-        fileName: options.fileName,
-        aLabel: options.aLabel,
-        bLabel: options.bLabel,
-        title: options.title,
-      },
-    });
-  }, [openWorkspaceBuffer]);
-
-  // Update buffer content
-  const updateBufferMetadata = useCallback((bufferId: string, updates: Record<string, unknown>) => {
-    setBuffers(prev => {
-      const buf = prev.get(bufferId);
-      if (!buf) return prev;
-      const next = new Map(prev);
-      next.set(bufferId, { ...buf, metadata: { ...buf.metadata, ...updates } });
-      return next;
-    });
-  }, []);
-
-  const updateBufferTitle = useCallback((bufferId: string, title: string) => {
-    setBuffers(prev => {
-      const buf = prev.get(bufferId);
-      if (!buf) return prev;
-      const next = new Map(prev);
-      next.set(bufferId, { ...buf, file: { ...buf.file, name: title } });
-      return next;
-    });
-  }, []);
-
-  const updateBufferContent = useCallback((bufferId: string, content: string) => {
-  setBuffers(prev => {
-    const buffer = prev.get(bufferId);
-    // Skip update if content hasn't changed to avoid unnecessary re-renders
-    if (!buffer || buffer.content === content) return prev;
-    
-    const newBuffers = new Map(prev);
-    newBuffers.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
-    return newBuffers;
-  });
-}, []);// Update buffer cursor position
-  const updateBufferCursor = useCallback((bufferId: string, position: { line: number; column: number }) => {
-    setBuffers(prev => {
-      const buffer = prev.get(bufferId);
-      if (!buffer) return prev;
-      // Skip update if cursor position hasn't changed to avoid unnecessary re-renders
-      if (buffer.cursorPosition?.line === position.line && buffer.cursorPosition?.column === position.column) {
-        return prev;
-      }
-      const newBuffers = new Map(prev);
-      newBuffers.set(bufferId, { ...buffer, cursorPosition: position });
-      return newBuffers;
-    });
-  }, []);
-
-  // Update buffer scroll position
-  const updateBufferScroll = useCallback((bufferId: string, position: { top: number; left: number }) => {
-    setBuffers(prev => {
-      const buffer = prev.get(bufferId);
-      if (!buffer) return prev;
-      // Skip update if scroll position hasn't changed to avoid unnecessary re-renders
-      if (buffer.scrollPosition?.top === position.top && buffer.scrollPosition?.left === position.left) {
-        return prev;
-      }
-      const newBuffers = new Map(prev);
-      newBuffers.set(bufferId, { ...buffer, scrollPosition: position });
-      return newBuffers;
-    });
-  }, []);
-
-  // Set buffer modified state
-  const setBufferModified = useCallback((bufferId: string, isModified: boolean) => {
-    setBuffers(prev => {
-      const buffer = prev.get(bufferId);
-      if (!buffer || buffer.isModified === isModified) return prev;
-      const newBuffers = new Map(prev);
-      newBuffers.set(bufferId, { ...buffer, isModified });
-      return newBuffers;
-    });
-  }, []);
-
-  const setBufferOriginalContent = useCallback((bufferId: string, originalContent: string) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, {
-          ...buffer,
-          originalContent,
-          isModified: buffer.content !== originalContent ? buffer.isModified : false,
-        });
-      }
-      return next;
-    });
-  }, []);
-
-  const setBufferExternallyModified = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, {
-          ...buffer,
-          externallyModified: true,
-          diskContent,
-          file: { ...buffer.file, modified: mtime ?? Math.floor(Date.now() / 1000) },
-        });
-      }
-      return next;
-    });
-  }, []);
-
-  const clearBufferExternallyModified = useCallback((bufferId: string) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, {
-          ...buffer,
-          externallyModified: false,
-          diskContent: null,
-        });
-      }
-      return next;
-    });
-  }, []);
-
-  const setBufferLanguageOverride = useCallback((bufferId: string, languageId: string | null) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, { ...buffer, languageOverride: languageId });
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleLinkedScroll = useCallback(() => {
-    setIsLinkedScrollEnabled(prev => !prev);
-  }, []);
-
-  const toggleBufferPin = useCallback((bufferId: string) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, { ...buffer, isPinned: !buffer.isPinned });
-      }
-      return next;
-    });
-  }, []);
-
-  const setBufferPinned = useCallback((bufferId: string, isPinned: boolean) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, { ...buffer, isPinned });
-      }
-      return next;
-    });
-  }, []);
-
-  const setBufferClosable = useCallback((bufferId: string, isClosable: boolean) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, { ...buffer, isClosable });
-      }
-      return next;
-    });
-  }, []);
-
-  const reloadBufferFromDisk = useCallback((bufferId: string, diskContent: string, mtime?: number) => {
-    setBuffers(prev => {
-      const next = new Map(prev);
-      const buffer = next.get(bufferId);
-      if (buffer) {
-        next.set(bufferId, {
-          ...buffer,
-          content: diskContent,
-          originalContent: diskContent,
-          isModified: false,
-          externallyModified: false,
-          diskContent: null,
-          file: { ...buffer.file, modified: mtime ?? Math.floor(Date.now() / 1000) },
-        });
-      }
-      return next;
-    });
-  }, []);
-
-  // Save a buffer to the server
-  const saveBuffer = useCallback(async (bufferId: string) => {
-    const buffer = buffersRef.current.get(bufferId);
-    if (!buffer || buffer.kind !== 'file') return;
-
-    // Handle virtual workspace buffers (untitled files created via Ctrl+N)
-    if (buffer.file.path.startsWith('__workspace/')) {
-      const filePath = await showThemedPrompt(
-        'Enter a file path for the new file:',
-        {
-          title: 'Save As',
-          defaultValue: 'untitled',
-          placeholder: 'path/to/file.ts',
-        }
-      );
-
-      if (!filePath || !filePath.trim()) {
-        return; // User cancelled
-      }
-
-      const trimmedPath = filePath.trim();
-
-      // Write the file to disk
-      try {
-        const response = await writeFileWithFetch(sproutFetch, trimmedPath, buffer.content);
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => response.statusText);
-          throw new Error(errorText || `Failed to save file: ${response.statusText}`);
-        }
-
-        // Update the buffer path to the real file path
-        const ext = trimmedPath.includes('.') ? trimmedPath.split('.').pop() : '';
-        const name = trimmedPath.split('/').pop() || trimmedPath;
-
-        setBuffers(prev => {
-          const newBuffers = new Map(prev);
-          const buf = newBuffers.get(bufferId);
-          if (buf) {
-            newBuffers.set(bufferId, {
-              ...buf,
-              file: {
-                ...buf.file,
-                name,
-                path: trimmedPath,
-                ext: ext || undefined,
-              },
-              originalContent: buf.content,
-              isModified: false,
-            });
-          }
-          return newBuffers;
-        });
-      } catch (error) {
-        console.error('Failed to save new file:', error);
-        throw error;
-      }
-      return;
-    }
-
-    // Normal save for existing files
-    // Format before saving if format-on-save is enabled
-    let contentToSave = buffer.content;
-    let formattedContent: string | undefined;
-    if (isFormatOnSaveEnabled && isFormattable(buffer.file.path)) {
-      try {
-        const formatPromise = formatCodeWithConfigDiscovery(
-          buffer.content,
-          buffer.file.path,
-          buffer.file.size,
-        );
-        // Timeout to prevent save from hanging indefinitely (e.g., Prettier
-        // processing a very large file or a stalled config fetch).
-        const formatTimeout = new Promise<{ formatted: string; error?: string }>((resolve) =>
-          setTimeout(() => resolve({ formatted: buffer.content, error: 'Format timed out' }), 2000),
-        );
-        const result = await Promise.race([formatPromise, formatTimeout]);
-        if (!result.error && result.formatted !== buffer.content) {
-          contentToSave = result.formatted;
-          formattedContent = result.formatted;
-        } else if (result.error) {
-          // Log but don't block save
-          debugLog(`[saveBuffer] Format-on-save skipped for ${buffer.file.path}: ${result.error}`);
-        }
-      } catch {
-        // If formatting fails, save the original content
-        debugLog(`[saveBuffer] Format-on-save failed for ${buffer.file.path}, saving unformatted`);
-      }
-    }
-
-    try {
-      const response = await writeFileWithFetch(sproutFetch, buffer.file.path, contentToSave);
-
-      if (response.ok) {
-        const data = await response.json();
-        // Check for validation errors (hotkeys config)
-        if (data.success === false) {
-          console.error('Save validation failed:', data);
-          throw new Error(data.error || 'Save validation failed');
-        }
-        // Check for success message
-        if (data.message === 'File saved successfully' || data.success === true) {
-          setBuffers(prev => {
-            const newBuffers = new Map(prev);
-            const buf = newBuffers.get(bufferId);
-            if (buf) {
-              newBuffers.set(bufferId, { ...buf, originalContent: formattedContent ?? buf.content, isModified: false });
-            }
-            return newBuffers;
-          });
-          return { mod_time: typeof data.mod_time === 'number' ? data.mod_time : undefined, formattedContent };
-        }
-      }
-    } catch (error) {
-      console.error('Failed to save buffer:', bufferId, error);
-      throw error;
-    }
-  }, [isFormatOnSaveEnabled, sproutFetch]);
-
-  // Save all modified buffers
-  const saveAllBuffers = useCallback(async () => {
-    const currentBuffers = buffersRef.current;
-    const savePromises = Array.from(currentBuffers.entries())
-      .filter(([_, buffer]) => buffer.isModified && !buffer.file.path.startsWith('__workspace/'))
-      .map(([bufferId, _]) => saveBuffer(bufferId));
-
-    await Promise.all(savePromises);
-  }, [saveBuffer]);
-
-  // Close a buffer (triggers auto-save if modified)
-  const closeBuffer = useCallback((bufferId: string) => {
-    const buffer = buffersRef.current.get(bufferId);
-    if (!buffer) return;
-    if (buffer.isClosable === false) return;
-
-    // Save before closing if modified and auto-save is enabled (fire-and-forget)
-    if (buffer.isModified && isAutoSaveEnabled) {
-      saveBuffer(bufferId).catch(err => {
-        console.error('Failed to save buffer before closing:', bufferId, err);
-      });
-    }
-
-    const remain = Array.from(buffersRef.current.values())
-      .filter((candidate) => candidate.id !== bufferId);
-    const nextPaneBuffer = buffer.paneId
-      ? remain.find((candidate) => candidate.paneId === buffer.paneId)
-        || remain.find((candidate) => !candidate.paneId)
-        || null
-      : null;
-
-    const currentActivePane = activePaneIdRef.current;
-
-    setBuffers(prev => {
-      const newBuffers = new Map(prev);
-      newBuffers.delete(bufferId);
-      if (buffer.paneId && nextPaneBuffer) {
-        const replacement = newBuffers.get(nextPaneBuffer.id);
-        if (replacement) {
-          newBuffers.set(nextPaneBuffer.id, {
-            ...replacement,
-            isActive: currentActivePane === buffer.paneId,
-            paneId: buffer.paneId,
-          });
-        }
-      }
-      return newBuffers;
-    });
-
-    if (buffer.paneId) {
-      setPanes(prev => prev.map(pane =>
-        pane.id === buffer.paneId
-          ? { ...pane, bufferId: nextPaneBuffer?.id || null }
-          : pane
-      ));
-    }
-
-    if (bufferId === activeBufferId) {
-      if (nextPaneBuffer) {
-        setActiveBufferId(nextPaneBuffer.id);
-      } else {
-        setActiveBufferId(null);
-      }
-    }
-  }, [activeBufferId, isAutoSaveEnabled, saveBuffer]);
-
-  const reorderBuffers = useCallback((sourceBufferId: string, targetBufferId: string) => {
-    if (!sourceBufferId || !targetBufferId || sourceBufferId === targetBufferId) {
-      return;
-    }
-
-    setBuffers((prev) => {
-      const entries = Array.from(prev.entries());
-      const sourceIndex = entries.findIndex(([id]) => id === sourceBufferId);
-      const targetIndex = entries.findIndex(([id]) => id === targetBufferId);
-
-      if (sourceIndex === -1 || targetIndex === -1) {
-        return prev;
-      }
-
-      const [moved] = entries.splice(sourceIndex, 1);
-      const nextTargetIndex = entries.findIndex(([id]) => id === targetBufferId);
-      entries.splice(nextTargetIndex, 0, moved);
-      return new Map(entries);
-    });
-  }, []);
-
-  const moveBufferToPane = useCallback((bufferId: string, paneId: string) => {
-    const buffer = buffersRef.current.get(bufferId);
-    if (!buffer || buffer.paneId === paneId) {
-      return;
-    }
-
-    setBuffers((prev) => {
-      const next = new Map(prev);
-      // Deactivate previous active buffer in destination pane
-      next.forEach((existing, key) => {
-        if (key !== bufferId && existing.paneId === paneId) {
-          next.set(key, { ...existing, isActive: false });
-        }
-      });
-      const moved = next.get(bufferId);
-      if (!moved) {
-        return prev;
-      }
-      next.set(bufferId, {
-        ...moved,
-        paneId,
-        isActive: activePaneId === paneId,
-      });
-      return next;
-    });
-
-    setPanes((prev) => prev.map((pane) => {
-      if (pane.id === paneId) {
-        return { ...pane, bufferId };
-      }
-      if (pane.bufferId === bufferId) {
-        return { ...pane, bufferId: null };
-      }
-      return pane;
-    }));
-
-    if (activePaneId === paneId) {
-      setActiveBufferId(bufferId);
-    }
-  }, [activePaneId]);
-
-  // Close a pane
-  const closePane = useCallback((paneId: string) => {
-    if (panes.length === 1) return; // Can't close last pane
-
-    const pane = panes.find(p => p.id === paneId);
-    if (pane?.bufferId) {
-      closeBuffer(pane.bufferId);
-    }
-
-    const remaining = panes.filter(p => p.id !== paneId);
-    setPanes(remaining);
-
-    // Redistribute pane sizes evenly among remaining panes
-    const evenSize = remaining.length === 1 ? 100 : 100 / remaining.length;
-    const newSizes: Record<string, number> = {};
-    remaining.forEach(p => {
-      newSizes[p.id] = evenSize;
-    });
-    setPaneSizes(newSizes);
-
-    // If we closed the active pane, activate another
-    if (paneId === activePaneId) {
-      setActivePaneId(remaining[0]?.id || null);
-    }
-
-    // Going to single pane
-    if (remaining.length === 1) {
-      setPaneLayoutState('single');
-    }
-  }, [panes, activePaneId, closeBuffer]);
-
-  // Switch to a different pane
-  const switchPane = useCallback((paneId: string) => {
-    setActivePaneId(paneId);
-    const pane = panes.find(p => p.id === paneId);
-    if (pane?.bufferId) {
-      setActiveBufferId(pane.bufferId);
-    }
-  }, [panes]);
-
-  // Split a pane
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
-    if (panes.length >= maxPanes) return null; // Respects configurable limit
-
-    const newPaneId = `pane-${Date.now()}`;
-
-    // Determine the position for the new pane based on current count
-    const positionValues: Array<'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary' | 'senary'> =
-      ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary', 'senary'];
-    const newPosition = positionValues[panes.length];
-
-    const newPanes: EditorPane[] = [
-      ...panes,
-      {
-        id: newPaneId,
-        bufferId: null,
-        isActive: false,
-        position: newPosition
-      }
-    ];
-
-    setPanes(newPanes);
-
-    // Update layout and distribute sizes evenly
-    const newPaneCount = panes.length + 1;
-    if (panes.length === 1) {
-      setPaneLayoutState(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
-      // Initialize pane sizes (50/50 split for 2 panes)
-      setPaneSizes({
-        [panes[0].id]: 50,
-        [newPaneId]: 50
-      });
-    } else {
-      // Distribute sizes evenly among all panes
-      const evenSize = 100 / newPaneCount;
-      const newSizes: Record<string, number> = {};
-      newPanes.forEach(pane => {
-        newSizes[pane.id] = evenSize;
-      });
-      setPaneSizes(newSizes);
-    }
-
-    // Activate new pane
-    setActivePaneId(newPaneId);
-    return newPaneId;
-  }, [panes, maxPanes]);
-
-  // Close split (reset to single pane)
-  const closeSplit = useCallback(() => {
-    const activePane = panes.find(p => p.id === activePaneId);
-
-    // Close all panes except the primary one
-    panes.forEach(pane => {
-      if (pane.position !== 'primary' && pane.id !== activePaneId) {
-        closePane(pane.id);
-      }
-    });
-
-    setPanes(prev => {
-      const primaryPane = prev.find(p => p.position === 'primary');
-      return primaryPane ? [primaryPane] : prev;
-    });
-
-    setPaneLayoutState('single');
-    setActivePaneId(panes[0]?.id || null);
-
-    // Reset pane sizes
-    setPaneSizes({ [panes[0]?.id || 'pane-1']: 100 });
-
-    const remainingBuffer = activePane?.bufferId;
-    if (remainingBuffer) {
-      setActiveBufferId(remainingBuffer);
-    }
-  }, [panes, activePaneId, closePane]);
-
-  // Set pane layout
-  const setPaneLayout = useCallback((layout: PaneLayout) => {
-    setPaneLayoutState(layout);
-
-    // Adjust panes based on layout
-    if (layout === 'single') {
-      setPanes(prev => {
-        const primary = prev.find(p => p.position === 'primary');
-        return primary ? [primary] : prev;
-      });
-      activePaneId && setActivePaneId(activePaneId);
-    }
-  }, [activePaneId]);
-
-  // Auto-save interval - saves all modified buffers every 30 seconds
-  useEffect(() => {
-    if (!isAutoSaveEnabled) return;
-
-    const intervalId = setInterval(async () => {
-      await saveAllBuffers();
-    }, autoSaveInterval);
-
-    return () => clearInterval(intervalId);
-  }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
-
-  // Update pane size (for resizable split panes)
-  const updatePaneSize = useCallback((paneId: string, size: number) => {
-    setPaneSizes(prev => {
-      // Count only actual pane IDs (exclude group:*, nested:*, grid:* keys)
-      const actualPaneKeys = Object.keys(prev).filter(
-        key => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:')
-      );
-      const currentPanesCount = actualPaneKeys.length;
-
-      // Calculate maximum size for this pane so that all other panes
-      // can maintain at least MIN_PANE_WIDTH_PERCENT
-      const maxAllowedSize = 100 - MIN_PANE_WIDTH_PERCENT * (currentPanesCount - 1);
-      // Clamp the size to ensure no pane goes below minimum width
-      const clampedSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowedSize, size));
-      return {
-        ...prev,
-        [paneId]: clampedSize
-      };
-    });
-  }, []);
+  return (
+    <BufferManagerProvider
+      paneBridge={paneBridge}
+      isAutoSaveEnabled={settings.isAutoSaveEnabled}
+      isFormatOnSaveEnabled={settings.isFormatOnSaveEnabled}
+      autoSaveInterval={settings.autoSaveInterval}
+    >
+      <CombinedContextProvider closeBufferRef={closeBufferRef}>
+        {children}
+      </CombinedContextProvider>
+    </BufferManagerProvider>
+  );
+};
+
+const CombinedContextProvider: React.FC<{
+  children: ReactNode;
+  closeBufferRef: React.MutableRefObject<((bufferId: string) => void) | null>;
+}> = ({ children, closeBufferRef }) => {
+  const settings = useSettings();
+  const pane = usePaneContext();
+  const buffer = useBufferContext();
+
+  // Store closeBuffer for PaneManager to use
+  closeBufferRef.current = buffer.closeBuffer;
 
   const value: EditorManagerContextValue = {
-    buffers,
-    panes,
-    paneLayout,
-    activePaneId,
-    activeBufferId,
-    isAutoSaveEnabled,
-    setAutoSaveEnabled,
-    whitespaceRenderingMode,
-    setWhitespaceRenderingMode,
-    autoSaveInterval,
-    paneSizes,
-    maxPanes,
-    setMaxPanes,
-    openFile,
-    openWorkspaceBuffer,
-    openCompareBuffer,
-    closeBuffer,
-    reorderBuffers,
-    moveBufferToPane,
-    closePane,
-    switchPane,
-    switchToBuffer,
-    splitPane,
-    closeSplit,
-    setPaneLayout,
-    updateBufferContent,
-    updateBufferCursor,
-    updateBufferScroll,
-    updateBufferMetadata,
-    updateBufferTitle,
-    saveBuffer,
-    setBufferModified,
-    setBufferOriginalContent,
-    setBufferExternallyModified,
-    clearBufferExternallyModified,
-    setBufferLanguageOverride,
-    saveAllBuffers,
-    updatePaneSize,
-    isLinkedScrollEnabled,
-    toggleLinkedScroll,
-    toggleBufferPin,
-    setBufferPinned,
-    setBufferClosable,
-    reloadBufferFromDisk,
-    isFormatOnSaveEnabled,
-    setFormatOnSaveEnabled,
+    // From BufferManager
+    buffers: buffer.buffers,
+    openFile: buffer.openFile,
+    openWorkspaceBuffer: buffer.openWorkspaceBuffer,
+    openCompareBuffer: buffer.openCompareBuffer,
+    closeBuffer: buffer.closeBuffer,
+    reorderBuffers: buffer.reorderBuffers,
+    moveBufferToPane: buffer.moveBufferToPane,
+    switchToBuffer: buffer.switchToBuffer,
+    updateBufferContent: buffer.updateBufferContent,
+    updateBufferCursor: buffer.updateBufferCursor,
+    updateBufferScroll: buffer.updateBufferScroll,
+    updateBufferMetadata: buffer.updateBufferMetadata,
+    updateBufferTitle: buffer.updateBufferTitle,
+    saveBuffer: buffer.saveBuffer,
+    setBufferModified: buffer.setBufferModified,
+    setBufferOriginalContent: buffer.setBufferOriginalContent,
+    setBufferExternallyModified: buffer.setBufferExternallyModified,
+    clearBufferExternallyModified: buffer.clearBufferExternallyModified,
+    setBufferLanguageOverride: buffer.setBufferLanguageOverride,
+    saveAllBuffers: buffer.saveAllBuffers,
+    toggleBufferPin: buffer.toggleBufferPin,
+    setBufferPinned: buffer.setBufferPinned,
+    setBufferClosable: buffer.setBufferClosable,
+    reloadBufferFromDisk: buffer.reloadBufferFromDisk,
+
+    // From PaneManager
+    panes: pane.panes,
+    paneLayout: pane.paneLayout,
+    activePaneId: pane.activePaneId,
+    activeBufferId: pane.activeBufferId,
+    paneSizes: pane.paneSizes,
+    isLinkedScrollEnabled: pane.isLinkedScrollEnabled,
+    closePane: pane.closePane,
+    switchPane: pane.switchPane,
+    splitPane: pane.splitPane,
+    closeSplit: pane.closeSplit,
+    setPaneLayout: pane.setPaneLayout,
+    updatePaneSize: pane.updatePaneSize,
+    toggleLinkedScroll: pane.toggleLinkedScroll,
+
+    // From Settings
+    isAutoSaveEnabled: settings.isAutoSaveEnabled,
+    setAutoSaveEnabled: settings.setAutoSaveEnabled,
+    whitespaceRenderingMode: settings.whitespaceRenderingMode,
+    setWhitespaceRenderingMode: settings.setWhitespaceRenderingMode,
+    autoSaveInterval: settings.autoSaveInterval,
+    isFormatOnSaveEnabled: settings.isFormatOnSaveEnabled,
+    setFormatOnSaveEnabled: settings.setFormatOnSaveEnabled,
+    maxPanes: settings.maxPanes,
+    setMaxPanes: settings.setMaxPanes,
   };
 
   return (

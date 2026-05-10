@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo, type ReactNode } from 'react';
-import type { DragEvent, MouseEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   X,
   AlertTriangle,
@@ -32,6 +32,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { type EditorBuffer } from '../types/editor';
 import ContextMenu from './ContextMenu';
 import { showThemedConfirm } from './ThemedDialog';
@@ -281,13 +282,25 @@ function EditorTabs({
     toggleBufferPin,
   } = useEditorManager();
   const [showConfirm, setShowConfirm] = useState<{ bufferId: string; fileName: string } | null>(null);
-  const [draggingBufferId, setDraggingBufferId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const batchCloseTargetsRef = useRef<string[]>([]);
   const buffersRef = useRef(buffers);
   buffersRef.current = buffers;
+
+  // ── Drag-and-drop tab reorder ─────────────────────────────────
+  const {
+    handleDragStart,
+    handleDrop,
+    resolveDraggedBufferId,
+    handlePaneDrop,
+    handleDragEnd,
+  } = useTabDragReorder({
+    paneId,
+    reorderBuffers,
+    moveBufferToPane,
+  });
 
   // ── Inline rename state for chat tabs ─────────────────────────
   const [renamingBufferId, setRenamingBufferId] = useState<string | null>(null);
@@ -439,38 +452,6 @@ function EditorTabs({
     }
   }, [startRename]);
 
-  // ── Drag and drop ─────────────────────────────────────────────
-  const handleDragStart = (e: DragEvent, bufferId: string) => {
-    setDraggingBufferId(bufferId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', bufferId);
-  };
-
-  const handleDrop = (targetBufferId: string, sourceBufferId?: string | null) => {
-    const draggedId = sourceBufferId || draggingBufferId;
-    if (!draggedId || draggedId === targetBufferId) {
-      setDraggingBufferId(null);
-      return;
-    }
-    reorderBuffers(draggedId, targetBufferId);
-    setDraggingBufferId(null);
-  };
-
-  const resolveDraggedBufferId = (e: DragEvent) => {
-    return draggingBufferId || e.dataTransfer.getData('text/plain') || null;
-  };
-
-  const handlePaneDrop = (e: DragEvent) => {
-    e.preventDefault();
-    const droppedBufferId = resolveDraggedBufferId(e);
-    if (!droppedBufferId || !paneId) {
-      setDraggingBufferId(null);
-      return;
-    }
-    moveBufferToPane(droppedBufferId, paneId);
-    setDraggingBufferId(null);
-  };
-
   // ── Close confirmation ────────────────────────────────────────
   const handleConfirmClose = () => {
     if (showConfirm) {
@@ -619,14 +600,14 @@ function EditorTabs({
                   draggable
                   data-buffer-id={buffer.id}
                   onDragStart={(e) => handleDragStart(e, buffer.id)}
-                  onDragEnd={() => setDraggingBufferId(null)}
+                  onDragEnd={handleDragEnd}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     const droppedBufferId = resolveDraggedBufferId(e);
                     if (!droppedBufferId || droppedBufferId === buffer.id) {
-                      setDraggingBufferId(null);
+                      handleDragEnd();
                       return;
                     }
                     if (paneId && buffers.get(droppedBufferId)?.paneId !== paneId) {

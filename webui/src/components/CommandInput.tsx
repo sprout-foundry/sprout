@@ -1,13 +1,16 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info, Database } from 'lucide-react';
-import { showThemedConfirm } from './ThemedDialog';
+import { useRef, useEffect, memo } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLog } from '../utils/log';
 import './CommandInput.css';
 import { useImageUpload } from './useImageUpload';
 import { useCommandHistory } from './useCommandHistory';
 import { useInputHandling } from './useInputHandling';
-import QueuedMessagesPanel from './QueuedMessagesPanel';
+import { useCommandSubmit } from './useCommandSubmit';
+import { useIndexToggle } from './useIndexToggle';
+import { usePopovers } from './usePopovers';
+import { CommandInputHeader } from './CommandInputHeader';
+import { ImagePreviewPanel } from './ImagePreviewPanel';
+import { CommandInputActions } from './CommandInputActions';
 
 interface CommandInputProps {
   value?: string;
@@ -60,10 +63,6 @@ function CommandInput({
   onToggleIndex,
 }: CommandInputProps): JSX.Element {
   const log = useLog();
-  const [showQueuePanel, setShowQueuePanel] = useState(false);
-  const [showHints, setShowHints] = useState(false);
-  const queuePanelRef = useRef<HTMLDivElement>(null);
-
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Image upload hook
@@ -103,23 +102,31 @@ function CommandInput({
     navigateHistory,
   } = useCommandHistory({ log, draftValue, updateValue });
 
-  // Optimistic state for the index toggle — provides immediate visual feedback
-  // while waiting for the stats poll to confirm. Reset whenever the prop changes.
-  const [optimisticIndexEnabled, setOptimisticIndexEnabled] = useState<boolean | null>(null);
-  const effectiveIndexEnabled = optimisticIndexEnabled !== null ? optimisticIndexEnabled : isIndexEnabled;
+  // Index toggle hook
+  const { effectiveIndexEnabled, handleToggleIndexClick } = useIndexToggle({
+    isIndexEnabled,
+    onToggleIndex,
+  });
 
-  // Sync optimistic state back to prop when it catches up
-  useEffect(() => {
-    if (optimisticIndexEnabled !== null && optimisticIndexEnabled === isIndexEnabled) {
-      setOptimisticIndexEnabled(null);
-    }
-  }, [optimisticIndexEnabled, isIndexEnabled]);
+  // Command submit hook
+  const { handleSend, handleQueue, handleNewSession, handleSubmit, canSend } = useCommandSubmit({
+    draftValue,
+    updateValue,
+    attachedImages,
+    clearImages,
+    isProcessing,
+    inputRef,
+    saveToHistory,
+    resetHistoryNavigation,
+    onSend,
+    onSendCommand,
+    onQueue,
+    isComposingRef,
+    disabled,
+  });
 
-  const handleToggleIndexClick = useCallback(() => {
-    const next = !effectiveIndexEnabled;
-    setOptimisticIndexEnabled(next);
-    onToggleIndex?.(next);
-  }, [effectiveIndexEnabled, onToggleIndex]);
+  // Popovers hook
+  const { showQueuePanel, setShowQueuePanel, showHints, setShowHints, queuePanelRef } = usePopovers();
 
   // Focus input if autoFocus is true
   useEffect(() => {
@@ -128,73 +135,10 @@ function CommandInput({
     }
   }, [autoFocus, inputRef]);
 
-  // Click-outside handler for the queue panel popover
-  useEffect(() => {
-    if (!showQueuePanel) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (queuePanelRef.current && !queuePanelRef.current.contains(e.target as Node)) {
-        setShowQueuePanel(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showQueuePanel]);
-
-  // Click-outside handler for the hints popover
-  useEffect(() => {
-    if (!showHints) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.hints-popover') && !target.closest('.hints-button')) {
-        setShowHints(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showHints]);
-
   // Load history on mount
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-
-  const handleSend = async () => {
-    const textareaValue = draftValue;
-    if (textareaValue.trim() === '') return;
-
-    // Build query with image paths
-    let commandToSend = textareaValue.trim();
-    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
-    if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
-      commandToSend = `${imagePaths}\n\n${commandToSend}`;
-    }
-
-    // Reset history navigation
-    resetHistoryNavigation();
-
-    // Call the appropriate send handler
-    if (onSend) {
-      onSend(commandToSend);
-    } else if (onSendCommand) {
-      onSendCommand(commandToSend);
-    }
-
-    void saveToHistory(commandToSend);
-
-    // Clear textarea using onChange for controlled component
-    updateValue('', { start: 0, end: 0 });
-
-    // Clear attached images and revoke URLs
-    clearImages();
-
-    // Focus back to input
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 100);
-  };
 
   const handleKeyDown = (e: ReactKeyboardEvent) => {
     if (disabled) return;
@@ -239,7 +183,6 @@ function CommandInput({
       }
       case 'Tab':
         e.preventDefault();
-        // Simple auto-completion could be added here
         handleTabCompletion();
         break;
       case 'Enter':
@@ -263,14 +206,14 @@ function CommandInput({
               return;
             }
             e.preventDefault();
-            handleSend();
+            void handleSend();
           }
         } else {
           if (isComposingRef.current) {
             return;
           }
           e.preventDefault();
-          handleSend();
+          void handleSend();
         }
         break;
       case 'Escape':
@@ -296,150 +239,20 @@ function CommandInput({
     }
   };
 
-  const handleQueue = async () => {
-    const textareaValue = draftValue;
-    if (textareaValue.trim() === '') return;
-
-    // Build query with image paths
-    let commandToQueue = textareaValue.trim();
-    const uploadedImages = attachedImages.filter((img) => img.uploadedPath);
-    if (uploadedImages.length > 0) {
-      const imagePaths = uploadedImages.map((img) => `Pasted image saved to disk: ${img.uploadedPath}`).join('\n');
-      commandToQueue = `${imagePaths}\n\n${commandToQueue}`;
-    }
-
-    resetHistoryNavigation();
-    onQueue?.(commandToQueue);
-    void saveToHistory(commandToQueue);
-    updateValue('', { start: 0, end: 0 });
-
-    // Clear attached images and revoke URLs
-    clearImages();
-
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-      }
-    }, 100);
-  };
-
-  const commandRef = useCallback(
-    async (command: string) => {
-      resetHistoryNavigation();
-
-      if (onSend) {
-        onSend(command);
-      } else if (onSendCommand) {
-        onSendCommand(command);
-      }
-
-      updateValue('', { start: 0, end: 0 });
-
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, 100);
-    },
-    [onSend, onSendCommand, updateValue, resetHistoryNavigation, inputRef],
-  );
-
-  const handleNewSession = useCallback(async () => {
-    if (isProcessing) {
-      const confirmed = await showThemedConfirm('A request is currently processing. Stop it and start a new session?', { type: 'warning' });
-      if (!confirmed) {
-        return;
-      }
-      commandRef('/clear');
-      return;
-    }
-    commandRef('/clear');
-  }, [isProcessing, commandRef]);
-
-  const canSend = !!draftValue.trim() && !attachedImages.some((img) => !img.uploadedPath && !img.error);
-
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!canSend || disabled || isComposingRef.current) {
-      return;
-    }
-    handleSend();
-  };
-
   return (
     <form className="command-input" onSubmit={handleSubmit}>
-      <div className="input-header">
-        <div className="input-info">
-          {isHistoryMode && (
-            <span className="history-indicator">
-              <ScrollText size={14} /> History ({history.index + 1}/{history.commands.length})
-            </span>
-          )}
-          {isLoadingHistory && <span className="loading-indicator">Loading history...</span>}
-          {draftValue.length > 100 && <span className="length-indicator">{draftValue.length}</span>}
-        </div>
-        {isHistoryMode && (
-          <button
-            className="history-exit-btn"
-            onClick={() => {
-              resetHistoryNavigation();
-              updateValue(history.tempInput, {
-                start: history.tempInput.length,
-                end: history.tempInput.length,
-              });
-            }}
-            title="Exit history mode (Esc)"
-          >
-            <X size={12} />
-          </button>
-        )}
-        <div className="hints-button-wrapper">
-          <button
-            type="button"
-            className="hints-button"
-            onClick={() => setShowHints(!showHints)}
-            aria-label="Show keyboard shortcuts"
-            aria-expanded={showHints}
-          >
-            <Info size={14} />
-          </button>
-          {showHints && (
-            <div className="hints-popover">
-              <div className="hints-popover-title">Keyboard Shortcuts</div>
-              <div className="hints-popover-row">
-                <span>
-                  <kbd>Enter</kbd>
-                </span>
-                <span>Send message</span>
-              </div>
-              <div className="hints-popover-row">
-                <span>
-                  <kbd>Shift+Enter</kbd>
-                </span>
-                <span>New line</span>
-              </div>
-              <div className="hints-popover-row">
-                <span>
-                  <kbd>↑</kbd> <kbd>↓</kbd>
-                </span>
-                <span>History</span>
-              </div>
-              <div className="hints-popover-row">
-                <span>
-                  <kbd>Esc</kbd>
-                </span>
-                <span>Clear input</span>
-              </div>
-              <div className="hints-popover-row">
-                <span>
-                  <kbd>Ctrl+C</kbd>
-                </span>
-                <span>Copy to clipboard</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <CommandInputHeader
+        isHistoryMode={isHistoryMode}
+        isLoadingHistory={isLoadingHistory}
+        historyIndex={history.index}
+        historyLength={history.commands.length}
+        draftValueLength={draftValue.length}
+        tempInput={history.tempInput}
+        resetHistoryNavigation={resetHistoryNavigation}
+        updateValue={updateValue}
+        showHints={showHints}
+        setShowHints={setShowHints}
+      />
 
       <textarea
         ref={inputRef}
@@ -467,197 +280,41 @@ function CommandInput({
         data-testid="command-input"
       />
 
-      {attachedImages.length > 0 && (
-        <div className="image-preview-strip">
-          {attachedImages.map((img) => (
-            <div
-              key={img.id}
-              className={`image-preview-chip ${img.error ? 'error' : ''} ${!img.uploadedPath && !img.error ? 'uploading' : ''}`}
-            >
-              <button
-                type="button"
-                className="image-preview-open"
-                onClick={() => setPreviewImageId(img.id)}
-                aria-label={`Preview ${img.file.name}`}
-              >
-                <img src={img.preview} alt={img.file.name} />
-              </button>
-              <span className="image-name">{img.file.name}</span>
-              {!img.uploadedPath && !img.error && <span className="upload-spinner" />}
-              {img.error && <span className="upload-error">{img.error}</span>}
-              <button
-                type="button"
-                className="remove-btn"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  removeImage(img.id);
-                }}
-                aria-label="Remove image"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <ImagePreviewPanel
+        attachedImages={attachedImages}
+        previewImageId={previewImageId}
+        setPreviewImageId={setPreviewImageId}
+        previewImage={previewImage}
+        removeImage={removeImage}
+      />
 
-      {previewImage ? (
-        <div
-          className="image-preview-modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Preview image ${previewImage.file.name}`}
-          onClick={() => setPreviewImageId(null)}
-        >
-          <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="image-preview-modal-header">
-              <span>{previewImage.file.name}</span>
-              <button
-                type="button"
-                className="image-preview-modal-close"
-                onClick={() => setPreviewImageId(null)}
-                aria-label="Close image preview"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="image-preview-modal-body">
-              <img src={previewImage.preview} alt={previewImage.file.name} />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="input-actions">
-        {onToggleIndex !== undefined && (
-          <button
-            type="button"
-            className={`index-badge ${effectiveIndexEnabled ? 'enabled' : 'disabled'}`}
-            onClick={handleToggleIndexClick}
-            data-tooltip={
-              effectiveIndexEnabled
-                ? isIndexBuilding
-                  ? 'Building index...'
-                  : 'Indexing enabled — click to disable'
-                : 'Enable workspace indexing for semantic search'
-            }
-            aria-label={effectiveIndexEnabled ? 'Disable workspace indexing' : 'Enable workspace indexing'}
-            aria-pressed={effectiveIndexEnabled}
-          >
-            <Database size={14} />
-            {!effectiveIndexEnabled && <span className="index-badge-slash" />}
-          </button>
-        )}
-        <button
-          type="button"
-          className="upload-button"
-          onClick={handleUploadClick}
-          disabled={disabled}
-          data-tooltip="Attach image"
-          aria-label="Attach image"
-        >
-          <Plus size={16} />
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={handleFileSelect}
-        />
-        <button
-          type="button"
-          className="new-session-button"
-          onClick={handleNewSession}
-          disabled={disabled}
-          data-tooltip="New Session (/clear)"
-          aria-label="New Session"
-        >
-          <SquarePen size={16} />
-        </button>
-        <button
-          type="submit"
-          disabled={disabled || !canSend || !isConnected}
-          className="send-button"
-          data-tooltip={!isConnected ? 'Reconnecting...' : isProcessing ? 'Steer running request' : 'Send message'}
-          aria-label="Send message"
-        >
-          <Send size={16} />
-        </button>
-        {isProcessing && (
-          <button
-            type="button"
-            onClick={onStop}
-            disabled={disabled}
-            className="stop-button"
-            data-tooltip="Stop processing"
-            aria-label="Stop processing"
-          >
-            <Square size={15} />
-          </button>
-        )}
-        {isProcessing && onQueue && (
-          <button
-            type="button"
-            onClick={handleQueue}
-            disabled={disabled || !canSend}
-            className="queue-add-button"
-            data-tooltip="Queue for after current run"
-            aria-label="Queue message"
-          >
-            <ListPlus size={16} />
-          </button>
-        )}
-        {(queuedCount > 0 || showQueuePanel) && (
-          <div className="queue-button-wrapper" ref={queuePanelRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setShowQueuePanel((prev) => !prev);
-              }}
-              disabled={queuedCount === 0}
-              className="queue-button"
-              data-tooltip={`${queuedCount} queued message${queuedCount !== 1 ? 's' : ''} — click to manage`}
-              aria-label={`View ${queuedCount} queued message${queuedCount !== 1 ? 's' : ''}`}
-            >
-              <ListPlus size={16} />
-              {queuedCount > 0 && <span className="queue-count">{queuedCount}</span>}
-            </button>
-            {showQueuePanel && (
-              <div className="queue-popover-overlay">
-                <QueuedMessagesPanel
-                  messages={queuedMessages}
-                  onRemove={
-                    onQueueMessageRemove ||
-                    (() => {
-                      /* noop */
-                    })
-                  }
-                  onEdit={
-                    onQueueMessageEdit ||
-                    (() => {
-                      /* noop */
-                    })
-                  }
-                  onReorder={
-                    onQueueReorder ||
-                    (() => {
-                      /* noop */
-                    })
-                  }
-                  onClear={
-                    onClearQueuedMessages ||
-                    (() => {
-                      /* noop */
-                    })
-                  }
-                  onClose={() => setShowQueuePanel(false)}
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <CommandInputActions
+        effectiveIndexEnabled={effectiveIndexEnabled}
+        isIndexBuilding={isIndexBuilding}
+        disabled={disabled}
+        isConnected={isConnected}
+        isProcessing={isProcessing}
+        canSend={canSend}
+        onToggleIndex={onToggleIndex}
+        onToggleIndexClick={handleToggleIndexClick}
+        handleUploadClick={handleUploadClick}
+        handleNewSession={handleNewSession}
+        handleSubmit={handleSubmit}
+        handleQueue={handleQueue}
+        onStop={onStop}
+        onQueue={onQueue}
+        showQueuePanel={showQueuePanel}
+        setShowQueuePanel={setShowQueuePanel}
+        queuePanelRef={queuePanelRef}
+        queuedCount={queuedCount}
+        queuedMessages={queuedMessages}
+        onQueueMessageRemove={onQueueMessageRemove}
+        onQueueMessageEdit={onQueueMessageEdit}
+        onQueueReorder={onQueueReorder}
+        onClearQueuedMessages={onClearQueuedMessages}
+        fileInputRef={fileInputRef}
+        handleFileSelect={handleFileSelect}
+      />
     </form>
   );
 }

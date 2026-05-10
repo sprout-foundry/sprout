@@ -12,11 +12,12 @@ import { BufferManagerProvider, useBufferManager as useBufferContext } from './B
 import { PaneBridge } from './BufferManagerContext';
 
 // ---------------------------------------------------------------------------
-// Re-export constants for backward compatibility
+// Re-export constants and hooks for backward compatibility
 // ---------------------------------------------------------------------------
 
-export { MAX_PANES } from './EditorSettingsContext';
-export { MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from './PaneManagerContext';
+export { MAX_PANES, useEditorSettings } from './EditorSettingsContext';
+export { MIN_PANE_WIDTH_PERCENT, normalizePaneSize, usePaneManager } from './PaneManagerContext';
+export { useBufferManager, type PaneBridge } from './BufferManagerContext';
 
 // ---------------------------------------------------------------------------
 // Combined Interface (matches original EditorManagerContextValue)
@@ -162,10 +163,19 @@ const PaneToBufferBridge: React.FC<{
 }> = ({ children, settings, closeBufferRef }) => {
   const pane = usePaneContext();
 
+  // Use refs for data values so PaneBridge is stable across pane state changes
+  const activePaneIdRef = React.useRef(pane.activePaneId);
+  const activeBufferIdRef = React.useRef(pane.activeBufferId);
+  const panesRef = React.useRef(pane.panes);
+
+  activePaneIdRef.current = pane.activePaneId;
+  activeBufferIdRef.current = pane.activeBufferId;
+  panesRef.current = pane.panes;
+
   const paneBridge: PaneBridge = React.useMemo(() => ({
-    activePaneId: pane.activePaneId,
-    activeBufferId: pane.activeBufferId,
-    panes: pane.panes,
+    get activePaneId() { return activePaneIdRef.current; },
+    get activeBufferId() { return activeBufferIdRef.current; },
+    get panes() { return panesRef.current; },
     setActiveBufferId: pane.setActiveBufferId,
     setActivePaneId: pane.setActivePaneId,
     setPanes: pane.setPanes,
@@ -173,9 +183,6 @@ const PaneToBufferBridge: React.FC<{
     closeBuffer: (id: string) => closeBufferRef.current?.(id),
     moveBufferToPane: pane.moveBufferToPane,
   }), [
-    pane.activePaneId,
-    pane.activeBufferId,
-    pane.panes,
     pane.setActiveBufferId,
     pane.setActivePaneId,
     pane.setPanes,

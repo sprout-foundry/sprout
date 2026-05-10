@@ -56,14 +56,14 @@ export function useCommandHistory({ log, draftValue, updateValue }: UseCommandHi
     });
   }, []);
 
-  const resetHistoryNavigation = () => {
+  const resetHistoryNavigation = useCallback(() => {
     setHistory((prev) => ({
       ...prev,
       index: -1,
       tempInput: '',
     }));
     setIsHistoryMode(false);
-  };
+  }, []);
 
   const navigateHistory = (direction: number) => {
     if (history.commands.length === 0) return;

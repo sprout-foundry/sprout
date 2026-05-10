@@ -806,7 +806,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `EditorManagerContext.tsx` (1,266 lines) — 35+ action methods and 15+ state vars in single context; split into `BufferManagerContext`, `PaneManagerContext`, `EditorSettingsContext`. `webui/src/contexts/EditorManagerContext.tsx`
 [x] - REFACTOR: Split `CommandInput.tsx` (974 lines) — separate input handling, image upload, and submit logic. `webui/src/components/CommandInput.tsx`
 [x] - REFACTOR: Split `EditorTabs.tsx` (973 → 954 lines) — extracted drag reorder logic into `useTabDragReorder` hook. `webui/src/components/EditorTabs.tsx`, `webui/src/hooks/useTabDragReorder.ts`
-[] - REFACTOR: Split `SearchView.tsx` (1,168 lines). `webui/src/components/SearchView.tsx`
+[x] - REFACTOR: Split `SearchView.tsx` (1,168 lines → 416 lines). Extracted `search/types.ts`, `search/useSearchState.ts`, `search/highlightMatch.tsx`, `search/SearchResults.tsx`, `search/SemanticSearchResults.tsx`, `search/SemanticPreviewTooltip.tsx`, `search/SearchContextMenu.tsx`. `webui/src/components/SearchView.tsx`
 [] - REFACTOR: Split `CommandPalette.tsx` (896 lines). `webui/src/components/CommandPalette.tsx`
 [] - REFACTOR: Split `cloudAdapter.ts` (919 lines) by routing layer, or document that size is justified by clean layering. `webui/src/services/cloudAdapter.ts`
 [] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`

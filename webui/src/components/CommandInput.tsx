@@ -1,21 +1,12 @@
-import { useState, useRef, useEffect, useCallback, useLayoutEffect, memo } from 'react';
-import type {
-  ChangeEvent,
-  ClipboardEvent as ReactClipboardEvent,
-  FormEvent,
-  KeyboardEvent as ReactKeyboardEvent,
-} from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info, Database } from 'lucide-react';
 import { showThemedConfirm } from './ThemedDialog';
-import { useLog, debugLog } from '../utils/log';
+import { useLog } from '../utils/log';
 import './CommandInput.css';
-import { ApiService } from '../services/api';
-import {
-  type CommandHistoryState,
-  dedupeCommands,
-  loadCommandHistory,
-  persistCommandHistory,
-} from './command_input_history';
+import { useImageUpload } from './useImageUpload';
+import { useCommandHistory } from './useCommandHistory';
+import { useInputHandling } from './useInputHandling';
 import QueuedMessagesPanel from './QueuedMessagesPanel';
 
 interface CommandInputProps {
@@ -69,33 +60,48 @@ function CommandInput({
   onToggleIndex,
 }: CommandInputProps): JSX.Element {
   const log = useLog();
-  const [draftValue, setDraftValue] = useState(value);
-  const [history, setHistory] = useState<CommandHistoryState>({
-    commands: [],
-    index: -1,
-    tempInput: '',
-  });
-  const [isHistoryMode, setIsHistoryMode] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [attachedImages, setAttachedImages] = useState<
-    Array<{
-      id: string;
-      file: File;
-      preview: string;
-      uploadedPath?: string;
-      error?: string;
-    }>
-  >([]);
-  const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [showHints, setShowHints] = useState(false);
   const queuePanelRef = useRef<HTMLDivElement>(null);
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const apiService = useRef(ApiService.getInstance());
-  const selectionRef = useRef<{ start: number; end: number } | null>(null);
-  const uploadInProgressRef = useRef<Set<string>>(new Set());
-  const isComposingRef = useRef(false);
+
+  // Image upload hook
+  const {
+    attachedImages,
+    previewImageId,
+    setPreviewImageId,
+    previewImage,
+    handlePaste,
+    handleUploadClick,
+    removeImage,
+    fileInputRef,
+    clearImages,
+    handleFileSelect,
+  } = useImageUpload({ inputRef });
+
+  // Input handling hook
+  const {
+    draftValue,
+    isComposingRef,
+    updateValue,
+    trackUpcomingSelection,
+    handleTabCompletion,
+    handleCompositionStart,
+    handleCompositionEnd,
+    setSelection,
+  } = useInputHandling({ value, onChange, inputRef, attachedImageCount: attachedImages.length });
+
+  // Command history hook
+  const {
+    history,
+    isHistoryMode,
+    isLoadingHistory,
+    loadHistory,
+    saveToHistory,
+    resetHistoryNavigation,
+    navigateHistory,
+  } = useCommandHistory({ log, draftValue, updateValue });
 
   // Optimistic state for the index toggle — provides immediate visual feedback
   // while waiting for the stats poll to confirm. Reset whenever the prop changes.
@@ -115,49 +121,12 @@ function CommandInput({
     onToggleIndex?.(next);
   }, [effectiveIndexEnabled, onToggleIndex]);
 
-  useEffect(() => {
-    if (value === draftValue) {
-      return;
-    }
-
-    const isFocused = document.activeElement === inputRef.current;
-    if (!isFocused) {
-      setDraftValue(value);
-      return;
-    }
-
-    if (value === '' || value.startsWith(draftValue)) {
-      setDraftValue(value);
-    }
-  }, [value, draftValue]);
-
-  useLayoutEffect(() => {
-    if (!inputRef.current || !selectionRef.current) return;
-    if (document.activeElement !== inputRef.current) return;
-
-    const { start, end } = selectionRef.current;
-    inputRef.current.setSelectionRange(Math.min(start, draftValue.length), Math.min(end, draftValue.length));
-  }, [draftValue]);
-
-  useLayoutEffect(() => {
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = '0px';
-    const computed = window.getComputedStyle(textarea);
-    const lineHeight = Number.parseFloat(computed.lineHeight) || 24;
-    const minHeight = lineHeight * 2 + 20;
-    const maxHeight = lineHeight * 10 + 20;
-    const nextHeight = Math.min(maxHeight, Math.max(minHeight, textarea.scrollHeight));
-    textarea.style.height = `${nextHeight}px`;
-  }, [draftValue, attachedImages.length]);
-
   // Focus input if autoFocus is true
   useEffect(() => {
     if (autoFocus && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [autoFocus]);
+  }, [autoFocus, inputRef]);
 
   // Click-outside handler for the queue panel popover
   useEffect(() => {
@@ -184,278 +153,10 @@ function CommandInput({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showHints]);
 
-  useEffect(() => {
-    if (!previewImageId) {
-      return;
-    }
-
-    const handlePreviewEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPreviewImageId(null);
-      }
-    };
-
-    window.addEventListener('keydown', handlePreviewEscape);
-    return () => window.removeEventListener('keydown', handlePreviewEscape);
-  }, [previewImageId]);
-
-  const loadHistory = useCallback(async () => {
-    setIsLoadingHistory(true);
-    try {
-      const commands = await loadCommandHistory(apiService.current);
-      setHistory((prev) => ({
-        ...prev,
-        commands,
-      }));
-    } catch (error) {
-      log.warn('Failed to load command history', { title: 'Command History' });
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, [log]);
-
-  // Load history from localStorage and terminal on mount
+  // Load history on mount
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
-
-  const saveToHistory = useCallback(async (command: string) => {
-    if (!command.trim()) return;
-    const trimmedCommand = command.trim();
-    // Update local state AND persist to localStorage synchronously
-    setHistory((prev) => {
-      const next = dedupeCommands([...prev.commands, trimmedCommand]);
-      persistCommandHistory(next);
-      return { commands: next, index: -1, tempInput: '' };
-    });
-  }, []);
-
-  const resetHistoryNavigation = () => {
-    setHistory((prev) => ({
-      ...prev,
-      index: -1,
-      tempInput: '',
-    }));
-    setIsHistoryMode(false);
-  };
-
-  const updateValue = useCallback(
-    (nextValue: string, selection?: { start: number; end: number }) => {
-      if (selection) {
-        selectionRef.current = selection;
-      }
-      setDraftValue(nextValue);
-      onChange?.(nextValue);
-    },
-    [onChange],
-  );
-
-  const currentHistoryValue =
-    isHistoryMode && history.index >= 0 ? (history.commands[history.commands.length - 1 - history.index] ?? '') : null;
-
-  useEffect(() => {
-    if (!isHistoryMode || currentHistoryValue === null) {
-      return;
-    }
-    if (draftValue === currentHistoryValue) {
-      return;
-    }
-
-    setHistory((prev) => ({
-      ...prev,
-      index: -1,
-      tempInput: draftValue,
-    }));
-    setIsHistoryMode(false);
-  }, [currentHistoryValue, draftValue, isHistoryMode]);
-
-  const trackUpcomingSelection = useCallback(
-    (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-      const textarea = inputRef.current;
-      if (!textarea) {
-        return;
-      }
-
-      const start = textarea.selectionStart ?? 0;
-      const end = textarea.selectionEnd ?? start;
-
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
-        const next = start + 1;
-        selectionRef.current = { start: next, end: next };
-        return;
-      }
-
-      switch (e.key) {
-        case 'Backspace': {
-          const next = start === end ? Math.max(0, start - 1) : start;
-          selectionRef.current = { start: next, end: next };
-          return;
-        }
-        case 'Delete':
-          selectionRef.current = { start, end: start };
-          return;
-        case 'ArrowLeft': {
-          const next = start === end ? Math.max(0, start - 1) : start;
-          selectionRef.current = { start: next, end: next };
-          return;
-        }
-        case 'ArrowRight': {
-          const next = start === end ? Math.min(draftValue.length, end + 1) : end;
-          selectionRef.current = { start: next, end: next };
-          return;
-        }
-        case 'Home':
-          selectionRef.current = { start: 0, end: 0 };
-          return;
-        case 'End': {
-          const next = draftValue.length;
-          selectionRef.current = { start: next, end: next };
-          return;
-        }
-      }
-    },
-    [draftValue.length],
-  );
-
-  // Handle paste event for images
-  const handlePaste = useCallback((e: ReactClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        e.preventDefault();
-        const blob = items[i].getAsFile();
-        if (blob) {
-          const preview = URL.createObjectURL(blob);
-          const imageId = crypto.randomUUID();
-          setAttachedImages((prev) => [
-            ...prev,
-            {
-              id: imageId,
-              file: blob,
-              preview,
-            },
-          ]);
-        }
-        break; // Only handle first image
-      }
-    }
-  }, []);
-
-  // Handle file selection from input
-  const handleFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const preview = URL.createObjectURL(file);
-      const imageId = crypto.randomUUID();
-      setAttachedImages((prev) => [
-        ...prev,
-        {
-          id: imageId,
-          file,
-          preview,
-        },
-      ]);
-      // Reset input so same file can be selected again
-      e.target.value = '';
-      // Focus back to textarea
-      inputRef.current?.focus();
-    }
-  }, []);
-
-  // Click handler for upload button
-  const handleUploadClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  // Remove an image from the list
-  const removeImage = useCallback((id: string) => {
-    setAttachedImages((prev) => {
-      const imageToRemove = prev.find((img) => img.id === id);
-      if (imageToRemove) {
-        URL.revokeObjectURL(imageToRemove.preview);
-      }
-      // Clean up upload tracking ref
-      uploadInProgressRef.current.delete(id);
-      return prev.filter((img) => img.id !== id);
-    });
-    setPreviewImageId((current) => (current === id ? null : current));
-  }, []);
-
-  // Upload image to server
-  const uploadImageAsync = useCallback(async (imageId: string, imageFile: File) => {
-    if (uploadInProgressRef.current.has(imageId)) return;
-    uploadInProgressRef.current.add(imageId);
-
-    try {
-      const result = await apiService.current.uploadImage(imageFile);
-      setAttachedImages((prev) =>
-        prev.map((img) => (img.id === imageId ? { ...img, uploadedPath: result.path, error: undefined } : img)),
-      );
-    } catch (error) {
-      debugLog('Failed to upload image:', error);
-      setAttachedImages((prev) =>
-        prev.map((img) =>
-          img.id === imageId ? { ...img, error: error instanceof Error ? error.message : 'Upload failed' } : img,
-        ),
-      );
-    }
-  }, []);
-
-  // Auto-upload images when they are added
-  useEffect(() => {
-    attachedImages.forEach((img) => {
-      if (!img.uploadedPath && !img.error) {
-        uploadImageAsync(img.id, img.file);
-      }
-    });
-  }, [attachedImages]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const navigateHistory = (direction: number) => {
-    if (history.commands.length === 0) return;
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    let newIndex = history.index + direction;
-    const currentInputValue = draftValue;
-
-    if (newIndex < -1) {
-      newIndex = -1;
-    } else if (newIndex >= history.commands.length) {
-      newIndex = history.commands.length - 1;
-    }
-
-    let newInputValue = '';
-
-    if (newIndex === -1) {
-      // Return to temp input
-      newInputValue = history.tempInput;
-      setIsHistoryMode(false);
-    } else {
-      // Navigate to history item
-      newInputValue = history.commands[history.commands.length - 1 - newIndex];
-      setIsHistoryMode(true);
-    }
-
-    setHistory((prev) => ({
-      ...prev,
-      index: newIndex,
-      tempInput: history.index === -1 && !isHistoryMode ? currentInputValue : prev.tempInput,
-    }));
-
-    updateValue(newInputValue, { start: newInputValue.length, end: newInputValue.length });
-  };
-
-  const handleTabCompletion = () => {
-    // Basic auto-completion logic could be added here
-    // For now, just insert a tab character
-    const textarea = inputRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newInput = `${draftValue.substring(0, start)}\t${draftValue.substring(end)}`;
-    updateValue(newInput, { start: start + 1, end: start + 1 });
-  };
 
   const handleSend = async () => {
     const textareaValue = draftValue;
@@ -485,12 +186,7 @@ function CommandInput({
     updateValue('', { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
-    setAttachedImages((prev) => {
-      prev.forEach((img) => URL.revokeObjectURL(img.preview));
-      // Clean up upload tracking ref
-      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
-      return [];
-    });
+    clearImages();
 
     // Focus back to input
     setTimeout(() => {
@@ -618,12 +314,7 @@ function CommandInput({
     updateValue('', { start: 0, end: 0 });
 
     // Clear attached images and revoke URLs
-    setAttachedImages((prev) => {
-      prev.forEach((img) => URL.revokeObjectURL(img.preview));
-      // Clean up upload tracking ref
-      prev.forEach((img) => uploadInProgressRef.current.delete(img.id));
-      return [];
-    });
+    clearImages();
 
     setTimeout(() => {
       if (inputRef.current) {
@@ -650,7 +341,7 @@ function CommandInput({
         }
       }, 100);
     },
-    [onSend, onSendCommand, updateValue],
+    [onSend, onSendCommand, updateValue, resetHistoryNavigation, inputRef],
   );
 
   const handleNewSession = useCallback(async () => {
@@ -665,14 +356,6 @@ function CommandInput({
     commandRef('/clear');
   }, [isProcessing, commandRef]);
 
-  const handleCompositionStart = () => {
-    isComposingRef.current = true;
-  };
-
-  const handleCompositionEnd = () => {
-    isComposingRef.current = false;
-  };
-
   const canSend = !!draftValue.trim() && !attachedImages.some((img) => !img.uploadedPath && !img.error);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -682,8 +365,6 @@ function CommandInput({
     }
     handleSend();
   };
-
-  const previewImage = previewImageId ? attachedImages.find((img) => img.id === previewImageId) || null : null;
 
   return (
     <form className="command-input" onSubmit={handleSubmit}>
@@ -765,18 +446,14 @@ function CommandInput({
         value={draftValue}
         onChange={(e) => {
           const newValue = e.target.value;
-          selectionRef.current = {
+          updateValue(newValue, {
             start: e.target.selectionStart,
             end: e.target.selectionEnd,
-          };
-          updateValue(newValue);
+          });
         }}
         onSelect={(e) => {
           const target = e.target as HTMLTextAreaElement;
-          selectionRef.current = {
-            start: target.selectionStart,
-            end: target.selectionEnd,
-          };
+          setSelection(target.selectionStart, target.selectionEnd);
         }}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}

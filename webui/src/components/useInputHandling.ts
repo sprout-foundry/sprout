@@ -9,6 +9,7 @@ interface UseInputHandlingOptions {
 }
 
 export function useInputHandling({ value, onChange, inputRef, attachedImageCount = 0 }: UseInputHandlingOptions) {
+  const mountedRef = useRef(true);
   const [draftValue, setDraftValue] = useState(value);
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
   const isComposingRef = useRef(false);
@@ -24,8 +25,14 @@ export function useInputHandling({ value, onChange, inputRef, attachedImageCount
     [onChange],
   );
 
+  // Cleanup effect for mounted ref
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
   // Sync external value prop changes to draftValue
   useEffect(() => {
+    if (!mountedRef.current) return;
     if (value === draftValue) {
       return;
     }

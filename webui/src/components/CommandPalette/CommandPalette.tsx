@@ -13,7 +13,7 @@ import useFileIndex from './useFileIndex';
 import usePaletteResults from './usePaletteResults';
 import useCommandExecutor from './useCommandExecutor';
 import { MODE_TABS } from './constants';
-import type { CommandPaletteProps, PaletteMode } from './types';
+import type { CommandPaletteProps, PaletteMode, PaletteResult } from './types';
 
 function CommandPalette({
   isOpen,
@@ -38,6 +38,10 @@ function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
   const prevOpenRef = useRef(false);
+
+  // Refs to avoid stale closures in handleKeyDown
+  const selectedIndexRef = useRef(0);
+  const navigableItemsRef = useRef<PaletteResult[]>([]);
 
   // ── File index ─────────────────────────────────────────────────────────
 
@@ -78,6 +82,10 @@ function CommandPalette({
     activeBufferFileExtension,
     selectedIndex,
   });
+
+  // Sync refs for handleKeyDown closure
+  selectedIndexRef.current = selectedIndex;
+  navigableItemsRef.current = navigableItems;
 
   // ── Command executor ───────────────────────────────────────────────────
 
@@ -154,6 +162,9 @@ function CommandPalette({
         e.stopPropagation();
       }
 
+      const navItems = navigableItemsRef.current;
+      const selIdx = selectedIndexRef.current;
+
       switch (e.key) {
         case 'Escape':
           e.preventDefault();
@@ -161,7 +172,7 @@ function CommandPalette({
           break;
         case 'ArrowDown':
           e.preventDefault();
-          setSelectedIndex((prev) => Math.min(prev + 1, Math.max(navigableItems.length - 1, 0)));
+          setSelectedIndex((prev) => Math.min(prev + 1, Math.max(navItems.length - 1, 0)));
           break;
         case 'ArrowUp':
           e.preventDefault();
@@ -170,7 +181,7 @@ function CommandPalette({
         case 'Enter':
           e.preventDefault();
           e.stopPropagation();
-          executeSelected(navigableItems[selectedIndex], onOpenFile, onNavigateToLine);
+          executeSelected(navItems[selIdx], onOpenFile, onNavigateToLine);
           break;
         case 'Tab':
           e.preventDefault();
@@ -185,7 +196,7 @@ function CommandPalette({
         }
       }
     },
-    [navigableItems.length, query, mode, cycleMode, executeSelected, onOpenFile, onNavigateToLine, onClose],
+    [query, mode, cycleMode, executeSelected, onOpenFile, onNavigateToLine, onClose],
   );
 
   const handleOverlayClick = useCallback(

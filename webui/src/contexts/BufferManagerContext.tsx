@@ -805,15 +805,18 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
   }, [paneBridge]);
 
   // Auto-save interval
+  const saveAllBuffersRef = useRef(saveAllBuffers);
+  saveAllBuffersRef.current = saveAllBuffers;
+
   useEffect(() => {
     if (!isAutoSaveEnabled) return;
 
     const intervalId = setInterval(async () => {
-      await saveAllBuffers();
+      await saveAllBuffersRef.current();
     }, autoSaveInterval);
 
     return () => clearInterval(intervalId);
-  }, [isAutoSaveEnabled, autoSaveInterval, saveAllBuffers]);
+  }, [isAutoSaveEnabled, autoSaveInterval]);
 
   const value: BufferManagerContextValue = {
     buffers,

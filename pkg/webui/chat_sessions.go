@@ -137,7 +137,7 @@ func (cs *chatSession) getWorktreePath() string {
 // agent.NewAgentWithLayers call so that initialization-time os.Getwd() and
 // relative-path resolution observe the correct workspace directory (critical
 // in daemon mode where the process CWD may differ from the client workspace).
-func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string, workspaceDir string, eventBus *events.EventBus, clientID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
+func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string, workspaceDir string, eventBus *events.EventBus, clientID, userID string, workspaceChdir func(string, func() error) error) (*agent.Agent, error) {
 	cs.mu.Lock()
 	if cs.Agent != nil {
 		// Use chat's worktree path if set, otherwise use provided workspaceRoot
@@ -147,7 +147,11 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		}
 		agentInst := cs.Agent
 		agentInst.SetWorkspaceRoot(agentWorkspace)
-		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
+		meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
+		if userID != "" {
+			meta["user_id"] = userID
+		}
+		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		cs.mu.Unlock()
 		return agentInst, nil
@@ -201,7 +205,11 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 		created.SetEventBus(eventBus)
 	}
 	created.SetWorkspaceRoot(agentWorkspace)
-	created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
+	meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
+	if userID != "" {
+		meta["user_id"] = userID
+	}
+	created.SetEventMetadata(meta)
 	created.EnableStreaming(func(string) {})
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
@@ -260,7 +268,11 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 			agentWorkspace = workspaceRoot
 		}
 		created.SetWorkspaceRoot(agentWorkspace)
-		created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": cs.ID})
+		meta := map[string]interface{}{"client_id": clientID, "chat_id": cs.ID}
+		if userID != "" {
+			meta["user_id"] = userID
+		}
+		created.SetEventMetadata(meta)
 		created.EnableStreaming(func(string) {})
 	}
 	return created, nil

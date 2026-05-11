@@ -31,6 +31,20 @@ func (e *ErrShellTimeoutPromoted) Error() string {
 	return e.Message
 }
 
+// extractExitCode extracts the exit code from an error, if it's an exit error.
+// Returns 0 if the error is nil or not an exit error.
+func extractExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if exitError, ok := err.(*exec.ExitError); ok {
+		if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+			return status.ExitStatus()
+		}
+	}
+	return 0
+}
+
 // ExecuteShellCommand executes a shell command with safety checks
 func ExecuteShellCommand(ctx context.Context, command string) (string, error) {
 	return ExecuteShellCommandWithSafety(ctx, command, true, "", false)
@@ -138,15 +152,7 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		err = cmd.Wait()
 
 		// Get the exit code for status reporting
-		exitCode := 0
-		if err != nil {
-			// Check if it's an exit error (command ran but failed)
-			if exitError, ok := err.(*exec.ExitError); ok {
-				if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-					exitCode = status.ExitStatus()
-				}
-			}
-		}
+		exitCode := extractExitCode(err)
 
 		// Build the final output with status header
 		finalOutput := buildShellOutputWithStatus(outputBuf.String(), command, exitCode, err)
@@ -200,15 +206,7 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	select {
 	case waitErr := <-done:
 		// Command completed (success or failure)
-		exitCode := 0
-		if waitErr != nil {
-			// Check if it's an exit error (command ran but failed)
-			if exitError, ok := waitErr.(*exec.ExitError); ok {
-				if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-					exitCode = status.ExitStatus()
-				}
-			}
-		}
+		exitCode := extractExitCode(waitErr)
 		output := outputBuf.String()
 
 		// For LLM tool calls, truncate output to 2 lines

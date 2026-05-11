@@ -21,6 +21,9 @@ import { FONT_SIZE_DEFAULT } from '../components/terminalConstants';
 
 export interface UseTerminalXTermOptions {
   isActive: boolean;
+  /** When true, the terminal should steal focus on init. Only the visible
+      session in the focused pane should have this set. */
+  shouldFocus?: boolean;
   fontSize?: number;
   copyOnSelect: boolean;
   themePackId: string;
@@ -91,6 +94,7 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
     onSearchToggle,
     onSaveScrollback,
     getSessionId,
+    shouldFocus = true,
   } = options;
 
   const paneWrapperRef = useRef<HTMLDivElement>(null);
@@ -242,7 +246,9 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
 
     requestAnimationFrame(() => {
       fitAddon.fit();
-      term.focus();
+      if (shouldFocus) {
+        term.focus();
+      }
     });
 
     return () => {

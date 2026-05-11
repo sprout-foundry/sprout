@@ -28,6 +28,9 @@ export interface TerminalPaneHandle {
 interface TerminalPaneProps {
   /** Whether the parent terminal is expanded (mounted). */
   isActive: boolean;
+  /** When true, the terminal should steal focus on init. Only the visible
+      session in the focused pane should have this set. */
+  shouldFocus?: boolean;
   /** Whether the app-level WebSocket connection is available. */
   isConnected?: boolean;
   /** When true, renders a close button in the pane header. */
@@ -52,6 +55,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   (
     {
       isActive,
+      shouldFocus = true,
       isConnected = true,
       showCloseButton,
       onClose,
@@ -195,6 +199,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       searchAddonRef: xtermSearchAddonRef,
     } = useTerminalXTerm({
       isActive,
+      shouldFocus,
       fontSize,
       copyOnSelect,
       themePackId: themePack.id,

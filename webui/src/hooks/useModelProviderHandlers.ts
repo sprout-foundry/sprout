@@ -8,14 +8,15 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { MutableRefObject } from 'react';
 import { debugLog } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseModelProviderHandlersOptions {
   state: AppState;
-  setState: Dispatch<SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   /** Shared refs for tracking pending provider changes across hooks. */
   pendingProviderChangeRef?: MutableRefObject<boolean>;
   pendingProviderChangeValueRef?: MutableRefObject<string | null>;
@@ -52,7 +53,6 @@ export function useModelProviderHandlers({
       debugLog('Model changed to:', model);
       const provider = pendingProviderRef.current || providerRef.current;
       setState((prev) => ({
-        ...prev,
         model,
       }));
       events.sendEvent({
@@ -75,7 +75,6 @@ export function useModelProviderHandlers({
         pendingProviderChangeValueRef.current = provider;
       }
       setState((prev) => ({
-        ...prev,
         provider,
       }));
       events.sendEvent({
@@ -89,7 +88,6 @@ export function useModelProviderHandlers({
 
   const handleViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
     setState((prev) => ({
-      ...prev,
       currentView: view,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -19,6 +19,7 @@ import type { AppState } from '../types/app';
 import { useLog } from '../utils/log';
 import type { LocalEventsProvider } from '../services/localEventsProvider';
 import type { SproutEvent } from '../types/events';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 interface RecentFile {
   path: string;
@@ -33,7 +34,7 @@ export interface UseAppInitializationOptions {
   setRecentFiles: Dispatch<SetStateAction<RecentFile[]>>;
   setIsMobile: Dispatch<SetStateAction<boolean>>;
   setIsTablet: Dispatch<SetStateAction<boolean>>;
-  setState: Dispatch<SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   /** Reconnect handler that recovers stuck processing state after WebSocket reconnection. */
   handleReconnect: () => void;
 }
@@ -68,7 +69,6 @@ export function useAppInitialization({
         .then((stats: StatsResponse) => {
           const statsRecord = stats as unknown as Record<string, unknown>;
           setState((prev) => ({
-            ...prev,
             // Only update provider/model from stats when the backend
             // has a real value.  An empty string means the agent hasn't
             // been lazily created yet — we should keep whatever the

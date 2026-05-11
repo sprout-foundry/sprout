@@ -13,23 +13,9 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
-
-// ErrShellTimeoutPromoted is returned when a shell command times out and is
-// automatically promoted to a background session. The caller should return
-// the promotion message to the LLM instead of treating this as a failure.
-type ErrShellTimeoutPromoted struct {
-	SessionID string
-	Command   string
-	Message   string
-}
-
-func (e *ErrShellTimeoutPromoted) Error() string {
-	return e.Message
-}
 
 // extractExitCode extracts the exit code from an error, if it's an exit error.
 // Returns 0 if the error is nil or not an exit error.
@@ -76,7 +62,13 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 			// Execute via hidden PTY
 			output, exitCode, err := tm.ExecuteCommandInHidden(ctx, hiddenSessionID, command)
 			if err != nil {
-				// Fall through to os/exec on PTY error
+				// Check if the command was promoted to background due to timeout
+				if strings.HasPrefix(err.Error(), "COMMAND_PROMOTED_TO_BACKGROUND:") {
+					bgSessionID := strings.TrimPrefix(err.Error(), "COMMAND_PROMOTED_TO_BACKGROUND:")
+					msg := formatBackgroundPromotionMessage(bgSessionID, command, output)
+					return msg, nil
+				}
+				// Fall through to os/exec on other PTY errors
 				log.Printf("debug: PTY command execution failed on session %q, falling back to os/exec: %v", hiddenSessionID, err)
 			} else {
 				// Build final output with status
@@ -164,13 +156,12 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 	}
 
 	// SILENT MODE: Capture output without streaming (for LLM tool calls)
-	// Use exec.Command (not CommandContext) so we control the timeout behavior.
-	// When the timeout fires, we promote to background instead of killing.
+	// Use exec.CommandContext to respect context cancellation
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
 	}
-	cmd := exec.Command(shell, "-c", command)
+	cmd := exec.CommandContext(ctx, shell, "-c", command)
 
 	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
 		cmd.Dir = wd
@@ -178,89 +169,24 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		cmd.Dir = wd
 	}
 
-	// Use a pipe to capture output while allowing timeout detection
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+	// Capture combined stdout and stderr
+	output, err := cmd.CombinedOutput()
+
+	// Get the exit code for status reporting
+	exitCode := extractExitCode(err)
+
+	// For LLM tool calls, truncate output to 2 lines
+	truncatedOutput := truncateOutput(string(output), 2)
+
+	// Print truncated output to terminal unless we're in tests/CI.
+	if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
+		fmt.Printf("%s\n", truncatedOutput)
 	}
-	cmd.Stderr = cmd.Stdout // merge stderr into stdout
 
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("failed to start command: %w", err)
-	}
+	// Build the final output with status header
+	finalOutput := buildShellOutputWithStatus(string(output), command, exitCode, err)
 
-	// Read output in background
-	var outputBuf bytes.Buffer
-	done := make(chan error, 1)
-	go func() {
-		io.Copy(&outputBuf, stdout)
-		done <- cmd.Wait()
-	}()
-
-	// Wait for completion, timeout, or context cancellation
-	// Use 115 seconds to fire before the tool executor's 2-minute deadline
-	const foregroundTimeout = 115 * time.Second
-	timer := time.NewTimer(foregroundTimeout)
-	defer timer.Stop()
-
-	select {
-	case waitErr := <-done:
-		// Command completed (success or failure)
-		exitCode := extractExitCode(waitErr)
-		output := outputBuf.String()
-
-		// For LLM tool calls, truncate output to 2 lines
-		truncatedOutput := truncateOutput(output, 2)
-
-		// Print truncated output to terminal unless we're in tests/CI.
-		if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
-			fmt.Printf("%s\n", truncatedOutput)
-		}
-
-		// Build the final output with status header
-		finalOutput := buildShellOutputWithStatus(output, command, exitCode, waitErr)
-
-		return finalOutput, nil
-
-	case <-timer.C:
-		// Timeout — promote to background if possible
-		if tm := TerminalManagerFromContext(ctx); tm != nil {
-			// Kill the os/exec process — we'll start a fresh one in background PTY
-			cmd.Process.Kill()
-			<-done // wait for goroutine to finish
-
-			// Start the command in a background PTY session
-			bgSessionID, bgErr := tm.ExecuteCommandInBackground(context.Background(), "default", command)
-			if bgErr == nil {
-				msg := fmt.Sprintf(
-					"Command timed out after 2 minutes and has been automatically moved to a background process.\n\n"+
-						"Session ID: %s\n"+
-						"Command: %s\n\n"+
-						"The command is still running in the background. You can:\n"+
-						"- Check accumulated output so far: use shell_command with check_background=\"%s\"\n"+
-						"- Stop it: use shell_command with stop_background=\"%s\"\n\n"+
-						"Decide whether to wait for it to finish or stop it and try a different approach.",
-					bgSessionID, command, bgSessionID, bgSessionID,
-				)
-				return "", &ErrShellTimeoutPromoted{
-					SessionID: bgSessionID,
-					Command:   command,
-					Message:   msg,
-				}
-			}
-			// Background start failed — fall through to kill
-		}
-		// No TerminalManager or background start failed — kill the process
-		cmd.Process.Kill()
-		<-done
-		return "", fmt.Errorf("command timed out after %s", foregroundTimeout)
-
-	case <-ctx.Done():
-		// Context cancelled (user interrupt or tool executor timeout)
-		cmd.Process.Kill()
-		<-done
-		return "", ctx.Err()
-	}
+	return finalOutput, nil
 }
 
 func shouldPrintCapturedShellPreview() bool {
@@ -396,4 +322,26 @@ func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error
 		return "", fmt.Errorf("failed to marshal check result: %w", err)
 	}
 	return string(resultBytes), nil
+}
+
+// formatBackgroundPromotionMessage creates a formatted message for commands that
+// were promoted to background sessions due to timeout.
+func formatBackgroundPromotionMessage(sessionID, command, accumulatedOutput string) string {
+	// Truncate accumulated output preview
+	preview := accumulatedOutput
+	const maxPreview = 2000
+	if len(preview) > maxPreview {
+		preview = preview[:maxPreview] + "\n... (output truncated)"
+	}
+
+	return fmt.Sprintf(
+		"Command timed out after 2 minutes. It is still running in background session %s.\n\n"+
+			"Command: %s\n\n"+
+			"Output so far:\n%s\n\n"+
+			"You can:\n"+
+			"- Check progress: use shell_command with check_background=\"%s\"\n"+
+			"- Stop it: use shell_command with stop_background=\"%s\"\n\n"+
+			"Decide whether to wait for it to finish or stop it and try a different approach.",
+		sessionID, command, preview, sessionID, sessionID,
+	)
 }

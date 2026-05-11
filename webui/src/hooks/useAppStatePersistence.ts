@@ -46,30 +46,38 @@ export function useAppStatePersistence({ state }: UseAppStatePersistenceOptions)
     } catch {
       // QuotaExceededError: retry with fewer messages, then give up gracefully.
       try {
-        window.localStorage.setItem(storageKey, JSON.stringify({
-          provider: state.provider,
-          model: state.model,
-          sessionId: state.sessionId,
-          queryCount: state.queryCount,
-          currentView: state.currentView,
-          messages: state.messages.slice(-5),
-          fileEdits: state.fileEdits.slice(-20),
-        }));
-      } catch {
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify({
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify({
             provider: state.provider,
             model: state.model,
             sessionId: state.sessionId,
             queryCount: state.queryCount,
             currentView: state.currentView,
-            messages: [],
+            messages: state.messages.slice(-5),
             fileEdits: state.fileEdits.slice(-20),
-          }));
+          }),
+        );
+      } catch {
+        try {
+          window.localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              provider: state.provider,
+              model: state.model,
+              sessionId: state.sessionId,
+              queryCount: state.queryCount,
+              currentView: state.currentView,
+              messages: [],
+              fileEdits: state.fileEdits.slice(-20),
+            }),
+          );
         } catch {
           try {
             window.localStorage.removeItem(storageKey);
-          } catch { /* nothing more we can do */ }
+          } catch {
+            /* nothing more we can do */
+          }
         }
       }
     }
@@ -85,14 +93,7 @@ export function useAppStatePersistence({ state }: UseAppStatePersistenceOptions)
 
     persistState(20);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- persistState reads state.messages by reference intentionally
-  }, [
-    state.provider,
-    state.model,
-    state.sessionId,
-    state.queryCount,
-    state.currentView,
-    state.fileEdits,
-  ]);
+  }, [state.provider, state.model, state.sessionId, state.queryCount, state.currentView, state.fileEdits]);
 
   // Effect 2: isProcessing transition persistence
   // Persists full state (including messages) when isProcessing transitions from true → false.

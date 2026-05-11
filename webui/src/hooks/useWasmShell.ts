@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  initWasmShell,
-  resetWasmShell,
-  type WasmShell,
-  type WasmShellResult,
-} from '../services/wasmShell';
+import { initWasmShell, resetWasmShell, type WasmShell, type WasmShellResult } from '../services/wasmShell';
 
 interface UseWasmShellOptions {
   /** Override the virtual home directory (default: /home/user) */
@@ -97,77 +92,67 @@ export function useWasmShell(options: UseWasmShellOptions = {}): UseWasmShellRet
     }
   }, [autoInit, initialize]);
 
-  const executeCommand = useCallback(
-    (input: string): WasmShellResult => {
-      if (!shellRef.current) {
-        return {
-          stdout: '',
-          stderr: 'WASM shell not initialized yet.\n',
-          exitCode: 1,
-        };
+  const executeCommand = useCallback((input: string): WasmShellResult => {
+    if (!shellRef.current) {
+      return {
+        stdout: '',
+        stderr: 'WASM shell not initialized yet.\n',
+        exitCode: 1,
+      };
+    }
+
+    try {
+      const result = shellRef.current.executeCommand(input);
+
+      // Update cwd if it might have changed (cd command).
+      const trimmed = input.trim();
+      if (trimmed.startsWith('cd ') || trimmed === 'cd' || trimmed.startsWith('cd\t')) {
+        setCwd(shellRef.current.getCwd());
       }
 
-      try {
-        const result = shellRef.current.executeCommand(input);
-
-        // Update cwd if it might have changed (cd command).
-        const trimmed = input.trim();
-        if (
-          trimmed.startsWith('cd ') ||
-          trimmed === 'cd' ||
-          trimmed.startsWith('cd\t')
-        ) {
-          setCwd(shellRef.current.getCwd());
-        }
-
-        // Update history.
-        if (trimmed && !trimmed.startsWith('#')) {
-          setHistory((prev) => {
-            // Avoid duplicate of last entry.
-            if (prev.length > 0 && prev[prev.length - 1] === trimmed) {
-              return prev;
-            }
-            const next = [...prev, trimmed];
-            // Cap history at 1000 entries.
-            if (next.length > 1000) {
-              return next.slice(next.length - 1000);
-            }
-            return next;
-          });
-        }
-
-        return result;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          stdout: '',
-          stderr: `Error: ${message}\n`,
-          exitCode: 1,
-        };
-      }
-    },
-    [],
-  );
-
-  const changeDir = useCallback(
-    (dir: string): string | null => {
-      if (!shellRef.current) {
-        return 'WASM shell not initialized yet.';
+      // Update history.
+      if (trimmed && !trimmed.startsWith('#')) {
+        setHistory((prev) => {
+          // Avoid duplicate of last entry.
+          if (prev.length > 0 && prev[prev.length - 1] === trimmed) {
+            return prev;
+          }
+          const next = [...prev, trimmed];
+          // Cap history at 1000 entries.
+          if (next.length > 1000) {
+            return next.slice(next.length - 1000);
+          }
+          return next;
+        });
       }
 
-      try {
-        const result = shellRef.current.changeDir(dir);
-        if (result.error) {
-          return result.error;
-        }
-        setCwd(result.cwd);
-        return null;
-      } catch (err) {
-        return err instanceof Error ? err.message : String(err);
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        stdout: '',
+        stderr: `Error: ${message}\n`,
+        exitCode: 1,
+      };
+    }
+  }, []);
+
+  const changeDir = useCallback((dir: string): string | null => {
+    if (!shellRef.current) {
+      return 'WASM shell not initialized yet.';
+    }
+
+    try {
+      const result = shellRef.current.changeDir(dir);
+      if (result.error) {
+        return result.error;
       }
-    },
-    [],
-  );
+      setCwd(result.cwd);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  }, []);
 
   const autoComplete = useCallback((input: string): string[] => {
     if (!shellRef.current) {

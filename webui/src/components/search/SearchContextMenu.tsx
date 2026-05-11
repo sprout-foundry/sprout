@@ -67,8 +67,7 @@ function SearchContextMenu({
       .filter((p) => p.length > 0);
 
     if (!existingPatterns.includes(patternToExclude)) {
-      const newExclude =
-        existingPatterns.length > 0 ? `${excludePatterns},${patternToExclude}` : patternToExclude;
+      const newExclude = existingPatterns.length > 0 ? `${excludePatterns},${patternToExclude}` : patternToExclude;
       onExcludePatternsChange(newExclude);
     }
 
@@ -100,12 +99,7 @@ function SearchContextMenu({
   // ── Render ───────────────────────────────────────────────────
 
   return (
-    <ContextMenu
-      isOpen={contextMenu !== null}
-      x={contextMenu?.x ?? 0}
-      y={contextMenu?.y ?? 0}
-      onClose={onClose}
-    >
+    <ContextMenu isOpen={contextMenu !== null} x={contextMenu?.x ?? 0} y={contextMenu?.y ?? 0} onClose={onClose}>
       {!contextMenu?.isFileHeader && (
         <>
           <button className="context-menu-item" onClick={handleCopyMatchText} type="button">
@@ -156,9 +150,7 @@ function SearchContextMenu({
 // ── Context menu trigger handlers (used by parent) ──────────
 
 /** Create a context menu trigger for a match row. */
-export function createRowContextMenuHandler(
-  setContextMenu: (state: SearchContextMenuState) => void,
-) {
+export function createRowContextMenuHandler(setContextMenu: (state: SearchContextMenuState) => void) {
   return (e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -174,9 +166,7 @@ export function createRowContextMenuHandler(
 }
 
 /** Create a context menu trigger for a file header. */
-export function createFileHeaderContextMenuHandler(
-  setContextMenu: (state: SearchContextMenuState) => void,
-) {
+export function createFileHeaderContextMenuHandler(setContextMenu: (state: SearchContextMenuState) => void) {
   return (e: MouseEvent, filePath: string) => {
     e.preventDefault();
     e.stopPropagation();

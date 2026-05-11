@@ -13,7 +13,7 @@ jest.mock('@codemirror/state', () => {
   const mockCompartment = jest.fn(() => ({
     reconfigure: jest.fn(() => ({ type: 'StateEffect' })),
   }));
-  
+
   return {
     Extension: {},
     Compartment: mockCompartment,
@@ -26,7 +26,7 @@ jest.mock('@emmetio/codemirror6-plugin', () => {
   const abbreviationTracker = jest.fn(() => [{ type: 'AbbreviationTracker' }]);
   const wrapWithAbbreviation = jest.fn(() => ({ type: 'WrapWithAbbreviation' }));
   const expandAbbreviation = jest.fn(() => ({ type: 'ExpandAbbreviation' }));
-  
+
   return {
     abbreviationTracker,
     wrapWithAbbreviation,

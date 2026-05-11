@@ -95,12 +95,18 @@ async function idbSaveFile(path: string, content: string): Promise<void> {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     store.put({ path, content, modTime: Date.now() });
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
   });
 }
 
-async function idbLoadFile(path: string): Promise<string | null> {
+async function _idbLoadFile(path: string): Promise<string | null> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -110,7 +116,10 @@ async function idbLoadFile(path: string): Promise<string | null> {
       db.close();
       resolve(req.result?.content ?? null);
     };
-    req.onerror = () => { db.close(); reject(req.error); };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
   });
 }
 
@@ -120,8 +129,14 @@ async function idbDeleteFile(path: string): Promise<void> {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     store.delete(path);
-    tx.oncomplete = () => { db.close(); resolve(); };
-    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
   });
 }
 
@@ -135,7 +150,10 @@ async function idbListFiles(): Promise<string> {
       db.close();
       resolve(JSON.stringify(req.result || []));
     };
-    req.onerror = () => { db.close(); reject(req.error); };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
   });
 }
 
@@ -168,8 +186,8 @@ let sharedInstance: WasmShell | null = null;
  */
 export async function initWasmShell(config?: {
   home?: string;
-  wasmUrl?: string;       // default: '/wasm/sprout.wasm'
-  wasmExecUrl?: string;   // default: '/wasm/wasm_exec.js'
+  wasmUrl?: string; // default: '/wasm/sprout.wasm'
+  wasmExecUrl?: string; // default: '/wasm/wasm_exec.js'
 }): Promise<WasmShell> {
   if (sharedInstance) {
     return sharedInstance;
@@ -182,7 +200,7 @@ export async function initWasmShell(config?: {
         console.warn('[sprout-wasm] Failed to save file to IndexedDB:', path, err),
       );
     },
-    loadFile: (path) => {
+    loadFile: (_path) => {
       // Synchronous not possible with IndexedDB — the store.listFiles restores all
       // files on init instead. loadFile is provided for completeness but returns null.
       return null;

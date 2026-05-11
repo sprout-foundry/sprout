@@ -62,11 +62,7 @@ function isLSPAvailable(languageId: string): boolean {
  * This is the main entry point used by EditorPane after the client
  * is connected. It returns all the bundled LSP extensions.
  */
-export function buildLSPPluginExtensions(
-  client: LSPClient | null,
-  filePath: string,
-  languageId: string,
-): Extension[] {
+export function buildLSPPluginExtensions(client: LSPClient | null, filePath: string, languageId: string): Extension[] {
   if (!client) return [];
   const fileURI = getFileURI(filePath);
   return [client.plugin(fileURI, languageId)];

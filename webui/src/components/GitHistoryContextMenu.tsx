@@ -126,7 +126,10 @@ function GitHistoryContextMenu({
   const handleCheckout = useCallback(async () => {
     if (!menu.commitHash || isLoading || isActing) return;
     const short = menu.commitShortHash || menu.commitHash.slice(0, 7);
-    const confirmed = await showThemedConfirm(`Checkout commit ${short}?\n\nThis will put you in a detached HEAD state.`, { type: 'warning' });
+    const confirmed = await showThemedConfirm(
+      `Checkout commit ${short}?\n\nThis will put you in a detached HEAD state.`,
+      { type: 'warning' },
+    );
     if (!confirmed) {
       close();
       return;

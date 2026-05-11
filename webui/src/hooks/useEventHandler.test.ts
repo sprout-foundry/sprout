@@ -53,9 +53,7 @@ vi.mock('../utils/chatCompletion', () => ({
     // otherwise append a new one.
     const last = messages[messages.length - 1];
     if (last?.type === 'assistant') return messages;
-    return typeof response === 'string' && response.trim()
-      ? [...messages, createMsg(response)]
-      : messages;
+    return typeof response === 'string' && response.trim() ? [...messages, createMsg(response)] : messages;
   }),
 }));
 
@@ -219,27 +217,24 @@ describe('per-chat filtering', () => {
     'error',
   ];
 
-  it.each(perChatEvents)(
-    'filters out "%s" when chat_id does not match activeChatId',
-    (eventType) => {
-      const { setStateMock, activeChatIdRef } = setupHandler();
-      activeChatIdRef.current = 'chat-1';
+  it.each(perChatEvents)('filters out "%s" when chat_id does not match activeChatId', (eventType) => {
+    const { setStateMock, activeChatIdRef } = setupHandler();
+    activeChatIdRef.current = 'chat-1';
 
-      const wrapper = setupHandler({ setState: setStateMock, activeChatIdRef });
+    const wrapper = setupHandler({ setState: setStateMock, activeChatIdRef });
 
-      act(() => {
-        root.render(createElement(HookWrapper, { options: wrapper.options }));
-      });
+    act(() => {
+      root.render(createElement(HookWrapper, { options: wrapper.options }));
+    });
 
-      const { handleEvent } = getHandleEvent();
+    const { handleEvent } = getHandleEvent();
 
-      act(() => {
-        handleEvent({ type: eventType, data: { chat_id: 'chat-2' } });
-      });
+    act(() => {
+      handleEvent({ type: eventType, data: { chat_id: 'chat-2' } });
+    });
 
-      expect(setStateMock).not.toHaveBeenCalled();
-    },
-  );
+    expect(setStateMock).not.toHaveBeenCalled();
+  });
 
   it('allows per-chat event when chat_id matches activeChatId', () => {
     const { setStateMock, activeChatIdRef, stateHolder } = setupHandler();
@@ -397,11 +392,22 @@ describe('query_started', () => {
   it('clears previous state (fileEdits, subagentActivities, queryProgress, currentTodos)', () => {
     const initState = createDefaultState({
       fileEdits: [{ path: 'foo.ts', action: 'edited', timestamp: new Date() }],
-      subagentActivities: [{ id: '1', toolCallId: '', toolName: '', phase: 'output' as const, message: '', timestamp: new Date() }],
+      subagentActivities: [
+        { id: '1', toolCallId: '', toolName: '', phase: 'output' as const, message: '', timestamp: new Date() },
+      ],
       queryProgress: { step: 2 },
       currentTodos: [{ id: '1', content: 'test', status: 'completed' as const }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -457,7 +463,16 @@ describe('stream_chunk', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -488,7 +503,16 @@ describe('stream_chunk', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'user', content: 'Hi', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -520,7 +544,16 @@ describe('stream_chunk', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: '', reasoning: '', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -579,7 +612,16 @@ describe('stream_chunk', () => {
 
 describe('query_completed', () => {
   it('decrements activeRequestsRef and sets isProcessing based on remaining requests', () => {
-    const { setStateMock, stateHolder, activeRequestsRef, activeChatIdRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeRequestsRef,
+      activeChatIdRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     activeRequestsRef.current = 2;
 
     const wrapper = setupHandler({
@@ -609,7 +651,16 @@ describe('query_completed', () => {
   });
 
   it('sets isProcessing=false when no active requests remain', () => {
-    const { setStateMock, stateHolder, activeRequestsRef, activeChatIdRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeRequestsRef,
+      activeChatIdRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     activeRequestsRef.current = 1;
 
     const wrapper = setupHandler({
@@ -641,7 +692,16 @@ describe('query_completed', () => {
       messages: [{ id: '1', type: 'user', content: 'hello', timestamp: new Date() }],
       currentTodos: [{ id: '1', content: 'test', status: 'pending' as const }],
     });
-    const { setStateMock, stateHolder, queuedMessagesRef, setQueuedMessages, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      queuedMessagesRef,
+      setQueuedMessages,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+    } = setupHandler();
     stateHolder.current = initState;
     queuedMessagesRef.current = ['msg1', 'msg2'];
 
@@ -679,7 +739,16 @@ describe('query_completed', () => {
         { id: 't2', tool: 'write_file', status: 'completed' as const, startTime: new Date(), endTime: new Date() },
       ],
     });
-    const { setStateMock, stateHolder, activeRequestsRef, activeChatIdRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeRequestsRef,
+      activeChatIdRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
     activeRequestsRef.current = 1;
 
@@ -714,7 +783,16 @@ describe('query_completed', () => {
       securityApprovalRequest: { requestId: 'r1', toolName: 'shell', riskLevel: 'HIGH', reasoning: 'test' },
       securityPromptRequest: { requestId: 'p1', prompt: 'Confirm?' },
     });
-    const { setStateMock, stateHolder, activeRequestsRef, activeChatIdRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeRequestsRef,
+      activeChatIdRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
     activeRequestsRef.current = 1;
 
@@ -752,7 +830,16 @@ describe('tool_start', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Thinking...', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -883,7 +970,16 @@ describe('tool_start', () => {
       ],
       messages: [{ id: '1', type: 'assistant', content: '', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -930,7 +1026,16 @@ describe('tool_start', () => {
       details: { tool_call_id: `tc-${i}` },
     }));
     const initState = createDefaultState({ toolExecutions: tools });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -978,7 +1083,16 @@ describe('tool_end', () => {
         },
       ],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1026,7 +1140,16 @@ describe('tool_end', () => {
         },
       ],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1098,7 +1221,16 @@ describe('tool_end', () => {
         },
       ],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1134,7 +1266,16 @@ describe('tool_end', () => {
 
 describe('error', () => {
   it('sets lastError, adds error message, and decrements activeRequestsRef', () => {
-    const { setStateMock, stateHolder, activeRequestsRef, activeChatIdRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeRequestsRef,
+      activeChatIdRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     activeRequestsRef.current = 1;
 
     const wrapper = setupHandler({
@@ -1170,7 +1311,16 @@ describe('error', () => {
   });
 
   it('uses "Unknown error" when no message provided', () => {
-    const { setStateMock, stateHolder, activeRequestsRef, activeChatIdRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeRequestsRef,
+      activeChatIdRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     activeRequestsRef.current = 0;
 
     const wrapper = setupHandler({
@@ -1476,7 +1626,16 @@ describe('file_changed', () => {
       timestamp: new Date(),
     }));
     const initState = createDefaultState({ fileEdits: edits });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1515,7 +1674,16 @@ describe('metrics_update', () => {
       model: 'old-model',
       stats: { tokens: 100 },
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1613,7 +1781,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1646,7 +1823,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1679,7 +1865,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1712,7 +1907,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1745,7 +1949,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1778,7 +1991,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1811,7 +2033,16 @@ describe('agent_message', () => {
     const initState = createDefaultState({
       messages: [{ id: '1', type: 'assistant', content: 'Hello', timestamp: new Date() }],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({
@@ -1873,7 +2104,16 @@ describe('agent_message', () => {
         },
       ],
     });
-    const { setStateMock, stateHolder, activeChatIdRef, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef, queuedMessagesRef, setQueuedMessages } = setupHandler();
+    const {
+      setStateMock,
+      stateHolder,
+      activeChatIdRef,
+      activeRequestsRef,
+      connectionTimeoutRef,
+      lastConnectionStateRef,
+      queuedMessagesRef,
+      setQueuedMessages,
+    } = setupHandler();
     stateHolder.current = initState;
 
     const wrapper = setupHandler({

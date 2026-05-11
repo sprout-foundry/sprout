@@ -59,10 +59,7 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
   lsp,
   setWhitespaceRenderingMode,
 }) => {
-  const handleKeyDown = (
-    e: KeyboardEvent<HTMLSpanElement>,
-    callback: () => void,
-  ) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLSpanElement>, callback: () => void) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       callback();
@@ -86,16 +83,28 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
         <span className="line-count">Lines: {(buffer?.content || '').split('\n').length}</span>
         <span className="char-count">Chars: {(buffer?.content || '').length}</span>
         <span className="cursor-position">
-          Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line + 1 : 0}, Col {buffer?.cursorPosition?.column !== undefined ? buffer.cursorPosition.column + 1 : 0}
-          {selectionInfo && selectionInfo.selectionCount !== undefined && selectionInfo.selectionCount > 1 && ` (${selectionInfo.selectionCount} selections)`}
-          {selectionInfo && selectionInfo.selectionCount !== undefined && selectionInfo.selectionCount === 1 && ` (${selectionInfo.charCount ?? 0} selected)`}
+          Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line + 1 : 0}, Col{' '}
+          {buffer?.cursorPosition?.column !== undefined ? buffer.cursorPosition.column + 1 : 0}
+          {selectionInfo &&
+            selectionInfo.selectionCount !== undefined &&
+            selectionInfo.selectionCount > 1 &&
+            ` (${selectionInfo.selectionCount} selections)`}
+          {selectionInfo &&
+            selectionInfo.selectionCount !== undefined &&
+            selectionInfo.selectionCount === 1 &&
+            ` (${selectionInfo.charCount ?? 0} selected)`}
         </span>
         <span
           className="zoom-control"
           role="button"
           tabIndex={0}
           onClick={settings.onZoomOut}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); settings.onZoomOut(); }}}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              settings.onZoomOut();
+            }
+          }}
           title="Zoom out (decrease font size)"
           style={{ cursor: 'pointer', opacity: 0.7 }}
         >
@@ -106,7 +115,12 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
           role="button"
           tabIndex={0}
           onClick={handleResetZoom}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleResetZoom(); }}}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleResetZoom();
+            }
+          }}
           title="Reset zoom to default"
           style={{ cursor: 'pointer' }}
         >
@@ -117,7 +131,12 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
           role="button"
           tabIndex={0}
           onClick={settings.onZoomIn}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); settings.onZoomIn(); }}}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              settings.onZoomIn();
+            }
+          }}
           title="Zoom in (increase font size)"
           style={{ cursor: 'pointer', opacity: 0.7 }}
         >
@@ -161,7 +180,12 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
                     : 'var(--cm-status-warning, #c90)',
             }}
           >
-            LSP:{lsp.lspState === 'connected' ? '✓' : lsp.lspState === 'connecting' || lsp.lspState === 'reconnecting' ? '…' : '✗'}
+            LSP:
+            {lsp.lspState === 'connected'
+              ? '✓'
+              : lsp.lspState === 'connecting' || lsp.lspState === 'reconnecting'
+                ? '…'
+                : '✗'}
           </span>
         )}
       </div>

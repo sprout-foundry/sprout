@@ -124,14 +124,7 @@ export function useTabManagement({
       }
       if (bufferId === activeBufferId) setActiveBufferId(nextPaneBuffer?.id || null);
     },
-    [
-      activeBufferId,
-      activePaneIdRef,
-      buffersRef,
-      setBuffers,
-      setPanes,
-      setActiveBufferId,
-    ],
+    [activeBufferId, activePaneIdRef, buffersRef, setBuffers, setPanes, setActiveBufferId],
   );
 
   const closeAllBuffers = useCallback(() => {

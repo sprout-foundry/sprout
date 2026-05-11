@@ -1,17 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLog } from '../../utils/log';
-import type {
-  ChatContextPanelProps,
-  ChatTabId,
-  Revision,
-  RevisionDetailFile,
-} from './types';
+import type { ChatContextPanelProps, ChatTabId, Revision, RevisionDetailFile } from './types';
 import { normalizeRevision, buildRevisionFileKey } from '@sprout/ui';
 
-export function useRevisionManager(
-  chatProps: ChatContextPanelProps | null,
-  chatTab: ChatTabId,
-) {
+export function useRevisionManager(chatProps: ChatContextPanelProps | null, chatTab: ChatTabId) {
   const log = useLog();
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [expandedRevisionIds, setExpandedRevisionIds] = useState<Set<string>>(new Set());

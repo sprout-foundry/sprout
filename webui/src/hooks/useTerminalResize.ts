@@ -27,14 +27,7 @@ export interface UseTerminalResizeReturn {
 }
 
 export function useTerminalResize(options: UseTerminalResizeOptions): UseTerminalResizeReturn {
-  const {
-    isActive,
-    paneConnected,
-    sendResize,
-    paneWrapperRef,
-    xtermContainerRef,
-    lastRestoreTimeRef,
-  } = options;
+  const { isActive, paneConnected, sendResize, paneWrapperRef, xtermContainerRef, lastRestoreTimeRef } = options;
 
   const resizeTimerRef = useRef<number | null>(null);
   const expandTimeoutRef = useRef<number | null>(null);

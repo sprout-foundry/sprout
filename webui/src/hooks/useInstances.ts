@@ -16,38 +16,38 @@ export interface UseInstancesReturn {
   onInstanceChange: (pid: number) => Promise<void>;
 }
 
-export const useInstances = ({
-  apiService,
-  isConnected,
-}: UseInstancesParams): UseInstancesReturn => {
+export const useInstances = ({ apiService, isConnected }: UseInstancesParams): UseInstancesReturn => {
   const [instances, setInstances] = useState<SproutInstance[]>([]);
   const [selectedInstancePID, setSelectedInstancePID] = useState<number>(0);
   const [isSwitchingInstance, setIsSwitchingInstance] = useState(false);
 
-  const handleInstanceChange = useCallback(async (pid: number) => {
-    if (!supportsInstances) return;
-    if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
-      return;
-    }
-
-    setIsSwitchingInstance(true);
-    try {
-      const targetInstance = instances.find((instance) => instance.pid === pid);
-      if (!targetInstance || !targetInstance.port) {
-        throw new Error('Selected instance is unavailable');
+  const handleInstanceChange = useCallback(
+    async (pid: number) => {
+      if (!supportsInstances) return;
+      if (!Number.isFinite(pid) || pid <= 0 || pid === selectedInstancePID) {
+        return;
       }
 
-      const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
-      window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
-      window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
-      const nextURL = new URL(window.location.href);
-      nextURL.port = String(targetInstance.port);
-      window.location.assign(nextURL.toString());
-    } catch (error) {
-      console.error('Failed to switch instance:', error);
-      setIsSwitchingInstance(false);
-    }
-  }, [instances, selectedInstancePID]);
+      setIsSwitchingInstance(true);
+      try {
+        const targetInstance = instances.find((instance) => instance.pid === pid);
+        if (!targetInstance || !targetInstance.port) {
+          throw new Error('Selected instance is unavailable');
+        }
+
+        const INSTANCE_SWITCH_RESET_KEY = 'sprout:webui:instanceSwitchReset';
+        window.localStorage.setItem(INSTANCE_PID_STORAGE_KEY, String(pid));
+        window.sessionStorage.setItem(INSTANCE_SWITCH_RESET_KEY, '1');
+        const nextURL = new URL(window.location.href);
+        nextURL.port = String(targetInstance.port);
+        window.location.assign(nextURL.toString());
+      } catch (error) {
+        console.error('Failed to switch instance:', error);
+        setIsSwitchingInstance(false);
+      }
+    },
+    [instances, selectedInstancePID],
+  );
 
   useEffect(() => {
     if (!supportsInstances || !isConnected) {

@@ -23,9 +23,15 @@ jest.mock('@codemirror/state', () => ({
     create: jest.fn(),
   },
   Compartment: class {
-    of() { return this; }
-    reconfigure() { return this; }
-    get() { return null; }
+    of() {
+      return this;
+    }
+    reconfigure() {
+      return this;
+    }
+    get() {
+      return null;
+    }
   },
 }));
 
@@ -35,14 +41,20 @@ jest.mock('@codemirror/view', () => ({
     destroy() {}
     dispatch() {}
     focus() {}
-    hasFocus() { return false; }
-    contentDOM: {}
-    dom: {}
-    state: {}
-    static scrollIntoView() { return {}; }
+    hasFocus() {
+      return false;
+    }
+    contentDOM: {};
+    dom: {};
+    state: {};
+    static scrollIntoView() {
+      return {};
+    }
   },
   ViewPlugin: class {
-    static fromClass() { return {}; }
+    static fromClass() {
+      return {};
+    }
   },
 }));
 
@@ -501,7 +513,10 @@ describe('getEditorKeymap', () => {
         lines: lines.length,
         lineAt: (p) => {
           for (let i = lineData.length - 1; i >= 0; i--) {
-            if (p >= lineData[i].from && (p <= lineData[i].to || (i === lineData.length - 1 && p === lineData[i].to + 1))) {
+            if (
+              p >= lineData[i].from &&
+              (p <= lineData[i].to || (i === lineData.length - 1 && p === lineData[i].to + 1))
+            ) {
               return lineData[i];
             }
           }
@@ -525,10 +540,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - delete current line', () => {
       it('deletes lines at each cursor position', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2', 'line3'],
-          [0, 12]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2', 'line3'], [0, 12]);
 
         // Ctrl+Shift+K → Mod-Shift-k
         const entries = [{ key: 'Ctrl+Shift+K', command_id: 'editor_delete_line' }];
@@ -554,10 +566,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - duplicate current line (down)', () => {
       it('duplicates lines at each cursor position', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2', 'line3'],
-          [0, 12]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2', 'line3'], [0, 12]);
 
         // Ctrl+Shift+D → Mod-Shift-d
         const entries = [{ key: 'Ctrl+Shift+D', command_id: 'editor_duplicate_line_down' }];
@@ -579,10 +588,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - duplicate current line (up)', () => {
       it('duplicates lines above each cursor position', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2', 'line3'],
-          [6, 18]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2', 'line3'], [6, 18]);
 
         // Ctrl+Shift+Alt+D → Mod-Shift-Alt-d
         const entries = [{ key: 'Ctrl+Shift+Alt+D', command_id: 'editor_duplicate_line_up' }];
@@ -603,10 +609,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - insert line below', () => {
       it('inserts blank lines below each unique cursor line', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['  const x = 1;', '    let y = 2;'],
-          [2, 18]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['  const x = 1;', '    let y = 2;'], [2, 18]);
 
         // Insert line below uses Mod-Enter fallback
         const keymap = getEditorKeymap(null, emptyActions);
@@ -627,10 +630,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - insert line above', () => {
       it('inserts blank lines above each unique cursor line', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['  const x = 1;', '    let y = 2;'],
-          [2, 18]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['  const x = 1;', '    let y = 2;'], [2, 18]);
 
         const keymap = getEditorKeymap(null, emptyActions);
         const aboveBinding = keymap.find((b) => b.key === 'Mod-Shift-Enter');
@@ -648,10 +648,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - move line up', () => {
       it('moves lines up from each cursor position', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2', 'line3', 'line4'],
-          [6, 18]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2', 'line3', 'line4'], [6, 18]);
 
         const entries = [{ key: 'Alt+ArrowUp', command_id: 'editor_move_line_up' }];
         const keymap = getEditorKeymap(entries, emptyActions);
@@ -670,10 +667,7 @@ describe('getEditorKeymap', () => {
 
     describe('multiple cursors - same line deduplication', () => {
       it('only duplicates once when multiple cursors are on the same line', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['some line', 'another'],
-          [2, 4]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['some line', 'another'], [2, 4]);
 
         const entries = [{ key: 'Ctrl+Shift+D', command_id: 'editor_duplicate_line_down' }];
         const keymap = getEditorKeymap(entries, emptyActions);
@@ -693,10 +687,7 @@ describe('getEditorKeymap', () => {
 
     describe('single cursor - regression tests', () => {
       it('delete line works with single cursor', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2', 'line3'],
-          [0]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2', 'line3'], [0]);
 
         const entries = [{ key: 'Ctrl+Shift+K', command_id: 'editor_delete_line' }];
         const keymap = getEditorKeymap(entries, emptyActions);
@@ -709,10 +700,7 @@ describe('getEditorKeymap', () => {
       });
 
       it('duplicate line down works with single cursor', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['const x = 1;'],
-          [5]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['const x = 1;'], [5]);
 
         const entries = [{ key: 'Ctrl+Shift+D', command_id: 'editor_duplicate_line_down' }];
         const keymap = getEditorKeymap(entries, emptyActions);
@@ -725,10 +713,7 @@ describe('getEditorKeymap', () => {
       });
 
       it('insert line below works with single cursor', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['  indented'],
-          [2]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['  indented'], [2]);
 
         const keymap = getEditorKeymap(null, emptyActions);
         const belowBinding = keymap.find((b) => b.key === 'Mod-Enter');
@@ -740,10 +725,7 @@ describe('getEditorKeymap', () => {
       });
 
       it('insert line above works with single cursor', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['  indented'],
-          [2]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['  indented'], [2]);
 
         const keymap = getEditorKeymap(null, emptyActions);
         const aboveBinding = keymap.find((b) => b.key === 'Mod-Shift-Enter');
@@ -755,10 +737,7 @@ describe('getEditorKeymap', () => {
       });
 
       it('move line up works with single cursor', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2'],
-          [6]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2'], [6]);
 
         const entries = [{ key: 'Alt+ArrowUp', command_id: 'editor_move_line_up' }];
         const keymap = getEditorKeymap(entries, emptyActions);
@@ -772,10 +751,7 @@ describe('getEditorKeymap', () => {
       });
 
       it('move line down works with single cursor', () => {
-        const { view, dispatched } = createMockMultiCursorView(
-          ['line1', 'line2'],
-          [0]
-        );
+        const { view, dispatched } = createMockMultiCursorView(['line1', 'line2'], [0]);
 
         const entries = [{ key: 'Alt+ArrowDown', command_id: 'editor_move_line_down' }];
         const keymap = getEditorKeymap(entries, emptyActions);

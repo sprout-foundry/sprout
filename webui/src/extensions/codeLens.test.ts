@@ -201,9 +201,7 @@ describe('computeCodeLenses', () => {
   });
 
   it('uses generic patterns for undefined language and produces lenses when refs exist', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'foo', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'foo', line: 1, kind: 'function' }]);
 
     const content = `function foo() {}
 foo();`;
@@ -219,9 +217,7 @@ foo();`;
 
   it('returns lenses for container-kind symbols with refs > 0', () => {
     // Mock extractSymbols to return a function symbol on line 5
-    mockExtractSymbols.mockReturnValue([
-      { name: 'myFunc', line: 5, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'myFunc', line: 5, kind: 'function' }]);
 
     const content = `function myFunc() {
   myFunc();
@@ -297,9 +293,7 @@ function myFunc() {
   });
 
   it('includes class symbols', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'MyClass', line: 5, kind: 'class' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'MyClass', line: 5, kind: 'class' }]);
 
     const content = `class MyClass {
   constructor() {
@@ -321,9 +315,7 @@ const instance = new MyClass();`;
   });
 
   it('includes interface symbols', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'MyInterface', line: 5, kind: 'interface' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'MyInterface', line: 5, kind: 'interface' }]);
 
     const content = `interface MyInterface {
   prop: string;
@@ -343,9 +335,7 @@ const obj2: MyInterface = { prop: 'world' };`;
   });
 
   it('includes method symbols', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'myMethod', line: 5, kind: 'method' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'myMethod', line: 5, kind: 'method' }]);
 
     const content = `class MyClass {
   myMethod() {
@@ -438,9 +428,7 @@ const instance = new MyClass();`;
   });
 
   it('handles TypeScript file extension', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'myFunction', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'myFunction', line: 1, kind: 'function' }]);
 
     const content = `function myFunction() { myFunction(); }`;
 
@@ -451,9 +439,7 @@ const instance = new MyClass();`;
   });
 
   it('handles JavaScript file extension', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'myFunction', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'myFunction', line: 1, kind: 'function' }]);
 
     const content = `function myFunction() { myFunction(); }`;
 
@@ -463,9 +449,7 @@ const instance = new MyClass();`;
   });
 
   it('handles Go file extension', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'myFunction', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'myFunction', line: 1, kind: 'function' }]);
 
     const content = `func myFunction() { myFunction() }`;
 
@@ -475,9 +459,7 @@ const instance = new MyClass();`;
   });
 
   it('handles Python file extension', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'my_function', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'my_function', line: 1, kind: 'function' }]);
 
     const content = `def my_function():
     my_function()`;
@@ -511,9 +493,7 @@ function b() {}`;
 
   it('handles case-insensitive reference counts correctly', () => {
     // Note: word boundary regex is case-sensitive
-    mockExtractSymbols.mockReturnValue([
-      { name: 'foo', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'foo', line: 1, kind: 'function' }]);
 
     const content = `function foo() {}
 Foo(); // case matters - should not match
@@ -526,9 +506,7 @@ foo(); // match`;
   });
 
   it('excludes references found in single-line comments', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'myFunc', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'myFunc', line: 1, kind: 'function' }]);
 
     const content = `function myFunc() {
   // myFunc is a great function
@@ -544,9 +522,7 @@ foo(); // match`;
   });
 
   it('excludes references found in block comments', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'handleClick', line: 5, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'handleClick', line: 5, kind: 'function' }]);
 
     const content = `/* handleClick processes click events.
    Always call handleClick() in your event handler.
@@ -564,9 +540,7 @@ function handleClick() {
   });
 
   it('correctly counts refs when comments and real calls are mixed', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'processData', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'processData', line: 1, kind: 'function' }]);
 
     const content = `function processData() {
   // processData does things
@@ -583,9 +557,7 @@ function handleClick() {
   });
 
   it('does not under-count when a string contains // on the same line as a real ref', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'fetchData', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'fetchData', line: 1, kind: 'function' }]);
 
     const content = `function fetchData() {
   const url = "http://example.com/api";
@@ -599,9 +571,7 @@ function handleClick() {
   });
 
   it('does not under-count when multiple strings with // are on same line as a ref', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'open', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'open', line: 1, kind: 'function' }]);
 
     const content = `function open() {
   const a = "https://a.com"; open();
@@ -614,9 +584,7 @@ function handleClick() {
   });
 
   it('handles block comments correctly with string-aware stripping', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'processData', line: 5, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'processData', line: 5, kind: 'function' }]);
 
     const content = `/* processData processes click events.
    Always call processData() in your handler.
@@ -633,9 +601,7 @@ function processData() {
   });
 
   it('excludes references found in Python # comments', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'my_func', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'my_func', line: 1, kind: 'function' }]);
 
     const content = `def my_func():
     # my_func is a great function
@@ -650,9 +616,7 @@ function processData() {
   });
 
   it('handles # that appears inside a Python string (not a comment)', () => {
-    mockExtractSymbols.mockReturnValue([
-      { name: 'fetch_data', line: 1, kind: 'function' },
-    ]);
+    mockExtractSymbols.mockReturnValue([{ name: 'fetch_data', line: 1, kind: 'function' }]);
 
     const content = `def fetch_data():
     url = "https://example.com"

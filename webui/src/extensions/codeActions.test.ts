@@ -239,7 +239,7 @@ describe('createCodeActionsExtension', () => {
   it('returns an array', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(Array.isArray(extension)).toBe(true);
   });
@@ -247,7 +247,7 @@ describe('createCodeActionsExtension', () => {
   it('returns an array with exactly 4 items', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(extension).toHaveLength(4);
   });
@@ -255,7 +255,7 @@ describe('createCodeActionsExtension', () => {
   it.skip('first item is a facet configuration', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     // The first item should be something that can be used as a CM6 extension
     expect(extension[0]).toBeTruthy();
@@ -264,7 +264,7 @@ describe('createCodeActionsExtension', () => {
   it('second item is a state field', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(extension[1]).toBeTruthy();
   });
@@ -272,7 +272,7 @@ describe('createCodeActionsExtension', () => {
   it('third item is a plugin', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(extension[2]).toBeTruthy();
   });
@@ -280,7 +280,7 @@ describe('createCodeActionsExtension', () => {
   it('fourth item is the gutter extension', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(extension[3]).toBeTruthy();
   });
@@ -290,7 +290,7 @@ describe('createCodeActionsExtension', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
       () => 'const x = 1;',
-      onApplyEdits
+      onApplyEdits,
     );
 
     expect(extension).toHaveLength(4);
@@ -299,7 +299,7 @@ describe('createCodeActionsExtension', () => {
   it('works with undefined file path', () => {
     const extension = createCodeActionsExtension(
       () => undefined,
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(extension).toHaveLength(4);
   });
@@ -307,7 +307,7 @@ describe('createCodeActionsExtension', () => {
   it('works with empty content', () => {
     const extension = createCodeActionsExtension(
       () => 'test.ts',
-      () => ''
+      () => '',
     );
     expect(extension).toHaveLength(4);
   });
@@ -317,7 +317,10 @@ describe('createCodeActionsExtension', () => {
 
 describe('CodeActionsPlugin static actions', () => {
   it.skip('extension returns proper CM6 extension array structure', () => {
-    const extension = createCodeActionsExtension(() => 'test.ts', () => 'const x = 1;');
+    const extension = createCodeActionsExtension(
+      () => 'test.ts',
+      () => 'const x = 1;',
+    );
 
     // Verify array has the expected structure for CM6
     expect(extension).toHaveLength(4);
@@ -330,8 +333,14 @@ describe('CodeActionsPlugin static actions', () => {
   });
 
   it('returns extension that can be composed', () => {
-    const ext1 = createCodeActionsExtension(() => 'a.ts', () => 'a');
-    const ext2 = createCodeActionsExtension(() => 'b.ts', () => 'b');
+    const ext1 = createCodeActionsExtension(
+      () => 'a.ts',
+      () => 'a',
+    );
+    const ext2 = createCodeActionsExtension(
+      () => 'b.ts',
+      () => 'b',
+    );
 
     // Extensions should be able to exist in an array together
     const allExtensions = [...ext1, ...ext2];
@@ -347,7 +356,7 @@ describe('Edge cases', () => {
     // The actual filtering happens inside the plugin
     const extension = createCodeActionsExtension(
       () => '__workspace/test.ts',
-      () => 'const x = 1;'
+      () => 'const x = 1;',
     );
     expect(extension).toHaveLength(4);
   });
@@ -355,7 +364,7 @@ describe('Edge cases', () => {
   it('handles files without extensions', () => {
     const extension = createCodeActionsExtension(
       () => 'Makefile',
-      () => 'all: build'
+      () => 'all: build',
     );
     expect(extension).toHaveLength(4);
   });
@@ -366,7 +375,7 @@ describe('Edge cases', () => {
     for (const ext of extensions) {
       const extension = createCodeActionsExtension(
         () => `test${ext}`,
-        () => '// content'
+        () => '// content',
       );
       expect(extension).toHaveLength(4);
     }
@@ -434,7 +443,10 @@ describe('Action kind emoji mapping (through public API)', () => {
   it('resolveLanguageId is called when fetching actions', () => {
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
 
-    createCodeActionsExtension(() => 'test.ts', () => 'const x = 1;');
+    createCodeActionsExtension(
+      () => 'test.ts',
+      () => 'const x = 1;',
+    );
 
     // The extension is created, now the plugin would call resolveLanguageId
     // when it fetches actions
@@ -514,7 +526,10 @@ describe('LSP CodeAction integration', () => {
         edit: {
           changes: {
             'file:///test.ts': [
-              { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, newText: 'import { foo } from "bar";\n' },
+              {
+                range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                newText: 'import { foo } from "bar";\n',
+              },
             ],
           },
         },

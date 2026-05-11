@@ -40,13 +40,16 @@ export function useTerminalContextMenu(options: UseTerminalContextMenuOptions): 
     });
   }, []);
 
-  const handleContextPaste = useCallback((text: string) => {
-    if (wasmActiveRef.current) {
-      handleWasmInput(text);
-    } else {
-      handlePtyInput(text);
-    }
-  }, [handleWasmInput, handlePtyInput]);
+  const handleContextPaste = useCallback(
+    (text: string) => {
+      if (wasmActiveRef.current) {
+        handleWasmInput(text);
+      } else {
+        handlePtyInput(text);
+      }
+    },
+    [handleWasmInput, handlePtyInput],
+  );
 
   const handleContextClear = useCallback(() => {
     xtermRef.current?.clear();

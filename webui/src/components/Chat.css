@@ -259,8 +259,13 @@
 }
 
 @keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .status-label {
@@ -648,7 +653,10 @@
   border-radius: 6px;
   position: relative;
   backdrop-filter: none;
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
   border: 1px solid transparent;
 }
 
@@ -751,10 +759,18 @@
   color: var(--text-primary);
 }
 
-.message-content h1 { font-size: 20px; }
-.message-content h2 { font-size: 18px; }
-.message-content h3 { font-size: 16px; }
-.message-content h4 { font-size: 15px; }
+.message-content h1 {
+  font-size: 20px;
+}
+.message-content h2 {
+  font-size: 18px;
+}
+.message-content h3 {
+  font-size: 16px;
+}
+.message-content h4 {
+  font-size: 15px;
+}
 
 .message-content ul,
 .message-content ol {
@@ -935,7 +951,9 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s var(--ease-out), background 0.15s var(--ease-out);
+  transition:
+    border-color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out);
 }
 
 .error-recovery-btn:hover {
@@ -1033,11 +1051,7 @@
 /* Subagent-specific styles */
 .tool-execution.tool-subagent {
   border-left: 3px solid var(--accent-primary);
-  background: linear-gradient(
-    135deg,
-    rgba(var(--accent-primary-rgb, 88, 166, 255), 0.06) 0%,
-    var(--bg-tertiary) 100%
-  );
+  background: linear-gradient(135deg, rgba(var(--accent-primary-rgb, 88, 166, 255), 0.06) 0%, var(--bg-tertiary) 100%);
 }
 
 .tool-name-subagent {
@@ -1400,7 +1414,9 @@
     cursor: pointer;
     box-shadow: var(--shadow-elevated);
     z-index: 500;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .context-panel-mobile-toggle:hover {
@@ -1480,7 +1496,10 @@
   font-size: 10.5px;
   line-height: 1.6;
   cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
 }
 
 .message-tool-links-compact .message-tool-link {
@@ -1540,7 +1559,10 @@
   cursor: pointer;
   font-size: 11.5px;
   color: var(--text-secondary);
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
   max-width: max-content;
   user-select: none;
 }
@@ -1604,7 +1626,9 @@
   line-height: 1;
   padding: 0 1px;
   border-radius: 2px;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
   white-space: nowrap;
 }
 
@@ -1675,8 +1699,13 @@
 }
 
 @keyframes inline-todo-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
 }
 
 /* ── Tool Highlight (when pill is clicked) ───────────────────── */
@@ -1687,9 +1716,16 @@
 }
 
 @keyframes tool-highlight-fade {
-  0% { box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.4); }
-  70% { box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.2); }
-  100% { box-shadow: 0 0 0 0 rgba(var(--accent-primary-rgb, 99, 102, 241), 0); border-color: var(--border-default); }
+  0% {
+    box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.2);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--accent-primary-rgb, 99, 102, 241), 0);
+    border-color: var(--border-default);
+  }
 }
 
 /* ── Side Panel Tasks ────────────────────────────────────────── */
@@ -1806,7 +1842,10 @@
   cursor: pointer;
   z-index: 10;
   box-shadow: var(--shadow-elevated);
-  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out), opacity 0.15s ease;
+  transition:
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    opacity 0.15s ease;
 }
 
 .scroll-to-bottom-btn:hover {

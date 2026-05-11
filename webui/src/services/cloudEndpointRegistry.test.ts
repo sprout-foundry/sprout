@@ -303,10 +303,7 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should return correct synthetic response for SSH error endpoints', async () => {
-      const sshErrorEndpoints = [
-        '/api/instances/ssh-open',
-        '/api/instances/ssh-browse',
-      ];
+      const sshErrorEndpoints = ['/api/instances/ssh-open', '/api/instances/ssh-browse'];
 
       for (const path of sshErrorEndpoints) {
         const response = getSyntheticResponse(path, 'POST');
@@ -318,10 +315,7 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should return correct synthetic response for SSH success endpoints', async () => {
-      const sshSuccessEndpoints = [
-        '/api/instances/ssh-close',
-        '/api/instances/select',
-      ];
+      const sshSuccessEndpoints = ['/api/instances/ssh-close', '/api/instances/select'];
 
       for (const path of sshSuccessEndpoints) {
         const response = getSyntheticResponse(path, 'POST');
@@ -534,11 +528,7 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should correctly classify all hotkey endpoints', () => {
-      const hotkeyEndpoints = [
-        '/api/hotkeys',
-        '/api/hotkeys/validate',
-        '/api/hotkeys/preset',
-      ];
+      const hotkeyEndpoints = ['/api/hotkeys', '/api/hotkeys/validate', '/api/hotkeys/preset'];
 
       for (const path of hotkeyEndpoints) {
         const getResult = classifyEndpoint(path, 'GET');
@@ -552,11 +542,7 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should correctly classify all terminal endpoints', () => {
-      const terminalEndpoints = [
-        '/api/terminal/sessions',
-        '/api/terminal/shells',
-        '/api/terminal/history',
-      ];
+      const terminalEndpoints = ['/api/terminal/sessions', '/api/terminal/shells', '/api/terminal/history'];
 
       for (const path of terminalEndpoints) {
         const getResult = classifyEndpoint(path, 'GET');

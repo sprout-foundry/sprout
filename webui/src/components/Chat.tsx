@@ -1,4 +1,5 @@
-import { useRef, useCallback, useState, useMemo, useLayoutEffect, CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
+import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ChevronDown } from 'lucide-react';
 import CommandInput from './CommandInput';
@@ -6,12 +7,7 @@ import { ChatMessageContextMenu } from '@sprout/ui';
 import { supportsSSH } from '../config/mode';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
-import {
-  ChatFooter,
-  ChatHeader,
-  EmptyChatPanel,
-  MessageItem,
-} from './chat';
+import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, ToolExecution } from './chat/types';
 import './Chat.css';
 
@@ -147,68 +143,62 @@ function Chat(props: ChatProps): JSX.Element {
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
-        {showOffline
-          ? (
-            <EmptyChatPanel
-              ref={chatContainerRef}
-              showOffline
-              onRetryConnection={onRetryConnection}
-            />
-          ) : messages.length === 0
-            ? (
-              <EmptyChatPanel
-                ref={chatContainerRef}
-                providerAvailable={providerAvailable}
-                onRequestProviderSetup={onRequestProviderSetup}
-              />
-            ) : (
-              <div ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                <Virtuoso
-                  ref={virtuosoRef}
-                  data={messages}
-                  followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
-                  initialTopMostItemIndex={messages.length - 1}
-                  increaseViewportBy={{ top: 400, bottom: 400 }}
-                  atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
-                  itemContent={(_index, message) => (
-                    <MessageItem
-                      message={message}
-                      onToolPillClick={onToolPillClick}
-                      findMatchingToolExecution={findMatchingToolExecution}
-                      filteredToolExecutions={filteredToolExecutions}
-                      formatTime={formatTime}
-                    />
-                  )}
-                  components={{
-                    Header: () => <ChatHeader worktreePath={worktreePath} />,
-                    Footer: () => (
-                      <ChatFooter
-                        hasSubagentActivity={hasSubagentActivity}
-                        subagentActivities={subagentActivities}
-                        queryProgress={queryProgress}
-                        isProcessing={isProcessing}
-                        filteredToolExecutions={filteredToolExecutions}
-                        lastError={lastError}
-                        showExpiredSessionRecovery={showExpiredSessionRecovery}
-                        handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
-                      />
-                    ),
-                  }}
-                  className="chat-virtuoso"
-                  style={{ height: '100%' }}
+        {showOffline ? (
+          <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
+        ) : messages.length === 0 ? (
+          <EmptyChatPanel
+            ref={chatContainerRef}
+            providerAvailable={providerAvailable}
+            onRequestProviderSetup={onRequestProviderSetup}
+          />
+        ) : (
+          <div ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+            <Virtuoso
+              ref={virtuosoRef}
+              data={messages}
+              followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
+              initialTopMostItemIndex={messages.length - 1}
+              increaseViewportBy={{ top: 400, bottom: 400 }}
+              atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
+              itemContent={(_index, message) => (
+                <MessageItem
+                  message={message}
+                  onToolPillClick={onToolPillClick}
+                  findMatchingToolExecution={findMatchingToolExecution}
+                  filteredToolExecutions={filteredToolExecutions}
+                  formatTime={formatTime}
                 />
-                {!isAtBottom && (
-                  <button
-                    className="scroll-to-bottom-btn"
-                    onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })}
-                    type="button"
-                    aria-label="Scroll to bottom"
-                  >
-                    <ChevronDown size={18} />
-                  </button>
-                )}
-              </div>
+              )}
+              components={{
+                Header: () => <ChatHeader worktreePath={worktreePath} />,
+                Footer: () => (
+                  <ChatFooter
+                    hasSubagentActivity={hasSubagentActivity}
+                    subagentActivities={subagentActivities}
+                    queryProgress={queryProgress}
+                    isProcessing={isProcessing}
+                    filteredToolExecutions={filteredToolExecutions}
+                    lastError={lastError}
+                    showExpiredSessionRecovery={showExpiredSessionRecovery}
+                    handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
+                  />
+                ),
+              }}
+              className="chat-virtuoso"
+              style={{ height: '100%' }}
+            />
+            {!isAtBottom && (
+              <button
+                className="scroll-to-bottom-btn"
+                onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })}
+                type="button"
+                aria-label="Scroll to bottom"
+              >
+                <ChevronDown size={18} />
+              </button>
             )}
+          </div>
+        )}
       </div>
 
       <div className="input-container" ref={inputContainerRef}>

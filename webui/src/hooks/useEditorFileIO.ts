@@ -23,8 +23,9 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import { EditorView } from '@codemirror/view';
-import { EditorState, Transaction, Compartment } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
+import type { Compartment } from '@codemirror/state';
+import { EditorState, Transaction } from '@codemirror/state';
 import { indentUnit } from '@codemirror/language';
 
 import type { EditorBuffer } from '../types/editor';
@@ -54,9 +55,7 @@ const MIN_INDENTED_LINES_FOR_DETECTION = 3;
 // Transaction annotations for external content replacements (file reloads,
 // initial loads, buffer switches). Prevents CodeMirror from recording
 // these in the undo/redo stack.
-const suppressHistoryAnnotations = [
-  Transaction.addToHistory.of(false),
-];
+const suppressHistoryAnnotations = [Transaction.addToHistory.of(false)];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -375,8 +374,7 @@ export function useEditorFileIO(
 
     try {
       const saveResult = await saveBuffer(buf.id);
-      const serverMtime =
-        saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
+      const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
 
       // If format-on-save was applied, update the CodeMirror view with the formatted content.
       // Guard against overwriting user edits made while the save was in flight.
@@ -648,7 +646,14 @@ export function useEditorFileIO(
 
     document.addEventListener('file_externally_modified', handleExternalChange);
     return () => document.removeEventListener('file_externally_modified', handleExternalChange);
-  }, [buffer?.id, buffer?.kind, buffer?.file?.path, clearBufferExternallyModified, setBufferExternallyModified, openWorkspaceBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    buffer?.id,
+    buffer?.kind,
+    buffer?.file?.path,
+    clearBufferExternallyModified,
+    setBufferExternallyModified,
+    openWorkspaceBuffer,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-reload sync listener ──────────────────────────────────
   // Syncs the CodeMirror view when a clean buffer is auto-reloaded

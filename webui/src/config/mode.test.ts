@@ -268,7 +268,7 @@ describe('with CloudAdapter installed', () => {
     jest.resetModules();
   });
 
-      it('adapter flags override build-time defaults', async () => {
+  it('adapter flags override build-time defaults', async () => {
     const { installAdapter } = await import('../services/apiAdapter');
     const { CloudAdapter } = await import('../services/cloudAdapter');
     installAdapter(
@@ -286,7 +286,8 @@ describe('with CloudAdapter installed', () => {
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(false);
     expect(modeModule.supportsSettings).toBe(false);
-  });it('mode and isCloud remain based on env var, not adapter', async () => {
+  });
+  it('mode and isCloud remain based on env var, not adapter', async () => {
     const { installAdapter } = await import('../services/apiAdapter');
     const { CloudAdapter } = await import('../services/cloudAdapter');
     installAdapter(

@@ -179,17 +179,20 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
         }
         if (event.key.toLowerCase() === 'v') {
           event.preventDefault();
-          navigator.clipboard.readText().then((text) => {
-            onPasteRef.current(text);
-          }).catch((err) => {
-            debugLog('[TerminalPane] clipboard paste failed:', err);
-          });
+          navigator.clipboard
+            .readText()
+            .then((text) => {
+              onPasteRef.current(text);
+            })
+            .catch((err) => {
+              debugLog('[TerminalPane] clipboard paste failed:', err);
+            });
           return false;
         }
         if (event.key.toLowerCase() === 'f') {
           event.preventDefault();
           const sel = xtermRef.current?.getSelection();
-          onSearchToggleRef.current((sel && sel.trim()) ? sel.trim() : null);
+          onSearchToggleRef.current(sel && sel.trim() ? sel.trim() : null);
           return false;
         }
       }
@@ -200,9 +203,11 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
     searchAddonRef.current = searchAddon;
 
     // Search results listener
-    const resultsDisposable = searchAddon.onDidChangeResults((results: { resultIndex?: number; resultCount?: number }) => {
-      onSearchResultsRef.current(results.resultIndex, results.resultCount);
-    });
+    const resultsDisposable = searchAddon.onDidChangeResults(
+      (results: { resultIndex?: number; resultCount?: number }) => {
+        onSearchResultsRef.current(results.resultIndex, results.resultCount);
+      },
+    );
 
     // Data handler
     term.onData((data) => {

@@ -45,7 +45,12 @@ export interface UseChatSessionsReturn {
   switchChatSessionWorktree: (chatId: string, worktreePath: string) => Promise<void>;
   listWorktrees: () => Promise<Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }>>;
   createWorktree: (path: string, branch: string, baseRef?: string) => Promise<void>;
-  createChatInWorktree: (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean) => Promise<string | null>;
+  createChatInWorktree: (
+    branch: string,
+    baseRef?: string,
+    name?: string,
+    autoSwitch?: boolean,
+  ) => Promise<string | null>;
 }
 
 export function useChatSessions({
@@ -175,7 +180,6 @@ export function useChatSessions({
         const backendProvider = response.chat_session.provider;
         const backendModel = response.chat_session.model;
         return {
-          
           activeChatId: response.active_chat_id,
           messages: useBackendMessages ? backendMessages : prev.messages,
           isProcessing: finalIsProcessing,
@@ -308,7 +312,6 @@ export function useChatSessions({
           }));
         const backendIsActive = response.chat_session.active_query;
         setState((prev) => ({
-          
           messages: backendMessages,
           isProcessing: backendIsActive,
         }));
@@ -322,51 +325,67 @@ export function useChatSessions({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchWorktrees = useCallback(async (): Promise<Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }>> => {
+  const fetchWorktrees = useCallback(async (): Promise<
+    Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }>
+  > => {
     try {
       const response = await listWorktrees();
-      return (response as { worktrees: Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }> }).worktrees || [];
+      return (
+        (response as { worktrees: Array<{ path: string; branch: string; is_main: boolean; is_current: boolean }> })
+          .worktrees || []
+      );
     } catch (error) {
       debugLog('[worktree] Failed to list worktrees:', error);
       return [];
     }
   }, []);
 
-  const createLocalWorktree = useCallback(async (path: string, branch: string, baseRef?: string) => {
-    try {
-      await createWorktree(path, branch, baseRef);
-      // Refresh worktree list
-      await fetchWorktrees();
-    } catch (error) {
-      debugLog('[worktree] Failed to create worktree:', error);
-      const message = error instanceof Error ? error.message : 'Failed to create worktree';
-      setState((prev) => ({ lastError: message }));
-      throw error;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchWorktrees]);
-
-  const createChatInWorktree = useCallback(async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
-    try {
-      const response = await createChatSessionInWorktree({ branch, base_ref: baseRef, name, auto_switch_workspace: autoSwitch });
-      const newId = response.chat_session.id;
-      const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
-      
-      // If auto-switch was requested, switch to the new chat
-      if (autoSwitch && newId) {
-        await handleActiveChatChange(newId);
+  const createLocalWorktree = useCallback(
+    async (path: string, branch: string, baseRef?: string) => {
+      try {
+        await createWorktree(path, branch, baseRef);
+        // Refresh worktree list
+        await fetchWorktrees();
+      } catch (error) {
+        debugLog('[worktree] Failed to create worktree:', error);
+        const message = error instanceof Error ? error.message : 'Failed to create worktree';
+        setState((prev) => ({ lastError: message }));
+        throw error;
       }
-      
-      return newId;
-    } catch (error) {
-      debugLog('[chat] Failed to create chat in worktree:', error);
-      const message = error instanceof Error ? error.message : 'Failed to create chat in worktree';
-      setState((prev) => ({ lastError: message }));
-      throw error;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleActiveChatChange]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [fetchWorktrees],
+  );
+
+  const createChatInWorktree = useCallback(
+    async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
+      try {
+        const response = await createChatSessionInWorktree({
+          branch,
+          base_ref: baseRef,
+          name,
+          auto_switch_workspace: autoSwitch,
+        });
+        const newId = response.chat_session.id;
+        const sessionsResp = await listChatSessions();
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+
+        // If auto-switch was requested, switch to the new chat
+        if (autoSwitch && newId) {
+          await handleActiveChatChange(newId);
+        }
+
+        return newId;
+      } catch (error) {
+        debugLog('[chat] Failed to create chat in worktree:', error);
+        const message = error instanceof Error ? error.message : 'Failed to create chat in worktree';
+        setState((prev) => ({ lastError: message }));
+        throw error;
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [handleActiveChatChange],
+  );
 
   return {
     loadChatSessions,

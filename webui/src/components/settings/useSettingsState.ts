@@ -25,7 +25,11 @@ interface UseSettingsStateReturn {
   subagentProviders: ProviderOption[];
   setSubagentProviders: (v: ProviderOption[] | ((prev: ProviderOption[]) => ProviderOption[])) => void;
   subagentTypes: Record<string, SubagentTypeInfo>;
-  setSubagentTypes: (v: Record<string, SubagentTypeInfo> | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>)) => void;
+  setSubagentTypes: (
+    v:
+      | Record<string, SubagentTypeInfo>
+      | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>),
+  ) => void;
   subagentSavingPersona: string | null;
   setSubagentSavingPersona: (v: string | null) => void;
   currentProviderInfo: { provider: string; model: string; hasCredential: boolean } | null;
@@ -53,7 +57,13 @@ interface UseSettingsStateReturn {
   credentialServer: string | null;
   setCredentialServer: (v: string | null) => void;
   credentialEntries: Array<{ key: string; value: string; status: string }>;
-  setCredentialEntries: (v: Array<{ key: string; value: string; status: string }> | ((prev: Array<{ key: string; value: string; status: string }>) => Array<{ key: string; value: string; status: string }>)) => void;
+  setCredentialEntries: (
+    v:
+      | Array<{ key: string; value: string; status: string }>
+      | ((
+          prev: Array<{ key: string; value: string; status: string }>,
+        ) => Array<{ key: string; value: string; status: string }>),
+  ) => void;
   credentialLoading: boolean;
   setCredentialLoading: (v: boolean) => void;
   newCredentialKey: string;
@@ -191,7 +201,8 @@ export function useSettingsState(
       let cancelled = false;
       setLayerLoading(configViewLayer);
       setLayerError(null);
-      api.getSettingsLayer(configViewLayer)
+      api
+        .getSettingsLayer(configViewLayer)
         .then((data) => {
           if (cancelled) return;
           setLayerData(data);
@@ -205,16 +216,25 @@ export function useSettingsState(
         .finally(() => {
           if (!cancelled) setLayerLoading(null);
         });
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     } else {
       setLayerData(null);
       setLayerError(null);
       setLayerLoading(null);
       let cancelled = false;
-      api.getSettingsProvenance()
-        .then((data) => { if (!cancelled) setProvenanceSources(data.sources || {}); })
-        .catch(() => { if (!cancelled) setProvenanceSources({}); });
-      return () => { cancelled = true; };
+      api
+        .getSettingsProvenance()
+        .then((data) => {
+          if (!cancelled) setProvenanceSources(data.sources || {});
+        })
+        .catch(() => {
+          if (!cancelled) setProvenanceSources({});
+        });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [activeSubTab, configViewLayer]);
 
@@ -232,7 +252,9 @@ export function useSettingsState(
         debugLog('[SettingsPanel] failed to load subagent types:', err);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeSubTab, api]);
 
   // Fetch providers for commit & review when tab is activated
@@ -248,7 +270,9 @@ export function useSettingsState(
         debugLog('[SettingsPanel] failed to load commit-review providers:', err);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeSubTab, api]);
 
   // Fetch current provider info when providers tab is activated
@@ -272,50 +296,87 @@ export function useSettingsState(
         if (!cancelled) setLoadingProviderInfo(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeSubTab, api]);
 
   return {
-    activeSubTab, setActiveSubTab,
-    configViewLayer, setConfigViewLayer,
-    layerLoading, setLayerLoading,
-    layerData, setLayerData,
-    layerError, setLayerError,
-    creatingWorkspaceConfig, setCreatingWorkspaceConfig,
-    provenanceSources, setProvenanceSources,
+    activeSubTab,
+    setActiveSubTab,
+    configViewLayer,
+    setConfigViewLayer,
+    layerLoading,
+    setLayerLoading,
+    layerData,
+    setLayerData,
+    layerError,
+    setLayerError,
+    creatingWorkspaceConfig,
+    setCreatingWorkspaceConfig,
+    provenanceSources,
+    setProvenanceSources,
     displaySettingsRef,
-    subagentProviders, setSubagentProviders,
-    subagentTypes, setSubagentTypes,
-    subagentSavingPersona, setSubagentSavingPersona,
-    currentProviderInfo, setCurrentProviderInfo,
-    loadingProviderInfo, setLoadingProviderInfo,
-    commitReviewProviders, setCommitReviewProviders,
+    subagentProviders,
+    setSubagentProviders,
+    subagentTypes,
+    setSubagentTypes,
+    subagentSavingPersona,
+    setSubagentSavingPersona,
+    currentProviderInfo,
+    setCurrentProviderInfo,
+    loadingProviderInfo,
+    setLoadingProviderInfo,
+    commitReviewProviders,
+    setCommitReviewProviders,
     // MCP
-    editingServer, setEditingServer,
-    serverName, setServerName,
-    serverCommand, setServerCommand,
-    serverArgs, setServerArgs,
-    serverEnvVars, setServerEnvVars,
-    newEnvKey, setNewEnvKey,
-    newEnvValue, setNewEnvValue,
+    editingServer,
+    setEditingServer,
+    serverName,
+    setServerName,
+    serverCommand,
+    setServerCommand,
+    serverArgs,
+    setServerArgs,
+    serverEnvVars,
+    setServerEnvVars,
+    newEnvKey,
+    setNewEnvKey,
+    newEnvValue,
+    setNewEnvValue,
     // Credentials
-    credentialServer, setCredentialServer,
-    credentialEntries, setCredentialEntries,
-    credentialLoading, setCredentialLoading,
-    newCredentialKey, setNewCredentialKey,
-    newCredentialValue, setNewCredentialValue,
+    credentialServer,
+    setCredentialServer,
+    credentialEntries,
+    setCredentialEntries,
+    credentialLoading,
+    setCredentialLoading,
+    newCredentialKey,
+    setNewCredentialKey,
+    newCredentialValue,
+    setNewCredentialValue,
     // Provider
-    editingProvider, setEditingProvider,
-    providerName, setProviderName,
-    providerApiBase, setProviderApiBase,
-    providerModelName, setProviderModelName,
-    providerContextSize, setProviderContextSize,
-    providerEnvVar, setProviderEnvVar,
-    providerSupportsVision, setProviderSupportsVision,
-    providerVisionModel, setProviderVisionModel,
-    providerModelContextSizes, setProviderModelContextSizes,
+    editingProvider,
+    setEditingProvider,
+    providerName,
+    setProviderName,
+    providerApiBase,
+    setProviderApiBase,
+    providerModelName,
+    setProviderModelName,
+    providerContextSize,
+    setProviderContextSize,
+    providerEnvVar,
+    setProviderEnvVar,
+    providerSupportsVision,
+    setProviderSupportsVision,
+    providerVisionModel,
+    setProviderVisionModel,
+    providerModelContextSizes,
+    setProviderModelContextSizes,
     // Drafts
-    textDrafts, setTextDrafts,
+    textDrafts,
+    setTextDrafts,
     textSaveTimersRef,
     // Services
     api,

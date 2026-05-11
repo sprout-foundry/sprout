@@ -75,9 +75,7 @@ const TasksPage: React.FC = () => {
         <p>View and manage your background tasks and operations.</p>
       </div>
 
-      {loading && (
-        <div className="platform-page-loading">Loading tasks...</div>
-      )}
+      {loading && <div className="platform-page-loading">Loading tasks...</div>}
 
       {error && (
         <div className="platform-page-error">
@@ -112,14 +110,10 @@ const TasksPage: React.FC = () => {
               </div>
               <div className="platform-list-item-content">
                 <div className="platform-list-item-title">{task.title}</div>
-                <div className="platform-list-item-subtitle">
-                  {task.description || 'No description'}
-                </div>
+                <div className="platform-list-item-subtitle">{task.description || 'No description'}</div>
               </div>
               <div className="platform-list-item-meta">
-                <span className={`platform-status-badge ${task.status}`}>
-                  {task.status}
-                </span>
+                <span className={`platform-status-badge ${task.status}`}>{task.status}</span>
                 <div className="platform-list-item-time">
                   <div>{formatDate(task.created_at)}</div>
                   <div>{formatTime(task.created_at)}</div>

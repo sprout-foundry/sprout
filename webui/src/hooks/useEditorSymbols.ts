@@ -11,12 +11,7 @@
  * ```
  */
 import { useMemo } from 'react';
-import {
-  extractSymbols,
-  findSymbolScopeEnd,
-  CONTAINER_KINDS,
-  type SymbolInfo,
-} from '../utils/symbolUtils';
+import { extractSymbols, findSymbolScopeEnd, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import type { EditorBuffer } from '../types/editor';
 
 /** BreadcrumbSymbol is an alias for SymbolInfo (re-exported for convenience) */
@@ -74,8 +69,7 @@ export function useEditorSymbols(
     const lines = localContent.split('\n');
 
     // Filter to container kinds only; extractSymbols returns in line-ascending order (outermost first)
-    const containers = allSymbols
-      .filter((s) => CONTAINER_KINDS.has(s.kind) && s.line <= cursorLine);
+    const containers = allSymbols.filter((s) => CONTAINER_KINDS.has(s.kind) && s.line <= cursorLine);
 
     // Find containers whose scopes enclose the cursor (up to 3 levels deep)
     const result: SymbolInfo[] = [];

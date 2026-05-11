@@ -81,7 +81,10 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
 
     const entries: { path: string; mtime: number }[] = [];
     mtimes.forEach((mtime, path) => entries.push({ path, mtime }));
-    if (entries.length === 0) { consecutiveFailuresRef.current = 0; return; }
+    if (entries.length === 0) {
+      consecutiveFailuresRef.current = 0;
+      return;
+    }
 
     try {
       const response = await checkFilesModified(entries);
@@ -91,17 +94,22 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
         const deleted = result.size === 0 && result.mod_time === 0;
         mtimes.set(result.path, result.mod_time);
 
-        if (!seenOnce.has(result.path)) { seenOnce.add(result.path); continue; }
-        
+        if (!seenOnce.has(result.path)) {
+          seenOnce.add(result.path);
+          continue;
+        }
+
         // Skip notification if this file was just saved from editor (within cooldown)
         const lastFired = cooldowns.get(result.path) || 0;
         if (now - lastFired < COOLDOWN_MS) continue;
-        
+
         cooldowns.set(result.path, now);
 
-        document.dispatchEvent(new CustomEvent('file_externally_modified', {
-          detail: { path: result.path, mtime: result.mod_time, size: result.size, deleted },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('file_externally_modified', {
+            detail: { path: result.path, mtime: result.mod_time, size: result.size, deleted },
+          }),
+        );
       }
     } catch (err) {
       consecutiveFailuresRef.current += 1;
@@ -109,20 +117,27 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
     }
   }, []);
 
-  const scheduleNext = useCallback((delay?: number) => {
-    clearTimeoutRef();
-    if (!runningRef.current) return;
+  const scheduleNext = useCallback(
+    (delay?: number) => {
+      clearTimeoutRef();
+      if (!runningRef.current) return;
 
-    const failures = consecutiveFailuresRef.current;
-    const backoff = Math.min(POLL_INTERVAL_MS * Math.pow(2, failures), BACKOFF_CAP_MS);
-    timeoutRef.current = setTimeout(() => {
-      timeoutRef.current = null;
-      performCheck().then(() => scheduleNext());
-    }, delay ?? backoff);
-  }, [clearTimeoutRef, performCheck]);
+      const failures = consecutiveFailuresRef.current;
+      const backoff = Math.min(POLL_INTERVAL_MS * Math.pow(2, failures), BACKOFF_CAP_MS);
+      timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null;
+        performCheck().then(() => scheduleNext());
+      }, delay ?? backoff);
+    },
+    [clearTimeoutRef, performCheck],
+  );
 
-  const startWatching = useCallback(() => { if (!runningRef.current) setRunning(true); }, []);
-  const stopWatching = useCallback(() => { if (runningRef.current) setRunning(false); }, []);
+  const startWatching = useCallback(() => {
+    if (!runningRef.current) setRunning(true);
+  }, []);
+  const stopWatching = useCallback(() => {
+    if (runningRef.current) setRunning(false);
+  }, []);
   const forceCheck = useCallback(() => performCheck(), [performCheck]);
 
   // Update known mtime when a file is saved from the editor.
@@ -146,7 +161,10 @@ export function useExternalFileWatcher({ buffers }: WatcherOptions): WatcherRetu
 
   // Main polling loop: immediate check, then schedule with backoff.
   useEffect(() => {
-    if (!running) { clearTimeoutRef(); return; }
+    if (!running) {
+      clearTimeoutRef();
+      return;
+    }
     performCheck().then(() => scheduleNext());
     return () => clearTimeoutRef();
   }, [running, performCheck, scheduleNext, clearTimeoutRef]);

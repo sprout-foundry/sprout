@@ -1167,7 +1167,7 @@
   box-shadow: inset 0 0 0 2px var(--accent-primary);
 }
 
-.model-selection-item[aria-selected="true"] {
+.model-selection-item[aria-selected='true'] {
   background: var(--color-warning-bg);
   color: var(--accent-warning);
   font-weight: 600;

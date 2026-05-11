@@ -60,7 +60,7 @@ export interface UseEditorSettingsReturn {
   lineEnding: LineEnding;
   inlayHintsEnabled: boolean;
   signatureHelpEnabled: boolean;
-  
+
   // Ref mirrors
   wordWrapRef: React.MutableRefObject<boolean>;
   minimapEnabledRef: React.MutableRefObject<boolean>;
@@ -69,13 +69,13 @@ export interface UseEditorSettingsReturn {
   indentManuallySetRef: React.MutableRefObject<boolean>;
   inlayHintsEnabledRef: React.MutableRefObject<boolean>;
   signatureHelpEnabledRef: React.MutableRefObject<boolean>;
-  
+
   // Setters for external use (e.g., file loading, buffer changes)
   setEditorTabSize: (v: number) => void;
   setEditorUsesTabs: (v: boolean) => void;
   setIndentManuallySet: (v: boolean) => void;
   setLineEnding: (v: LineEnding) => void;
-  
+
   // Callbacks
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -134,7 +134,7 @@ export function useEditorSettings(
       if (stored === null) return TAB_SIZE_DEFAULT;
       if (stored === '0') return TAB_SIZE_TABS_MODE;
       const parsed = parseInt(stored, 10);
-      if (!isNaN(parsed) && TAB_SIZE_OPTIONS.includes(parsed as typeof TAB_SIZE_OPTIONS[number])) {
+      if (!isNaN(parsed) && TAB_SIZE_OPTIONS.includes(parsed as (typeof TAB_SIZE_OPTIONS)[number])) {
         return parsed;
       }
       return TAB_SIZE_DEFAULT;
@@ -206,9 +206,7 @@ export function useEditorSettings(
     return true;
   });
 
-  const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState<boolean>(
-    getStoredRelativeLineNumbers,
-  );
+  const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState<boolean>(getStoredRelativeLineNumbers);
 
   const [minimapEnabled, setMinimapEnabled] = useState<boolean>(getStoredMinimapEnabled);
 
@@ -362,7 +360,7 @@ export function useEditorSettings(
         }
         return 2;
       }
-      const currentIdx = TAB_SIZE_OPTIONS.indexOf(prev as typeof TAB_SIZE_OPTIONS[number]);
+      const currentIdx = TAB_SIZE_OPTIONS.indexOf(prev as (typeof TAB_SIZE_OPTIONS)[number]);
       if (currentIdx === TAB_SIZE_OPTIONS.length - 1) {
         setEditorUsesTabs(true);
         try {
@@ -430,8 +428,11 @@ export function useEditorSettings(
     if (now - lastWhitespaceToggleRef.current < 100) return whitespaceRenderingModeRef.current;
     lastWhitespaceToggleRef.current = now;
     const next: WhitespaceRenderingMode =
-      whitespaceRenderingModeRef.current === 'none' ? 'boundary' :
-      whitespaceRenderingModeRef.current === 'boundary' ? 'all' : 'none';
+      whitespaceRenderingModeRef.current === 'none'
+        ? 'boundary'
+        : whitespaceRenderingModeRef.current === 'boundary'
+          ? 'all'
+          : 'none';
     whitespaceRenderingModeRef.current = next;
     try {
       localStorage.setItem('editor:whitespace-rendering-mode', next);
@@ -482,7 +483,7 @@ export function useEditorSettings(
     lineEnding,
     inlayHintsEnabled,
     signatureHelpEnabled,
-    
+
     // Ref mirrors
     wordWrapRef,
     minimapEnabledRef,
@@ -491,13 +492,13 @@ export function useEditorSettings(
     indentManuallySetRef,
     inlayHintsEnabledRef,
     signatureHelpEnabledRef,
-    
+
     // Setters
     setEditorTabSize,
     setEditorUsesTabs,
     setIndentManuallySet,
     setLineEnding,
-    
+
     // Callbacks
     onZoomIn,
     onZoomOut,

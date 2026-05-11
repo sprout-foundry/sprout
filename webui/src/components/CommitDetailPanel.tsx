@@ -9,7 +9,10 @@ import './CommitDetailPanel.css';
 
 interface CommitDetailPanelProps {
   onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
-  onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{ message: string; hash: string; path: string; diff: string }>;
+  onLoadCommitFileDiff: (
+    hash: string,
+    filePath: string,
+  ) => Promise<{ message: string; hash: string; path: string; diff: string }>;
   commit: GitCommitSummary;
   onBack: () => void;
   openWorkspaceBuffer: (options: {
@@ -96,7 +99,9 @@ function CommitDetailPanel({
           },
         });
       } catch (err) {
-        log.error(`Failed to load file diff: ${err instanceof Error ? err.message : 'Unknown error'}`, { title: 'Git Error' });
+        log.error(`Failed to load file diff: ${err instanceof Error ? err.message : 'Unknown error'}`, {
+          title: 'Git Error',
+        });
       }
     },
     [commit.hash, commit.short_hash, onLoadCommitFileDiff, openWorkspaceBuffer, log],

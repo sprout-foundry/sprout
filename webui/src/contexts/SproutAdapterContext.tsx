@@ -50,7 +50,7 @@ export function useSproutFetch(): (input: RequestInfo | URL, init?: RequestInit)
       // the header is set correctly once in the final request.
       return clientFetch(input, { ...init, headers });
     },
-    [adapter]
+    [adapter],
   );
 }
 
@@ -77,11 +77,7 @@ export function SproutAdapterProvider({ children }: SproutAdapterProviderProps):
   // The adapter reference is stable, so this only updates when getAdapter() returns a different value
   const value = useMemo(() => ({ adapter }), [adapter]);
 
-  return (
-    <SproutAdapterContext.Provider value={value}>
-      {children}
-    </SproutAdapterContext.Provider>
-  );
+  return <SproutAdapterContext.Provider value={value}>{children}</SproutAdapterContext.Provider>;
 }
 
 SproutAdapterProvider.displayName = 'SproutAdapterProvider';

@@ -70,22 +70,18 @@ export function useEditorDiagnostics(
   // Forward-reference ref to avoid circular dependency issues in consuming components
   // (e.g., EditorPane's loadFile callback needs to call fetchDiagnostics before
   // fetchDiagnostics is defined in the component body).
-  const fetchDiagnosticsRef = useRef<(filePath: string, content: string, trigger?: DiagnosticTrigger) => void>(
-    () => {
-      /* noop */
-    },
-  );
+  const fetchDiagnosticsRef = useRef<(filePath: string, content: string, trigger?: DiagnosticTrigger) => void>(() => {
+    /* noop */
+  });
 
   // Fetch diagnostics for the current file and push them into the editor
   const fetchDiagnostics = useCallback(
     async (filePath: string, content: string, trigger: DiagnosticTrigger = 'edit') => {
       if (!viewRef.current) return;
 
-      const languageId = resolveLanguageId(
-        buffer?.languageOverride,
-        buffer?.file?.ext?.replace(/^\./, ''),
-        buffer?.file?.name,
-      ).languageId ?? '';
+      const languageId =
+        resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
+          .languageId ?? '';
 
       // If LSP client is connected, it handles diagnostics via serverDiagnostics() extension
       // - skip old semantic diagnostics to avoid duplication
@@ -100,7 +96,9 @@ export function useEditorDiagnostics(
           const semantic = await apiService.getSemanticDiagnostics(filePath, content, languageId, trigger);
           if (!viewRef.current) return; // Guard against unmount during async call
           if (semantic.capabilities?.diagnostics) {
-            debugLog(`[fetchDiagnostics] semantic latency ${semantic.duration_ms ?? -1}ms (${languageId}, trigger=${trigger})`);
+            debugLog(
+              `[fetchDiagnostics] semantic latency ${semantic.duration_ms ?? -1}ms (${languageId}, trigger=${trigger})`,
+            );
             if (semantic.diagnostics && semantic.diagnostics.length > 0) {
               debouncedDiag.current.update(viewRef.current, semantic.diagnostics);
             } else {

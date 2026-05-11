@@ -114,19 +114,27 @@ describe('wordHighlightsExtension', () => {
   // ── CSS variable theme style tests ────────────────────────────────
 
   it('uses CSS variable --cm-selection-match-bg with fallback for .cm-selectionMatch backgroundColor', () => {
-    expect(themeConfig['.cm-selectionMatch'].backgroundColor).toBe('var(--cm-selection-match-bg, rgba(97, 175, 239, 0.12))');
+    expect(themeConfig['.cm-selectionMatch'].backgroundColor).toBe(
+      'var(--cm-selection-match-bg, rgba(97, 175, 239, 0.12))',
+    );
   });
 
   it('uses CSS variable --cm-selection-match-outline with fallback for .cm-selectionMatch outline', () => {
-    expect(themeConfig['.cm-selectionMatch'].outline).toBe('1px solid var(--cm-selection-match-outline, rgba(97, 175, 239, 0.4))');
+    expect(themeConfig['.cm-selectionMatch'].outline).toBe(
+      '1px solid var(--cm-selection-match-outline, rgba(97, 175, 239, 0.4))',
+    );
   });
 
   it('uses CSS variable --cm-selection-match-main-bg with fallback for .cm-selectionMatch-main backgroundColor', () => {
-    expect(themeConfig['.cm-selectionMatch-main'].backgroundColor).toBe('var(--cm-selection-match-main-bg, rgba(97, 175, 239, 0.22))');
+    expect(themeConfig['.cm-selectionMatch-main'].backgroundColor).toBe(
+      'var(--cm-selection-match-main-bg, rgba(97, 175, 239, 0.22))',
+    );
   });
 
   it('uses CSS variable --cm-selection-match-main-outline with fallback for .cm-selectionMatch-main outline', () => {
-    expect(themeConfig['.cm-selectionMatch-main'].outline).toBe('1.5px solid var(--cm-selection-match-main-outline, rgba(97, 175, 239, 0.6))');
+    expect(themeConfig['.cm-selectionMatch-main'].outline).toBe(
+      '1.5px solid var(--cm-selection-match-main-outline, rgba(97, 175, 239, 0.6))',
+    );
   });
 
   it('sets .cm-searchMatch .cm-selectionMatch to transparent to prevent visual conflict', () => {

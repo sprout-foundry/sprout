@@ -20,10 +20,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
   // Save a buffer to the server
   const saveBuffer = useCallback(
-    async (
-      bufferId: string,
-      options?: { silent?: boolean },
-    ): Promise<{ mod_time?: number } | void> => {
+    async (bufferId: string, options?: { silent?: boolean }): Promise<{ mod_time?: number } | void> => {
       const buffer = buffersRef.current.get(bufferId);
       if (!buffer || buffer.kind !== 'file') return;
 
@@ -45,9 +42,11 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
 
         // Set the save cooldown *before* the HTTP write so that the
         // server-side fsnotify echo (arriving via WebSocket) is suppressed.
-        document.dispatchEvent(new CustomEvent('file:editor-saved', {
-          detail: { path: trimmedPath, mtime: Math.floor(Date.now() / 1000) },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path: trimmedPath, mtime: Math.floor(Date.now() / 1000) },
+          }),
+        );
 
         // Write the file to disk
         const response = await writeFileWithConsent(trimmedPath, buffer.content);
@@ -90,9 +89,11 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
           log.success(`${trimmedPath} saved successfully`, { title: 'File Saved', duration: 3000 });
         }
         // Notify external file watchers so they suppress the fsnotify echo.
-        document.dispatchEvent(new CustomEvent('file:editor-saved', {
-          detail: { path: trimmedPath, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path: trimmedPath, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+          }),
+        );
         return saveData;
       }
 
@@ -101,9 +102,11 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
         // Set the save cooldown *before* the HTTP write so that the
         // server-side fsnotify echo (arriving via WebSocket) is suppressed.
         // The echo can reach the client before this HTTP response does.
-        document.dispatchEvent(new CustomEvent('file:editor-saved', {
-          detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
-        }));
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: { path: buffer.file.path, mtime: Math.floor(Date.now() / 1000) },
+          }),
+        );
 
         const response = await writeFileWithConsent(buffer.file.path, buffer.content);
 
@@ -124,9 +127,7 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
                   ...buf,
                   originalContent: buf.content,
                   isModified: false,
-                  file: serverMtime != null
-                    ? { ...buf.file, modified: serverMtime }
-                    : buf.file,
+                  file: serverMtime != null ? { ...buf.file, modified: serverMtime } : buf.file,
                 });
               }
               return next;
@@ -135,9 +136,11 @@ export function useBufferPersistence({ buffersRef, setBuffers }: UseBufferPersis
               log.success(`${buffer.file.path} saved successfully`, { title: 'File Saved', duration: 3000 });
             }
             // Notify external file watchers so they suppress the fsnotify echo.
-            document.dispatchEvent(new CustomEvent('file:editor-saved', {
-              detail: { path: buffer.file.path, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
-            }));
+            document.dispatchEvent(
+              new CustomEvent('file:editor-saved', {
+                detail: { path: buffer.file.path, mtime: serverMtime ?? Math.floor(Date.now() / 1000) },
+              }),
+            );
             return data;
           }
         } else {

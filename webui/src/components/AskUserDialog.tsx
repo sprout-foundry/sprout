@@ -7,11 +7,7 @@ export interface AskUserDialogProps {
   onRespond: (requestId: string, response: string) => void;
 }
 
-function AskUserDialog({
-  requestId,
-  question,
-  onRespond,
-}: AskUserDialogProps): JSX.Element {
+function AskUserDialog({ requestId, question, onRespond }: AskUserDialogProps): JSX.Element {
   const [response, setResponse] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -22,22 +18,25 @@ function AskUserDialog({
     }
   }, [requestId, response, onRespond]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      // Cannot dismiss via Escape — user MUST respond
-      e.preventDefault();
-      return;
-    }
-    if (e.key === 'Enter') {
-      // Submit on Enter (without Ctrl/Cmd)
-      if (e.metaKey || e.ctrlKey || e.shiftKey) {
-        // Allow Ctrl+Enter, Cmd+Enter, Shift+Enter for newlines
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Cannot dismiss via Escape — user MUST respond
+        e.preventDefault();
         return;
       }
-      e.preventDefault();
-      handleSubmit();
-    }
-  }, [handleSubmit]);
+      if (e.key === 'Enter') {
+        // Submit on Enter (without Ctrl/Cmd)
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          // Allow Ctrl+Enter, Cmd+Enter, Shift+Enter for newlines
+          return;
+        }
+        e.preventDefault();
+        handleSubmit();
+      }
+    },
+    [handleSubmit],
+  );
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);

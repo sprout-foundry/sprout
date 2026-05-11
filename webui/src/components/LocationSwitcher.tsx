@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { FolderOpen, Monitor, Loader2, Server } from 'lucide-react';
 import './LocationSwitcher.css';
-import { SproutInstance } from '../services/api';
+import type { SproutInstance } from '../services/api';
 import { supportsSSH } from '../config/mode';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
 import { useWorkspaceData } from './locationSwitcher/useWorkspaceData';
@@ -78,7 +78,9 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
 
   // ─── Render ───
   return (
-    <div className={`location-switcher ${sidebarCollapsed ? 'collapsed' : ''} ${ws.switchingState.isSwitching || ws.isLoading ? 'loading' : ''}`}>
+    <div
+      className={`location-switcher ${sidebarCollapsed ? 'collapsed' : ''} ${ws.switchingState.isSwitching || ws.isLoading ? 'loading' : ''}`}
+    >
       {supportsSSH && (
         <button
           ref={sug.sshBtnRef}
@@ -88,9 +90,17 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
           aria-expanded={isSshPanelOpen}
           aria-haspopup="listbox"
           disabled={!isConnected}
-          title={ws.remoteContext ? `SSH: ${ws.remoteContext.hostAlias} — click to manage` : 'Local — click to connect via SSH'}
+          title={
+            ws.remoteContext
+              ? `SSH: ${ws.remoteContext.hostAlias} — click to manage`
+              : 'Local — click to connect via SSH'
+          }
         >
-          {ws.remoteContext ? <Server size={13} className="location-host-btn-icon" /> : <Monitor size={13} className="location-host-btn-icon" />}
+          {ws.remoteContext ? (
+            <Server size={13} className="location-host-btn-icon" />
+          ) : (
+            <Monitor size={13} className="location-host-btn-icon" />
+          )}
         </button>
       )}
 
@@ -106,7 +116,11 @@ const LocationSwitcher: React.FC<LocationSwitcherProps> = ({
       >
         <FolderOpen size={14} className="location-switcher-trigger-icon" />
         {sug.showText && <span className="location-switcher-trigger-text">{triggerWorkspaceName}</span>}
-        {ws.switchingState.isSwitching ? <Loader2 size={12} className="spin" /> : <span className="location-switcher-trigger-chevron" />}
+        {ws.switchingState.isSwitching ? (
+          <Loader2 size={12} className="spin" />
+        ) : (
+          <span className="location-switcher-trigger-chevron" />
+        )}
       </button>
 
       {supportsSSH && isSshPanelOpen && (

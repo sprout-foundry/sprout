@@ -17,16 +17,35 @@ export interface FieldRenderers {
   renderProvenanceBadge: (settingKey: string) => JSX.Element | null;
   renderToggle: (settingKey: string, label: string) => JSX.Element | null;
   renderSelect: (settingKey: string, label: string, options: string[]) => JSX.Element | null;
-  renderNumberInput: (settingKey: string, label: string, min?: number, max?: number, step?: number) => JSX.Element | null;
+  renderNumberInput: (
+    settingKey: string,
+    label: string,
+    min?: number,
+    max?: number,
+    step?: number,
+  ) => JSX.Element | null;
   renderTextInput: (settingKey: string, label: string, placeholder?: string) => JSX.Element | null;
-  renderTextareaInput: (settingKey: string, label: string, placeholder?: string, rows?: number, helpText?: string) => JSX.Element | null;
+  renderTextareaInput: (
+    settingKey: string,
+    label: string,
+    placeholder?: string,
+    rows?: number,
+    helpText?: string,
+  ) => JSX.Element | null;
   renderSaving: () => JSX.Element | null;
 }
 
 export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRenderers {
   const {
-    displaySettingsRef, settings, textDrafts, setTextDrafts, textSaveTimersRef,
-    updateSetting, savingKey, provenanceSources, configViewLayer,
+    displaySettingsRef,
+    settings,
+    textDrafts,
+    setTextDrafts,
+    textSaveTimersRef,
+    updateSetting,
+    savingKey,
+    provenanceSources,
+    configViewLayer,
   } = params;
 
   const renderProvenanceBadge = (settingKey: string) => {
@@ -66,7 +85,10 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
         <span className="toggle-track" />
-        <span className="toggle-label">{label}{renderProvenanceBadge(settingKey)}</span>
+        <span className="toggle-label">
+          {label}
+          {renderProvenanceBadge(settingKey)}
+        </span>
       </label>
     );
   };
@@ -77,7 +99,10 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     const value = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
+        <label htmlFor={`setting-${settingKey}`}>
+          {label}
+          {renderProvenanceBadge(settingKey)}
+        </label>
         <select
           id={`setting-${settingKey}`}
           value={value}
@@ -100,7 +125,10 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     const value = getNestedValue(current as unknown as Record<string, unknown>, settingKey);
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
+        <label htmlFor={`setting-${settingKey}`}>
+          {label}
+          {renderProvenanceBadge(settingKey)}
+        </label>
         <input
           id={`setting-${settingKey}`}
           type="number"
@@ -125,7 +153,10 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
+        <label htmlFor={`setting-${settingKey}`}>
+          {label}
+          {renderProvenanceBadge(settingKey)}
+        </label>
         <input
           id={`setting-${settingKey}`}
           type="text"
@@ -174,7 +205,10 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
-        <label htmlFor={`setting-${settingKey}`}>{label}{renderProvenanceBadge(settingKey)}</label>
+        <label htmlFor={`setting-${settingKey}`}>
+          {label}
+          {renderProvenanceBadge(settingKey)}
+        </label>
         <textarea
           id={`setting-${settingKey}`}
           className="styled-input styled-textarea"

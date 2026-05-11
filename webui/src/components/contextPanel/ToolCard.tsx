@@ -28,13 +28,7 @@ interface ToolCardProps {
   onToggleExpansion: (toolId: string) => void;
 }
 
-export function ToolCard({
-  tool,
-  expandedTools,
-  activeToolId,
-  toolRef,
-  onToggleExpansion,
-}: ToolCardProps) {
+export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleExpansion }: ToolCardProps) {
   const isSub = isSubagentTool(tool);
   const subagentPrompt = isSub ? getSubagentPrompt(tool) : undefined;
 

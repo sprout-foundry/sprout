@@ -4,7 +4,7 @@ import type { EditorBuffer } from '../types/editor';
 
 interface UseUnsavedChangesWarningParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
-  buffers: Map<string, EditorBuffer>;
+  _buffers: Map<string, EditorBuffer>;
   activeBufferId: string | null;
 }
 
@@ -23,7 +23,7 @@ interface UseUnsavedChangesWarningParams {
  */
 export function useUnsavedChangesWarning({
   buffersRef,
-  buffers,
+  _buffers,
   activeBufferId,
 }: UseUnsavedChangesWarningParams): void {
   // Effect 1: Warn on beforeunload if any file buffer is modified

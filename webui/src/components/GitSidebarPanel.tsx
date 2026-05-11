@@ -423,9 +423,7 @@ function GitSidebarPanel({
                           const anchor = anchorRef.current.get(section.id) ?? 0;
                           const from = Math.min(anchor, index);
                           const to = Math.max(anchor, index);
-                          const rangeKeys = files
-                            .slice(from, to + 1)
-                            .map((f) => selectionKey(section.id, f.path));
+                          const rangeKeys = files.slice(from, to + 1).map((f) => selectionKey(section.id, f.path));
                           if (onSelectFiles) {
                             onSelectFiles(rangeKeys);
                           }
@@ -467,7 +465,10 @@ function GitSidebarPanel({
                         {section.id === 'staged' ? (
                           <button
                             className="git-row-icon-btn"
-                            onClick={(e) => { e.stopPropagation(); onUnstageFile(file.path); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUnstageFile(file.path);
+                            }}
                             title="Unstage file"
                             disabled={isActing}
                           >
@@ -476,7 +477,10 @@ function GitSidebarPanel({
                         ) : (
                           <button
                             className="git-row-icon-btn"
-                            onClick={(e) => { e.stopPropagation(); onStageFile(file.path); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onStageFile(file.path);
+                            }}
                             title="Stage file"
                             disabled={isActing}
                           >
@@ -486,7 +490,10 @@ function GitSidebarPanel({
                         {(section.id === 'modified' || section.id === 'untracked' || section.id === 'deleted') && (
                           <button
                             className="git-row-icon-btn danger"
-                            onClick={(e) => { e.stopPropagation(); onDiscardFile(file.path); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDiscardFile(file.path);
+                            }}
                             title={section.id === 'deleted' ? 'Restore file' : 'Discard file changes'}
                             disabled={isActing}
                           >

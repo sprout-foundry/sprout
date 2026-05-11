@@ -466,13 +466,7 @@ describe('extractSymbols', () => {
     });
 
     it('returns empty scope for top-level Python functions', () => {
-      const content = [
-        'def standalone():',
-        '    x = 1',
-        '',
-        'class MyClass:',
-        '    pass',
-      ].join('\n');
+      const content = ['def standalone():', '    x = 1', '', 'class MyClass:', '    pass'].join('\n');
 
       const scope = getScopePath(content, '.py', 1, 'standalone');
       expect(scope).toBe('');
@@ -503,12 +497,7 @@ describe('getScopePath', () => {
   // Go nested named functions which ARE lexically scoped.
 
   it('returns the outer function name for a nested Go function', () => {
-    const content = [
-      'func outer() {',
-      '  func inner() {',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['func outer() {', '  func inner() {', '  }', '}'].join('\n');
     // inner is on line 2
     const result = getScopePath(content, '.go', 2, 'inner');
     expect(result).toBe('outer');
@@ -517,11 +506,7 @@ describe('getScopePath', () => {
   // ── TypeScript class method ──────────────────────────────────────────
 
   it('returns the class name for a method inside a TypeScript class', () => {
-    const content = [
-      'class Foo {',
-      '  bar() {}',
-      '}',
-    ].join('\n');
+    const content = ['class Foo {', '  bar() {}', '}'].join('\n');
     // bar is on line 2, Foo is on line 1 and is a class container
     const result = getScopePath(content, '.ts', 2, 'bar');
     expect(result).toBe('Foo');
@@ -530,13 +515,7 @@ describe('getScopePath', () => {
   // ── Nested scope (TypeScript) ────────────────────────────────────────
 
   it('returns nested scope for deeply nested items', () => {
-    const content = [
-      'class Outer {',
-      '  inner() {',
-      '    const nested = () => {};',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Outer {', '  inner() {', '    const nested = () => {};', '  }', '}'].join('\n');
     // nested (arrow function) is on line 3
     // It's inside inner() on line 2 and Outer on line 1
     const result = getScopePath(content, '.ts', 3, 'nested');
@@ -546,11 +525,7 @@ describe('getScopePath', () => {
   // ── Class itself has nothing enclosing ───────────────────────────────
 
   it('returns empty string when a class has nothing enclosing it', () => {
-    const content = [
-      'class Foo {',
-      '  bar() {}',
-      '}',
-    ].join('\n');
+    const content = ['class Foo {', '  bar() {}', '}'].join('\n');
     // Foo (the class) is on line 1 — nothing encloses it
     const result = getScopePath(content, '.ts', 1, 'Foo');
     expect(result).toBe('');
@@ -561,11 +536,7 @@ describe('getScopePath', () => {
   it('correctly filters out the symbol itself from enclosing containers', () => {
     // A class method named "Foo" inside class "Foo" — the enclosing
     // containers should NOT include the "Foo" method itself.
-    const content = [
-      'class Foo {',
-      '  Foo() {}',
-      '}',
-    ].join('\n');
+    const content = ['class Foo {', '  Foo() {}', '}'].join('\n');
     // The constructor/method Foo is on line 2. getEnclosingSymbols will find
     // the class Foo (line 1) as enclosing, but should also match the method
     // itself (line 2). The self-filter should remove the method, leaving
@@ -707,11 +678,7 @@ describe('GoToSymbolOverlay component', () => {
   // ── Scope path display ───────────────────────────────────────────────
 
   it('shows scope path for symbols inside containers', () => {
-    const content = [
-      'class MyClass {',
-      '  myMethod() {}',
-      '}',
-    ].join('\n');
+    const content = ['class MyClass {', '  myMethod() {}', '}'].join('\n');
     const view = renderOverlay({ visible: true, content, fileExtension: '.ts' });
 
     // The method myMethod should have a scope path element
@@ -730,21 +697,13 @@ describe('GoToSymbolOverlay component', () => {
   });
 
   it('shows correct scope path text for nested symbols', () => {
-    const content = [
-      'class Outer {',
-      '  inner() {',
-      '    const nested = () => {};',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Outer {', '  inner() {', '    const nested = () => {};', '  }', '}'].join('\n');
     const view = renderOverlay({ visible: true, content, fileExtension: '.ts' });
 
     // nested should have scope "Outer › inner"
     const scopeElements = view.el.querySelectorAll('.goto-symbol-scope');
     // Find the scope element that contains "Outer › inner"
-    const nestedScope = Array.from(scopeElements).find(
-      (el) => el.textContent === 'Outer › inner'
-    );
+    const nestedScope = Array.from(scopeElements).find((el) => el.textContent === 'Outer › inner');
     expect(nestedScope).not.toBeUndefined();
   });
 });

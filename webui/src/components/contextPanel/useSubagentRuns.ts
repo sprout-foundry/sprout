@@ -1,10 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
-import type {
-  ChatContextPanelProps,
-  ContextSubagentRun,
-  ContextNormalizedActivity,
-} from './types';
+import type { ChatContextPanelProps, ContextSubagentRun, ContextNormalizedActivity } from './types';
 import { isSubagentTool, getSubagentPrompt } from './helpers';
 
 export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
@@ -12,7 +8,7 @@ export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
   const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
   const subagentActivities = useMemo(() => chatProps?.subagentActivities ?? [], [chatProps]);
 
-  const getSubagentLogMessage = useCallback((logEntry: typeof subagentLogs[number]): string | null => {
+  const getSubagentLogMessage = useCallback((logEntry: (typeof subagentLogs)[number]): string | null => {
     if (logEntry.type !== 'agent_message' || !logEntry.data || typeof logEntry.data !== 'object') {
       return null;
     }

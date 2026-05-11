@@ -139,9 +139,7 @@ describe('PlatformNavProvider', () => {
   });
 
   it('provides nav items with only required fields (no icon or order)', () => {
-    const navItems = [
-      { id: 'settings', label: 'Settings', href: '/settings' },
-    ];
+    const navItems = [{ id: 'settings', label: 'Settings', href: '/settings' }];
 
     getAdapter.mockReturnValue({
       name: 'MinimalAdapter',
@@ -159,9 +157,7 @@ describe('PlatformNavProvider', () => {
   });
 
   it('provides a single nav item correctly', () => {
-    const navItems = [
-      { id: 'dashboard', label: 'Dashboard', href: '/dashboard', order: 0 },
-    ];
+    const navItems = [{ id: 'dashboard', label: 'Dashboard', href: '/dashboard', order: 0 }];
 
     getAdapter.mockReturnValue({
       name: 'SingleItemAdapter',
@@ -174,9 +170,7 @@ describe('PlatformNavProvider', () => {
   });
 
   it('provides the same reference to the adapter nav items array', () => {
-    const navItems = [
-      { id: 'test', label: 'Test', href: '/test' },
-    ];
+    const navItems = [{ id: 'test', label: 'Test', href: '/test' }];
 
     getAdapter.mockReturnValue({
       name: 'RefTestAdapter',

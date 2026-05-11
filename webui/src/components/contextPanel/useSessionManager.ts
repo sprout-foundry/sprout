@@ -1,17 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLog } from '../../utils/log';
 import { showThemedConfirm } from '../ThemedDialog';
-import type {
-  ChatContextPanelProps,
-  ChatTabId,
-  SessionEntry,
-} from './types';
+import type { ChatContextPanelProps, ChatTabId, SessionEntry } from './types';
 
-export function useSessionManager(
-  chatProps: ChatContextPanelProps | null,
-  chatTab: ChatTabId,
-  isProcessing: boolean,
-) {
+export function useSessionManager(chatProps: ChatContextPanelProps | null, chatTab: ChatTabId, isProcessing: boolean) {
   const log = useLog();
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
@@ -48,13 +40,10 @@ export function useSessionManager(
         return;
       }
       if (
-        !(await showThemedConfirm(
-          `Restore session ${sessionId}?\n\nThis will replace the current conversation.`,
-          {
-            title: 'Restore Session',
-            type: 'warning',
-          }
-        ))
+        !(await showThemedConfirm(`Restore session ${sessionId}?\n\nThis will replace the current conversation.`, {
+          title: 'Restore Session',
+          type: 'warning',
+        }))
       ) {
         return;
       }
@@ -67,7 +56,7 @@ export function useSessionManager(
             window.dispatchEvent(
               new CustomEvent('sprout:session-restored', {
                 detail: { messages: response.messages },
-              })
+              }),
             );
           }, 400);
         }

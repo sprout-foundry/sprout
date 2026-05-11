@@ -15,7 +15,13 @@
 import type { APIAdapter, PlatformNavItem } from './apiAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
-import { CHAT_ENDPOINT_MAP, translateAndProxyChat, proxyGitRequest, proxyStatsRequest, proxySettingsRequest } from './cloudProxyRoutes';
+import {
+  CHAT_ENDPOINT_MAP,
+  translateAndProxyChat,
+  proxyGitRequest,
+  proxyStatsRequest,
+  proxySettingsRequest,
+} from './cloudProxyRoutes';
 import { handleWasmLocal, jsonError } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 

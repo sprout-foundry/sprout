@@ -53,7 +53,7 @@ declare global {
 /**
  * UpdateNotification component that displays update status and provides
  * controls for installing or deferring updates.
- * 
+ *
  * This component is rendered conditionally when an update is available
  * or when checking for updates. It provides a non-intrusive UI for
  * users to manage updates.
@@ -90,7 +90,7 @@ function UpdateNotification(): JSX.Element | null {
             'success',
             'Update Available',
             `Version ${result.result.version} is ready to install.`,
-            0 // Don't auto-dismiss
+            0, // Don't auto-dismiss
           );
         }
       } else {
@@ -142,7 +142,7 @@ function UpdateNotification(): JSX.Element | null {
     let unsubscribeDownloadProgress: (() => void) | null = null;
     if (window.sproutDesktop.onUpdateDownloadProgress) {
       unsubscribeDownloadProgress = window.sproutDesktop.onUpdateDownloadProgress((progress) => {
-        console.log(`Update download progress: ${progress.percent}%`);
+        console.warn(`Update download progress: ${progress.percent}%`);
         setDownloadProgress(progress.percent ?? null);
       });
     }
@@ -151,14 +151,14 @@ function UpdateNotification(): JSX.Element | null {
     let unsubscribeDownloaded: (() => void) | null = null;
     if (window.sproutDesktop.onUpdateDownloaded) {
       unsubscribeDownloaded = window.sproutDesktop.onUpdateDownloaded((info) => {
-        console.log(`Update downloaded: ${info.version}`);
+        console.warn(`Update downloaded: ${info.version}`);
         setDownloadProgress(null); // Reset progress when download completes
         setUpdateAvailable({ hasUpdate: true, version: info.version });
         addNotification(
           'success',
           'Update Available',
           `Version ${info.version} is ready to install.`,
-          0 // Don't auto-dismiss
+          0, // Don't auto-dismiss
         );
       });
     }
@@ -257,16 +257,10 @@ function UpdateNotification(): JSX.Element | null {
   // Show pending install banner
   if (pendingInstall) {
     return (
-      <div
-        className="update-pending-banner"
-        role="alert"
-        aria-live="polite"
-      >
+      <div className="update-pending-banner" role="alert" aria-live="polite">
         <div className="update-pending-content">
           <Download size={16} className="update-pending-icon" />
-          <span className="update-pending-text">
-            An update is queued and will be installed when you quit Sprout.
-          </span>
+          <span className="update-pending-text">An update is queued and will be installed when you quit Sprout.</span>
           <button
             className="update-pending-dismiss"
             onClick={cancelPendingInstall}
@@ -283,11 +277,7 @@ function UpdateNotification(): JSX.Element | null {
   // Show update available banner
   if (updateAvailable?.hasUpdate && updateAvailable.version) {
     return (
-      <div
-        className="update-available-banner"
-        role="alert"
-        aria-live="polite"
-      >
+      <div className="update-available-banner" role="alert" aria-live="polite">
         <div className="update-available-content">
           <div className="update-available-info">
             <AlertTriangle size={16} className="update-available-icon" />
@@ -331,11 +321,7 @@ function UpdateNotification(): JSX.Element | null {
   // Show checking state
   if (checking) {
     return (
-      <div
-        className="update-checking-banner"
-        role="status"
-        aria-live="polite"
-      >
+      <div className="update-checking-banner" role="status" aria-live="polite">
         <div className="update-checking-content">
           <RefreshCw size={14} className="spin" />
           <span>Checking for updates...</span>
@@ -347,16 +333,10 @@ function UpdateNotification(): JSX.Element | null {
   // Show download progress
   if (downloadProgress !== null) {
     return (
-      <div
-        className="update-downloading-banner"
-        role="status"
-        aria-live="polite"
-      >
+      <div className="update-downloading-banner" role="status" aria-live="polite">
         <div className="update-downloading-content">
           <Loader size={16} className="update-downloading-icon" />
-          <span className="update-downloading-text">
-            Downloading update: {Math.round(downloadProgress)}%
-          </span>
+          <span className="update-downloading-text">Downloading update: {Math.round(downloadProgress)}%</span>
         </div>
       </div>
     );

@@ -87,7 +87,7 @@ export function findWhitespacePositions(
       } else if (mode === 'boundary') {
         // In boundary mode, render trailing spaces (spaces after content)
         // OR if the entire line is whitespace (all are trailing)
-        if (isTrailing || (trailingStart === 0)) {
+        if (isTrailing || trailingStart === 0) {
           positions.push({
             from: i,
             to: i + 1,
@@ -131,8 +131,6 @@ class WhitespaceCharWidget extends WidgetType {
 
 const spaceMark = Decoration.mark({ class: 'cm-whitespace-space' });
 const trailingSpaceMark = Decoration.mark({ class: 'cm-whitespace-trailing' });
-
-
 
 // ── ViewPlugin for decoration building ────────────────────────────────
 
@@ -306,8 +304,5 @@ const whitespaceRenderingBaseTheme = EditorView.baseTheme({
  * ```
  */
 export function whitespaceRenderingPlugin(mode: WhitespaceRenderingMode): Extension {
-  return [
-    whitespaceRenderingBaseTheme,
-    createWhitespacePlugin(mode),
-  ];
+  return [whitespaceRenderingBaseTheme, createWhitespacePlugin(mode)];
 }

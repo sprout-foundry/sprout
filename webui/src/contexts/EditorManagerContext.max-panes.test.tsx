@@ -17,10 +17,11 @@ jest.mock('../services/fileAccess', () => ({
 
 jest.mock('./SproutAdapterContext', () => ({
   ...jest.requireActual('./SproutAdapterContext'),
-  useSproutFetch: () => jest.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ message: 'File saved successfully' }),
-  }),
+  useSproutFetch: () =>
+    jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ message: 'File saved successfully' }),
+    }),
 }));
 
 jest.mock('../services/formatter', () => ({
@@ -30,9 +31,14 @@ jest.mock('../services/formatter', () => ({
 
 jest.mock('./NotificationContext', () => {
   const noop = () => {};
-  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
-    useNotifications: () => ({ addNotification: noop }),
-  });
+  return Object.assign(
+    function NotificationProviderMock({ children }) {
+      return children;
+    },
+    {
+      useNotifications: () => ({ addNotification: noop }),
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -324,7 +330,7 @@ describe('getRightmostPane helper with 6 panes', () => {
     }
 
     const panes = ctx().panes;
-    const rightmost = panes.find(p => p.position === 'senary');
+    const rightmost = panes.find((p) => p.position === 'senary');
 
     expect(rightmost).toBeDefined();
     expect(rightmost.position).toBe('senary');
@@ -339,7 +345,7 @@ describe('getRightmostPane helper with 6 panes', () => {
       senary: 5,
     };
 
-    panes.forEach(pane => {
+    panes.forEach((pane) => {
       expect(positionOrder[pane.position]).toBeDefined();
     });
   });

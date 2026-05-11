@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useCallback, useRef } from 'react';
-import { EditorView } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
 import { Transaction } from '@codemirror/state';
 import { undo, redo } from '@codemirror/commands';
 import { openSearchPanel } from '@codemirror/search';
@@ -132,26 +132,25 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
       const currentBuffer = bufferRef.current;
       if (viewRef.current && currentBuffer) {
         const content = viewRef.current.state.doc.toString();
-        formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size)
-          .then(result => {
-            if (bufferRef.current?.id !== currentBuffer.id) return;
-            if (result.error) {
-              notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
-              return;
-            }
-            if (result.formatted !== content && viewRef.current) {
-              // Bail out if the user edited while formatting was in progress
-              if (viewRef.current.state.doc.toString() !== content) return;
-              viewRef.current.dispatch({
-                changes: {
-                  from: 0,
-                  to: viewRef.current.state.doc.length,
-                  insert: result.formatted,
-                },
-                annotations: [Transaction.addToHistory.of(false)],
-              });
-            }
-          });
+        formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size).then((result) => {
+          if (bufferRef.current?.id !== currentBuffer.id) return;
+          if (result.error) {
+            notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
+            return;
+          }
+          if (result.formatted !== content && viewRef.current) {
+            // Bail out if the user edited while formatting was in progress
+            if (viewRef.current.state.doc.toString() !== content) return;
+            viewRef.current.dispatch({
+              changes: {
+                from: 0,
+                to: viewRef.current.state.doc.length,
+                insert: result.formatted,
+              },
+              annotations: [Transaction.addToHistory.of(false)],
+            });
+          }
+        });
       }
     } else if (e.type === 'editor-find-all-references') {
       handleFindAllReferences();

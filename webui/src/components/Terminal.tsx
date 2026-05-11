@@ -208,7 +208,11 @@ function Terminal({
         throw new Error(`Failed to fetch sessions: ${response.status}`);
       }
       const data = await response.json();
-      interface RawSession { id: string; name?: string; status?: string }
+      interface RawSession {
+        id: string;
+        name?: string;
+        status?: string;
+      }
       const rawSessions: RawSession[] = data?.sessions || [];
       const sessions: AttachableSession[] = rawSessions.map((s) => ({
         id: s.id,

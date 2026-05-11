@@ -107,7 +107,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 onClick={() =>
                   import('../services/api')
                     .then(({ ApiService }) => ApiService.getInstance().exportSupportBundle())
-                    .catch(() => {})
+                    .catch((err) => { logError('Failed to export support bundle: ' + String(err)); })
                 }
               >
                 Export Diagnostics

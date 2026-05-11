@@ -66,22 +66,8 @@ func TestGetTerminalWidth(t *testing.T) {
 
 func TestIsCI_NoCIEnv(t *testing.T) {
 	// Ensure no CI env vars are set
-	origCI := os.Getenv("CI")
-	origGA := os.Getenv("GITHUB_ACTIONS")
-	os.Unsetenv("CI")
-	os.Unsetenv("GITHUB_ACTIONS")
-	defer func() {
-		if origCI != "" {
-			os.Setenv("CI", origCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-		if origGA != "" {
-			os.Setenv("GITHUB_ACTIONS", origGA)
-		} else {
-			os.Unsetenv("GITHUB_ACTIONS")
-		}
-	}()
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
 
 	if IsCI() {
 		t.Error("IsCI() should return false when no CI env vars are set")
@@ -89,15 +75,7 @@ func TestIsCI_NoCIEnv(t *testing.T) {
 }
 
 func TestIsCI_WithCI(t *testing.T) {
-	origCI := os.Getenv("CI")
-	os.Setenv("CI", "true")
-	defer func() {
-		if origCI != "" {
-			os.Setenv("CI", origCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "true")
 
 	if !IsCI() {
 		t.Error("IsCI() should return true when CI is set")
@@ -105,22 +83,9 @@ func TestIsCI_WithCI(t *testing.T) {
 }
 
 func TestIsCI_WithGitHubActions(t *testing.T) {
-	origCI := os.Getenv("CI")
-	origGA := os.Getenv("GITHUB_ACTIONS")
-	os.Unsetenv("CI") // Ensure CI doesn't mask the GITHUB_ACTIONS path
-	os.Setenv("GITHUB_ACTIONS", "true")
-	defer func() {
-		if origCI != "" {
-			os.Setenv("CI", origCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-		if origGA != "" {
-			os.Setenv("GITHUB_ACTIONS", origGA)
-		} else {
-			os.Unsetenv("GITHUB_ACTIONS")
-		}
-	}()
+	// Unset CI so GITHUB_ACTIONS path is tested
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "true")
 
 	if !IsCI() {
 		t.Error("IsCI() should return true when GITHUB_ACTIONS is set")
@@ -338,23 +303,9 @@ func TestExtractDescription(t *testing.T) {
 // =============================================================================
 
 func TestGetConfigDir_LEDIT_CONFIG(t *testing.T) {
-	orig := os.Getenv("LEDIT_CONFIG")
-	origSprout := os.Getenv("SPROUT_CONFIG")
 	tmpDir := t.TempDir()
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	os.Unsetenv("SPROUT_CONFIG")
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-		if origSprout != "" {
-			os.Setenv("SPROUT_CONFIG", origSprout)
-		} else {
-			os.Unsetenv("SPROUT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	got := getConfigDir()
 	if got != tmpDir {
@@ -363,30 +314,10 @@ func TestGetConfigDir_LEDIT_CONFIG(t *testing.T) {
 }
 
 func TestGetConfigDir_XDG_CONFIG_HOME(t *testing.T) {
-	origLedit := os.Getenv("LEDIT_CONFIG")
-	origSprout := os.Getenv("SPROUT_CONFIG")
-	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Unsetenv("LEDIT_CONFIG")
-	os.Unsetenv("SPROUT_CONFIG")
+	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	tmpXDG := t.TempDir()
-	os.Setenv("XDG_CONFIG_HOME", tmpXDG)
-	defer func() {
-		if origLedit != "" {
-			os.Setenv("LEDIT_CONFIG", origLedit)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
-		} else {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		}
-		if origSprout != "" {
-			os.Setenv("SPROUT_CONFIG", origSprout)
-		} else {
-			os.Unsetenv("SPROUT_CONFIG")
-		}
-	}()
+	t.Setenv("XDG_CONFIG_HOME", tmpXDG)
 
 	got := getConfigDir()
 	want := filepath.Join(tmpXDG, "sprout")
@@ -396,76 +327,24 @@ func TestGetConfigDir_XDG_CONFIG_HOME(t *testing.T) {
 }
 
 func TestGetConfigDir_HOME(t *testing.T) {
-	origLedit := os.Getenv("LEDIT_CONFIG")
-	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	origHome := os.Getenv("HOME")
-	origSprout := os.Getenv("SPROUT_CONFIG")
-	os.Unsetenv("LEDIT_CONFIG")
-	os.Unsetenv("XDG_CONFIG_HOME")
-	os.Unsetenv("SPROUT_CONFIG")
+	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	tmpHome := t.TempDir()
-	os.Setenv("HOME", tmpHome)
-	defer func() {
-		if origLedit != "" {
-			os.Setenv("LEDIT_CONFIG", origLedit)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
-		} else {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		}
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-	}()
+	t.Setenv("HOME", tmpHome)
 
 	got := getConfigDir()
 	want := filepath.Join(tmpHome, ".config", "sprout")
 	if got != want {
 		t.Errorf("getConfigDir() = %q, want %q", got, want)
 	}
-	if origSprout != "" {
-		os.Setenv("SPROUT_CONFIG", origSprout)
-	} else {
-		os.Unsetenv("SPROUT_CONFIG")
-	}
 }
 
 func TestGetConfigDir_Fallback(t *testing.T) {
-	origLedit := os.Getenv("LEDIT_CONFIG")
-	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	origHome := os.Getenv("HOME")
-	origSprout := os.Getenv("SPROUT_CONFIG")
-	os.Unsetenv("LEDIT_CONFIG")
-	os.Unsetenv("XDG_CONFIG_HOME")
-	os.Unsetenv("HOME")
-	os.Unsetenv("SPROUT_CONFIG")
-	defer func() {
-		if origLedit != "" {
-			os.Setenv("LEDIT_CONFIG", origLedit)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
-		} else {
-			os.Unsetenv("XDG_CONFIG_HOME")
-		}
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-		if origSprout != "" {
-			os.Setenv("SPROUT_CONFIG", origSprout)
-		} else {
-			os.Unsetenv("SPROUT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
 
 	got := getConfigDir()
 	want := "/data/data/com.termux/files/home/.config/sprout"
@@ -480,15 +359,8 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 
 func TestLoadInstances_FileNotExist(t *testing.T) {
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	instances, err := loadInstances()
 	if err != nil {
@@ -501,15 +373,8 @@ func TestLoadInstances_FileNotExist(t *testing.T) {
 
 func TestLoadInstances_ValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	validJSON := `{
   "instance_1": {
@@ -550,15 +415,8 @@ func TestLoadInstances_ValidJSON(t *testing.T) {
 
 func TestLoadInstances_EmptyFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "instances.json"), []byte(""), 0644); err != nil {
 		t.Fatal(err)
@@ -575,15 +433,8 @@ func TestLoadInstances_EmptyFile(t *testing.T) {
 
 func TestLoadInstances_InvalidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "instances.json"), []byte("not valid json{{{"), 0644); err != nil {
 		t.Fatal(err)
@@ -601,15 +452,8 @@ func TestLoadInstances_InvalidJSON(t *testing.T) {
 
 func TestSaveInstances(t *testing.T) {
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	instances := map[string]InstanceInfo{
 		"inst_1": {
@@ -663,15 +507,8 @@ func TestSaveInstances(t *testing.T) {
 
 func TestSaveInstances_EmptyMap(t *testing.T) {
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	err := saveInstances(map[string]InstanceInfo{})
 	if err != nil {
@@ -690,15 +527,8 @@ func TestSaveInstances_EmptyMap(t *testing.T) {
 func TestSaveInstances_CreatesDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	nestedDir := filepath.Join(tmpDir, "sub", "nested")
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", nestedDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", nestedDir)
+	t.Setenv("SPROUT_CONFIG", nestedDir)
 
 	instances := map[string]InstanceInfo{
 		"inst_1": {ID: "inst_1", Port: 8080},
@@ -815,15 +645,8 @@ func TestCleanStaleInstances_EmptyMap(t *testing.T) {
 func TestCleanStaleInstances_IntegrationWithSaveAndLoad(t *testing.T) {
 	now := time.Now()
 	tmpDir := t.TempDir()
-	orig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer func() {
-		if orig != "" {
-			os.Setenv("LEDIT_CONFIG", orig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-	}()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	instances := map[string]InstanceInfo{
 		"fresh": {ID: "fresh", Port: 8080, LastPing: now},

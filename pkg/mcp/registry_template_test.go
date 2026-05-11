@@ -84,11 +84,8 @@ func TestLoadTemplatesFromConfig_ValidConfig(t *testing.T) {
 	}
 
 	// Set environment variable to use temp directory as config dir
-	oldConfigDir := os.Getenv("LEDIT_CONFIG")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_CONFIG", oldConfigDir)
-	})
-	os.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	// Load templates from config
 	err = registry.loadTemplatesFromConfig()
@@ -118,11 +115,8 @@ func TestLoadTemplatesFromConfig_MissingConfigFile(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	oldConfigDir := os.Getenv("LEDIT_CONFIG")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_CONFIG", oldConfigDir)
-	})
-	os.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	// Should return error when config file doesn't exist
 	err := registry.loadTemplatesFromConfig()
@@ -142,11 +136,8 @@ func TestLoadTemplatesFromConfig_InvalidJSON(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	oldConfigDir := os.Getenv("LEDIT_CONFIG")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_CONFIG", oldConfigDir)
-	})
-	os.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
 	assert.Error(t, err)
@@ -174,11 +165,8 @@ func TestLoadTemplatesFromConfig_InvalidSchema(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	oldConfigDir := os.Getenv("LEDIT_CONFIG")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_CONFIG", oldConfigDir)
-	})
-	os.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
 	// JSON should parse, but we may have warnings about missing fields
@@ -212,11 +200,8 @@ func TestLoadTemplatesFromConfig_IDsMatchKeys(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	oldConfigDir := os.Getenv("LEDIT_CONFIG")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_CONFIG", oldConfigDir)
-	})
-	os.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
 	require.NoError(t, err)
@@ -246,11 +231,8 @@ func TestLoadTemplatesFromConfig_EmptyTemplates(t *testing.T) {
 		templates: make(map[string]MCPServerTemplate),
 	}
 
-	oldConfigDir := os.Getenv("LEDIT_CONFIG")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_CONFIG", oldConfigDir)
-	})
-	os.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
 	err = registry.loadTemplatesFromConfig()
 	require.NoError(t, err)

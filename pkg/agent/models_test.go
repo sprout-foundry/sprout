@@ -15,15 +15,7 @@ import (
 // TestGetModel tests the GetModel method
 func TestGetModel(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -39,15 +31,7 @@ func TestGetModel(t *testing.T) {
 // TestGetProvider tests the GetProvider method
 func TestGetProvider(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -63,15 +47,7 @@ func TestGetProvider(t *testing.T) {
 // TestGetProviderType tests the GetProviderType method
 func TestGetProviderType(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -114,15 +90,7 @@ func TestGetProviderType(t *testing.T) {
 // TestIsProviderAvailable tests provider availability checking
 func TestIsProviderAvailable(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -197,6 +165,7 @@ func TestHasSessionOverrides_AfterSetProvider(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "test-provider",
@@ -270,6 +239,7 @@ func TestHasSessionOverrides_AfterClearSessionOverrides(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "test-provider",
@@ -369,6 +339,7 @@ func TestGetProvider_ReturnsSessionOverride(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "custom-provider",
@@ -460,6 +431,7 @@ func TestGetProviderType_ReturnsSessionOverride(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "custom-provider-type",
@@ -550,6 +522,7 @@ func TestGetModel_ReturnsSessionOverride(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "model-session-test",
@@ -644,6 +617,7 @@ func TestSetProvider_DoesNotPersistToConfig(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "no-persist-provider",
@@ -755,6 +729,7 @@ func TestSetModel_DoesNotPersistToConfig(t *testing.T) {
 	// Set up custom provider config with initial model
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "model-persist-test",
@@ -846,6 +821,7 @@ func TestSetProviderPersisted_DoesPersistToConfig(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "persisted-provider",
@@ -933,6 +909,7 @@ func TestSessionOverrides_TakePrecedenceOverConfig(t *testing.T) {
 	// Set up custom provider config with a specific model
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "precedence-test",
@@ -1023,6 +1000,7 @@ func TestSetProvider_WithSessionOverrideFlag(t *testing.T) {
 	// Set up custom provider config
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "session-override",

@@ -65,7 +65,7 @@ func generateAskUserRequestID() string {
 // RequestAskUser publishes an ask_user_request event and blocks until the
 // webui responds, a timeout elapses, or the event bus is nil.
 // Returns the user's text response.
-func (m *AskUserManager) RequestAskUser(eventBus *events.EventBus, question, clientID string) (string, error) {
+func (m *AskUserManager) RequestAskUser(eventBus *events.EventBus, question, clientID, userID string) (string, error) {
 	if eventBus == nil {
 		return "", fmt.Errorf("no event bus available")
 	}
@@ -87,7 +87,11 @@ func (m *AskUserManager) RequestAskUser(eventBus *events.EventBus, question, cli
 		m.mu.Unlock()
 	}()
 
-	eventBus.Publish(events.EventTypeAskUserRequest, events.AskUserRequestEvent(requestID, question, clientID))
+	payload := events.AskUserRequestEvent(requestID, question, clientID)
+	if trimmed := strings.TrimSpace(userID); trimmed != "" {
+		payload["user_id"] = trimmed
+	}
+	eventBus.Publish(events.EventTypeAskUserRequest, payload)
 
 	timeout := m.timeout
 	if timeout <= 0 {
@@ -160,7 +164,7 @@ func AskUser(question string) (string, error) {
 
 // AskUserWithEventBus prompts the user with a question using the event bus
 // for WebUI mode, falling back to stdin for CLI mode.
-func AskUserWithEventBus(question string, eventBus *events.EventBus, clientID string) (string, error) {
+func AskUserWithEventBus(question string, eventBus *events.EventBus, clientID, userID string) (string, error) {
 	if question == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
@@ -169,7 +173,7 @@ func AskUserWithEventBus(question string, eventBus *events.EventBus, clientID st
 
 	// WebUI mode: route through event bus
 	if mgr != nil && eventBus != nil {
-		return mgr.RequestAskUser(eventBus, question, clientID)
+		return mgr.RequestAskUser(eventBus, question, clientID, userID)
 	}
 
 	// CLI mode: read from stdin

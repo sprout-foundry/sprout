@@ -14,10 +14,11 @@ import type { WsEvent } from '../services/websocket';
 import { ApiService } from '../services/api';
 import { debugLog } from '../utils/log';
 import { useEventHandler } from './useEventHandler';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseWebSocketEventsOptions {
   state: AppState;
-  setState: Dispatch<SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   setQueuedMessages: Dispatch<SetStateAction<string[]>>;
   queuedMessagesRef: MutableRefObject<string[]>;
 }
@@ -80,11 +81,9 @@ export default function useWebSocketEvents({
           );
           activeRequestsRef.current = 0;
           setState((prev) => ({
-            ...prev,
             isProcessing: false,
             queryProgress: null,
             lastError: null,
-            // Finalise any tool executions that were left in a started/running state
             toolExecutions: prev.toolExecutions.map((tool) => {
               if (tool.status === 'started' || tool.status === 'running') {
                 return {
@@ -102,8 +101,7 @@ export default function useWebSocketEvents({
             '[reconnect] Backend still processing but frontend is idle — restoring processing state',
           );
           activeRequestsRef.current = 1;
-          setState((prev) => ({
-            ...prev,
+          setState(() => ({
             isProcessing: true,
             lastError: null,
           }));

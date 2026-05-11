@@ -518,7 +518,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						extras["target"] = fmt.Sprintf("git %s", op)
 					}
 				}
-				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
+				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 				}
 			} else {
@@ -684,7 +684,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 			"risk_type": "Filesystem Security",
 			"target":    filePath,
 		}
-		if mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), toolName, "CAUTION", prompt, extras) {
+		if mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, "CAUTION", prompt, extras) {
 			agent.debugLog("[APPROVAL] User approved file access outside working directory: %s\n", filePath)
 			agent.SetSecurityBypassApproved()
 			return filesystem.WithSecurityBypass(ctx), true

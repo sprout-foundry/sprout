@@ -94,6 +94,59 @@ func TestValidTodoStatuses(t *testing.T) {
 	}
 }
 
+func TestIsValidPriority(t *testing.T) {
+	tests := []struct {
+		name     string
+		priority string
+		expected bool
+	}{
+		{"high", "high", true},
+		{"medium", "medium", true},
+		{"low", "low", true},
+		{"empty (optional)", "", true},
+		{"unknown", "critical", false},
+		{"upper case", "HIGH", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsValidPriority(tt.priority)
+			if got != tt.expected {
+				t.Errorf("IsValidPriority(%q) = %v, want %v", tt.priority, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestFormatTodoPriorityError(t *testing.T) {
+	priority := "urgent"
+	got := FormatTodoPriorityError(priority)
+
+	if !strings.Contains(got, "urgent") {
+		t.Errorf("FormatTodoPriorityError() should contain the invalid priority, got: %s", got)
+	}
+
+	for _, p := range []string{"high", "medium", "low"} {
+		if !strings.Contains(got, p) {
+			t.Errorf("FormatTodoPriorityError() should contain %q, got: %s", p, got)
+		}
+	}
+}
+
+func TestValidTodoPriorityList(t *testing.T) {
+	priorities := ValidTodoPriorityList()
+	expected := []string{"high", "medium", "low"}
+
+	if len(priorities) != len(expected) {
+		t.Fatalf("Expected %d priorities, got %d", len(expected), len(priorities))
+	}
+
+	for i, p := range priorities {
+		if p != expected[i] {
+			t.Errorf("Expected priority[%d] = %q, got %q", i, expected[i], p)
+		}
+	}
+}
+
 func TestFormatTodoResponseForID(t *testing.T) {
 	tests := []struct {
 		name     string

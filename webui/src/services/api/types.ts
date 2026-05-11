@@ -216,6 +216,17 @@ export class SSHWorkspaceOpenError extends Error {
 export interface WorkspaceResponse {
   daemon_root: string;
   workspace_root: string;
+  is_project: boolean;
+  project_markers: string[];
+  needs_workspace_selection: boolean;
+  suggested_projects: Array<{ path: string; name: string; markers: string[] }>;
+  recent_workspaces: Array<{
+    path: string;
+    name: string;
+    last_used: string;
+    markers: string[];
+    session_count: number;
+  }>;
   ssh_context?: {
     host_alias: string;
     session_key?: string;

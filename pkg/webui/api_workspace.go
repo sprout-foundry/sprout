@@ -70,10 +70,24 @@ func (ws *ReactWebServer) handleAPIWorkspace(w http.ResponseWriter, r *http.Requ
 
 func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.Request) {
 	clientCtx := ws.getClientContextForRequest(r)
+	workspaceRoot := clientCtx.WorkspaceRoot
+	isProject, markers := IsProjectDirectory(workspaceRoot)
+
 	response := map[string]interface{}{
-		"daemon_root":    ws.GetDaemonRoot(),
-		"workspace_root": clientCtx.WorkspaceRoot,
+		"daemon_root":                ws.GetDaemonRoot(),
+		"workspace_root":             workspaceRoot,
+		"is_project":                 isProject,
+		"project_markers":            markers,
+		"needs_workspace_selection":  !isProject,
+		"recent_workspaces":          GetRecentWorkspaces(),
 	}
+
+	// If workspace is not a project, suggest nearby projects
+	if !isProject {
+		suggested := FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
+		response["suggested_projects"] = suggested
+	}
+
 	if clientCtx.SSHHostAlias != "" {
 		sshContext := map[string]interface{}{
 			"host_alias":  clientCtx.SSHHostAlias,
@@ -149,6 +163,9 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 		http.Error(w, fmt.Sprintf("Failed to set workspace: %v", err), http.StatusBadRequest)
 		return
 	}
+
+	// Record this workspace as recently used.
+	RecordWorkspace(workspaceRoot)
 
 	ws.publishClientEvent(clientID, events.EventTypeWorkspaceChanged, map[string]interface{}{
 		"daemon_root":             ws.GetDaemonRoot(),

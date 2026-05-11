@@ -85,6 +85,13 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		workspaceRoot = "."
 	}
 
+	// Auto-correct to nearest project root if the current directory is not a project.
+	if !isProjectRoot(workspaceRoot) {
+		if nearest, _ := FindNearestProjectRoot(workspaceRoot); nearest != "" && nearest != workspaceRoot {
+			workspaceRoot = nearest
+		}
+	}
+
 	// daemonRoot is the user's home directory — this scopes daemon-level
 	// storage (sessions, SSH tunnels, config) to the user rather than a
 	// specific project workspace.
@@ -92,6 +99,9 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	if err != nil {
 		daemonRoot = workspaceRoot
 	}
+
+	// Initialize recent workspace tracking.
+	initRecentWorkspaces()
 
 	providercatalog.RefreshFromRemoteAsync("")
 

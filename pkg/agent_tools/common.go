@@ -21,9 +21,21 @@ var ValidTodos = map[string]bool{
 	"cancelled":   true,
 }
 
+// ValidTodoPriorities contains all allowable todo priority values
+var ValidTodoPriorities = map[string]bool{
+	"high":   true,
+	"medium": true,
+	"low":    true,
+}
+
 // ValidTodoStatuses returns a slice of all valid status values for error messages
 func ValidTodoStatuses() []string {
 	return []string{"pending", "in_progress", "completed", "cancelled"}
+}
+
+// ValidTodoPriorityList returns a slice of all valid priority values for error messages
+func ValidTodoPriorityList() []string {
+	return []string{"high", "medium", "low"}
 }
 
 // NormalizeTodoID converts various ID formats to the internal "todo_X" format.
@@ -69,6 +81,19 @@ func IsValidStatus(status string) bool {
 // FormatTodoStatusError returns a standardized error message for invalid status values.
 func FormatTodoStatusError(status string) string {
 	return fmt.Sprintf("invalid status '%s', must be one of: %s", status, strings.Join(ValidTodoStatuses(), ", "))
+}
+
+// IsValidPriority checks if the given priority string is valid. Empty string is accepted (priority is optional).
+func IsValidPriority(priority string) bool {
+	if priority == "" {
+		return true // priority is optional
+	}
+	return ValidTodoPriorities[priority]
+}
+
+// FormatTodoPriorityError returns a standardized error message for invalid priority values.
+func FormatTodoPriorityError(priority string) string {
+	return fmt.Sprintf("invalid priority '%s', must be one of: %s", priority, strings.Join(ValidTodoPriorityList(), ", "))
 }
 
 // formatTodoResponseForID formats a todo item title with its ID in square brackets.

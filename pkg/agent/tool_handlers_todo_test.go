@@ -166,3 +166,54 @@ func TestHandleTodoRead(t *testing.T) {
 	// Clean up global state
 	tools.TodoWrite([]tools.TodoItem{})
 }
+
+func TestHandleTodoWrite_InvalidStatus(t *testing.T) {
+	// Not parallel: uses global tools.TodoWrite singleton
+	a := &Agent{
+		state: NewAgentStateManager(false),
+	}
+
+	_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+		"todos": []interface{}{
+			map[string]interface{}{
+				"content": "Test task",
+				"status":  "invalid_status",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid status, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid status") {
+		t.Errorf("error should mention invalid status, got: %v", err)
+	}
+
+	// Clean up global state
+	tools.TodoWrite([]tools.TodoItem{})
+}
+
+func TestHandleTodoWrite_InvalidPriority(t *testing.T) {
+	// Not parallel: uses global tools.TodoWrite singleton
+	a := &Agent{
+		state: NewAgentStateManager(false),
+	}
+
+	_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+		"todos": []interface{}{
+			map[string]interface{}{
+				"content":  "Test task",
+				"status":   "pending",
+				"priority": "urgent",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid priority, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid priority") {
+		t.Errorf("error should mention invalid priority, got: %v", err)
+	}
+
+	// Clean up global state
+	tools.TodoWrite([]tools.TodoItem{})
+}

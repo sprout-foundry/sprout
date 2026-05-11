@@ -45,14 +45,33 @@
   overflow: auto;
 }
 
+/* ── Force CodeMirror merge view to fill full width ── */
+
+/* The .cm-editor itself must fill its parent */
 .merge-view-container .cm-editor {
+  width: 100%;
   height: 100%;
   font-family: var(--font-mono, 'SFMono-Regular', Consolas, monospace);
   font-size: 13px;
 }
 
+/* .cm-scroller is the scrollable viewport — must fill editor */
 .merge-view-container .cm-editor .cm-scroller {
+  width: 100%;
+  height: 100%;
   overflow: auto;
+}
+
+/* .cm-content is position:absolute inside .cm-scroller.
+   Force it to 100% of the scroller so it stretches full width. */
+.merge-view-container .cm-editor .cm-scroller .cm-content {
+  width: 100%;
+}
+
+/* Each .cm-line must also stretch to full width so backgrounds
+   and text fill the entire pane, not just the longest line. */
+.merge-view-container .cm-editor .cm-scroller .cm-content .cm-line {
+  min-width: 100%;
 }
 
 .merge-view-container .cm-mergeView {
@@ -67,6 +86,8 @@
 
 .merge-view-container .cm-mergeView .cm-editor {
   flex: 1;
+  min-width: 0;
+  width: 100%;
 }
 
 /* Gutter markers for changed lines */

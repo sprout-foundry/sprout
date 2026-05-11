@@ -317,14 +317,13 @@ function EditorTabs({
     return order;
   }, [panes]);
 
-  // Preserve insertion order, filter by paneId with pinned-chat exception.
-  // Uses buffersRef.current to avoid re-computing on every keystroke (the Map
-  // identity changes even when its contents are identical).
+  // Preserve insertion order, filter by paneId.
+  // Uses `buffers` directly — Array.from + filter is trivially cheap.
   const bufferList = useMemo(() => {
-    const values = Array.from(buffersRef.current.values());
+    const values = Array.from(buffers.values());
     if (!paneId) return values;
     return values.filter((buffer) => buffer.paneId === paneId);
-  }, [buffersRef, paneId]);
+  }, [buffers, paneId]);
 
   useEffect(() => {
     if (!activeBufferId) {

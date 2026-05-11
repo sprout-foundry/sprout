@@ -60,8 +60,14 @@ export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): U
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to generate commit message');
+      const text = await response.text();
+      let errorData: { message?: string } | null = null;
+      try {
+        errorData = JSON.parse(text);
+      } catch {
+        // Backend returned plain text error (http.Error), not JSON.
+      }
+      throw new Error(errorData?.message || text || 'Failed to generate commit message');
     }
 
     const data = await response.json();

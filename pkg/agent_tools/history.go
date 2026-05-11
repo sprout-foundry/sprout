@@ -123,8 +123,8 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 		}
 
 		if err := filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode); err != nil {
-		return RollbackResult{}, fmt.Errorf("failed to restore file content: %w", err)
-	}
+			return RollbackResult{}, fmt.Errorf("failed to restore file content: %w", err)
+		}
 
 		return RollbackResult{
 			Output: fmt.Sprintf("Successfully rolled back file '%s' from revision '%s'", filePath, revisionID),
@@ -135,7 +135,8 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 				"file_paths":  []string{filePath},
 			},
 			Success: true,
-		}, nil}
+		}, nil
+	}
 
 	if !confirm {
 		return RollbackResult{
@@ -170,6 +171,90 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 	}, nil
 }
 
+// revisionGroup holds parsed data for a single revision block.
+type revisionGroup struct {
+	ID      string
+	Changes []history.ChangeLog
+}
+
+// formatRevisionOpts controls the output format for a single revision block.
+type formatRevisionOpts struct {
+	ShowContent      bool
+	ShowStatus       bool
+	ShowInstructions bool
+	TimeFormat       string
+	TitlePrefix      string
+	FilesLabel       string
+}
+
+// groupChangesByRevision groups changes by RequestHash and returns them sorted
+// by timestamp (newest first). The result order is deterministic because of the
+// timestamp-based sort.
+func groupChangesByRevision(changes []history.ChangeLog) []revisionGroup {
+	if len(changes) == 0 {
+		return []revisionGroup{}
+	}
+
+	groups := make(map[string][]history.ChangeLog)
+
+	for _, change := range changes {
+		groups[change.RequestHash] = append(groups[change.RequestHash], change)
+	}
+
+	result := make([]revisionGroup, 0, len(groups))
+	for id, revChanges := range groups {
+		result = append(result, revisionGroup{ID: id, Changes: revChanges})
+	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		return result[i].Changes[0].Timestamp.After(result[j].Changes[0].Timestamp)
+	})
+
+	return result
+}
+
+// formatRevision formats a single revision group into a string using the provided options.
+func formatRevision(group revisionGroup, opts formatRevisionOpts) string {
+	if len(group.Changes) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	changes := group.Changes
+
+	b.WriteString(fmt.Sprintf("%s%s\n", opts.TitlePrefix, group.ID))
+	b.WriteString(fmt.Sprintf("**Model:** %s\n", changes[0].AgentModel))
+	b.WriteString(fmt.Sprintf("**Time:** %s\n", changes[0].Timestamp.Format(opts.TimeFormat)))
+	b.WriteString(fmt.Sprintf("%s%d\n", opts.FilesLabel, len(changes)))
+
+	if opts.ShowInstructions && changes[0].Instructions != "" {
+		b.WriteString(fmt.Sprintf("**Instructions:** %s\n", changes[0].Instructions))
+	}
+
+	if opts.ShowStatus {
+		b.WriteString("\n**Files:**\n")
+		for _, change := range changes {
+			b.WriteString(fmt.Sprintf("- **%s** (%s)\n", change.Filename, change.Status))
+			if change.Description != "" {
+				b.WriteString(fmt.Sprintf("  *%s*\n", change.Description))
+			}
+
+			if opts.ShowContent {
+				b.WriteString("  ```diff\n")
+				b.WriteString(fmt.Sprintf("  Content changed (%d chars → %d chars)\n",
+					len(change.OriginalCode), len(change.NewCode)))
+				b.WriteString("  ```\n")
+			}
+		}
+	} else {
+		for _, change := range changes {
+			b.WriteString(fmt.Sprintf("  - %s\n", change.Filename))
+		}
+	}
+
+	return b.String()
+}
+
 func listAvailableRevisions() (RollbackResult, error) {
 	changes, err := history.GetAllChanges()
 	if err != nil {
@@ -184,26 +269,15 @@ func listAvailableRevisions() (RollbackResult, error) {
 		}, nil
 	}
 
-	// Group active changes by revision ID
-	revisions := make(map[string][]history.ChangeLog)
-	type revisionInfo struct {
-		id      string
-		when    time.Time
-		changes []history.ChangeLog
-	}
-	order := make([]revisionInfo, 0)
-
+	// Filter to only active changes
+	var active []history.ChangeLog
 	for _, change := range changes {
-		if change.Status != "active" {
-			continue
+		if change.Status == "active" {
+			active = append(active, change)
 		}
-		if _, ok := revisions[change.RequestHash]; !ok {
-			revisions[change.RequestHash] = []history.ChangeLog{}
-		}
-		revisions[change.RequestHash] = append(revisions[change.RequestHash], change)
 	}
 
-	if len(revisions) == 0 {
+	if len(active) == 0 {
 		return RollbackResult{
 			Output:   "No active changes found to rollback.",
 			Metadata: map[string]interface{}{"action": "list_revisions", "available_count": 0},
@@ -211,27 +285,22 @@ func listAvailableRevisions() (RollbackResult, error) {
 		}, nil
 	}
 
-	for id, revChanges := range revisions {
-		when := revChanges[0].Timestamp
-		order = append(order, revisionInfo{id: id, when: when, changes: revChanges})
-	}
+	groups := groupChangesByRevision(active)
 
-	sort.Slice(order, func(i, j int) bool {
-		return order[i].when.After(order[j].when)
-	})
+	opts := formatRevisionOpts{
+		ShowContent:  false,
+		ShowStatus:   false,
+		ShowInstructions: false,
+		TimeFormat:   time.RFC3339,
+		TitlePrefix:  "**Revision ID:** ",
+		FilesLabel:   "**Files changed:** ",
+	}
 
 	var builder strings.Builder
 	builder.WriteString("Available revisions to rollback:\n\n")
 
-	for _, info := range order {
-		revChanges := info.changes
-		builder.WriteString(fmt.Sprintf("**Revision ID:** %s\n", info.id))
-		builder.WriteString(fmt.Sprintf("**Model:** %s\n", revChanges[0].AgentModel))
-		builder.WriteString(fmt.Sprintf("**Time:** %s\n", revChanges[0].Timestamp.Format(time.RFC3339)))
-		builder.WriteString(fmt.Sprintf("**Files changed:** %d\n", len(revChanges)))
-		for _, change := range revChanges {
-			builder.WriteString(fmt.Sprintf("  - %s\n", change.Filename))
-		}
+	for _, group := range groups {
+		builder.WriteString(formatRevision(group, opts))
 		builder.WriteString("\n")
 	}
 
@@ -244,7 +313,7 @@ func listAvailableRevisions() (RollbackResult, error) {
 		Output: builder.String(),
 		Metadata: map[string]interface{}{
 			"action":          "list_revisions",
-			"available_count": len(revisions),
+			"available_count": len(groups),
 		},
 		Success: true,
 	}, nil
@@ -256,48 +325,23 @@ func formatHistoryView(changes []history.ChangeLog, showContent bool) string {
 
 	result.WriteString(fmt.Sprintf("## Change History (%d entries)\n\n", len(changes)))
 
-	revisions := make(map[string][]history.ChangeLog)
-	revisionOrder := make([]string, 0)
-	seen := make(map[string]bool)
+	groups := groupChangesByRevision(changes)
 
-	for _, change := range changes {
-		if !seen[change.RequestHash] {
-			revisionOrder = append(revisionOrder, change.RequestHash)
-			seen[change.RequestHash] = true
-		}
-		revisions[change.RequestHash] = append(revisions[change.RequestHash], change)
-	}
-
-	for _, revID := range revisionOrder {
-		revChanges := revisions[revID]
+	for _, group := range groups {
+		revChanges := group.Changes
 		if len(revChanges) == 0 {
 			continue
 		}
 
-		firstChange := revChanges[0]
-		result.WriteString(fmt.Sprintf("### Revision: %s\n", revID))
-		result.WriteString(fmt.Sprintf("**Model:** %s\n", firstChange.AgentModel))
-		result.WriteString(fmt.Sprintf("**Time:** %s\n", firstChange.Timestamp.Format("2006-01-02 15:04:05")))
-		result.WriteString(fmt.Sprintf("**Files Changed:** %d\n", len(revChanges)))
-
-		if firstChange.Instructions != "" {
-			result.WriteString(fmt.Sprintf("**Instructions:** %s\n", firstChange.Instructions))
+		opts := formatRevisionOpts{
+			ShowContent:      showContent,
+			ShowStatus:       true,
+			ShowInstructions: true,
+			TimeFormat:       "2006-01-02 15:04:05",
+			TitlePrefix:      "### Revision: ",
+			FilesLabel:       "**Files Changed:** ",
 		}
-
-		result.WriteString("\n**Files:**\n")
-		for _, change := range revChanges {
-			result.WriteString(fmt.Sprintf("- **%s** (%s)\n", change.Filename, change.Status))
-			if change.Description != "" {
-				result.WriteString(fmt.Sprintf("  *%s*\n", change.Description))
-			}
-
-			if showContent {
-				result.WriteString("  ```diff\n")
-				result.WriteString(fmt.Sprintf("  Content changed (%d chars → %d chars)\n",
-					len(change.OriginalCode), len(change.NewCode)))
-				result.WriteString("  ```\n")
-			}
-		}
+		result.WriteString(formatRevision(group, opts))
 		result.WriteString("\n---\n\n")
 	}
 

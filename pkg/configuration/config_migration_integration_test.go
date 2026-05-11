@@ -13,6 +13,7 @@ import (
 func TestConfigMigration_Integration_WithLoad(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create a minimal config file without version or any new fields
 	// This simulates a pre-versioned config (0.0)

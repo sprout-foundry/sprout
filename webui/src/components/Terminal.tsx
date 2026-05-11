@@ -929,6 +929,7 @@ function Terminal({
                           }
                         }}
                         isActive={hasActivated || isExpanded}
+                        shouldFocus={pane.id === focusedPaneId && isActiveSession}
                         isConnected={isConnected}
                         showCloseButton={false}
                         preferredShell={sessionShellsRef.current.get(session.id) ?? null}

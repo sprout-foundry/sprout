@@ -130,7 +130,7 @@ func TestGlobalAskUserManager_NilByDefault(t *testing.T) {
 func TestRequestAskUser_NilEventBus(t *testing.T) {
 	t.Parallel()
 	mgr := NewAskUserManager()
-	_, err := mgr.RequestAskUser(nil, "question", "client")
+	_, err := mgr.RequestAskUser(nil, "question", "client", "")
 	if err == nil {
 		t.Fatal("expected error for nil event bus")
 	}
@@ -143,7 +143,7 @@ func TestRequestAskUser_EmptyQuestion(t *testing.T) {
 	t.Parallel()
 	mgr := NewAskUserManager()
 	bus := events.NewEventBus()
-	_, err := mgr.RequestAskUser(bus, "", "client")
+	_, err := mgr.RequestAskUser(bus, "", "client", "")
 	if err == nil {
 		t.Fatal("expected error for empty question")
 	}
@@ -176,7 +176,7 @@ func TestRequestAskUser_SuccessfulResponse(t *testing.T) {
 		}
 	}()
 
-	result, err := mgr.RequestAskUser(bus, "What is your name?", "client1")
+	result, err := mgr.RequestAskUser(bus, "What is your name?", "client1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestRequestAskUser_Timeout(t *testing.T) {
 	bus := events.NewEventBus()
 
 	// Do not respond — let it timeout
-	_, err := mgr.RequestAskUser(bus, "Will you wait forever?", "client1")
+	_, err := mgr.RequestAskUser(bus, "Will you wait forever?", "client1", "")
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -211,7 +211,7 @@ func TestAskUserWithEventBus_EmptyQuestion(t *testing.T) {
 	prev := GetGlobalAskUserManager()
 	t.Cleanup(func() { SetGlobalAskUserManager(prev) })
 
-	_, err := AskUserWithEventBus("", nil, "")
+	_, err := AskUserWithEventBus("", nil, "", "")
 	if err == nil {
 		t.Fatal("expected error for empty question")
 	}
@@ -246,7 +246,7 @@ func TestAskUserWithEventBus_RoutesThroughEventBus(t *testing.T) {
 		}
 	}()
 
-	result, err := AskUserWithEventBus("Do you agree?", bus, "c1")
+	result, err := AskUserWithEventBus("Do you agree?", bus, "c1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

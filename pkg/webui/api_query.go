@@ -81,6 +81,7 @@ func (ws *ReactWebServer) publishClientEvent(clientID, eventType string, data ma
 
 // publishClientEventWithChat publishes an event to the event bus with client_id and optional chat_id.
 // The chat_id is included in the event data so that WebSocket connections can filter events by chat session.
+// In service mode, the user_id from the client context is also added for user isolation.
 func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType string, data map[string]interface{}) {
 	if ws.eventBus == nil {
 		return
@@ -93,6 +94,10 @@ func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType
 	}
 	if strings.TrimSpace(chatID) != "" {
 		data["chat_id"] = chatID
+	}
+	// Stamp user_id from client context for user isolation in service mode
+	if userID := ws.userIDForClient(clientID); userID != "" {
+		data["user_id"] = userID
 	}
 	ws.eventBus.Publish(eventType, data)
 }

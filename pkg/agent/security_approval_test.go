@@ -34,7 +34,7 @@ func TestSecurityApprovalManager_BasicApproval(t *testing.T) {
 		mgr.RespondToApproval(requestID, true)
 	}()
 
-	approved := mgr.RequestToolApproval(eb, "", "shell_command", "CAUTION", "potentially risky operation", nil)
+	approved := mgr.RequestToolApproval(eb, "", "", "shell_command", "CAUTION", "potentially risky operation", nil)
 	if !approved {
 		t.Error("expected approval to be true")
 	}
@@ -54,7 +54,7 @@ func TestSecurityApprovalManager_Rejection(t *testing.T) {
 		mgr.RespondToApproval(requestID, false)
 	}()
 
-	approved := mgr.RequestToolApproval(eb, "", "shell_command", "DANGEROUS", "rm -rf /", nil)
+	approved := mgr.RequestToolApproval(eb, "", "", "shell_command", "DANGEROUS", "rm -rf /", nil)
 	if approved {
 		t.Error("expected approval to be false (rejected)")
 	}
@@ -62,7 +62,7 @@ func TestSecurityApprovalManager_Rejection(t *testing.T) {
 
 func TestSecurityApprovalManager_NilEventBus(t *testing.T) {
 	mgr := security.NewApprovalManager()
-	approved := mgr.RequestToolApproval(nil, "", "shell_command", "CAUTION", "test", nil)
+	approved := mgr.RequestToolApproval(nil, "", "", "shell_command", "CAUTION", "test", nil)
 	if approved {
 		t.Error("expected false when event bus is nil")
 	}
@@ -83,7 +83,7 @@ func TestSecurityApprovalManager_ConcurrentRequests(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			results[idx] = mgr.RequestToolApproval(eb, "", "shell_command", "CAUTION", "test", nil)
+			results[idx] = mgr.RequestToolApproval(eb, "", "", "shell_command", "CAUTION", "test", nil)
 		}(i)
 	}
 
@@ -144,7 +144,7 @@ func TestSecurityApprovalManager_RequestEventData(t *testing.T) {
 	// Use a timeout so tests don't hang forever
 	done := make(chan bool, 1)
 	go func() {
-		approved := mgr.RequestToolApproval(eb, "", "shell_command", "CAUTION", "potentially risky operation - review carefully", nil)
+		approved := mgr.RequestToolApproval(eb, "", "", "shell_command", "CAUTION", "potentially risky operation - review carefully", nil)
 		done <- approved
 	}()
 
@@ -179,7 +179,7 @@ func TestSecurityApprovalManager_RequestEventIncludesClientIDWhenProvided(t *tes
 		mgr.RespondToApproval(requestID, true)
 	}()
 
-	approved := mgr.RequestToolApproval(eb, "client-123", "shell_command", "CAUTION", "test", nil)
+	approved := mgr.RequestToolApproval(eb, "client-123", "", "shell_command", "CAUTION", "test", nil)
 	if !approved {
 		t.Error("expected approval")
 	}
@@ -214,7 +214,7 @@ func TestSecurityApprovalManager_ExtrasInEvent(t *testing.T) {
 		"risk_type": "some risk",
 	}
 
-	approved := mgr.RequestToolApproval(eb, "", "shell_command", "CAUTION", "test", extras)
+	approved := mgr.RequestToolApproval(eb, "", "", "shell_command", "CAUTION", "test", extras)
 	if !approved {
 		t.Error("expected approval")
 	}
@@ -235,7 +235,7 @@ func TestSecurityApprovalManager_TimeoutReturnsFalse(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		approved := mgr.RequestToolApproval(eb, "", "shell_command", "CAUTION", "test timeout", nil)
+		approved := mgr.RequestToolApproval(eb, "", "", "shell_command", "CAUTION", "test timeout", nil)
 		done <- approved
 	}()
 
@@ -268,7 +268,7 @@ func TestSecurityApprovalManager_SetApprovalTimeout(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		approved := mgr.RequestToolApproval(eb, "", "tool", "LOW", "test", nil)
+		approved := mgr.RequestToolApproval(eb, "", "", "tool", "LOW", "test", nil)
 		done <- approved
 	}()
 
@@ -298,7 +298,7 @@ func TestSecurityApprovalManager_SetApprovalTimeout(t *testing.T) {
 		mgr.RespondToApproval(requestID, true)
 	}()
 
-	approved := mgr.RequestToolApproval(eb, "", "tool", "LOW", "test default reset", nil)
+	approved := mgr.RequestToolApproval(eb, "", "", "tool", "LOW", "test default reset", nil)
 	if !approved {
 		t.Error("expected approval after resetting timeout to default (response sent immediately)")
 	}
@@ -323,7 +323,7 @@ func TestSecurityApprovalManager_TimeoutDoesNotBlockIfResponseArrives(t *testing
 	}()
 
 	start := time.Now()
-	approved := mgr.RequestToolApproval(eb, "", "shell_command", "LOW", "quick response test", nil)
+	approved := mgr.RequestToolApproval(eb, "", "", "shell_command", "LOW", "quick response test", nil)
 	elapsed := time.Since(start)
 
 	if !approved {

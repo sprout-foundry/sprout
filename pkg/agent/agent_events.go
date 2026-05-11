@@ -160,3 +160,18 @@ func (a *Agent) GetEventChatID() string {
 	}
 	return ""
 }
+
+// GetEventUserID returns the bound user_id from event metadata, if present.
+func (a *Agent) GetEventUserID() string {
+	mu := a.output.GetEventMetadataMutex()
+	mu.RLock()
+	defer mu.RUnlock()
+	eventMetadata := a.output.GetEventMetadata()
+	if len(eventMetadata) == 0 {
+		return ""
+	}
+	if userID, ok := eventMetadata["user_id"].(string); ok {
+		return strings.TrimSpace(userID)
+	}
+	return ""
+}

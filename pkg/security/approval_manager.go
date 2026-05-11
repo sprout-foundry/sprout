@@ -38,6 +38,7 @@ type ApprovalRequest struct {
 	RiskLevel string
 	Reasoning string
 	ClientID  string
+	UserID    string // User ID for multi-tenant isolation
 
 	// Prompt kind fields
 	Prompt string
@@ -160,10 +161,16 @@ func (am *ApprovalManager) RequestApproval(eventBus *events.EventBus, req Approv
 		if trimmed := strings.TrimSpace(req.ClientID); trimmed != "" {
 			payload["client_id"] = trimmed
 		}
+		if trimmed := strings.TrimSpace(req.UserID); trimmed != "" {
+			payload["user_id"] = trimmed
+		}
 		eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
 
 	case ApprovalKindPrompt:
 		payload := events.SecurityPromptRequestEvent(requestID, req.Prompt, req.DefaultResponse, req.Extras)
+		if trimmed := strings.TrimSpace(req.UserID); trimmed != "" {
+			payload["user_id"] = trimmed
+		}
 		eventBus.Publish(events.EventTypeSecurityPromptRequest, payload)
 	}
 
@@ -228,7 +235,7 @@ func (am *ApprovalManager) SetTimeout(d time.Duration) {
 
 // RequestToolApproval is a convenience wrapper for ApprovalKindTool requests.
 // It preserves the original SecurityApprovalManager.RequestApproval signature.
-func (am *ApprovalManager) RequestToolApproval(eventBus *events.EventBus, clientID, toolName, riskLevel, reasoning string, extras map[string]string) bool {
+func (am *ApprovalManager) RequestToolApproval(eventBus *events.EventBus, clientID, userID, toolName, riskLevel, reasoning string, extras map[string]string) bool {
 	return am.RequestApproval(eventBus, ApprovalRequest{
 		Kind:           ApprovalKindTool,
 		DefaultResponse: false, // reject for safety
@@ -236,17 +243,19 @@ func (am *ApprovalManager) RequestToolApproval(eventBus *events.EventBus, client
 		RiskLevel:      riskLevel,
 		Reasoning:      reasoning,
 		ClientID:       clientID,
+		UserID:         userID,
 		Extras:         extras,
 	})
 }
 
 // RequestPrompt is a convenience wrapper for ApprovalKindPrompt requests.
 // It preserves the original SecurityPromptManager.RequestPrompt signature.
-func (am *ApprovalManager) RequestPrompt(eventBus *events.EventBus, prompt string, defaultResponse bool, extras map[string]string) bool {
+func (am *ApprovalManager) RequestPrompt(eventBus *events.EventBus, userID, prompt string, defaultResponse bool, extras map[string]string) bool {
 	return am.RequestApproval(eventBus, ApprovalRequest{
 		Kind:            ApprovalKindPrompt,
 		DefaultResponse: defaultResponse,
 		Prompt:          prompt,
+		UserID:          userID,
 		Extras:          extras,
 	})
 }

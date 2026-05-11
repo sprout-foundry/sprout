@@ -762,7 +762,7 @@ class LSPClientService {
       this.reconnectTimers.delete(languageId);
       if (this.disconnectedLanguages.has(languageId)) {
         this.disconnectedLanguages.delete(languageId);
-        this.getClientForLanguage(languageId).catch(() => {});
+        this.getClientForLanguage(languageId).catch((err) => { console.warn('[LSPClientService] Reconnect failed:', err); });
       }
     }, backoff);
 

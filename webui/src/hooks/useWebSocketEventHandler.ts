@@ -563,22 +563,23 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'warning';
-  if (event.data?.status === 'responded') return;
-  if (event.data) {
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  if (data.status === 'responded') return;
+  if (data) {
     setState(prev => ({
       securityApprovalRequest: {
-        requestId: String(event.data.request_id || ''),
-        toolName: String(event.data.tool_name || ''),
-        riskLevel: String(event.data.risk_level || 'CAUTION'),
-        reasoning: String(event.data.reasoning || ''),
-        command: event.data.command != null ? String(event.data.command) : undefined,
-        riskType: event.data.risk_type != null ? String(event.data.risk_type) : undefined,
-        target: event.data.target != null ? String(event.data.target) : undefined,
+        requestId: String(data.request_id || ''),
+        toolName: String(data.tool_name || ''),
+        riskLevel: String(data.risk_level || 'CAUTION'),
+        reasoning: String(data.reasoning || ''),
+        command: data.command != null ? String(data.command) : undefined,
+        riskType: data.risk_type != null ? String(data.risk_type) : undefined,
+        target: data.target != null ? String(data.target) : undefined,
       },
       logs: appendCappedLog(prev.logs, logEntry),
     }));
   }
-  debugLog('[security] Approval request:', event.data?.tool_name, event.data?.risk_level);
+  debugLog('[security] Approval request:', data.tool_name, data.risk_level);
 };
 
 // Handle security_prompt_request event
@@ -587,18 +588,19 @@ const handleSecurityPromptRequest = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'warning';
-  if (event.data?.status === 'responded') return;
-  if (!event.data?.prompt) return;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  if (data.status === 'responded') return;
+  if (!data.prompt) return;
   setState(prev => ({
     securityPromptRequest: {
-      requestId: String(event.data.request_id || ''),
-      prompt: String(event.data.prompt || ''),
-      filePath: event.data.file_path != null ? String(event.data.file_path) : undefined,
-      concern: event.data.concern != null ? String(event.data.concern) : undefined,
+      requestId: String(data.request_id || ''),
+      prompt: String(data.prompt || ''),
+      filePath: data.file_path != null ? String(data.file_path) : undefined,
+      concern: data.concern != null ? String(data.concern) : undefined,
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));
-  debugLog('[security] Prompt request:', event.data?.file_path, event.data?.concern);
+  debugLog('[security] Prompt request:', data.file_path, data.concern);
 };
 
 // Handle ask_user_request event
@@ -607,16 +609,17 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'info';
-  if (event.data?.status === 'responded') return;
-  if (!event.data?.question) return;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  if (data.status === 'responded') return;
+  if (!data.question) return;
   setState(prev => ({
     askUserRequest: {
-      requestId: String(event.data.request_id || ''),
-      question: String(event.data.question || ''),
+      requestId: String(data.request_id || ''),
+      question: String(data.question || ''),
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));
-  debugLog('[ask_user] Question:', event.data?.question);
+  debugLog('[ask_user] Question:', data.question);
 };
 
 // ── Hook Interface ───────────────────────────────────────────────────────

@@ -2,8 +2,6 @@
 package webui
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -66,12 +64,8 @@ type ReactWebServer struct {
 	normalizedAllowedOrigins        []string // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
 	trustedUserHeader               string   // Header name for user ID extraction in service mode
 	serviceMode                     bool     // true when running as a managed service (SPROUT_SERVICE=1)
+	authToken                       string   // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
 }
-
-const (
-	clientContextCleanupInterval = 5 * time.Minute
-	clientContextMaxIdle         = 30 * time.Minute
-)
 
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string) *ReactWebServer {
@@ -157,6 +151,12 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		}
 	}
 
+	// Parse auth token for write endpoint protection
+	authToken := strings.TrimSpace(configuration.GetEnvSimple("AUTH_TOKEN"))
+	if authToken != "" {
+		log.Printf("[web] Auth token configured: write endpoints require authentication")
+	}
+
 	return &ReactWebServer{
 		agent:             agent,
 		eventBus:          eventBus,
@@ -173,47 +173,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		port:              port,
 		bindAddr:          bindAddr,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				// Allow localhost connections (IPv4 and IPv6).
-				// When binding to 0.0.0.0 (cloud/service mode),
-				// accept any origin since the service is explicitly
-				// exposed. The SPROUT_ALLOWED_ORIGINS env var
-				// provides finer-grained control for specific origins.
-				origin := r.Header.Get("Origin")
-				if origin == "" {
-					return true // Allow same-origin and direct connections
-				}
-
-				parsed, err := url.Parse(origin)
-				if err != nil {
-					return false
-				}
-				host := strings.ToLower(parsed.Hostname())
-				if host == "localhost" {
-					return true
-				}
-				if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-					return true
-				}
-
-				// Check against SPROUT_ALLOWED_ORIGINS allowlist.
-				// Origins were pre-normalized at startup; only a simple
-				// string comparison is needed per request.
-				if len(normalizedAllowedOrigins) > 0 {
-					normalizedIncoming := normalizeOriginForCompare(parsed)
-					for _, allowed := range normalizedAllowedOrigins {
-						if normalizedIncoming == allowed {
-							return true
-						}
-					}
-				}
-
-				// When binding to all interfaces, accept any origin.
-				if bindAddr == "0.0.0.0" || bindAddr == "::" {
-					return true
-				}
-				return false
-			},
+			CheckOrigin: newCheckOriginFunc(bindAddr, normalizedAllowedOrigins),
 		},
 		terminalManager:   NewTerminalManager(workspaceRoot),
 		startTime:         time.Now(),
@@ -224,121 +184,8 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		normalizedAllowedOrigins: normalizedAllowedOrigins,
 		trustedUserHeader:        trustedUserHeader,
 		serviceMode:              serviceMode,
+		authToken:                authToken,
 	}
-}
-
-// Start starts the web server
-func (ws *ReactWebServer) Start(ctx context.Context) error {
-	mux := ws.setupRoutes(ctx)
-
-	// Wrap mux with user ID extraction middleware
-	var handler http.Handler = mux
-	if ws.serviceMode && ws.trustedUserHeader != "" {
-		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := ws.contextWithUserID(r.Context(), r)
-			r = r.WithContext(ctx)
-			mux.ServeHTTP(w, r)
-		})
-	}
-
-	ws.server = &http.Server{
-		Addr:    formatListenAddr(ws.bindAddr, ws.port),
-		Handler: handler,
-	}
-
-	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ws.server.Addr)
-	if err != nil {
-		return fmt.Errorf("failed to bind web server on %s: %w", ws.server.Addr, err)
-	}
-
-	// When the configured port is 0, the OS assigns a random free port.
-	// Capture the actual port from the listener so GetPort() and logging
-	// report the real value.
-	if ws.port == 0 {
-		actualPort := listener.Addr().(*net.TCPAddr).Port
-		ws.port = actualPort
-		ws.server.Addr = formatListenAddr(ws.bindAddr, actualPort)
-	}
-
-	ws.mutex.Lock()
-	if ws.isRunning {
-		ws.mutex.Unlock()
-		listener.Close()
-		return fmt.Errorf("web server is already running")
-	}
-	ws.listener = listener
-	ws.isRunning = true
-	ws.mutex.Unlock()
-
-	// Start server in goroutine
-	go func() {
-		log.Printf("[web] Web UI starting at http://%s:%d", DisplayAddr(ws.bindAddr), ws.port)
-		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
-			log.Printf("Web server error: %v", err)
-		}
-	}()
-
-	go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
-
-	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes, background timeout 2 hours)
-	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
-
-	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.
-	startSemanticEviction(ctx)
-
-	// Start file watcher for detecting external changes to open files.
-	ws.fileWatcher.start(ctx)
-
-	// Wait for context cancellation
-	go func() {
-		<-ctx.Done()
-		ws.Shutdown()
-	}()
-
-	return nil
-}
-
-// Shutdown gracefully shuts down the web server
-func (ws *ReactWebServer) Shutdown() error {
-	ws.mutex.Lock()
-	if !ws.isRunning {
-		ws.mutex.Unlock()
-		return nil
-	}
-	ws.isRunning = false
-	listener := ws.listener
-	ws.listener = nil
-	ws.mutex.Unlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Stop the file watcher.
-	ws.fileWatcher.stop()
-
-	// Clean up LSP manager (closes all language server processes)
-	if ws.lspManager != nil {
-		ws.lspManager.Cleanup()
-	}
-
-	// Close all WebSocket connections
-	ws.connections.Range(func(conn, value interface{}) bool {
-		if wsConn, ok := conn.(*websocket.Conn); ok {
-			wsConn.Close()
-		}
-		return true
-	})
-
-	ws.shutdownSSHSessions()
-
-	if listener != nil {
-		_ = listener.Close()
-	}
-
-	if err := ws.server.Shutdown(ctx); err != nil && !isExpectedServerCloseError(err) {
-		return fmt.Errorf("shutdown web server: %w", err)
-	}
-	return nil
 }
 
 // IsRunning returns true if the web server is running

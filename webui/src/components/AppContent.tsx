@@ -408,4 +408,4 @@ const AppContent: React.FC<AppContentProps> = ({
   );
 };
 
-export default AppContent;
+export default React.memo(AppContent);

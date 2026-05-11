@@ -112,8 +112,9 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				// Set read deadline for heartbeat (60 seconds)
 				conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
-				var msg map[string]interface{}
-				if err := conn.ReadJSON(&msg); err != nil {
+				// Read raw message bytes for validation
+				_, rawMsg, err := conn.ReadMessage()
+				if err != nil {
 					if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) ||
 						websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 						log.Printf("WebSocket %s closed: %v", sessionID, err)
@@ -140,6 +141,17 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 						log.Printf("WebSocket %s read error: %v", sessionID, err)
 					}
 					return
+				}
+
+				// Validate the incoming message
+				msg, err := parseAndValidateMessage(rawMsg)
+				if err != nil {
+					log.Printf("WebSocket %s message validation failed: %v", sessionID, err)
+					safeConn.WriteJSON(map[string]interface{}{
+						"type": "error",
+						"data": map[string]string{"message": err.Error()},
+					})
+					continue
 				}
 
 				// Update last message time on successful read (includes pong responses,
@@ -264,34 +276,35 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 }
 
 // handleWebSocketMessage processes incoming WebSocket messages
-func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID string, msg map[string]interface{}, clientID string) {
-	msgType, ok := msg["type"].(string)
-	if !ok {
-		return
-	}
-
-	switch msgType {
-	case "ping":
+func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID string, msg *WebSocketMessage, clientID string) {
+	switch msg.Type {
+	case AllowedMessageTypePing:
 		// Respond to ping with pong
 		safeConn.WriteJSON(map[string]interface{}{
 			"type": "pong",
 			"data": map[string]interface{}{"timestamp": time.Now().Unix()},
 		})
 
-	case "pong":
+	case AllowedMessageTypePong:
 		// Client responded to ping - handled by read goroutine timestamp tracking
 		// The read goroutine updates lastMessage on any successful read
 
-	case "subscribe":
+	case AllowedMessageTypeSubscribe:
 		// Handle subscription requests for specific event types
-		if data, ok := msg["data"].(map[string]interface{}); ok {
-			if eventTypes, ok := data["events"].([]interface{}); ok {
-				// This could be used to filter events at the source level
-				log.Printf("WebSocket client subscribed to events: %v", eventTypes)
-			}
+		data, err := parseAndValidateData[SubscribeData](msg.Data, func(d *SubscribeData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			log.Printf("WebSocket %s invalid subscribe data: %v", sessionID, err)
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
 		}
+		log.Printf("WebSocket client subscribed to events: %v", data.Events)
 
-	case "request_stats":
+	case AllowedMessageTypeRequestStats:
 		// Send current stats immediately
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			stats := ws.gatherStatsForClientID(clientID)
@@ -301,34 +314,94 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 		})
 
-	case "provider_change":
+	case AllowedMessageTypeProviderChange:
+		data, err := parseAndValidateData[ProviderChangeData](msg.Data, func(d *ProviderChangeData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handleProviderChangeMessage(safeConn, msg, clientID)
+			ws.handleProviderChangeMessage(safeConn, data, clientID)
 		})
 
-	case "model_change":
+	case AllowedMessageTypeModelChange:
+		data, err := parseAndValidateData[ModelChangeData](msg.Data, func(d *ModelChangeData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handleModelChangeMessage(safeConn, msg, clientID)
+			ws.handleModelChangeMessage(safeConn, data, clientID)
 		})
 
-	case "persona_change":
+	case AllowedMessageTypePersonaChange:
+		data, err := parseAndValidateData[PersonaChangeData](msg.Data, func(d *PersonaChangeData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handlePersonaChangeMessage(safeConn, msg, clientID)
+			ws.handlePersonaChangeMessage(safeConn, data, clientID)
 		})
 
-	case "security_approval_response":
+	case AllowedMessageTypeSecurityApprovalResponse:
+		data, err := parseAndValidateData[SecurityApprovalResponseData](msg.Data, func(d *SecurityApprovalResponseData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handleSecurityApprovalResponse(safeConn, msg, clientID)
+			ws.handleSecurityApprovalResponse(safeConn, data, clientID)
 		})
 
-	case "security_prompt_response":
+	case AllowedMessageTypeSecurityPromptResponse:
+		data, err := parseAndValidateData[SecurityPromptResponseData](msg.Data, func(d *SecurityPromptResponseData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handleSecurityPromptResponse(safeConn, msg, clientID)
+			ws.handleSecurityPromptResponse(safeConn, data, clientID)
 		})
 
-	case "ask_user_response":
+	case AllowedMessageTypeAskUserResponse:
+		data, err := parseAndValidateData[AskUserResponseData](msg.Data, func(d *AskUserResponseData) error {
+			return d.Validate()
+		})
+		if err != nil {
+			safeConn.WriteJSON(map[string]interface{}{
+				"type": "error",
+				"data": map[string]string{"message": err.Error()},
+			})
+			return
+		}
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handleAskUserResponse(safeConn, msg, clientID)
+			ws.handleAskUserResponse(safeConn, data, clientID)
 		})
 	}
 }

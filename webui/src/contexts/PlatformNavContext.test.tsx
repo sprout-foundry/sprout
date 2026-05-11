@@ -9,8 +9,8 @@ import { getAdapter } from '../services/apiAdapter';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/apiAdapter', () => ({
-  getAdapter: jest.fn(),
+vi.mock('../services/apiAdapter', () => ({
+  getAdapter: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   latestContext = undefined;
   // Default: no adapter installed
   getAdapter.mockReturnValue(null);
@@ -71,7 +71,7 @@ const ctx = () => latestContext;
 describe('usePlatformNav', () => {
   it('throws an error when used outside of PlatformNavProvider', () => {
     // Suppress the expected console.error from React when the component throws
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Render TestConsumer WITHOUT the provider — the hook should throw
     expect(() => {

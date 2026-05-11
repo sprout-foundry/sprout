@@ -20,8 +20,8 @@ import UpdateNotification from './UpdateNotification';
 // ---------------------------------------------------------------------------
 
 // Mock NotificationContext
-const mockAddNotification = jest.fn();
-jest.mock('../contexts/NotificationContext', () => {
+const mockAddNotification = vi.fn();
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }: { children: React.ReactNode }) {
@@ -75,17 +75,17 @@ const createMockDesktopApi = () => {
 
   return {
     // API methods
-    checkForUpdates: jest.fn<Promise<DesktopApiResponse<CheckResult>>, []>(),
-    installUpdate: jest.fn<Promise<DesktopApiResponse<UpdateApiResponse>>, []>(),
-    deferUpdate: jest.fn<Promise<DesktopApiResponse<UpdateApiResponse>>, []>(),
-    isUpdatePending: jest.fn<Promise<UpdateApiResponse>, []>(),
-    cancelPendingInstall: jest.fn<Promise<DesktopApiResponse<UpdateApiResponse>>, []>(),
+    checkForUpdates: vi.fn<Promise<DesktopApiResponse<CheckResult>>, []>(),
+    installUpdate: vi.fn<Promise<DesktopApiResponse<UpdateApiResponse>>, []>(),
+    deferUpdate: vi.fn<Promise<DesktopApiResponse<UpdateApiResponse>>, []>(),
+    isUpdatePending: vi.fn<Promise<UpdateApiResponse>, []>(),
+    cancelPendingInstall: vi.fn<Promise<DesktopApiResponse<UpdateApiResponse>>, []>(),
 
     // Event listeners
-    onUpdateError: jest.fn((callback: (data: NotificationEvent) => void) => {
+    onUpdateError: vi.fn((callback: (data: NotificationEvent) => void) => {
       eventListeners.onError.push(callback);
       // Return a jest mock function that can be tested
-      const unsubscribe = jest.fn(() => {
+      const unsubscribe = vi.fn(() => {
         const index = eventListeners.onError.indexOf(callback);
         if (index > -1) {
           eventListeners.onError.splice(index, 1);
@@ -93,10 +93,10 @@ const createMockDesktopApi = () => {
       });
       return unsubscribe;
     }),
-    onUpdateAvailable: jest.fn((callback: (data: NotificationEvent) => void) => {
+    onUpdateAvailable: vi.fn((callback: (data: NotificationEvent) => void) => {
       eventListeners.onUpdateAvailable.push(callback);
       // Return a jest mock function that can be tested
-      const unsubscribe = jest.fn(() => {
+      const unsubscribe = vi.fn(() => {
         const index = eventListeners.onUpdateAvailable.indexOf(callback);
         if (index > -1) {
           eventListeners.onUpdateAvailable.splice(index, 1);
@@ -104,10 +104,10 @@ const createMockDesktopApi = () => {
       });
       return unsubscribe;
     }),
-    onUpdateDownloadProgress: jest.fn((callback: (progress: { percent: number }) => void) => {
+    onUpdateDownloadProgress: vi.fn((callback: (progress: { percent: number }) => void) => {
       eventListeners.onDownloadProgress.push(callback);
       // Return a jest mock function that can be tested
-      const unsubscribe = jest.fn(() => {
+      const unsubscribe = vi.fn(() => {
         const index = eventListeners.onDownloadProgress.indexOf(callback);
         if (index > -1) {
           eventListeners.onDownloadProgress.splice(index, 1);
@@ -115,10 +115,10 @@ const createMockDesktopApi = () => {
       });
       return unsubscribe;
     }),
-    onUpdateDownloaded: jest.fn((callback: (info: { version: string }) => void) => {
+    onUpdateDownloaded: vi.fn((callback: (info: { version: string }) => void) => {
       eventListeners.onDownloaded.push(callback);
       // Return a jest mock function that can be tested
-      const unsubscribe = jest.fn(() => {
+      const unsubscribe = vi.fn(() => {
         const index = eventListeners.onDownloaded.indexOf(callback);
         if (index > -1) {
           eventListeners.onDownloaded.splice(index, 1);
@@ -126,10 +126,10 @@ const createMockDesktopApi = () => {
       });
       return unsubscribe;
     }),
-    onTriggerUpdateCheck: jest.fn((callback: () => void) => {
+    onTriggerUpdateCheck: vi.fn((callback: () => void) => {
       eventListeners.onTriggerUpdateCheck.push(callback);
       // Return a jest mock function that can be tested
-      const unsubscribe = jest.fn(() => {
+      const unsubscribe = vi.fn(() => {
         const index = eventListeners.onTriggerUpdateCheck.indexOf(callback);
         if (index > -1) {
           eventListeners.onTriggerUpdateCheck.splice(index, 1);
@@ -180,7 +180,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockDesktopApi = createMockDesktopApi();
 
   // Set up window.sproutDesktop API

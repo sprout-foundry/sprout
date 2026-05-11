@@ -3,7 +3,7 @@
  *
  * The module maintains module-level singleton state (debounceTimerId,
  * pendingSnapshot, beforeUnloadHandler).  We reset it between tests via
- * jest.runAllTimers() (to flush any pending debounce), then clearing
+ * vi.runAllTimers() (to flush any pending debounce), then clearing
  * localStorage via window.localStorage.clear().
  */
 
@@ -72,11 +72,11 @@ const beforeUnloadHandlers: (() => void)[] = [];
 beforeEach(() => {
   // Switch to fake timers first so we can flush pending work from the
   // previous test's module-level debounce timer.
-  jest.useFakeTimers();
+  vi.useFakeTimers();
 
   // Flush any pending debounce timer so the module's internal state is
   // clean (pendingSnapshot = null, debounceTimerId = null).
-  jest.runAllTimers();
+  vi.runAllTimers();
   dispose();
   flush();
 
@@ -112,8 +112,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
-  jest.useRealTimers();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 // ===========================================================================
@@ -131,7 +131,7 @@ describe('readStorageItem', () => {
   });
 
   it('returns null when localStorage.getItem throws', () => {
-    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('security error');
     });
     expect(readStorageItem('any-key')).toBeNull();
@@ -149,7 +149,7 @@ describe('writeStorageItem', () => {
   });
 
   it('silently ignores storage errors', () => {
-    jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('quota exceeded');
     });
     expect(() => writeStorageItem('k', 'v')).not.toThrow();
@@ -173,7 +173,7 @@ describe('saveLayoutSnapshot', () => {
       activeBufferFilePath: '/src/app.ts',
     });
     saveLayoutSnapshot(snapshot);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
 
     const loaded = loadLayoutSnapshot();
     expect(loaded).not.toBeNull();
@@ -187,9 +187,9 @@ describe('saveLayoutSnapshot', () => {
     const snap3 = makeSnapshot({ activePaneId: 'third' });
 
     saveLayoutSnapshot(snap1);
-    jest.advanceTimersByTime(300);
+    vi.advanceTimersByTime(300);
     saveLayoutSnapshot(snap2);
-    jest.advanceTimersByTime(300);
+    vi.advanceTimersByTime(300);
     saveLayoutSnapshot(snap3);
 
     // Debounce hasn't fully elapsed yet — nothing should be written.
@@ -197,7 +197,7 @@ describe('saveLayoutSnapshot', () => {
 
     // Advance past the 1s debounce window from snap3 ( snap3 was saved at
     // virtual time 600; debounce fires at 1600).
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     const loaded = loadLayoutSnapshot();
     expect(loaded).not.toBeNull();
     expect(loaded!.activePaneId).toBe('third');
@@ -208,12 +208,12 @@ describe('saveLayoutSnapshot', () => {
     const snap2 = makeSnapshot({ activePaneId: 'new' });
 
     saveLayoutSnapshot(snap1);
-    jest.advanceTimersByTime(500);
+    vi.advanceTimersByTime(500);
     saveLayoutSnapshot(snap2);
 
     // Need to advance the FULL debounce period from the last save to fire it.
     expect(loadLayoutSnapshot()).toBeNull();
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
     const loaded = loadLayoutSnapshot();
     expect(loaded).not.toBeNull();
     expect(loaded!.activePaneId).toBe('new');
@@ -243,7 +243,7 @@ describe('flush', () => {
     saveLayoutSnapshot(snapshot);
     flush();
 
-    jest.advanceTimersByTime(2_000);
+    vi.advanceTimersByTime(2_000);
 
     const loaded = loadLayoutSnapshot();
     expect(loaded).not.toBeNull();
@@ -314,7 +314,7 @@ describe('loadLayoutSnapshot', () => {
   });
 
   it('returns null when localStorage.getItem throws', () => {
-    jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('boom');
     });
     expect(loadLayoutSnapshot()).toBeNull();
@@ -589,7 +589,7 @@ describe('dispose', () => {
 
     dispose();
 
-    jest.advanceTimersByTime(2_000);
+    vi.advanceTimersByTime(2_000);
 
     const loaded = loadLayoutSnapshot();
     expect(loaded).not.toBeNull();
@@ -730,7 +730,7 @@ describe('full round-trip', () => {
     });
 
     saveLayoutSnapshot(snapshot);
-    jest.advanceTimersByTime(1_000);
+    vi.advanceTimersByTime(1_000);
 
     const loaded = loadLayoutSnapshot();
     expect(loaded).not.toBeNull();

@@ -9,7 +9,7 @@ import GitSidebarPanel, { type GitStatusData } from './GitSidebarPanel';
 // ---------------------------------------------------------------------------
 
 // Mock navigator.clipboard
-const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
+const mockClipboardWriteText = vi.fn().mockResolvedValue(undefined);
 Object.assign(navigator, {
   clipboard: { writeText: mockClipboardWriteText },
 });
@@ -45,26 +45,26 @@ const MINIMAL_PROPS = {
   actionError: null,
   actionWarning: null,
   workspaceRoot: undefined as string | undefined,
-  onCommitMessageChange: jest.fn(),
-  onGenerateCommitMessage: jest.fn(),
-  onCommit: jest.fn(),
-  onRunReview: jest.fn(),
-  onCheckoutBranch: jest.fn(),
-  onCreateBranch: jest.fn(),
-  onPull: jest.fn(),
-  onPush: jest.fn(),
-  onRefresh: jest.fn(),
-  onToggleFileSelection: jest.fn(),
-  onToggleSectionSelection: jest.fn(),
-  onClearSelection: jest.fn(),
-  onPreviewFile: jest.fn(),
-  onStageSelected: jest.fn(),
-  onUnstageSelected: jest.fn(),
-  onDiscardSelected: jest.fn(),
-  onStageFile: jest.fn(),
-  onUnstageFile: jest.fn(),
-  onDiscardFile: jest.fn(),
-  onSectionAction: jest.fn(),
+  onCommitMessageChange: vi.fn(),
+  onGenerateCommitMessage: vi.fn(),
+  onCommit: vi.fn(),
+  onRunReview: vi.fn(),
+  onCheckoutBranch: vi.fn(),
+  onCreateBranch: vi.fn(),
+  onPull: vi.fn(),
+  onPush: vi.fn(),
+  onRefresh: vi.fn(),
+  onToggleFileSelection: vi.fn(),
+  onToggleSectionSelection: vi.fn(),
+  onClearSelection: vi.fn(),
+  onPreviewFile: vi.fn(),
+  onStageSelected: vi.fn(),
+  onUnstageSelected: vi.fn(),
+  onDiscardSelected: vi.fn(),
+  onStageFile: vi.fn(),
+  onUnstageFile: vi.fn(),
+  onDiscardFile: vi.fn(),
+  onSectionAction: vi.fn(),
   onOpenFile: undefined as ((path: string) => void) | undefined,
 };
 
@@ -85,14 +85,14 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   };
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
 });
 
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -246,7 +246,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
   });
 
   it('"Preview diff" calls onPreviewFile with correct section and path', async () => {
-    const onPreviewFile = jest.fn();
+    const onPreviewFile = vi.fn();
     await renderGitPanel({ onPreviewFile });
 
     fireContextMenuOnGitFile('newfile.go');
@@ -283,7 +283,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
   });
 
   it('"Open in editor" appears when onOpenFile is provided', async () => {
-    const onOpenFile = jest.fn();
+    const onOpenFile = vi.fn();
     await renderGitPanel({ onOpenFile });
 
     fireContextMenuOnGitFile('src/utils.ts');
@@ -304,7 +304,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
   });
 
   it('"Open in editor" calls onOpenFile with correct file path', async () => {
-    const onOpenFile = jest.fn();
+    const onOpenFile = vi.fn();
     await renderGitPanel({ onOpenFile });
 
     fireContextMenuOnGitFile('config.json');
@@ -322,7 +322,7 @@ describe('GitSidebarPanel context menu – clipboard & editor actions', () => {
   });
 
   it('"Open in editor" does NOT appear for deleted files even when onOpenFile is provided', async () => {
-    const onOpenFile = jest.fn();
+    const onOpenFile = vi.fn();
     await renderGitPanel({ onOpenFile });
 
     fireContextMenuOnGitFile('old.txt');

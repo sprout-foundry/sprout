@@ -9,8 +9,8 @@ import { useEditorManager } from '../contexts/EditorManagerContext';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../contexts/EditorManagerContext', () => ({
-  useEditorManager: jest.fn(),
+vi.mock('../contexts/EditorManagerContext', () => ({
+  useEditorManager: vi.fn(),
 }));
 
 let rafId = 0;
@@ -21,9 +21,9 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
   // scrollIntoView does not exist in jsdom
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 // ---------------------------------------------------------------------------
@@ -53,12 +53,12 @@ const makeMockBuffer = (id: string, paneId: string, overrides: Partial<any> = {}
   ...overrides,
 });
 
-const mockCloseBuffer = jest.fn();
-const mockSwitchToBuffer = jest.fn();
-const mockSwitchPane = jest.fn();
-const mockReorderBuffers = jest.fn();
-const mockMoveBufferToPane = jest.fn();
-const mockToggleBufferPin = jest.fn();
+const mockCloseBuffer = vi.fn();
+const mockSwitchToBuffer = vi.fn();
+const mockSwitchPane = vi.fn();
+const mockReorderBuffers = vi.fn();
+const mockMoveBufferToPane = vi.fn();
+const mockToggleBufferPin = vi.fn();
 
 const defaultMockEditorManager = {
   buffers: new Map<string, any>(),
@@ -73,7 +73,7 @@ const defaultMockEditorManager = {
   toggleBufferPin: mockToggleBufferPin,
 };
 
-const mockUseEditorManager = useEditorManager as jest.MockedFunction<typeof useEditorManager>;
+const mockUseEditorManager = useEditorManager as vi.MockedFunction<typeof useEditorManager>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,7 +83,7 @@ let container: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockCloseBuffer.mockClear();
   mockSwitchToBuffer.mockClear();
   mockSwitchPane.mockClear();

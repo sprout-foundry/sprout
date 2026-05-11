@@ -16,9 +16,7 @@
 
 .command-input:focus-within {
   border-color: var(--border-focus);
-  box-shadow:
-    var(--shadow-elevated),
-    0 0 0 1px var(--border-focus);
+  box-shadow: var(--shadow-elevated);
 }
 
 .input-header {

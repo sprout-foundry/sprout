@@ -12,9 +12,10 @@ import {
 import { debugLog } from '../utils/log';
 import { trimMessages } from '../utils/messageWindow';
 import { generateMessageId } from '../utils/messageId';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseChatSessionManagerParams {
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<string[]>;
@@ -75,7 +76,6 @@ export function useChatSessionManager({
         }
       }
       setState(prev => ({
-        ...prev,
         chatSessions: response.chat_sessions,
         activeChatId: prev.activeChatId || activeChatId,
         messages: prev.messages.length === 0 && initialMessages.length > 0 ? trimMessages(initialMessages) : prev.messages,
@@ -114,7 +114,6 @@ export function useChatSessionManager({
       const restoredIsProcessing = cached?.isProcessing ?? false;
       activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
       return {
-        ...prev,
         activeChatId: id,
         messages: cached?.messages ?? [],
         isProcessing: restoredIsProcessing,
@@ -148,7 +147,6 @@ export function useChatSessionManager({
         const finalIsProcessing = backendIsActive;
         activeRequestsRef.current = finalIsProcessing ? 1 : 0;
         return {
-          ...prev,
           activeChatId: response.active_chat_id,
           messages: useBackendMessages ? trimMessages(backendMessages) : prev.messages,
           isProcessing: finalIsProcessing,
@@ -157,7 +155,7 @@ export function useChatSessionManager({
 
       const sessionsResp = await listChatSessions();
       if (activeChatIdRef.current !== switchId) return;
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState(prev => ({ chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       if (activeChatIdRef.current !== switchId) return;
       activeChatIdRef.current = currentId;
@@ -170,12 +168,12 @@ export function useChatSessionManager({
       const response = await createChatSession();
       const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState(prev => ({ chatSessions: sessionsResp.chat_sessions }));
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
       const message = error instanceof Error ? error.message : 'Failed to create new chat';
-      setState(prev => ({ ...prev, lastError: message }));
+      setState(prev => ({ lastError: message }));
       return null;
     }
   }, [setState]);
@@ -188,11 +186,11 @@ export function useChatSessionManager({
         if (sessionsResp.chat_sessions.length > 0) {
           await handleActiveChatChange(sessionsResp.active_chat_id);
         } else {
-          setState(prev => ({ ...prev, chatSessions: [], activeChatId: null, messages: [] }));
+          setState(prev => ({ chatSessions: [], activeChatId: null, messages: [] }));
         }
       } else {
         const sessionsResp = await listChatSessions();
-        setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+        setState(prev => ({ chatSessions: sessionsResp.chat_sessions }));
       }
     } catch (error) {
       debugLog('[chat] Failed to delete chat session:', error);
@@ -203,7 +201,7 @@ export function useChatSessionManager({
     try {
       await renameChatSession(id, name);
       const sessionsResp = await listChatSessions();
-      setState(prev => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState(prev => ({ chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       debugLog('[chat] Failed to rename chat session:', error);
     }
@@ -227,7 +225,6 @@ export function useChatSessionManager({
       setQueuedMessagesCount(0);
 
       setState((prev) => ({
-        ...prev,
         isProcessing: false,
         lastError: null,
         queryProgress: null,
@@ -243,7 +240,6 @@ export function useChatSessionManager({
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Failed to send clear command';
         setState((prev) => ({
-          ...prev,
           lastError: errorMsg,
           messages: [
             ...prev.messages,
@@ -263,7 +259,6 @@ export function useChatSessionManager({
 
     if (!allowConcurrent && activeRequestsRef.current > 0) {
       setState(prev => ({
-        ...prev,
         lastError: null,
         messages: trimMessages([...prev.messages, {
           id: generateMessageId(),
@@ -280,7 +275,6 @@ export function useChatSessionManager({
     activeRequestsRef.current += 1;
 
     setState(prev => ({
-      ...prev,
       isProcessing: true,
       lastError: null,
     }));
@@ -297,7 +291,6 @@ export function useChatSessionManager({
       }
       const errorMsg = error instanceof Error ? error.message : 'Failed to send message';
       setState(prev => ({
-        ...prev,
         isProcessing: activeRequestsRef.current > 0,
         lastError: `Failed to send message: ${errorMsg}`,
         messages: trimMessages([...prev.messages, {
@@ -324,7 +317,6 @@ export function useChatSessionManager({
       queuedMessagesRef.current = [];
       setQueuedMessagesCount(0);
       setState(prev => ({
-        ...prev,
         isProcessing: false,
         queryProgress: null,
         lastError: null,
@@ -335,7 +327,6 @@ export function useChatSessionManager({
       setQueuedMessagesCount(0);
       const errorMsg = error instanceof Error ? error.message : 'Failed to stop query';
       setState(prev => ({
-        ...prev,
         isProcessing: false,
         queryProgress: null,
         lastError: errorMsg,
@@ -367,7 +358,6 @@ export function useChatSessionManager({
 
       if (restoredMessages.length > 0) {
         setState(prev => ({
-          ...prev,
           messages: trimMessages(restoredMessages),
           toolExecutions: [],
           fileEdits: [],
@@ -400,7 +390,6 @@ export function useChatSessionManager({
     handleSendMessage(next).catch((error) => {
       const errorMsg = error instanceof Error ? error.message : 'Failed to send queued message';
       setState(prev => ({
-        ...prev,
         lastError: `Failed to send queued message: ${errorMsg}`,
         messages: trimMessages([...prev.messages, {
           id: generateMessageId(),

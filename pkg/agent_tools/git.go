@@ -62,6 +62,11 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 		return commitFlowExecutor.ExecuteGitCommitFlow()
 	}
 
+	// Validate git arguments for dangerous patterns before proceeding
+	if err := ValidateGitArgs(op.Args); err != nil {
+		return "", fmt.Errorf("git argument validation failed: %w", err)
+	}
+
 	// All git operations require user approval - build the full git command for display
 	cmd := buildGitCommand(op.Operation, op.Args)
 

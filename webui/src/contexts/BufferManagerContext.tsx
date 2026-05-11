@@ -282,7 +282,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     paneBridge.setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [activateBuffer, switchToBuffer]);
+  }, [activateBuffer, switchToBuffer, paneBridge]);
 
   // Open workspace buffer
   const openWorkspaceBuffer = useCallback((options: {
@@ -377,7 +377,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     paneBridge.setActiveBufferId(bufferId);
 
     return bufferId;
-  }, [activateBuffer, getRightmostPane, paneBridge.panes, paneBridge.activePaneId, paneBridge]);
+  }, [activateBuffer, getRightmostPane, switchToBuffer, paneBridge]);
 
   // Open compare buffer
   const openCompareBuffer = useCallback((options: {
@@ -827,7 +827,7 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     return () => clearInterval(intervalId);
   }, [isAutoSaveEnabled, autoSaveInterval]);
 
-  const value: BufferManagerContextValue = {
+  const value = React.useMemo<BufferManagerContextValue>(() => ({
     buffers,
     openFile,
     openWorkspaceBuffer,
@@ -852,7 +852,32 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     setBufferPinned,
     setBufferClosable,
     reloadBufferFromDisk,
-  };
+  }), [
+    buffers,
+    openFile,
+    openWorkspaceBuffer,
+    openCompareBuffer,
+    closeBuffer,
+    reorderBuffers,
+    moveBufferToPane,
+    switchToBuffer,
+    updateBufferContent,
+    updateBufferCursor,
+    updateBufferScroll,
+    updateBufferMetadata,
+    updateBufferTitle,
+    saveBuffer,
+    setBufferModified,
+    setBufferOriginalContent,
+    setBufferExternallyModified,
+    clearBufferExternallyModified,
+    setBufferLanguageOverride,
+    saveAllBuffers,
+    toggleBufferPin,
+    setBufferPinned,
+    setBufferClosable,
+    reloadBufferFromDisk,
+  ]);
 
   return (
     <BufferManagerContext.Provider value={value}>

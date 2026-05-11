@@ -59,43 +59,52 @@ export function useWorktrees(): UseWorktreesReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const createWorktreeHandler = useCallback(async (path: string, branch: string, baseRef?: string): Promise<string | null> => {
-    try {
-      await createWorktree(path, branch, baseRef);
-      // Refresh the list after creating
-      await refresh();
-      return path;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create worktree';
-      setError(message);
-      debugLog('[worktrees] Failed to create worktree:', err);
-      return null;
-    }
-  }, [refresh]);
+  const createWorktreeHandler = useCallback(
+    async (path: string, branch: string, baseRef?: string): Promise<string | null> => {
+      try {
+        await createWorktree(path, branch, baseRef);
+        // Refresh the list after creating
+        await refresh();
+        return path;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to create worktree';
+        setError(message);
+        debugLog('[worktrees] Failed to create worktree:', err);
+        return null;
+      }
+    },
+    [refresh],
+  );
 
-  const removeWorktreeHandler = useCallback(async (path: string): Promise<void> => {
-    try {
-      await removeWorktree(path);
-      // Refresh the list after removing
-      await refresh();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to remove worktree';
-      setError(message);
-      debugLog('[worktrees] Failed to remove worktree:', err);
-    }
-  }, [refresh]);
+  const removeWorktreeHandler = useCallback(
+    async (path: string): Promise<void> => {
+      try {
+        await removeWorktree(path);
+        // Refresh the list after removing
+        await refresh();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to remove worktree';
+        setError(message);
+        debugLog('[worktrees] Failed to remove worktree:', err);
+      }
+    },
+    [refresh],
+  );
 
-  const checkoutWorktreeHandler = useCallback(async (path: string): Promise<void> => {
-    try {
-      await checkoutWorktree(path);
-      // Refresh the list after switching
-      await refresh();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to checkout worktree';
-      setError(message);
-      debugLog('[worktrees] Failed to checkout worktree:', err);
-    }
-  }, [refresh]);
+  const checkoutWorktreeHandler = useCallback(
+    async (path: string): Promise<void> => {
+      try {
+        await checkoutWorktree(path);
+        // Refresh the list after switching
+        await refresh();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to checkout worktree';
+        setError(message);
+        debugLog('[worktrees] Failed to checkout worktree:', err);
+      }
+    },
+    [refresh],
+  );
 
   return {
     worktrees,

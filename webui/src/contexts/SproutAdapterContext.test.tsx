@@ -255,9 +255,12 @@ describe('useSproutFetch', () => {
     // Call the fetch function
     await fn('/api/cloud/test', { method: 'POST' });
 
-    expect(adapterFetchSpy).toHaveBeenCalledWith('/api/cloud/test', expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(adapterFetchSpy).toHaveBeenCalledWith(
+      '/api/cloud/test',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
 
     adapterFetchSpy.mockRestore();
   });
@@ -283,9 +286,7 @@ describe('useSproutFetch', () => {
   });
 
   it('merges custom headers with client ID header when no adapter', async () => {
-    const clientFetchSpy = jest
-      .spyOn({ clientFetch }, 'clientFetch')
-      .mockResolvedValue({ ok: true } as Response);
+    const clientFetchSpy = jest.spyOn({ clientFetch }, 'clientFetch').mockResolvedValue({ ok: true } as Response);
 
     renderProvider();
 
@@ -301,7 +302,7 @@ describe('useSproutFetch', () => {
       '/api/test',
       expect.objectContaining({
         headers: expect.any(Headers),
-      })
+      }),
     );
 
     const capturedHeaders = clientFetchSpy.mock.calls[0]![1]!.headers as Headers;
@@ -440,7 +441,7 @@ describe('SproutAdapterProvider', () => {
       installAdapter(secondAdapter);
       root.render(
         // @ts-expect-error — createElement accepts children as rest args
-        createElement(SproutAdapterProvider, {}, createElement(TestConsumer))
+        createElement(SproutAdapterProvider, {}, createElement(TestConsumer)),
       );
     });
 
@@ -448,9 +449,7 @@ describe('SproutAdapterProvider', () => {
   });
 
   it('handles adapter with all optional fields', () => {
-    const navItems = [
-      { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 1 },
-    ];
+    const navItems = [{ id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 1 }];
 
     const adapter = createMockAdapter({
       name: 'FullFieldsAdapter',

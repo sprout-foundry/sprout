@@ -27,7 +27,9 @@
   flex-direction: column;
   transform: scale(1);
   opacity: 1;
-  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+  transition:
+    transform 0.2s ease-out,
+    opacity 0.2s ease-out;
 }
 
 /* Header */
@@ -240,10 +242,16 @@
 
 /* Animations */
 @keyframes wt-picker-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes wt-picker-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }

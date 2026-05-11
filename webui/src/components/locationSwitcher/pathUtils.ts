@@ -1,4 +1,4 @@
-import { SSHBrowseQuery } from './types';
+import type { SSHBrowseQuery } from './types';
 
 export const normalizePath = (rawPath: string): string => {
   let normalized = rawPath.trim().replace(/\/+/g, '/');
@@ -53,8 +53,7 @@ export const getSSHBrowseQuery = (rawPath: string): SSHBrowseQuery => {
   }
 
   const endsWithSlash = normalized.endsWith('/');
-  const withoutTrailingSlash =
-    normalized.length > 1 && endsWithSlash ? normalized.replace(/\/+$/, '') : normalized;
+  const withoutTrailingSlash = normalized.length > 1 && endsWithSlash ? normalized.replace(/\/+$/, '') : normalized;
 
   if (withoutTrailingSlash.startsWith('$HOME/')) {
     const lastSlash = withoutTrailingSlash.lastIndexOf('/');

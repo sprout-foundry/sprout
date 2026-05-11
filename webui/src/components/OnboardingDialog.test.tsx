@@ -27,11 +27,12 @@ import type { OnboardingProviderOption } from '../services/api';
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
-  X: ({ size }: { size?: number }) => require('react').createElement('svg', {
-    width: size,
-    height: size,
-    'data-testid': 'x-icon',
-  }),
+  X: ({ size }: { size?: number }) =>
+    require('react').createElement('svg', {
+      width: size,
+      height: size,
+      'data-testid': 'x-icon',
+    }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -124,10 +125,7 @@ const mockAdvancedProviders: OnboardingProviderOption[] = [
 const mockWindowsGuidance = {
   title: 'Windows Setup',
   body: 'Install WSL or Git Bash for the best experience.',
-  checklist: [
-    'Install WSL from Microsoft Store',
-    'Or install Git Bash from gitforwindows.org',
-  ],
+  checklist: ['Install WSL from Microsoft Store', 'Or install Git Bash from gitforwindows.org'],
   canInstallWsl: true,
   canInstallGitBash: true,
   tone: 'info',
@@ -156,7 +154,7 @@ afterEach(() => {
 });
 
 const flushPromises = async () => {
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 // ---------------------------------------------------------------------------
@@ -169,7 +167,7 @@ const renderOnboardingDialog = (
   recommendedProviders: OnboardingProviderOption[] = mockRecommendedProviders,
   advancedProviders: OnboardingProviderOption[] = mockAdvancedProviders,
   windowsGuidance: any = null,
-  callbacks: any = {}
+  callbacks: any = {},
 ) => {
   const defaultCallbacks = {
     onProviderChange: jest.fn(),
@@ -197,7 +195,7 @@ const renderOnboardingDialog = (
       createElement(OnboardingDialog, {
         ...props,
         ...mergedCallbacks,
-      })
+      }),
     );
   });
 };
@@ -246,10 +244,17 @@ describe('OnboardingDialog', () => {
 
     it('calls onProviderChange when a recommended provider is clicked', async () => {
       const onProviderChange = jest.fn();
-      renderOnboardingDialog({ ...mockOnboarding, open: true }, null, mockRecommendedProviders, mockAdvancedProviders, null, { onProviderChange });
+      renderOnboardingDialog(
+        { ...mockOnboarding, open: true },
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        null,
+        { onProviderChange },
+      );
 
-      const zaiButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.includes('Z.AI')
+      const zaiButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.includes('Z.AI'),
       );
       if (zaiButton) {
         zaiButton.click();
@@ -267,8 +272,8 @@ describe('OnboardingDialog', () => {
       };
       renderOnboardingDialog(onboardingWithProvider, mockRecommendedProviders[0]);
 
-      const zaiButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.includes('Z.AI')
+      const zaiButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.includes('Z.AI'),
       );
       if (zaiButton) {
         expect(zaiButton.classList.contains('selected')).toBe(true);
@@ -305,8 +310,8 @@ describe('OnboardingDialog', () => {
       expect(container.textContent).not.toContain('OpenRouter');
 
       // 2. Find and verify the toggle button exists
-      const toggleButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.toLowerCase().includes('show other providers')
+      const toggleButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.toLowerCase().includes('show other providers'),
       );
       expect(toggleButton).toBeTruthy();
 
@@ -345,8 +350,8 @@ describe('OnboardingDialog', () => {
       expect(container.textContent).toContain('OpenRouter');
 
       // 8. Verify toggle button text changed to "Hide other providers"
-      const hideButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.toLowerCase().includes('hide')
+      const hideButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.toLowerCase().includes('hide'),
       );
       expect(hideButton).toBeTruthy();
 
@@ -407,7 +412,7 @@ describe('OnboardingDialog', () => {
         mockRecommendedProviders,
         mockAdvancedProviders,
         null,
-        { updateOnboarding }
+        { updateOnboarding },
       );
 
       const modelInput = container.querySelector('input[id="onboarding-model"]') as HTMLInputElement;
@@ -417,8 +422,8 @@ describe('OnboardingDialog', () => {
       }
 
       // Click on a model option
-      const glm47Option = Array.from(container.querySelectorAll('li')).find(
-        li => li.textContent?.includes('glm-4.7')
+      const glm47Option = Array.from(container.querySelectorAll('li')).find((li) =>
+        li.textContent?.includes('glm-4.7'),
       );
       if (glm47Option) {
         glm47Option.click();
@@ -429,11 +434,11 @@ describe('OnboardingDialog', () => {
       expect(updateOnboarding).toHaveBeenCalled();
       const updateCall = updateOnboarding.mock.calls[0][0];
       expect(typeof updateCall).toBe('function');
-      
+
       // Call the function to get the updated state
       const mockPrevState = { ...mockOnboarding, open: true, provider: 'zai' };
       const result = updateCall(mockPrevState);
-      
+
       // Verify the model was set correctly
       expect(result.model).toBe('glm-4.7');
       expect(result.error).toBeNull();
@@ -506,17 +511,24 @@ describe('OnboardingDialog', () => {
         provider: 'zai',
       };
 
-      renderOnboardingDialog(onboardingWithProvider, selectedProvider, mockRecommendedProviders, mockAdvancedProviders, null, {
-        updateOnboarding,
-      });
+      renderOnboardingDialog(
+        onboardingWithProvider,
+        selectedProvider,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        null,
+        {
+          updateOnboarding,
+        },
+      );
 
       const apiKeyInput = container.querySelector('input[id="onboarding-api-key"]') as HTMLInputElement;
       expect(apiKeyInput).toBeTruthy();
-      
+
       // Verify the input has the right attributes
       expect(apiKeyInput.type).toBe('password');
       expect(apiKeyInput.placeholder).toBe('Paste API key');
-      
+
       // Verify the input is not disabled
       expect(apiKeyInput.disabled).toBe(false);
     });
@@ -654,10 +666,17 @@ describe('OnboardingDialog', () => {
 
     it('calls onSkip when skip button is clicked', async () => {
       const onSkip = jest.fn();
-      renderOnboardingDialog({ ...mockOnboarding, open: true }, null, mockRecommendedProviders, mockAdvancedProviders, null, { onSkip });
+      renderOnboardingDialog(
+        { ...mockOnboarding, open: true },
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        null,
+        { onSkip },
+      );
 
-      const skipButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.toLowerCase().includes('skip')
+      const skipButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.toLowerCase().includes('skip'),
       );
       if (skipButton) {
         skipButton.click();
@@ -675,10 +694,17 @@ describe('OnboardingDialog', () => {
 
     it('calls onRefresh when refresh button is clicked', async () => {
       const onRefresh = jest.fn();
-      renderOnboardingDialog({ ...mockOnboarding, open: true }, null, mockRecommendedProviders, mockAdvancedProviders, null, { onRefresh });
+      renderOnboardingDialog(
+        { ...mockOnboarding, open: true },
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        null,
+        { onRefresh },
+      );
 
-      const refreshButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.toLowerCase().includes('refresh')
+      const refreshButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.toLowerCase().includes('refresh'),
       );
       if (refreshButton) {
         refreshButton.click();
@@ -708,10 +734,17 @@ describe('OnboardingDialog', () => {
 
     it('calls onComplete when complete button is clicked', async () => {
       const onComplete = jest.fn();
-      renderOnboardingDialog({ ...mockOnboarding, open: true }, null, mockRecommendedProviders, mockAdvancedProviders, null, { onComplete });
+      renderOnboardingDialog(
+        { ...mockOnboarding, open: true },
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        null,
+        { onComplete },
+      );
 
-      const completeButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.toLowerCase().includes('complete')
+      const completeButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.toLowerCase().includes('complete'),
       );
       if (completeButton) {
         completeButton.click();
@@ -763,7 +796,13 @@ describe('OnboardingDialog', () => {
 
   describe('Platform Guidance', () => {
     it('displays Windows guidance when windowsGuidance is provided', () => {
-      renderOnboardingDialog({ ...mockOnboarding, open: true }, null, mockRecommendedProviders, mockAdvancedProviders, mockWindowsGuidance);
+      renderOnboardingDialog(
+        { ...mockOnboarding, open: true },
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        mockWindowsGuidance,
+      );
 
       expect(container.textContent).toMatch(/windows setup/i);
     });
@@ -779,13 +818,25 @@ describe('OnboardingDialog', () => {
         },
       };
 
-      renderOnboardingDialog(onboardingWithDistro, null, mockRecommendedProviders, mockAdvancedProviders, mockWindowsGuidance);
+      renderOnboardingDialog(
+        onboardingWithDistro,
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        mockWindowsGuidance,
+      );
 
       expect(container.textContent).toMatch(/ubuntu-22.04/i);
     });
 
     it('displays install buttons when canInstallWsl is true', () => {
-      renderOnboardingDialog({ ...mockOnboarding, open: true }, null, mockRecommendedProviders, mockAdvancedProviders, mockWindowsGuidance);
+      renderOnboardingDialog(
+        { ...mockOnboarding, open: true },
+        null,
+        mockRecommendedProviders,
+        mockAdvancedProviders,
+        mockWindowsGuidance,
+      );
 
       expect(container.textContent).toMatch(/install wsl/i);
     });
@@ -798,11 +849,11 @@ describe('OnboardingDialog', () => {
         mockRecommendedProviders,
         mockAdvancedProviders,
         mockWindowsGuidance,
-        { onInstallWsl }
+        { onInstallWsl },
       );
 
-      const installWslButton = Array.from(container.querySelectorAll('button')).find(
-        btn => btn.textContent?.toLowerCase().includes('install wsl')
+      const installWslButton = Array.from(container.querySelectorAll('button')).find((btn) =>
+        btn.textContent?.toLowerCase().includes('install wsl'),
       );
       if (installWslButton) {
         installWslButton.click();
@@ -858,7 +909,7 @@ describe('OnboardingDialog', () => {
         mockRecommendedProviders,
         mockAdvancedProviders,
         null,
-        { updateOnboarding }
+        { updateOnboarding },
       );
 
       const closeButton = container.querySelector('[aria-label="Close"]');

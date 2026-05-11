@@ -138,7 +138,11 @@ describe('buildLSPPluginExtensions', () => {
   it('returns [client.plugin()] when client exists', () => {
     const mockPlugin = jest.fn().mockReturnValue([]);
     const mockClient = { connected: true, plugin: mockPlugin };
-    const result = buildLSPPluginExtensions(mockClient as unknown as unknown as import('@codemirror/lsp-client').LSPClient, '/test/file.go', 'go');
+    const result = buildLSPPluginExtensions(
+      mockClient as unknown as unknown as import('@codemirror/lsp-client').LSPClient,
+      '/test/file.go',
+      'go',
+    );
     expect(mockPlugin).toHaveBeenCalledWith('file:///test/file.go', 'go');
     expect(result).toEqual([[]]);
   });
@@ -146,7 +150,11 @@ describe('buildLSPPluginExtensions', () => {
   it('returns [client.plugin()] with empty file path', () => {
     const mockPlugin = jest.fn().mockReturnValue([]);
     const mockClient = { connected: true, plugin: mockPlugin };
-    const result = buildLSPPluginExtensions(mockClient as unknown as unknown as import('@codemirror/lsp-client').LSPClient, '', 'go');
+    const result = buildLSPPluginExtensions(
+      mockClient as unknown as unknown as import('@codemirror/lsp-client').LSPClient,
+      '',
+      'go',
+    );
     expect(mockPlugin).toHaveBeenCalledWith('', 'go');
     expect(result).toEqual([[]]);
   });

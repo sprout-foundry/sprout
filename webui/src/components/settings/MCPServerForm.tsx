@@ -190,11 +190,7 @@ export default function MCPServerForm({
   }
 
   return (
-    <button
-      type="button"
-      className="crud-add-btn"
-      onClick={handleShowAddForm}
-    >
+    <button type="button" className="crud-add-btn" onClick={handleShowAddForm}>
       <Plus size={14} /> Add server
     </button>
   );

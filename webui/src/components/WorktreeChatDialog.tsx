@@ -7,12 +7,7 @@ import './WorktreeChatDialog.css';
 export interface WorktreeChatDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (params: {
-    branch: string;
-    baseRef: string;
-    name: string;
-    autoSwitch: boolean;
-  }) => void;
+  onSubmit: (params: { branch: string; baseRef: string; name: string; autoSwitch: boolean }) => void;
   isCreating?: boolean;
   error?: string | null;
 }
@@ -31,7 +26,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
   const [existingWorktrees, setExistingWorktrees] = useState<WorktreeInfo[]>([]);
   const [isLoadingWorktrees, setIsLoadingWorktrees] = useState(false);
   const [worktreesError, setWorktreesError] = useState(false);
-  
+
   const branchInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form when dialog opens
@@ -43,7 +38,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
       setAutoSwitch(true);
       setExistingWorktrees([]);
       setWorktreesError(false);
-      
+
       // Focus the branch input when dialog opens
       setTimeout(() => {
         branchInputRef.current?.focus();
@@ -86,8 +81,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
   }, [isOpen, onClose, isCreating]);
 
   // Check if the typed branch already has a worktree
-  const branchHasWorktree =
-    branch.trim() && existingWorktrees.some((wt) => wt.branch === branch.trim());
+  const branchHasWorktree = branch.trim() && existingWorktrees.some((wt) => wt.branch === branch.trim());
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -179,13 +173,10 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
             />
             {branchHasWorktree && (
               <small className="wt-chat-dialog-warning">
-                <TriangleAlert size={12} />
-                A worktree already exists for branch <strong>{branch.trim()}</strong>
+                <TriangleAlert size={12} />A worktree already exists for branch <strong>{branch.trim()}</strong>
               </small>
             )}
-            {!branchHasWorktree && (
-              <small>Create a new branch for this worktree</small>
-            )}
+            {!branchHasWorktree && <small>Create a new branch for this worktree</small>}
           </div>
 
           {/* Base Reference Input */}
@@ -266,9 +257,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
                     >
                       <GitBranch size={13} />
                       <span className="wt-chat-dialog-worktree-branch">{wt.branch}</span>
-                      {wt.is_current && (
-                        <span className="wt-chat-dialog-worktree-badge">active</span>
-                      )}
+                      {wt.is_current && <span className="wt-chat-dialog-worktree-badge">active</span>}
                     </button>
                   </li>
                 ))}
@@ -278,12 +267,7 @@ export const WorktreeChatDialog: React.FC<WorktreeChatDialogProps> = ({
 
           {/* Actions */}
           <div className="wt-chat-dialog-actions">
-            <button
-              type="button"
-              className="wt-chat-dialog-btn-cancel"
-              onClick={handleCancel}
-              disabled={isCreating}
-            >
+            <button type="button" className="wt-chat-dialog-btn-cancel" onClick={handleCancel} disabled={isCreating}>
               Cancel
             </button>
             <button

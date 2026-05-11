@@ -6,9 +6,14 @@ export const useHotkeysConfig = (apiService: ApiService, isConnected: boolean): 
 
   useEffect(() => {
     if (!isConnected) return;
-    apiService.getHotkeys().then(config => {
-      if (config.path) setHotkeysConfigPath(config.path);
-    }).catch((err) => { console.warn('Failed to load hotkeys config:', err); });
+    apiService
+      .getHotkeys()
+      .then((config) => {
+        if (config.path) setHotkeysConfigPath(config.path);
+      })
+      .catch((err) => {
+        console.warn('Failed to load hotkeys config:', err);
+      });
   }, [isConnected, apiService]);
 
   return hotkeysConfigPath;

@@ -6,3 +6,4 @@ coverage/
 **/*.test.*
 **/*.spec.*
 **/__mocks__/**
+src/vitest.setup.ts

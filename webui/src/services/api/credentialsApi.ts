@@ -2,7 +2,7 @@
  * Credentials domain API — adapter-aware credential operations.
  */
 
-import {
+import type {
   ProviderCredentialsResponse,
   TestProviderConnectionResponse,
   KeyPoolResponse,
@@ -40,7 +40,10 @@ export async function deleteProviderCredential(fetchFn: typeof fetch, provider: 
   }
 }
 
-export async function testProviderConnection(fetchFn: typeof fetch, provider: string): Promise<TestProviderConnectionResponse> {
+export async function testProviderConnection(
+  fetchFn: typeof fetch,
+  provider: string,
+): Promise<TestProviderConnectionResponse> {
   const response = await fetchFn('/api/settings/credentials/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -83,13 +86,20 @@ export async function removeKeyFromPool(fetchFn: typeof fetch, provider: string,
   }
 }
 
-export async function getMCPServerCredentials(fetchFn: typeof fetch, serverName: string): Promise<MCPServerCredentialsResponse> {
+export async function getMCPServerCredentials(
+  fetchFn: typeof fetch,
+  serverName: string,
+): Promise<MCPServerCredentialsResponse> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
 }
 
-export async function updateMCPServerCredentials(fetchFn: typeof fetch, serverName: string, credentials: Record<string, string>): Promise<UpdateMCPServerCredentialsResponse> {
+export async function updateMCPServerCredentials(
+  fetchFn: typeof fetch,
+  serverName: string,
+  credentials: Record<string, string>,
+): Promise<UpdateMCPServerCredentialsResponse> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -99,7 +109,14 @@ export async function updateMCPServerCredentials(fetchFn: typeof fetch, serverNa
   return response.json();
 }
 
-export async function deleteMCPServerCredential(fetchFn: typeof fetch, serverName: string, credentialName: string): Promise<void> {
-  const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials/${encodeURIComponent(credentialName)}`, { method: 'DELETE' });
+export async function deleteMCPServerCredential(
+  fetchFn: typeof fetch,
+  serverName: string,
+  credentialName: string,
+): Promise<void> {
+  const response = await fetchFn(
+    `/api/settings/mcp/servers/${encodeURIComponent(serverName)}/credentials/${encodeURIComponent(credentialName)}`,
+    { method: 'DELETE' },
+  );
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 }

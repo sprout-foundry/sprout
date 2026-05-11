@@ -146,9 +146,7 @@ describe('formatMarkdown', () => {
   });
 
   it('converts inline code (backticks) to <code>...</code>', () => {
-    expect(formatMarkdown('Use `console.log()` for debugging')).toBe(
-      'Use <code>console.log()</code> for debugging'
-    );
+    expect(formatMarkdown('Use `console.log()` for debugging')).toBe('Use <code>console.log()</code> for debugging');
   });
 
   // -------------------------------------------------------------------------
@@ -207,7 +205,7 @@ describe('createHoverTooltipExtension', () => {
   it('returns an extension (or undefined if mocked keymap returns empty array)', () => {
     const extension = createHoverTooltipExtension(
       () => undefined,
-      () => ''
+      () => '',
     );
     // Note: With mocked keymap.of returning [], this may be an empty array or undefined.
     // The important thing is that it doesn't throw.
@@ -217,7 +215,7 @@ describe('createHoverTooltipExtension', () => {
   it('returns an extension with hoverTooltip called', () => {
     const extension = createHoverTooltipExtension(
       () => undefined,
-      () => ''
+      () => '',
     );
     expect(mockHoverTooltip).toHaveBeenCalled();
   });
@@ -321,7 +319,7 @@ describe('createHoverTooltipExtension', () => {
       'const x: number = 1;',
       'typescript',
       1, // line number
-      6  // column (pos - line.from + 1, i.e., 5 - 0 + 1)
+      6, // column (pos - line.from + 1, i.e., 5 - 0 + 1)
     );
   });
 
@@ -514,7 +512,7 @@ describe('createHoverTooltipExtension', () => {
       'line1\nline2',
       'typescript',
       2, // line number
-      2  // column (7 - 6 + 1 = 2)
+      2, // column (7 - 6 + 1 = 2)
     );
   });
 

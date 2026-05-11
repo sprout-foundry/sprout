@@ -91,8 +91,7 @@ function getScriptSrc(): string {
 
 function createMockFetch(responseOverrides?: Map<string, Partial<Response>>) {
   return async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
-    const url =
-      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     capturedFetchUrls.push(url);
 
     const override = responseOverrides?.get(url);
@@ -378,8 +377,9 @@ describe('initWasmShell — configurable paths', () => {
         return node;
       });
 
-      await expect(initWasmShell({ wasmExecUrl: customUrl }))
-        .rejects.toThrow(`Failed to load wasm_exec.js from ${customUrl}`);
+      await expect(initWasmShell({ wasmExecUrl: customUrl })).rejects.toThrow(
+        `Failed to load wasm_exec.js from ${customUrl}`,
+      );
     });
   });
 

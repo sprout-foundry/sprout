@@ -15,15 +15,14 @@ export function getSyntheticResponse(path: string, method: string): Response | n
   }
 
   // Determine status code based on response shape
-  const hasError = endpoint.syntheticResponse &&
+  const hasError =
+    endpoint.syntheticResponse &&
     typeof endpoint.syntheticResponse === 'object' &&
     'error' in endpoint.syntheticResponse;
 
   const status = hasError ? 400 : 200;
 
-  const body = endpoint.syntheticResponse != null
-    ? JSON.stringify(endpoint.syntheticResponse)
-    : '{}';
+  const body = endpoint.syntheticResponse != null ? JSON.stringify(endpoint.syntheticResponse) : '{}';
 
   return new Response(body, {
     status,

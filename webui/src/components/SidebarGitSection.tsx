@@ -21,12 +21,19 @@ interface ExtendedGitSidebarPanelProps extends GitSidebarPanelProps {
     isClosable?: boolean;
     metadata?: Record<string, unknown>;
   }) => string;
-  onLoadCommits: (limit: number, offset: number, opts?: { signal?: AbortSignal }) => Promise<{
+  onLoadCommits: (
+    limit: number,
+    offset: number,
+    opts?: { signal?: AbortSignal },
+  ) => Promise<{
     commits: GitCommitSummary[];
     total: number;
   }>;
   onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
-  onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{
+  onLoadCommitFileDiff: (
+    hash: string,
+    filePath: string,
+  ) => Promise<{
     message: string;
     hash: string;
     path: string;
@@ -81,12 +88,7 @@ export default function SidebarGitSection({
   return (
     <>
       {/* Sub-tab bar: Changes / History / Worktrees */}
-      <div
-        className="git-sidebar-tab-bar"
-        role="tablist"
-        aria-label="Git sub-sections"
-        onKeyDown={handleTabBarKeyDown}
-      >
+      <div className="git-sidebar-tab-bar" role="tablist" aria-label="Git sub-sections" onKeyDown={handleTabBarKeyDown}>
         <button
           type="button"
           role="tab"

@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  normalizePath,
-  getPathDisplayName,
-  collapseHomePath,
-  getSSHBrowseQuery,
-} from './pathUtils';
+import { normalizePath, getPathDisplayName, collapseHomePath, getSSHBrowseQuery } from './pathUtils';
 
 describe('normalizePath', () => {
   describe('empty / trivial input', () => {
@@ -27,9 +22,7 @@ describe('normalizePath', () => {
     });
 
     it('leaves nested absolute path unchanged', () => {
-      expect(normalizePath('/home/user/projects/sprout')).toBe(
-        '/home/user/projects/sprout',
-      );
+      expect(normalizePath('/home/user/projects/sprout')).toBe('/home/user/projects/sprout');
     });
   });
 
@@ -93,9 +86,7 @@ describe('getPathDisplayName', () => {
     });
 
     it('returns last 2 segments for deep path', () => {
-      expect(getPathDisplayName('/home/user/projects/sprout/src')).toBe(
-        'sprout/src',
-      );
+      expect(getPathDisplayName('/home/user/projects/sprout/src')).toBe('sprout/src');
     });
 
     it('returns last 2 segments for very deep path', () => {
@@ -149,21 +140,15 @@ describe('collapseHomePath', () => {
 
   describe('path starting with home', () => {
     it('replaces home prefix with ~ for subdirectory', () => {
-      expect(collapseHomePath('/home/alanp/projects', '/home/alanp')).toBe(
-        '~/projects',
-      );
+      expect(collapseHomePath('/home/alanp/projects', '/home/alanp')).toBe('~/projects');
     });
 
     it('replaces home prefix for nested paths', () => {
-      expect(
-        collapseHomePath('/home/alanp/projects/sprout/src', '/home/alanp'),
-      ).toBe('~/projects/sprout/src');
+      expect(collapseHomePath('/home/alanp/projects/sprout/src', '/home/alanp')).toBe('~/projects/sprout/src');
     });
 
     it('handles home path with trailing content', () => {
-      expect(collapseHomePath('/home/alanp/.config', '/home/alanp')).toBe(
-        '~/.config',
-      );
+      expect(collapseHomePath('/home/alanp/.config', '/home/alanp')).toBe('~/.config');
     });
   });
 
@@ -177,23 +162,17 @@ describe('collapseHomePath', () => {
     });
 
     it('does not match partial directory name', () => {
-      expect(collapseHomePath('/home/alanpother/file', '/home/alanp')).toBe(
-        '/home/alanpother/file',
-      );
+      expect(collapseHomePath('/home/alanpother/file', '/home/alanp')).toBe('/home/alanpother/file');
     });
   });
 
   describe('different home paths', () => {
     it('handles macOS-style home paths', () => {
-      expect(collapseHomePath('/Users/alanp/docs', '/Users/alanp')).toBe(
-        '~/docs',
-      );
+      expect(collapseHomePath('/Users/alanp/docs', '/Users/alanp')).toBe('~/docs');
     });
 
     it('handles WSL-style home paths', () => {
-      expect(
-        collapseHomePath('/mnt/c/Users/alanp/docs', '/mnt/c/Users/alanp'),
-      ).toBe('~/docs');
+      expect(collapseHomePath('/mnt/c/Users/alanp/docs', '/mnt/c/Users/alanp')).toBe('~/docs');
     });
   });
 });

@@ -19,14 +19,7 @@
  * - Active parameter is bolded in the signature display.
  */
 
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  ViewPlugin,
-  type ViewUpdate,
-  keymap,
-} from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, keymap } from '@codemirror/view';
 import { Annotation, type Extension } from '@codemirror/state';
 import { ApiService } from '../services/api';
 import { isLSPClientConnected } from './lspExtensions';
@@ -40,13 +33,7 @@ const DEBOUNCE_MS = 100;
 const signatureHelpAnnotation = Annotation.define<boolean>();
 
 /** Languages that support signature help via the semantic API. */
-const SIGNATURE_HELP_LANGUAGES = new Set([
-  'typescript',
-  'typescript-jsx',
-  'javascript',
-  'javascript-jsx',
-  'go',
-]);
+const SIGNATURE_HELP_LANGUAGES = new Set(['typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'go']);
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -77,10 +64,7 @@ function createTooltipDOM(): HTMLDivElement {
   return el;
 }
 
-function renderSignature(
-  el: HTMLDivElement,
-  data: SignatureHelpData,
-): void {
+function renderSignature(el: HTMLDivElement, data: SignatureHelpData): void {
   const sig = data.signatures[data.activeSignature] ?? data.signatures[0];
   if (!sig) {
     el.style.display = 'none';
@@ -137,11 +121,7 @@ interface SignaturePart {
  * Strategy: find the active parameter's label within the signature text.
  * Parameters are separated by commas inside parentheses.
  */
-function splitSignatureAtParams(
-  label: string,
-  params: SignatureParameter[],
-  activeParam: number,
-): SignaturePart[] {
+function splitSignatureAtParams(label: string, params: SignatureParameter[], activeParam: number): SignaturePart[] {
   // Find the opening paren for the parameter list
   const openParen = label.indexOf('(');
   if (openParen < 0) {
@@ -163,9 +143,7 @@ function splitSignatureAtParams(
   // Adjust activeParam if it's out of range (e.g. after trailing comma)
   const paramIdx = Math.min(activeParam, paramSegments.length - 1);
 
-  const parts: SignaturePart[] = [
-    { text: before, highlight: false },
-  ];
+  const parts: SignaturePart[] = [{ text: before, highlight: false }];
 
   for (let i = 0; i < paramSegments.length; i++) {
     if (i > 0) {
@@ -504,30 +482,29 @@ const activePlugins = new WeakMap<EditorView, SignatureHelpPlugin>();
 // Keybinding extension with plugin instance access
 function signatureKeymapExtension(): Extension {
   return keymap.of([
-      {
-        key: 'Ctrl-Shift-Space',
-        run(view: EditorView) {
-          const plugin = activePlugins.get(view);
-          if (plugin) {
-            plugin.trigger();
-            return true;
-          }
-          return false;
-        },
+    {
+      key: 'Ctrl-Shift-Space',
+      run(view: EditorView) {
+        const plugin = activePlugins.get(view);
+        if (plugin) {
+          plugin.trigger();
+          return true;
+        }
+        return false;
       },
-      {
-        key: 'Escape',
-        run(view: EditorView) {
-          const plugin = activePlugins.get(view);
-          if (plugin && plugin.isTooltipVisible()) {
-            plugin.dismiss();
-            return true;
-          }
-          return false;
-        },
+    },
+    {
+      key: 'Escape',
+      run(view: EditorView) {
+        const plugin = activePlugins.get(view);
+        if (plugin && plugin.isTooltipVisible()) {
+          plugin.dismiss();
+          return true;
+        }
+        return false;
       },
-    ],
-  );
+    },
+  ]);
 }
 
 // ── Public API ──────────────────────────────────────────────────────

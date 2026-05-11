@@ -22,8 +22,8 @@ const wsUrl = import.meta.env.REACT_APP_FOUNDRY_WS_URL;
 
 if (mode === 'cloud') {
   const resolvedApiBase = apiBase || window.location.origin;
-  const resolvedWsUrl = wsUrl ||
-    `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+  const resolvedWsUrl =
+    wsUrl || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
 
   installAdapter(new CloudAdapter({ apiBase: resolvedApiBase, wsUrl: resolvedWsUrl, navItems: CLOUD_NAV_ITEMS }));
 }

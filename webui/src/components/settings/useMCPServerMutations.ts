@@ -24,7 +24,13 @@ interface MCPMutationParams {
   credentialServer: string | null;
   setCredentialServer: (v: string | null) => void;
   credentialEntries: Array<{ key: string; value: string; status: string }>;
-  setCredentialEntries: (v: Array<{ key: string; value: string; status: string }> | ((prev: Array<{ key: string; value: string; status: string }>) => Array<{ key: string; value: string; status: string }>)) => void;
+  setCredentialEntries: (
+    v:
+      | Array<{ key: string; value: string; status: string }>
+      | ((
+          prev: Array<{ key: string; value: string; status: string }>,
+        ) => Array<{ key: string; value: string; status: string }>),
+  ) => void;
   credentialLoading: boolean;
   setCredentialLoading: (v: boolean) => void;
   newCredentialKey: string;
@@ -36,18 +42,30 @@ interface MCPMutationParams {
 export function useMCPServerMutations(params: MCPMutationParams) {
   const {
     ctx,
-    editingServer, setEditingServer,
-    serverName, setServerName,
-    serverCommand, setServerCommand,
-    serverArgs, setServerArgs,
-    serverEnvVars, setServerEnvVars,
-    newEnvKey: _newEnvKey, setNewEnvKey,
-    newEnvValue: _newEnvValue, setNewEnvValue,
-    credentialServer, setCredentialServer,
-    credentialEntries, setCredentialEntries,
-    credentialLoading: _credentialLoading, setCredentialLoading,
-    newCredentialKey, setNewCredentialKey,
-    newCredentialValue, setNewCredentialValue,
+    editingServer,
+    setEditingServer,
+    serverName,
+    setServerName,
+    serverCommand,
+    setServerCommand,
+    serverArgs,
+    setServerArgs,
+    serverEnvVars,
+    setServerEnvVars,
+    newEnvKey: _newEnvKey,
+    setNewEnvKey,
+    newEnvValue: _newEnvValue,
+    setNewEnvValue,
+    credentialServer,
+    setCredentialServer,
+    credentialEntries,
+    setCredentialEntries,
+    credentialLoading: _credentialLoading,
+    setCredentialLoading,
+    newCredentialKey,
+    setNewCredentialKey,
+    newCredentialValue,
+    setNewCredentialValue,
   } = params;
 
   const { api, onSettingsChanged, addNotification, setSavingKey } = ctx;
@@ -78,7 +96,15 @@ export function useMCPServerMutations(params: MCPMutationParams) {
     setServerEnvVars([]);
     setNewEnvKey('');
     setNewEnvValue('');
-  }, [setEditingServer, setServerName, setServerCommand, setServerArgs, setServerEnvVars, setNewEnvKey, setNewEnvValue]);
+  }, [
+    setEditingServer,
+    setServerName,
+    setServerCommand,
+    setServerArgs,
+    setServerEnvVars,
+    setNewEnvKey,
+    setNewEnvValue,
+  ]);
 
   const handleAddServer = useCallback(async () => {
     if (!serverName.trim()) return;
@@ -114,23 +140,35 @@ export function useMCPServerMutations(params: MCPMutationParams) {
     } finally {
       setSavingKey(null);
     }
-  }, [editingServer, serverName, buildServerPayload, setSavingKey, api, onSettingsChanged, addNotification, resetServerForm]);
+  }, [
+    editingServer,
+    serverName,
+    buildServerPayload,
+    setSavingKey,
+    api,
+    onSettingsChanged,
+    addNotification,
+    resetServerForm,
+  ]);
 
-  const handleDeleteServer = useCallback(async (name: string) => {
-    setSavingKey('mcp-server-delete');
-    try {
-      await api.deleteMCPServer(name);
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Server deleted', 3000);
-      if (editingServer?.originalName === name) resetServerForm();
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to delete MCP server:', err);
-      addNotification('error', 'Settings', 'Failed to delete server', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  }, [setSavingKey, api, onSettingsChanged, addNotification, editingServer, resetServerForm]);
+  const handleDeleteServer = useCallback(
+    async (name: string) => {
+      setSavingKey('mcp-server-delete');
+      try {
+        await api.deleteMCPServer(name);
+        const fresh = await api.getSettings();
+        onSettingsChanged(fresh);
+        addNotification('success', 'Settings', 'Server deleted', 3000);
+        if (editingServer?.originalName === name) resetServerForm();
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to delete MCP server:', err);
+        addNotification('error', 'Settings', 'Failed to delete server', 5000);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [setSavingKey, api, onSettingsChanged, addNotification, editingServer, resetServerForm],
+  );
 
   /* ─── MCP credential management ───────────────────────── */
 
@@ -142,28 +180,40 @@ export function useMCPServerMutations(params: MCPMutationParams) {
     setNewCredentialValue('');
   }, [setCredentialServer, setCredentialEntries, setCredentialLoading, setNewCredentialKey, setNewCredentialValue]);
 
-  const handleLoadCredentials = useCallback(async (credentialServerName: string) => {
-    setCredentialServer(credentialServerName);
-    setCredentialLoading(true);
-    setCredentialEntries([]);
-    setNewCredentialKey('');
-    setNewCredentialValue('');
-    try {
-      const resp = await api.getMCPServerCredentials(credentialServerName);
-      const entries = Object.entries(resp.credentials || {}).map(([key, info]: [string, { status: string }]) => ({
-        key,
-        value: '',
-        status: info.status === 'set' ? 'set' : 'missing',
-      }));
-      setCredentialEntries(entries);
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to load credentials:', err);
-      addNotification('error', 'Settings', 'Failed to load credentials', 5000);
-      resetCredentialForm();
-    } finally {
-      setCredentialLoading(false);
-    }
-  }, [setCredentialServer, setCredentialLoading, setCredentialEntries, setNewCredentialKey, setNewCredentialValue, api, addNotification, resetCredentialForm]);
+  const handleLoadCredentials = useCallback(
+    async (credentialServerName: string) => {
+      setCredentialServer(credentialServerName);
+      setCredentialLoading(true);
+      setCredentialEntries([]);
+      setNewCredentialKey('');
+      setNewCredentialValue('');
+      try {
+        const resp = await api.getMCPServerCredentials(credentialServerName);
+        const entries = Object.entries(resp.credentials || {}).map(([key, info]: [string, { status: string }]) => ({
+          key,
+          value: '',
+          status: info.status === 'set' ? 'set' : 'missing',
+        }));
+        setCredentialEntries(entries);
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to load credentials:', err);
+        addNotification('error', 'Settings', 'Failed to load credentials', 5000);
+        resetCredentialForm();
+      } finally {
+        setCredentialLoading(false);
+      }
+    },
+    [
+      setCredentialServer,
+      setCredentialLoading,
+      setCredentialEntries,
+      setNewCredentialKey,
+      setNewCredentialValue,
+      api,
+      addNotification,
+      resetCredentialForm,
+    ],
+  );
 
   const handleSaveCredential = useCallback(async () => {
     if (!credentialServer) return;
@@ -193,24 +243,37 @@ export function useMCPServerMutations(params: MCPMutationParams) {
     } finally {
       setSavingKey(null);
     }
-  }, [credentialServer, credentialEntries, newCredentialKey, newCredentialValue, setSavingKey, api, onSettingsChanged, addNotification, handleLoadCredentials]);
+  }, [
+    credentialServer,
+    credentialEntries,
+    newCredentialKey,
+    newCredentialValue,
+    setSavingKey,
+    api,
+    onSettingsChanged,
+    addNotification,
+    handleLoadCredentials,
+  ]);
 
-  const handleDeleteCredential = useCallback(async (credName: string) => {
-    if (!credentialServer) return;
-    setSavingKey('mcp-credential-delete');
-    try {
-      await api.deleteMCPServerCredential(credentialServer, credName);
-      const fresh = await api.getSettings();
-      onSettingsChanged(fresh);
-      addNotification('success', 'Settings', 'Credential deleted', 3000);
-      await handleLoadCredentials(credentialServer);
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to delete credential:', err);
-      addNotification('error', 'Settings', 'Failed to delete credential', 5000);
-    } finally {
-      setSavingKey(null);
-    }
-  }, [credentialServer, setSavingKey, api, onSettingsChanged, addNotification, handleLoadCredentials]);
+  const handleDeleteCredential = useCallback(
+    async (credName: string) => {
+      if (!credentialServer) return;
+      setSavingKey('mcp-credential-delete');
+      try {
+        await api.deleteMCPServerCredential(credentialServer, credName);
+        const fresh = await api.getSettings();
+        onSettingsChanged(fresh);
+        addNotification('success', 'Settings', 'Credential deleted', 3000);
+        await handleLoadCredentials(credentialServer);
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to delete credential:', err);
+        addNotification('error', 'Settings', 'Failed to delete credential', 5000);
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [credentialServer, setSavingKey, api, onSettingsChanged, addNotification, handleLoadCredentials],
+  );
 
   const handleAddCredentialEntry = useCallback(() => {
     if (!newCredentialKey.trim() || !newCredentialValue.trim()) return;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Invoice, getInvoices } from '../../services/billingService';
+import type { Invoice } from '../../services/billingService';
+import { getInvoices } from '../../services/billingService';
 
 export const InvoiceHistory: React.FC = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -48,9 +49,7 @@ export const InvoiceHistory: React.FC = () => {
     return (
       <div className="platform-card">
         <div className="platform-card-body">
-          <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-            No invoices found.
-          </p>
+          <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No invoices found.</p>
         </div>
       </div>
     );
@@ -79,9 +78,7 @@ export const InvoiceHistory: React.FC = () => {
                 return (
                   <tr key={invoice.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '12px' }}>{formatDate(invoice.created)}</td>
-                    <td style={{ padding: '12px', fontWeight: '600' }}>
-                      {formatCurrency(invoice.amount_due)}
-                    </td>
+                    <td style={{ padding: '12px', fontWeight: '600' }}>{formatCurrency(invoice.amount_due)}</td>
                     <td style={{ padding: '12px' }}>
                       <span className={`platform-status-badge ${getStatusBadge(invoice.status)}`}>
                         {invoice.status.toUpperCase()}
@@ -90,7 +87,8 @@ export const InvoiceHistory: React.FC = () => {
                     <td style={{ padding: '12px' }}>
                       {hasProration ? (
                         <span style={{ color: prorationTotal > 0 ? '#22c55e' : '#ef4444' }}>
-                          {prorationTotal > 0 ? '+' : ''}{formatCurrency(prorationTotal)}
+                          {prorationTotal > 0 ? '+' : ''}
+                          {formatCurrency(prorationTotal)}
                         </span>
                       ) : (
                         <span style={{ color: 'var(--text-secondary)' }}>—</span>

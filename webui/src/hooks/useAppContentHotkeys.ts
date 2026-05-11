@@ -1,14 +1,23 @@
+import type { EditorBuffer } from '../types/editor';
 import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
 import type { MutableRefObject } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 
 export interface UseAppContentHotkeysParams {
   activeBufferId: string | null;
-  buffersRef: MutableRefObject<Map<string, any>>;
+  buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
   onSidebarToggle: () => void;
   onTerminalExpandedChange: (expanded: boolean) => void;
   isTerminalExpanded: boolean;
-  openWorkspaceBuffer: (options: { kind: 'file' | 'chat'; path: string; title: string; ext?: string; isClosable?: boolean; isPinned?: boolean; metadata?: Record<string, unknown> }) => void;
+  openWorkspaceBuffer: (options: {
+    kind: 'file' | 'chat';
+    path: string;
+    title: string;
+    ext?: string;
+    isClosable?: boolean;
+    isPinned?: boolean;
+    metadata?: Record<string, unknown>;
+  }) => void;
   onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
   handlePrimaryViewChange: (view: 'chat' | 'editor' | 'git') => void;
   closeBuffer: (bufferId: string) => void;
@@ -67,7 +76,7 @@ export const useAppContentHotkeys = ({
       switch (detail.commandId) {
         case 'command_palette':
           setCommandPaletteMode('all');
-          setIsCommandPaletteOpen(prev => !prev);
+          setIsCommandPaletteOpen((prev) => !prev);
           break;
         case 'new_file':
           openWorkspaceBuffer({
@@ -89,9 +98,10 @@ export const useAppContentHotkeys = ({
           break;
         case 'toggle_explorer': {
           const activeBuffer = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
-          const filePath = activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
-            ? activeBuffer.file.path
-            : null;
+          const filePath =
+            activeBuffer?.file?.path && !activeBuffer.file.isDir && activeBuffer.kind === 'file'
+              ? activeBuffer.file.path
+              : null;
 
           window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path: filePath ?? '' } }));
           break;

@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
+import type { SessionEntry } from '../services/api/types';
 import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import { getTabWorkspacePath } from '../services/clientSession';
 import { debugLog } from '../utils/log';
@@ -143,11 +144,14 @@ export function useAppInitialization({
         const sessionsResponse = await apiService.getSessions('current');
         const sessions = Array.isArray(sessionsResponse?.sessions) ? sessionsResponse.sessions : [];
         const currentSessionId = String(sessionsResponse?.current_session_id || '');
-        const currentSession = sessions.find((item: any) => String(item?.session_id || '') === currentSessionId);
+        const currentSession = sessions.find(
+          (item: SessionEntry) => String(item?.session_id || '') === currentSessionId,
+        );
         const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
         if (!currentHasMessages) {
-          const restorable = sessions.find((item: any) =>
-            String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
+          const restorable = sessions.find(
+            (item: SessionEntry) =>
+              String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,
           );
           if (restorable?.session_id) {
             const restored = await apiService.restoreSession(String(restorable.session_id));

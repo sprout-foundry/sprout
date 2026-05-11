@@ -67,7 +67,12 @@ class InlayHintWidget extends WidgetType {
 
   toDOM(): HTMLElement {
     const span = document.createElement('span');
-    const kindClass = this.kind === 'type' ? 'cm-inlayHint-type' : this.kind === 'parameter' ? 'cm-inlayHint-parameter' : 'cm-inlayHint';
+    const kindClass =
+      this.kind === 'type'
+        ? 'cm-inlayHint-type'
+        : this.kind === 'parameter'
+          ? 'cm-inlayHint-parameter'
+          : 'cm-inlayHint';
     span.className = `cm-inlayHint ${kindClass}`;
     span.textContent = this.label;
     span.setAttribute('role', 'presentation');
@@ -76,8 +81,7 @@ class InlayHintWidget extends WidgetType {
   }
 
   eq(other: InlayHintWidget): boolean {
-    return other instanceof InlayHintWidget &&
-      this.label === other.label && this.kind === other.kind;
+    return other instanceof InlayHintWidget && this.label === other.label && this.kind === other.kind;
   }
 
   ignoreEvent(_event: Event): boolean {

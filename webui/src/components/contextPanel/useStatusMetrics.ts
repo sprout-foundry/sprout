@@ -1,10 +1,6 @@
 import { useMemo } from 'react';
 import { debugLog } from '../../utils/log';
-import type {
-  ChatContextPanelProps,
-  StatusMetrics,
-  ToolExecution,
-} from './types';
+import type { ChatContextPanelProps, StatusMetrics, ToolExecution } from './types';
 import { isSubagentTool } from './helpers';
 
 export function useStatusMetrics(

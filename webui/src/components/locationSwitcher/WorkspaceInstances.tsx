@@ -1,6 +1,6 @@
 import React from 'react';
 import { Monitor } from 'lucide-react';
-import { SproutInstance } from '../../services/api';
+import type { SproutInstance } from '../../services/api';
 
 export interface WorkspaceInstancesProps {
   instances: SproutInstance[];
@@ -19,11 +19,7 @@ export const WorkspaceInstances: React.FC<WorkspaceInstancesProps> = ({
 }) => {
   if (instances.length === 0) {
     return (
-      <div
-        className="location-switcher-item location-switcher-item-empty"
-        role="option"
-        aria-selected={false}
-      >
+      <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
         <span className="location-switcher-item-text">No instances available</span>
       </div>
     );
@@ -37,20 +33,14 @@ export const WorkspaceInstances: React.FC<WorkspaceInstancesProps> = ({
       </div>
 
       {instances.map((instance) => {
-        const name = instance.working_dir
-          .split('/')
-          .filter(Boolean)
-          .slice(-2)
-          .join('/');
+        const name = instance.working_dir.split('/').filter(Boolean).slice(-2).join('/');
         const label = `${name} · pid:${instance.pid}`;
 
         return (
           <button
             key={`instance-${instance.id}`}
             type="button"
-            className={`location-switcher-item ${
-              instance.pid === selectedInstancePID ? 'active' : ''
-            }`}
+            className={`location-switcher-item ${instance.pid === selectedInstancePID ? 'active' : ''}`}
             onClick={() => {
               if (onInstanceChange && instance.pid) {
                 onInstanceChange(instance.pid);
@@ -59,17 +49,10 @@ export const WorkspaceInstances: React.FC<WorkspaceInstancesProps> = ({
             role="option"
             aria-selected={instance.pid === selectedInstancePID}
             aria-label={`Switch to instance ${label}`}
-            disabled={
-              isSwitching ||
-              isSwitchingInstance ||
-              !onInstanceChange ||
-              instance.is_host
-            }
+            disabled={isSwitching || isSwitchingInstance || !onInstanceChange || instance.is_host}
           >
             <span className="location-switcher-item-text">{label}</span>
-            {instance.pid === selectedInstancePID ? (
-              <span className="location-switcher-item-indicator">●</span>
-            ) : null}
+            {instance.pid === selectedInstancePID ? <span className="location-switcher-item-indicator">●</span> : null}
           </button>
         );
       })}

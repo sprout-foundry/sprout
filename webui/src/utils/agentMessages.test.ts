@@ -220,11 +220,13 @@ describe('normalizeTodoList', () => {
   // ── Valid entries ──────────────────────────────────────────────────────
 
   it('normalizes valid todo entry', () => {
-    const result = normalizeTodoList([{
-      id: 'task-1',
-      content: 'Implement feature',
-      status: 'pending',
-    }]);
+    const result = normalizeTodoList([
+      {
+        id: 'task-1',
+        content: 'Implement feature',
+        status: 'pending',
+      },
+    ]);
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
       id: 'task-1',
@@ -234,21 +236,25 @@ describe('normalizeTodoList', () => {
   });
 
   it('generates ID when missing', () => {
-    const result = normalizeTodoList([{
-      content: 'Do something',
-      status: 'in_progress',
-    }]);
+    const result = normalizeTodoList([
+      {
+        content: 'Do something',
+        status: 'in_progress',
+      },
+    ]);
     expect(result).toHaveLength(1);
     expect(result[0].id).toBeTruthy();
     expect(typeof result[0].id).toBe('string');
   });
 
   it('trims content and status', () => {
-    const result = normalizeTodoList([{
-      id: '1',
-      content: '  Trim me  ',
-      status: '  pending  ',
-    }]);
+    const result = normalizeTodoList([
+      {
+        id: '1',
+        content: '  Trim me  ',
+        status: '  pending  ',
+      },
+    ]);
     expect(result[0].content).toBe('Trim me');
     expect(result[0].status).toBe('pending');
   });
@@ -276,12 +282,7 @@ describe('normalizeTodoList', () => {
   });
 
   it('rejects non-object entries', () => {
-    const result = normalizeTodoList([
-      'string',
-      42,
-      true,
-      { id: '1', content: 'OK', status: 'pending' },
-    ]);
+    const result = normalizeTodoList(['string', 42, true, { id: '1', content: 'OK', status: 'pending' }]);
     expect(result).toHaveLength(1);
   });
 
@@ -355,28 +356,34 @@ describe('normalizeTodoList', () => {
   // ── ID generation ──────────────────────────────────────────────────────
 
   it('generates predictable ID from index and content', () => {
-    const result = normalizeTodoList([{
-      content: 'My Task',
-      status: 'pending',
-    }]);
+    const result = normalizeTodoList([
+      {
+        content: 'My Task',
+        status: 'pending',
+      },
+    ]);
     expect(result[0].id).toBe('todo-0-pending-My Task');
   });
 
   it('generates ID with content truncated to 48 chars', () => {
     const longContent = 'a'.repeat(100);
-    const result = normalizeTodoList([{
-      content: longContent,
-      status: 'pending',
-    }]);
+    const result = normalizeTodoList([
+      {
+        content: longContent,
+        status: 'pending',
+      },
+    ]);
     expect(result[0].id).toBe(`todo-0-pending-${'a'.repeat(48)}`);
   });
 
   it('uses provided ID when available', () => {
-    const result = normalizeTodoList([{
-      id: 'my-custom-id',
-      content: 'Task',
-      status: 'pending',
-    }]);
+    const result = normalizeTodoList([
+      {
+        id: 'my-custom-id',
+        content: 'Task',
+        status: 'pending',
+      },
+    ]);
     expect(result[0].id).toBe('my-custom-id');
   });
 
@@ -402,11 +409,13 @@ describe('normalizeTodoList', () => {
   // ── Trimmed ID generation ──────────────────────────────────────────────
 
   it('trims generated ID if id is provided but whitespace-only', () => {
-    const result = normalizeTodoList([{
-      id: '   ',
-      content: 'Task',
-      status: 'pending',
-    }]);
+    const result = normalizeTodoList([
+      {
+        id: '   ',
+        content: 'Task',
+        status: 'pending',
+      },
+    ]);
     // Whitespace-only ID should fall back to generated ID
     expect(result[0].id).toBeTruthy();
     expect(result[0].id.startsWith('todo-')).toBe(true);

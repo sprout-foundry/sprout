@@ -33,6 +33,29 @@ const defaultViewportHeight = 720
 
 const defaultWaitTimeout = 10 * time.Second
 
+// localhostTimeout is the navigation timeout for localhost URLs (fast fail).
+const localhostTimeout = 10 * time.Second
+
+// remoteTimeout is the navigation timeout for all other URLs.
+const remoteTimeout = 30 * time.Second
+
+// getNavigationTimeout returns the appropriate navigation timeout for the given URL.
+// Localhost URLs get a shorter timeout (10s) to fail fast when nothing is listening.
+// Remote URLs get a longer timeout (30s) to accommodate slower network conditions.
+func getNavigationTimeout(url string) time.Duration {
+	lowerURL := strings.ToLower(url)
+	// Match localhost-style URLs: with optional port, path, query, fragment.
+	if strings.HasPrefix(lowerURL, "http://localhost") ||
+		strings.HasPrefix(lowerURL, "http://127.0.0.1") ||
+		strings.HasPrefix(lowerURL, "http://[::1]") ||
+		strings.HasPrefix(lowerURL, "https://localhost") ||
+		strings.HasPrefix(lowerURL, "https://127.0.0.1") ||
+		strings.HasPrefix(lowerURL, "https://[::1]") {
+		return localhostTimeout
+	}
+	return remoteTimeout
+}
+
 const browserInstrumentationScript = `
 (() => {
   if (window.__sproutBrowserCaptureInstalled) return;
@@ -451,7 +474,7 @@ func (r *rodRenderer) RenderPage(ctx context.Context, url string) (string, error
 		_ = incognito.Close()
 	}()
 
-	if err := page.Navigate(url); err != nil {
+	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
 		return "", fmt.Errorf("navigate to %s: %w", url, err)
 	}
 
@@ -488,7 +511,7 @@ func (r *rodRenderer) Screenshot(ctx context.Context, url string, outputPath str
 		return fmt.Errorf("screenshot: apply viewport and UA: %w", err)
 	}
 
-	if err := page.Navigate(url); err != nil {
+	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
 		return fmt.Errorf("navigate to %s: %w", url, err)
 	}
 
@@ -538,7 +561,7 @@ func (r *rodRenderer) CaptureDOM(ctx context.Context, url string, viewportWidth,
 		return "", fmt.Errorf("failed to apply viewport and user agent: %w", err)
 	}
 
-	if err := page.Navigate(url); err != nil {
+	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
 		return "", fmt.Errorf("navigate to %s: %w", url, err)
 	}
 
@@ -609,7 +632,7 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 		}()
 	}
 
-	if err := page.Navigate(url); err != nil {
+	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
 		return nil, fmt.Errorf("navigate to %s: %w", url, err)
 	}
 	if err := page.WaitStable(stableDuration); err != nil {
@@ -857,7 +880,7 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		if target == "" {
 			return fmt.Errorf("browse step navigate requires value URL")
 		}
-		if err := page.Navigate(target); err != nil {
+		if err := page.Timeout(getNavigationTimeout(target)).Navigate(target); err != nil {
 			return fmt.Errorf("navigate to %q: %w", target, err)
 		}
 		if err := page.WaitStable(stableDuration); err != nil {

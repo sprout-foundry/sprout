@@ -6,14 +6,13 @@
  */
 
 import { useCallback } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
 import type { LocalEventsProvider } from '../services/localEventsProvider';
-import type { AppState } from '../types/app';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseSecurityHandlersOptions {
   eventsProvider: LocalEventsProvider;
   provider: string;
-  setState: Dispatch<SetStateAction<AppState>>;
+  setState: AppStoreSetState;
 }
 
 export interface UseSecurityHandlersReturn {
@@ -36,7 +35,7 @@ export function useSecurityHandlers({
         type: 'security_approval_response',
         data: { request_id: requestId, approved },
       });
-      setState((prev) => ({ ...prev, securityApprovalRequest: null }));
+      setState((prev) => ({ securityApprovalRequest: null }));
     },
     [eventsProvider, setState],
   );
@@ -48,7 +47,7 @@ export function useSecurityHandlers({
         type: 'security_prompt_response',
         data: { request_id: requestId, response },
       });
-      setState((prev) => ({ ...prev, securityPromptRequest: null }));
+      setState((prev) => ({ securityPromptRequest: null }));
     },
     [eventsProvider, setState],
   );
@@ -60,7 +59,7 @@ export function useSecurityHandlers({
         type: 'ask_user_response',
         data: { request_id: requestId, response },
       });
-      setState((prev) => ({ ...prev, askUserRequest: null }));
+      setState((prev) => ({ askUserRequest: null }));
     },
     [eventsProvider, setState],
   );
@@ -72,13 +71,13 @@ export function useSecurityHandlers({
         type: 'model_change',
         data: { provider, model },
       });
-      setState((prev) => ({ ...prev, modelSelectionRequest: null }));
+      setState((prev) => ({ modelSelectionRequest: null }));
     },
     [eventsProvider, provider, setState],
   );
 
   const handleModelSelectionClose = useCallback(() => {
-    setState((prev) => ({ ...prev, modelSelectionRequest: null }));
+    setState((prev) => ({ modelSelectionRequest: null }));
   }, [setState]);
 
   return {

@@ -7,6 +7,7 @@ import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { trimMessages } from '../utils/messageWindow';
 import { getWebUIClientId } from '../services/clientSession';
 import { generateMessageId } from '../utils/messageId';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 // ── Helper Functions ───────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ const normalizeTodoList = (
 
 interface EventHandlerContext {
   event: any;
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
   apiService: any;
@@ -115,7 +116,6 @@ const handleConnectionStatus = (ctx: EventHandlerContext): void => {
     connectionTimeoutRef.current = setTimeout(() => {
       lastConnectionStateRef.current = newConnectionState;
       setState(prev => ({
-        ...prev,
         sessionId: incomingSessionId || prev.sessionId,
         isConnected: newConnectionState,
         stats: {
@@ -140,7 +140,6 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
 
   setState(prev => ({
-    ...prev,
     isProcessing: true,
     lastError: null,
     queryCount: prev.queryCount + 1,
@@ -160,7 +159,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
 // Handle query_progress event
 const handleQueryProgress = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
-  setState(prev => ({ ...prev, queryProgress: event.data }));
+  setState(prev => ({ queryProgress: event.data }));
   debugLog('[>>] Query progress:', event.data);
 };
 
@@ -189,7 +188,7 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
       if (chunkType === 'reasoning') newMsg.reasoning = chunkContent;
       newMessages.push(newMsg);
     }
-    return { ...prev, messages: newMessages };
+    return { messages: newMessages };
   });
 };
 
@@ -219,7 +218,6 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
     if (!wasClearCommand) nextMessages = trimMessages(nextMessages);
 
     return {
-      ...prev,
       messages: nextMessages,
       currentTodos: wasClearCommand ? [] : prev.currentTodos,
       isProcessing: activeRequestsRef.current > 0,
@@ -282,7 +280,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       };
       const messages = [...messagesWithNewline];
       addToolRefToMessage(messages, updated[existingIdx].id);
-      return { ...prev, messages, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
+      return { messages, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
     }
 
     const newTool: ToolExecution = {
@@ -291,7 +289,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
     };
     const messages = [...messagesWithNewline];
     addToolRefToMessage(messages, newTool.id);
-    return { ...prev, messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
+    return { messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
   });
   debugLog('[tool] Tool start:', event.data?.tool_name);
 };
@@ -329,7 +327,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
         arguments: event.data?.arguments != null ? String(event.data.arguments) : undefined,
         result: result || error,
       };
-      return { ...prev, toolExecutions: [...prev.toolExecutions, fallbackExecution], logs: appendCappedLog(prev.logs, logEntry) };
+      return { toolExecutions: [...prev.toolExecutions, fallbackExecution], logs: appendCappedLog(prev.logs, logEntry) };
     }
 
     const messagesAfterTool = prev.messages.map((msg, idx) => {
@@ -338,7 +336,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
       }
       return msg;
     });
-    return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: appendCappedLog(prev.logs, logEntry) };
+    return { messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: appendCappedLog(prev.logs, logEntry) };
   });
   debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
 };
@@ -366,9 +364,9 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
   };
 
   if (!activity.message) {
-    setState(prev => ({ ...prev, logs: appendCappedLog(prev.logs, logEntry) }));
+    setState(prev => ({ logs: appendCappedLog(prev.logs, logEntry) }));
   } else {
-    setState(prev => ({ ...prev, subagentActivities: [...prev.subagentActivities, activity].slice(-500), logs: appendCappedLog(prev.logs, logEntry) }));
+    setState(prev => ({ subagentActivities: [...prev.subagentActivities, activity].slice(-500), logs: appendCappedLog(prev.logs, logEntry) }));
   }
 };
 
@@ -400,11 +398,11 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
           const row = updated[i];
           if (row.tool === parsedToolName && !row.endTime && row.status !== 'running') {
             updated[i] = { ...row, status: 'running' };
-            return { ...prev, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
+            return { toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
           }
         }
       }
-      return { ...prev, logs: appendCappedLog(prev.logs, logEntry) };
+      return { logs: appendCappedLog(prev.logs, logEntry) };
     });
   } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
     logEntry.category = 'system';
@@ -416,7 +414,7 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
         const prefixedMsg = category === 'error' ? `\n\nWarning: ${cleanedMsg}` : `\n\nNote: ${cleanedMsg}`;
         newMessages[newMessages.length - 1] = { ...lastMessage, content: (lastMessage.content || '') + prefixedMsg };
       }
-      return { ...prev, messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
+      return { messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
     });
   } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
     logEntry.category = 'system';
@@ -427,7 +425,7 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
       if (lastMessage && lastMessage.type === 'assistant') {
         newMessages[newMessages.length - 1] = { ...lastMessage, content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}` };
       }
-      return { ...prev, messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
+      return { messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
     });
   }
 };
@@ -439,7 +437,7 @@ const handleTodoUpdate = (ctx: EventHandlerContext): void => {
   logEntry.category = 'tool';
   logEntry.level = 'info';
   const normalizedTodos = normalizeTodoList(event.data?.todos);
-  setState(prev => ({ ...prev, currentTodos: normalizedTodos, logs: appendCappedLog(prev.logs, logEntry) }));
+  setState(prev => ({ currentTodos: normalizedTodos, logs: appendCappedLog(prev.logs, logEntry) }));
 };
 
 // Handle file_changed event
@@ -456,7 +454,7 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
     linesDeleted: event.data.lines_deleted,
   };
   setState(prev => ({
-    ...prev, logs: appendCappedLog(prev.logs, logEntry), fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
+    logs: appendCappedLog(prev.logs, logEntry), fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
   }));
   debugLog('[edit] File changed:', event.data.path);
 };
@@ -473,7 +471,7 @@ const handleError = (ctx: EventHandlerContext): void => {
 
   if (errorCode === 'model_not_available') {
     setState(prev => ({
-      ...prev, isProcessing: activeRequestsRef.current > 0, queryProgress: null,
+      isProcessing: activeRequestsRef.current > 0, queryProgress: null,
       modelSelectionRequest: { provider: prev.provider }, logs: appendCappedLog(prev.logs, logEntry),
     }));
     debugLog('[model-not-available] Model not available, showing selection modal');
@@ -484,7 +482,7 @@ const handleError = (ctx: EventHandlerContext): void => {
     pendingProviderChangeRef.current = false;
     pendingProviderChangeValueRef.current = null;
     setState(prev => ({
-      ...prev, isProcessing: activeRequestsRef.current > 0, queryProgress: null, lastError: errorMessage,
+      isProcessing: activeRequestsRef.current > 0, queryProgress: null, lastError: errorMessage,
       messages: trimMessages([...prev.messages, {
         id: generateMessageId(), type: 'assistant', content: `[FAIL] Error: ${errorMessage}`, timestamp: new Date(),
       }]),
@@ -492,7 +490,7 @@ const handleError = (ctx: EventHandlerContext): void => {
     }));
     apiService.getStats().then((stats: any) => {
       if (stats) {
-        setState(prev => ({ ...prev, provider: stats.provider || prev.provider, model: stats.model || prev.model }));
+        setState(prev => ({ provider: stats.provider || prev.provider, model: stats.model || prev.model }));
       }
     }).catch((err: unknown) => {
       debugLog('[App] Failed to sync provider state after error:', {
@@ -504,7 +502,7 @@ const handleError = (ctx: EventHandlerContext): void => {
     });
   } else {
     setState(prev => ({
-      ...prev, isProcessing: activeRequestsRef.current > 0, queryProgress: null, lastError: errorMessage,
+      isProcessing: activeRequestsRef.current > 0, queryProgress: null, lastError: errorMessage,
       messages: trimMessages([...prev.messages, {
         id: generateMessageId(), type: 'assistant', content: `[FAIL] Error: ${errorMessage}`, timestamp: new Date(),
       }]),
@@ -527,7 +525,6 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
   }
 
   setState(prev => ({
-    ...prev,
     provider: event.data?.provider || prev.provider,
     model: event.data?.model || prev.model,
     stats: { ...prev.stats, ...event.data },
@@ -553,7 +550,6 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
   if (event.data?.status === 'responded') return;
   if (event.data) {
     setState(prev => ({
-      ...prev,
       securityApprovalRequest: {
         requestId: String(event.data.request_id || ''),
         toolName: String(event.data.tool_name || ''),
@@ -578,7 +574,6 @@ const handleSecurityPromptRequest = (ctx: EventHandlerContext): void => {
   if (event.data?.status === 'responded') return;
   if (!event.data?.prompt) return;
   setState(prev => ({
-    ...prev,
     securityPromptRequest: {
       requestId: String(event.data.request_id || ''),
       prompt: String(event.data.prompt || ''),
@@ -599,7 +594,6 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   if (event.data?.status === 'responded') return;
   if (!event.data?.question) return;
   setState(prev => ({
-    ...prev,
     askUserRequest: {
       requestId: String(event.data.request_id || ''),
       question: String(event.data.question || ''),
@@ -622,7 +616,7 @@ export interface UseWebSocketEventHandlerRefs {
 }
 
 export interface UseWebSocketEventHandlerParams {
-  setState: React.Dispatch<React.SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   refs: UseWebSocketEventHandlerRefs;
   apiService: any;
 }
@@ -683,7 +677,7 @@ export function useWebSocketEventHandler({
       default:
         const logEntry = createLogEntry(event);
         logEntry.level = 'warning';
-        setState(prev => ({ ...prev, logs: appendCappedLog(prev.logs, logEntry) }));
+        setState(prev => ({ logs: appendCappedLog(prev.logs, logEntry) }));
         debugLog('[?] Unknown event type:', event.type, event.data);
     }
   }, [activeChatIdRef, lastConnectionStateRef, connectionTimeoutRef, pendingProviderChangeRef, pendingProviderChangeValueRef, activeRequestsRef, setState, apiService, pendingProviderRef]);
@@ -702,7 +696,7 @@ export function useWebSocketEventHandler({
             return tool;
           });
           return {
-            ...prev, isConnected: true, isProcessing: backendProcessing, queryProgress: backendProcessing ? prev.queryProgress : null,
+            isConnected: true, isProcessing: backendProcessing, queryProgress: backendProcessing ? prev.queryProgress : null,
             lastError: null, toolExecutions: nextToolExecutions,
             stats: { ...prev.stats, ...stats, connection_phase: 'reconnected' },
           };

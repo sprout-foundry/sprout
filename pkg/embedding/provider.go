@@ -30,6 +30,9 @@ type VectorStore interface {
 	// it is replaced.
 	Store(records []VectorRecord) error
 
+	// LoadAll returns all records currently stored.
+	LoadAll() ([]VectorRecord, error)
+
 	// Query returns the top-K records whose embeddings are most similar to
 	// the query vector, with similarity >= threshold.
 	Query(vec []float32, topK int, threshold float32) ([]QueryResult, error)

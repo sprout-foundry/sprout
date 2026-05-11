@@ -486,7 +486,6 @@ func TestGetConfigDir_XdgConfigHomeSet(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	unsetEnv(t, "CONFIG")
-	os.Unsetenv("XDG_CONFIG_HOME")
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	configDir, err := GetConfigDir()
@@ -514,7 +513,7 @@ func TestGetConfigDir_HomeSet(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	unsetEnv(t, "CONFIG")
-	os.Unsetenv("XDG_CONFIG_HOME")
+	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("HOME", tmpDir)
 
 	configDir, err := GetConfigDir()

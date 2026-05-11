@@ -52,6 +52,19 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 		if todo.Status == "" {
 			return "", agenterrors.NewInvalidInputError("each todo requires status", nil)
 		}
+
+		// Validate status against known values
+		if !tools.IsValidStatus(todo.Status) {
+			return "", agenterrors.NewInvalidInputError(
+				fmt.Sprintf("todo %q: %s", todo.Content, tools.FormatTodoStatusError(todo.Status)), nil)
+		}
+
+		// Validate priority against known values (priority is optional, empty is allowed)
+		if !tools.IsValidPriority(todo.Priority) {
+			return "", agenterrors.NewInvalidInputError(
+				fmt.Sprintf("todo %q: %s", todo.Content, tools.FormatTodoPriorityError(todo.Priority)), nil)
+		}
+
 		todos = append(todos, todo)
 	}
 

@@ -1,4 +1,6 @@
 import { File, Folder, Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
+import { useWorkspace } from '../hooks/useWorkspace';
+import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
 
 interface WelcomeTabProps {
@@ -9,14 +11,42 @@ interface WelcomeTabProps {
   onStartChat?: () => void;
 }
 
-function WelcomeTab({
+/* ── Workspace Picker View ────────────────────────────────────────── */
+
+function WorkspacePickerView({
+  workspaceInfo,
+  homeDir,
+  setWorkspace,
+}: {
+  workspaceInfo: ReturnType<typeof useWorkspace>['workspaceInfo'];
+  homeDir: string;
+  setWorkspace: (path: string) => Promise<void>;
+}): JSX.Element {
+  const handleBrowse = () => {
+    window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+  };
+
+  return (
+    <WorkspacePicker
+      daemonRoot={workspaceInfo.daemon_root}
+      currentWorkspace={workspaceInfo.workspace_root}
+      suggestedProjects={workspaceInfo.suggested_projects}
+      recentWorkspaces={workspaceInfo.recent_workspaces}
+      onSelect={setWorkspace}
+      onBrowse={handleBrowse}
+    />
+  );
+}
+
+/* ── Main Welcome Content ─────────────────────────────────────────── */
+
+function WelcomeContent({
   onDismiss,
   onOpenCommandPalette,
   onOpenTerminal,
   onViewGit,
   onStartChat,
 }: WelcomeTabProps): JSX.Element {
-  // Sample quick actions
   const quickActions = [
     {
       icon: <Command size={20} />,
@@ -66,7 +96,7 @@ function WelcomeTab({
   ];
 
   return (
-    <div className="welcome-tab">
+    <>
       <div className="welcome-header">
         <div className="welcome-header-content">
           <h1>Welcome to sprout</h1>
@@ -181,8 +211,26 @@ function WelcomeTab({
           Pro tip: Press <kbd>Ctrl+P</kbd> to open the command palette and search for any command or file
         </p>
       </div>
-    </div>
+    </>
   );
+}
+
+/* ── WelcomeTab Root Component ─────────────────────────────────────── */
+
+function WelcomeTab(props: WelcomeTabProps): JSX.Element {
+  const { workspaceInfo, homeDir, isLoading, setWorkspace } = useWorkspace();
+
+  // When workspace selection is needed (not a project), show the picker
+  if (!isLoading && workspaceInfo.needs_workspace_selection) {
+    return (
+      <div className="welcome-tab">
+        <WorkspacePickerView workspaceInfo={workspaceInfo} homeDir={homeDir} setWorkspace={setWorkspace} />
+      </div>
+    );
+  }
+
+  // Normal welcome content
+  return <div className="welcome-tab"><WelcomeContent {...props} /></div>;
 }
 
 export default WelcomeTab;

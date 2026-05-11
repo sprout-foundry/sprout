@@ -56,6 +56,7 @@ func TestSetProviderFallsBackWhenConfiguredCustomModelIsInvalid(t *testing.T) {
 
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	err := configuration.SaveCustomProvider(configuration.CustomProviderConfig{
 		Name:           "ai-worker",

@@ -4,7 +4,6 @@ package webui
 import (
 	"context"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 
@@ -47,16 +46,12 @@ func TestTrustedUserHeaderParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set the environment variables
-			os.Setenv("SPROUT_TRUSTED_USER_HEADER", tt.envValue)
+			t.Setenv("SPROUT_TRUSTED_USER_HEADER", tt.envValue)
 			if tt.serviceMode {
-				os.Setenv("SPROUT_SERVICE", "1")
+				t.Setenv("SPROUT_SERVICE", "1")
 			} else {
-				os.Unsetenv("SPROUT_SERVICE")
+				t.Setenv("SPROUT_SERVICE", "")
 			}
-			defer func() {
-				os.Unsetenv("SPROUT_TRUSTED_USER_HEADER")
-				os.Unsetenv("SPROUT_SERVICE")
-			}()
 
 			// Create a minimal event bus for testing
 			eventBus := events.NewEventBus()

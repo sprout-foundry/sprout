@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // waitWithTimeout runs fn in a goroutine and fails the test if it does not complete in time.
@@ -23,8 +26,7 @@ func waitWithTimeout(t *testing.T, timeout time.Duration, fn func() []TodoItem) 
 }
 
 func TestTodoWrite_NoDeadlock(t *testing.T) {
-	// Reset global state
-	TodoWrite([]TodoItem{})
+	tm := NewTodoManager()
 
 	todos := []TodoItem{
 		{Content: "Set up project", Status: "pending", Priority: "high"},
@@ -33,17 +35,17 @@ func TestTodoWrite_NoDeadlock(t *testing.T) {
 	}
 
 	res := waitWithTimeout(t, 2*time.Second, func() []TodoItem {
-		TodoWrite(todos)
-		return TodoRead()
+		tm.Write(todos)
+		return tm.Read()
 	})
 
 	if len(res) != 3 {
 		t.Fatalf("expected 3 todos, got: %d", len(res))
 	}
 
-	// Verify we can call TodoRead without deadlock (this tests RLock usage)
+	// Verify we can call Read without deadlock (this tests RLock usage)
 	todos2 := waitWithTimeout(t, 1*time.Second, func() []TodoItem {
-		return TodoRead()
+		return tm.Read()
 	})
 
 	if len(todos2) != 3 {
@@ -52,11 +54,10 @@ func TestTodoWrite_NoDeadlock(t *testing.T) {
 }
 
 func TestTodoRead_EmptyList(t *testing.T) {
-	// Reset and read
-	TodoWrite([]TodoItem{})
+	tm := NewTodoManager()
 
 	todos := waitWithTimeout(t, 1*time.Second, func() []TodoItem {
-		return TodoRead()
+		return tm.Read()
 	})
 
 	if len(todos) != 0 {
@@ -65,18 +66,20 @@ func TestTodoRead_EmptyList(t *testing.T) {
 }
 
 func TestTodoWrite_OverwriteList(t *testing.T) {
+	tm := NewTodoManager()
+
 	// Start with initial list
-	TodoWrite([]TodoItem{
+	tm.Write([]TodoItem{
 		{Content: "Initial task", Status: "pending"},
 	})
 
 	// Replace with new list
-	TodoWrite([]TodoItem{
+	tm.Write([]TodoItem{
 		{Content: "New task 1", Status: "pending"},
 		{Content: "New task 2", Status: "in_progress"},
 	})
 
-	todos := TodoRead()
+	todos := tm.Read()
 
 	if len(todos) != 2 {
 		t.Fatalf("expected 2 todos after overwrite, got: %d", len(todos))
@@ -88,15 +91,15 @@ func TestTodoWrite_OverwriteList(t *testing.T) {
 }
 
 func TestTodoWrite_WithPriority(t *testing.T) {
-	TodoWrite([]TodoItem{})
+	tm := NewTodoManager()
 
 	todos := []TodoItem{
 		{Content: "High priority task", Status: "pending", Priority: "high"},
 		{Content: "Low priority task", Status: "pending", Priority: "low"},
 	}
-	TodoWrite(todos)
+	tm.Write(todos)
 
-	result := TodoRead()
+	result := tm.Read()
 
 	if len(result) != 2 {
 		t.Fatalf("expected 2 todos, got: %d", len(result))
@@ -104,8 +107,8 @@ func TestTodoWrite_WithPriority(t *testing.T) {
 
 	// Check that priorities are preserved
 	foundHigh := false
-	for _, t := range result {
-		if t.Priority == "high" && strings.Contains(t.Content, "High priority") {
+	for _, item := range result {
+		if item.Priority == "high" && strings.Contains(item.Content, "High priority") {
 			foundHigh = true
 		}
 	}
@@ -114,15 +117,74 @@ func TestTodoWrite_WithPriority(t *testing.T) {
 	}
 }
 
-func TestGetTodoListCompact(t *testing.T) {
-	TodoWrite([]TodoItem{
+func TestTodoWrite_ClearList(t *testing.T) {
+	tm := NewTodoManager()
+
+	tm.Write([]TodoItem{
 		{Content: "Task 1", Status: "pending"},
 		{Content: "Task 2", Status: "in_progress"},
 	})
 
-	result := GetTodoListCompact()
+	msg := tm.Write([]TodoItem{})
+	require.NotNil(t, tm)
+	assert.Equal(t, "Todo list cleared", msg)
+	assert.Empty(t, tm.Read())
+}
 
-	if len(result) != 2 {
-		t.Fatalf("expected 2 todos, got: %d", len(result))
+func TestTodoWrite_ReturnsCount(t *testing.T) {
+	tm := NewTodoManager()
+
+	msg := tm.Write([]TodoItem{
+		{Content: "Task 1", Status: "pending"},
+		{Content: "Task 2", Status: "in_progress"},
+		{Content: "Task 3", Status: "completed"},
+	})
+	assert.Equal(t, "Todo list updated with 3 items", msg)
+}
+
+func TestTodoRead_ReturnsCopy(t *testing.T) {
+	tm := NewTodoManager()
+
+	tm.Write([]TodoItem{
+		{Content: "Original", Status: "pending"},
+	})
+
+	// Modify the returned slice should not affect stored items
+	result := tm.Read()
+	result[0].Content = "Modified"
+
+	original := tm.Read()
+	assert.Equal(t, "Original", original[0].Content)
+}
+
+func TestTodoManager_ConcurrentReadWrite(t *testing.T) {
+	tm := NewTodoManager()
+	done := make(chan struct{})
+
+	// Concurrent writers
+	for i := 0; i < 5; i++ {
+		go func(n int) {
+			defer func() { done <- struct{}{} }()
+			tm.Write([]TodoItem{
+				{Content: "from goroutine", Status: "pending"},
+			})
+		}(i)
+	}
+
+	// Concurrent readers
+	for i := 0; i < 5; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			tm.Read()
+		}()
+	}
+
+	// Wait for all goroutines
+	for i := 0; i < 10; i++ {
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("deadlock detected in concurrent read/write")
+		}
 	}
 }

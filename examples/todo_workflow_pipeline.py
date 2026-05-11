@@ -8,10 +8,17 @@ For each incomplete TODO item this script:
   4. Marks the TODO as complete in TODO.md
   5. Advances to the next incomplete item
 
+Timeout & Recovery:
+  - Monitors agent output for signs of progress (tool calls, LLM calls, etc.)
+  - If no progress for ``--stale-timeout`` seconds, logs a warning and optionally kills
+  - On hard timeout, saves partial state and skips the TODO (``--skip-on-timeout``)
+  - Writes a checkpoint file so re-runs resume after the last processed item
+
 Usage:
     python3 examples/todo_workflow_pipeline.py --repo /path/to/repo
     python3 examples/todo_workflow_pipeline.py --repo . --single --dry-run
     python3 examples/todo_workflow_pipeline.py --repo . --timeout 10800
+    python3 examples/todo_workflow_pipeline.py --repo . --skip-on-timeout
 """
 
 from __future__ import annotations
@@ -23,8 +30,9 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # ---------------------------------------------------------------------------
 # Data types
@@ -33,6 +41,31 @@ from dataclasses import dataclass
 _TODO_RE = re.compile(r"^\[\]\s+[-—]\s+(.+)$")
 
 PLACEHOLDER = "{TODO_TEXT}"
+
+# Patterns that indicate the agent is still making progress
+_PROGRESS_PATTERNS = [
+    r"tool_call",
+    r"running subagent",
+    r"spawn.*subagent",
+    r"executing tool",
+    r"tool result",
+    r"llm call",
+    r"tokens_",
+    r"iteration",
+    r"compacting",
+    r"preparing messages",
+    r"process_query",
+    r"finish_reason",
+    r"staged changes",
+    r"commit",
+    r"git add",
+    r"build",
+    r"test",
+    r"review",
+]
+_PROGRESS_RE = re.compile("|".join(_PROGRESS_PATTERNS), re.IGNORECASE)
+
+CHECKPOINT_FILE = "examples/.todo_pipeline_checkpoint.json"
 
 
 @dataclass
@@ -51,6 +84,9 @@ class Opts:
     single: bool
     dry_run: bool
     timeout: int
+    skip_on_timeout: bool
+    stale_timeout: int
+    keep_on_timeout: bool
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +100,42 @@ def _ts() -> str:
 
 def _log(msg: str) -> None:
     print(f"[{_ts()}] {msg}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint management
+# ---------------------------------------------------------------------------
+
+
+def load_checkpoint(checkpoint_path: pathlib.Path) -> list[str]:
+    """Load the list of already-processed TODO texts from the checkpoint file."""
+    if not checkpoint_path.exists():
+        return []
+    try:
+        data = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        return data.get("processed", [])
+    except (json.JSONDecodeError, KeyError):
+        return []
+
+
+def save_checkpoint(
+    checkpoint_path: pathlib.Path, processed: list[str], skipped: list[str] | None = None
+) -> None:
+    """Save processed (and optionally skipped) TODO texts to the checkpoint file."""
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "processed": processed,
+        "skipped": skipped or [],
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    checkpoint_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def clear_checkpoint(checkpoint_path: pathlib.Path) -> None:
+    """Remove the checkpoint file."""
+    if checkpoint_path.exists():
+        checkpoint_path.unlink()
+        _log("Checkpoint cleared")
 
 
 # ---------------------------------------------------------------------------
@@ -181,34 +253,160 @@ def build_templated_workflow(
 # ---------------------------------------------------------------------------
 
 
+class ProgressMonitor:
+    """Monitor subprocess output for signs of progress."""
+
+    def __init__(self, stale_timeout: int = 600) -> None:
+        self.stale_timeout = stale_timeout
+        self.last_progress_time = time.time()
+        self.stale_warnings = 0
+        self.total_bytes = 0
+
+    def feed(self, data: str) -> None:
+        """Process output data and update progress tracking."""
+        self.total_bytes += len(data)
+        if _PROGRESS_RE.search(data):
+            self.last_progress_time = time.time()
+            self.stale_warnings = 0
+
+    def is_stale(self) -> bool:
+        """Return True if no progress detected within stale_timeout."""
+        if self.stale_timeout <= 0:
+            return False
+        return (time.time() - self.last_progress_time) > self.stale_timeout
+
+    def status(self) -> str:
+        elapsed_since_progress = time.time() - self.last_progress_time
+        return (
+            f"bytes={self.total_bytes}, "
+            f"last_progress={elapsed_since_progress:.0f}s ago, "
+            f"warnings={self.stale_warnings}"
+        )
+
+
+def _tee_output(
+    source,  # subprocess stdout/stderr pipe
+    monitor: ProgressMonitor,
+    label: str = "",
+) -> str:
+    """Read from pipe, tee to stderr with progress monitoring, return collected text."""
+    collected: list[str] = []
+    prefix = f"[{label}] " if label else ""
+    for line in source:
+        line = line if isinstance(line, str) else line.decode("utf-8", errors="replace")
+        monitor.feed(line)
+        collected.append(line)
+        # Only print non-empty lines to avoid flooding stderr
+        if line.strip():
+            print(f"{prefix}{line}", end="", file=sys.stderr)
+    return "".join(collected)
+
+
 def _run_process(
     cmd: list[str],
     cwd: pathlib.Path | str,
     timeout: int | None = None,
+    stale_timeout: int = 600,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a command with stdout/stderr flowing directly to the console."""
+    """Run a command with stdout/stderr flowing directly to the console.
+
+    Monitors output for progress indicators. Warns if output stalls.
+    On timeout, kills the process gracefully and returns a CompletedProcess
+    with returncode=-1 (special sentinel for timeout).
+    """
+    monitor = ProgressMonitor(stale_timeout)
+    stale_warning_interval = max(stale_timeout // 2, 60)  # warn at most every N seconds
+
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
         stdin=subprocess.DEVNULL,
-        stdout=None,
-        stderr=None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
     )
 
-    try:
-        proc.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
-        raise
+    start_time = time.time()
+    last_stale_warning = 0.0
+    stdout_text = ""
+    stderr_text = ""
 
-    return subprocess.CompletedProcess(
-        cmd,
-        returncode=proc.returncode,
-        stdout="",
-        stderr="",
-    )
+    try:
+        # Use threads to read stdout/stderr concurrently while monitoring
+        stdout_done = threading.Event()
+        stderr_done = threading.Event()
+
+        def read_stdout():
+            try:
+                nonlocal stdout_text
+                stdout_text = _tee_output(proc.stdout, monitor, "stdout")
+            finally:
+                proc.stdout.close()
+                stdout_done.set()
+
+        def read_stderr():
+            try:
+                nonlocal stderr_text
+                stderr_text = _tee_output(proc.stderr, monitor, "stderr")
+            finally:
+                proc.stderr.close()
+                stderr_done.set()
+
+        t_out = threading.Thread(target=read_stdout, daemon=True)
+        t_err = threading.Thread(target=read_stderr, daemon=True)
+        t_out.start()
+        t_err.start()
+
+        while True:
+            elapsed = time.time() - start_time
+
+            # Check timeout
+            if timeout and elapsed >= timeout:
+                _log(f"TIMEOUT after {elapsed:.0f}s – killing agent")
+                _log(f"  Progress: {monitor.status()}")
+                proc.kill()
+                proc.wait(timeout=10)
+                stdout_done.wait(timeout=5)
+                stderr_done.wait(timeout=5)
+                return subprocess.CompletedProcess(
+                    cmd,
+                    returncode=-1,  # sentinel: timeout
+                    stdout=stdout_text,
+                    stderr=stderr_text,
+                )
+
+            # Check for staleness (no output progress)
+            if monitor.is_stale():
+                if elapsed - last_stale_warning > stale_warning_interval:
+                    monitor.stale_warnings += 1
+                    _log(
+                        f"STALE output (warning #{monitor.stale_warnings}): "
+                        f"no progress indicators for {stale_timeout}s. "
+                        f"{monitor.status()}"
+                    )
+                    last_stale_warning = elapsed
+
+            # Check if process finished
+            ret = proc.poll()
+            if ret is not None:
+                stdout_done.wait(timeout=5)
+                stderr_done.wait(timeout=5)
+                return subprocess.CompletedProcess(
+                    cmd,
+                    returncode=ret,
+                    stdout=stdout_text,
+                    stderr=stderr_text,
+                )
+
+            time.sleep(2)  # poll interval
+
+    except KeyboardInterrupt:
+        _log("Interrupted – killing agent process")
+        proc.kill()
+        proc.wait(timeout=10)
+        stdout_done.wait(timeout=5)
+        stderr_done.wait(timeout=5)
+        raise
 
 
 def run_ledit_agent(
@@ -230,9 +428,16 @@ def run_ledit_agent(
         _log("[DRY RUN] Would run ledit agent (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
-    result = _run_process(cmd, cwd=opts.repo, timeout=opts.timeout)
+    result = _run_process(
+        cmd,
+        cwd=opts.repo,
+        timeout=opts.timeout,
+        stale_timeout=opts.stale_timeout,
+    )
 
-    if result.returncode != 0:
+    if result.returncode == -1:
+        _log(f"Agent TIMEOUT after {opts.timeout}s")
+    elif result.returncode != 0:
         _log(f"Agent exited with code {result.returncode}")
 
     return result
@@ -280,8 +485,13 @@ class TodoPipeline:
     def __init__(self, opts: Opts) -> None:
         self.opts = opts
         self.processed = 0
+        self.skipped: list[str] = []
 
-    def process_one(self, item: TodoItem) -> None:
+    def _checkpoint_path(self) -> pathlib.Path:
+        return self.opts.repo / CHECKPOINT_FILE
+
+    def process_one(self, item: TodoItem) -> bool:
+        """Process a single TODO item. Returns True if completed, False if skipped."""
         _log(f"Processing TODO: {item.text!r}")
 
         # 1. Build templated workflow config
@@ -289,6 +499,26 @@ class TodoPipeline:
         try:
             # 2. Run ledit agent
             agent_result = run_ledit_agent(self.opts, tmp_workflow)
+
+            # Handle timeout (returncode == -1 sentinel)
+            if agent_result.returncode == -1:
+                _log(f"Agent timed out for TODO: {item.text!r}")
+
+                if self.opts.skip_on_timeout:
+                    _log("Skipping timed-out TODO (--skip-on-timeout)")
+                    self.skipped.append(item.text)
+                    return False
+
+                if self.opts.keep_on_timeout:
+                    _log("Keeping staged changes from timed-out run (--keep-on-timeout)")
+                    # Don't raise — fall through to commit/mark-complete
+                else:
+                    _log("Raising timeout error (default behavior)")
+                    raise RuntimeError(
+                        f"ledit agent timed out for TODO {item.text!r} "
+                        f"(after {self.opts.timeout}s)"
+                    )
+
             if agent_result.returncode != 0:
                 raise RuntimeError(
                     f"ledit agent failed for TODO {item.text!r} "
@@ -315,6 +545,7 @@ class TodoPipeline:
                 tmp_workflow.unlink()
 
         self.processed += 1
+        return True
 
     def run(self) -> None:
         _log(f"Starting TODO workflow pipeline – repo={self.opts.repo}")
@@ -325,6 +556,13 @@ class TodoPipeline:
         _log(f"  Single mode:     {self.opts.single}")
         _log(f"  Dry run:         {self.opts.dry_run}")
         _log(f"  Timeout:         {self.opts.timeout}s")
+        _log(f"  Stale timeout:   {self.opts.stale_timeout}s")
+        _log(f"  Skip on timeout: {self.opts.skip_on_timeout}")
+
+        checkpoint_path = self._checkpoint_path()
+        processed_texts = load_checkpoint(checkpoint_path)
+        if processed_texts:
+            _log(f"  Checkpoint:      {len(processed_texts)} previously processed items")
 
         try:
             while True:
@@ -333,12 +571,46 @@ class TodoPipeline:
                     _log("No incomplete TODOs remain – done")
                     break
 
+                # Skip already-processed items (from checkpoint)
+                if processed_texts:
+                    original_count = len(todos)
+                    todos = [t for t in todos if t.text not in processed_texts]
+                    if todos:
+                        _log(
+                            f"  Skipping {original_count - len(todos)} already-processed TODO(s) "
+                            f"from checkpoint, {len(todos)} remaining"
+                        )
+                    elif original_count > 0:
+                        _log(
+                            f"  All {original_count} remaining TODO(s) already processed "
+                            f"in checkpoint – marking checkpoint items as done in TODO.md"
+                        )
+                        # Re-parse and mark checkpoint items as done
+                        all_todos = parse_incomplete_todos(self.opts.todo_file)
+                        for t in all_todos:
+                            if t.text in processed_texts:
+                                try:
+                                    mark_todo_complete(self.opts.todo_file, t.text)
+                                except ValueError:
+                                    pass
+                        clear_checkpoint(checkpoint_path)
+                        break
+
+                if not todos:
+                    _log("No new incomplete TODOs – done")
+                    break
+
                 item = todos[0]
                 _log(
                     f"Found {len(todos)} incomplete TODO(s); next: {item.text!r}"
                 )
 
-                self.process_one(item)
+                success = self.process_one(item)
+
+                # Update checkpoint after successful processing
+                if success:
+                    processed_texts.append(item.text)
+                    save_checkpoint(checkpoint_path, processed_texts, self.skipped)
 
                 if self.opts.single:
                     _log("Single mode – stopping after one TODO")
@@ -351,12 +623,16 @@ class TodoPipeline:
                     break
 
         except KeyboardInterrupt:
-            _log("Interrupted by user – stopping cleanly")
+            _log("Interrupted by user – saving checkpoint and stopping")
+            save_checkpoint(checkpoint_path, processed_texts, self.skipped)
             sys.exit(130)
 
         _log(
-            f"Pipeline finished – processed {self.processed} TODO(s)"
+            f"Pipeline finished – processed {self.processed} TODO(s), "
+            f"skipped {len(self.skipped)}"
         )
+        if self.skipped:
+            _log(f"Skipped TODOs: {self.skipped}")
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +686,27 @@ def build_parser() -> argparse.ArgumentParser:
         default=7200,
         help="Timeout in seconds for ledit agent subprocess (default: 7200)",
     )
+    parser.add_argument(
+        "--stale-timeout",
+        type=int,
+        default=600,
+        help="Seconds of no output progress before warning (default: 600, 0 to disable)",
+    )
+    parser.add_argument(
+        "--skip-on-timeout",
+        action="store_true",
+        help="Skip the TODO and continue to next on timeout instead of failing",
+    )
+    parser.add_argument(
+        "--keep-on-timeout",
+        action="store_true",
+        help="Keep staged changes and mark TODO complete even after timeout",
+    )
+    parser.add_argument(
+        "--clear-checkpoint",
+        action="store_true",
+        help="Clear the checkpoint file and start from the first TODO",
+    )
     return parser
 
 
@@ -420,6 +717,13 @@ def main() -> None:
     repo = pathlib.Path(args.repo).expanduser().resolve()
     todo_file = pathlib.Path(args.todo_file) if args.todo_file else repo / "TODO.md"
     workflow_config = pathlib.Path(args.workflow_config).expanduser().resolve()
+    checkpoint_path = repo / CHECKPOINT_FILE
+
+    # Handle --clear-checkpoint before anything else
+    if args.clear_checkpoint:
+        clear_checkpoint(checkpoint_path)
+        _log("Done. Checkpoint cleared.")
+        return
 
     opts = Opts(
         repo=repo,
@@ -430,6 +734,9 @@ def main() -> None:
         single=args.single,
         dry_run=args.dry_run,
         timeout=args.timeout,
+        skip_on_timeout=args.skip_on_timeout,
+        stale_timeout=args.stale_timeout,
+        keep_on_timeout=args.keep_on_timeout,
     )
 
     pipeline = TodoPipeline(opts)

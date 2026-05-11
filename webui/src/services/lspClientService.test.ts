@@ -20,12 +20,7 @@ jest.mock('@codemirror/lsp-client', () => ({
 
 // ── Module under test ─────────────────────────────────────────────────
 
-import {
-  getFileURI,
-  uriToFilePath,
-  LSP_SUPPORTED_LANGUAGES,
-  createTransport,
-} from './lspClientService';
+import { getFileURI, uriToFilePath, LSP_SUPPORTED_LANGUAGES, createTransport } from './lspClientService';
 
 // ── getFileURI tests ──────────────────────────────────────────────────
 
@@ -140,9 +135,7 @@ describe('createTransport', () => {
     const OriginalWebSocket = globalThis.WebSocket;
 
     // Mock the global WebSocket constructor while preserving constants
-    jest.spyOn(globalThis, 'WebSocket').mockImplementation(
-      () => mockWsInstance as unknown as WebSocket
-    );
+    jest.spyOn(globalThis, 'WebSocket').mockImplementation(() => mockWsInstance as unknown as WebSocket);
 
     // Restore WebSocket.OPEN, CLOSING, CLOSED constants that jest.mock removes
     (globalThis.WebSocket as unknown as { OPEN: number }).OPEN = OriginalWebSocket.OPEN;

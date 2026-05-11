@@ -56,54 +56,53 @@ function OnboardingDialog({
   }, []);
 
   // Close dropdown on Escape key
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    const models = selectedProvider?.models || [];
-    const recommendedModel = selectedProvider?.recommended_model;
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const models = selectedProvider?.models || [];
+      const recommendedModel = selectedProvider?.recommended_model;
 
-    // Sort models so recommended model comes first
-    const sortedModels = [...models].sort((a, b) => {
-      if (a === recommendedModel) return -1;
-      if (b === recommendedModel) return 1;
-      return a.localeCompare(b);
-    });
+      // Sort models so recommended model comes first
+      const sortedModels = [...models].sort((a, b) => {
+        if (a === recommendedModel) return -1;
+        if (b === recommendedModel) return 1;
+        return a.localeCompare(b);
+      });
 
-    // Filter models based on input value
-    const filterText = e.currentTarget.value.toLowerCase();
-    const filteredModels = sortedModels.filter((model) =>
-      model.toLowerCase().includes(filterText)
-    );
+      // Filter models based on input value
+      const filterText = e.currentTarget.value.toLowerCase();
+      const filteredModels = sortedModels.filter((model) => model.toLowerCase().includes(filterText));
 
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setModelListOpen(true);
-        setHighlightedIndex((prev) =>
-          prev < filteredModels.length - 1 ? prev + 1 : prev
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setModelListOpen(true);
-        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (highlightedIndex >= 0 && filteredModels[highlightedIndex]) {
-          updateOnboarding((prev) => ({
-            ...prev,
-            model: filteredModels[highlightedIndex],
-            error: null,
-          }));
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setModelListOpen(true);
+          setHighlightedIndex((prev) => (prev < filteredModels.length - 1 ? prev + 1 : prev));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setModelListOpen(true);
+          setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (highlightedIndex >= 0 && filteredModels[highlightedIndex]) {
+            updateOnboarding((prev) => ({
+              ...prev,
+              model: filteredModels[highlightedIndex],
+              error: null,
+            }));
+            setModelListOpen(false);
+            setHighlightedIndex(-1);
+          }
+          break;
+        case 'Escape':
           setModelListOpen(false);
           setHighlightedIndex(-1);
-        }
-        break;
-      case 'Escape':
-        setModelListOpen(false);
-        setHighlightedIndex(-1);
-        break;
-    }
-  }, [selectedProvider, highlightedIndex, updateOnboarding]);
+          break;
+      }
+    },
+    [selectedProvider, highlightedIndex, updateOnboarding],
+  );
 
   // Select a model from the dropdown
   const selectModel = useCallback(
@@ -113,7 +112,7 @@ function OnboardingDialog({
       setHighlightedIndex(-1);
       inputRef.current?.blur();
     },
-    [updateOnboarding]
+    [updateOnboarding],
   );
 
   // Get filtered and sorted models for display
@@ -130,9 +129,7 @@ function OnboardingDialog({
 
     // Filter based on current input value
     const filterText = onboarding.model.toLowerCase();
-    return sortedModels.filter((model) =>
-      model.toLowerCase().includes(filterText)
-    );
+    return sortedModels.filter((model) => model.toLowerCase().includes(filterText));
   }, [selectedProvider, onboarding.model]);
 
   if (!onboarding.open) {
@@ -140,12 +137,15 @@ function OnboardingDialog({
   }
 
   // Compute display models for the combobox
-  const displayModels = (selectedProvider?.models || []).length > 0
-    ? getDisplayModels()
-    : null;
+  const displayModels = (selectedProvider?.models || []).length > 0 ? getDisplayModels() : null;
 
   return (
-    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up sprout'}>
+    <div
+      className="onboarding-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up sprout'}
+    >
       <div className="onboarding-card">
         {onboarding.isReonboarding && (
           <button
@@ -162,9 +162,9 @@ function OnboardingDialog({
         <p>
           {onboarding.isReonboarding
             ? 'Choose a new provider and model, or update your API key.'
-            : (onboarding.reason === 'missing_provider_credential'
+            : onboarding.reason === 'missing_provider_credential'
               ? 'The selected provider is missing credentials.'
-              : 'Choose a provider and model to get started.')}
+              : 'Choose a provider and model to get started.'}
         </p>
 
         {windowsGuidance && (
@@ -176,7 +176,12 @@ function OnboardingDialog({
                 Running in WSL distro: <strong>{onboarding.environment.active_distro}</strong>
                 {onboarding.environment.wsl_distros?.length > 1 && (
                   <span className="onboarding-wsl-distro-hint">
-                    {' '}(other available: {onboarding.environment.wsl_distros.filter((d) => d !== onboarding.environment!.active_distro).join(', ')})
+                    {' '}
+                    (other available:{' '}
+                    {onboarding.environment.wsl_distros
+                      .filter((d) => d !== onboarding.environment!.active_distro)
+                      .join(', ')}
+                    )
                   </span>
                 )}
               </div>
@@ -231,7 +236,11 @@ function OnboardingDialog({
             >
               <span className="onboarding-provider-name">{providerOption.name}</span>
               {providerOption.has_credential && (
-                <span className="onboarding-configured-badge" title="Credentials already configured" aria-label="Credentials already configured">
+                <span
+                  className="onboarding-configured-badge"
+                  title="Credentials already configured"
+                  aria-label="Credentials already configured"
+                >
                   ✓ Configured
                 </span>
               )}
@@ -293,27 +302,28 @@ function OnboardingDialog({
           </div>
         )}
 
-        {onboarding.initialModelSet && selectedProvider?.recommended_model && onboarding.model !== selectedProvider.recommended_model && (
-          <div className="onboarding-note">
-            Recommended model: <strong>{selectedProvider.recommended_model}</strong>
-            {selectedProvider.recommended_model_why ? ` — ${selectedProvider.recommended_model_why}` : ''}
-            {' '}
-            <button
-              type="button"
-              className="onboarding-inline-action"
-              onClick={() =>
-                updateOnboarding((prev) => ({
-                  ...prev,
-                  model: selectedProvider.recommended_model,
-                  error: null,
-                }))
-              }
-              disabled={onboarding.submitting || onboarding.checking}
-            >
-              Use recommended model
-            </button>
-          </div>
-        )}
+        {onboarding.initialModelSet &&
+          selectedProvider?.recommended_model &&
+          onboarding.model !== selectedProvider.recommended_model && (
+            <div className="onboarding-note">
+              Recommended model: <strong>{selectedProvider.recommended_model}</strong>
+              {selectedProvider.recommended_model_why ? ` — ${selectedProvider.recommended_model_why}` : ''}{' '}
+              <button
+                type="button"
+                className="onboarding-inline-action"
+                onClick={() =>
+                  updateOnboarding((prev) => ({
+                    ...prev,
+                    model: selectedProvider.recommended_model,
+                    error: null,
+                  }))
+                }
+                disabled={onboarding.submitting || onboarding.checking}
+              >
+                Use recommended model
+              </button>
+            </div>
+          )}
 
         <div className="onboarding-step-title">2. Choose a model</div>
         <label htmlFor="onboarding-model">Model</label>
@@ -345,16 +355,12 @@ function OnboardingDialog({
                     onClick={() => selectModel(modelName)}
                   >
                     <span className="model-name">{modelName}</span>
-                    {isRecommended && (
-                      <span className="recommended-badge">★ Recommended</span>
-                    )}
+                    {isRecommended && <span className="recommended-badge">★ Recommended</span>}
                   </li>
                 );
               })}
               {displayModels.length === 0 && (
-                <li className="onboarding-model-list-item no-results">
-                  No matching models
-                </li>
+                <li className="onboarding-model-list-item no-results">No matching models</li>
               )}
             </ul>
           )}
@@ -369,7 +375,9 @@ function OnboardingDialog({
               type="password"
               value={onboarding.apiKey}
               className={onboarding.keyError ? 'onboarding-key-error' : ''}
-              onChange={(e) => updateOnboarding((prev) => ({ ...prev, apiKey: e.target.value, error: null, keyError: false }))}
+              onChange={(e) =>
+                updateOnboarding((prev) => ({ ...prev, apiKey: e.target.value, error: null, keyError: false }))
+              }
               placeholder="Paste API key"
               disabled={onboarding.submitting || onboarding.checking}
             />
@@ -385,19 +393,29 @@ function OnboardingDialog({
 
         {onboarding.validationSuccess && (
           <div className="onboarding-success">
-            ✓ API key validated — {onboarding.validationModelCount > 0 ? `${onboarding.validationModelCount} models available` : 'connection successful'}
+            ✓ API key validated —{' '}
+            {onboarding.validationModelCount > 0
+              ? `${onboarding.validationModelCount} models available`
+              : 'connection successful'}
           </div>
         )}
 
         {onboarding.platformActionMessage && <div className="onboarding-help">{onboarding.platformActionMessage}</div>}
 
         {!onboarding.isReonboarding && (
-          <div className="onboarding-editor-only-note">Want to explore first? You can set up AI later from Settings.</div>
+          <div className="onboarding-editor-only-note">
+            Want to explore first? You can set up AI later from Settings.
+          </div>
         )}
 
         <div className="onboarding-actions">
           {!onboarding.isReonboarding && (
-            <button type="button" className="onboarding-skip-btn" onClick={onSkip} disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}>
+            <button
+              type="button"
+              className="onboarding-skip-btn"
+              onClick={onSkip}
+              disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
+            >
               Skip — use as editor
             </button>
           )}
@@ -414,7 +432,9 @@ function OnboardingDialog({
               ? 'Done ✓'
               : onboarding.submitting
                 ? 'Validating…'
-                : (onboarding.isReonboarding ? 'Save Changes' : 'Complete Setup')}
+                : onboarding.isReonboarding
+                  ? 'Save Changes'
+                  : 'Complete Setup'}
           </button>
         </div>
       </div>

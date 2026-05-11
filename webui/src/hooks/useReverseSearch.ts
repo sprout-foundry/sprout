@@ -58,59 +58,62 @@ export function useReverseSearch(options: UseReverseSearchOptions): UseReverseSe
    * maintains overlay state showing the search query. The overlay is purely visual
    * and doesn't interfere with the actual PTY data flow.
    */
-  const handlePtyInput = useCallback((data: string) => {
-    terminalWSRef.current?.sendRawInput(data);
+  const handlePtyInput = useCallback(
+    (data: string) => {
+      terminalWSRef.current?.sendRawInput(data);
 
-    if (data.length > 1) {
-      // Multi-character sequence (escape sequences, etc.)
-      if (data.startsWith('\x1b')) {
+      if (data.length > 1) {
+        // Multi-character sequence (escape sequences, etc.)
+        if (data.startsWith('\x1b')) {
+          return;
+        }
+        if (reverseSearchActiveRef.current) {
+          reverseSearchQueryRef.current += data;
+          scheduleReverseSearchUpdate();
+        }
         return;
       }
-      if (reverseSearchActiveRef.current) {
-        reverseSearchQueryRef.current += data;
-        scheduleReverseSearchUpdate();
+
+      const ch = data;
+
+      // Ctrl+R: activate reverse-i-search
+      if (ch === '\x12') {
+        if (!reverseSearchActiveRef.current) {
+          reverseSearchActiveRef.current = true;
+          reverseSearchQueryRef.current = '';
+          setReverseSearchVisible(true);
+          setReverseSearchQuery('');
+        }
+        return;
       }
-      return;
-    }
 
-    const ch = data;
-
-    // Ctrl+R: activate reverse-i-search
-    if (ch === '\x12') {
-      if (!reverseSearchActiveRef.current) {
-        reverseSearchActiveRef.current = true;
+      // Enter, newline, Ctrl+C, or Escape: deactivate reverse-i-search
+      if (ch === '\r' || ch === '\n' || ch === '\x03' || ch === '\x1b') {
+        reverseSearchActiveRef.current = false;
         reverseSearchQueryRef.current = '';
-        setReverseSearchVisible(true);
+        setReverseSearchVisible(false);
         setReverseSearchQuery('');
+        return;
       }
-      return;
-    }
 
-    // Enter, newline, Ctrl+C, or Escape: deactivate reverse-i-search
-    if (ch === '\r' || ch === '\n' || ch === '\x03' || ch === '\x1b') {
-      reverseSearchActiveRef.current = false;
-      reverseSearchQueryRef.current = '';
-      setReverseSearchVisible(false);
-      setReverseSearchQuery('');
-      return;
-    }
+      // Backspace: trim query
+      if (ch === '\x7f' || ch === '\b') {
+        if (reverseSearchActiveRef.current && reverseSearchQueryRef.current.length > 0) {
+          reverseSearchQueryRef.current = reverseSearchQueryRef.current.slice(0, -1);
+          scheduleReverseSearchUpdate();
+        }
+        return;
+      }
 
-    // Backspace: trim query
-    if (ch === '\x7f' || ch === '\b') {
-      if (reverseSearchActiveRef.current && reverseSearchQueryRef.current.length > 0) {
-        reverseSearchQueryRef.current = reverseSearchQueryRef.current.slice(0, -1);
+      // Printable chars while reverse search is active: append to query
+      if (reverseSearchActiveRef.current && (ch >= ' ' || ch === '\t')) {
+        reverseSearchQueryRef.current += ch;
         scheduleReverseSearchUpdate();
+        return;
       }
-      return;
-    }
-
-    // Printable chars while reverse search is active: append to query
-    if (reverseSearchActiveRef.current && (ch >= ' ' || ch === '\t')) {
-      reverseSearchQueryRef.current += ch;
-      scheduleReverseSearchUpdate();
-      return;
-    }
-  }, [terminalWSRef, scheduleReverseSearchUpdate]);
+    },
+    [terminalWSRef, scheduleReverseSearchUpdate],
+  );
 
   const resetReverseSearch = useCallback(() => {
     reverseSearchActiveRef.current = false;

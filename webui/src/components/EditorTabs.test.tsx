@@ -613,7 +613,11 @@ describe('EditorTabs pin toggle button', () => {
 
 describe('EditorTabs chat tab close behavior', () => {
   test('pinned chat tab shows close button and confirmation dialog on close click', () => {
-    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
+      isPinned: true,
+      kind: 'chat',
+      file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,
       buffers: new Map([['buf-chat', buf1]]),
@@ -648,7 +652,11 @@ describe('EditorTabs chat tab close behavior', () => {
   });
 
   test('non-pinned chat tab closes directly without confirmation', () => {
-    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { kind: 'chat', isPinned: false, file: { path: '__workspace/chat/123', name: 'Chat 2', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
+      kind: 'chat',
+      isPinned: false,
+      file: { path: '__workspace/chat/123', name: 'Chat 2', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,
       buffers: new Map([['buf-chat', buf1]]),
@@ -668,7 +676,11 @@ describe('EditorTabs chat tab close behavior', () => {
   });
 
   test('pinned chat tab close confirmation dialog allows closing', () => {
-    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
+      isPinned: true,
+      kind: 'chat',
+      file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,
       buffers: new Map([['buf-chat', buf1]]),
@@ -691,7 +703,11 @@ describe('EditorTabs chat tab close behavior', () => {
   });
 
   test('pinned chat tab close confirmation dialog cancel does not close', () => {
-    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
+      isPinned: true,
+      kind: 'chat',
+      file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,
       buffers: new Map([['buf-chat', buf1]]),
@@ -715,7 +731,11 @@ describe('EditorTabs chat tab close behavior', () => {
   });
 
   test('middle-click on pinned chat tab triggers close confirmation', () => {
-    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
+      isPinned: true,
+      kind: 'chat',
+      file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,
       buffers: new Map([['buf-chat', buf1]]),
@@ -732,7 +752,11 @@ describe('EditorTabs chat tab close behavior', () => {
   });
 
   test('context menu Close item is visible for pinned chat tab', async () => {
-    const buf1 = makeMockBuffer('buf-chat', 'pane-1', { isPinned: true, kind: 'chat', file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 } });
+    const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
+      isPinned: true,
+      kind: 'chat',
+      file: { path: '__workspace/chat', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
     mockUseEditorManager.mockReturnValue({
       ...defaultMockEditorManager,
       buffers: new Map([['buf-chat', buf1]]),

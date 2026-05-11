@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  dedupeCommands,
-  persistCommandHistory,
-  loadCommandHistory,
-  saveCommandHistory,
-} from './command_input_history';
+import { dedupeCommands, persistCommandHistory, loadCommandHistory, saveCommandHistory } from './command_input_history';
 
 // ---------------------------------------------------------------------------
 // Mock localStorage
@@ -120,18 +115,12 @@ describe('persistCommandHistory', () => {
 
   it('saves commands to localStorage under correct key', () => {
     persistCommandHistory(['hello', 'world']);
-    expect(mockStorage.setItem).toHaveBeenCalledWith(
-      'sprout:chat-history',
-      JSON.stringify(['hello', 'world'])
-    );
+    expect(mockStorage.setItem).toHaveBeenCalledWith('sprout:chat-history', JSON.stringify(['hello', 'world']));
   });
 
   it('saves empty array', () => {
     persistCommandHistory([]);
-    expect(mockStorage.setItem).toHaveBeenCalledWith(
-      'sprout:chat-history',
-      JSON.stringify([])
-    );
+    expect(mockStorage.setItem).toHaveBeenCalledWith('sprout:chat-history', JSON.stringify([]));
   });
 
   it('does not throw on failure', () => {
@@ -222,10 +211,7 @@ describe('saveCommandHistory', () => {
     expect(result.commands).toEqual(['old', 'new']);
     expect(result.index).toBe(-1);
     expect(result.tempInput).toBe('');
-    expect(mockStorage.setItem).toHaveBeenCalledWith(
-      'sprout:chat-history',
-      JSON.stringify(['old', 'new'])
-    );
+    expect(mockStorage.setItem).toHaveBeenCalledWith('sprout:chat-history', JSON.stringify(['old', 'new']));
   });
 
   it('deduplicates new command against existing', async () => {

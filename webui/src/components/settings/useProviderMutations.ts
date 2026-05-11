@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { debugLog } from '../../utils/log';
 import type { MutationContext } from './types';
+import type { CustomProviderConfig } from '../../services/api/types';
 
 interface ProviderMutationParams {
   // Shared context
@@ -29,15 +30,24 @@ interface ProviderMutationParams {
 export function useProviderMutations(params: ProviderMutationParams) {
   const {
     ctx,
-    editingProvider, setEditingProvider,
-    providerName, setProviderName,
-    providerApiBase, setProviderApiBase,
-    providerModelName, setProviderModelName,
-    providerContextSize, setProviderContextSize,
-    providerEnvVar, setProviderEnvVar,
-    providerSupportsVision, setProviderSupportsVision,
-    providerVisionModel, setProviderVisionModel,
-    providerModelContextSizes, setProviderModelContextSizes,
+    editingProvider,
+    setEditingProvider,
+    providerName,
+    setProviderName,
+    providerApiBase,
+    setProviderApiBase,
+    providerModelName,
+    setProviderModelName,
+    providerContextSize,
+    setProviderContextSize,
+    providerEnvVar,
+    setProviderEnvVar,
+    providerSupportsVision,
+    setProviderSupportsVision,
+    providerVisionModel,
+    setProviderVisionModel,
+    providerModelContextSizes,
+    setProviderModelContextSizes,
   } = params;
 
   const resetProviderForm = useCallback(() => {
@@ -51,9 +61,15 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderVisionModel('');
     setProviderModelContextSizes('');
   }, [
-    setEditingProvider, setProviderName, setProviderApiBase,
-    setProviderModelName, setProviderContextSize, setProviderEnvVar,
-    setProviderSupportsVision, setProviderVisionModel, setProviderModelContextSizes,
+    setEditingProvider,
+    setProviderName,
+    setProviderApiBase,
+    setProviderModelName,
+    setProviderContextSize,
+    setProviderEnvVar,
+    setProviderSupportsVision,
+    setProviderVisionModel,
+    setProviderModelContextSizes,
   ]);
 
   const handleAddProvider = useCallback(async () => {
@@ -74,7 +90,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
         vision_model: providerVisionModel.trim() || undefined,
         model_context_sizes: providerModelContextSizes.trim() || undefined,
       };
-      await ctx.api.addCustomProvider(provider as unknown as import('../../services/api/types').CustomProviderConfig);
+      await ctx.api.addCustomProvider(provider as unknown as CustomProviderConfig);
       ctx.addNotification('success', 'Providers', `Provider "${providerName}" added`, 3000);
       resetProviderForm();
     } catch (err) {
@@ -83,8 +99,18 @@ export function useProviderMutations(params: ProviderMutationParams) {
     } finally {
       ctx.setSavingKey(null);
     }
-  }, [ctx, providerName, providerApiBase, providerModelName, providerContextSize,
-    providerEnvVar, providerSupportsVision, providerVisionModel, providerModelContextSizes, resetProviderForm]);
+  }, [
+    ctx,
+    providerName,
+    providerApiBase,
+    providerModelName,
+    providerContextSize,
+    providerEnvVar,
+    providerSupportsVision,
+    providerVisionModel,
+    providerModelContextSizes,
+    resetProviderForm,
+  ]);
 
   const handleUpdateProvider = useCallback(async () => {
     if (!editingProvider?.originalName) return;
@@ -101,7 +127,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
         vision_model: providerVisionModel.trim() || undefined,
         model_context_sizes: providerModelContextSizes.trim() || undefined,
       };
-      await ctx.api.updateCustomProvider(editingProvider.originalName, provider as unknown as import('../../services/api/types').CustomProviderConfig);
+      await ctx.api.updateCustomProvider(editingProvider.originalName, provider as unknown as CustomProviderConfig);
       ctx.addNotification('success', 'Providers', `Provider "${editingProvider.originalName}" updated`, 3000);
       resetProviderForm();
     } catch (err) {
@@ -110,25 +136,38 @@ export function useProviderMutations(params: ProviderMutationParams) {
     } finally {
       ctx.setSavingKey(null);
     }
-  }, [ctx, editingProvider, providerName, providerApiBase, providerModelName,
-    providerContextSize, providerEnvVar, providerSupportsVision, providerVisionModel,
-    providerModelContextSizes, resetProviderForm]);
+  }, [
+    ctx,
+    editingProvider,
+    providerName,
+    providerApiBase,
+    providerModelName,
+    providerContextSize,
+    providerEnvVar,
+    providerSupportsVision,
+    providerVisionModel,
+    providerModelContextSizes,
+    resetProviderForm,
+  ]);
 
-  const handleDeleteProvider = useCallback(async (name: string) => {
-    ctx.setSavingKey(`provider-delete-${name}`);
-    try {
-      await ctx.api.deleteCustomProvider(name);
-      ctx.addNotification('success', 'Providers', `Provider "${name}" deleted`, 3000);
-      if (editingProvider?.originalName === name) {
-        resetProviderForm();
+  const handleDeleteProvider = useCallback(
+    async (name: string) => {
+      ctx.setSavingKey(`provider-delete-${name}`);
+      try {
+        await ctx.api.deleteCustomProvider(name);
+        ctx.addNotification('success', 'Providers', `Provider "${name}" deleted`, 3000);
+        if (editingProvider?.originalName === name) {
+          resetProviderForm();
+        }
+      } catch (err) {
+        debugLog('[SettingsPanel] failed to delete provider:', err);
+        ctx.addNotification('error', 'Providers', 'Failed to delete provider', 5000);
+      } finally {
+        ctx.setSavingKey(null);
       }
-    } catch (err) {
-      debugLog('[SettingsPanel] failed to delete provider:', err);
-      ctx.addNotification('error', 'Providers', 'Failed to delete provider', 5000);
-    } finally {
-      ctx.setSavingKey(null);
-    }
-  }, [ctx, editingProvider, resetProviderForm]);
+    },
+    [ctx, editingProvider, resetProviderForm],
+  );
 
   return {
     resetProviderForm,

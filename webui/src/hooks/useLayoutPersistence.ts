@@ -161,7 +161,9 @@ export function useLayoutPersistence({
           restoreLayout();
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -261,8 +263,10 @@ export function useLayoutPersistence({
         const next = new Map(prev);
         let changed = false;
         next.forEach((buf, id) => {
-          if ((buf.kind === 'file' && buf.isClosable !== false && !buf.isPinned) ||
-              (buf.kind === 'chat' && buf.isClosable === true)) {
+          if (
+            (buf.kind === 'file' && buf.isClosable !== false && !buf.isPinned) ||
+            (buf.kind === 'chat' && buf.isClosable === true)
+          ) {
             next.delete(id);
             changed = true;
           }
@@ -275,9 +279,7 @@ export function useLayoutPersistence({
         prev.map((pane) => {
           if (pane.bufferId && !buffersRef.current.has(pane.bufferId)) {
             // Find the first chat buffer to show, or null for empty
-            const chatBuf = Array.from(buffersRef.current.values()).find(
-              (b) => b.kind === 'chat',
-            );
+            const chatBuf = Array.from(buffersRef.current.values()).find((b) => b.kind === 'chat');
             return { ...pane, bufferId: chatBuf?.id || null };
           }
           return pane;

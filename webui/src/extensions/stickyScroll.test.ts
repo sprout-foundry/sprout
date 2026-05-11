@@ -141,9 +141,7 @@ class MyClass {
   });
 
   it('finds enclosing scope for line inside function body', () => {
-    const symbols: SymbolInfo[] = [
-      { name: 'main', line: 1, kind: 'function' as const },
-    ];
+    const symbols: SymbolInfo[] = [{ name: 'main', line: 1, kind: 'function' as const }];
     const content = `func main() {
   fmt.Println("hello")
 }`;
@@ -171,9 +169,7 @@ class MyClass {
   });
 
   it('returns empty when cursor line is after symbol ends', () => {
-    const symbols: SymbolInfo[] = [
-      { name: 'main', line: 1, kind: 'function' as const },
-    ];
+    const symbols: SymbolInfo[] = [{ name: 'main', line: 1, kind: 'function' as const }];
     // Symbol ends at line 2 based on braces, cursor at line 10 is past the end
     const content = `func main() {
   x := 1
@@ -184,9 +180,7 @@ class MyClass {
   });
 
   it('handles TypeScript class', () => {
-    const symbols: SymbolInfo[] = [
-      { name: 'MyComponent', line: 1, kind: 'class' as const },
-    ];
+    const symbols: SymbolInfo[] = [{ name: 'MyComponent', line: 1, kind: 'class' as const }];
     const content = `class MyComponent {
   render() { return <div />; }
 }`;
@@ -197,9 +191,7 @@ class MyClass {
   });
 
   it('handles TypeScript interface', () => {
-    const symbols: SymbolInfo[] = [
-      { name: 'MyInterface', line: 1, kind: 'interface' as const },
-    ];
+    const symbols: SymbolInfo[] = [{ name: 'MyInterface', line: 1, kind: 'interface' as const }];
     const content = `interface MyInterface {
   foo: string;
 }`;
@@ -212,9 +204,7 @@ class MyClass {
   it('handles Python class without braces (scope extends to end of file)', () => {
     // Python uses indentation, not braces. Without brace detection, scope
     // extends to end of file. This tests that the function handles this case.
-    const symbols: SymbolInfo[] = [
-      { name: 'MyClass', line: 1, kind: 'class' as const },
-    ];
+    const symbols: SymbolInfo[] = [{ name: 'MyClass', line: 1, kind: 'class' as const }];
     const content = `class MyClass:
   def method(self):
     pass`;
@@ -254,7 +244,7 @@ describe('findScopeEnd', () => {
   });
 
   it('skips braces inside single-quoted strings', () => {
-    const lines = ["func foo() {", '  s := "{ }"', '}'];
+    const lines = ['func foo() {', '  s := "{ }"', '}'];
     expect(findScopeEnd(lines, 0)).toBe(3);
   });
 
@@ -388,17 +378,13 @@ describe('computeStickyScopes', () => {
   });
 
   it('handles TypeScript file extension', () => {
-    getEnclosingSymbols.mockReturnValue([
-      { name: 'MyComponent', line: 1, kind: 'class' as const },
-    ]);
+    getEnclosingSymbols.mockReturnValue([{ name: 'MyComponent', line: 1, kind: 'class' as const }]);
     const result = computeStickyScopes('class MyComponent {}', '.tsx', 3);
     expect(result.length).toBe(1);
   });
 
   it('handles JavaScript file extension', () => {
-    getEnclosingSymbols.mockReturnValue([
-      { name: 'myFunction', line: 1, kind: 'function' as const },
-    ]);
+    getEnclosingSymbols.mockReturnValue([{ name: 'myFunction', line: 1, kind: 'function' as const }]);
     const result = computeStickyScopes('function myFunction() {}', '.js', 2);
     expect(result.length).toBe(1);
   });

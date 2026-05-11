@@ -32,11 +32,7 @@ function formatFilePath(filePath: string | null): string {
 }
 
 /** Highlight the symbol range in a line of code. */
-function highlightSymbol(
-  lineText: string,
-  startCol: number,
-  endCol: number,
-): React.ReactNode {
+function highlightSymbol(lineText: string, startCol: number, endCol: number): React.ReactNode {
   if (startCol < 1 || startCol > lineText.length || endCol < startCol || endCol > lineText.length + 1) {
     return lineText;
   }
@@ -225,9 +221,7 @@ function FindAllReferencesOverlay({
       >
         {isEmpty && <div className="find-refs-empty">No references found</div>}
 
-        {isSearching && (
-          <div className="find-refs-empty">Searching for references...</div>
-        )}
+        {isSearching && <div className="find-refs-empty">Searching for references...</div>}
 
         {!isEmpty &&
           !isSearching &&
@@ -262,18 +256,12 @@ function FindAllReferencesOverlay({
                       role="option"
                       aria-selected={isActive}
                       tabIndex={-1}
-                      className={`find-refs-item${
-                        isActive ? ' find-refs-item-active' : ''
-                      }`}
+                      className={`find-refs-item${isActive ? ' find-refs-item-active' : ''}`}
                       onClick={() => handleItemClick(ref)}
                       onMouseEnter={() => handleItemMouseEnter(flatIndex)}
                     >
                       <span className="find-refs-line-text">
-                        {highlightSymbol(
-                          ref.lineText,
-                          ref.startCol,
-                          ref.endCol,
-                        )}
+                        {highlightSymbol(ref.lineText, ref.startCol, ref.endCol)}
                       </span>
                       <span className="find-refs-line-num">:{ref.line}</span>
                     </div>

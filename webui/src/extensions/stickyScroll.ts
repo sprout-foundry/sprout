@@ -18,7 +18,13 @@
 
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type Extension } from '@codemirror/state';
-import { extractSymbols, getEnclosingSymbols, findSymbolScopeEnd as findScopeEnd, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
+import {
+  extractSymbols,
+  getEnclosingSymbols,
+  findSymbolScopeEnd as findScopeEnd,
+  CONTAINER_KINDS,
+  type SymbolInfo,
+} from '../utils/symbolUtils';
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -37,11 +43,7 @@ const MAX_SCOPES_DISPLAY = 3;
  * @param content - The document content (needed for scope end detection).
  * @returns Array of enclosing SymbolInfo objects (up to 3).
  */
-export function findEnclosingScopes(
-  symbols: SymbolInfo[],
-  targetLine: number,
-  content: string,
-): SymbolInfo[] {
+export function findEnclosingScopes(symbols: SymbolInfo[], targetLine: number, content: string): SymbolInfo[] {
   if (!symbols || symbols.length === 0 || targetLine < 1) {
     return [];
   }
@@ -51,9 +53,7 @@ export function findEnclosingScopes(
 
   // Symbols from extractSymbols() are pre-sorted by line ascending.
   // Sort defensively in case of unsorted input.
-  const containers = symbols
-    .filter((s) => CONTAINER_KINDS.has(s.kind))
-    .sort((a, b) => a.line - b.line);
+  const containers = symbols.filter((s) => CONTAINER_KINDS.has(s.kind)).sort((a, b) => a.line - b.line);
 
   for (const sym of containers) {
     if (sym.line > targetLine) continue; // symbol starts after target
@@ -81,11 +81,7 @@ export function findEnclosingScopes(
  * @param topLine - The 1-based line number at the top of the viewport.
  * @returns Array of enclosing SymbolInfo objects (up to 3).
  */
-export function computeStickyScopes(
-  content: string,
-  fileExtension: string | undefined,
-  topLine: number,
-): SymbolInfo[] {
+export function computeStickyScopes(content: string, fileExtension: string | undefined, topLine: number): SymbolInfo[] {
   if (!content || topLine < 1) {
     return [];
   }
@@ -221,11 +217,7 @@ class StickyScrollPlugin {
 
       // Use cached symbols directly to find enclosing scopes
       // (avoids re-parsing via getEnclosingSymbols)
-      const scopes = findEnclosingScopes(
-        this.cachedSymbols,
-        topLineNumber,
-        doc.toString(),
-      );
+      const scopes = findEnclosingScopes(this.cachedSymbols, topLineNumber, doc.toString());
 
       // No scope or header visible — hide and clear
       if (scopes.length === 0) {
@@ -390,11 +382,13 @@ const stickyScrollBaseTheme = EditorView.baseTheme({
 export function stickyScrollPlugin(getFileExtension: () => string | undefined): Extension {
   return [
     stickyScrollBaseTheme,
-    ViewPlugin.fromClass(class extends StickyScrollPlugin {
-      constructor(view: EditorView) {
-        super(view, getFileExtension);
-      }
-    }),
+    ViewPlugin.fromClass(
+      class extends StickyScrollPlugin {
+        constructor(view: EditorView) {
+          super(view, getFileExtension);
+        }
+      },
+    ),
   ];
 }
 

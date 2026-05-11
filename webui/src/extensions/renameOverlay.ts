@@ -9,7 +9,8 @@
  * uses the backend API. For other languages, falls back to simple text replace.
  */
 
-import { EditorView, Decoration, type DecorationSet } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
+import { Decoration, type DecorationSet } from '@codemirror/view';
 import { StateEffect, StateField, type EditorState } from '@codemirror/state';
 import { ApiService } from '../services/api';
 import { resolveLanguageId } from './languageRegistry';
@@ -17,9 +18,7 @@ import { debugLog } from '../utils/log';
 import './renameOverlay.css';
 
 /** Semantic language IDs that support rename. */
-const RENAME_LANGUAGES = new Set([
-  'typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'go',
-]);
+const RENAME_LANGUAGES = new Set(['typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'go']);
 
 // ---------------------------------------------------------------------------
 // StateEffects for decoration management
@@ -61,9 +60,7 @@ export const renameHighlightField = StateField.define<DecorationSet>({
         if (locs.length === 0) {
           return Decoration.none;
         }
-        const marks = locs.map(loc =>
-          Decoration.mark({ class: 'cm-rename-highlight' }).range(loc.from, loc.to)
-        );
+        const marks = locs.map((loc) => Decoration.mark({ class: 'cm-rename-highlight' }).range(loc.from, loc.to));
         decorations = Decoration.set(marks, true);
       }
       if (effect.is(clearRenameLocations)) {
@@ -143,7 +140,7 @@ function createOverlayElement(
   to: number,
   currentWord: string,
   locationCount: number,
-  isFallback: boolean
+  isFallback: boolean,
 ): OverlayState {
   const coords = view.coordsAtPos(from);
   if (!coords) {
@@ -250,7 +247,7 @@ function triggerSemanticRename(
   languageId: string,
   from: number,
   to: number,
-  currentWord: string
+  currentWord: string,
 ): void {
   const api = ApiService.getInstance();
   const line = view.state.doc.lineAt(from);
@@ -260,7 +257,8 @@ function triggerSemanticRename(
   // Show loading state
   const loadingOverlay = createLoadingOverlay(view, from, currentWord);
 
-  api.getSemanticRename(filePath, options.getContent(), languageId, lineNum, col)
+  api
+    .getSemanticRename(filePath, options.getContent(), languageId, lineNum, col)
     .then((result) => {
       // Remove loading overlay
       loadingOverlay.remove();
@@ -273,8 +271,8 @@ function triggerSemanticRename(
 
       // Filter locations to current file (or locations without filePath)
       const locations = result.rename.locations
-        .filter(l => !l.filePath || l.filePath === filePath)
-        .map(l => ({ from: l.from, to: l.to }));
+        .filter((l) => !l.filePath || l.filePath === filePath)
+        .map((l) => ({ from: l.from, to: l.to }));
 
       if (locations.length === 0) {
         debugLog('[rename] No locations in current file');
@@ -307,7 +305,7 @@ function triggerFallbackRename(
   options: RenameOptions,
   from: number,
   to: number,
-  currentWord: string
+  currentWord: string,
 ): void {
   const locations = findAllOccurrences(view.state.doc, currentWord);
 
@@ -350,7 +348,7 @@ function wireRenameInput(view: EditorView, overlay: OverlayState, options: Renam
     }
 
     // Apply all replacements in ONE atomic transaction
-    const changes = locations.map(loc => {
+    const changes = locations.map((loc) => {
       return { from: loc.from, to: loc.to, insert: newName };
     });
 

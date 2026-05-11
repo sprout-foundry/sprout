@@ -88,12 +88,19 @@ export function extractTagName(docText: string, cursorPos: number): string | nul
   while (startPos >= 0) {
     const ch = docText[startPos];
     // Track quote context (single and double quotes skip each other)
-    if (ch === '"' && !inSingleQuote) { inDoubleQuote = !inDoubleQuote; }
-    else if (ch === "'" && !inDoubleQuote) { inSingleQuote = !inSingleQuote; }
+    if (ch === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+    } else if (ch === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+    }
     // Track brace depth to detect unclosed JSX expressions (e.g., `<div data-x={5 >`)
     // When scanning backwards: } increments, { decrements
-    if (ch === '}' && !inDoubleQuote && !inSingleQuote) { braceDepth++; }
-    if (ch === '{' && !inDoubleQuote && !inSingleQuote) { braceDepth--; }
+    if (ch === '}' && !inDoubleQuote && !inSingleQuote) {
+      braceDepth++;
+    }
+    if (ch === '{' && !inDoubleQuote && !inSingleQuote) {
+      braceDepth--;
+    }
     if (ch === '<' && !inDoubleQuote && !inSingleQuote) {
       break;
     }
@@ -272,9 +279,7 @@ export function buildAutoCloseTagExtensions(languageId: string | null | undefine
           return;
         }
         // Check if this is a user input type event
-        const isUserInput = update.transactions.some((tr) =>
-          tr.isUserEvent('input.type'),
-        );
+        const isUserInput = update.transactions.some((tr) => tr.isUserEvent('input.type'));
         if (!isUserInput) {
           return;
         }

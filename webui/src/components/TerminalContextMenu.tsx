@@ -1,15 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import type { Terminal } from '@xterm/xterm';
-import {
-  Copy,
-  ClipboardPaste,
-  Search,
-  Trash2,
-  Rows2,
-  Columns2,
-  TextSelect,
-  Link2,
-} from 'lucide-react';
+import { Copy, ClipboardPaste, Search, Trash2, Rows2, Columns2, TextSelect, Link2 } from 'lucide-react';
 import { ContextMenu } from '@sprout/ui';
 import { debugLog } from '../utils/log';
 
@@ -89,48 +80,51 @@ function TerminalContextMenu({
 
   // ── Detect link under cursor (same logic as inline implementation) ───
 
-  const detectLinkUnderCursor = useCallback((e: MouseEvent): { hasLink: boolean; linkUrl: string } => {
-    const term = getTerminal();
-    if (!term) return { hasLink: false, linkUrl: '' };
+  const detectLinkUnderCursor = useCallback(
+    (e: MouseEvent): { hasLink: boolean; linkUrl: string } => {
+      const term = getTerminal();
+      if (!term) return { hasLink: false, linkUrl: '' };
 
-    const container = containerRef.current;
-    if (!container) return { hasLink: false, linkUrl: '' };
+      const container = containerRef.current;
+      if (!container) return { hasLink: false, linkUrl: '' };
 
-    const rect = container.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      return { hasLink: false, linkUrl: '' };
-    }
-
-    const cellWidth = rect.width / term.cols;
-    const cellHeight = rect.height / term.rows;
-    const cellX = Math.floor((e.clientX - rect.left) / cellWidth);
-    const cellY = Math.floor((e.clientY - rect.top) / cellHeight);
-
-    const buf = term.buffer.active;
-    const lineIdx = buf.baseY + cellY;
-    const line = buf.getLine(lineIdx);
-
-    if (!line) return { hasLink: false, linkUrl: '' };
-
-    // Build line text
-    let text = '';
-    for (let i = 0; i < line.length; i++) {
-      text += line.getCell(i)?.getChars() || '';
-    }
-
-    // URL regex (same as inline)
-    const urlRegex = /https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/g;
-    let match;
-    while ((match = urlRegex.exec(text)) !== null) {
-      const start = match.index;
-      const end = start + match[0].length;
-      if (cellX >= start && cellX < end) {
-        return { hasLink: true, linkUrl: match[0] };
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        return { hasLink: false, linkUrl: '' };
       }
-    }
 
-    return { hasLink: false, linkUrl: '' };
-  }, [getTerminal, containerRef]);
+      const cellWidth = rect.width / term.cols;
+      const cellHeight = rect.height / term.rows;
+      const cellX = Math.floor((e.clientX - rect.left) / cellWidth);
+      const cellY = Math.floor((e.clientY - rect.top) / cellHeight);
+
+      const buf = term.buffer.active;
+      const lineIdx = buf.baseY + cellY;
+      const line = buf.getLine(lineIdx);
+
+      if (!line) return { hasLink: false, linkUrl: '' };
+
+      // Build line text
+      let text = '';
+      for (let i = 0; i < line.length; i++) {
+        text += line.getCell(i)?.getChars() || '';
+      }
+
+      // URL regex (same as inline)
+      const urlRegex = /https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/g;
+      let match;
+      while ((match = urlRegex.exec(text)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+        if (cellX >= start && cellX < end) {
+          return { hasLink: true, linkUrl: match[0] };
+        }
+      }
+
+      return { hasLink: false, linkUrl: '' };
+    },
+    [getTerminal, containerRef],
+  );
 
   // ── Context menu handler ──────────────────────────────────
 
@@ -234,16 +228,9 @@ function TerminalContextMenu({
 
   return (
     <ContextMenu isOpen={menu.visible} x={menu.x} y={menu.y} onClose={close}>
-      <button
-        className="context-menu-item"
-        onClick={handleCopy}
-        disabled={!hasSel}
-        type="button"
-      >
+      <button className="context-menu-item" onClick={handleCopy} disabled={!hasSel} type="button">
         <Copy size={13} />
-        <span className="menu-item-label">
-          {copiedAction === 'text' ? 'Copied!' : 'Copy'}
-        </span>
+        <span className="menu-item-label">{copiedAction === 'text' ? 'Copied!' : 'Copy'}</span>
         <span className="menu-item-shortcut">Ctrl+Shift+C</span>
       </button>
       <button className="context-menu-item" onClick={handlePaste} type="button">
@@ -279,9 +266,7 @@ function TerminalContextMenu({
           <div className="context-menu-divider" />
           <button className="context-menu-item" onClick={handleCopyLink} type="button">
             <Link2 size={13} />
-            <span className="menu-item-label">
-              {copiedAction === 'link' ? 'Copied!' : 'Copy Link'}
-            </span>
+            <span className="menu-item-label">{copiedAction === 'link' ? 'Copied!' : 'Copy Link'}</span>
           </button>
         </>
       )}

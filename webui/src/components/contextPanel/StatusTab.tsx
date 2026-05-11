@@ -1,12 +1,6 @@
 import type { ChatContextPanelProps, StatusMetrics } from './types';
 import type { Revision } from './types';
-import {
-  Activity,
-  Bot,
-  Wrench,
-  FileCode,
-  BarChart3,
-} from 'lucide-react';
+import { Activity, Bot, Wrench, FileCode, BarChart3 } from 'lucide-react';
 import { formatDurationMs, formatTokens, formatCost } from './helpers';
 
 interface StatusTabProps {
@@ -16,12 +10,7 @@ interface StatusTabProps {
   revisions: Revision[];
 }
 
-export function StatusTab({
-  chatProps,
-  statusMetrics,
-  liveDurationMs,
-  revisions,
-}: StatusTabProps) {
+export function StatusTab({ chatProps, statusMetrics, liveDurationMs, revisions }: StatusTabProps) {
   const chatLastError = chatProps?.lastError ?? null;
   const chatQueryProgress = chatProps?.queryProgress ?? null;
   const chatIsProcessing = chatProps?.isProcessing ?? false;
@@ -102,9 +91,7 @@ export function StatusTab({
           </div>
           {statusMetrics.activeTools > 0 && (
             <div className="status-metric">
-              <span className="status-metric-value status-metric-active">
-                {statusMetrics.activeTools}
-              </span>
+              <span className="status-metric-value status-metric-active">{statusMetrics.activeTools}</span>
               <span className="status-metric-label">Active</span>
             </div>
           )}
@@ -159,15 +146,11 @@ export function StatusTab({
         </div>
         <div className="status-metrics-grid">
           <div className="status-metric">
-            <span className="status-metric-value">
-              {chatStats ? formatTokens(chatStats.total_tokens || 0) : '—'}
-            </span>
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.total_tokens || 0) : '—'}</span>
             <span className="status-metric-label">Total</span>
           </div>
           <div className="status-metric">
-            <span className="status-metric-value">
-              {chatStats ? formatTokens(chatStats.prompt_tokens || 0) : '—'}
-            </span>
+            <span className="status-metric-value">{chatStats ? formatTokens(chatStats.prompt_tokens || 0) : '—'}</span>
             <span className="status-metric-label">Prompt</span>
           </div>
           <div className="status-metric">
@@ -192,9 +175,7 @@ export function StatusTab({
         <div className="status-metrics-grid">
           <div className="status-metric">
             <span className="status-metric-value">
-              {chatStats?.context_usage_percent != null
-                ? `${chatStats.context_usage_percent.toFixed(1)}%`
-                : '—'}
+              {chatStats?.context_usage_percent != null ? `${chatStats.context_usage_percent.toFixed(1)}%` : '—'}
             </span>
             <span className="status-metric-label">Used</span>
           </div>
@@ -215,11 +196,7 @@ export function StatusTab({
           <div className="status-context-bar">
             <div
               className={`status-context-bar-fill ${
-                chatStats.context_usage_percent > 90
-                  ? 'critical'
-                  : chatStats.context_usage_percent > 75
-                    ? 'high'
-                    : ''
+                chatStats.context_usage_percent > 90 ? 'critical' : chatStats.context_usage_percent > 75 ? 'high' : ''
               }`}
               style={{
                 width: `${Math.max(0, Math.min(100, chatStats.context_usage_percent))}%`,
@@ -235,16 +212,12 @@ export function StatusTab({
         </div>
         <div className="status-metrics-grid">
           <div className="status-metric">
-            <span className="status-metric-value">
-              {chatStats ? formatCost(chatStats.total_cost || 0) : '—'}
-            </span>
+            <span className="status-metric-value">{chatStats ? formatCost(chatStats.total_cost || 0) : '—'}</span>
             <span className="status-metric-label">Total Cost</span>
           </div>
           {(chatStats?.cached_cost_savings || 0) > 0 && (
             <div className="status-metric">
-              <span className="status-metric-value">
-                {formatCost(chatStats?.cached_cost_savings || 0)}
-              </span>
+              <span className="status-metric-value">{formatCost(chatStats?.cached_cost_savings || 0)}</span>
               <span className="status-metric-label">Cache Savings</span>
             </div>
           )}

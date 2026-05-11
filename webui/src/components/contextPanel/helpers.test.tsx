@@ -14,9 +14,24 @@ import { render } from '@testing-library/react';
 
 vi.mock('lucide-react', () => {
   const icons = [
-    'Wrench', 'Terminal', 'BookOpen', 'Pencil', 'Search', 'Eye',
-    'FlaskConical', 'Globe', 'ArrowDown', 'ClipboardList', 'ScrollText',
-    'RotateCcw', 'Bot', 'Rocket', 'Zap', 'CheckCircle2', 'XCircle', 'Hourglass',
+    'Wrench',
+    'Terminal',
+    'BookOpen',
+    'Pencil',
+    'Search',
+    'Eye',
+    'FlaskConical',
+    'Globe',
+    'ArrowDown',
+    'ClipboardList',
+    'ScrollText',
+    'RotateCcw',
+    'Bot',
+    'Rocket',
+    'Zap',
+    'CheckCircle2',
+    'XCircle',
+    'Hourglass',
   ];
   const result: Record<string, (props: any) => JSX.Element> = {};
   for (const name of icons) {

@@ -61,12 +61,9 @@ function EditorWithOutline({
   }, [panelWidth]);
 
   // Handle panel resize (use incremental delta, not cumulative totalDelta)
-  const handleResize = useCallback(
-    (deltaPixels: number) => {
-      setPanelWidth((prev) => Math.max(180, Math.min(500, prev + deltaPixels)));
-    },
-    [],
-  );
+  const handleResize = useCallback((deltaPixels: number) => {
+    setPanelWidth((prev) => Math.max(180, Math.min(500, prev + deltaPixels)));
+  }, []);
 
   // Handle toggle collapse
   const handleToggleCollapse = useCallback(() => {
@@ -75,9 +72,7 @@ function EditorWithOutline({
 
   // Panel style: let DocumentOutlinePanel's own CSS handle collapsed state (40px)
   // Only set explicit width when expanded
-  const outlinePanelStyle: CSSProperties = isCollapsed
-    ? {}
-    : { width: `${panelWidth}px`, minWidth: `${panelWidth}px` };
+  const outlinePanelStyle: CSSProperties = isCollapsed ? {} : { width: `${panelWidth}px`, minWidth: `${panelWidth}px` };
 
   return (
     <div className="editor-with-outline">
@@ -86,11 +81,7 @@ function EditorWithOutline({
       {isFileOpen && (
         <>
           {!isCollapsed && (
-            <ResizeHandle
-              direction="horizontal"
-              onResize={handleResize}
-              className="outline-resize-handle"
-            />
+            <ResizeHandle direction="horizontal" onResize={handleResize} className="outline-resize-handle" />
           )}
           <div className="outline-panel-container" style={outlinePanelStyle}>
             <DocumentOutlinePanel

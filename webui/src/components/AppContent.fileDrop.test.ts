@@ -69,13 +69,7 @@ describe('Binary file detection (AppContent.handleFilesDropped)', () => {
     });
 
     describe('executables/libraries', () => {
-      const exeExtensions = [
-        'program.exe',
-        'lib.dll',
-        'lib.so',
-        'lib.dylib',
-        'module.wasm',
-      ];
+      const exeExtensions = ['program.exe', 'lib.dll', 'lib.so', 'lib.dylib', 'module.wasm'];
 
       it.each(exeExtensions)('detects %s as binary', (fileName) => {
         expect(isBinaryFile(fileName)).toBe(true);
@@ -102,13 +96,7 @@ describe('Binary file detection (AppContent.handleFilesDropped)', () => {
     });
 
     describe('fonts', () => {
-      const fontExtensions = [
-        'font.ttf',
-        'font.otf',
-        'font.woff',
-        'font.woff2',
-        'font.eot',
-      ];
+      const fontExtensions = ['font.ttf', 'font.otf', 'font.woff', 'font.woff2', 'font.eot'];
 
       it.each(fontExtensions)('detects %s as binary', (fileName) => {
         expect(isBinaryFile(fileName)).toBe(true);
@@ -116,12 +104,7 @@ describe('Binary file detection (AppContent.handleFilesDropped)', () => {
     });
 
     describe('data files', () => {
-      const dataExtensions = [
-        'datafile.bin',
-        'config.dat',
-        'database.db',
-        'database.sqlite',
-      ];
+      const dataExtensions = ['datafile.bin', 'config.dat', 'database.db', 'database.sqlite'];
 
       it.each(dataExtensions)('detects %s as binary', (fileName) => {
         expect(isBinaryFile(fileName)).toBe(true);
@@ -185,10 +168,10 @@ describe('Binary file detection (AppContent.handleFilesDropped)', () => {
       'env.env',
       'script.lua',
       'source.r',
-      'source.JS',       // uppercase
-      'source.PY',       // uppercase
-      'source.TXT',      // uppercase
-      'source.MD',       // uppercase
+      'source.JS', // uppercase
+      'source.PY', // uppercase
+      'source.TXT', // uppercase
+      'source.MD', // uppercase
     ];
 
     it.each(textExtensions)('does NOT detect %s as binary', (fileName) => {
@@ -307,14 +290,7 @@ describe('Binary file detection (AppContent.handleFilesDropped)', () => {
     }
 
     it('processes only text files, skipping binary files', () => {
-      const files = [
-        'readme.md',
-        'photo.png',
-        'script.ts',
-        'archive.zip',
-        'data.json',
-        'video.mp4',
-      ];
+      const files = ['readme.md', 'photo.png', 'script.ts', 'archive.zip', 'data.json', 'video.mp4'];
 
       const result = simulateDrop(files);
       expect(result).toEqual(['readme.md', 'script.ts', 'data.json']);

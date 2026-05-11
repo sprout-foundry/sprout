@@ -29,16 +29,10 @@ describe('ModelSelectionModal', () => {
 
   it('renders loading state initially', () => {
     mockApiService.getProviderModels.mockImplementation(
-      () => new Promise(() => {}) // Never resolves
+      () => new Promise(() => {}), // Never resolves
     );
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     expect(screen.getByText('Model Not Available')).toBeInTheDocument();
     expect(screen.getByText(/configured model is not available/i)).toBeInTheDocument();
@@ -52,13 +46,7 @@ describe('ModelSelectionModal', () => {
       models: mockModels,
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.queryByText('Loading available models...')).not.toBeInTheDocument();
@@ -73,13 +61,7 @@ describe('ModelSelectionModal', () => {
     const errorMessage = 'Failed to fetch models';
     mockApiService.getProviderModels.mockRejectedValue(new Error(errorMessage));
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.queryByText('Loading available models...')).not.toBeInTheDocument();
@@ -94,13 +76,7 @@ describe('ModelSelectionModal', () => {
       models: [],
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.queryByText('Loading available models...')).not.toBeInTheDocument();
@@ -115,13 +91,7 @@ describe('ModelSelectionModal', () => {
       models: ['gpt-4o'],
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.getByText('Cancel')).toBeInTheDocument();
@@ -138,13 +108,7 @@ describe('ModelSelectionModal', () => {
       models: mockModels,
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.getByText('Select Model')).toBeInTheDocument();
@@ -165,13 +129,7 @@ describe('ModelSelectionModal', () => {
       models: mockModels,
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.getByText('gpt-4o')).toBeInTheDocument();
@@ -191,13 +149,7 @@ describe('ModelSelectionModal', () => {
       models: ['gpt-4o'],
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.getByText('Cancel')).toBeInTheDocument();
@@ -214,13 +166,7 @@ describe('ModelSelectionModal', () => {
       models: [],
     });
 
-    render(
-      <ModelSelectionModal
-        provider={mockProvider}
-        onClose={mockOnClose}
-        onSelectModel={mockOnSelectModel}
-      />
-    );
+    render(<ModelSelectionModal provider={mockProvider} onClose={mockOnClose} onSelectModel={mockOnSelectModel} />);
 
     await waitFor(() => {
       expect(screen.getByText('Select Model')).toBeInTheDocument();

@@ -184,19 +184,8 @@ describe('computeModifiedLines', () => {
   // -------------------------------------------------------------------------
 
   it('handles interleaved additions and modifications', () => {
-    const current = [
-      'unchanged 1',
-      'modified',
-      'inserted',
-      'unchanged 2',
-      'also modified',
-    ];
-    const original = [
-      'unchanged 1',
-      'original line',
-      'unchanged 2',
-      'original too',
-    ];
+    const current = ['unchanged 1', 'modified', 'inserted', 'unchanged 2', 'also modified'];
+    const original = ['unchanged 1', 'original line', 'unchanged 2', 'original too'];
     const result = computeModifiedLines(current, original);
     // Lines 2 and 3 are new/changed, line 5 is changed
     expect(result.has(2)).toBe(true);
@@ -223,9 +212,7 @@ describe('computeModifiedLines', () => {
   it('uses fast path for files over 3000 lines - prefix/suffix detection', () => {
     // Create a 3001-line file
     function makeLines(n, changeAt) {
-      return Array.from({ length: n }, (_, i) =>
-        changeAt.includes(i) ? 'CHANGED ' + i : 'line ' + i,
-      );
+      return Array.from({ length: n }, (_, i) => (changeAt.includes(i) ? 'CHANGED ' + i : 'line ' + i));
     }
 
     const original = makeLines(3001, []);

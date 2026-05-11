@@ -156,11 +156,11 @@ describe('EventsContextProvider', () => {
 
     act(() => {
       root.render(
-        createElement(EventsContextProvider, { provider: outerProvider },
-          createElement(EventsContextProvider, { provider: innerProvider },
-            createElement(TestConsumer)
-          )
-        )
+        createElement(
+          EventsContextProvider,
+          { provider: outerProvider },
+          createElement(EventsContextProvider, { provider: innerProvider }, createElement(TestConsumer)),
+        ),
       );
     });
 

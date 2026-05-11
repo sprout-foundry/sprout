@@ -116,9 +116,7 @@ function SearchMatchGroup({
         }}
       >
         <span className="search-match-line-number">{match.line_number}</span>
-        <div className="search-match-line">
-          {highlightMatch(match.line, match.column_start, match.column_end)}
-        </div>
+        <div className="search-match-line">{highlightMatch(match.line, match.column_start, match.column_end)}</div>
       </div>
 
       {match.context_after.map((ctx, i) => {
@@ -148,13 +146,7 @@ interface SearchMatchRowProps {
   onContextMenu: (e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => void;
 }
 
-function SearchMatchRow({
-  filePath,
-  lineNumber,
-  text,
-  onFileClick,
-  onContextMenu,
-}: SearchMatchRowProps): JSX.Element {
+function SearchMatchRow({ filePath, lineNumber, text, onFileClick, onContextMenu }: SearchMatchRowProps): JSX.Element {
   return (
     <div
       className="search-match-row search-match-row--context search-match-row--clickable"

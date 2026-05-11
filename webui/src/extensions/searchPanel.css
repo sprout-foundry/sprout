@@ -23,7 +23,9 @@
   border-radius: 3px;
   color: var(--cm-fg, #000);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .cm-search .cm-textfield:focus {

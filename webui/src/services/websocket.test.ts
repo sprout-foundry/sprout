@@ -207,7 +207,7 @@ describe('WebSocketService - Queue Behavior', () => {
 
     // The first message (msg0) should have been dropped
     expect(debugLog).toHaveBeenCalledWith(
-      expect.stringContaining('Queue full (100 messages). Dropped oldest message.')
+      expect.stringContaining('Queue full (100 messages). Dropped oldest message.'),
     );
   });
 
@@ -728,7 +728,7 @@ describe('WebSocketService - Miscellaneous Queue Tests', () => {
 
     expect(ws.getQueuedMessageCount()).toBe(100);
     expect(debugLog).toHaveBeenCalledWith(
-      expect.stringContaining('Queue full (100 messages). Dropped oldest message.')
+      expect.stringContaining('Queue full (100 messages). Dropped oldest message.'),
     );
   });
 });

@@ -55,7 +55,7 @@ func TestSecurityApprovalWebuiFlow(t *testing.T) {
 	}()
 
 	// Test the webui approval flow: eventBus is available, so approval should go through webui
-	approved := approvalMgr.RequestToolApproval(eventBus, "test-client", "shell_command", "CAUTION", "Test reasoning", map[string]string{
+	approved := approvalMgr.RequestToolApproval(eventBus, "test-client", "", "shell_command", "CAUTION", "Test reasoning", map[string]string{
 		"command": "echo test",
 		"extras":  "should not appear",
 	})
@@ -72,7 +72,7 @@ func TestSecurityApprovalWebuiFlow(t *testing.T) {
 		approvalMgr.RespondToApproval(requestID, false)
 	}()
 
-	rejected := approvalMgr.RequestToolApproval(eventBus, "test-client", "shell_command", "DANGEROUS", "Test rejection", map[string]string{
+	rejected := approvalMgr.RequestToolApproval(eventBus, "test-client", "", "shell_command", "DANGEROUS", "Test rejection", map[string]string{
 		"command": "rm -rf /",
 	})
 
@@ -86,7 +86,7 @@ func TestSecurityApprovalNoEventBus(t *testing.T) {
 	approvalMgr := security.NewApprovalManager()
 
 	// When eventBus is nil, RequestToolApproval should return false (reject for safety)
-	approved := approvalMgr.RequestToolApproval(nil, "", "shell_command", "CAUTION", "Test", nil)
+	approved := approvalMgr.RequestToolApproval(nil, "", "", "shell_command", "CAUTION", "Test", nil)
 
 	if approved {
 		t.Error("Expected approval to be false when eventBus is nil (reject for safety)")
@@ -111,7 +111,7 @@ func TestSecurityApprovalNonInteractive(t *testing.T) {
 	}()
 
 	// Even though IsInteractive might be false, webui should handle it
-	approved := approvalMgr.RequestToolApproval(eventBus, "test-client", "shell_command", "CAUTION", "Non-interactive test", nil)
+	approved := approvalMgr.RequestToolApproval(eventBus, "test-client", "", "shell_command", "CAUTION", "Non-interactive test", nil)
 
 	if !approved {
 		t.Error("Expected approval to be true when eventBus is available, even in non-interactive mode")

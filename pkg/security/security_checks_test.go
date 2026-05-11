@@ -785,7 +785,7 @@ func TestSecurityPromptManager_Timeout(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		response := mgr.RequestPrompt(eb, "Allow this?", false, nil)
+		response := mgr.RequestPrompt(eb, "", "Allow this?", false, nil)
 		done <- response
 	}()
 
@@ -817,7 +817,7 @@ func TestSecurityPromptManager_TimeoutWithDefaultTrue(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		response := mgr.RequestPrompt(eb, "Allow this?", true, nil)
+		response := mgr.RequestPrompt(eb, "", "Allow this?", true, nil)
 		done <- response
 	}()
 
@@ -847,7 +847,7 @@ func TestSecurityPromptManager_SetPromptTimeout(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		response := mgr.RequestPrompt(eb, "Continue?", false, nil)
+		response := mgr.RequestPrompt(eb, "", "Continue?", false, nil)
 		done <- response
 	}()
 
@@ -877,7 +877,7 @@ func TestSecurityPromptManager_SetPromptTimeout(t *testing.T) {
 		mgr.RespondToPrompt(requestID, true)
 	}()
 
-	response := mgr.RequestPrompt(eb, "Continue?", false, nil)
+	response := mgr.RequestPrompt(eb, "", "Continue?", false, nil)
 	if !response {
 		t.Error("expected true after resetting timeout to default (response sent immediately)")
 	}
@@ -902,7 +902,7 @@ func TestSecurityPromptManager_TimeoutDoesNotBlockIfResponseArrives(t *testing.T
 	}()
 
 	start := time.Now()
-	response := mgr.RequestPrompt(eb, "Allow this?", false, nil)
+	response := mgr.RequestPrompt(eb, "", "Allow this?", false, nil)
 	elapsed := time.Since(start)
 
 	if !response {

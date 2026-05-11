@@ -210,6 +210,7 @@ func CheckFileSecurity(
 	existingIgnoredSecurityConcerns []string,
 	cfg *configuration.Config,
 	eventBus *events.EventBus,
+	userID string,
 ) (
 	updatedSecurityConcerns []string,
 	updatedIgnoredSecurityConcerns []string,
@@ -256,7 +257,7 @@ func CheckFileSecurity(
 
 			// Try event-based prompting first (for WebUI)
 			if eventBus != nil && promptManager != nil {
-				userResponse = promptManager.RequestPrompt(eventBus, prompt, true, map[string]string{
+				userResponse = promptManager.RequestPrompt(eventBus, userID, prompt, true, map[string]string{
 					"file_path": relativePath,
 					"concern":   detectedConcern,
 				})

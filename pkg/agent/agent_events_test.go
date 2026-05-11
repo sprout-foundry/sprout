@@ -229,3 +229,34 @@ func TestGetEventChatID(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEventUserID(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		meta     map[string]interface{}
+		expected string
+	}{
+		{name: "with user_id", meta: map[string]interface{}{"user_id": "user-789"}, expected: "user-789"},
+		{name: "empty metadata", meta: map[string]interface{}{}, expected: ""},
+		{name: "nil metadata", meta: nil, expected: ""},
+		{name: "user_id with spaces", meta: map[string]interface{}{"user_id": "  trimmed "}, expected: "trimmed"},
+		{name: "user_id not string type", meta: map[string]interface{}{"user_id": 123}, expected: ""},
+		{name: "user_id absent", meta: map[string]interface{}{"other": "value"}, expected: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := &Agent{
+				output: NewAgentOutputManager(),
+			}
+			if tc.meta != nil {
+				a.SetEventMetadata(tc.meta)
+			}
+			if got := a.GetEventUserID(); got != tc.expected {
+				t.Errorf("GetEventUserID() = %q, expected %q", got, tc.expected)
+			}
+		})
+	}
+}

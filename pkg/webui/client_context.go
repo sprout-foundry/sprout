@@ -388,9 +388,14 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst := ctx.Agent
 		workspaceRoot := ctx.WorkspaceRoot
 		terminal := ctx.Terminal
+		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.RUnlock()
 		agentInst.SetWorkspaceRoot(workspaceRoot)
-		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
+		meta := map[string]interface{}{"client_id": clientID}
+		if userID != "" {
+			meta["user_id"] = userID
+		}
+		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
@@ -406,12 +411,17 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 			if cs.Agent != nil {
 				agentInst := cs.Agent
 				terminal := ctx.Terminal
+				userID := ctx.UserID // Capture before releasing lock
 				cs.mu.Unlock()
 				ctx.Agent = agentInst // cache for next time
 				workspaceRoot := ctx.WorkspaceRoot
 				ws.mutex.RUnlock()
 				agentInst.SetWorkspaceRoot(workspaceRoot)
-				agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
+				meta := map[string]interface{}{"client_id": clientID}
+				if userID != "" {
+					meta["user_id"] = userID
+				}
+				agentInst.SetEventMetadata(meta)
 				agentInst.EnableStreaming(func(string) {})
 				agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 				// Wire the TerminalManager from the client context into the agent for WebUI mode.
@@ -431,9 +441,14 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst := ctx.Agent
 		workspaceRoot := ctx.WorkspaceRoot
 		terminal := ctx.Terminal
+		userID := ctx.UserID // Capture before releasing lock
 		ws.mutex.Unlock()
 		agentInst.SetWorkspaceRoot(workspaceRoot)
-		agentInst.SetEventMetadata(map[string]interface{}{"client_id": clientID})
+		meta := map[string]interface{}{"client_id": clientID}
+		if userID != "" {
+			meta["user_id"] = userID
+		}
+		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
@@ -444,6 +459,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	}
 	workspaceRoot := ctx.WorkspaceRoot
 	snapshot := append([]byte(nil), ctx.AgentState...)
+	userID := ctx.UserID // Capture before releasing lock
 	ws.mutex.Unlock()
 
 	// Fast check: if no provider is configured, return immediately with a
@@ -489,14 +505,22 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 
 	created.SetEventBus(ws.eventBus)
 	created.SetWorkspaceRoot(workspaceRoot)
-	created.SetEventMetadata(map[string]interface{}{"client_id": clientID, "chat_id": func() string {
-		ws.mutex.RLock()
-		defer ws.mutex.RUnlock()
-		if ctx := ws.clientContexts[clientID]; ctx != nil {
-			return ctx.getActiveChatID()
-		}
-		return ""
-	}()})
+	// Get chat_id while holding the lock
+	ws.mutex.RLock()
+	chatID := ""
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		chatID = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+	// Build metadata map
+	meta := map[string]interface{}{
+		"client_id": clientID,
+		"chat_id":   chatID,
+	}
+	if userID != "" {
+		meta["user_id"] = userID
+	}
+	created.SetEventMetadata(meta)
 	created.EnableStreaming(func(string) {})
 	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
 
@@ -645,6 +669,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	workspaceRoot := ctx.WorkspaceRoot
 	eventBus := ws.eventBus
 	terminal := ctx.Terminal
+	userID := ctx.UserID // Capture before releasing lock
 	ws.mutex.RUnlock()
 
 	// Compute layered config directories: global + workspace (no session file)
@@ -657,7 +682,7 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
 	}
 
-	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, ws.withAgentWorkspace)
+	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, userID, ws.withAgentWorkspace)
 	if err != nil {
 		if errors.Is(err, agent.ErrModelNotAvailable) {
 			return nil, agent.ErrModelNotAvailable
@@ -787,4 +812,21 @@ func (ws *ReactWebServer) resolveWorkspaceRootForChat(clientID, chatID string) s
 		return wtPath
 	}
 	return ctx.WorkspaceRoot
+}
+
+// userIDForClient safely retrieves the UserID for a given clientID.
+// Returns empty string if the client context doesn't exist or has no UserID.
+func (ws *ReactWebServer) userIDForClient(clientID string) string {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		return ""
+	}
+
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		return ctx.UserID
+	}
+	return ""
 }

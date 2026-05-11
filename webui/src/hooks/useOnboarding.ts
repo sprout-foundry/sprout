@@ -295,8 +295,9 @@ function useOnboarding(): UseOnboardingReturn {
       } catch (error) {
         debugLog('[useOnboarding] Failed to complete setup:', error);
         // Detect API key validation failures from structured error codes.
-        const isKeyError = (error as Error & { code?: string })?.code === 'api_key_invalid'
-          || (error instanceof Error && /api key.*(?:invalid|failed|validation)/i.test(error.message));
+        const isKeyError =
+          (error as Error & { code?: string })?.code === 'api_key_invalid' ||
+          (error instanceof Error && /api key.*(?:invalid|failed|validation)/i.test(error.message));
         setOnboarding((prev) => ({
           ...prev,
           submitting: false,

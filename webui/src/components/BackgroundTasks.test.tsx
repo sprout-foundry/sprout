@@ -594,9 +594,10 @@ describe('BackgroundTasks', () => {
       // Simulate slow response
       let resolveFetch: (() => void) | undefined;
       mockClientFetch.mockImplementation(
-        () => new Promise<Response>((resolve) => {
-          resolveFetch = () => resolve(makeOkResponse(mockResponse));
-        })
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = () => resolve(makeOkResponse(mockResponse));
+          }),
       );
 
       const view = renderBackgroundTasks();
@@ -657,10 +658,9 @@ describe('BackgroundTasks', () => {
       await flushPromises();
 
       // Verify the POST was called
-      expect(mockClientFetch).toHaveBeenCalledWith(
-        '/api/terminal/agent-sessions/bg-npm-install-abc123/attach',
-        { method: 'POST' }
-      );
+      expect(mockClientFetch).toHaveBeenCalledWith('/api/terminal/agent-sessions/bg-npm-install-abc123/attach', {
+        method: 'POST',
+      });
     });
 
     it('dispatches sprout:terminal-attach-session custom event', async () => {
@@ -816,10 +816,9 @@ describe('BackgroundTasks', () => {
       });
       await flushPromises();
 
-      expect(mockClientFetch).toHaveBeenCalledWith(
-        '/api/terminal/agent-sessions/bg-npm-install-abc123/kill',
-        { method: 'POST' }
-      );
+      expect(mockClientFetch).toHaveBeenCalledWith('/api/terminal/agent-sessions/bg-npm-install-abc123/kill', {
+        method: 'POST',
+      });
     });
 
     it('refetches session list after kill', async () => {
@@ -1181,7 +1180,7 @@ describe('BackgroundTasks', () => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
             detail: { type: 'terminal_output', data: 'output' },
-          })
+          }),
         );
       });
       await flushPromises();
@@ -1210,7 +1209,7 @@ describe('BackgroundTasks', () => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
             detail: { type: 'pty_exit', session_id: 'bg-npm-install-abc123' },
-          })
+          }),
         );
       });
       await flushPromises();
@@ -1239,7 +1238,7 @@ describe('BackgroundTasks', () => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
             detail: { type: 'agent_session_update', session_id: 'bg-npm-install-abc123' },
-          })
+          }),
         );
       });
       await flushPromises();
@@ -1268,7 +1267,7 @@ describe('BackgroundTasks', () => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
             detail: { type: 'some_other_event' },
-          })
+          }),
         );
       });
       await flushPromises();
@@ -1296,7 +1295,7 @@ describe('BackgroundTasks', () => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
             detail: { type: 'terminal_output', data: 'output' },
-          })
+          }),
         );
       });
       await flushPromises();
@@ -1329,7 +1328,7 @@ describe('BackgroundTasks', () => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
             detail: { type: 'terminal_output', data: 'output' },
-          })
+          }),
         );
       });
       await flushPromises();
@@ -1437,9 +1436,7 @@ describe('BackgroundTasks', () => {
 
       // Dispatch event with null detail
       act(() => {
-        window.dispatchEvent(
-          new CustomEvent('sprout:wsevent', { detail: null })
-        );
+        window.dispatchEvent(new CustomEvent('sprout:wsevent', { detail: null }));
       });
       await flushPromises();
 

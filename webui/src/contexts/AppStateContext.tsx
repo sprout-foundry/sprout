@@ -6,7 +6,14 @@
  * in the functional update style: setState((prev) => ({...prev, changes})).
  */
 
-import React, { createContext, useContext, useReducer, type Dispatch, type SetStateAction, type ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  type Dispatch,
+  type SetStateAction,
+  type ReactNode,
+} from 'react';
 import type { AppState } from '../types/app';
 import { loadPersistedAppState } from '../services/appStatePersistence';
 
@@ -52,10 +59,7 @@ const DEFAULT_APP_STATE: AppState = {
  * @param action - Either a functional updater or partial state to merge
  * @returns The new application state
  */
-function appStateReducer(
-  prevState: AppState,
-  action: SetStateAction<AppState>
-): AppState {
+function appStateReducer(prevState: AppState, action: SetStateAction<AppState>): AppState {
   if (typeof action === 'function') {
     return (action as (prev: AppState) => AppState)(prevState);
   }
@@ -110,25 +114,21 @@ export interface AppStateProviderProps {
  * ```
  */
 export function AppStateProvider({ children }: AppStateProviderProps): JSX.Element {
-  const [state, dispatch] = useReducer(
-    appStateReducer,
-    DEFAULT_APP_STATE,
-    (defaultState) => {
-      const persisted = loadPersistedAppState();
-      return {
-        ...defaultState,
-        ...persisted,
-        // Runtime-only defaults that must never be loaded from storage
-        isConnected: false,
-        isProcessing: false,
-        lastError: null,
-        queryProgress: null,
-        activeChatId: null,
-        chatSessions: [],
-        perChatCache: {},
-      };
-    }
-  );
+  const [state, dispatch] = useReducer(appStateReducer, DEFAULT_APP_STATE, (defaultState) => {
+    const persisted = loadPersistedAppState();
+    return {
+      ...defaultState,
+      ...persisted,
+      // Runtime-only defaults that must never be loaded from storage
+      isConnected: false,
+      isProcessing: false,
+      lastError: null,
+      queryProgress: null,
+      activeChatId: null,
+      chatSessions: [],
+      perChatCache: {},
+    };
+  });
 
   const contextValue: AppStateContextValue = {
     state,

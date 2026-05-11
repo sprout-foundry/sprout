@@ -21,7 +21,14 @@ import type { EditorSettingsCompartments } from './useEditorSettings';
 import type { UseEditorExtensionsReturn } from './useEditorExtensions';
 import type { KeymapActions } from './useEditorKeymaps';
 import { resolveLanguageId } from '../extensions/languageRegistry';
-import { buildLSPPluginExtensions, lspSyncOnDocChange, setGlobalDisplayFileCallback, type DisplayFileCallback, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
+import {
+  buildLSPPluginExtensions,
+  lspSyncOnDocChange,
+  setGlobalDisplayFileCallback,
+  type DisplayFileCallback,
+  registerEditorView,
+  unregisterEditorView,
+} from '../extensions/lspExtensions';
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
 import type { Extension } from '@codemirror/state';
@@ -70,7 +77,12 @@ export interface UseEditorViewInitOptions {
   /** Ref to keymaps — stable identity avoids EditorView recreation */
   keymapsRef: React.MutableRefObject<EditorViewInitKeymaps>;
   localContentRef: React.MutableRefObject<string>;
-  openWorkspaceBuffer: (buffer: { kind: 'file' | 'chat' | 'diff' | 'review' | 'compare'; path: string; title: string; ext?: string }) => void;
+  openWorkspaceBuffer: (buffer: {
+    kind: 'file' | 'chat' | 'diff' | 'review' | 'compare';
+    path: string;
+    title: string;
+    ext?: string;
+  }) => void;
   onCancelPendingFlush: () => void;
   /** Ref to the update handler — stable identity avoids EditorView recreation on every keystroke */
   onUpdateRef: React.MutableRefObject<(update: ViewUpdate) => void>;
@@ -121,7 +133,11 @@ export function useEditorViewInit(options: UseEditorViewInitOptions): void {
   useEffect(() => {
     if (!editorRef.current) return;
 
-    const resolvedLanguage = resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name);
+    const resolvedLanguage = resolveLanguageId(
+      buffer?.languageOverride,
+      buffer?.file?.ext?.replace(/^\./, ''),
+      buffer?.file?.name,
+    );
 
     // Read current values from refs to avoid stale closure issues.
     // These are read inside the effect (not captured by dependency array)

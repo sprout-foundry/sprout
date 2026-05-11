@@ -33,10 +33,7 @@ export interface EditorContextMenuProps {
 /**
  * Component that renders the editor context menu.
  */
-export const EditorContextMenu: FC<EditorContextMenuProps> = ({
-  contextMenu: ctx,
-  isSemanticLanguage,
-}) => {
+export const EditorContextMenu: FC<EditorContextMenuProps> = ({ contextMenu: ctx, isSemanticLanguage }) => {
   const { contextMenu, workspaceRoot } = ctx;
 
   return (

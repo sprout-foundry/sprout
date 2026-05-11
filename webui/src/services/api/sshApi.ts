@@ -2,16 +2,11 @@
  * SSH/Instances domain API — adapter-aware SSH and instance operations.
  */
 
-import {
-  SproutInstance,
-  SSHHostEntry,
+import type {
   SSHHostsResponse,
-  SSHSessionEntry,
   SSHSessionsResponse,
   SSHOpenResponse,
-  SSHOpenErrorPayload,
   SSHLaunchStatus,
-  SSHBrowseEntry,
   SSHBrowseResponse,
   SSHCloseResponse,
   SelectInstanceResponse,
@@ -41,7 +36,11 @@ export async function getSSHHosts(fetchFn: typeof fetch): Promise<SSHHostsRespon
  * Open SSH workspace with polling for completion.
  * This function polls until the SSH workspace launch completes.
  */
-export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string, remoteWorkspacePath?: string): Promise<SSHOpenResponse> {
+export async function openSSHWorkspace(
+  fetchFn: typeof fetch,
+  hostAlias: string,
+  remoteWorkspacePath?: string,
+): Promise<SSHOpenResponse> {
   // Kick off the launch asynchronously — the server returns 202 immediately
   // so the browser never hits a long HTTP timeout.
   const startResponse = await fetchFn('/api/instances/ssh-open', {
@@ -54,7 +53,7 @@ export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string,
   });
 
   if (!startResponse.ok) {
-    const errData = await startResponse.json().catch(() => ({})) as Record<string, unknown>;
+    const errData = (await startResponse.json().catch(() => ({}))) as Record<string, unknown>;
     throw new SSHWorkspaceOpenError({
       error: (errData.error as string) || (errData.message as string) || 'Failed to start SSH workspace launch',
       step: errData.step as string | undefined,
@@ -66,9 +65,7 @@ export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string,
   // Poll ssh-launch-status until the launch completes or times out.
   const deadline = Date.now() + SSH_POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await new Promise<void>((resolve) =>
-      window.setTimeout(resolve, SSH_POLL_INTERVAL_MS)
-    );
+    await new Promise<void>((resolve) => window.setTimeout(resolve, SSH_POLL_INTERVAL_MS));
 
     let status: SSHLaunchStatus;
     try {
@@ -115,7 +112,11 @@ export async function openSSHWorkspace(fetchFn: typeof fetch, hostAlias: string,
   });
 }
 
-export async function getSSHLaunchStatus(fetchFn: typeof fetch, hostAlias: string, remoteWorkspacePath?: string): Promise<SSHLaunchStatus> {
+export async function getSSHLaunchStatus(
+  fetchFn: typeof fetch,
+  hostAlias: string,
+  remoteWorkspacePath?: string,
+): Promise<SSHLaunchStatus> {
   const params = new URLSearchParams({ host_alias: hostAlias });
   if (remoteWorkspacePath) params.set('remote_workspace_path', remoteWorkspacePath);
   const response = await fetchFn(`/api/instances/ssh-launch-status?${params}`);
@@ -129,7 +130,11 @@ export async function getSSHSessions(fetchFn: typeof fetch): Promise<SSHSessions
   return response.json();
 }
 
-export async function browseSSHDirectory(fetchFn: typeof fetch, sessionKey: string, path: string): Promise<SSHBrowseResponse> {
+export async function browseSSHDirectory(
+  fetchFn: typeof fetch,
+  sessionKey: string,
+  path: string,
+): Promise<SSHBrowseResponse> {
   const response = await fetchFn(`/api/instances/ssh/${encodeURIComponent(sessionKey)}/browse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -159,7 +164,11 @@ export async function closeSSHSession(fetchFn: typeof fetch, key: string): Promi
  * Browse SSH directory using host_alias (for selecting directory before opening session)
  * This is different from browseSSHDirectory which uses sessionKey.
  */
-export async function browseSSHDirectoryByHostAlias(fetchFn: typeof fetch, hostAlias: string, path?: string): Promise<SSHBrowseResponse> {
+export async function browseSSHDirectoryByHostAlias(
+  fetchFn: typeof fetch,
+  hostAlias: string,
+  path?: string,
+): Promise<SSHBrowseResponse> {
   const response = await fetchFn('/api/instances/ssh-browse', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

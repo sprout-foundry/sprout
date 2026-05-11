@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import { WorkspaceDirectory, RemoteWorkspaceContext } from './types';
+import type { WorkspaceDirectory, RemoteWorkspaceContext } from './types';
 import { collapseHomePath } from './pathUtils';
 
 export interface WorkspaceSuggestionListProps {
@@ -62,9 +62,7 @@ export const WorkspaceSuggestionList: React.FC<WorkspaceSuggestionListProps> = (
           >
             <span className="location-switcher-item-text">{dir.name}</span>
             <span className="location-switcher-item-meta">
-              {remoteContext
-                ? collapseHomePath(dir.path, remoteContext.homePath)
-                : dir.path}
+              {remoteContext ? collapseHomePath(dir.path, remoteContext.homePath) : dir.path}
             </span>
           </button>
         ))}

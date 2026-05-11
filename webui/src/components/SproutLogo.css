@@ -38,30 +38,30 @@
 
 /* Dark mode — deep navy + teal frost */
 .sprout-logo-bg {
-  fill: #10212D;
+  fill: #10212d;
 }
 .sprout-logo-line {
-  stroke: #F4FEFF;
+  stroke: #f4feff;
 }
 .sprout-logo-accent {
-  stroke: #68E3EE;
+  stroke: #68e3ee;
 }
 .sprout-logo-accent-fill {
-  fill: #68E3EE;
+  fill: #68e3ee;
 }
 
 /* Light mode — subtle tinted background + earth + robust green */
 :root[data-theme='light'] .sprout-logo-bg {
-  fill: #F0F4F8;
+  fill: #f0f4f8;
 }
 :root[data-theme='light'] .sprout-logo-line {
-  stroke: #6B4C2A;
+  stroke: #6b4c2a;
 }
 :root[data-theme='light'] .sprout-logo-accent {
-  stroke: #1BA03D;
+  stroke: #1ba03d;
 }
 :root[data-theme='light'] .sprout-logo-accent-fill {
-  fill: #1BA03D;
+  fill: #1ba03d;
 }
 
 .sprout-logo-wordmark {

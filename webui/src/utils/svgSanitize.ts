@@ -50,7 +50,10 @@ const URL_ATTRIBUTES = new Set([
 function normalizeUrl(value: string): string {
   // Remove zero-width spaces (U+200B), zero-width non-joiners (U+200C),
   // zero-width joiners (U+200D), and BOM (U+FEFF)
-  let result = value.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+  let result = value.replace(/\u200B/g, '');
+  result = result.replace(/\u200C/g, '');
+  result = result.replace(/\u200D/g, '');
+  result = result.replace(/\uFEFF/g, '');
   // Remove extra whitespace but keep single spaces
   result = result.replace(/\s+/g, ' ');
   return result;
@@ -101,9 +104,11 @@ function sanitizeCssValue(value: string): string {
     const trimmed = normalized.trim().toLowerCase();
 
     // Check for dangerous URLs
-    if (trimmed.startsWith('javascript:') ||
-        trimmed.startsWith('data:image/svg+xml') ||
-        trimmed.startsWith('data:text/html')) {
+    if (
+      trimmed.startsWith('javascript:') ||
+      trimmed.startsWith('data:image/svg+xml') ||
+      trimmed.startsWith('data:text/html')
+    ) {
       // Replace with empty url()
       return 'url()';
     }

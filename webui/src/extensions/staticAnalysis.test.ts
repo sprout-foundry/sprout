@@ -10,8 +10,22 @@ jest.mock('@codemirror/view', () => ({
   ViewPlugin: { fromClass: jest.fn((Class) => ({ type: 'Plugin', Class })) },
   EditorView: { theme: jest.fn(() => []), dom: {}, coordsAtPos: jest.fn(), plugin: jest.fn() },
   gutter: jest.fn(() => ({ type: 'Gutter' })),
-  GutterMarker: class MockGutterMarker { toDOM() { return mockCreateSpan(); } },
-  WidgetType: class MockWidgetType { toDOM() { return mockCreateElement(); } eq() { return true; } ignoreEvent() { return true; } },
+  GutterMarker: class MockGutterMarker {
+    toDOM() {
+      return mockCreateSpan();
+    }
+  },
+  WidgetType: class MockWidgetType {
+    toDOM() {
+      return mockCreateElement();
+    }
+    eq() {
+      return true;
+    }
+    ignoreEvent() {
+      return true;
+    }
+  },
 }));
 
 jest.mock('@codemirror/state', () => {
@@ -29,17 +43,31 @@ jest.mock('@codemirror/state', () => {
 });
 
 jest.mock('../services/api', () => ({
-  ApiService: { getInstance: jest.fn(() => ({ getSemanticCodeActions: jest.fn().mockResolvedValue({ code_actions: [] }) })) },
+  ApiService: {
+    getInstance: jest.fn(() => ({ getSemanticCodeActions: jest.fn().mockResolvedValue({ code_actions: [] }) })),
+  },
 }));
 
 jest.mock('./languageRegistry', () => ({ resolveLanguageId: jest.fn() }));
 jest.mock('../utils/log', () => ({ debugLog: jest.fn() }));
 
-import { computeStaticActions, isNearImportLine, findUnusedJsImports, findUnusedGoImports, kindEmoji, Doc, DocLine, Selection } from './staticAnalysis';
+import {
+  computeStaticActions,
+  isNearImportLine,
+  findUnusedJsImports,
+  findUnusedGoImports,
+  kindEmoji,
+  Doc,
+  DocLine,
+  Selection,
+} from './staticAnalysis';
 
 // Helper to generate filler code for tests requiring >100 lines
 function makeFiller(prefix = 'const v', count = 100): string {
-  return Array(count).fill(null).map((_, i) => `${prefix}${i} = ${i};`).join('\n');
+  return Array(count)
+    .fill(null)
+    .map((_, i) => `${prefix}${i} = ${i};`)
+    .join('\n');
 }
 
 function makeMockDoc(content: string): Doc {
@@ -58,9 +86,18 @@ function makeMockDoc(content: string): Doc {
   return {
     toString: () => content,
     line: (n: number) => lineInfos[n - 1],
-    lineAt: (pos: number) => { for (const info of lineInfos) { if (pos >= info.from && pos <= info.to) return info; } return lineInfos[lineInfos.length - 1]; },
-    get lines() { return lineInfos.length; },
-    get length() { return content.length; },
+    lineAt: (pos: number) => {
+      for (const info of lineInfos) {
+        if (pos >= info.from && pos <= info.to) return info;
+      }
+      return lineInfos[lineInfos.length - 1];
+    },
+    get lines() {
+      return lineInfos.length;
+    },
+    get length() {
+      return content.length;
+    },
   };
 }
 
@@ -70,17 +107,39 @@ function makeMockSelection(empty: boolean, from: number, to: number): Selection 
 
 // kindEmoji tests
 describe('kindEmoji', () => {
-  it('returns box emoji for organizeImports', () => { expect(kindEmoji('organizeImports')).toBe('📦'); });
-  it('returns box emoji for import', () => { expect(kindEmoji('import')).toBe('📦'); });
-  it('returns wrench emoji for quickfix', () => { expect(kindEmoji('quickfix')).toBe('🔧'); });
-  it('returns wrench emoji for fix', () => { expect(kindEmoji('fix')).toBe('🔧'); });
-  it('returns trash emoji for remove', () => { expect(kindEmoji('remove')).toBe('🗑️'); });
-  it('returns trash emoji for delete', () => { expect(kindEmoji('delete')).toBe('🗑️'); });
-  it('returns recycle emoji for refactor', () => { expect(kindEmoji('refactor')).toBe('♻️'); });
-  it('returns recycle emoji for sort', () => { expect(kindEmoji('sort')).toBe('♻️'); });
-  it('returns broom emoji for source', () => { expect(kindEmoji('source')).toBe('🧹'); });
-  it('returns lightning for unknown kind', () => { expect(kindEmoji('other')).toBe('⚡'); });
-  it('returns lightning for empty string', () => { expect(kindEmoji('')).toBe('⚡'); });
+  it('returns box emoji for organizeImports', () => {
+    expect(kindEmoji('organizeImports')).toBe('📦');
+  });
+  it('returns box emoji for import', () => {
+    expect(kindEmoji('import')).toBe('📦');
+  });
+  it('returns wrench emoji for quickfix', () => {
+    expect(kindEmoji('quickfix')).toBe('🔧');
+  });
+  it('returns wrench emoji for fix', () => {
+    expect(kindEmoji('fix')).toBe('🔧');
+  });
+  it('returns trash emoji for remove', () => {
+    expect(kindEmoji('remove')).toBe('🗑️');
+  });
+  it('returns trash emoji for delete', () => {
+    expect(kindEmoji('delete')).toBe('🗑️');
+  });
+  it('returns recycle emoji for refactor', () => {
+    expect(kindEmoji('refactor')).toBe('♻️');
+  });
+  it('returns recycle emoji for sort', () => {
+    expect(kindEmoji('sort')).toBe('♻️');
+  });
+  it('returns broom emoji for source', () => {
+    expect(kindEmoji('source')).toBe('🧹');
+  });
+  it('returns lightning for unknown kind', () => {
+    expect(kindEmoji('other')).toBe('⚡');
+  });
+  it('returns lightning for empty string', () => {
+    expect(kindEmoji('')).toBe('⚡');
+  });
 });
 
 // isNearImportLine tests
@@ -129,14 +188,14 @@ describe('computeStaticActions', () => {
     it('detects trailing whitespace on current line', () => {
       const doc = makeMockDoc(`const a = 1;\nconst b = 2;   \nconst c = 3;`);
       const actions = computeStaticActions(doc, 2, makeMockSelection(true, 20, 20), 'test.ts');
-      const trailingAction = actions.find(a => a.kind === 'refactor.remove');
+      const trailingAction = actions.find((a) => a.kind === 'refactor.remove');
       expect(trailingAction).toBeDefined();
       expect(trailingAction?.title).toBe('Remove trailing whitespace');
     });
     it('detects file-wide trailing whitespace', () => {
       const doc = makeMockDoc(`const a = 1;   \nconst b = 2;`);
       const actions = computeStaticActions(doc, 1, makeMockSelection(true, 0, 0), 'test.ts');
-      const fileTrailingAction = actions.find(a => a.kind === 'source.removeTrailingWhitespace');
+      const fileTrailingAction = actions.find((a) => a.kind === 'source.removeTrailingWhitespace');
       expect(fileTrailingAction).toBeDefined();
     });
   });
@@ -145,14 +204,14 @@ describe('computeStaticActions', () => {
     it('detects empty lines around cursor', () => {
       const doc = makeMockDoc(`const a = 1;\n\nconst b = 2;`);
       const actions = computeStaticActions(doc, 3, makeMockSelection(true, 20, 20), 'test.ts');
-      const emptyLineAction = actions.find(a => a.title === 'Remove empty lines');
+      const emptyLineAction = actions.find((a) => a.title === 'Remove empty lines');
       expect(emptyLineAction).toBeDefined();
       expect(emptyLineAction?.kind).toBe('refactor.remove');
     });
     it('removes both empty lines when present', () => {
       const doc = makeMockDoc(`\n\nconst a = 1;\n\nconst b = 2;`);
       const actions = computeStaticActions(doc, 3, makeMockSelection(true, 20, 20), 'test.ts');
-      const emptyLineAction = actions.find(a => a.title === 'Remove empty lines');
+      const emptyLineAction = actions.find((a) => a.title === 'Remove empty lines');
       expect(emptyLineAction).toBeDefined();
       expect(emptyLineAction?.edits).toHaveLength(2);
     });
@@ -162,20 +221,20 @@ describe('computeStaticActions', () => {
     it('detects unsorted lines with multi-line selection', () => {
       const doc = makeMockDoc(`const z = 1;\nconst a = 2;\nconst m = 3;`);
       const actions = computeStaticActions(doc, 2, makeMockSelection(false, 0, 40), 'test.ts');
-      const sortAction = actions.find(a => a.kind === 'refactor.sort');
+      const sortAction = actions.find((a) => a.kind === 'refactor.sort');
       expect(sortAction).toBeDefined();
       expect(sortAction?.title).toBe('Sort lines alphabetically');
     });
     it('no sort action for already sorted selection', () => {
       const doc = makeMockDoc(`const a = 1;\nconst b = 2;\nconst c = 3;`);
       const actions = computeStaticActions(doc, 2, makeMockSelection(false, 0, 30), 'test.ts');
-      const sortAction = actions.find(a => a.kind === 'refactor.sort');
+      const sortAction = actions.find((a) => a.kind === 'refactor.sort');
       expect(sortAction).toBeUndefined();
     });
     it('no sort action for single line selection', () => {
       const doc = makeMockDoc(`const z = 1;\nconst a = 2;`);
       const actions = computeStaticActions(doc, 1, makeMockSelection(false, 0, 10), 'test.ts');
-      const sortAction = actions.find(a => a.kind === 'refactor.sort');
+      const sortAction = actions.find((a) => a.kind === 'refactor.sort');
       expect(sortAction).toBeUndefined();
     });
   });
@@ -184,20 +243,22 @@ describe('computeStaticActions', () => {
     it('detects tabs on line', () => {
       const doc = makeMockDoc(`const a = 1;\n\tconst b = 2;\nconst c = 3;`);
       const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.ts');
-      const tabsAction = actions.find(a => a.kind === 'refactor.convertTabs');
+      const tabsAction = actions.find((a) => a.kind === 'refactor.convertTabs');
       expect(tabsAction).toBeDefined();
     });
     it('converts tabs to 2 spaces for .ts files', () => {
-      const doc = makeMockDoc(`import { useState } from 'react';\n\tconst [x, setX] = useState(0);\n\texport default App;`);
+      const doc = makeMockDoc(
+        `import { useState } from 'react';\n\tconst [x, setX] = useState(0);\n\texport default App;`,
+      );
       const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.ts');
-      const tabsAction = actions.find(a => a.kind === 'refactor.convertTabs');
+      const tabsAction = actions.find((a) => a.kind === 'refactor.convertTabs');
       expect(tabsAction).toBeDefined();
       expect(tabsAction?.edits[0].newText).toContain('  const [x, setX]');
     });
     it('converts tabs to 4 spaces for .go files', () => {
       const doc = makeMockDoc(`package main\n\timport "fmt"\n\tfunc main() {}`);
       const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.go');
-      const tabsAction = actions.find(a => a.kind === 'refactor.convertTabs');
+      const tabsAction = actions.find((a) => a.kind === 'refactor.convertTabs');
       expect(tabsAction).toBeDefined();
       expect(tabsAction?.edits[0].newText).toContain('    import "fmt"');
     });
@@ -207,7 +268,7 @@ describe('computeStaticActions', () => {
     it('detects leading spaces', () => {
       const doc = makeMockDoc(`const a = 1;\n    const b = 2;\nconst c = 3;`);
       const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.ts');
-      const spacesAction = actions.find(a => a.kind === 'refactor.convertSpaces');
+      const spacesAction = actions.find((a) => a.kind === 'refactor.convertSpaces');
       expect(spacesAction).toBeDefined();
     });
   });
@@ -215,9 +276,11 @@ describe('computeStaticActions', () => {
   describe('JS/TS unused imports', () => {
     it('detects unused import symbols', () => {
       const filler = makeFiller('const v', 100);
-      const doc = makeMockDoc(`import { useState, useEffect } from 'react';\nimport { foo, bar } from './utils';\n\nfunction App() {\n  useState();\n}\n${filler}\n\n// useEffect usage here to detect it\nuseEffect();`);
+      const doc = makeMockDoc(
+        `import { useState, useEffect } from 'react';\nimport { foo, bar } from './utils';\n\nfunction App() {\n  useState();\n}\n${filler}\n\n// useEffect usage here to detect it\nuseEffect();`,
+      );
       const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.ts');
-      const unusedActions = actions.filter(a => a.kind === 'quickfix.unusedImport');
+      const unusedActions = actions.filter((a) => a.kind === 'quickfix.unusedImport');
       expect(unusedActions.length).toBeGreaterThan(0);
     });
   });
@@ -227,7 +290,7 @@ describe('computeStaticActions', () => {
       const filler = makeFiller('// Line', 100);
       const doc = makeMockDoc(`package main\n\nimport "fmt"\n\nfunc main() {\n  // not used\n}\n${filler}`);
       const actions = computeStaticActions(doc, 4, makeMockSelection(true, 0, 0), 'test.go');
-      const unusedActions = actions.filter(a => a.kind === 'quickfix.unusedImport');
+      const unusedActions = actions.filter((a) => a.kind === 'quickfix.unusedImport');
       expect(unusedActions.length).toBeGreaterThan(0);
     });
   });
@@ -271,49 +334,63 @@ describe('findUnusedJsImports', () => {
   // So usage must appear in the later portion of the file
 
   it('detects unused named import symbol', () => {
-    const doc = makeMockDoc(`import { used, unused } from './module';\n\nfunction test() {\n  console.log(used);\n}\n${makeFiller('const v', 100)}\n\n// Usage of unused here\nconsole.log(unused);`);
+    const doc = makeMockDoc(
+      `import { used, unused } from './module';\n\nfunction test() {\n  console.log(used);\n}\n${makeFiller('const v', 100)}\n\n// Usage of unused here\nconsole.log(unused);`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
     expect(actions.length).toBeGreaterThan(0);
-    const unusedAction = actions.find(a => a.title.includes('unused'));
+    const unusedAction = actions.find((a) => a.title.includes('unused'));
     expect(unusedAction).toBeDefined();
   });
 
   it('detects fully unused import', () => {
-    const doc = makeMockDoc(`import { completelyUnused } from './module';\nimport { used } from './other';\n\nfunction test() {\n  console.log(used);\n}\n${makeFiller('const v', 100)}`);
+    const doc = makeMockDoc(
+      `import { completelyUnused } from './module';\nimport { used } from './other';\n\nfunction test() {\n  console.log(used);\n}\n${makeFiller('const v', 100)}`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
-    const removeAction = actions.find(a => a.title.includes("Remove unused import from './module'"));
+    const removeAction = actions.find((a) => a.title.includes("Remove unused import from './module'"));
     expect(removeAction).toBeDefined();
     expect(removeAction?.edits[0].newText).toBe('');
   });
 
   it('returns empty for used imports (usage after scanEnd)', () => {
-    const doc = makeMockDoc(`import { useState } from 'react';\n\nfunction App() {\n  useState();\n}\n${makeFiller('const v', 100)}\n\n// useState usage here\nuseState();`);
+    const doc = makeMockDoc(
+      `import { useState } from 'react';\n\nfunction App() {\n  useState();\n}\n${makeFiller('const v', 100)}\n\n// useState usage here\nuseState();`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('handles default imports that are used (usage after scanEnd)', () => {
-    const doc = makeMockDoc(`import React from 'react';\n\nfunction App() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}\n\n// React usage here\nReact.useState();`);
+    const doc = makeMockDoc(
+      `import React from 'react';\n\nfunction App() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}\n\n// React usage here\nReact.useState();`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('handles unused default import', () => {
-    const doc = makeMockDoc(`import React from 'react';\n\nfunction App() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}`);
+    const doc = makeMockDoc(
+      `import React from 'react';\n\nfunction App() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
     expect(actions.length).toBeGreaterThan(0);
   });
 
   it('handles star imports that are used', () => {
-    const doc = makeMockDoc(`import * as _ from 'lodash';\n\nfunction test() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}\n\n// _.merge usage here\n_.merge({}, {});`);
+    const doc = makeMockDoc(
+      `import * as _ from 'lodash';\n\nfunction test() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}\n\n// _.merge usage here\n_.merge({}, {});`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('handles star imports that are unused', () => {
-    const doc = makeMockDoc(`import * as lodash from 'lodash';\n\nfunction test() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}`);
+    const doc = makeMockDoc(
+      `import * as lodash from 'lodash';\n\nfunction test() {\n  console.log('hello');\n}\n${makeFiller('const v', 100)}`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('returns empty when no imports found', () => {
@@ -324,10 +401,12 @@ describe('findUnusedJsImports', () => {
 
   it('partially unused import - all symbols used after scanEnd means no action', () => {
     // When all symbols are used in code AFTER scanEnd, the detector finds no unused imports
-    const doc = makeMockDoc(`import { a, b, c } from './module';\n\nfunction test() {\n  console.log(a, c);\n}\n${makeFiller('const v', 100)}\n\n// All symbols used after scanEnd\nconsole.log(a, b, c);`);
+    const doc = makeMockDoc(
+      `import { a, b, c } from './module';\n\nfunction test() {\n  console.log(a, c);\n}\n${makeFiller('const v', 100)}\n\n// All symbols used after scanEnd\nconsole.log(a, b, c);`,
+    );
     const actions = findUnusedJsImports(doc, 'test.ts');
     // Since all symbols (a, b, c) are used after scanEnd, no unused import actions
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 });
 
@@ -337,21 +416,27 @@ describe('findUnusedGoImports', () => {
   // So usage must appear in the later portion of the file
 
   it('detects unused Go import package identifier', () => {
-    const doc = makeMockDoc(`package main\n\nimport "fmt"\n\nfunc main() {\n  // not used\n}\n${makeFiller('// Line', 100)}`);
+    const doc = makeMockDoc(
+      `package main\n\nimport "fmt"\n\nfunc main() {\n  // not used\n}\n${makeFiller('// Line', 100)}`,
+    );
     const actions = findUnusedGoImports(doc, 'test.go');
     expect(actions.length).toBeGreaterThan(0);
-    expect(actions.find(a => a.title.includes('fmt'))).toBeDefined();
+    expect(actions.find((a) => a.title.includes('fmt'))).toBeDefined();
   });
 
   it('handles aliased imports that are used', () => {
-    const doc = makeMockDoc(`package main\n\nimport f "fmt"\n\nfunc main() {\n  // not used\n}\n${makeFiller('// Line', 100)}\n\n// f.Println usage here\nf.Println("test");`);
+    const doc = makeMockDoc(
+      `package main\n\nimport f "fmt"\n\nfunc main() {\n  // not used\n}\n${makeFiller('// Line', 100)}\n\n// f.Println usage here\nf.Println("test");`,
+    );
     const actions = findUnusedGoImports(doc, 'test.go');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('handles aliased imports (alias pattern not matched by simple regex)', () => {
     // Aliased single-line imports are now detected (import f "fmt")
-    const doc = makeMockDoc(`package main\n\nimport f "fmt"\n\nfunc main() {\n  // not used\n}\n${makeFiller('// Line', 100)}`);
+    const doc = makeMockDoc(
+      `package main\n\nimport f "fmt"\n\nfunc main() {\n  // not used\n}\n${makeFiller('// Line', 100)}`,
+    );
     const actions = findUnusedGoImports(doc, 'test.go');
     // Now detects aliased imports - f is unused so it should be flagged
     expect(actions.length).toBe(1);
@@ -359,9 +444,11 @@ describe('findUnusedGoImports', () => {
   });
 
   it('handles underscore imports (should not flag)', () => {
-    const doc = makeMockDoc(`package main\n\nimport _ "fmt"\n\nfunc main() {\n  // side effects\n}\n${makeFiller('// Line', 100)}`);
+    const doc = makeMockDoc(
+      `package main\n\nimport _ "fmt"\n\nfunc main() {\n  // side effects\n}\n${makeFiller('// Line', 100)}`,
+    );
     const actions = findUnusedGoImports(doc, 'test.go');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('handles import blocks with all used', () => {
@@ -377,7 +464,7 @@ func main() {
 }
 ${makeFiller('// Line', 100)}\n\n// fmt and strings usage after scanEnd\nfmt.Println("test")\nstrings.ToLower("test")`);
     const actions = findUnusedGoImports(doc, 'test.go');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('handles import block with unused import', () => {
@@ -394,11 +481,13 @@ func main() {
 ${makeFiller('// Line', 100)}`);
     const actions = findUnusedGoImports(doc, 'test.go');
     expect(actions.length).toBe(1);
-    expect(actions.find(a => a.title.includes('fmt'))).toBeDefined();
+    expect(actions.find((a) => a.title.includes('fmt'))).toBeDefined();
   });
 
   it('returns empty for used imports (usage after scanEnd)', () => {
-    const doc = makeMockDoc(`package main\n\nimport "fmt"\n\nfunc main() {\n  // not used in first 100 lines\n}\n${makeFiller('// Line', 100)}\n\n// fmt.Println usage here\nfmt.Println("test");`);
+    const doc = makeMockDoc(
+      `package main\n\nimport "fmt"\n\nfunc main() {\n  // not used in first 100 lines\n}\n${makeFiller('// Line', 100)}\n\n// fmt.Println usage here\nfmt.Println("test");`,
+    );
     const actions = findUnusedGoImports(doc, 'test.go');
     expect(actions).toEqual([]);
   });
@@ -410,9 +499,11 @@ ${makeFiller('// Line', 100)}`);
   });
 
   it('extracts identifier from package path for single import (usage after scanEnd)', () => {
-    const doc = makeMockDoc(`package main\n\nimport "strings"\n\nfunc main() {\n  // not used in first 100 lines\n}\n${makeFiller('// Line', 100)}\n\n// strings.ToLower usage here\nstrings.ToLower("HELLO")`);
+    const doc = makeMockDoc(
+      `package main\n\nimport "strings"\n\nfunc main() {\n  // not used in first 100 lines\n}\n${makeFiller('// Line', 100)}\n\n// strings.ToLower usage here\nstrings.ToLower("HELLO")`,
+    );
     const actions = findUnusedGoImports(doc, 'test.go');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 
   it('extracts identifier from package path for import block', () => {
@@ -427,7 +518,7 @@ func main() {
 }
 ${makeFiller('// Line', 100)}\n\n// strings.Contains usage after scanEnd\nstrings.Contains("", "")`);
     const actions = findUnusedGoImports(doc, 'test.go');
-    expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+    expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
   });
 });
 
@@ -470,19 +561,23 @@ describe('Edge cases', () => {
   describe('findUnusedJsImports', () => {
     it('handles import with semicolon', () => {
       const filler = makeFiller('const v', 100);
-      const doc = makeMockDoc(`import { x } from 'y';\n\nconsole.log('hello');\n${filler}\n\n// x usage here\nconsole.log(x);`);
+      const doc = makeMockDoc(
+        `import { x } from 'y';\n\nconsole.log('hello');\n${filler}\n\n// x usage here\nconsole.log(x);`,
+      );
       const actions = findUnusedJsImports(doc, 'test.ts');
-      expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+      expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
     });
   });
 
   describe('findUnusedGoImports', () => {
     it('handles renamed identifier import', () => {
       const filler = makeFiller('// Line', 100);
-      const doc = makeMockDoc(`package main\n\nimport (\n  fmt "fmt"\n)\n\nfunc main() {\n  // not used in first 100 lines\n}\n${filler}\n\n// fmt.Println usage AFTER line 100\nfmt.Println("test");`);
+      const doc = makeMockDoc(
+        `package main\n\nimport (\n  fmt "fmt"\n)\n\nfunc main() {\n  // not used in first 100 lines\n}\n${filler}\n\n// fmt.Println usage AFTER line 100\nfmt.Println("test");`,
+      );
       const actions = findUnusedGoImports(doc, 'test.go');
       // fmt is used after line 100, so should NOT be flagged
-      expect(actions.filter(a => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
+      expect(actions.filter((a) => a.kind === 'quickfix.unusedImport')).toHaveLength(0);
     });
   });
 });
@@ -491,7 +586,9 @@ describe('Edge cases', () => {
 describe('Full workflow scenarios', () => {
   it('typescript file with multiple issues shows multiple actions', () => {
     const filler = makeFiller('const v', 100);
-    const doc = makeMockDoc(`import { a, b, c } from './module';\nimport { unused } from './other';\n   \n   \nfunction test() {\n  const z = 1;\n  const a = 2;\n  const m = 3;\n  console.log(a);\n}\n${filler}`);
+    const doc = makeMockDoc(
+      `import { a, b, c } from './module';\nimport { unused } from './other';\n   \n   \nfunction test() {\n  const z = 1;\n  const a = 2;\n  const m = 3;\n  console.log(a);\n}\n${filler}`,
+    );
     const actions = computeStaticActions(doc, 5, makeMockSelection(false, 80, 120), 'test.ts');
     expect(actions.length).toBeGreaterThanOrEqual(4);
   });
@@ -508,20 +605,20 @@ func main() {
 ${filler}`);
     const actions = computeStaticActions(doc, 4, makeMockSelection(true, 0, 0), 'test.go');
     // os is unused (not used after scanEnd)
-    expect(actions.some(a => a.kind === 'quickfix.unusedImport')).toBe(true);
+    expect(actions.some((a) => a.kind === 'quickfix.unusedImport')).toBe(true);
   });
 
   it('python file with indentation shows convert tabs action', () => {
     const doc = makeMockDoc(`def main():\n\tprint("hello")\n\tprint("world")`);
     const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.py');
-    const tabsAction = actions.find(a => a.kind === 'refactor.convertTabs');
+    const tabsAction = actions.find((a) => a.kind === 'refactor.convertTabs');
     expect(tabsAction).toBeDefined();
   });
 
   it('rust file with 4-space indentation shows convert tabs action', () => {
     const doc = makeMockDoc(`fn main() {\n\tlet x = 1;\n}`);
     const actions = computeStaticActions(doc, 2, makeMockSelection(true, 0, 0), 'test.rs');
-    const tabsAction = actions.find(a => a.kind === 'refactor.convertTabs');
+    const tabsAction = actions.find((a) => a.kind === 'refactor.convertTabs');
     expect(tabsAction).toBeDefined();
     expect(tabsAction?.edits[0].newText).toContain('    let x = 1;');
   });

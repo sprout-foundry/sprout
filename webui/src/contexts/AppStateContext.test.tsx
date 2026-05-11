@@ -20,9 +20,7 @@ jest.mock('../services/appStatePersistence', () => ({
 
 describe('AppStateContext', () => {
   it('should create context with default values', () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <AppStateProvider>{children}</AppStateProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider>{children}</AppStateProvider>;
 
     const { result } = renderHook(() => useAppStateContext(), { wrapper });
 
@@ -32,9 +30,7 @@ describe('AppStateContext', () => {
   });
 
   it('should load persisted state and merge with defaults', () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <AppStateProvider>{children}</AppStateProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider>{children}</AppStateProvider>;
 
     const { result } = renderHook(() => useAppStateContext(), { wrapper });
 
@@ -50,9 +46,7 @@ describe('AppStateContext', () => {
   });
 
   it('should allow state updates using functional updater', () => {
-    const wrapper = ({ children }: { children: React.ReactNode }) => (
-      <AppStateProvider>{children}</AppStateProvider>
-    );
+    const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider>{children}</AppStateProvider>;
 
     const { result } = renderHook(() => useAppStateContext(), { wrapper });
 
@@ -89,7 +83,7 @@ describe('AppStateContext', () => {
     const { getByText } = render(
       <AppStateProvider>
         <TestChild />
-      </AppStateProvider>
+      </AppStateProvider>,
     );
 
     expect(getByText('Provider: openai')).toBeInTheDocument();

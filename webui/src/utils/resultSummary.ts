@@ -27,7 +27,7 @@ export function truncateText(value: string, maxLength: number): string {
 export function formatToolDetail(content: string): string {
   // Strip ANSI codes first
   const cleaned = stripAnsiCodes(content);
-  
+
   try {
     const parsed = JSON.parse(cleaned);
     return JSON.stringify(parsed, null, 2);

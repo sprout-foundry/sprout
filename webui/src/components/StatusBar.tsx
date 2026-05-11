@@ -111,9 +111,7 @@ function StatusBar({
         >
           <BellIcon />
           {notificationCount > 0 && (
-            <span className="statusbar-notification-badge">
-              {notificationCount > 99 ? '99+' : notificationCount}
-            </span>
+            <span className="statusbar-notification-badge">{notificationCount > 99 ? '99+' : notificationCount}</span>
           )}
         </div>
       )}

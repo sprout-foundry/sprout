@@ -84,13 +84,14 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
       if (!detail?.commandId) return;
 
       // Gate terminal commands in cloud mode
-      if (!supportsLocalTerminal && (
-        detail.commandId === 'toggle_terminal' ||
-        detail.commandId === 'split_terminal_vertical' ||
-        detail.commandId === 'split_terminal_horizontal' ||
-        detail.commandId === 'clear_terminal' ||
-        detail.commandId === 'kill_terminal'
-      )) {
+      if (
+        !supportsLocalTerminal &&
+        (detail.commandId === 'toggle_terminal' ||
+          detail.commandId === 'split_terminal_vertical' ||
+          detail.commandId === 'split_terminal_horizontal' ||
+          detail.commandId === 'clear_terminal' ||
+          detail.commandId === 'kill_terminal')
+      ) {
         return;
       }
 
@@ -173,7 +174,9 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           break;
         case 'focus_next_tab': {
           if (!activePaneId) break;
-          const paneBuffers = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
+          const paneBuffers = Array.from(buffersRef.current.values()).filter(
+            (buffer) => buffer.paneId === activePaneId,
+          );
           if (paneBuffers.length <= 1) break;
           const currentIdx = activeBufferId ? paneBuffers.findIndex((b) => b.id === activeBufferId) : -1;
           const nextIdx = currentIdx + 1 < paneBuffers.length ? currentIdx + 1 : 0;
@@ -185,7 +188,9 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         }
         case 'focus_prev_tab': {
           if (!activePaneId) break;
-          const paneBuffersPrev = Array.from(buffersRef.current.values()).filter((buffer) => buffer.paneId === activePaneId);
+          const paneBuffersPrev = Array.from(buffersRef.current.values()).filter(
+            (buffer) => buffer.paneId === activePaneId,
+          );
           if (paneBuffersPrev.length <= 1) break;
           const currentIdx = activeBufferId ? paneBuffersPrev.findIndex((b) => b.id === activeBufferId) : -1;
           const prevIdx = currentIdx - 1 >= 0 ? currentIdx - 1 : paneBuffersPrev.length - 1;
@@ -273,7 +278,11 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
           document.dispatchEvent(new CustomEvent('editor-format-document'));
           break;
         case 'reset_saved_layout': {
-          if (!(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))) break;
+          if (
+            !(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))
+          ) {
+            break;
+          }
           // Match CommandPalette reset logic: clear persisted snapshot + all layout keys
           clearLayoutSnapshot();
           const keys = [

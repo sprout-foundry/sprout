@@ -38,10 +38,7 @@ export function classifyEndpoint(path: string, method: string): CloudEndpoint | 
   const normalizedMethod = method.toUpperCase();
 
   for (const endpoint of CLOUD_ENDPOINTS) {
-    if (
-      matchesEndpoint(cleanPath, endpoint) &&
-      endpoint.methods.includes(normalizedMethod)
-    ) {
+    if (matchesEndpoint(cleanPath, endpoint) && endpoint.methods.includes(normalizedMethod)) {
       return endpoint;
     }
   }

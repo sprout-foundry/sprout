@@ -28,17 +28,23 @@ const toPaneFlex = (weight: number): CSSProperties => ({
   minHeight: 0,
 });
 
-const PaneWrapper: React.FC<{ children: React.ReactNode, style?: CSSProperties }> = ({ children, style }) => (
-  <div className="pane-wrapper" style={style}>{children}</div>
+const PaneWrapper: React.FC<{ children: React.ReactNode; style?: CSSProperties }> = ({ children, style }) => (
+  <div className="pane-wrapper" style={style}>
+    {children}
+  </div>
 );
 
-const EditorPaneWrapper: React.FC<{ children: React.ReactNode, isActive?: boolean, onClick?: () => void }> = ({ children, isActive, onClick }) => {
+const EditorPaneWrapper: React.FC<{ children: React.ReactNode; isActive?: boolean; onClick?: () => void }> = ({
+  children,
+  isActive,
+  onClick,
+}) => {
   return (
     <div
       className={`editor-pane-wrapper ${isActive ? 'active' : ''}`}
       onClick={!isActive ? onClick : undefined}
       tabIndex={isActive ? -1 : 0}
-      onFocus={() => isActive && (onClick?.())}
+      onFocus={() => isActive && onClick?.()}
     >
       {children}
     </div>
@@ -99,7 +105,11 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const canSplit = panes.length < maxPanes;
   const canCloseSplit = panes.length > 1;
 
-  const [nestedSplit, setNestedSplit] = React.useState<{ hostPaneId: string; nestedPaneId: string; direction: 'vertical' | 'horizontal' } | null>(null);
+  const [nestedSplit, setNestedSplit] = React.useState<{
+    hostPaneId: string;
+    nestedPaneId: string;
+    direction: 'vertical' | 'horizontal';
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
@@ -110,29 +120,44 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     }
   }, [nestedSplit, panes.length]);
 
-  const handlePaneResize = useCallback((sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) => (_deltaPixels: number, totalDeltaPixels: number) => {
-    if (!containerRef.current) return;
+  const handlePaneResize = useCallback(
+    (sizeKey: string, axis: 'horizontal' | 'vertical', invert = false) =>
+      (_deltaPixels: number, totalDeltaPixels: number) => {
+        if (!containerRef.current) return;
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const isVertical = axis === 'horizontal';
-    const containerSize = isVertical ? containerRect.width : containerRect.height;
-    const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const isVertical = axis === 'horizontal';
+        const containerSize = isVertical ? containerRect.width : containerRect.height;
+        const deltaPercent = ((invert ? -totalDeltaPixels : totalDeltaPixels) / containerSize) * 100;
 
-    // Capture size at drag start to avoid accumulation bugs.
-    if (!isPaneDraggingRef.current.has(sizeKey)) {
-      isPaneDraggingRef.current.add(sizeKey);
-      dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
-    }
-    const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
-    const maxAllowed = 100 - MIN_PANE_WIDTH_PERCENT * Math.max(0, Object.keys(paneSizes).filter(k => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:')).length - 1);
-    const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
-    updatePaneSize(sizeKey, newSize);
-  }, [paneSizes, updatePaneSize]);
+        // Capture size at drag start to avoid accumulation bugs.
+        if (!isPaneDraggingRef.current.has(sizeKey)) {
+          isPaneDraggingRef.current.add(sizeKey);
+          dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
+        }
+        const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey)!;
+        const maxAllowed =
+          100 -
+          MIN_PANE_WIDTH_PERCENT *
+            Math.max(
+              0,
+              Object.keys(paneSizes).filter(
+                (k) => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:'),
+              ).length - 1,
+            );
+        const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
+        updatePaneSize(sizeKey, newSize);
+      },
+    [paneSizes, updatePaneSize],
+  );
 
-  const handlePaneResizeEnd = useCallback((sizeKey: string) => () => {
-    isPaneDraggingRef.current.delete(sizeKey);
-    dragStartSizeRef.current.delete(sizeKey);
-  }, []);
+  const handlePaneResizeEnd = useCallback(
+    (sizeKey: string) => () => {
+      isPaneDraggingRef.current.delete(sizeKey);
+      dragStartSizeRef.current.delete(sizeKey);
+    },
+    [],
+  );
 
   const showResizeHandles = panes.length > 1;
 
@@ -204,15 +229,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return (
       <PaneWrapper key={pane.id} style={style}>
         <div className="pane-shell">
-          <EditorTabs
-            paneId={pane.id}
-            compact
-            actions={renderSplitControls(pane.id)}
-          />
-          <EditorPaneWrapper
-            isActive={pane.id === activePaneId}
-            onClick={() => switchPane(pane.id)}
-          >
+          <EditorTabs paneId={pane.id} compact actions={renderSplitControls(pane.id)} />
+          <EditorPaneWrapper isActive={pane.id === activePaneId} onClick={() => switchPane(pane.id)}>
             <EditorPaneComponent
               paneId={pane.id}
               isActive={pane.id === activePaneId}
@@ -242,7 +260,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       if (panes.length === 2) {
         const [firstPane, secondPane] = panes;
         const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-        const firstPaneSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50));
+        const firstPaneSize = Math.max(
+          MIN_PANE_WIDTH_PERCENT,
+          Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50),
+        );
         const secondPaneSize = 100 - firstPaneSize;
 
         return (
@@ -261,7 +282,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       return (
         <>
           {(() => {
-            const rawSizes = panes.map(p => paneSizes[p.id] || (100 / panes.length));
+            const rawSizes = panes.map((p) => paneSizes[p.id] || 100 / panes.length);
             const totalSize = rawSizes.reduce((a, b) => a + b, 0);
             return (
               <>
@@ -293,14 +314,17 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     // 3+ panes with nested split
     const hostPane = panes.find((pane) => pane.id === nestedSplit.hostPaneId);
     const nestedPane = panes.find((pane) => pane.id === nestedSplit.nestedPaneId);
-    const siblingPane = panes.find((pane) => pane.id !== nestedSplit.hostPaneId && pane.id !== nestedSplit.nestedPaneId);
+    const siblingPane = panes.find(
+      (pane) => pane.id !== nestedSplit.hostPaneId && pane.id !== nestedSplit.nestedPaneId,
+    );
     if (!hostPane || !nestedPane || !siblingPane) {
       return null;
     }
 
     const rootDirection = paneLayout === 'split-horizontal' ? 'column' : 'row';
     const nestedDirection = nestedSplit.direction === 'horizontal' ? 'column' : 'row';
-    const hostIsFirst = panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
+    const hostIsFirst =
+      panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
     const rootSizeKey = `group:${hostPane.id}`;
     const nestedSizeKey = `nested:${hostPane.id}`;
     const groupSize = paneSizes[rootSizeKey] || 50;
@@ -309,10 +333,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     const nestedHandleDirection = nestedDirection === 'row' ? 'horizontal' : 'vertical';
 
     const nestedGroup = (
-      <div
-        className={`nested-pane-group nested-pane-group-${nestedDirection}`}
-        style={toPaneFlex(groupSize)}
-      >
+      <div className={`nested-pane-group nested-pane-group-${nestedDirection}`} style={toPaneFlex(groupSize)}>
         {renderPaneById(hostPane.id, toPaneFlex(nestedSize))}
         <ResizeHandle
           direction={nestedHandleDirection}
@@ -336,27 +357,30 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     );
   };
 
-  const handleSplitRequest = useCallback((direction: 'vertical' | 'horizontal') => {
-    if (!activePaneId) {
-      return;
-    }
+  const handleSplitRequest = useCallback(
+    (direction: 'vertical' | 'horizontal') => {
+      if (!activePaneId) {
+        return;
+      }
 
-    const previousPaneCount = panes.length;
-    const newPaneId = splitPane(activePaneId, direction);
-    if (!newPaneId) {
-      return;
-    }
+      const previousPaneCount = panes.length;
+      const newPaneId = splitPane(activePaneId, direction);
+      if (!newPaneId) {
+        return;
+      }
 
-    if (previousPaneCount === 2) {
-      setNestedSplit({
-        hostPaneId: activePaneId,
-        nestedPaneId: newPaneId,
-        direction,
-      });
-      updatePaneSize(`group:${activePaneId}`, 50);
-      updatePaneSize(`nested:${activePaneId}`, 50);
-    }
-  }, [activePaneId, panes.length, splitPane, updatePaneSize]);
+      if (previousPaneCount === 2) {
+        setNestedSplit({
+          hostPaneId: activePaneId,
+          nestedPaneId: newPaneId,
+          direction,
+        });
+        updatePaneSize(`group:${activePaneId}`, 50);
+        updatePaneSize(`nested:${activePaneId}`, 50);
+      }
+    },
+    [activePaneId, panes.length, splitPane, updatePaneSize],
+  );
 
   const handleCloseAllSplits = useCallback(() => {
     if (nestedSplit) {
@@ -370,34 +394,37 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }, [closeSplit, closePane, nestedSplit]);
 
   // Handle focus_split hotkeys (focus_split_1 through focus_split_6)
-  const handleFocusPaneIndex = useCallback((index: number) => {
-    if (index < 0) {
-      return;
-    }
-
-    // If the pane exists, switch to it
-    if (index < panes.length) {
-      switchPane(panes[index].id);
-      return;
-    }
-
-    // If we can create a new pane, do so
-    if (panes.length < maxPanes) {
-      const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
-      if (!sourcePaneId) return;
-
-      const direction = panes.length === 1 ? 'vertical' : 'horizontal';
-      const newPaneId = splitPane(sourcePaneId, direction);
-
-      if (newPaneId) {
-        if (panes.length === 1) {
-          updatePaneSize(`group:${sourcePaneId}`, 50);
-          updatePaneSize(`nested:${sourcePaneId}`, 50);
-        }
-        switchPane(newPaneId);
+  const handleFocusPaneIndex = useCallback(
+    (index: number) => {
+      if (index < 0) {
+        return;
       }
-    }
-  }, [panes, activePaneId, splitPane, switchPane, updatePaneSize, maxPanes]);
+
+      // If the pane exists, switch to it
+      if (index < panes.length) {
+        switchPane(panes[index].id);
+        return;
+      }
+
+      // If we can create a new pane, do so
+      if (panes.length < maxPanes) {
+        const sourcePaneId = activePaneId || panes[panes.length - 1]?.id;
+        if (!sourcePaneId) return;
+
+        const direction = panes.length === 1 ? 'vertical' : 'horizontal';
+        const newPaneId = splitPane(sourcePaneId, direction);
+
+        if (newPaneId) {
+          if (panes.length === 1) {
+            updatePaneSize(`group:${sourcePaneId}`, 50);
+            updatePaneSize(`nested:${sourcePaneId}`, 50);
+          }
+          switchPane(newPaneId);
+        }
+      }
+    },
+    [panes, activePaneId, splitPane, switchPane, updatePaneSize, maxPanes],
+  );
 
   // Listen for focus_split hotkeys
   React.useEffect(() => {
@@ -439,10 +466,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       onNavigateToSymbol={handleOutlineNavigateToSymbol}
     >
       <div className={`editor-workspace ${paneLayout}`}>
-        <div
-          ref={containerRef}
-          className={`panes-container layout-${paneLayout}`}
-        >
+        <div ref={containerRef} className={`panes-container layout-${paneLayout}`}>
           {renderPaneLayout()}
         </div>
       </div>

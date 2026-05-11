@@ -96,9 +96,7 @@ describe('readRecentWorkspaces', () => {
   });
 
   it('reads and normalizes paths', () => {
-    mock.getItem.mockReturnValue(
-      JSON.stringify(['/project/src', '/home/user/project', '//double//slash//path'])
-    );
+    mock.getItem.mockReturnValue(JSON.stringify(['/project/src', '/home/user/project', '//double//slash//path']));
     const result = readRecentWorkspaces();
     expect(result).toEqual(['/project/src', '/home/user/project', '/double/slash/path']);
   });
@@ -169,18 +167,12 @@ describe('writeRecentWorkspaces', () => {
 
   it('saves paths to correct localStorage key', () => {
     writeRecentWorkspaces(['/project', '/home']);
-    expect(mock.setItem).toHaveBeenCalledWith(
-      RECENT_WORKSPACES_KEY,
-      JSON.stringify(['/project', '/home'])
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY, JSON.stringify(['/project', '/home']));
   });
 
   it('saves empty array', () => {
     writeRecentWorkspaces([]);
-    expect(mock.setItem).toHaveBeenCalledWith(
-      RECENT_WORKSPACES_KEY,
-      JSON.stringify([])
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(RECENT_WORKSPACES_KEY, JSON.stringify([]));
   });
 
   it('slices to MAX_RECENT_WORKSPACES before saving', () => {
@@ -245,7 +237,7 @@ describe('readRemoteRecentWorkspaces', () => {
       JSON.stringify({
         'host-a': ['/home/user', '//double//slash'],
         'host-b': ['/project/src'],
-      })
+      }),
     );
     const result = readRemoteRecentWorkspaces();
     expect(result).toEqual({
@@ -258,7 +250,7 @@ describe('readRemoteRecentWorkspaces', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
         host: ['/valid', 123, null, 'also-valid'],
-      })
+      }),
     );
     const result = readRemoteRecentWorkspaces();
     expect(result).toEqual({
@@ -281,7 +273,7 @@ describe('readRemoteRecentWorkspaces', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
         host: 'not an array',
-      })
+      }),
     );
     const result = readRemoteRecentWorkspaces();
     expect(result).toEqual({ host: [] });
@@ -304,7 +296,7 @@ describe('readRemoteRecentWorkspaces', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
         host: ['/valid', '', '  ', '/also'],
-      })
+      }),
     );
     const result = readRemoteRecentWorkspaces();
     expect(result).toEqual({ host: ['/valid', '/also'] });
@@ -328,18 +320,12 @@ describe('writeRemoteRecentWorkspaces', () => {
 
   it('saves to correct localStorage key', () => {
     writeRemoteRecentWorkspaces({ host: ['/path'] });
-    expect(mock.setItem).toHaveBeenCalledWith(
-      REMOTE_RECENT_WORKSPACES_KEY,
-      JSON.stringify({ host: ['/path'] })
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify({ host: ['/path'] }));
   });
 
   it('saves empty object', () => {
     writeRemoteRecentWorkspaces({});
-    expect(mock.setItem).toHaveBeenCalledWith(
-      REMOTE_RECENT_WORKSPACES_KEY,
-      JSON.stringify({})
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify({}));
   });
 
   it('saves multiple hosts', () => {
@@ -348,10 +334,7 @@ describe('writeRemoteRecentWorkspaces', () => {
       'host-b': ['/path3'],
     };
     writeRemoteRecentWorkspaces(value);
-    expect(mock.setItem).toHaveBeenCalledWith(
-      REMOTE_RECENT_WORKSPACES_KEY,
-      JSON.stringify(value)
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(REMOTE_RECENT_WORKSPACES_KEY, JSON.stringify(value));
   });
 });
 
@@ -398,9 +381,9 @@ describe('readSSHFavoriteWorkspaces', () => {
   it('reads and normalizes SSH favorite entries', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
-        'myserver': ['/home/user/projects', '//double//slash'],
-        'otherhost': ['/project'],
-      })
+        myserver: ['/home/user/projects', '//double//slash'],
+        otherhost: ['/project'],
+      }),
     );
     const result = readSSHFavoriteWorkspaces();
     expect(result).toEqual({
@@ -413,7 +396,7 @@ describe('readSSHFavoriteWorkspaces', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
         host: ['/valid', 123, null],
-      })
+      }),
     );
     const result = readSSHFavoriteWorkspaces();
     expect(result).toEqual({ host: ['/valid'] });
@@ -430,7 +413,7 @@ describe('readSSHFavoriteWorkspaces', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
         host: 'not an array',
-      })
+      }),
     );
     const result = readSSHFavoriteWorkspaces();
     expect(result).toEqual({ host: [] });
@@ -453,7 +436,7 @@ describe('readSSHFavoriteWorkspaces', () => {
     mock.getItem.mockReturnValue(
       JSON.stringify({
         host: ['/valid', '', '  ', '/also'],
-      })
+      }),
     );
     const result = readSSHFavoriteWorkspaces();
     expect(result).toEqual({ host: ['/valid', '/also'] });
@@ -477,18 +460,12 @@ describe('writeSSHFavoriteWorkspaces', () => {
 
   it('saves to correct localStorage key', () => {
     writeSSHFavoriteWorkspaces({ host: ['/path'] });
-    expect(mock.setItem).toHaveBeenCalledWith(
-      SSH_FAVORITE_WORKSPACES_KEY,
-      JSON.stringify({ host: ['/path'] })
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify({ host: ['/path'] }));
   });
 
   it('saves empty object', () => {
     writeSSHFavoriteWorkspaces({});
-    expect(mock.setItem).toHaveBeenCalledWith(
-      SSH_FAVORITE_WORKSPACES_KEY,
-      JSON.stringify({})
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify({}));
   });
 
   it('saves multiple hosts', () => {
@@ -497,10 +474,7 @@ describe('writeSSHFavoriteWorkspaces', () => {
       'host-b': ['/path3'],
     };
     writeSSHFavoriteWorkspaces(value);
-    expect(mock.setItem).toHaveBeenCalledWith(
-      SSH_FAVORITE_WORKSPACES_KEY,
-      JSON.stringify(value)
-    );
+    expect(mock.setItem).toHaveBeenCalledWith(SSH_FAVORITE_WORKSPACES_KEY, JSON.stringify(value));
   });
 
   it('does not throw on storage error (SSS-friendly)', () => {

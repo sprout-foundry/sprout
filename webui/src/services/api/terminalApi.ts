@@ -2,7 +2,7 @@
  * Terminal domain API — adapter-aware terminal operations.
  */
 
-import { ShellInfo, TerminalHistoryResponse, AddTerminalHistoryResponse } from './types';
+import type { ShellInfo, TerminalHistoryResponse, AddTerminalHistoryResponse } from './types';
 
 export async function getTerminalSessionCount(fetchFn: typeof fetch): Promise<number> {
   const response = await fetchFn('/api/terminal/sessions');

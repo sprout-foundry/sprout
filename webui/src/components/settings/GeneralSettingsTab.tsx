@@ -9,10 +9,7 @@ interface GeneralSettingsTabProps {
  * Editor display preferences — auto-save, format-on-save, whitespace rendering.
  * Runtime-scoped (Editor section).
  */
-export default function GeneralSettingsTab({
-  editorPreferences,
-  onEditorPreferenceChanged,
-}: GeneralSettingsTabProps) {
+export default function GeneralSettingsTab({ editorPreferences, onEditorPreferenceChanged }: GeneralSettingsTabProps) {
   if (!editorPreferences || !onEditorPreferenceChanged) {
     return <div className="settings-empty">Editor preferences not available</div>;
   }

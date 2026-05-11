@@ -5,7 +5,7 @@
  * so they work in both local and cloud modes.
  */
 
-import {
+import type {
   GitStatusResponse,
   GitBranchesResponse,
   GitBranchResponse,
@@ -133,7 +133,11 @@ export async function unstageAll(fetchFn: typeof fetch): Promise<GitStageAllResp
   return response.json();
 }
 
-export async function createCommit(fetchFn: typeof fetch, message: string, files?: string[]): Promise<GitCommitResponse> {
+export async function createCommit(
+  fetchFn: typeof fetch,
+  message: string,
+  files?: string[],
+): Promise<GitCommitResponse> {
   const body: Record<string, unknown> = { message };
   if (files && files.length > 0) {
     body.files = files;
@@ -161,7 +165,12 @@ export async function generateCommitMessage(fetchFn: typeof fetch): Promise<GitC
   return response.json();
 }
 
-export async function getGitLog(fetchFn: typeof fetch, limit: number, offset: number, opts?: { signal?: AbortSignal }): Promise<GitLogResponse> {
+export async function getGitLog(
+  fetchFn: typeof fetch,
+  limit: number,
+  offset: number,
+  opts?: { signal?: AbortSignal },
+): Promise<GitLogResponse> {
   const response = await fetchFn(`/api/git/log?limit=${limit}&offset=${offset}`, {
     signal: opts?.signal,
   });
@@ -175,8 +184,14 @@ export async function getGitCommitDetail(fetchFn: typeof fetch, hash: string): P
   return response.json();
 }
 
-export async function getGitCommitFileDiff(fetchFn: typeof fetch, hash: string, path: string): Promise<GitCommitFileDiffResponse> {
-  const response = await fetchFn(`/api/git/commit/show/file?hash=${encodeURIComponent(hash)}&path=${encodeURIComponent(path)}`);
+export async function getGitCommitFileDiff(
+  fetchFn: typeof fetch,
+  hash: string,
+  path: string,
+): Promise<GitCommitFileDiffResponse> {
+  const response = await fetchFn(
+    `/api/git/commit/show/file?hash=${encodeURIComponent(hash)}&path=${encodeURIComponent(path)}`,
+  );
   if (!response.ok) throw new Error('Failed to fetch commit file diff');
   return response.json();
 }

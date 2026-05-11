@@ -1,4 +1,7 @@
-jest.mock('./ThemedDialog', () => ({ showThemedConfirm: jest.fn().mockResolvedValue(false), showThemedPrompt: jest.fn().mockResolvedValue(null) }));
+jest.mock('./ThemedDialog', () => ({
+  showThemedConfirm: jest.fn().mockResolvedValue(false),
+  showThemedPrompt: jest.fn().mockResolvedValue(null),
+}));
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
@@ -363,7 +366,6 @@ describe('GitHistoryContextMenu', () => {
 
     const updatedTexts = getMenuTexts();
     expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Checked out')]));
-
   });
 
   // 14. Revert calls apiService.revertGitCommit with full hash
@@ -386,7 +388,6 @@ describe('GitHistoryContextMenu', () => {
 
     const updatedTexts = getMenuTexts();
     expect(updatedTexts).toEqual(expect.arrayContaining([expect.stringContaining('Reverted')]));
-
   });
 
   // 15. Checkout cancelled (user clicks Cancel) closes menu without calling API
@@ -404,7 +405,6 @@ describe('GitHistoryContextMenu', () => {
     });
 
     expect(mockApiService.checkoutGitCommit).not.toHaveBeenCalled();
-
   });
 
   // 16. Revert cancelled (user clicks Cancel) closes menu without calling API
@@ -422,7 +422,6 @@ describe('GitHistoryContextMenu', () => {
     });
 
     expect(mockApiService.revertGitCommit).not.toHaveBeenCalled();
-
   });
 
   // 17. Checkout error shows error message in actionStatus
@@ -445,7 +444,6 @@ describe('GitHistoryContextMenu', () => {
     const statusEl = document.querySelector('.git-history-context-menu-status');
     expect(statusEl).not.toBeNull();
     expect(statusEl!.textContent).toContain('merge conflict');
-
   });
 
   // 18. Revert error shows error message in actionStatus
@@ -468,6 +466,5 @@ describe('GitHistoryContextMenu', () => {
     const statusEl = document.querySelector('.git-history-context-menu-status');
     expect(statusEl).not.toBeNull();
     expect(statusEl!.textContent).toContain('merge conflict');
-
   });
 });

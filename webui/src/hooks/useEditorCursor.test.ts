@@ -56,22 +56,17 @@ function createMockDoc(lines: MockLine[]) {
   };
 }
 
-function createMockUpdate(options: {
-  selectionSet?: boolean;
-  head?: number;
-  ranges?: MockRange[];
-  docLines?: MockLine[];
-  throwOnLineAt?: boolean;
-  mainNull?: boolean;
-} = {}) {
-  const {
-    selectionSet = true,
-    head = 0,
-    ranges,
-    docLines,
-    throwOnLineAt = false,
-    mainNull = false,
-  } = options;
+function createMockUpdate(
+  options: {
+    selectionSet?: boolean;
+    head?: number;
+    ranges?: MockRange[];
+    docLines?: MockLine[];
+    throwOnLineAt?: boolean;
+    mainNull?: boolean;
+  } = {},
+) {
+  const { selectionSet = true, head = 0, ranges, docLines, throwOnLineAt = false, mainNull = false } = options;
 
   const doc = docLines ? createMockDoc(docLines) : createMockDoc([{ number: 1, from: 0, to: Infinity }]);
 
@@ -116,10 +111,12 @@ afterEach(() => {
  * Render the hook inside a minimal wrapper component so React effects fire.
  * Returns control handles for making assertions.
  */
-function renderTestHook(options: {
-  bufferId?: string;
-  docLines?: MockLine[];
-} = {}) {
+function renderTestHook(
+  options: {
+    bufferId?: string;
+    docLines?: MockLine[];
+  } = {},
+) {
   const updateBufferCursor = vi.fn();
   const { bufferId = 'buf-1', docLines } = options;
 
@@ -656,7 +653,7 @@ describe('handleCursorUpdate — edge cases', () => {
       head: 50,
       ranges: [
         { from: 10, to: 20, empty: false }, // 10 chars
-        { from: 50, to: 50, empty: true },  // 0 chars
+        { from: 50, to: 50, empty: true }, // 0 chars
         { from: 100, to: 105, empty: false }, // 5 chars
       ],
     });

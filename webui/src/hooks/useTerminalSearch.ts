@@ -82,7 +82,7 @@ export function useTerminalSearch(options: UseTerminalSearchOptions): UseTermina
 
   const handleContextSearch = useCallback(() => {
     const sel = xtermRef.current?.getSelection();
-    searchInitialQueryRef.current = (sel && sel.trim()) ? sel.trim() : null;
+    searchInitialQueryRef.current = sel && sel.trim() ? sel.trim() : null;
     setSearchVisible(true);
   }, [xtermRef]);
 

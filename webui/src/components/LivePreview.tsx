@@ -33,7 +33,7 @@ function LivePreview({ content, language, fileName, onContentChange }: LivePrevi
         }
       }, 300);
     },
-    [onContentChange]
+    [onContentChange],
   );
 
   // Update editor content when prop changes (e.g., buffer switch)
@@ -87,9 +87,7 @@ function LivePreview({ content, language, fileName, onContentChange }: LivePrevi
 
   // Build language badge
   const languageBadge = (
-    <span className={`live-preview-badge live-preview-badge-${language}`}>
-      {language.toUpperCase()}
-    </span>
+    <span className={`live-preview-badge live-preview-badge-${language}`}>{language.toUpperCase()}</span>
   );
 
   // Build preview pane content
@@ -98,10 +96,7 @@ function LivePreview({ content, language, fileName, onContentChange }: LivePrevi
       return (
         <div className="live-preview-pane live-preview-pane-svg">
           <div className="live-preview-svg-container">
-            <div
-              className="live-preview-svg-content"
-              dangerouslySetInnerHTML={{ __html: editorContent }}
-            />
+            <div className="live-preview-svg-content" dangerouslySetInnerHTML={{ __html: editorContent }} />
           </div>
         </div>
       );

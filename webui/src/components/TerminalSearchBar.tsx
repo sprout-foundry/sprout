@@ -66,18 +66,21 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
     }, [visible, initialQuery]);
 
     // Handle search execution
-    const executeSearch = useCallback((direction: 'next' | 'previous' = 'next') => {
-      if (query.trim()) {
-        onSearch(
-          {
-            query: query.trim(),
-            caseSensitive,
-            regex,
-          },
-          direction,
-        );
-      }
-    }, [query, caseSensitive, regex, onSearch]);
+    const executeSearch = useCallback(
+      (direction: 'next' | 'previous' = 'next') => {
+        if (query.trim()) {
+          onSearch(
+            {
+              query: query.trim(),
+              caseSensitive,
+              regex,
+            },
+            direction,
+          );
+        }
+      },
+      [query, caseSensitive, regex, onSearch],
+    );
 
     // Handle input change
     const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -174,9 +177,7 @@ const TerminalSearchBar = forwardRef<TerminalSearchBarHandle, TerminalSearchBarP
             onKeyDown={handleKeyDown}
             aria-label="Search in terminal"
           />
-          {searchError && (
-            <span className="terminal-search-error">{searchError}</span>
-          )}
+          {searchError && <span className="terminal-search-error">{searchError}</span>}
         </div>
 
         <div className="terminal-search-controls">

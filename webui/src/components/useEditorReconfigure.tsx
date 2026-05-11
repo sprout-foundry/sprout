@@ -109,10 +109,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     );
 
     view.dispatch({
-      effects: [
-        compartments.language.reconfigure(getLanguageExtensions(languageId)),
-        compartments.lsp.reconfigure([]),
-      ],
+      effects: [compartments.language.reconfigure(getLanguageExtensions(languageId)), compartments.lsp.reconfigure([])],
     });
 
     const lspService = getLSPClientService();
@@ -146,9 +143,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     if (!view) return;
 
     view.dispatch({
-      effects: compartments.hotkeys.reconfigure(
-        keymapsRef.current.customKeymap,
-      ),
+      effects: compartments.hotkeys.reconfigure(keymapsRef.current.customKeymap),
     });
   }, [hotkeys, keymapsRef]);
 
@@ -181,9 +176,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     if (!view) return;
 
     view.dispatch({
-      effects: compartments.whitespaceRendering.reconfigure(
-        whitespaceRenderingPlugin(whitespaceRenderingMode),
-      ),
+      effects: compartments.whitespaceRendering.reconfigure(whitespaceRenderingPlugin(whitespaceRenderingMode)),
     });
   }, [whitespaceRenderingMode]);
 
@@ -197,9 +190,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
 
     // Font size
     view.dispatch({
-      effects: compartments.fontSize.reconfigure([
-        CMEditorView.theme({ '&': { fontSize: `${editorFontSize}px` } }),
-      ]),
+      effects: compartments.fontSize.reconfigure([CMEditorView.theme({ '&': { fontSize: `${editorFontSize}px` } })]),
     });
 
     // Tab size
@@ -226,14 +217,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
         relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers(),
       ),
     });
-  }, [
-    editorFontSize,
-    editorTabSize,
-    editorUsesTabs,
-    wordWrapEnabled,
-    minimapEnabled,
-    relativeLineNumbersEnabled,
-  ]);
+  }, [editorFontSize, editorTabSize, editorUsesTabs, wordWrapEnabled, minimapEnabled, relativeLineNumbersEnabled]);
 
   // ---------------------------------------------------------------------------
   // Inlay hints compartment sync
@@ -247,14 +231,22 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
       ? inlayHintsExtension(
           () => buffer?.file?.path,
           () => view.state.doc.toString(),
-          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name).languageId,
+          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
+            .languageId,
         )
       : [];
 
     view.dispatch({
       effects: compartments.inlayHints.reconfigure(ext),
     });
-  }, [inlayHintsEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+  }, [
+    inlayHintsEnabled,
+    buffer?.id,
+    buffer?.file?.path,
+    buffer?.languageOverride,
+    buffer?.file?.ext,
+    buffer?.file?.name,
+  ]);
 
   // ---------------------------------------------------------------------------
   // Signature help compartment sync
@@ -268,12 +260,20 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
       ? signatureHelpExtension(
           () => buffer?.file?.path,
           () => view.state.doc.toString(),
-          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name).languageId,
+          resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
+            .languageId,
         )
       : [];
 
     view.dispatch({
       effects: compartments.signatureHelp.reconfigure(ext),
     });
-  }, [signatureHelpEnabled, buffer?.id, buffer?.file?.path, buffer?.languageOverride, buffer?.file?.ext, buffer?.file?.name]);
+  }, [
+    signatureHelpEnabled,
+    buffer?.id,
+    buffer?.file?.path,
+    buffer?.languageOverride,
+    buffer?.file?.ext,
+    buffer?.file?.name,
+  ]);
 }

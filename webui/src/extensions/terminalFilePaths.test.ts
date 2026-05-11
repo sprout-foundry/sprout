@@ -64,10 +64,7 @@ function createMockTerminal(lines: string[]): Terminal {
  * Invoke the registered provider's provideLinks and return the resolved links.
  * provideLinks calls its callback synchronously, so we capture the result directly.
  */
-function getLinksFromProvider(
-  terminal: Terminal,
-  bufferLineNumber: number
-): unknown {
+function getLinksFromProvider(terminal: Terminal, bufferLineNumber: number): unknown {
   const registeredProvider = (terminal.registerLinkProvider as ReturnType<typeof vi.fn>).mock.calls[0][0];
   let result: unknown;
   registeredProvider.provideLinks(bufferLineNumber, (links: unknown) => {
@@ -359,7 +356,7 @@ describe('registerTerminalFilePathLinks', () => {
     (e: Event) => {
       eventHandler.collected.push(e as CustomEvent);
     },
-    { collected: [] }
+    { collected: [] },
   );
 
   beforeEach(() => {
@@ -521,11 +518,7 @@ describe('registerTerminalFilePathLinks', () => {
   });
 
   it('uses correct buffer line number in range y', () => {
-    const terminal = createMockTerminal([
-      'first line',
-      './file.go:42',
-      'third line',
-    ]);
+    const terminal = createMockTerminal(['first line', './file.go:42', 'third line']);
     registerTerminalFilePathLinks(terminal);
 
     const links = getLinksFromProvider(terminal, 2) as Array<{

@@ -176,13 +176,14 @@ export const useGitWorkspace = ({
 
   // Fetch workspace root once on mount (workspace rarely changes during a session).
   useEffect(() => {
-    workspaceApi.getWorkspace(fetchFn)
-      .then(ws => {
+    workspaceApi
+      .getWorkspace(fetchFn)
+      .then((ws) => {
         if (ws?.workspace_root) {
           setWorkspaceRoot(String(ws.workspace_root));
         }
       })
-      .catch(err => {
+      .catch((err) => {
         debugLog('[useGitWorkspace] failed to fetch workspace root:', err);
       });
   }, [fetchFn]);
@@ -638,10 +639,7 @@ export const useGitWorkspace = ({
     [fetchFn],
   );
 
-  const handleLoadCommitDetail = useCallback(
-    (hash: string) => gitApi.getGitCommitDetail(fetchFn, hash),
-    [fetchFn],
-  );
+  const handleLoadCommitDetail = useCallback((hash: string) => gitApi.getGitCommitDetail(fetchFn, hash), [fetchFn]);
 
   const handleLoadCommitFileDiff = useCallback(
     (hash: string, path: string) => gitApi.getGitCommitFileDiff(fetchFn, hash, path),

@@ -192,6 +192,20 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, connInfo *ConnectionInfo) bool {
 	data, _ := event.Data.(map[string]interface{})
 
+	// --- User isolation (service mode) ---
+	// If the connection has a UserID, enforce user boundary:
+	//   - Events with a user_id must match the connection's UserID
+	//   - Events without user_id (or empty/whitespace-only) are allowed through (backward compatible)
+	// If the connection has NO UserID (local mode), skip user filtering.
+	if connInfo.UserID != "" {
+		eventUserID, _ := data["user_id"].(string)
+		if strings.TrimSpace(eventUserID) != "" {
+			if eventUserID != connInfo.UserID {
+				return false
+			}
+		}
+	}
+
 	// Extract target client_id and chat_id from event
 	targetClientID, _ := data["client_id"].(string)
 	targetChatID, _ := data["chat_id"].(string)
@@ -228,10 +242,16 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	}
 
 	// No client_id and no chat_id - only allow known global event types
+	// or events with user_id (user-scoped broadcasts after passing user filtering above)
 	switch event.Type {
 	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest, events.EventTypeAskUserRequest:
 		return true
 	default:
+		// Allow events with a non-empty user_id (user-scoped broadcasts)
+		eventUserID, _ := data["user_id"].(string)
+		if strings.TrimSpace(eventUserID) != "" {
+			return true
+		}
 		return false
 	}
 }

@@ -80,7 +80,7 @@ func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
 				"file_path": filePath,
 				"concern":   concern,
 			}
-			userResponse = promptManager.RequestPrompt(eventBus, prompt, true, extras)
+			userResponse = promptManager.RequestPrompt(eventBus, a.GetEventUserID(), prompt, true, extras)
 			logger.Logf("Security concern '%s' in %s user response: %v", concern, filePath, userResponse)
 		} else {
 			userResponse = logger.AskForConfirmation(prompt, true, false)

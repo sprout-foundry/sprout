@@ -139,6 +139,7 @@ func TestRegisterMigration_DuplicateSource(t *testing.T) {
 func TestConfigMigration_Integration(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create a minimal config file without version or any new fields
 	configContent := `{

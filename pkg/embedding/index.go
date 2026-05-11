@@ -57,14 +57,22 @@ func NewIndexManager(provider EmbeddingProvider, store VectorStore, opts IndexOp
 }
 
 // BuildIndex walks rootDir, extracts code units, embeds them, and stores them.
+// Uses incremental rebuild: loads existing records, compares content hashes,
+// and only re-embeds changed or new files. Deleted files have their records
+// removed from the store.
 // When IndexFileLevel is enabled, also indexes non-code files at the file level.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
 	start := time.Now()
 	stats := &IndexStats{}
 
+	// Load existing records for incremental comparison.
+	existingRecords, err := m.store.LoadAll()
+	if err != nil {
+		return nil, fmt.Errorf("index: load existing: %w", err)
+	}
+
 	// Choose the appropriate walk function based on file-level indexing flag
 	var files []string
-	var err error
 	if m.opts.IndexFileLevel {
 		files, err = WalkAllIndexableFiles(ctx, rootDir)
 	} else {
@@ -132,34 +140,110 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		return stats, nil
 	}
 
-	records, err := m.embedUnits(ctx, allUnits)
-	if err != nil {
-		stats.Duration = time.Since(start)
-		return stats, fmt.Errorf("index: embed units: %w", err)
+	// --- Incremental rebuild logic ---
+
+	// Build a map of file → unit ID → hash from existing records.
+	existingFileUnits := make(map[string]map[string]string)
+	for _, rec := range existingRecords {
+		if existingFileUnits[rec.File] == nil {
+			existingFileUnits[rec.File] = make(map[string]string)
+		}
+		existingFileUnits[rec.File][rec.ID] = rec.Hash
 	}
 
-	// Store in batches to avoid overwhelming the store.
-	// On context cancellation, store what we can and return partial results.
-	const storeBatch = 128
-	stored := 0
-	for i := 0; i < len(records); i += storeBatch {
-		if err := ctx.Err(); err != nil {
-			// Partial store — log and return what we have so far.
-			log.Printf("index: store interrupted after %d/%d records: %v", stored, len(records), err)
-			break
-		}
-		end := i + storeBatch
-		if end > len(records) {
-			end = len(records)
-		}
-		if err := m.store.Store(records[i:end]); err != nil {
-			return stats, fmt.Errorf("index: store batch %d-%d: %w", i, end, err)
-		}
-		stored += end - i
+	// Build a set of current files from extracted units.
+	currentFiles := make(map[string]bool)
+	for _, unit := range allUnits {
+		currentFiles[unit.File] = true
 	}
 
-	stats.UnitsEmbedded = stored
+	// Filter existing records to only include files that still exist.
+	// This handles the case where files were deleted since the last index build.
+	// Defer all disk writes to a single Store call at the end.
+	var baseRecords []VectorRecord
+	for _, rec := range existingRecords {
+		if currentFiles[rec.File] {
+			baseRecords = append(baseRecords, rec)
+		}
+	}
+	if len(baseRecords) < len(existingRecords) {
+		log.Printf("index: dropping %d records for deleted files",
+			len(existingRecords)-len(baseRecords))
+	}
 
+	// Build a map of file → unit ID → hash from extracted units.
+	currentFileUnits := make(map[string]map[string]string)
+	for _, unit := range allUnits {
+		if currentFileUnits[unit.File] == nil {
+			currentFileUnits[unit.File] = make(map[string]string)
+		}
+		currentFileUnits[unit.File][unit.ID] = unit.Hash
+	}
+
+	// Determine which files have changed by comparing hashes.
+	var filesToReembed []string
+	for file, unitHashes := range currentFileUnits {
+		existingHashes := existingFileUnits[file]
+		// File is new or has different unit count → re-embed.
+		if len(existingHashes) != len(unitHashes) {
+			filesToReembed = append(filesToReembed, file)
+			continue
+		}
+		// Compare hashes unit-by-unit.
+		for id, hash := range unitHashes {
+			if existingHashes[id] != hash {
+				filesToReembed = append(filesToReembed, file)
+				break
+			}
+		}
+	}
+
+	// Collect units from changed/new files for embedding.
+	var unitsToEmbed []CodeUnit
+	reembedSet := make(map[string]bool)
+	for _, f := range filesToReembed {
+		reembedSet[f] = true
+	}
+	for _, unit := range allUnits {
+		if reembedSet[unit.File] {
+			unitsToEmbed = append(unitsToEmbed, unit)
+		}
+	}
+
+	// Embed only changed units.
+	var newRecords []VectorRecord
+	if len(unitsToEmbed) > 0 {
+		log.Printf("index: re-embedding %d units from %d changed/new files...",
+			len(unitsToEmbed), len(filesToReembed))
+		embedStart := time.Now()
+		newRecords, err = m.embedUnits(ctx, unitsToEmbed)
+		if err != nil {
+			stats.Duration = time.Since(start)
+			return stats, fmt.Errorf("index: embed units: %w", err)
+		}
+		log.Printf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
+	}
+
+	// Store all records in a single call.
+	// Store() merges by ID: existing records that weren't re-embedded are preserved,
+	// and re-embedded records replace their old versions.
+	if len(newRecords) > 0 || len(baseRecords) < len(existingRecords) {
+		// Combine filtered existing records with new records.
+		allStoreRecords := make([]VectorRecord, 0, len(baseRecords)+len(newRecords))
+		allStoreRecords = append(allStoreRecords, baseRecords...)
+		allStoreRecords = append(allStoreRecords, newRecords...)
+
+		log.Printf("index: storing %d records (%d existing + %d new)...",
+			len(allStoreRecords), len(baseRecords), len(newRecords))
+		storeStart := time.Now()
+		if err := m.store.Store(allStoreRecords); err != nil {
+			return stats, fmt.Errorf("index: store: %w", err)
+		}
+		log.Printf("index: stored %d records in %s", len(allStoreRecords), time.Since(storeStart))
+		stats.UnitsEmbedded = len(newRecords)
+	} else {
+		log.Printf("index: no changes detected, skipping store")
+	}
 	stats.Duration = time.Since(start)
 	return stats, nil
 }

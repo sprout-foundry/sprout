@@ -3,6 +3,7 @@ import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import type { EditorBuffer, EditorPane } from '../types/editor';
 import { persistTabWorkspacePath } from '../services/clientSession';
 import { ApiService } from '../services/api';
+import { debugLog } from '../utils/log';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
 import {
   saveLayoutSnapshot,
@@ -153,8 +154,8 @@ export function useLayoutPersistence({
           persistTabWorkspacePath(ws.workspace_root);
         }
       })
-      .catch(() => {
-        // Non-critical: workspace scoping will use _default
+      .catch((err) => {
+        debugLog('[LayoutPersistence] Failed to fetch workspace root:', err);
       })
       .finally(() => {
         if (!cancelled) {

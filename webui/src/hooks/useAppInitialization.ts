@@ -168,7 +168,7 @@ export function useAppInitialization({
         debugLog('[startup] session restore check failed:', error);
       }
     };
-    restoreStartupState().catch(() => {});
+    restoreStartupState().catch((err) => { debugLog('[startup] Restore startup state failed:', err); });
 
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000);

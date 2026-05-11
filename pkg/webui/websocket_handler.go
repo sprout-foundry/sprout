@@ -2,7 +2,8 @@ package webui
 
 import (
 	"context"
-	"fmt"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net"
 	"net/http"
@@ -25,8 +26,14 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	safeConn := NewSafeConn(conn)
 	defer safeConn.Close()
 
-	// Generate unique session ID for this connection
-	sessionID := fmt.Sprintf("ws_%d", time.Now().UnixNano())
+	// Generate unique session ID for this connection using cryptographically secure random
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		log.Printf("Failed to generate session ID: %v", err)
+		conn.Close()
+		return
+	}
+	sessionID := "ws_" + hex.EncodeToString(b)
 	clientID := ws.resolveClientID(r)
 
 	// Panic recovery for the main handler - moved here so safeConn and sessionID are available

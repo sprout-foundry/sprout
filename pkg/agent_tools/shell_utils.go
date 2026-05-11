@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"path"
 	"strings"
 )
 
@@ -103,15 +104,90 @@ func containsRedirection(cmd string) bool {
 	return false
 }
 
+// extractRedirectionTarget extracts the path from the first output redirection
+// in the command string. Handles both > and >> operators. Returns the cleaned
+// path and true if found, or empty string and false if not found.
+// Correctly distinguishes >> from > by checking >> first at each position.
+func extractRedirectionTarget(lower string) (string, bool) {
+	for i := 0; i < len(lower); i++ {
+		if lower[i] != '>' {
+			continue
+		}
+		// Check for >> first (append redirect)
+		redirectLen := 1
+		if i+1 < len(lower) && lower[i+1] == '>' {
+			redirectLen = 2
+		}
+		// Skip file descriptor duplication (e.g., 2>&1)
+		if i+redirectLen < len(lower) && lower[i+redirectLen] == '&' {
+			continue
+		}
+		pathStart := i + redirectLen
+		// Skip whitespace after redirect operator
+		for pathStart < len(lower) && lower[pathStart] == ' ' {
+			pathStart++
+		}
+		if pathStart >= len(lower) {
+			continue
+		}
+		// Extract path until whitespace, semicolon, pipe, or &
+		pathEnd := pathStart
+		for pathEnd < len(lower) {
+			c := lower[pathEnd]
+			if c == ' ' || c == ';' || c == '|' || c == '&' {
+				break
+			}
+			pathEnd++
+		}
+		if pathEnd > pathStart {
+			pathStr := lower[pathStart:pathEnd]
+			cleaned := path.Clean(pathStr)
+			return cleaned, true
+		}
+		// Only process the first redirection
+		break
+	}
+	return "", false
+}
+
 // isBenignRedirection returns true if output redirection targets known harmless sinks.
+// For /tmp paths, validates that the cleaned path stays within /tmp to prevent
+// path traversal attacks like > /tmp/../etc/passwd.
 func isBenignRedirection(cmd string) bool {
 	lower := strings.ToLower(cmd)
-	return strings.Contains(lower, "> /tmp") || strings.Contains(lower, ">> /tmp") ||
-		strings.Contains(lower, ">/tmp") ||
-		strings.Contains(lower, "> /dev/null") || strings.Contains(lower, ">> /dev/null") ||
+
+	// Extract first redirection target and validate
+	cleaned, found := extractRedirectionTarget(lower)
+	if found {
+		if strings.HasPrefix(cleaned, "/tmp/") || cleaned == "/tmp" {
+			return true
+		}
+	}
+
+	// /dev/null, /dev/stdout, /dev/stderr are always safe
+	return strings.Contains(lower, "> /dev/null") || strings.Contains(lower, ">> /dev/null") ||
 		strings.Contains(lower, ">/dev/null") ||
 		strings.Contains(lower, "> /dev/stdout") || strings.Contains(lower, ">> /dev/stdout") ||
 		strings.Contains(lower, "> /dev/stderr") || strings.Contains(lower, ">> /dev/stderr")
+}
+
+// hasRedirectionTraversalToSystemDir checks if a command with output redirection
+// uses path traversal to target a system directory. For example, > /tmp/../etc/passwd
+// appears to target /tmp but actually resolves to /etc/passwd.
+func hasRedirectionTraversalToSystemDir(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	systemPrefixes := []string{"/etc/", "/usr/", "/bin/", "/sbin/", "/var/", "/opt/", "/root/", "/boot/"}
+
+	cleaned, found := extractRedirectionTarget(lower)
+	if !found {
+		return false
+	}
+	for _, sys := range systemPrefixes {
+		if strings.HasPrefix(cleaned, sys) {
+			return true
+		}
+	}
+	return false
 }
 
 // getShellCommandReasoning returns a human-readable reasoning string

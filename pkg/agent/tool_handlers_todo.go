@@ -69,14 +69,14 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	a.debugLog("TodoWrite: processing %d todos\n", len(todos))
-	result := tools.TodoWrite(todos)
+	result := a.GetTodoManager().Write(todos)
 	a.debugLog("TodoWrite result: %s\n", result)
 	return result, nil
 }
 
 func handleTodoRead(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	a.debugLog("TodoRead: returning current todo list\n")
-	todos := tools.TodoRead()
+	todos := a.GetTodoManager().Read()
 	if len(todos) == 0 {
 		return "No todos", nil
 	}

@@ -71,6 +71,7 @@ type Agent struct {
 	output   OutputManager   // Streaming, async output, event metadata, output routing
 	security SecurityManager // Approvals, redaction, elevation, bypass
 	mcpSub   MCPSubManager   // MCP server lifecycle and tool caching
+	todoMgr  *tools.TodoManager // Per-agent todo manager for session isolation
 
 	// Event system (bridges output and core)
 	eventBus  *events.EventBus

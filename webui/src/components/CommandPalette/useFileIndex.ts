@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clientFetch } from '../../services/clientSession';
 import type { ApiService } from '../../services/api';
-import type { useLog } from '../../utils/log';
+import { debugLog, type useLog } from '../../utils/log';
 import type { FileResult } from './types';
 import { MAX_INDEXED_FILES, MAX_INDEXED_DIRECTORIES, SKIP_DIRECTORIES, MAX_DIRECTORY_DEPTH } from './constants';
 
@@ -39,8 +39,9 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
       .then((workspace) => {
         if (!cancelled) setWorkspaceRoot(String(workspace.workspace_root || '').trim());
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) setWorkspaceRoot('');
+        debugLog('[FileIndex] Failed to fetch workspace root:', err);
       });
 
     const doFetch = async () => {

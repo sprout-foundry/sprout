@@ -59,7 +59,7 @@ export function useTerminalScrollback(options: UseTerminalScrollbackOptions): Us
         const clientScrollback = await loadScrollback(sessionId);
         if (clientScrollback) {
           term.write(clientScrollback);
-          await deleteScrollback(sessionId).catch(() => {});
+          await deleteScrollback(sessionId).catch((err) => { console.warn('[TerminalPane] Failed to delete scrollback after load:', err); });
         }
       } catch (err) {
         debugLog('[TerminalPane] Failed to load client scrollback:', err);

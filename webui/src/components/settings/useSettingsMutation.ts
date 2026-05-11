@@ -229,8 +229,8 @@ export function useSettingsMutation(params: MutationHookParams) {
           api
             .getSettingsProvenance()
             .then((data) => setProvenanceSources(data.sources || {}))
-            .catch(() => {
-              /* keep current badges */
+            .catch((err) => {
+              debugLog('[SettingsPanel] Failed to refresh provenance after save:', err);
             });
         }
       } catch (err) {

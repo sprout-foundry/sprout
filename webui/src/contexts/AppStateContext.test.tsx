@@ -8,8 +8,8 @@ import { AppStateProvider, useAppStateContext } from './AppStateContext';
 import type { AppState } from '../types/app';
 
 // Mock the persistence service
-jest.mock('../services/appStatePersistence', () => ({
-  loadPersistedAppState: jest.fn(() => ({
+vi.mock('../services/appStatePersistence', () => ({
+  loadPersistedAppState: vi.fn(() => ({
     provider: 'openai',
     model: 'gpt-4',
     messages: [],
@@ -65,7 +65,7 @@ describe('AppStateContext', () => {
   });
 
   it('should throw error when used outside provider', () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(() => {
       renderHook(() => useAppStateContext());

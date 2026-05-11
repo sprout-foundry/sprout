@@ -4,16 +4,16 @@ import { WebSocketService } from './websocket';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../utils/log', () => ({
-  debugLog: jest.fn(),
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
 }));
 
-jest.mock('./clientSession', () => ({
-  appendClientIdToUrl: jest.fn((url) => url + '?client=test'),
+vi.mock('./clientSession', () => ({
+  appendClientIdToUrl: vi.fn((url) => url + '?client=test'),
 }));
 
-jest.mock('./notificationBus', () => ({
-  notificationBus: { notify: jest.fn() },
+vi.mock('./notificationBus', () => ({
+  notificationBus: { notify: vi.fn() },
 }));
 
 // Get the mocked functions for assertions
@@ -22,8 +22,8 @@ const appendClientIdToUrl = require('./clientSession').appendClientIdToUrl;
 const notificationBus = require('./notificationBus').notificationBus;
 
 // Mock WebSocket
-const mockSend = jest.fn();
-const mockClose = jest.fn();
+const mockSend = vi.fn();
+const mockClose = vi.fn();
 let mockOnOpen = null;
 let mockOnClose = null;
 let mockOnError = null;
@@ -86,9 +86,9 @@ global.WebSocket = MockWebSocket;
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  jest.useFakeTimers();
-  jest.clearAllMocks();
-  jest.spyOn(Math, 'random').mockReturnValue(0.5);
+  vi.useFakeTimers();
+  vi.clearAllMocks();
+  vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
   // Reset WebSocket mock state
   mockReadyState = MockWebSocket.CLOSED;
@@ -107,8 +107,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  jest.useRealTimers();
-  jest.spyOn(Math, 'random').mockRestore();
+  vi.useRealTimers();
+  vi.spyOn(Math, 'random').mockRestore();
 });
 
 function triggerWebSocketOpen() {
@@ -253,7 +253,7 @@ describe('WebSocketService - Queue Behavior', () => {
     expect(ws.getQueuedMessageCount()).toBe(2);
 
     // Advance timers to trigger reconnect
-    jest.advanceTimersByTime(2100);
+    vi.advanceTimersByTime(2100);
 
     // Queue should still have messages (preserved)
     expect(ws.getQueuedMessageCount()).toBe(2);
@@ -408,7 +408,7 @@ describe('WebSocketService - Exponential Backoff', () => {
     triggerWebSocketClose();
 
     // First reconnect attempt scheduled
-    jest.advanceTimersByTime(2500); // 2000 + 500 (jitter with random=0.5)
+    vi.advanceTimersByTime(2500); // 2000 + 500 (jitter with random=0.5)
 
     // New WebSocket should have been created
     expect(webSocketConstructorCallCount).toBeGreaterThan(initialConstructorCount);
@@ -426,7 +426,7 @@ describe('WebSocketService - Exponential Backoff', () => {
     triggerWebSocketClose();
 
     // First reconnect attempt
-    jest.advanceTimersByTime(2500);
+    vi.advanceTimersByTime(2500);
     const countAfterFirstReconnect = webSocketConstructorCallCount;
     triggerWebSocketOpen();
     mockReadyState = MockWebSocket.OPEN;
@@ -436,7 +436,7 @@ describe('WebSocketService - Exponential Backoff', () => {
     triggerWebSocketClose();
 
     // Second reconnect attempt - should be longer
-    jest.advanceTimersByTime(4500); // 4000 + 500 (jitter)
+    vi.advanceTimersByTime(4500); // 4000 + 500 (jitter)
 
     // New WebSocket should have been created
     expect(webSocketConstructorCallCount).toBeGreaterThan(countAfterFirstReconnect);
@@ -456,7 +456,7 @@ describe('WebSocketService - Exponential Backoff', () => {
       triggerWebSocketClose();
 
       // Advance past the reconnect delay
-      jest.advanceTimersByTime(31000); // Cap is 30000 + 500 jitter
+      vi.advanceTimersByTime(31000); // Cap is 30000 + 500 jitter
       triggerWebSocketOpen();
       mockReadyState = MockWebSocket.OPEN;
     }
@@ -468,7 +468,7 @@ describe('WebSocketService - Exponential Backoff', () => {
   it('verifies reconnect timer fires and calls connect()', () => {
     const ws = WebSocketService.getInstance();
 
-    const connectSpy = jest.spyOn(ws, 'connect');
+    const connectSpy = vi.spyOn(ws, 'connect');
 
     ws.connect();
 
@@ -482,7 +482,7 @@ describe('WebSocketService - Exponential Backoff', () => {
     connectSpy.mockClear();
 
     // Advance to trigger reconnect
-    jest.advanceTimersByTime(2500);
+    vi.advanceTimersByTime(2500);
 
     expect(connectSpy).toHaveBeenCalled();
   });
@@ -735,13 +735,13 @@ describe('WebSocketService - Miscellaneous Queue Tests', () => {
 
 describe('WebSocketService - freeze() and resume() queue preservation', () => {
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.spyOn(Math, 'random').mockReturnValue(0.5);
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
   });
 
   afterEach(() => {
-    jest.useRealTimers();
-    jest.restoreAllMocks();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('preserves queue across freeze() then resume() with replay', () => {

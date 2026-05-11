@@ -19,7 +19,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -37,11 +37,11 @@ const flushPromises = async () => {
 
 /** Render the panel with the given props and flush microtask queue. */
 async function renderPanel(props: Partial<React.ComponentProps<typeof QueuedMessagesPanel>> = {}) {
-  const onRemove = props.onRemove ?? jest.fn();
-  const onEdit = props.onEdit ?? jest.fn();
-  const onReorder = props.onReorder ?? jest.fn();
-  const onClear = props.onClear ?? jest.fn();
-  const onClose = props.onClose ?? jest.fn();
+  const onRemove = props.onRemove ?? vi.fn();
+  const onEdit = props.onEdit ?? vi.fn();
+  const onReorder = props.onReorder ?? vi.fn();
+  const onClear = props.onClear ?? vi.fn();
+  const onClose = props.onClose ?? vi.fn();
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
@@ -346,7 +346,7 @@ describe('QueuedMessagesPanel – close button', () => {
 // ===========================================================================
 
 describe('QueuedMessagesPanel – editing', () => {
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => vi.useRealTimers());
 
   it('enters edit mode when the edit button is clicked', async () => {
     await renderPanel({ messages: ['Hello world'] });
@@ -472,7 +472,7 @@ describe('QueuedMessagesPanel – editing', () => {
   });
 
   it('cancels edit when saving empty text instead of removing message', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const { onEdit } = await renderPanel({ messages: ['Will be emptied'] });
 
@@ -495,7 +495,7 @@ describe('QueuedMessagesPanel – editing', () => {
 
     // Advance past the 400ms shake delay
     act(() => {
-      jest.advanceTimersByTime(400);
+      vi.advanceTimersByTime(400);
     });
 
     // Editing to empty text cancels the edit (preserves original message) rather than calling onEdit
@@ -507,7 +507,7 @@ describe('QueuedMessagesPanel – editing', () => {
   });
 
   it('cancels edit when saving whitespace-only text', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const { onEdit } = await renderPanel({ messages: ['Keep me'] });
 
@@ -530,7 +530,7 @@ describe('QueuedMessagesPanel – editing', () => {
 
     // Advance past the 400ms shake delay
     act(() => {
-      jest.advanceTimersByTime(400);
+      vi.advanceTimersByTime(400);
     });
 
     // Whitespace-only text should cancel the edit, not call onEdit

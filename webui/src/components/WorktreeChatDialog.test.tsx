@@ -17,7 +17,7 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
 
   // Mock setTimeout so the branch-input auto-focus timer fires synchronously.
   // The component calls setTimeout(() => branchInputRef.current?.focus(), 50).
@@ -27,7 +27,7 @@ beforeAll(() => {
     }
     return ++rafId;
   }) as typeof setTimeout;
-  global.clearTimeout = jest.fn();
+  global.clearTimeout = vi.fn();
 });
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ let mountPoint: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mountPoint = document.createElement('div');
   document.body.appendChild(mountPoint);
 });
@@ -68,8 +68,8 @@ type DialogProps = {
  */
 function renderDialog(props: DialogProps = {}) {
   const { isOpen = true, isCreating = false, error = null } = props;
-  const onClose = jest.fn();
-  const onSubmit = jest.fn();
+  const onClose = vi.fn();
+  const onSubmit = vi.fn();
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
@@ -95,16 +95,16 @@ function rerenderDialog(props: {
   isOpen?: boolean;
   isCreating?: boolean;
   error?: string | null;
-  onClose?: ReturnType<typeof jest.fn>;
-  onSubmit?: ReturnType<typeof jest.fn>;
+  onClose?: ReturnType<typeof vi.fn>;
+  onSubmit?: ReturnType<typeof vi.fn>;
 }) {
   const { isOpen = true, isCreating = false, error = null, onClose, onSubmit } = props;
   act(() => {
     root!.render(
       <WorktreeChatDialog
         isOpen={isOpen}
-        onClose={onClose ?? jest.fn()}
-        onSubmit={onSubmit ?? jest.fn()}
+        onClose={onClose ?? vi.fn()}
+        onSubmit={onSubmit ?? vi.fn()}
         isCreating={isCreating}
         error={error}
       />,
@@ -342,7 +342,7 @@ describe('WorktreeChatDialog', () => {
   });
 
   test('dialog is removed from DOM when isOpen transitions to false', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     renderDialog({ isOpen: true });
 
     expect(document.querySelector('.wt-chat-dialog-overlay')).not.toBeNull();

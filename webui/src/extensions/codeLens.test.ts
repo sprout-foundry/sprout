@@ -10,28 +10,28 @@ import { countReferences, formatRefText, computeCodeLenses } from './codeLens';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   WidgetType: class {},
   Decoration: {
-    widget: jest.fn(() => ({})),
+    widget: vi.fn(() => ({})),
     none: { type: 'none' },
-    set: jest.fn((decorations) => decorations),
+    set: vi.fn((decorations) => decorations),
   },
-  ViewPlugin: { fromClass: jest.fn(() => []) },
-  EditorView: { baseTheme: jest.fn(() => []) },
+  ViewPlugin: { fromClass: vi.fn(() => []) },
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
 
-jest.mock('@codemirror/state', () => ({
-  Annotation: { define: jest.fn(() => ({})) },
+vi.mock('@codemirror/state', () => ({
+  Annotation: { define: vi.fn(() => ({})) },
   Extension: {},
 }));
 
 // Mock the symbolUtils module.
 // Use requireActual to preserve the real CONTAINER_KINDS for the mock setup,
-// while replacing extractSymbols with jest.fn() for controlled testing.
-jest.mock('../utils/symbolUtils', () => ({
-  ...jest.requireActual('../utils/symbolUtils'),
-  extractSymbols: jest.fn(),
+// while replacing extractSymbols with vi.fn() for controlled testing.
+vi.mock('../utils/symbolUtils', () => ({
+  ...vi.importActual('../utils/symbolUtils'),
+  extractSymbols: vi.fn(),
 }));
 
 // ── formatRefText tests ──────────────────────────────────────────
@@ -190,7 +190,7 @@ describe('computeCodeLenses', () => {
   const mockExtractSymbols = require('../utils/symbolUtils').extractSymbols;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Default to returning empty array so tests don't crash when no mock is set
     mockExtractSymbols.mockReturnValue([]);
   });

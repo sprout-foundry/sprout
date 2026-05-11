@@ -8,18 +8,18 @@ import Terminal from './Terminal';
 // Mock TerminalPane — forwardRef component with imperative handle { clear, focus }
 // ---------------------------------------------------------------------------
 
-jest.mock('./TerminalPane', () => {
-  const { forwardRef, useImperativeHandle } = jest.requireActual('react');
+vi.mock('./TerminalPane', () => {
+  const { forwardRef, useImperativeHandle } = vi.importActual('react');
   return forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
-    // NOTE: jest.fn() inside useImperativeHandle creates fresh mock instances on
+    // NOTE: vi.fn() inside useImperativeHandle creates fresh mock instances on
     // every re-render. This is acceptable because no test asserts on imperative
     // handle call counts — all assertions check DOM state. If future tests need
     // to verify clear()/focus() calls, the mock factory will need restructuring
     // to use stable references (e.g., storing mocks on a shared object that both
     // the factory and test scope can access).
     useImperativeHandle(ref, () => ({
-      clear: jest.fn(),
-      focus: jest.fn(),
+      clear: vi.fn(),
+      focus: vi.fn(),
     }));
 
     return (
@@ -42,7 +42,7 @@ jest.mock('./TerminalPane', () => {
 // Mock TerminalTabBar — simple presentational component
 // ---------------------------------------------------------------------------
 
-jest.mock('./TerminalTabBar', () => {
+vi.mock('./TerminalTabBar', () => {
   return function MockTerminalTabBar(props: any) {
     return <div data-testid="terminal-tab-bar" data-active={props.activeSessionId} />;
   };

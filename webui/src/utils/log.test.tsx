@@ -29,13 +29,13 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.useFakeTimers();
-  jest.clearAllMocks();
+  vi.useFakeTimers();
+  vi.clearAllMocks();
   // Suppress console output in tests
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'info').mockImplementation(() => {});
-  jest.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'log').mockImplementation(() => {});
 
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -47,8 +47,8 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
-  jest.useRealTimers();
-  jest.restoreAllMocks();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   setMinLevel(Levels.debug); // safety net: reset minLevel even if a test throws before its inline reset
 });
 

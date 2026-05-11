@@ -4,22 +4,22 @@ import { ApiService } from '../services/api';
 import { debugLog } from '../utils/log';
 
 // Mock dependencies
-jest.mock('../services/api');
-jest.mock('../utils/log');
+vi.mock('../services/api');
+vi.mock('../utils/log');
 
 describe('ModelSelectionModal', () => {
   const mockApiService = {
-    getInstance: jest.fn(),
+    getInstance: vi.fn(),
   };
 
   const mockProvider = 'openai';
-  const mockOnClose = jest.fn();
-  const mockOnSelectModel = jest.fn();
+  const mockOnClose = vi.fn();
+  const mockOnSelectModel = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (ApiService.getInstance as jest.Mock).mockReturnValue(mockApiService);
-    mockApiService.getProviderModels = jest.fn();
+    vi.clearAllMocks();
+    (ApiService.getInstance as vi.Mock).mockReturnValue(mockApiService);
+    mockApiService.getProviderModels = vi.fn();
   });
 
   afterEach(() => {

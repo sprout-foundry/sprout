@@ -12,6 +12,7 @@ import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } fro
 import type { WsEvent } from '../services/websocket';
 import { getWebUIClientId } from '../services/clientSession';
 import { debugLog, error as logError } from '../utils/log';
+import { appendCappedLog } from '../utils/logCap';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import {
@@ -123,7 +124,7 @@ export function useEventHandler({
               // not a chat session id. It changes on reconnect and must never clear chat state.
               sessionId: prev.sessionId || (incomingSessionId ?? null),
               isConnected: newConnectionState,
-              logs: [...prev.logs, logEntry],
+              logs: appendCappedLog(prev.logs, logEntry),
             }));
           }, 300); // Wait 300ms to confirm the connection state is stable
         }
@@ -153,7 +154,7 @@ export function useEventHandler({
           subagentActivities: [],
           queryProgress: null, // Clear previous progress
           currentTodos: [], // Clear previous todos
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         debugLog('[>>] Query started:', startedQuery);
         break;
@@ -279,7 +280,7 @@ export function useEventHandler({
                   }
                   return tool;
                 }),
-            logs: [...prev.logs, logEntry],
+            logs: appendCappedLog(prev.logs, logEntry),
           };
         });
         debugLog('[OK] Query completed');
@@ -345,7 +346,7 @@ export function useEventHandler({
             if (finalTools.length > MAX_TOOL_EXECUTIONS) {
               finalTools = finalTools.slice(finalTools.length - MAX_TOOL_EXECUTIONS);
             }
-            return { ...prev, messages, toolExecutions: finalTools, logs: [...prev.logs, logEntry] };
+            return { ...prev, messages, toolExecutions: finalTools, logs: appendCappedLog(prev.logs, logEntry) };
           }
 
           // Add new tool execution from rich start event
@@ -390,7 +391,7 @@ export function useEventHandler({
             ...prev,
             messages,
             toolExecutions: newToolsList,
-            logs: [...prev.logs, logEntry],
+            logs: appendCappedLog(prev.logs, logEntry),
           };
         });
         debugLog('[tool] Tool start:', eventData?.tool_name);
@@ -448,11 +449,11 @@ export function useEventHandler({
             return {
               ...prev,
               toolExecutions: newToolsList,
-              logs: [...prev.logs, logEntry],
+              logs: appendCappedLog(prev.logs, logEntry),
             };
           }
 
-          return { ...prev, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
+          return { ...prev, toolExecutions: updatedExecutions, logs: appendCappedLog(prev.logs, logEntry) };
         });
         debugLog('[tool] Tool end:', eventData?.tool_name, eventData?.status);
         break;
@@ -478,13 +479,13 @@ export function useEventHandler({
           };
 
           if (!activity.message) {
-            return { ...prev, logs: [...prev.logs, logEntry] };
+            return { ...prev, logs: appendCappedLog(prev.logs, logEntry) };
           }
 
           return {
             ...prev,
             subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-            logs: [...prev.logs, logEntry],
+            logs: appendCappedLog(prev.logs, logEntry),
           };
         });
         break;
@@ -538,11 +539,11 @@ export function useEventHandler({
                 break;
               }
               if (touched) {
-                return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+                return { ...prev, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
               }
             }
 
-            return { ...prev, logs: [...prev.logs, logEntry] };
+            return { ...prev, logs: appendCappedLog(prev.logs, logEntry) };
           });
         } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
           // Warning/error messages are operational notices, not model reasoning.
@@ -559,7 +560,7 @@ export function useEventHandler({
                 content: (lastMessage.content || '') + prefixedMsg,
               };
             }
-            return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+            return { ...prev, messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
           });
         } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
           // Meaningful info messages should render in chat, but not inside reasoning.
@@ -575,7 +576,7 @@ export function useEventHandler({
                 content: `${lastMessage.content || ''}\n\nInfo: ${cleanedMsg}`,
               };
             }
-            return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+            return { ...prev, messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
           });
         }
         // For plain 'info' (unclassified): silently skip rendering in WebUI.
@@ -591,7 +592,7 @@ export function useEventHandler({
         setState((prev) => ({
           ...prev,
           currentTodos: normalizedTodos,
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         break;
       }
@@ -600,8 +601,6 @@ export function useEventHandler({
         logEntry.category = 'file';
         logEntry.level = 'info';
         setState((prev) => {
-          const newLogs = [...prev.logs, logEntry];
-
           // Track file edits
           const newFileEdit = {
             path: String(eventData.path || eventData.file_path || 'Unknown'),
@@ -614,7 +613,7 @@ export function useEventHandler({
           // Add to file edits (keep last 50)
           const updatedFileEdits = [...prev.fileEdits, newFileEdit].slice(-50);
 
-          return { ...prev, logs: newLogs, fileEdits: updatedFileEdits };
+          return { ...prev, logs: appendCappedLog(prev.logs, logEntry), fileEdits: updatedFileEdits };
         });
         debugLog('[edit] File changed:', eventData.path);
         break;
@@ -631,7 +630,7 @@ export function useEventHandler({
             deleted: (typeof size === 'number' ? size : 0) === 0 && (typeof mod_time === 'number' ? mod_time : 0) === 0,
           };
           document.dispatchEvent(new CustomEvent('file_externally_modified', { detail }));
-          setState((prev) => ({ ...prev, logs: [...prev.logs, logEntry] }));
+          setState((prev) => ({ ...prev, logs: appendCappedLog(prev.logs, logEntry) }));
         }
         debugLog('[file] File content changed externally:', eventData?.file_path);
         break;
@@ -642,7 +641,7 @@ export function useEventHandler({
         // Handle terminal output - this will be processed by the Terminal component
         setState((prev) => ({
           ...prev,
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         debugLog('[term] Terminal output received:', eventData);
         break;
@@ -668,7 +667,7 @@ export function useEventHandler({
               timestamp: new Date(),
             },
           ],
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         logError('[FAIL] Error event: ' + String(eventData));
         addNotification('error', 'Agent Error', errorMessage, 8000);
@@ -686,7 +685,7 @@ export function useEventHandler({
             ...prev.stats,
             ...eventData,
           },
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         break;
 
@@ -702,7 +701,7 @@ export function useEventHandler({
             // a DOM event so workspace-dependent UI (file tree, breadcrumbs…)
             // refreshes.
             debugLog('[workspace] Worktree switch/clear detected — refreshing workspace state without page reload');
-            setState((prev) => ({ ...prev, logs: [...prev.logs, logEntry] }));
+            setState((prev) => ({ ...prev, logs: appendCappedLog(prev.logs, logEntry) }));
             const detail = {
               workspaceRoot: String(eventData.workspace_root || ''),
               daemonRoot: String(eventData.daemon_root || ''),
@@ -735,7 +734,7 @@ export function useEventHandler({
             riskType: eventData?.risk_type != null ? String(eventData.risk_type) : undefined,
             target: eventData?.target != null ? String(eventData.target) : undefined,
           },
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         debugLog('[security] Approval request:', eventData?.tool_name, eventData?.risk_level);
         break;
@@ -761,7 +760,7 @@ export function useEventHandler({
             filePath: eventData?.file_path != null ? String(eventData.file_path) : undefined,
             concern: eventData?.concern != null ? String(eventData.concern) : undefined,
           },
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         debugLog('[security] Prompt request:', eventData?.file_path, eventData?.concern);
         break;
@@ -771,7 +770,7 @@ export function useEventHandler({
         logEntry.level = 'warning';
         setState((prev) => ({
           ...prev,
-          logs: [...prev.logs, logEntry],
+          logs: appendCappedLog(prev.logs, logEntry),
         }));
         debugLog('[?] Unknown event type:', event.type, eventData);
     }

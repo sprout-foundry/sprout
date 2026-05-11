@@ -5,11 +5,40 @@
  * scoped by instance PID and UI context (local vs SSH).
  */
 
-import type { AppState, Message } from '../types/app';
+import type { AppState, Message, ToolRef } from '../types/app';
 import { APP_STATE_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
 import { parseDate } from '../utils/dateUtils';
 import { debugLog } from '../utils/log';
 import { notificationBus } from './notificationBus';
+
+// ── Local Helper Types ───────────────────────────────────────────────
+
+/**
+ * Serialized form of Message from localStorage.
+ * All fields are optional since localStorage data is unreliable.
+ * Timestamp is string | Date since it may be a JSON string or already parsed.
+ */
+type SerializedMessage = Partial<{
+  id: string;
+  type: 'user' | 'assistant';
+  content: string;
+  timestamp: string | Date;
+  reasoning: string;
+  toolRefs: ToolRef[];
+}>;
+
+/**
+ * Serialized form of FileEdit from localStorage.
+ * All fields are optional since localStorage data is unreliable.
+ * Timestamp is string | Date since it may be a JSON string or already parsed.
+ */
+type SerializedFileEdit = Partial<{
+  path: string;
+  action: string;
+  timestamp: string | Date;
+  linesAdded: number;
+  linesDeleted: number;
+}>;
 
 export const getUIContextScope = (): string => {
   if (typeof window === 'undefined') {
@@ -60,7 +89,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
 
     const parsed = JSON.parse(raw);
     const parsedMessages: Message[] = Array.isArray(parsed.messages)
-      ? parsed.messages.map((message: Record<string, unknown>) => ({
+      ? parsed.messages.map((message: SerializedMessage) => ({
           ...message,
           timestamp: parseDate(message?.timestamp),
           toolRefs: Array.isArray(message?.toolRefs) ? message.toolRefs : undefined,
@@ -74,7 +103,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       currentView: ['chat', 'editor', 'git', 'tasks', 'billing', 'team'].includes(parsed.currentView) ? parsed.currentView : 'chat',
       messages: parsedMessages,
       fileEdits: Array.isArray(parsed.fileEdits)
-        ? parsed.fileEdits.map((edit: Record<string, unknown>) => ({
+        ? parsed.fileEdits.map((edit: SerializedFileEdit) => ({
             ...edit,
             timestamp: parseDate(edit?.timestamp),
           }))

@@ -17,7 +17,7 @@ import { getTabWorkspacePath } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import type { AppState } from '../types/app';
 import { useLog } from '../utils/log';
-import type { LocalEventsProvider } from '../services/localEventsProvider';
+import type { EventsProvider } from '@sprout/events';
 import type { SproutEvent } from '../types/events';
 import type { AppStoreSetState } from '../contexts/AppStore';
 
@@ -27,7 +27,7 @@ interface RecentFile {
 }
 
 export interface UseAppInitializationOptions {
-  eventsProvider: LocalEventsProvider;
+  eventsProvider: EventsProvider;
   handleEvent: (event: SproutEvent) => void;
   connectionTimeoutRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   loadChatSessions: () => void;

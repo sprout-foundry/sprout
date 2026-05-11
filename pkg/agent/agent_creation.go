@@ -28,6 +28,113 @@ func isDebugEnvEnabled() bool {
 	}
 }
 
+// agentInitParams encapsulates the parameters needed to initialize an Agent
+// after the provider and client have been resolved.
+type agentInitParams struct {
+	client          api.ClientInterface
+	clientType      api.ClientType
+	systemPrompt    string
+	configManager   *configuration.Manager
+	workspaceRoot   string
+	debug           bool
+	interruptCtx    context.Context
+	interruptCancel context.CancelFunc
+	// isProduction indicates this is a production agent, not a test agent.
+	// Production agents have additional initialization steps (context limits,
+	// todo clearing, session cleanup, tool registry initialization).
+	isProduction bool
+}
+
+// initAgentFromResolvedProvider creates and initializes an Agent from resolved
+// provider parameters. This consolidates the common agent initialization logic
+// that was duplicated between test and production paths.
+func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
+	// Create sub-managers
+	stateMgr := NewAgentStateManager(params.debug)
+	outputMgr := NewAgentOutputManager()
+	securityMgr := NewAgentSecurityManager()
+	mcpMgr := NewAgentMCPManager()
+
+	// Construct the agent struct
+	agent := &Agent{
+		client:              params.client,
+		systemPrompt:        params.systemPrompt,
+		baseSystemPrompt:    params.systemPrompt,
+		maxIterations:       0,
+		clientType:          params.clientType,
+		debug:               params.debug,
+		configManager:       params.configManager,
+		shellCommandHistory: make(map[string]*ShellCommandResult),
+		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
+		interruptCtx:        params.interruptCtx,
+		interruptCancel:     params.interruptCancel,
+		workspaceRoot:       params.workspaceRoot,
+		state:               stateMgr,
+		output:              outputMgr,
+		security:            securityMgr,
+		mcpSub:              mcpMgr,
+	}
+
+	// Set up output router
+	router := NewOutputRouter(agent, nil)
+	agent.output.SetOutputRouter(router)
+
+	// Configure the optimizer with the LLM client
+	agent.state.GetOptimizer().SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
+		agent.PrintLineAsync(line)
+	})
+
+	// Initialize debug log file if debug enabled
+	if agent.debug {
+		if err := agent.initDebugLogger(); err != nil {
+			// Non-fatal: fall back to stdout debug
+			fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
+		}
+	}
+
+	// Production-only initialization steps
+	if params.isProduction {
+		// Initialize context limits based on model
+		agent.state.SetMaxContextTokens(agent.getModelContextLimit())
+		agent.state.SetCurrentContextTokens(0)
+		agent.state.SetContextWarningIssued(false)
+
+		// Clear old todos at session start
+		tools.TodoWrite([]tools.TodoItem{})
+
+		// Clean up old sessions (keep only most recent 20 for this working directory scope)
+		if err := cleanupMemorySessions(); err != nil && agent.debug {
+			fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
+		}
+
+		// Pre-initialize tool registry to avoid first-use overhead
+		if agent.debug {
+			agent.Logger().Info("Pre-initializing tool registry...")
+		}
+		InitializeToolRegistry()
+		if agent.debug {
+			agent.Logger().Info("Tool registry initialized")
+		}
+	}
+
+	// Load command history from configuration
+	agent.loadHistoryFromConfig()
+
+	// Set persona from environment if specified
+	if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
+		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
+	}
+
+	// Initialize change tracker
+	agent.changeTracker = NewChangeTracker(agent, "")
+	agent.changeTracker.Enable() // Start enabled by default
+
+	// Restore embedding index if previously enabled for this workspace
+	agent.RestoreEmbeddingIndex()
+
+	return agent, nil
+}
+
 // NewAgent creates a new agent with auto-detected provider
 func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")
@@ -102,58 +209,18 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		}
 		systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
-		stateMgr := NewAgentStateManager(isDebugEnvEnabled())
-		outputMgr := NewAgentOutputManager()
-		securityMgr := NewAgentSecurityManager()
-		mcpMgr := NewAgentMCPManager()
-
-		agent := &Agent{
-			client:              client,
-			systemPrompt:        systemPrompt,
-			baseSystemPrompt:    systemPrompt,
-			maxIterations:       0,
-			clientType:          clientType,
-			debug:               isDebugEnvEnabled(),
-			configManager:       configManager,
-			shellCommandHistory: make(map[string]*ShellCommandResult),
-			inputInjectionChan:  make(chan string, inputInjectionBufferSize),
-			interruptCtx:        context.Background(),
-			interruptCancel:     func() { /* no-op */ },
-			workspaceRoot:       workspaceRoot,
-			state:               stateMgr,
-			output:              outputMgr,
-			security:            securityMgr,
-			mcpSub:              mcpMgr,
-		}
-
-		router := NewOutputRouter(agent, nil)
-		agent.output.SetOutputRouter(router)
-
-		agent.state.GetOptimizer().SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-			agent.PrintLineAsync(line)
+		// Initialize agent using the helper
+		return initAgentFromResolvedProvider(agentInitParams{
+			client:          client,
+			clientType:      clientType,
+			systemPrompt:    systemPrompt,
+			configManager:   configManager,
+			workspaceRoot:   workspaceRoot,
+			debug:           isDebugEnvEnabled(),
+			interruptCtx:    context.Background(),
+			interruptCancel: func() { /* no-op */ },
+			isProduction:    false,
 		})
-
-		// Load command history from configuration
-		agent.loadHistoryFromConfig()
-		// Initialize debug log file if debug enabled
-		if agent.debug {
-			if err := agent.initDebugLogger(); err != nil {
-				fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
-			}
-		}
-
-		if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
-			agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
-		}
-
-		// Initialize change tracker
-		agent.changeTracker = NewChangeTracker(agent, "")
-		agent.changeTracker.Enable() // Start enabled by default
-
-		// Restore embedding index if previously enabled for this workspace
-		agent.RestoreEmbeddingIndex()
-
-		return agent, nil
 	}
 
 	// Non-interactive fast-fail: check provider availability before entering
@@ -305,83 +372,19 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	}
 	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
-	// Clear old todos at session start
-	tools.TodoWrite([]tools.TodoItem{})
-
-	// Clean up old sessions (keep only most recent 20 for this working directory scope).
-	if err := cleanupMemorySessions(); err != nil && debug {
-		fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
-	}
-
 	// Create interrupt context for the agent
 	interruptCtx, interruptCancel := context.WithCancel(context.Background())
 
-	stateMgr := NewAgentStateManager(debug)
-	outputMgr := NewAgentOutputManager()
-	securityMgr := NewAgentSecurityManager()
-	mcpMgr := NewAgentMCPManager()
-
-	agent := &Agent{
-		client:              client,
-		systemPrompt:        systemPrompt,
-		baseSystemPrompt:    systemPrompt,
-		maxIterations:       0,
-		clientType:          clientType,
-		debug:               debug,
-		configManager:       configManager,
-		shellCommandHistory: make(map[string]*ShellCommandResult),
-		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
-		interruptCtx:        interruptCtx,
-		interruptCancel:     interruptCancel,
-		workspaceRoot:       workspaceRoot,
-		state:               stateMgr,
-		output:              outputMgr,
-		security:            securityMgr,
-		mcpSub:              mcpMgr,
-	}
-
-	router := NewOutputRouter(agent, nil)
-	agent.output.SetOutputRouter(router)
-
-	agent.state.GetOptimizer().SetLLMClient(agent.client, agent.GetProvider(), func(line string) {
-		agent.PrintLineAsync(line)
+	// Initialize agent using the helper
+	return initAgentFromResolvedProvider(agentInitParams{
+		client:          client,
+		clientType:      clientType,
+		systemPrompt:    systemPrompt,
+		configManager:   configManager,
+		workspaceRoot:   workspaceRoot,
+		debug:           debug,
+		interruptCtx:    interruptCtx,
+		interruptCancel: interruptCancel,
+		isProduction:    true,
 	})
-
-	// Initialize debug log file if debug enabled
-	if debug {
-		if err := agent.initDebugLogger(); err != nil {
-			// Non-fatal: fall back to stdout debug
-			fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
-		}
-	}
-
-	// Initialize context limits based on model
-	agent.state.SetMaxContextTokens(agent.getModelContextLimit())
-	agent.state.SetCurrentContextTokens(0)
-	agent.state.SetContextWarningIssued(false)
-
-	// Initialize change tracker
-	agent.changeTracker = NewChangeTracker(agent, "")
-	agent.changeTracker.Enable() // Start enabled by default
-
-	// Pre-initialize tool registry to avoid first-use overhead
-	if debug {
-		agent.Logger().Info("Pre-initializing tool registry...")
-	}
-	InitializeToolRegistry()
-	if debug {
-		agent.Logger().Info("Tool registry initialized")
-	}
-
-	// Load command history from configuration
-	agent.loadHistoryFromConfig()
-
-	if persona := strings.TrimSpace(configuration.GetEnvSimple("PERSONA")); persona != "" {
-		agent.state.SetActivePersona(strings.ReplaceAll(strings.ToLower(persona), "-", "_"))
-	}
-
-	// Restore embedding index if previously enabled for this workspace
-	agent.RestoreEmbeddingIndex()
-
-	return agent, nil
 }

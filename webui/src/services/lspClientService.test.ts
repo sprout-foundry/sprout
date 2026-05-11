@@ -7,15 +7,15 @@
 
 // ── Mock modules before imports ───────────────────────────────────────
 
-jest.mock('./api', () => ({
+vi.mock('./api', () => ({
   ApiService: {
-    getInstance: jest.fn(),
+    getInstance: vi.fn(),
   },
 }));
 
-jest.mock('@codemirror/lsp-client', () => ({
-  LSPClient: jest.fn(),
-  languageServerExtensions: jest.fn(() => []),
+vi.mock('@codemirror/lsp-client', () => ({
+  LSPClient: vi.fn(),
+  languageServerExtensions: vi.fn(() => []),
 }));
 
 // ── Module under test ─────────────────────────────────────────────────
@@ -111,8 +111,8 @@ describe('LSP_SUPPORTED_LANGUAGES', () => {
 
 describe('createTransport', () => {
   let mockWsInstance: {
-    send: jest.Mock;
-    close: jest.Mock;
+    send: vi.Mock;
+    close: vi.Mock;
     onopen: (() => void) | null;
     onerror: (() => void) | null;
     onclose: (() => void) | null;
@@ -122,8 +122,8 @@ describe('createTransport', () => {
 
   beforeEach(() => {
     mockWsInstance = {
-      send: jest.fn(),
-      close: jest.fn(),
+      send: vi.fn(),
+      close: vi.fn(),
       onopen: null,
       onerror: null,
       onclose: null,
@@ -135,19 +135,19 @@ describe('createTransport', () => {
     const OriginalWebSocket = globalThis.WebSocket;
 
     // Mock the global WebSocket constructor while preserving constants
-    jest.spyOn(globalThis, 'WebSocket').mockImplementation(() => mockWsInstance as unknown as WebSocket);
+    vi.spyOn(globalThis, 'WebSocket').mockImplementation(() => mockWsInstance as unknown as WebSocket);
 
     // Restore WebSocket.OPEN, CLOSING, CLOSED constants that jest.mock removes
     (globalThis.WebSocket as unknown as { OPEN: number }).OPEN = OriginalWebSocket.OPEN;
     (globalThis.WebSocket as unknown as { CLOSING: number }).CLOSING = OriginalWebSocket.CLOSING;
     (globalThis.WebSocket as unknown as { CLOSED: number }).CLOSED = OriginalWebSocket.CLOSED;
 
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
-    (globalThis.WebSocket as jest.Mock).mockRestore();
+    vi.useRealTimers();
+    (globalThis.WebSocket as vi.Mock).mockRestore();
   });
 
   it('resolves with a transport object that has send, subscribe, unsubscribe, close', async () => {
@@ -196,7 +196,7 @@ describe('createTransport', () => {
     mockWsInstance.onopen!();
 
     const transport = await transportPromise;
-    const handler = jest.fn();
+    const handler = vi.fn();
     transport.subscribe(handler);
 
     // Simulate a message
@@ -212,7 +212,7 @@ describe('createTransport', () => {
     mockWsInstance.onopen!();
 
     const transport = await transportPromise;
-    const handler = jest.fn();
+    const handler = vi.fn();
     transport.subscribe(handler);
     transport.unsubscribe(handler);
 
@@ -251,7 +251,7 @@ describe('createTransport', () => {
     const transportPromise = createTransport('ws://localhost:8080/lsp');
 
     // Advance past the connection timeout (30s)
-    jest.advanceTimersByTime(30_000);
+    vi.advanceTimersByTime(30_000);
 
     await expect(transportPromise).rejects.toThrow('WebSocket connection timeout');
   });
@@ -265,7 +265,7 @@ describe('createTransport', () => {
   });
 
   it('calls onClose when WebSocket closes after connection', async () => {
-    const mockOnClose = jest.fn();
+    const mockOnClose = vi.fn();
     const transportPromise = createTransport('ws://localhost:8080/lsp', mockOnClose);
 
     mockWsInstance.readyState = 1;
@@ -274,7 +274,7 @@ describe('createTransport', () => {
     const transport = await transportPromise;
 
     // Subscribe a handler to ensure handlers.size > 0 (triggers onClose path)
-    const handler = jest.fn();
+    const handler = vi.fn();
     transport.subscribe(handler);
 
     // Simulate WebSocket close
@@ -290,7 +290,7 @@ describe('createTransport', () => {
     mockWsInstance.onopen!();
 
     const transport = await transportPromise;
-    const handler = jest.fn();
+    const handler = vi.fn();
     transport.subscribe(handler);
 
     // Simulate non-string data (e.g., binary)

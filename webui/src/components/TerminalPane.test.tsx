@@ -9,25 +9,25 @@ import TerminalPane from './TerminalPane';
 // ---------------------------------------------------------------------------
 
 const mockFitAddon = {
-  fit: jest.fn(),
+  fit: vi.fn(),
 };
 
 const mockTerm = {
-  hasSelection: jest.fn().mockReturnValue(false),
-  getSelection: jest.fn().mockReturnValue(''),
-  selectAll: jest.fn(),
-  clear: jest.fn(),
-  loadAddon: jest.fn(),
-  open: jest.fn(),
-  onData: jest.fn(),
-  focus: jest.fn(),
-  dispose: jest.fn(),
+  hasSelection: vi.fn().mockReturnValue(false),
+  getSelection: vi.fn().mockReturnValue(''),
+  selectAll: vi.fn(),
+  clear: vi.fn(),
+  loadAddon: vi.fn(),
+  open: vi.fn(),
+  onData: vi.fn(),
+  focus: vi.fn(),
+  dispose: vi.fn(),
   cols: 80,
   rows: 24,
   buffer: {
     active: {
       baseY: 0,
-      getLine: jest.fn().mockReturnValue(null),
+      getLine: vi.fn().mockReturnValue(null),
     },
   },
   options: {},
@@ -38,46 +38,46 @@ const mockTerm = {
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('@xterm/xterm', () => ({
-  Terminal: jest.fn(() => mockTerm),
+vi.mock('@xterm/xterm', () => ({
+  Terminal: vi.fn(() => mockTerm),
 }));
 
-jest.mock('@xterm/addon-fit', () => ({
-  FitAddon: jest.fn(() => mockFitAddon),
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: vi.fn(() => mockFitAddon),
 }));
 
-jest.mock('@xterm/addon-search', () => ({
-  SearchAddon: jest.fn(() => ({
-    findNext: jest.fn(),
-    findPrevious: jest.fn(),
-    clearDecorations: jest.fn(),
-    onDidChangeResults: jest.fn(() => ({ dispose: jest.fn() })),
-    dispose: jest.fn(),
+vi.mock('@xterm/addon-search', () => ({
+  SearchAddon: vi.fn(() => ({
+    findNext: vi.fn(),
+    findPrevious: vi.fn(),
+    clearDecorations: vi.fn(),
+    onDidChangeResults: vi.fn(() => ({ dispose: vi.fn() })),
+    dispose: vi.fn(),
   })),
 }));
 
 const mockService = {
-  sendRawInput: jest.fn(),
-  sendResize: jest.fn(),
-  onEvent: jest.fn(),
-  removeEvent: jest.fn(),
-  disconnect: jest.fn(),
-  connect: jest.fn(),
+  sendRawInput: vi.fn(),
+  sendResize: vi.fn(),
+  onEvent: vi.fn(),
+  removeEvent: vi.fn(),
+  disconnect: vi.fn(),
+  connect: vi.fn(),
 };
 
-jest.mock('../services/terminalWebSocket', () => ({
+vi.mock('../services/terminalWebSocket', () => ({
   TerminalWebSocketService: {
-    createInstance: jest.fn(() => mockService),
+    createInstance: vi.fn(() => mockService),
   },
 }));
 
-jest.mock('../contexts/ThemeContext', () => ({
-  useTheme: jest.fn(),
+vi.mock('../contexts/ThemeContext', () => ({
+  useTheme: vi.fn(),
 }));
 
-jest.mock('../utils/clipboard', () => {
+vi.mock('../utils/clipboard', () => {
   return {
-    copyToClipboard: jest.fn().mockResolvedValue(undefined),
+    copyToClipboard: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -87,8 +87,8 @@ jest.mock('../utils/clipboard', () => {
 
 Object.defineProperty(navigator, 'clipboard', {
   value: {
-    writeText: jest.fn().mockResolvedValue(undefined),
-    readText: jest.fn().mockResolvedValue(''),
+    writeText: vi.fn().mockResolvedValue(undefined),
+    readText: vi.fn().mockResolvedValue(''),
   },
   writable: true,
   configurable: true,
@@ -145,7 +145,7 @@ function setupMockLineWithUrl(url: string, urlStartCol: number, lineLength: numb
     if (lineIdx !== 0) return null;
     return {
       length: lineLength,
-      getCell: jest.fn().mockImplementation((col: number) => ({
+      getCell: vi.fn().mockImplementation((col: number) => ({
         getChars: () => {
           // If this cell falls in the URL range, return the corresponding char
           if (col >= urlStartCol && col < urlStartCol + url.length) {
@@ -223,7 +223,7 @@ describe.skip('TerminalPane context menu', () => {
     container.remove();
     // Clean up any leftover portal elements
     document.querySelectorAll('.context-menu').forEach((el) => el.remove());
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it.skip('context menu appears on right-click in the terminal pane content', async () => {
@@ -315,7 +315,7 @@ describe.skip('TerminalPane context menu', () => {
       y: 0,
       toJSON: () => ({}),
     } as DOMRect;
-    jest.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
+    vi.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
 
     // cellWidth = 800 / 80 = 10, cellHeight = 480 / 24 = 20
     // cellY = floor(clientY / cellHeight), want cellY = 0 → clientY < 20
@@ -496,7 +496,7 @@ describe.skip('TerminalPane context menu', () => {
       y: 0,
       toJSON: () => ({}),
     } as DOMRect;
-    jest.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
+    vi.spyOn(xtermContainer as HTMLElement, 'getBoundingClientRect').mockReturnValue(rect);
 
     const paneContent = container.querySelector('.terminal-pane-content');
     fireContextMenu(paneContent, 155, 10);
@@ -589,7 +589,7 @@ describe('TerminalPane wordSeparator', () => {
       root.unmount();
     });
     container.remove();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('passes wordSeparator option to Terminal constructor', async () => {

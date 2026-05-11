@@ -1,17 +1,25 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
-// ── Jest compatibility shim ────────────────────────────────────────────────
-// The test files use `jest.mock()` and `jest.fn()` — vitest doesn't provide
-// a `jest` global by default. This shim maps them to vitest equivalents so
-// existing test code continues to work without modification.
+// ── Vitest globals ──────────────────────────────────────────────────────────
+// The test files now use `vi.mock()`, `vi.fn()`, etc. directly.
+// This shim is kept as a safety net for any remaining `jest.*` references
+// in comments or edge cases. New test files should use `vi.*` exclusively.
 
-// @ts-expect-error — jest is a compatibility global
+// @ts-expect-error — jest is a compatibility global (deprecated shim)
 global.jest = {
   fn: vi.fn,
   mock: vi.mock,
   spyOn: vi.spyOn,
   clearAllMocks: vi.clearAllMocks,
+  restoreAllMocks: vi.restoreAllMocks,
+  useFakeTimers: vi.useFakeTimers,
+  useRealTimers: vi.useRealTimers,
+  advanceTimersByTime: vi.advanceTimersByTime,
+  runAllTimers: vi.advanceTimersToNextTimer,
+  resetModules: vi.resetModules,
+  requireActual: vi.importActual,
+  requireMock: vi.importMock,
 };
 
 // Mock window.matchMedia

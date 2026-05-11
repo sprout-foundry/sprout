@@ -6,10 +6,10 @@
 const mockCreateElement = () => ({ tagName: 'div', className: '', innerHTML: '', textContent: '' });
 const mockCreateSpan = () => ({ tagName: 'span', className: '', innerHTML: '', textContent: '' });
 
-jest.mock('@codemirror/view', () => ({
-  ViewPlugin: { fromClass: jest.fn((Class) => ({ type: 'Plugin', Class })) },
-  EditorView: { theme: jest.fn(() => []), dom: {}, coordsAtPos: jest.fn(), plugin: jest.fn() },
-  gutter: jest.fn(() => ({ type: 'Gutter' })),
+vi.mock('@codemirror/view', () => ({
+  ViewPlugin: { fromClass: vi.fn((Class) => ({ type: 'Plugin', Class })) },
+  EditorView: { theme: vi.fn(() => []), dom: {}, coordsAtPos: vi.fn(), plugin: vi.fn() },
+  gutter: vi.fn(() => ({ type: 'Gutter' })),
   GutterMarker: class MockGutterMarker {
     toDOM() {
       return mockCreateSpan();
@@ -28,28 +28,28 @@ jest.mock('@codemirror/view', () => ({
   },
 }));
 
-jest.mock('@codemirror/state', () => {
-  const mockDefine = jest.fn((config) => {
+vi.mock('@codemirror/state', () => {
+  const mockDefine = vi.fn((config) => {
     const facet = { type: 'Facet', config };
-    facet.of = jest.fn((value) => ({ type: 'FacetOf', value }));
+    facet.of = vi.fn((value) => ({ type: 'FacetOf', value }));
     return facet;
   });
   return {
-    StateField: { define: jest.fn((config) => ({ type: 'StateField', config })) },
+    StateField: { define: vi.fn((config) => ({ type: 'StateField', config })) },
     Facet: { define: mockDefine },
-    StateEffect: { define: jest.fn(() => ({ type: 'StateEffect' })) },
-    RangeSetBuilder: jest.fn(() => ({ add: jest.fn().mockReturnThis(), finish: jest.fn().mockReturnValue([]) })),
+    StateEffect: { define: vi.fn(() => ({ type: 'StateEffect' })) },
+    RangeSetBuilder: vi.fn(() => ({ add: vi.fn().mockReturnThis(), finish: vi.fn().mockReturnValue([]) })),
   };
 });
 
-jest.mock('../services/api', () => ({
+vi.mock('../services/api', () => ({
   ApiService: {
-    getInstance: jest.fn(() => ({ getSemanticCodeActions: jest.fn().mockResolvedValue({ code_actions: [] }) })),
+    getInstance: vi.fn(() => ({ getSemanticCodeActions: vi.fn().mockResolvedValue({ code_actions: [] }) })),
   },
 }));
 
-jest.mock('./languageRegistry', () => ({ resolveLanguageId: jest.fn() }));
-jest.mock('../utils/log', () => ({ debugLog: jest.fn() }));
+vi.mock('./languageRegistry', () => ({ resolveLanguageId: vi.fn() }));
+vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
 
 import {
   computeStaticActions,

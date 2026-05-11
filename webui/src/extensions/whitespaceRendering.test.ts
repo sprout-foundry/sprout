@@ -11,20 +11,20 @@ import { findWhitespacePositions, type WhitespaceRenderingMode } from './whitesp
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   Decoration: {
-    mark: jest.fn(() => ({ range: jest.fn() })),
-    replace: jest.fn(() => ({ range: jest.fn() })),
+    mark: vi.fn(() => ({ range: vi.fn() })),
+    replace: vi.fn(() => ({ range: vi.fn() })),
     none: [],
-    set: jest.fn(),
-    widget: jest.fn(),
+    set: vi.fn(),
+    widget: vi.fn(),
   },
-  ViewPlugin: { fromClass: jest.fn() },
-  EditorView: { baseTheme: jest.fn(() => []) },
+  ViewPlugin: { fromClass: vi.fn() },
+  EditorView: { baseTheme: vi.fn(() => []) },
   WidgetType: class {},
 }));
 
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
 // ── findWhitespacePositions tests ───────────────────────────────
 

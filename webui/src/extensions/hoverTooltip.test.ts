@@ -7,37 +7,37 @@
 
 // ── Mock modules before imports ───────────────────────────────────────
 
-jest.mock('@codemirror/view', () => ({
-  hoverTooltip: jest.fn((source, options) => ({ type: 'Extension', source, options })),
+vi.mock('@codemirror/view', () => ({
+  hoverTooltip: vi.fn((source, options) => ({ type: 'Extension', source, options })),
   EditorView: {
-    theme: jest.fn(() => []),
+    theme: vi.fn(() => []),
   },
   keymap: {
-    of: jest.fn(() => []),
+    of: vi.fn(() => []),
   },
 }));
 
-jest.mock('../services/api', () => ({
+vi.mock('../services/api', () => ({
   ApiService: {
-    getInstance: jest.fn(() => ({
-      getSemanticHover: jest.fn(),
+    getInstance: vi.fn(() => ({
+      getSemanticHover: vi.fn(),
     })),
   },
 }));
 
-jest.mock('./languageRegistry', () => ({
-  resolveLanguageId: jest.fn(),
+vi.mock('./languageRegistry', () => ({
+  resolveLanguageId: vi.fn(),
 }));
 
-jest.mock('../utils/log', () => ({
-  debugLog: jest.fn(),
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
 }));
 
 // Mock LSPClientService — it imports @codemirror/lsp-client (ESM-only)
-jest.mock('../services/lspClientService', () => ({
+vi.mock('../services/lspClientService', () => ({
   LSPClientService: class {
     static get lspClientService() {
-      return { isSupported: jest.fn(() => false) };
+      return { isSupported: vi.fn(() => false) };
     }
   },
 }));
@@ -195,7 +195,7 @@ describe('createHoverTooltipExtension', () => {
   const mockDebugLog = require('../utils/log').debugLog;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // -------------------------------------------------------------------------
@@ -235,7 +235,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 10 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 10 })),
         },
       },
     };
@@ -254,7 +254,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 10 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 10 })),
         },
       },
     };
@@ -279,7 +279,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 13 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 13 })),
         },
       },
     };
@@ -295,7 +295,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'number' },
       }),
     });
@@ -306,7 +306,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 21 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 21 })),
         },
       },
     };
@@ -333,7 +333,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         error: 'some error',
       }),
     });
@@ -344,7 +344,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -359,7 +359,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: '   ' },
       }),
     });
@@ -370,7 +370,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -385,7 +385,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({}),
+      getSemanticHover: vi.fn().mockResolvedValue({}),
     });
 
     const extension = createHoverTooltipExtension(getFilePath, getContent);
@@ -394,7 +394,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -414,7 +414,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'number' },
       }),
     });
@@ -425,7 +425,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -452,7 +452,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockRejectedValue(new Error('network error')),
+      getSemanticHover: vi.fn().mockRejectedValue(new Error('network error')),
     });
 
     const extension = createHoverTooltipExtension(getFilePath, getContent);
@@ -461,7 +461,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -482,7 +482,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'string' },
       }),
     });
@@ -495,7 +495,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn((pos) => {
+          lineAt: vi.fn((pos) => {
             // lineAt is called with the position being hovered
             if (pos === 7) return { number: 2, from: 6, to: 11 };
             return { number: 1, from: 0, to: 5 };
@@ -526,7 +526,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'javascript' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'object' },
       }),
     });
@@ -537,7 +537,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -552,7 +552,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'javascript-jsx' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'JSXElement' },
       }),
     });
@@ -563,7 +563,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 6 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 6 })),
         },
       },
     };
@@ -578,7 +578,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'go' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'package main' },
       }),
     });
@@ -589,7 +589,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 12 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 12 })),
         },
       },
     };
@@ -604,7 +604,7 @@ describe('createHoverTooltipExtension', () => {
 
     mockResolveLanguageId.mockReturnValue({ languageId: 'typescript-jsx' });
     MockApiService.getInstance.mockReturnValue({
-      getSemanticHover: jest.fn().mockResolvedValue({
+      getSemanticHover: vi.fn().mockResolvedValue({
         hover: { contents: 'React.FC' },
       }),
     });
@@ -615,7 +615,7 @@ describe('createHoverTooltipExtension', () => {
     const mockView = {
       state: {
         doc: {
-          lineAt: jest.fn(() => ({ number: 1, from: 0, to: 6 })),
+          lineAt: vi.fn(() => ({ number: 1, from: 0, to: 6 })),
         },
       },
     };

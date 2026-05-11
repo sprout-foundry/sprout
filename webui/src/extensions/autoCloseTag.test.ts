@@ -7,9 +7,9 @@
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/state', () => {
-  const mockCompartment = jest.fn(() => ({
-    reconfigure: jest.fn(() => ({ type: 'StateEffect' })),
+vi.mock('@codemirror/state', () => {
+  const mockCompartment = vi.fn(() => ({
+    reconfigure: vi.fn(() => ({ type: 'StateEffect' })),
   }));
 
   return {
@@ -18,22 +18,22 @@ jest.mock('@codemirror/state', () => {
   };
 });
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   EditorView: {
     updateListener: {
-      of: jest.fn(() => ({ type: 'UpdateListener' })),
+      of: vi.fn(() => ({ type: 'UpdateListener' })),
     },
   },
 }));
 
-jest.mock('@codemirror/language', () => ({
+vi.mock('@codemirror/language', () => ({
   indentUnit: {
-    combine: jest.fn(),
+    combine: vi.fn(),
   },
 }));
 
-jest.mock('../utils/editorHotkeys', () => ({
-  getLineIndent: jest.fn((text: string) => {
+vi.mock('../utils/editorHotkeys', () => ({
+  getLineIndent: vi.fn((text: string) => {
     const match = text.match(/^(\s*)/);
     return match ? match[1] : '';
   }),
@@ -253,7 +253,7 @@ describe('createAutoCloseTagCompartment', () => {
 
   it('returns a value that can be used in reconfigureAutoCloseTag', () => {
     const compartment = createAutoCloseTagCompartment();
-    const view = { dispatch: jest.fn() };
+    const view = { dispatch: vi.fn() };
     // Should not throw
     expect(() => {
       reconfigureAutoCloseTag(compartment, view as any, 'html');
@@ -295,7 +295,7 @@ describe('reconfigureAutoCloseTag', () => {
 
   it('does not throw when called with valid parameters', () => {
     const compartment = createAutoCloseTagCompartment();
-    const view = { dispatch: jest.fn() };
+    const view = { dispatch: vi.fn() };
     expect(() => {
       reconfigureAutoCloseTag(compartment, view as any, 'html');
     }).not.toThrow();
@@ -303,7 +303,7 @@ describe('reconfigureAutoCloseTag', () => {
 
   it('does not throw when called with null language ID', () => {
     const compartment = createAutoCloseTagCompartment();
-    const view = { dispatch: jest.fn() };
+    const view = { dispatch: vi.fn() };
     expect(() => {
       reconfigureAutoCloseTag(compartment, view as any, null);
     }).not.toThrow();

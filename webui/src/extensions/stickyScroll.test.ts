@@ -14,25 +14,25 @@ import type { SymbolInfo } from './stickyScroll';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   WidgetType: class {},
-  Decoration: { widget: jest.fn(), none: [], set: jest.fn() },
-  ViewPlugin: { fromClass: jest.fn(() => []) },
-  EditorView: { baseTheme: jest.fn(() => []) },
+  Decoration: { widget: vi.fn(), none: [], set: vi.fn() },
+  ViewPlugin: { fromClass: vi.fn(() => []) },
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
-jest.mock('@codemirror/state', () => ({
-  StateField: { define: jest.fn(() => ({})) },
-  StateEffect: { define: jest.fn(() => ({})) },
+vi.mock('@codemirror/state', () => ({
+  StateField: { define: vi.fn(() => ({})) },
+  StateEffect: { define: vi.fn(() => ({})) },
 }));
 
 // Mock the symbolUtils module.
 // Use requireActual to preserve the real findSymbolScopeEnd implementation
 // (avoids duplicating the brace-counting logic in the mock), while replacing
-// extractSymbols and getEnclosingSymbols with jest.fn() for controlled testing.
-jest.mock('../utils/symbolUtils', () => ({
-  ...jest.requireActual('../utils/symbolUtils'),
-  extractSymbols: jest.fn(),
-  getEnclosingSymbols: jest.fn(),
+// extractSymbols and getEnclosingSymbols with vi.fn() for controlled testing.
+vi.mock('../utils/symbolUtils', () => ({
+  ...vi.importActual('../utils/symbolUtils'),
+  extractSymbols: vi.fn(),
+  getEnclosingSymbols: vi.fn(),
 }));
 
 // ── findEnclosingScopes tests ─────────────────────────────────────
@@ -316,7 +316,7 @@ describe('computeStickyScopes', () => {
   const { getEnclosingSymbols } = require('../utils/symbolUtils');
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('returns empty array for empty content', () => {

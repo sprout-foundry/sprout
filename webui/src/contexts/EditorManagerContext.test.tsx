@@ -8,29 +8,29 @@ import { EditorManagerProvider, useEditorManager } from './EditorManagerContext'
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/fileAccess', () => ({
-  writeFileWithConsent: jest.fn().mockResolvedValue({
+vi.mock('../services/fileAccess', () => ({
+  writeFileWithConsent: vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({ message: 'File saved successfully' }),
   }),
 }));
 
 // Mock SproutAdapterContext to provide useSproutFetch
-jest.mock('./SproutAdapterContext', () => ({
-  ...jest.requireActual('./SproutAdapterContext'),
+vi.mock('./SproutAdapterContext', () => ({
+  ...vi.importActual('./SproutAdapterContext'),
   useSproutFetch: () =>
-    jest.fn().mockResolvedValue({
+    vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ message: 'File saved successfully' }),
     }),
 }));
 
 // EditorManagerProvider's hooks use useLog() which requires NotificationContext.
-jest.mock('../services/formatter', () => ({
-  formatWithPrettier: jest.fn().mockResolvedValue(undefined),
-  getPrettierParser: jest.fn().mockReturnValue(null),
+vi.mock('../services/formatter', () => ({
+  formatWithPrettier: vi.fn().mockResolvedValue(undefined),
+  getPrettierParser: vi.fn().mockReturnValue(null),
 }));
-jest.mock('./NotificationContext', () => {
+vi.mock('./NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -58,7 +58,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   latestContext = undefined;
   // Ensure the welcome buffer is NOT created in tests so they run
   // against the same initial state (only buffer-chat) as before.

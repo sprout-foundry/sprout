@@ -5,9 +5,50 @@
 import type { WorkspaceResponse } from './types';
 
 function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
+  const parseBool = (v: unknown): boolean => v === true || v === 'true';
+  const parseStrArray = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.filter((x) => typeof x === 'string');
+    return [];
+  };
+
+  const suggested_projects = ((): Array<{ path: string; name: string; markers: string[] }> => {
+    if (!Array.isArray(data.suggested_projects)) return [];
+    return data.suggested_projects.filter(
+      (p) => typeof p === 'object' && p != null && 'path' in p,
+    ).map((p) => ({
+      path: String((p as Record<string, unknown>).path ?? ''),
+      name: String((p as Record<string, unknown>).name ?? ''),
+      markers: parseStrArray((p as Record<string, unknown>).markers),
+    }));
+  })();
+
+  const recent_workspaces = ((): Array<{
+    path: string;
+    name: string;
+    last_used: string;
+    markers: string[];
+    session_count: number;
+  }> => {
+    if (!Array.isArray(data.recent_workspaces)) return [];
+    return data.recent_workspaces.filter(
+      (w) => typeof w === 'object' && w != null && 'path' in w,
+    ).map((w) => ({
+      path: String((w as Record<string, unknown>).path ?? ''),
+      name: String((w as Record<string, unknown>).name ?? ''),
+      last_used: String((w as Record<string, unknown>).last_used ?? ''),
+      markers: parseStrArray((w as Record<string, unknown>).markers),
+      session_count: Number((w as Record<string, unknown>).session_count ?? 0),
+    }));
+  })();
+
   return {
     daemon_root: String(data.daemon_root ?? ''),
     workspace_root: String(data.workspace_root ?? ''),
+    is_project: parseBool(data.is_project),
+    project_markers: parseStrArray(data.project_markers),
+    needs_workspace_selection: parseBool(data.needs_workspace_selection),
+    suggested_projects,
+    recent_workspaces,
     ...(data.ssh_context != null && typeof data.ssh_context === 'object'
       ? { ssh_context: data.ssh_context as WorkspaceResponse['ssh_context'] }
       : {}),

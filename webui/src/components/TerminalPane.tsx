@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { X, TriangleAlert, Terminal } from 'lucide-react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { useTheme } from '../contexts/ThemeContext';
@@ -358,6 +358,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   },
 );
 
-TerminalPane.displayName = 'TerminalPane';
+const TerminalPaneComponent = React.memo(TerminalPane);
+TerminalPaneComponent.displayName = 'TerminalPane';
 
-export default TerminalPane;
+export default TerminalPaneComponent;

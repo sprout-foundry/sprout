@@ -29,7 +29,18 @@
 // should be handled by separate layers.
 package tools
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// pipeToShellPattern matches pipe-to-shell patterns that can execute arbitrary code.
+// Matches: | followed by optional whitespace, optional path prefix (e.g., /bin/, /usr/bin/),
+// optional "env" wrapper, then shell/script interpreter name.
+// The shell name must be followed by whitespace, shell metacharacters (;, |, &), or end of string.
+// Examples matched: |bash, | bash, |  bash, | /bin/bash, | /usr/bin/env bash, |zsh, |bash -c 'cmd'
+// NOT matched: |sort, |shasum, |shfmt (shell name must be followed by a valid boundary)
+var pipeToShellPattern = regexp.MustCompile(`\|\s*(?:[^\s|&;]+/\s*)*(?:env\s+)?(?:bash|zsh|dash|fish|ksh|csh|tcsh|python[23]?|perl|ruby|node|sh)(?:\s|[;&|]|$)`)
 
 // SecurityRisk represents the risk level of a tool call
 type SecurityRisk int
@@ -149,12 +160,11 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 	// Check for pipe-to-shell patterns (case-insensitive to prevent bypass).
 	// Strip quoted sections first to avoid false positives from | characters
 	// inside grep patterns, regex alternation, etc. (e.g., grep "a|b|c" | head).
+	// Use regex to handle any whitespace and multiple shell interpreters.
 	cmdLower := strings.ToLower(cmd)
 	stripped := stripQuotedSections(cmdLower)
-	for _, pipe := range []string{"| bash", "| sh", "| /bin/bash", "| /bin/sh", "|bash", "|sh", "|/bin/bash", "|/bin/sh"} {
-		if strings.Contains(stripped, pipe) {
-			return []SecurityRisk{SecurityDangerous}
-		}
+	if pipeToShellPattern.MatchString(stripped) {
+		return []SecurityRisk{SecurityDangerous}
 	}
 
 	// Split on &&, ||, ;, | but respect quotes

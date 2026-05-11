@@ -62,7 +62,7 @@ export function useChatSessions({
       if (activeChatId) {
         try {
           const switchResp = await switchChatSession(activeChatId);
-          initialMessages = switchResp.chat_session.messages
+          initialMessages = (switchResp.chat_session.messages ?? [])
             .filter((m) => m.role === 'user' || m.role === 'assistant')
             .map((m, i) => ({
               id: `chat-${activeChatId}-${i}`,
@@ -162,7 +162,7 @@ export function useChatSessions({
       // Use backend active_query as the authoritative source of truth for
       // isProcessing — it knows whether the query actually completed, even
       // if we missed the query_completed WebSocket event while on another chat.
-      const backendIsActive = !!(response.chat_session as Record<string, unknown>).active_query;
+      const backendIsActive = response.chat_session.active_query;
 
       setState((prev) => {
         // Only update messages if backend has equal or more messages than what's
@@ -172,8 +172,8 @@ export function useChatSessions({
         const useBackendMessages = backendMessages.length >= prev.messages.length;
         const finalIsProcessing = backendIsActive;
         activeRequestsRef.current = finalIsProcessing ? 1 : 0;
-        const backendProvider = (response.chat_session as Record<string, unknown>).provider as string | undefined;
-        const backendModel = (response.chat_session as Record<string, unknown>).model as string | undefined;
+        const backendProvider = response.chat_session.provider;
+        const backendModel = response.chat_session.model;
         return {
           
           activeChatId: response.active_chat_id,
@@ -306,7 +306,7 @@ export function useChatSessions({
             timestamp: new Date(),
             ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
           }));
-        const backendIsActive = !!(response.chat_session as Record<string, unknown>).active_query;
+        const backendIsActive = response.chat_session.active_query;
         setState((prev) => ({
           
           messages: backendMessages,
@@ -349,7 +349,7 @@ export function useChatSessions({
   const createChatInWorktree = useCallback(async (branch: string, baseRef?: string, name?: string, autoSwitch?: boolean): Promise<string | null> => {
     try {
       const response = await createChatSessionInWorktree({ branch, base_ref: baseRef, name, auto_switch_workspace: autoSwitch });
-      const newId = (response.chat_session as Record<string, unknown>).id as string;
+      const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
       setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
       

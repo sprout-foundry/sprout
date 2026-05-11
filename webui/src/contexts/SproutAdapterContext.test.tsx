@@ -8,7 +8,7 @@ import { SproutAdapterProvider, useSproutAdapter, useSproutFetch } from './Sprou
 import type { APIAdapter } from '../services/apiAdapter';
 
 // Mock the apiAdapter module to control singleton state in tests
-jest.mock('../services/apiAdapter', () => {
+vi.mock('../services/apiAdapter', () => {
   let mockAdapter: APIAdapter | null = null;
 
   return {
@@ -23,12 +23,12 @@ jest.mock('../services/apiAdapter', () => {
 });
 
 // Mock the clientSession module for the clientFetch tests
-jest.mock('../services/clientSession', () => {
-  const actual = jest.requireActual('../services/clientSession');
+vi.mock('../services/clientSession', () => {
+  const actual = vi.importActual('../services/clientSession');
   return {
     ...actual,
-    clientFetch: jest.fn(),
-    getWebUIClientId: jest.fn(() => 'test-client-id'),
+    clientFetch: vi.fn(),
+    getWebUIClientId: vi.fn(() => 'test-client-id'),
     WEBUI_CLIENT_ID_HEADER: 'X-Sprout-Client-ID',
     __esModule: true,
   };
@@ -43,7 +43,7 @@ import { clientFetch, getWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../servic
 // ---------------------------------------------------------------------------
 
 function createMockAdapter(overrides: Partial<APIAdapter> = {}): APIAdapter {
-  const mockFetch = jest.fn().mockResolvedValue({
+  const mockFetch = vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ success: true }),
   } as Response);
@@ -51,7 +51,7 @@ function createMockAdapter(overrides: Partial<APIAdapter> = {}): APIAdapter {
   return {
     name: 'TestAdapter',
     fetch: mockFetch,
-    getWebSocketURL: jest.fn().mockReturnValue(null),
+    getWebSocketURL: vi.fn().mockReturnValue(null),
     requiresBackendHealthCheck: false,
     fileOpsViaAPI: true,
     showOnboarding: true,
@@ -85,7 +85,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   latestAdapterContext = undefined;
   latestFetchFn = undefined;
 
@@ -145,7 +145,7 @@ function requireCtx(): APIAdapter {
 describe('useSproutAdapter', () => {
   it('throws an error when used outside of SproutAdapterProvider', () => {
     // Suppress the expected console.error from React when the component throws
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // Render TestConsumer WITHOUT the provider — the hook should throw
     expect(() => {
@@ -204,7 +204,7 @@ describe('useSproutAdapter', () => {
 
 describe('useSproutFetch', () => {
   it('throws an error when used outside of SproutAdapterProvider', () => {
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     function FetchConsumer() {
       latestFetchFn = useSproutFetch();
@@ -228,7 +228,7 @@ describe('useSproutFetch', () => {
   });
 
   it('falls back to clientFetch when no adapter is installed', async () => {
-    const clientFetchSpy = jest.spyOn({ clientFetch }, 'clientFetch');
+    const clientFetchSpy = vi.spyOn({ clientFetch }, 'clientFetch');
     renderProvider();
 
     const fn = fetchFn();
@@ -244,7 +244,7 @@ describe('useSproutFetch', () => {
 
   it('delegates to adapter.fetch when adapter is installed', async () => {
     const adapter = createMockAdapter({ name: 'CloudAdapter' });
-    const adapterFetchSpy = jest.spyOn(adapter, 'fetch');
+    const adapterFetchSpy = vi.spyOn(adapter, 'fetch');
     installAdapter(adapter);
 
     renderProvider();
@@ -268,7 +268,7 @@ describe('useSproutFetch', () => {
   it('always sets the X-Sprout-Client-ID header', async () => {
     const adapter = createMockAdapter({ name: 'HeaderAdapter' });
     const capturedHeaders: Headers[] = [];
-    adapter.fetch = jest.fn().mockImplementation(async (input, init) => {
+    adapter.fetch = vi.fn().mockImplementation(async (input, init) => {
       capturedHeaders.push(init?.headers as Headers);
       return { ok: true } as Response;
     });
@@ -286,7 +286,7 @@ describe('useSproutFetch', () => {
   });
 
   it('merges custom headers with client ID header when no adapter', async () => {
-    const clientFetchSpy = jest.spyOn({ clientFetch }, 'clientFetch').mockResolvedValue({ ok: true } as Response);
+    const clientFetchSpy = vi.spyOn({ clientFetch }, 'clientFetch').mockResolvedValue({ ok: true } as Response);
 
     renderProvider();
 
@@ -318,7 +318,7 @@ describe('useSproutFetch', () => {
   it('merges custom headers with client ID header when adapter is installed', async () => {
     const capturedHeaders: Headers[] = [];
     const adapter = createMockAdapter({ name: 'MergeHeaderAdapter' });
-    adapter.fetch = jest.fn().mockImplementation(async (input, init) => {
+    adapter.fetch = vi.fn().mockImplementation(async (input, init) => {
       capturedHeaders.push(init?.headers as Headers);
       return { ok: true } as Response;
     });
@@ -345,7 +345,7 @@ describe('useSproutFetch', () => {
 
   it('propagates fetch errors correctly', async () => {
     const adapter = createMockAdapter({ name: 'ErrorAdapter' });
-    adapter.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+    adapter.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
     installAdapter(adapter);
 
     renderProvider();

@@ -11,18 +11,18 @@ import { computeModifiedLines } from './unsavedLineHighlight';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/state', () => ({
-  StateEffect: { define: jest.fn() },
-  StateField: { define: jest.fn() },
+vi.mock('@codemirror/state', () => ({
+  StateEffect: { define: vi.fn() },
+  StateField: { define: vi.fn() },
 }));
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   Decoration: {
-    line: jest.fn(() => ({ range: jest.fn() })),
+    line: vi.fn(() => ({ range: vi.fn() })),
     none: [],
-    set: jest.fn(),
+    set: vi.fn(),
   },
-  ViewPlugin: { fromClass: jest.fn() },
-  EditorView: { baseTheme: jest.fn(() => []) },
+  ViewPlugin: { fromClass: vi.fn() },
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
 
 // ── computeModifiedLines tests ──────────────────────────────────────

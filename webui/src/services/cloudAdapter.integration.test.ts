@@ -15,7 +15,7 @@ import { CloudAdapter, type CloudAdapterConfig } from './cloudAdapter';
 import { CLOUD_ENDPOINTS, getEndpointsByCategory, type CloudEndpoint } from './cloudEndpointRegistry';
 
 // Mock clientSession module
-jest.mock('./clientSession', () => ({
+vi.mock('./clientSession', () => ({
   WEBUI_CLIENT_ID_HEADER: 'x-webui-client-id',
   getWebUIClientId: () => 'test-client-id-123',
 }));
@@ -100,7 +100,7 @@ if (typeof Request === 'undefined') {
 describe('CloudAdapter Integration Tests', () => {
   let adapter: CloudAdapter;
   let mockConfig: CloudAdapterConfig;
-  let mockFetch: jest.Mock;
+  let mockFetch: vi.Mock;
 
   beforeEach(() => {
     mockConfig = {
@@ -110,12 +110,12 @@ describe('CloudAdapter Integration Tests', () => {
     };
 
     adapter = new CloudAdapter(mockConfig);
-    mockFetch = jest.fn();
+    mockFetch = vi.fn();
     global.fetch = mockFetch;
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // =========================================================================

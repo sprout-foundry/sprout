@@ -18,7 +18,7 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
 });
 
 // ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ let mountPoint: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mountPoint = document.createElement('div');
   document.body.appendChild(mountPoint);
 });
@@ -69,7 +69,7 @@ function renderMenu(
     zIndex,
     children = <button className="context-menu-item">Item 1</button>,
   } = props;
-  const onClose = jest.fn();
+  const onClose = vi.fn();
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {
@@ -192,7 +192,7 @@ describe('ContextMenu', () => {
     // Mock getBoundingClientRect to return a rect that overflows the viewport.
     // The menu is positioned at (190, 190) via inline style, and the mock
     // reports it as 180px wide and 100px tall, so right=370 > 200 and bottom=290 > 200.
-    Element.prototype.getBoundingClientRect = jest.fn(() => ({
+    Element.prototype.getBoundingClientRect = vi.fn(() => ({
       left: 190,
       top: 190,
       width: 180,
@@ -237,8 +237,8 @@ describe('ContextMenu', () => {
   });
 
   test('multiple independent menus can be open simultaneously', () => {
-    const onClose1 = jest.fn();
-    const onClose2 = jest.fn();
+    const onClose1 = vi.fn();
+    const onClose2 = vi.fn();
 
     // renderMenu creates a root — use it to render two menus via Fragment
     renderMenu();

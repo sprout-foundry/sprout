@@ -11,7 +11,7 @@ import GoToSymbolOverlay from './GoToSymbolOverlay';
 // React 18 compat: suppress createRoot warning for ReactDOM.render
 const originalError = console.error;
 beforeAll(() => {
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   console.error = (...args: any[]) => {
     if (typeof args[0] === 'string' && args[0].includes('ReactDOM.render is no longer supported')) return;
     originalError.call(console, ...args);
@@ -38,8 +38,8 @@ function renderOverlay(props: {
     visible = true,
     content = '',
     fileExtension = '.go',
-    onSelectSymbol = jest.fn(),
-    onClose = jest.fn(),
+    onSelectSymbol = vi.fn(),
+    onClose = vi.fn(),
   } = props;
 
   let _component: GoToSymbolOverlay | null = null;
@@ -591,7 +591,7 @@ describe('GoToSymbolOverlay component', () => {
   });
 
   it('calls onSelectSymbol with correct line when item is clicked', () => {
-    const onSelectSymbol = jest.fn();
+    const onSelectSymbol = vi.fn();
     const content = 'func FirstFunc() {}\nfunc SecondFunc() {}\n';
     const view = renderOverlay({
       visible: true,
@@ -611,7 +611,7 @@ describe('GoToSymbolOverlay component', () => {
   });
 
   it('calls onClose when Escape is pressed', () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
     const content = 'func Foo() {}\n';
     const view = renderOverlay({
       visible: true,
@@ -633,7 +633,7 @@ describe('GoToSymbolOverlay component', () => {
   });
 
   it('keyboard navigation: ArrowDown, ArrowUp, Enter work', () => {
-    const onSelectSymbol = jest.fn();
+    const onSelectSymbol = vi.fn();
     const content = 'func Alpha() {}\nfunc Beta() {}\nfunc Gamma() {}\n';
     const view = renderOverlay({
       visible: true,

@@ -35,6 +35,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		})
 	}
 
+	// Wrap with auth token middleware for write endpoints
+	handler = authTokenMiddleware(ws.authToken)(handler)
+
 	ws.server = &http.Server{
 		Addr:    formatListenAddr(ws.bindAddr, ws.port),
 		Handler: handler,

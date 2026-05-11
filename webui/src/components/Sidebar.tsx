@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
 import type { SproutInstance } from '../services/api';
 import { useEditorManager } from '../contexts/EditorManagerContext';
@@ -473,4 +473,4 @@ function Sidebar({
   );
 }
 
-export default Sidebar;
+export default React.memo(Sidebar);

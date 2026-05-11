@@ -82,7 +82,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	var todoBefore []tools.TodoItem
 	if normalizedToolName == "TodoWrite" {
-		todoBefore = tools.TodoRead()
+		todoBefore = te.agent.GetTodoManager().Read()
 	}
 
 	// Generate a tool call ID if empty to prevent sanitization from dropping the result
@@ -224,7 +224,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	}
 
 	if err == nil && normalizedToolName == "TodoWrite" {
-		te.emitTodoChecklistUpdate(todoBefore, tools.TodoRead())
+		te.emitTodoChecklistUpdate(todoBefore, te.agent.GetTodoManager().Read())
 	}
 
 	// Apply model-specific constraints (truncation for fetch_url, etc.)

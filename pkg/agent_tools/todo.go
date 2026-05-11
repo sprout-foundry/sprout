@@ -19,17 +19,19 @@ type TodoManager struct {
 	mutex sync.RWMutex
 }
 
-var globalTodoManager = &TodoManager{
-	items: make([]TodoItem, 0),
+// NewTodoManager creates a new TodoManager instance.
+func NewTodoManager() *TodoManager {
+	return &TodoManager{
+		items: make([]TodoItem, 0),
+	}
 }
 
-// TodoWrite creates and manages a structured task list for the current session
-func TodoWrite(todos []TodoItem) string {
-	globalTodoManager.mutex.Lock()
-	defer globalTodoManager.mutex.Unlock()
+// Write replaces all todo items with the new list and returns a status message.
+func (tm *TodoManager) Write(todos []TodoItem) string {
+	tm.mutex.Lock()
+	defer tm.mutex.Unlock()
 
-	// Replace all items with the new list
-	globalTodoManager.items = todos
+	tm.items = todos
 
 	if len(todos) == 0 {
 		return "Todo list cleared"
@@ -37,18 +39,12 @@ func TodoWrite(todos []TodoItem) string {
 	return fmt.Sprintf("Todo list updated with %d items", len(todos))
 }
 
-// TodoRead returns the current todo list
-func TodoRead() []TodoItem {
-	globalTodoManager.mutex.RLock()
-	defer globalTodoManager.mutex.RUnlock()
+// Read returns a copy of the current todo list.
+func (tm *TodoManager) Read() []TodoItem {
+	tm.mutex.RLock()
+	defer tm.mutex.RUnlock()
 
-	// Return a copy
-	result := make([]TodoItem, len(globalTodoManager.items))
-	copy(result, globalTodoManager.items)
+	result := make([]TodoItem, len(tm.items))
+	copy(result, tm.items)
 	return result
-}
-
-// GetTodoListCompact returns a compact representation of the todo list
-func GetTodoListCompact() []TodoItem {
-	return TodoRead()
 }

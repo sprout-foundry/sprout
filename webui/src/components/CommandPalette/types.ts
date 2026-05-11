@@ -51,4 +51,3 @@ export interface PaletteResult {
   symbolKind?: SymbolKind;
   scopePath?: string;
 }
-

@@ -101,7 +101,12 @@ export const useAutoReloadCleanBuffers = ({
         const lastNotified = lastNotifiedRef.current.get(detail.path) ?? 0;
         if (now - lastNotified >= NOTIFY_COOLDOWN_MS) {
           lastNotifiedRef.current.set(detail.path, now);
-          notificationBus.notify('warning', 'File Deleted', `${targetBuffer.file.name} has been deleted from disk.`, 6000);
+          notificationBus.notify(
+            'warning',
+            'File Deleted',
+            `${targetBuffer.file.name} has been deleted from disk.`,
+            6000,
+          );
         }
         if (setBufferExternallyModified) {
           setBufferExternallyModified(bufferId, '');
@@ -157,7 +162,12 @@ export const useAutoReloadCleanBuffers = ({
         const lastReloadNotify = lastNotifiedRef.current.get(detail.path) ?? 0;
         if (reloadNow - lastReloadNotify >= NOTIFY_COOLDOWN_MS) {
           lastNotifiedRef.current.set(detail.path, reloadNow);
-          notificationBus.notify('info', 'File Reloaded', `${freshBuffer.file.name} was modified externally and has been reloaded.`, 4000);
+          notificationBus.notify(
+            'info',
+            'File Reloaded',
+            `${freshBuffer.file.name} was modified externally and has been reloaded.`,
+            4000,
+          );
         }
       } catch (err) {
         // Non-critical: read failures are expected for some file types

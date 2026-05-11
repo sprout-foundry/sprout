@@ -43,9 +43,7 @@ export interface UseEditorToolbarActionsReturn {
  * @param options - Configuration options
  * @returns Toolbar actions array
  */
-export function useEditorToolbarActions(
-  options: UseEditorToolbarActionsOptions,
-): UseEditorToolbarActionsReturn {
+export function useEditorToolbarActions(options: UseEditorToolbarActionsOptions): UseEditorToolbarActionsReturn {
   const {
     isSvgFile,
     isHtmlFile,
@@ -111,9 +109,10 @@ export function useEditorToolbarActions(
         id: 'md-toggle',
         title: markdownPreviewMode === 'off' ? 'Toggle markdown preview' : 'Close markdown preview',
         icon: <Eye size={16} />,
-        onClick: () => setMarkdownPreviewMode(
-          markdownPreviewMode === 'off' ? 'split' : markdownPreviewMode === 'split' ? 'preview' : 'off',
-        ),
+        onClick: () =>
+          setMarkdownPreviewMode(
+            markdownPreviewMode === 'off' ? 'split' : markdownPreviewMode === 'split' ? 'preview' : 'off',
+          ),
         active: markdownPreviewMode !== 'off',
       });
 

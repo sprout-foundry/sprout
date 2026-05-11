@@ -2,7 +2,7 @@
  * Settings domain API — adapter-aware settings operations.
  */
 
-import {
+import type {
   SproutSettings,
   MCPSettingsResponse,
   MCPServerConfig,
@@ -20,7 +20,10 @@ export async function getSettings(fetchFn: typeof fetch): Promise<SproutSettings
   return response.json();
 }
 
-export async function getSettingsLayer(fetchFn: typeof fetch, layer: 'global' | 'workspace' | 'session'): Promise<Record<string, unknown>> {
+export async function getSettingsLayer(
+  fetchFn: typeof fetch,
+  layer: 'global' | 'workspace' | 'session',
+): Promise<Record<string, unknown>> {
   const response = await fetchFn(`/api/settings?layer=${layer}`);
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
@@ -32,7 +35,11 @@ export async function getSettingsProvenance(fetchFn: typeof fetch): Promise<{ so
   return response.json();
 }
 
-export async function updateSettings(fetchFn: typeof fetch, settings: Record<string, unknown>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
+export async function updateSettings(
+  fetchFn: typeof fetch,
+  settings: Record<string, unknown>,
+  layer?: 'session' | 'workspace' | 'global',
+): Promise<{ message: string }> {
   const url = layer ? `/api/settings?layer=${layer}` : '/api/settings';
   const response = await fetchFn(url, {
     method: 'PUT',
@@ -49,7 +56,10 @@ export async function getMCPSettings(fetchFn: typeof fetch): Promise<MCPSettings
   return response.json();
 }
 
-export async function updateMCPSettings(fetchFn: typeof fetch, settingsData: MCPSettingsResponse): Promise<{ message: string }> {
+export async function updateMCPSettings(
+  fetchFn: typeof fetch,
+  settingsData: MCPSettingsResponse,
+): Promise<{ message: string }> {
   const response = await fetchFn('/api/settings/mcp', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -69,7 +79,11 @@ export async function addMCPServer(fetchFn: typeof fetch, server: MCPServerConfi
   return response.json();
 }
 
-export async function updateMCPServer(fetchFn: typeof fetch, name: string, server: MCPServerConfig): Promise<{ message: string }> {
+export async function updateMCPServer(
+  fetchFn: typeof fetch,
+  name: string,
+  server: MCPServerConfig,
+): Promise<{ message: string }> {
   const response = await fetchFn(`/api/settings/mcp/servers/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -91,7 +105,10 @@ export async function getCustomProviders(fetchFn: typeof fetch): Promise<CustomP
   return response.json();
 }
 
-export async function addCustomProvider(fetchFn: typeof fetch, provider: CustomProviderConfig): Promise<{ message: string }> {
+export async function addCustomProvider(
+  fetchFn: typeof fetch,
+  provider: CustomProviderConfig,
+): Promise<{ message: string }> {
   const response = await fetchFn('/api/settings/providers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -101,7 +118,11 @@ export async function addCustomProvider(fetchFn: typeof fetch, provider: CustomP
   return response.json();
 }
 
-export async function updateCustomProvider(fetchFn: typeof fetch, name: string, provider: CustomProviderConfig): Promise<{ message: string }> {
+export async function updateCustomProvider(
+  fetchFn: typeof fetch,
+  name: string,
+  provider: CustomProviderConfig,
+): Promise<{ message: string }> {
   const response = await fetchFn(`/api/settings/providers/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -139,7 +160,11 @@ export async function getSubagentTypes(fetchFn: typeof fetch): Promise<SubagentT
   return response.json();
 }
 
-export async function updateSubagentType(fetchFn: typeof fetch, name: string, updates: { provider?: string; model?: string }): Promise<UpdateSubagentTypeResponse> {
+export async function updateSubagentType(
+  fetchFn: typeof fetch,
+  name: string,
+  updates: { provider?: string; model?: string },
+): Promise<UpdateSubagentTypeResponse> {
   const response = await fetchFn(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -158,7 +183,10 @@ export async function getHotkeys(fetchFn: typeof fetch): Promise<HotkeyConfig> {
   return response.json();
 }
 
-export async function updateHotkeys(fetchFn: typeof fetch, config: HotkeyConfig): Promise<{ success: boolean; config: HotkeyConfig }> {
+export async function updateHotkeys(
+  fetchFn: typeof fetch,
+  config: HotkeyConfig,
+): Promise<{ success: boolean; config: HotkeyConfig }> {
   const response = await fetchFn('/api/hotkeys', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -168,7 +196,10 @@ export async function updateHotkeys(fetchFn: typeof fetch, config: HotkeyConfig)
   return response.json();
 }
 
-export async function validateHotkeys(fetchFn: typeof fetch, config: HotkeyConfig): Promise<{ valid: boolean; config: HotkeyConfig }> {
+export async function validateHotkeys(
+  fetchFn: typeof fetch,
+  config: HotkeyConfig,
+): Promise<{ valid: boolean; config: HotkeyConfig }> {
   const response = await fetchFn('/api/hotkeys/validate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -178,7 +209,10 @@ export async function validateHotkeys(fetchFn: typeof fetch, config: HotkeyConfi
   return response.json();
 }
 
-export async function applyHotkeyPreset(fetchFn: typeof fetch, preset: string): Promise<{ success: boolean; preset: string; config: HotkeyConfig }> {
+export async function applyHotkeyPreset(
+  fetchFn: typeof fetch,
+  preset: string,
+): Promise<{ success: boolean; preset: string; config: HotkeyConfig }> {
   const response = await fetchFn('/api/hotkeys/preset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

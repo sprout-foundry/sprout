@@ -3,18 +3,8 @@ import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
 import { LiveLog } from '@sprout/ui';
 import type { ContextSubagentRun, LiveLogLine } from './types';
-import {
-  getPersonaColor,
-  getStatusIcon,
-  formatDuration,
-  formatTime,
-} from './helpers';
-import {
-  Bot,
-  ChevronDown,
-  ChevronRight,
-  BarChart3,
-} from 'lucide-react';
+import { getPersonaColor, getStatusIcon, formatDuration, formatTime } from './helpers';
+import { Bot, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 
 interface SubagentsTabProps {
   subagentRuns: ContextSubagentRun[];
@@ -65,8 +55,8 @@ export function SubagentsTab({
     <div className="context-panel-tools-list">
       {subagentRuns.length === 0 ? (
         <div className="context-panel-empty">
-          Delegated work will appear here when the orchestrator runs{' '}
-          <code>run_subagent</code> or <code>run_parallel_subagents</code>.
+          Delegated work will appear here when the orchestrator runs <code>run_subagent</code> or{' '}
+          <code>run_parallel_subagents</code>.
         </div>
       ) : (
         subagentRuns.map(({ tool, prompt, latestActivity, activities, orderedTaskGroups }) => {

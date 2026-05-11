@@ -138,23 +138,14 @@ describe('extractSymbols', () => {
     });
 
     it('extracts interface method signatures', () => {
-      const content = [
-        'type Reader interface {',
-        '\tRead(p []byte) (n int, err error)',
-        '}',
-      ].join('\n');
+      const content = ['type Reader interface {', '\tRead(p []byte) (n int, err error)', '}'].join('\n');
 
       const symbols = extractSymbols(content, '.go');
       expect(symbols).toContainEqual({ name: 'Read', line: 2, kind: 'method' });
     });
 
     it('extracts const block items', () => {
-      const content = [
-        'const (',
-        '\tMaxItems = 100',
-        '\tMinItems = 1',
-        ')',
-      ].join('\n');
+      const content = ['const (', '\tMaxItems = 100', '\tMinItems = 1', ')'].join('\n');
 
       const symbols = extractSymbols(content, '.go');
       expect(symbols).toContainEqual({ name: 'MaxItems', line: 2, kind: 'constant' });
@@ -475,7 +466,7 @@ describe('extractSymbols', () => {
 
       const symbols = extractSymbols(content, '.unknown');
       expect(symbols).toHaveLength(5);
-      expect(symbols.map(s => s.name)).toEqual(['jsFunc', 'MyClass', 'MyInterface', 'pyFunc', 'goFunc']);
+      expect(symbols.map((s) => s.name)).toEqual(['jsFunc', 'MyClass', 'MyInterface', 'pyFunc', 'goFunc']);
     });
 
     it('generic fallback extracts type struct', () => {
@@ -526,10 +517,7 @@ describe('extractSymbols', () => {
     });
 
     it('allows same name on different lines', () => {
-      const content = [
-        'function render() {}',
-        'class render {}',
-      ].join('\n');
+      const content = ['function render() {}', 'class render {}'].join('\n');
       const symbols = extractSymbols(content, '.unknown');
       expect(symbols).toHaveLength(2);
       expect(symbols[0].line).toBe(1);
@@ -555,13 +543,7 @@ describe('findSymbolScopeEnd', () => {
   });
 
   it('finds scope end for class with nested braces', () => {
-    const lines = [
-      'class Foo {',
-      '  bar() {',
-      '    return 1;',
-      '  }',
-      '}',
-    ];
+    const lines = ['class Foo {', '  bar() {', '    return 1;', '  }', '}'];
     expect(findSymbolScopeEnd(lines, 0)).toBe(5);
   });
 
@@ -581,7 +563,7 @@ describe('findSymbolScopeEnd', () => {
   });
 
   it('ignores braces inside single-quoted strings', () => {
-    const lines = ["function foo() {", "  const s = 'hello { world';", '}'];
+    const lines = ['function foo() {', "  const s = 'hello { world';", '}'];
     expect(findSymbolScopeEnd(lines, 0)).toBe(3);
   });
 
@@ -591,13 +573,7 @@ describe('findSymbolScopeEnd', () => {
   });
 
   it('handles multi-line backtick strings', () => {
-    const lines = [
-      'function foo() {',
-      '  const s = `',
-      '    hello { world',
-      '  `;',
-      '}',
-    ];
+    const lines = ['function foo() {', '  const s = `', '    hello { world', '  `;', '}'];
     expect(findSymbolScopeEnd(lines, 0)).toBe(5);
   });
 
@@ -612,13 +588,7 @@ describe('findSymbolScopeEnd', () => {
   });
 
   it('handles multi-line block comments', () => {
-    const lines = [
-      'function foo() {',
-      '  /*',
-      '   { }',
-      '  */',
-      '}',
-    ];
+    const lines = ['function foo() {', '  /*', '   { }', '  */', '}'];
     expect(findSymbolScopeEnd(lines, 0)).toBe(5);
   });
 
@@ -636,35 +606,17 @@ describe('findSymbolScopeEnd', () => {
 
   describe('Python indentation', () => {
     it('finds scope end for Python class', () => {
-      const lines = [
-        'class Foo:',
-        '    def bar(self):',
-        '        pass',
-        '',
-        'def other():',
-      ];
+      const lines = ['class Foo:', '    def bar(self):', '        pass', '', 'def other():'];
       expect(findSymbolScopeEnd(lines, 0, '.py')).toBe(4);
     });
 
     it('finds scope end for Python function', () => {
-      const lines = [
-        'def foo():',
-        '    x = 1',
-        '    return x',
-        '',
-        'def bar():',
-      ];
+      const lines = ['def foo():', '    x = 1', '    return x', '', 'def bar():'];
       expect(findSymbolScopeEnd(lines, 0, '.py')).toBe(4);
     });
 
     it('handles Python nested scope', () => {
-      const lines = [
-        'class Foo:',
-        '    def bar(self):',
-        '        x = 1',
-        '    def baz(self):',
-        '        pass',
-      ];
+      const lines = ['class Foo:', '    def bar(self):', '        x = 1', '    def baz(self):', '        pass'];
       // Class scope ends at end of file (nothing at same level)
       expect(findSymbolScopeEnd(lines, 0, '.py')).toBe(5);
       // Method bar scope ends at baz (same indent)
@@ -672,31 +624,18 @@ describe('findSymbolScopeEnd', () => {
     });
 
     it('handles Python empty body (returns next line)', () => {
-      const lines = [
-        'def foo():',
-        'def bar():',
-      ];
+      const lines = ['def foo():', 'def bar():'];
       // First non-blank line after decl is at same indent → empty body
       expect(findSymbolScopeEnd(lines, 0, '.py')).toBe(1);
     });
 
     it('handles Python blank lines and comments in body', () => {
-      const lines = [
-        'def foo():',
-        '',
-        '    # comment',
-        '    x = 1',
-        '',
-        'def bar():',
-      ];
+      const lines = ['def foo():', '', '    # comment', '    x = 1', '', 'def bar():'];
       expect(findSymbolScopeEnd(lines, 0, '.py')).toBe(5);
     });
 
     it('returns length for Python function at EOF', () => {
-      const lines = [
-        'def foo():',
-        '    x = 1',
-      ];
+      const lines = ['def foo():', '    x = 1'];
       expect(findSymbolScopeEnd(lines, 0, '.py')).toBe(2);
     });
 
@@ -731,13 +670,7 @@ describe('getEnclosingSymbols', () => {
   });
 
   it('returns enclosing containers for TypeScript', () => {
-    const content = [
-      'class Foo {',
-      '  bar() {',
-      '    return 1;',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Foo {', '  bar() {', '    return 1;', '  }', '}'].join('\n');
 
     const result = getEnclosingSymbols(content, '.ts', 3);
     expect(result).toHaveLength(2);
@@ -761,12 +694,7 @@ describe('getEnclosingSymbols', () => {
   });
 
   it('only returns container kinds', () => {
-    const content = [
-      'const x = 1',
-      'function foo() {',
-      '  return x;',
-      '}',
-    ].join('\n');
+    const content = ['const x = 1', 'function foo() {', '  return x;', '}'].join('\n');
 
     const result = getEnclosingSymbols(content, '.ts', 3);
     // 'x' is variable (not a container), only 'foo' should be returned
@@ -775,13 +703,7 @@ describe('getEnclosingSymbols', () => {
   });
 
   it('returns empty for cursor outside any container', () => {
-    const content = [
-      'function foo() {',
-      '  return 1;',
-      '}',
-      '',
-      '// outside',
-    ].join('\n');
+    const content = ['function foo() {', '  return 1;', '}', '', '// outside'].join('\n');
 
     const result = getEnclosingSymbols(content, '.ts', 5);
     expect(result).toEqual([]);
@@ -818,15 +740,9 @@ describe('getEnclosingSymbols', () => {
   });
 
   it('sorts results by line (outermost first)', () => {
-    const content = [
-      'class Outer {',
-      '  class Inner {',
-      '    method() {',
-      '      return 1;',
-      '    }',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Outer {', '  class Inner {', '    method() {', '      return 1;', '    }', '  }', '}'].join(
+      '\n',
+    );
 
     const result = getEnclosingSymbols(content, '.ts', 4);
     expect(result[0].name).toBe('Outer');
@@ -844,13 +760,7 @@ describe('getScopePath', () => {
   });
 
   it('returns scope path with › separator', () => {
-    const content = [
-      'class Foo {',
-      '  bar() {',
-      '    return 1;',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Foo {', '  bar() {', '    return 1;', '  }', '}'].join('\n');
 
     // For 'bar' on line 2, enclosing is just 'Foo'
     const path = getScopePath(content, '.ts', 2, 'bar');
@@ -865,13 +775,7 @@ describe('getScopePath', () => {
   });
 
   it('returns nested scope path', () => {
-    const content = [
-      'class Outer {',
-      '  class Inner {',
-      '    method() {}',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Outer {', '  class Inner {', '    method() {}', '  }', '}'].join('\n');
 
     const path = getScopePath(content, '.ts', 3, 'method');
     expect(path).toBe('Outer › Inner');
@@ -892,12 +796,7 @@ describe('buildScopePaths', () => {
   });
 
   it('builds scope paths for multiple symbols', () => {
-    const content = [
-      'class Foo {',
-      '  bar() { return 1; }',
-      '  baz() { return 2; }',
-      '}',
-    ].join('\n');
+    const content = ['class Foo {', '  bar() { return 1; }', '  baz() { return 2; }', '}'].join('\n');
 
     const symbols: SymbolInfo[] = [
       { name: 'Foo', line: 1, kind: 'class' },
@@ -912,13 +811,7 @@ describe('buildScopePaths', () => {
   });
 
   it('builds nested scope paths', () => {
-    const content = [
-      'class Outer {',
-      '  class Inner {',
-      '    method() {}',
-      '  }',
-      '}',
-    ].join('\n');
+    const content = ['class Outer {', '  class Inner {', '    method() {}', '  }', '}'].join('\n');
 
     const symbols: SymbolInfo[] = [
       { name: 'Outer', line: 1, kind: 'class' },
@@ -933,12 +826,7 @@ describe('buildScopePaths', () => {
   });
 
   it('handles non-container symbols correctly', () => {
-    const content = [
-      'class Foo {',
-      '  bar() { return x; }',
-      '}',
-      'const x = 1',
-    ].join('\n');
+    const content = ['class Foo {', '  bar() { return x; }', '}', 'const x = 1'].join('\n');
 
     const symbols: SymbolInfo[] = [
       { name: 'Foo', line: 1, kind: 'class' },

@@ -235,12 +235,7 @@ function SettingsPanel({
         );
 
       case 'agent-skills':
-        return (
-          <SkillsSettingsTab
-            settings={activeSettings ?? settings}
-            toggleSkill={mutations.toggleSkill}
-          />
-        );
+        return <SkillsSettingsTab settings={activeSettings ?? settings} toggleSkill={mutations.toggleSkill} />;
 
       /* ── Workspace section ─────────────────────────── */
       case 'workspace-embeddings':
@@ -327,11 +322,7 @@ function SettingsPanel({
         );
 
       case 'env-performance':
-        return (
-          <PerformanceSettingsTab
-            renderNumberInput={fieldRenderers.renderNumberInput}
-          />
-        );
+        return <PerformanceSettingsTab renderNumberInput={fieldRenderers.renderNumberInput} />;
 
       case 'env-commit-review':
         return (
@@ -344,10 +335,7 @@ function SettingsPanel({
 
       case 'env-ocr':
         return (
-          <OcrSettingsTab
-            renderToggle={fieldRenderers.renderToggle}
-            renderTextInput={fieldRenderers.renderTextInput}
-          />
+          <OcrSettingsTab renderToggle={fieldRenderers.renderToggle} renderTextInput={fieldRenderers.renderTextInput} />
         );
 
       /* ── Editor section ────────────────────────────── */
@@ -369,10 +357,7 @@ function SettingsPanel({
   return (
     <div className="settings-panel">
       {SECTION_GROUPS.map((section) => (
-        <div
-          key={section.id}
-          className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}
-        >
+        <div key={section.id} className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}>
           {/* Section header (clickable to toggle) */}
           <button
             type="button"
@@ -381,9 +366,7 @@ function SettingsPanel({
             aria-expanded={expandedSections.has(section.id)}
           >
             <span className="settings-section-label">{section.label}</span>
-            <span className={`settings-scope-badge scope-${section.scope}`}>
-              {section.scope}
-            </span>
+            <span className={`settings-scope-badge scope-${section.scope}`}>{section.scope}</span>
             <ChevronRight className="settings-section-chevron" size={14} />
           </button>
 
@@ -405,7 +388,9 @@ function SettingsPanel({
                       className="styled-select"
                     >
                       {agentConfig.providers.length === 0 && (
-                        <option value="">{agentConfig.isLoadingProviders ? 'Loading providers...' : 'No providers available'}</option>
+                        <option value="">
+                          {agentConfig.isLoadingProviders ? 'Loading providers...' : 'No providers available'}
+                        </option>
                       )}
                       {agentConfig.providers.map((p) => (
                         <option key={p.id} value={p.id}>

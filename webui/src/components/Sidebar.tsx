@@ -28,7 +28,12 @@ import SproutLogo from './SproutLogo';
 import LocationSwitcher from './LocationSwitcher';
 import { supportsSettings } from '../config/mode';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
-import { type SectionTab, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_COLLAPSED_WIDTH, clampSidebarWidth } from '../hooks/useSidebarState';
+import {
+  type SectionTab,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_COLLAPSED_WIDTH,
+  clampSidebarWidth,
+} from '../hooks/useSidebarState';
 import { useSidebarModel } from '../hooks/useSidebarModel';
 import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
 import SidebarLogsPane from './SidebarLogsPane';
@@ -101,9 +106,16 @@ interface SidebarProps {
       metadata?: Record<string, unknown>;
     }) => string;
     // Git history callbacks
-    onLoadCommits: (limit: number, offset: number, opts?: { signal?: AbortSignal }) => Promise<{ commits: GitCommitSummary[]; total: number }>;
+    onLoadCommits: (
+      limit: number,
+      offset: number,
+      opts?: { signal?: AbortSignal },
+    ) => Promise<{ commits: GitCommitSummary[]; total: number }>;
     onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
-    onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{ message: string; hash: string; path: string; diff: string }>;
+    onLoadCommitFileDiff: (
+      hash: string,
+      filePath: string,
+    ) => Promise<{ message: string; hash: string; path: string; diff: string }>;
     onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
     onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   };
@@ -127,7 +139,7 @@ const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   'credit-card': CreditCard,
   'list-checks': ListChecks,
-  'users': Users,
+  users: Users,
   'layout-dashboard': LayoutDashboard,
   'external-link': ExternalLink,
 };
@@ -172,7 +184,14 @@ function Sidebar({
 }: SidebarProps): JSX.Element {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
-  const { isAutoSaveEnabled: autoSaveEnabled, setAutoSaveEnabled, whitespaceRenderingMode, setWhitespaceRenderingMode, isFormatOnSaveEnabled: formatOnSaveEnabled, setFormatOnSaveEnabled } = useEditorManager();
+  const {
+    isAutoSaveEnabled: autoSaveEnabled,
+    setAutoSaveEnabled,
+    whitespaceRenderingMode,
+    setWhitespaceRenderingMode,
+    isFormatOnSaveEnabled: formatOnSaveEnabled,
+    setFormatOnSaveEnabled,
+  } = useEditorManager();
   const { platformNavItems } = usePlatformNav();
   const sortedPlatformNavItems = useMemo(
     () => [...platformNavItems].sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity)),
@@ -287,22 +306,12 @@ function Sidebar({
   const renderContentPane = () => {
     switch (effectiveSelectedSection) {
       case 'git':
-        return (
-          <SidebarGitSection
-            gitPanel={gitPanel}
-            currentView={currentView}
-            onSectionChange={onSectionChange}
-          />
-        );
+        return <SidebarGitSection gitPanel={gitPanel} currentView={currentView} onSectionChange={onSectionChange} />;
       case 'logs':
         return <SidebarLogsPane logs={normalizedRecentLogs} />;
       case 'files':
         return (
-          <SidebarFilesSection
-            ref={fileTreeRef}
-            onFileClick={onFileClick}
-            workspaceRoot={gitPanel?.workspaceRoot}
-          />
+          <SidebarFilesSection ref={fileTreeRef} onFileClick={onFileClick} workspaceRoot={gitPanel?.workspaceRoot} />
         );
       case 'search':
         return renderSearchSection();
@@ -328,14 +337,27 @@ function Sidebar({
             selectedModel={modelState.finalSelectedModel}
             selectedPersona={modelState.selectedPersonaState}
             providers={modelState.providers.map((p) => ({ id: p.id, name: p.name }))}
-            availableModels={availableModels && availableModels.length > 1 ? availableModels : modelState.finalAvailableModels}
+            availableModels={
+              availableModels && availableModels.length > 1 ? availableModels : modelState.finalAvailableModels
+            }
             personas={modelState.personas.map((p) => ({ id: p.id, name: p.name }))}
             isLoadingProviders={modelState.isLoadingProviders}
             isLoadingPersonas={modelState.isLoadingPersonas}
             isConnected={isConnected}
-            onProviderChange={(val: string) => { modelState.setSelectedProvider(val); onProviderChange?.(val); }}
-            onModelChange={(val: string) => { if (val !== modelState.finalSelectedModel) { modelState.setSelectedModelState(val); onModelChange?.(val); } }}
-            onPersonaChange={(val: string) => { modelState.setSelectedPersonaState(val); onPersonaChange?.(val); }}
+            onProviderChange={(val: string) => {
+              modelState.setSelectedProvider(val);
+              onProviderChange?.(val);
+            }}
+            onModelChange={(val: string) => {
+              if (val !== modelState.finalSelectedModel) {
+                modelState.setSelectedModelState(val);
+                onModelChange?.(val);
+              }
+            }}
+            onPersonaChange={(val: string) => {
+              modelState.setSelectedPersonaState(val);
+              onPersonaChange?.(val);
+            }}
           />
         ) : null;
       default:
@@ -347,7 +369,11 @@ function Sidebar({
     <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
       <div
         className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
-        style={isMobile ? undefined : { width: `${effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : effectiveSidebarWidth}px` }}
+        style={
+          isMobile
+            ? undefined
+            : { width: `${effectiveSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : effectiveSidebarWidth}px` }
+        }
       >
         {/* Pinned global header: instance selector */}
         <div className="sidebar-pinned-header">
@@ -454,7 +480,12 @@ function Sidebar({
           </div>
 
           {/* Content Pane — always rendered; CSS handles fade-out on collapse */}
-          <div className="sidebar-content-pane" role="tabpanel" id="sidebar-tabpanel" {...(effectiveSidebarCollapsed ? { inert: true, 'aria-hidden': true } : {})}>
+          <div
+            className="sidebar-content-pane"
+            role="tabpanel"
+            id="sidebar-tabpanel"
+            {...(effectiveSidebarCollapsed ? { inert: true, 'aria-hidden': true } : {})}
+          >
             <div className="content-pane-scroll">{renderContentPane()}</div>
           </div>
         </div>

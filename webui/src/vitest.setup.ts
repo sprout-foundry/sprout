@@ -17,7 +17,7 @@ global.jest = {
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: vi.fn().mockImplementation((query) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -108,7 +108,7 @@ document.createRange = vi.fn(() => {
 
 // Mock Element.getClientRects
 const originalGetClientRects = Element.prototype.getClientRects;
-Element.prototype.getClientRects = vi.fn(function() {
+Element.prototype.getClientRects = vi.fn(function () {
   // For text nodes, return empty list
   if (this.nodeType === Node.TEXT_NODE) {
     return {
@@ -122,7 +122,7 @@ Element.prototype.getClientRects = vi.fn(function() {
 
 // Mock Element.getBoundingClientRect
 const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
-Element.prototype.getBoundingClientRect = vi.fn(function() {
+Element.prototype.getBoundingClientRect = vi.fn(function () {
   if (this.nodeType === Node.TEXT_NODE) {
     return {
       left: 0,
@@ -140,12 +140,12 @@ Element.prototype.getBoundingClientRect = vi.fn(function() {
 });
 
 // Mock requestAnimationFrame
-global.requestAnimationFrame = vi.fn(callback => {
+global.requestAnimationFrame = vi.fn((callback) => {
   return setTimeout(callback, 0);
 });
 
 // Mock cancelAnimationFrame
-global.cancelAnimationFrame = vi.fn(id => {
+global.cancelAnimationFrame = vi.fn((id) => {
   clearTimeout(id);
 });
 

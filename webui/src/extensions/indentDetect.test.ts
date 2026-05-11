@@ -46,13 +46,7 @@ describe('detectIndentation', () => {
   });
 
   it('detects tab-indented file with many lines', () => {
-    const lines = [
-      '\tconst a = 1;',
-      '\tconst b = 2;',
-      '\tfunction test() {',
-      '\t\treturn a + b;',
-      '\t}',
-    ];
+    const lines = ['\tconst a = 1;', '\tconst b = 2;', '\tfunction test() {', '\t\treturn a + b;', '\t}'];
     const result = detectIndentation(lines.join('\n'));
     expect(result.useTabs).toBe(true);
     expect(result.linesAnalyzed).toBe(5);
@@ -71,13 +65,7 @@ describe('detectIndentation', () => {
   });
 
   it('detects 2-space indentation with many lines', () => {
-    const lines = [
-      'function test() {',
-      '  const a = 1;',
-      '  const b = 2;',
-      '  return a + b;',
-      '}',
-    ];
+    const lines = ['function test() {', '  const a = 1;', '  const b = 2;', '  return a + b;', '}'];
     const result = detectIndentation(lines.join('\n'));
     expect(result.useTabs).toBe(false);
     expect(result.indentWidth).toBe(2);
@@ -98,13 +86,7 @@ describe('detectIndentation', () => {
   });
 
   it('detects 4-space indentation with many lines', () => {
-    const lines = [
-        'class Foo {',
-        '    constructor() {',
-        '        this.x = 1;',
-        '    }',
-        '}',
-    ];
+    const lines = ['class Foo {', '    constructor() {', '        this.x = 1;', '    }', '}'];
     const result = detectIndentation(lines.join('\n'));
     expect(result.useTabs).toBe(false);
     expect(result.indentWidth).toBe(4);
@@ -295,13 +277,7 @@ describe('detectIndentation', () => {
   });
 
   it('handles maxLines smaller than content', () => {
-    const lines = [
-      '    line1',
-      '    line2',
-      '    line3',
-      '    line4',
-      '    line5',
-    ];
+    const lines = ['    line1', '    line2', '    line3', '    line4', '    line5'];
     const content = lines.join('\n');
     const result = detectIndentation(content, 2);
     expect(result.linesAnalyzed).toBe(2);

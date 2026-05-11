@@ -333,8 +333,7 @@ export interface ImportResult {
   warnings?: string[];
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SCOPE_TO_TAG_ENTRIES: Array<[string, any[]]> = [
+const SCOPE_TO_TAG_ENTRIES: Array<[string, Tag[]]> = [
   // --- Comments ---
   ['comment', [tags.comment]],
   ['comment.block', [tags.comment]],
@@ -410,7 +409,6 @@ export class ThemeImporter {
    * Maps TextMate/VSCode scope selectors to CodeMirror highlight tags.
    * Scopes are matched by longest suffix (most specific match wins).
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private scopeToTag: Map<string, readonly Tag[]> = new Map();
 
   constructor() {

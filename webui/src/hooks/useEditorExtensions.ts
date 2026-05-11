@@ -70,14 +70,8 @@ import { minimapExtension } from '../extensions/minimap';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { getLanguageExtensions } from '../extensions/languageRegistry';
-import {
-  createEmmetCompartment,
-  getInitialEmmetExtensions,
-} from '../extensions/emmet';
-import {
-  createAutoCloseTagCompartment,
-  getInitialAutoCloseTagExtensions,
-} from '../extensions/autoCloseTag';
+import { createEmmetCompartment, getInitialEmmetExtensions } from '../extensions/emmet';
+import { createAutoCloseTagCompartment, getInitialAutoCloseTagExtensions } from '../extensions/autoCloseTag';
 
 // ── Settings constants (shared with EditorPane) ─────────────────────────
 
@@ -265,25 +259,17 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       codeFolding(),
       compartments.minimap.of(settings.minimapEnabled ? minimapExtension() : []),
       compartments.inlayHints.of(
-        settings.inlayHintsEnabled
-          ? inlayHintsExtension(buffer.getFilePath, buffer.getContent, buffer.languageId)
-          : [],
+        settings.inlayHintsEnabled ? inlayHintsExtension(buffer.getFilePath, buffer.getContent, buffer.languageId) : [],
       ),
       compartments.signatureHelp.of(
         settings.signatureHelpEnabled
           ? signatureHelpExtension(buffer.getFilePath, buffer.getContent, buffer.languageId)
           : [],
       ),
-      compartments.fontSize.of([
-        EditorView.theme({ '&': { fontSize: `${settings.editorFontSize}px` } }),
-      ]),
+      compartments.fontSize.of([EditorView.theme({ '&': { fontSize: `${settings.editorFontSize}px` } })]),
       compartments.tabSize.of([
         EditorState.tabSize.of(effectiveTabSize),
-        indentUnit.of(
-          settings.editorUsesTabs
-            ? '\t'
-            : ' '.repeat(effectiveTabSize),
-        ),
+        indentUnit.of(settings.editorUsesTabs ? '\t' : ' '.repeat(effectiveTabSize)),
       ]),
 
       // ── Base editor theme (CSS variables, layout, caret color) ──

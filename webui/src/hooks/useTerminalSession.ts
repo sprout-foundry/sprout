@@ -11,7 +11,6 @@ import type { Terminal as XTerm } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { WsEvent } from '../services/websocket';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
-import { debugLog } from '../utils/log';
 
 export interface UseTerminalSessionOptions {
   isActive: boolean;
@@ -105,7 +104,11 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
     }
 
     // Don't tear down during freeze or reconnect
-    if (isConnected === false && terminalWSRef.current && (terminalWSRef.current.isCurrentlyFrozen() || terminalWSRef.current.isReconnecting())) {
+    if (
+      isConnected === false &&
+      terminalWSRef.current &&
+      (terminalWSRef.current.isCurrentlyFrozen() || terminalWSRef.current.isReconnecting())
+    ) {
       return;
     }
 
@@ -216,9 +219,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
     }
 
     return () => {
-      if (terminalWSRef.current &&
-          (service.isCurrentlyFrozen() || service.isReconnecting()) &&
-          isActiveRef.current) {
+      if (terminalWSRef.current && (service.isCurrentlyFrozen() || service.isReconnecting()) && isActiveRef.current) {
         service.removeEvent(handler);
         return;
       }
@@ -231,7 +232,16 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
       terminalWSRef.current = null;
       eventHandlerRef.current = null;
     };
-  }, [isActive, isConnected, sendResize, xtermRef, onResetSearch, onResetReverseSearch, onSaveScrollback, onLoadScrollback]);
+  }, [
+    isActive,
+    isConnected,
+    sendResize,
+    xtermRef,
+    onResetSearch,
+    onResetReverseSearch,
+    onSaveScrollback,
+    onLoadScrollback,
+  ]);
 
   return {
     paneConnected,

@@ -1,14 +1,9 @@
 import React from 'react';
 import { FolderOpen, RefreshCw, Loader2 } from 'lucide-react';
-import { SproutInstance } from '../../services/api';
+import type { SproutInstance } from '../../services/api';
 import { supportsInstances } from '../../config/mode';
 import { normalizePath } from './pathUtils';
-import {
-  WorkspaceDirectory,
-  SwitchingState,
-  SSHFailureState,
-  RemoteWorkspaceContext,
-} from './types';
+import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
 import { WorkspaceSuggestionList } from './WorkspaceSuggestionList';
 import { WorkspaceSSHFavorites } from './WorkspaceSSHFavorites';
 import { WorkspaceRecentList } from './WorkspaceRecentList';
@@ -99,11 +94,7 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
           <div>{switchingState.error}</div>
           {showExpiredSessionRecovery ? (
             <div className="location-switcher-error-actions">
-              <button
-                type="button"
-                className="location-switcher-session-btn"
-                onClick={handleReloadWithoutSSHPath}
-              >
+              <button type="button" className="location-switcher-session-btn" onClick={handleReloadWithoutSSHPath}>
                 Reload Without SSH Path
               </button>
             </div>
@@ -184,11 +175,7 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
             disabled={!isConnected || switchingState.isSwitching || !normalizePath(inputValue)}
             title="Switch workspace"
           >
-            {switchingState.isSwitching ? (
-              <Loader2 size={12} className="spin" />
-            ) : (
-              <FolderOpen size={12} />
-            )}
+            {switchingState.isSwitching ? <Loader2 size={12} className="spin" /> : <FolderOpen size={12} />}
           </button>
         </div>
 
@@ -217,12 +204,8 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
             isSwitching={switchingState.isSwitching}
             onSelectFavorite={submitWorkspaceChange}
             onFillInput={setInputValue}
-            onSaveFavorite={() =>
-              addSSHFavoriteWorkspace(remoteContext.hostAlias, workspaceRoot)
-            }
-            onRemoveFavorite={(path) =>
-              removeSSHFavoriteWorkspace(remoteContext.hostAlias, path)
-            }
+            onSaveFavorite={() => addSSHFavoriteWorkspace(remoteContext.hostAlias, workspaceRoot)}
+            onRemoveFavorite={(path) => removeSSHFavoriteWorkspace(remoteContext.hostAlias, path)}
           />
         ) : null}
 

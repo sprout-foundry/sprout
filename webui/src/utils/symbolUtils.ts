@@ -23,7 +23,12 @@ export const KIND_ICONS: Record<SymbolKind, string> = {
 };
 
 /** Kinds that can act as scope containers for the breadcrumb. */
-export const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>(['function', 'method', 'class', 'interface']);
+export const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
+  'function',
+  'method',
+  'class',
+  'interface',
+]);
 
 // ── Language-specific patterns ───────────────────────────────────────────
 
@@ -99,7 +104,10 @@ const TYPESCRIPT_PATTERNS: PatternEntry[] = [
   [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:<[^>]*>)?\s*\(/, 'function'],
   // Arrow function: const foo = () =>
   // Supports optional generic type params: const foo = <T>(x: T) =>
-  [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:<[^>]*>)?\s*(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/, 'function'],
+  [
+    /\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*(?:async\s*)?(?:<[^>]*>)?\s*(?:\([^)]*\)|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*=>/,
+    'function',
+  ],
   // const foo: Type = ...
   [/\bconst\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/, 'variable'],
   // const foo = value (non-function)
@@ -220,7 +228,8 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
         // Simple heuristic: only strip # if it's not inside a string
         // Count quotes before # to determine if we're in a string context
         const before = line.slice(0, commentIdx);
-        let inSingle = false, inDouble = false;
+        let inSingle = false,
+          inDouble = false;
         for (let j = 0; j < before.length; j++) {
           if (before[j] === '"' && !inSingle) inDouble = !inDouble;
           if (before[j] === "'" && !inDouble) inSingle = !inSingle;
@@ -441,13 +450,11 @@ export function getScopePath(
   content: string,
   languageId: string | undefined,
   symbolLine: number,
-  symbolName: string
+  symbolName: string,
 ): string {
   const enclosing = getEnclosingSymbols(content, languageId, symbolLine);
   // Filter out the symbol itself (getEnclosingSymbols may return it)
-  const containers = enclosing.filter(
-    (s) => !(s.name === symbolName && s.line === symbolLine)
-  );
+  const containers = enclosing.filter((s) => !(s.name === symbolName && s.line === symbolLine));
   return containers.map((s) => s.name).join(' › ');
 }
 
@@ -474,9 +481,7 @@ export function buildScopePaths(
   // For each symbol, we need the container names that enclose it (excluding itself).
 
   // Gather all container-kind symbols, sorted by line (outermost first).
-  const containers = symbols
-    .filter((s) => CONTAINER_KINDS.has(s.kind))
-    .sort((a, b) => a.line - b.line);
+  const containers = symbols.filter((s) => CONTAINER_KINDS.has(s.kind)).sort((a, b) => a.line - b.line);
 
   // Precompute endLine for each container (one findSymbolScopeEnd call per container).
   const containerRanges: Array<{ sym: SymbolInfo; endLine: number }> = containers.map((sym) => ({

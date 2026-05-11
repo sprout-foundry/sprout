@@ -114,7 +114,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               </button>
             </div>
             <p className="error-log-hint">
-              Logs are written to <code>~/.config/sprout/logs/</code> (desktop: <code>userData/logs/</code> in the app data folder).
+              Logs are written to <code>~/.config/sprout/logs/</code> (desktop: <code>userData/logs/</code> in the app
+              data folder).
             </p>
           </div>
         </div>

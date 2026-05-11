@@ -33,11 +33,7 @@ export function ToolsTab({
         Array.from(groupedByQuery.entries()).map(([queryId, tools]) => {
           const isCurrentTurn = queryId === maxQueryId;
           const isExpanded = isCurrentTurn || expandedQueries.has(queryId);
-          const groupLabel = isCurrentTurn
-            ? 'Current turn'
-            : queryId === 0
-              ? 'Earlier'
-              : `Turn ${queryId}`;
+          const groupLabel = isCurrentTurn ? 'Current turn' : queryId === 0 ? 'Earlier' : `Turn ${queryId}`;
           return (
             <div key={queryId} className="tool-query-group">
               <div className="tool-query-header" onClick={() => toggleQueryGroup(queryId)}>

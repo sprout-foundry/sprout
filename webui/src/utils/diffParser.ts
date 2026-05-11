@@ -39,7 +39,12 @@ export function parseUnifiedDiffToDocuments(diffText: string): DiffDocuments {
 
     for (const line of lines) {
       // Skip header lines
-      if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
+      if (
+        line.startsWith('diff --git') ||
+        line.startsWith('index ') ||
+        line.startsWith('--- ') ||
+        line.startsWith('+++ ')
+      ) {
         continue;
       }
 

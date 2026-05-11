@@ -7,11 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
-import {
-  startHealthPolling,
-  stopHealthPolling,
-  triggerHealthCheck,
-} from '../services/backendHealth';
+import { startHealthPolling, stopHealthPolling, triggerHealthCheck } from '../services/backendHealth';
 
 export interface BackendReachableState {
   isReachable: boolean;

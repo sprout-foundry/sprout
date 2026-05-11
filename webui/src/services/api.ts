@@ -148,7 +148,20 @@ class ApiService {
     return miscApi.getProviderModels(clientFetch, provider);
   }
 
-  async getProviderCredentials(): Promise<{ storage_backend: string; providers: Array<{ provider: string; display_name: string; env_var: string; requires_api_key: boolean; has_stored_credential: boolean; has_env_credential: boolean; credential_source: string; masked_value: string; key_pool_size: number }> }> {
+  async getProviderCredentials(): Promise<{
+    storage_backend: string;
+    providers: Array<{
+      provider: string;
+      display_name: string;
+      env_var: string;
+      requires_api_key: boolean;
+      has_stored_credential: boolean;
+      has_env_credential: boolean;
+      credential_source: string;
+      masked_value: string;
+      key_pool_size: number;
+    }>;
+  }> {
     return credentialsApi.getProviderCredentials(clientFetch);
   }
 
@@ -160,11 +173,16 @@ class ApiService {
     return credentialsApi.deleteProviderCredential(clientFetch, provider);
   }
 
-  async getMCPServerCredentials(serverName: string): Promise<{ server: string; credentials: Record<string, { status: string; has_value: boolean }> }> {
+  async getMCPServerCredentials(
+    serverName: string,
+  ): Promise<{ server: string; credentials: Record<string, { status: string; has_value: boolean }> }> {
     return credentialsApi.getMCPServerCredentials(clientFetch, serverName);
   }
 
-  async updateMCPServerCredentials(serverName: string, credentials: Record<string, string>): Promise<{ success: boolean; server: string }> {
+  async updateMCPServerCredentials(
+    serverName: string,
+    credentials: Record<string, string>,
+  ): Promise<{ success: boolean; server: string }> {
     return credentialsApi.updateMCPServerCredentials(clientFetch, serverName, credentials);
   }
 
@@ -194,11 +212,13 @@ class ApiService {
     return onboardingApi.getOnboardingStatus(clientFetch);
   }
 
-  async completeOnboarding(payload: {
+  async completeOnboarding(payload: { provider: string; model?: string; api_key?: string }): Promise<{
+    success: boolean;
+    message: string;
     provider: string;
-    model?: string;
-    api_key?: string;
-  }): Promise<{ success: boolean; message: string; provider: string; model: string; validation?: { tested: boolean; model_count?: number } }> {
+    model: string;
+    validation?: { tested: boolean; model_count?: number };
+  }> {
     return onboardingApi.completeOnboarding(clientFetch, payload);
   }
 
@@ -260,7 +280,7 @@ class ApiService {
 
   async browseSSHDirectory(
     hostAlias: string,
-    path?: string
+    path?: string,
   ): Promise<{ path: string; home_path?: string; files: SSHBrowseEntry[] }> {
     return sshApi.browseSSHDirectoryByHostAlias(clientFetch, hostAlias, path);
   }
@@ -375,7 +395,11 @@ class ApiService {
     return gitApi.generateCommitMessage(clientFetch);
   }
 
-  async getGitLog(limit: number, offset: number, opts?: { signal?: AbortSignal }): Promise<{
+  async getGitLog(
+    limit: number,
+    offset: number,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{
     message: string;
     commits: Array<{
       hash: string;
@@ -407,7 +431,10 @@ class ApiService {
     return gitApi.getGitCommitDetail(clientFetch, hash);
   }
 
-  async getGitCommitFileDiff(hash: string, path: string): Promise<{ message: string; hash: string; path: string; diff: string }> {
+  async getGitCommitFileDiff(
+    hash: string,
+    path: string,
+  ): Promise<{ message: string; hash: string; path: string; diff: string }> {
     return gitApi.getGitCommitFileDiff(clientFetch, hash, path);
   }
 
@@ -440,7 +467,10 @@ class ApiService {
     return miscApi.fixFromDeepReview(clientFetch, reviewOutput);
   }
 
-  async startFixFromDeepReview(reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<{
+  async startFixFromDeepReview(
+    reviewOutput: string,
+    options?: { fixPrompt?: string; selectedItems?: string[] },
+  ): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -448,7 +478,10 @@ class ApiService {
     return miscApi.startFixFromDeepReview(clientFetch, reviewOutput, options);
   }
 
-  async getFixFromDeepReviewStatus(jobId: string, since = 0): Promise<{
+  async getFixFromDeepReviewStatus(
+    jobId: string,
+    since = 0,
+  ): Promise<{
     message: string;
     job_id: string;
     session_id: string;
@@ -479,22 +512,42 @@ class ApiService {
     return editorApi.getPrettierConfig(clientFetch, filePath);
   }
 
-  async getDiagnostics(path: string, content: string): Promise<{
+  async getDiagnostics(
+    path: string,
+    content: string,
+  ): Promise<{
     message: string;
     path: string;
-    diagnostics: Array<{ from: number; to: number; severity: 'error' | 'warning' | 'info'; message: string; source: string }>;
+    diagnostics: Array<{
+      from: number;
+      to: number;
+      severity: 'error' | 'warning' | 'info';
+      message: string;
+      source: string;
+    }>;
     version: string;
   }> {
     return editorApi.getDiagnostics(clientFetch, path, content);
   }
 
-  async getSemanticDiagnostics(path: string, content: string, languageId: string, trigger: 'edit' | 'save' = 'edit'): Promise<{
+  async getSemanticDiagnostics(
+    path: string,
+    content: string,
+    languageId: string,
+    trigger: 'edit' | 'save' = 'edit',
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
     method: string;
     capabilities: { diagnostics: boolean; definition: boolean };
-    diagnostics: Array<{ from: number; to: number; severity: 'error' | 'warning' | 'info'; message: string; source: string }>;
+    diagnostics: Array<{
+      from: number;
+      to: number;
+      severity: 'error' | 'warning' | 'info';
+      message: string;
+      source: string;
+    }>;
     duration_ms?: number;
     error?: string;
     version: string;
@@ -502,7 +555,13 @@ class ApiService {
     return editorApi.getSemanticDiagnostics(clientFetch, path, content, languageId, trigger);
   }
 
-  async getSemanticDefinition(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+  async getSemanticDefinition(
+    path: string,
+    content: string,
+    languageId: string,
+    line: number,
+    column: number,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
@@ -516,7 +575,13 @@ class ApiService {
     return editorApi.getSemanticDefinition(clientFetch, path, content, languageId, line, column);
   }
 
-  async getSemanticHover(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+  async getSemanticHover(
+    path: string,
+    content: string,
+    languageId: string,
+    line: number,
+    column: number,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
@@ -530,7 +595,13 @@ class ApiService {
     return editorApi.getSemanticHover(clientFetch, path, content, languageId, line, column);
   }
 
-  async getSemanticRename(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+  async getSemanticRename(
+    path: string,
+    content: string,
+    languageId: string,
+    line: number,
+    column: number,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
@@ -544,13 +615,22 @@ class ApiService {
     return editorApi.getSemanticRename(clientFetch, path, content, languageId, line, column);
   }
 
-  async getSemanticReferences(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+  async getSemanticReferences(
+    path: string,
+    content: string,
+    languageId: string,
+    line: number,
+    column: number,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
     method: string;
     capabilities: { diagnostics: boolean; definition: boolean; hover: boolean; rename: boolean; references: boolean };
-    references?: { locations: Array<{ filePath: string; line: number; startCol: number; endCol: number; lineText: string }>; symbolName: string } | null;
+    references?: {
+      locations: Array<{ filePath: string; line: number; startCol: number; endCol: number; lineText: string }>;
+      symbolName: string;
+    } | null;
     duration_ms?: number;
     error?: string;
     version: string;
@@ -558,13 +638,30 @@ class ApiService {
     return editorApi.getSemanticReferences(clientFetch, path, content, languageId, line, column);
   }
 
-  async getSemanticCodeActions(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+  async getSemanticCodeActions(
+    path: string,
+    content: string,
+    languageId: string,
+    line: number,
+    column: number,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
     method: string;
-    capabilities: { diagnostics: boolean; definition: boolean; hover: boolean; rename: boolean; references: boolean; code_actions: boolean };
-    code_actions?: Array<{ title: string; kind: string; edits: Array<{ filePath: string; from: number; to: number; newText: string }> }> | null;
+    capabilities: {
+      diagnostics: boolean;
+      definition: boolean;
+      hover: boolean;
+      rename: boolean;
+      references: boolean;
+      code_actions: boolean;
+    };
+    code_actions?: Array<{
+      title: string;
+      kind: string;
+      edits: Array<{ filePath: string; from: number; to: number; newText: string }>;
+    }> | null;
     duration_ms?: number;
     error?: string;
     version: string;
@@ -572,7 +669,11 @@ class ApiService {
     return editorApi.getSemanticCodeActions(clientFetch, path, content, languageId, line, column);
   }
 
-  async getSemanticInlayHints(path: string, content: string, languageId: string): Promise<{
+  async getSemanticInlayHints(
+    path: string,
+    content: string,
+    languageId: string,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
@@ -586,7 +687,13 @@ class ApiService {
     return editorApi.getSemanticInlayHints(clientFetch, path, content, languageId);
   }
 
-  async getSemanticSignatureHelp(path: string, content: string, languageId: string, line: number, column: number): Promise<{
+  async getSemanticSignatureHelp(
+    path: string,
+    content: string,
+    languageId: string,
+    line: number,
+    column: number,
+  ): Promise<{
     message: string;
     path: string;
     language_id: string;
@@ -687,7 +794,10 @@ class ApiService {
     return settingsApi.getSettingsProvenance(clientFetch);
   }
 
-  async updateSettings(settings: Record<string, unknown>, layer?: 'session' | 'workspace' | 'global'): Promise<{ message: string }> {
+  async updateSettings(
+    settings: Record<string, unknown>,
+    layer?: 'session' | 'workspace' | 'global',
+  ): Promise<{ message: string }> {
     return settingsApi.updateSettings(clientFetch, settings, layer);
   }
 
@@ -769,15 +879,18 @@ class ApiService {
 
   // ── Search API ───────────────────────────────────────────────────
 
-  async search(query: string, options?: {
-    case_sensitive?: boolean;
-    whole_word?: boolean;
-    regex?: boolean;
-    include?: string;
-    exclude?: string;
-    max_results?: number;
-    context_lines?: number;
-  }): Promise<{
+  async search(
+    query: string,
+    options?: {
+      case_sensitive?: boolean;
+      whole_word?: boolean;
+      regex?: boolean;
+      include?: string;
+      exclude?: string;
+      max_results?: number;
+      context_lines?: number;
+    },
+  ): Promise<{
     results: Array<{
       file: string;
       matches: Array<{
@@ -800,10 +913,13 @@ class ApiService {
 
   // ── Semantic Search API ──────────────────────────────────────────
 
-  async searchSemantic(query: string, options?: {
-    top_k?: number;
-    threshold?: number;
-  }): Promise<{
+  async searchSemantic(
+    query: string,
+    options?: {
+      top_k?: number;
+      threshold?: number;
+    },
+  ): Promise<{
     results: Array<{
       file: string;
       name: string;
@@ -812,7 +928,7 @@ class ApiService {
       end_line: number;
       language: string;
       similarity: number;
-      type: string;  // "code_unit" or "file"
+      type: string; // "code_unit" or "file"
     }>;
     duplicate_clusters: Array<{
       files: string[];
@@ -840,7 +956,11 @@ class ApiService {
     return searchApi.searchSemanticBuild(clientFetch);
   }
 
-  async searchSemanticPreview(file: string, startLine: number, context?: number): Promise<{
+  async searchSemanticPreview(
+    file: string,
+    startLine: number,
+    context?: number,
+  ): Promise<{
     file: string;
     start_line: number;
     snippet: Array<{

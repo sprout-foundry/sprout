@@ -35,9 +35,14 @@ jest.mock('../services/api', () => {
 // resolution cascade that causes OOM under Node 22 + Jest 27.
 jest.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
-  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
-    useNotifications: () => ({ addNotification: noop }),
-  });
+  return Object.assign(
+    function NotificationProviderMock({ children }) {
+      return children;
+    },
+    {
+      useNotifications: () => ({ addNotification: noop }),
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

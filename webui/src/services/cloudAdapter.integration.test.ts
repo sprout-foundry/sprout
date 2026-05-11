@@ -60,7 +60,10 @@ if (typeof Request === 'undefined') {
     headers: Headers | Map<string, string>;
     private _body: string | null;
 
-    constructor(input: string | Request, init?: RequestInit | { method?: string; headers?: HeadersInit; body?: BodyInit }) {
+    constructor(
+      input: string | Request,
+      init?: RequestInit | { method?: string; headers?: HeadersInit; body?: BodyInit },
+    ) {
       if (typeof input === 'string') {
         this.url = input;
         this.method = init?.method?.toUpperCase() ?? 'GET';
@@ -136,9 +139,7 @@ describe('CloudAdapter Integration Tests', () => {
         const method = endpoint.methods[0];
         const testPath = endpoint.path;
 
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         // Make the request
         const response = await adapter.fetch(testPath, { method });
@@ -153,9 +154,7 @@ describe('CloudAdapter Integration Tests', () => {
 
             // Verify URL is valid (not undefined, starts with http or /)
             expect(calledUrl).toBeTruthy();
-            expect(
-              calledUrl.startsWith('http') || calledUrl.startsWith('/')
-            ).toBe(true);
+            expect(calledUrl.startsWith('http') || calledUrl.startsWith('/')).toBe(true);
 
             // Verify headers include client ID
             const fetchInit = fetchCall[1] as RequestInit;
@@ -170,9 +169,7 @@ describe('CloudAdapter Integration Tests', () => {
 
             // Should return a valid response
             expect(response).toBeTruthy();
-            expect(response.ok).toBe(
-              endpoint.category === 'no-op' || !endpoint.syntheticResponse?.['error']
-            );
+            expect(response.ok).toBe(endpoint.category === 'no-op' || !endpoint.syntheticResponse?.['error']);
             break;
 
           case 'wasm-local':
@@ -189,7 +186,7 @@ describe('CloudAdapter Integration Tests', () => {
         // Every endpoint should either call fetch or return a valid response
         // (no 404s, no unhandled errors)
         expect(response).toBeTruthy();
-      }
+      },
     );
   });
 
@@ -198,35 +195,30 @@ describe('CloudAdapter Integration Tests', () => {
   // =========================================================================
 
   describe('Category: foundry-backend - Proxy URL Verification', () => {
-    const foundryBackendEndpoints = getEndpointsByCategory('foundry-backend').filter(
-      (e) => !e.isPrefix
-    );
+    const foundryBackendEndpoints = getEndpointsByCategory('foundry-backend').filter((e) => !e.isPrefix);
 
     /**
      * Test that all foundry-backend endpoints proxy to the correct URL.
      * Some endpoints have special URL rewriting (chat, git, stats, settings),
      * others use standard proxy (apiBase + path).
      */
-    it.each(foundryBackendEndpoints.map((e) => ({
-      endpoint: e,
-      expectedProxyPath: getExpectedProxyPath(e),
-    })))(
-      '$endpoint.path → $expectedProxyPath',
-      async ({ endpoint, expectedProxyPath }) => {
-        const method = endpoint.methods[0];
-        const testPath = endpoint.path;
+    it.each(
+      foundryBackendEndpoints.map((e) => ({
+        endpoint: e,
+        expectedProxyPath: getExpectedProxyPath(e),
+      })),
+    )('$endpoint.path → $expectedProxyPath', async ({ endpoint, expectedProxyPath }) => {
+      const method = endpoint.methods[0];
+      const testPath = endpoint.path;
 
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
-        await adapter.fetch(testPath, { method });
+      await adapter.fetch(testPath, { method });
 
-        expect(mockFetch).toHaveBeenCalledTimes(1);
-        const call = mockFetch.mock.calls[0];
-        expect(call[0]).toBe(`${mockConfig.apiBase}${expectedProxyPath}`);
-      }
-    );
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe(`${mockConfig.apiBase}${expectedProxyPath}`);
+    });
   });
 
   describe('Category: synthetic - No Fetch Calls', () => {
@@ -236,35 +228,35 @@ describe('CloudAdapter Integration Tests', () => {
      * Test that all synthetic endpoints return responses without calling fetch.
      * These are handled entirely client-side.
      */
-    it.each(syntheticEndpoints.map((e) => ({
-      endpoint: e,
-      firstMethod: e.methods[0],
-    })))(
-      '$endpoint.path ($endpoint.description) - synthetic response',
-      async ({ endpoint, firstMethod }) => {
-        const response = await adapter.fetch(endpoint.path, { method: firstMethod });
+    it.each(
+      syntheticEndpoints.map((e) => ({
+        endpoint: e,
+        firstMethod: e.methods[0],
+      })),
+    )('$endpoint.path ($endpoint.description) - synthetic response', async ({ endpoint, firstMethod }) => {
+      const response = await adapter.fetch(endpoint.path, { method: firstMethod });
 
-        // Should NOT call fetch
-        expect(mockFetch).not.toHaveBeenCalled();
+      // Should NOT call fetch
+      expect(mockFetch).not.toHaveBeenCalled();
 
-        // Check if this synthetic response has an error field
-        const hasError = endpoint.syntheticResponse &&
-          typeof endpoint.syntheticResponse === 'object' &&
-          'error' in endpoint.syntheticResponse;
+      // Check if this synthetic response has an error field
+      const hasError =
+        endpoint.syntheticResponse &&
+        typeof endpoint.syntheticResponse === 'object' &&
+        'error' in endpoint.syntheticResponse;
 
-        const expectedStatus = hasError ? 400 : 200;
+      const expectedStatus = hasError ? 400 : 200;
 
-        // Should return a valid response (may be error response)
-        expect(response.ok).toBe(!hasError);
-        expect(response.status).toBe(expectedStatus);
+      // Should return a valid response (may be error response)
+      expect(response.ok).toBe(!hasError);
+      expect(response.status).toBe(expectedStatus);
 
-        // If synthetic response is defined, it should match
-        if (endpoint.syntheticResponse) {
-          const data = await response.json();
-          expect(data).toEqual(endpoint.syntheticResponse);
-        }
+      // If synthetic response is defined, it should match
+      if (endpoint.syntheticResponse) {
+        const data = await response.json();
+        expect(data).toEqual(endpoint.syntheticResponse);
       }
-    );
+    });
   });
 
   describe('Category: no-op - No Fetch Calls', () => {
@@ -274,27 +266,26 @@ describe('CloudAdapter Integration Tests', () => {
      * Test that all no-op endpoints return success responses without calling fetch.
      * These are endpoints that don't apply in cloud mode but shouldn't break callers.
      */
-    it.each(noOpEndpoints.map((e) => ({
-      endpoint: e,
-      firstMethod: e.methods[0],
-    })))(
-      '$endpoint.path - no-op success response',
-      async ({ endpoint, firstMethod }) => {
-        const response = await adapter.fetch(endpoint.path, { method: firstMethod });
+    it.each(
+      noOpEndpoints.map((e) => ({
+        endpoint: e,
+        firstMethod: e.methods[0],
+      })),
+    )('$endpoint.path - no-op success response', async ({ endpoint, firstMethod }) => {
+      const response = await adapter.fetch(endpoint.path, { method: firstMethod });
 
-        // Should NOT call fetch
-        expect(mockFetch).not.toHaveBeenCalled();
+      // Should NOT call fetch
+      expect(mockFetch).not.toHaveBeenCalled();
 
-        // Should return a valid response
-        expect(response.ok).toBe(true);
+      // Should return a valid response
+      expect(response.ok).toBe(true);
 
-        // Synthetic response should be present
-        if (endpoint.syntheticResponse) {
-          const data = await response.json();
-          expect(data).toEqual(endpoint.syntheticResponse);
-        }
+      // Synthetic response should be present
+      if (endpoint.syntheticResponse) {
+        const data = await response.json();
+        expect(data).toEqual(endpoint.syntheticResponse);
       }
-    );
+    });
   });
 
   describe('Category: wasm-local - Standard Proxy', () => {
@@ -305,29 +296,26 @@ describe('CloudAdapter Integration Tests', () => {
      * In cloud mode, these are handled client-side by WASM, so the adapter
      * just proxies them to apiBase + path for potential forwarding.
      */
-    it.each(wasmLocalEndpoints.map((e) => ({
-      endpoint: e,
-      firstMethod: e.methods[0],
-    })))(
-      '$endpoint.path - falls through to standard proxy',
-      async ({ endpoint, firstMethod }) => {
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+    it.each(
+      wasmLocalEndpoints.map((e) => ({
+        endpoint: e,
+        firstMethod: e.methods[0],
+      })),
+    )('$endpoint.path - falls through to standard proxy', async ({ endpoint, firstMethod }) => {
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
-        await adapter.fetch(endpoint.path, { method: firstMethod });
+      await adapter.fetch(endpoint.path, { method: firstMethod });
 
-        // Should call fetch with apiBase + path
-        expect(mockFetch).toHaveBeenCalledTimes(1);
-        const call = mockFetch.mock.calls[0];
-        expect(call[0]).toBe(`${mockConfig.apiBase}${endpoint.path}`);
+      // Should call fetch with apiBase + path
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe(`${mockConfig.apiBase}${endpoint.path}`);
 
-        // Should include headers
-        const fetchInit = call[1] as RequestInit;
-        expect(fetchInit?.credentials).toBe('include');
-        expect(fetchInit?.headers).toBeTruthy();
-      }
-    );
+      // Should include headers
+      const fetchInit = call[1] as RequestInit;
+      expect(fetchInit?.credentials).toBe('include');
+      expect(fetchInit?.headers).toBeTruthy();
+    });
   });
 
   // =========================================================================
@@ -336,9 +324,7 @@ describe('CloudAdapter Integration Tests', () => {
 
   describe('URL Rewriting - Chat Endpoints', () => {
     it('/api/query POST → /api/proxy/chat', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -350,9 +336,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query/steer POST → /api/proxy/chat (with steer flag)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query/steer', {
         method: 'POST',
@@ -366,9 +350,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query/stop POST → /api/proxy/chat/stop', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query/stop', { method: 'POST' });
 
@@ -377,9 +359,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query/status GET → /api/proxy/chat/status', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: 'idle' }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'idle' }), { status: 200 }));
 
       await adapter.fetch('/api/query/status', { method: 'GET' });
 
@@ -422,38 +402,28 @@ describe('CloudAdapter Integration Tests', () => {
 
       for (const path of gitPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'POST' });
 
         expect(mockFetch).toHaveBeenCalledTimes(1);
-        expect(mockFetch.mock.calls[0][0]).toBe(
-          `${mockConfig.apiBase}${path.replace('/api/git/', '/api/proxy/git/')}`
-        );
+        expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}${path.replace('/api/git/', '/api/proxy/git/')}`);
       }
     });
 
     it('preserves query parameters in git URLs', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ diff: '' }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ diff: '' }), { status: 200 }));
 
       await adapter.fetch('/api/git/diff?path=file.txt&cached=false', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        `${mockConfig.apiBase}/api/proxy/git/diff?path=file.txt&cached=false`
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}/api/proxy/git/diff?path=file.txt&cached=false`);
     });
   });
 
   describe('URL Rewriting - Stats Endpoint', () => {
     it('/api/stats → /api/proxy/stats', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ stats: {} }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ stats: {} }), { status: 200 }));
 
       await adapter.fetch('/api/stats', { method: 'GET' });
 
@@ -464,9 +434,7 @@ describe('CloudAdapter Integration Tests', () => {
 
   describe('URL Rewriting - Settings Endpoints', () => {
     it('/api/settings → /api/proxy/settings', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ settings: {} }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ settings: {} }), { status: 200 }));
 
       await adapter.fetch('/api/settings', { method: 'GET' });
 
@@ -486,38 +454,30 @@ describe('CloudAdapter Integration Tests', () => {
 
       for (const path of settingsPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'GET' });
 
         expect(mockFetch).toHaveBeenCalledTimes(1);
         expect(mockFetch.mock.calls[0][0]).toBe(
-          `${mockConfig.apiBase}${path.replace('/api/settings', '/api/proxy/settings')}`
+          `${mockConfig.apiBase}${path.replace('/api/settings', '/api/proxy/settings')}`,
         );
       }
     });
 
     it('preserves query parameters in settings URLs', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ settings: {} }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ settings: {} }), { status: 200 }));
 
       await adapter.fetch('/api/settings?layer=provenance', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        `${mockConfig.apiBase}/api/proxy/settings?layer=provenance`
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}/api/proxy/settings?layer=provenance`);
     });
   });
 
   describe('URL Rewriting - Other foundry-backend Endpoints', () => {
     it('/api/upload/image → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/upload/image', { method: 'POST' });
 
@@ -526,9 +486,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/diagnostics → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/diagnostics', { method: 'POST' });
 
@@ -537,9 +495,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/semantic → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/semantic', { method: 'POST' });
 
@@ -548,9 +504,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/lsp/* → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/lsp/status', { method: 'GET' });
 
@@ -559,9 +513,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/chat-sessions → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ sessions: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
 
       await adapter.fetch('/api/chat-sessions', { method: 'GET' });
 
@@ -570,9 +522,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/history/* → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ changes: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ changes: [] }), { status: 200 }));
 
       await adapter.fetch('/api/history/changes', { method: 'GET' });
 
@@ -581,9 +531,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/costs/* → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ summary: {} }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ summary: {} }), { status: 200 }));
 
       await adapter.fetch('/api/costs/summary', { method: 'GET' });
 
@@ -592,9 +540,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/hotkeys → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ hotkeys: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ hotkeys: [] }), { status: 200 }));
 
       await adapter.fetch('/api/hotkeys', { method: 'GET' });
 
@@ -603,9 +549,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/providers → apiBase + path (standard proxy)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ providers: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ providers: [] }), { status: 200 }));
 
       await adapter.fetch('/api/providers', { method: 'GET' });
 
@@ -620,9 +564,7 @@ describe('CloudAdapter Integration Tests', () => {
 
   describe('Body Translation - Chat Endpoints', () => {
     it('/api/query POST translates { query } to { messages, stream }', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -638,9 +580,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query POST preserves chat_id in translated body', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -654,9 +594,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query POST preserves provider and model', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -673,9 +611,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query POST preserves workspace_root and system_prompt', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -692,9 +628,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query/steer POST adds steer: true flag', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query/steer', {
         method: 'POST',
@@ -708,9 +642,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query/stop POST passes body through unchanged', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       const requestBody = { chat_id: 'chat-123', reason: 'user requested' };
       await adapter.fetch('/api/query/stop', {
@@ -723,17 +655,13 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/query/status GET passes through unchanged (no body translation)', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ status: 'idle' }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ status: 'idle' }), { status: 200 }));
 
       await adapter.fetch('/api/query/status', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       // Query parameters are stripped when matching the endpoint, so only the path is used
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        `${mockConfig.apiBase}/api/proxy/chat/status`
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}/api/proxy/chat/status`);
       expect(mockFetch.mock.calls[0][1]?.body).toBeUndefined();
     });
   });
@@ -757,9 +685,7 @@ describe('CloudAdapter Integration Tests', () => {
 
         const method = endpoint.methods[0];
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         try {
           await adapter.fetch(endpoint.path, { method });
@@ -769,36 +695,26 @@ describe('CloudAdapter Integration Tests', () => {
           if (endpoint.category === 'synthetic' || endpoint.category === 'no-op') {
             // Should NOT have called fetch
             if (fetchCalled) {
-              errors.push(
-                `${endpoint.path} (${endpoint.category}): Expected no fetch call, but fetch was called`
-              );
+              errors.push(`${endpoint.path} (${endpoint.category}): Expected no fetch call, but fetch was called`);
             }
           } else {
             // Should have called fetch
             if (!fetchCalled) {
-              errors.push(
-                `${endpoint.path} (${endpoint.category}): Expected fetch call, but fetch was not called`
-              );
+              errors.push(`${endpoint.path} (${endpoint.category}): Expected fetch call, but fetch was not called`);
             } else {
               const calledUrl = mockFetch.mock.calls[0][0] as string;
               if (!calledUrl || !calledUrl.startsWith('http')) {
-                errors.push(
-                  `${endpoint.path} (${endpoint.category}): Invalid fetch URL: ${calledUrl}`
-                );
+                errors.push(`${endpoint.path} (${endpoint.category}): Invalid fetch URL: ${calledUrl}`);
               }
             }
           }
         } catch (error) {
-          errors.push(
-            `${endpoint.path} (${endpoint.category}): Unexpected error: ${error}`
-          );
+          errors.push(`${endpoint.path} (${endpoint.category}): Unexpected error: ${error}`);
         }
       }
 
       if (errors.length > 0) {
-        throw new Error(
-          `${errors.length} endpoint handling errors:\n${errors.map((e) => `  - ${e}`).join('\n')}`
-        );
+        throw new Error(`${errors.length} endpoint handling errors:\n${errors.map((e) => `  - ${e}`).join('\n')}`);
       }
     });
   });
@@ -819,9 +735,7 @@ describe('CloudAdapter Integration Tests', () => {
 
       for (const path of subPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'GET' });
 
@@ -840,9 +754,7 @@ describe('CloudAdapter Integration Tests', () => {
 
       for (const path of subPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'GET' });
 
@@ -861,9 +773,7 @@ describe('CloudAdapter Integration Tests', () => {
 
       for (const path of subPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'GET' });
 
@@ -882,9 +792,7 @@ describe('CloudAdapter Integration Tests', () => {
 
       for (const path of subPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'GET' });
 
@@ -895,16 +803,11 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('/api/chat-session/* prefix matches sub-paths', async () => {
-      const subPaths = [
-        '/api/chat-session/abc123',
-        '/api/chat-session/def456/history',
-      ];
+      const subPaths = ['/api/chat-session/abc123', '/api/chat-session/def456/history'];
 
       for (const path of subPaths) {
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         await adapter.fetch(path, { method: 'GET' });
 
@@ -917,9 +820,7 @@ describe('CloudAdapter Integration Tests', () => {
 
   describe('Default Fallthrough - Unregistered Paths', () => {
     it('unregistered /api/* paths proxy to apiBase + path', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/unregistered/endpoint', { method: 'GET' });
 
@@ -928,9 +829,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('non-/api paths are proxied as-is', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/health', { method: 'GET' });
 
@@ -941,42 +840,30 @@ describe('CloudAdapter Integration Tests', () => {
 
   describe('Query Parameters Preserved in Proxied Requests', () => {
     it('preserves query parameters for git endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ diff: '' }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ diff: '' }), { status: 200 }));
 
       await adapter.fetch('/api/git/diff?path=file.txt&cached=false', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        `${mockConfig.apiBase}/api/proxy/git/diff?path=file.txt&cached=false`
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}/api/proxy/git/diff?path=file.txt&cached=false`);
     });
 
     it('preserves query parameters for settings endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ settings: {} }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ settings: {} }), { status: 200 }));
 
       await adapter.fetch('/api/settings?layer=provenance', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        `${mockConfig.apiBase}/api/proxy/settings?layer=provenance`
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}/api/proxy/settings?layer=provenance`);
     });
 
     it('preserves query parameters for standard proxy endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ providers: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ providers: [] }), { status: 200 }));
 
       await adapter.fetch('/api/providers?type=llm&limit=10', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toBe(
-        `${mockConfig.apiBase}/api/providers?type=llm&limit=10`
-      );
+      expect(mockFetch.mock.calls[0][0]).toBe(`${mockConfig.apiBase}/api/providers?type=llm&limit=10`);
     });
   });
 
@@ -991,18 +878,14 @@ describe('CloudAdapter Integration Tests', () => {
      * - credentials: 'include'
      */
     it('all foundry-backend endpoints include WebUI client ID header', async () => {
-      const foundryEndpoints = getEndpointsByCategory('foundry-backend').filter(
-        (e) => !e.isPrefix
-      );
+      const foundryEndpoints = getEndpointsByCategory('foundry-backend').filter((e) => !e.isPrefix);
 
       const errors: string[] = [];
 
       for (const endpoint of foundryEndpoints) {
         const method = endpoint.methods[0];
         mockFetch.mockClear();
-        mockFetch.mockResolvedValueOnce(
-          new Response(JSON.stringify({ success: true }), { status: 200 })
-        );
+        mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
         try {
           await adapter.fetch(endpoint.path, { method });
@@ -1015,33 +898,27 @@ describe('CloudAdapter Integration Tests', () => {
 
           if (clientId !== 'test-client-id-123') {
             errors.push(
-              `${endpoint.path} (${method}): Expected client ID header 'test-client-id-123', got '${clientId}'`
+              `${endpoint.path} (${method}): Expected client ID header 'test-client-id-123', got '${clientId}'`,
             );
           }
 
           if (fetchInit?.credentials !== 'include') {
             errors.push(
-              `${endpoint.path} (${method}): Expected credentials 'include', got '${fetchInit?.credentials}'`
+              `${endpoint.path} (${method}): Expected credentials 'include', got '${fetchInit?.credentials}'`,
             );
           }
         } catch (error) {
-          errors.push(
-            `${endpoint.path} (${method}): Unexpected error checking headers: ${error}`
-          );
+          errors.push(`${endpoint.path} (${method}): Unexpected error checking headers: ${error}`);
         }
       }
 
       if (errors.length > 0) {
-        throw new Error(
-          `${errors.length} header injection errors:\n${errors.map((e) => `  - ${e}`).join('\n')}`
-        );
+        throw new Error(`${errors.length} header injection errors:\n${errors.map((e) => `  - ${e}`).join('\n')}`);
       }
     });
 
     it('preserves existing headers in proxied requests', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       const customHeaders = new Headers({
         'Content-Type': 'application/json',
@@ -1082,7 +959,8 @@ describe('CloudAdapter Integration Tests', () => {
 
         const response = await adapter.fetch(endpoint.path, { method });
 
-        const hasError = endpoint.syntheticResponse &&
+        const hasError =
+          endpoint.syntheticResponse &&
           typeof endpoint.syntheticResponse === 'object' &&
           'error' in endpoint.syntheticResponse;
 
@@ -1132,16 +1010,12 @@ describe('CloudAdapter Integration Tests', () => {
       expect(mockFetch).not.toHaveBeenCalled();
 
       // Backend endpoint
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
       await adapter.fetch('/api/git/status', { method: 'GET' });
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       // WASM-local endpoint
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ files: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
       await adapter.fetch('/api/files', { method: 'GET' });
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
@@ -1153,16 +1027,12 @@ describe('CloudAdapter Integration Tests', () => {
       expect(mockFetch).not.toHaveBeenCalled();
 
       // Backend endpoint
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
       await adapter.fetch(new URL('/api/git/status', 'https://api.sprout.dev'));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       // WASM-local endpoint
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ files: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
       await adapter.fetch(new URL('/api/files', 'https://api.sprout.dev'));
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
@@ -1176,17 +1046,13 @@ describe('CloudAdapter Integration Tests', () => {
 
       // Backend endpoint
       const request2 = new Request('/api/git/status', { method: 'GET' });
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
       await adapter.fetch(request2);
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
       // WASM-local endpoint
       const request3 = new Request('/api/files', { method: 'GET' });
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ files: [] }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
       await adapter.fetch(request3);
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
@@ -1198,25 +1064,19 @@ describe('CloudAdapter Integration Tests', () => {
 
   describe('Edge Cases', () => {
     it('handles case-insensitive HTTP methods', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/stats', { method: 'get' });
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/stats', { method: 'GeT' });
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('handles empty bodies in POST requests', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/query', {
         method: 'POST',
@@ -1229,9 +1089,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('handles invalid JSON bodies gracefully', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       // Invalid JSON should be passed through as-is
       await adapter.fetch('/api/query', {
@@ -1247,9 +1105,7 @@ describe('CloudAdapter Integration Tests', () => {
     });
 
     it('handles URLs with fragments', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ success: true }), { status: 200 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
 
       await adapter.fetch('/api/settings#section', { method: 'GET' });
 

@@ -602,10 +602,8 @@ describe('TerminalPane wordSeparator', () => {
     const { Terminal } = require('@xterm/xterm');
     const calls = Terminal.mock.calls;
     // Find the call that passed options (first arg is an object)
-    const optionsCall = calls.find(
-      (call: unknown[]) => call[0] && typeof call[0] === 'object'
-    );
+    const optionsCall = calls.find((call: unknown[]) => call[0] && typeof call[0] === 'object');
     expect(optionsCall).toBeDefined();
-    expect(optionsCall[0].wordSeparator).toBe(" ()[]{}',\"`");
+    expect(optionsCall[0].wordSeparator).toBe(' ()[]{}\',"`');
   });
 });

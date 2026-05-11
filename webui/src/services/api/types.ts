@@ -286,7 +286,7 @@ export interface HotkeyEntry {
 export interface HotkeyConfig {
   version: string;
   hotkeys: HotkeyEntry[];
-  path?: string;  // Filesystem path to the hotkeys config file
+  path?: string; // Filesystem path to the hotkeys config file
 }
 
 // ── MCP Settings interfaces ─────────────────────────────────────────
@@ -613,7 +613,7 @@ export interface SemanticSearchResult {
   end_line: number;
   language: string;
   similarity: number;
-  type: string;  // "code_unit" or "file"
+  type: string; // "code_unit" or "file"
 }
 
 export interface SemanticSearchDuplicateCluster {
@@ -725,7 +725,10 @@ export interface SemanticReferencesResponse {
   language_id: string;
   method: string;
   capabilities: SemanticCapabilities & { hover: boolean; rename: boolean; references: boolean };
-  references?: { locations: Array<{ filePath: string; line: number; startCol: number; endCol: number; lineText: string }>; symbolName: string } | null;
+  references?: {
+    locations: Array<{ filePath: string; line: number; startCol: number; endCol: number; lineText: string }>;
+    symbolName: string;
+  } | null;
   duration_ms?: number;
   error?: string;
   version: string;
@@ -737,7 +740,11 @@ export interface SemanticCodeActionsResponse {
   language_id: string;
   method: string;
   capabilities: SemanticCapabilities & { hover: boolean; rename: boolean; references: boolean; code_actions: boolean };
-  code_actions?: Array<{ title: string; kind: string; edits: Array<{ filePath: string; from: number; to: number; newText: string }> }> | null;
+  code_actions?: Array<{
+    title: string;
+    kind: string;
+    edits: Array<{ filePath: string; from: number; to: number; newText: string }>;
+  }> | null;
   duration_ms?: number;
   error?: string;
   version: string;

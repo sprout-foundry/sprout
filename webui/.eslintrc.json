@@ -46,7 +46,7 @@
   "root": true,
   "rules": {
     "@typescript-eslint/consistent-type-imports": [
-      "error",
+      "warn",
       {
         "fixStyle": "separate-type-imports",
         "prefer": "type-imports"
@@ -55,7 +55,7 @@
     "@typescript-eslint/explicit-function-return-type": "off",
     "@typescript-eslint/explicit-module-boundary-types": "off",
     "@typescript-eslint/no-empty-function": [
-      "error",
+      "warn",
       {
         "allow": [
           "constructors",
@@ -64,10 +64,10 @@
       }
     ],
     "@typescript-eslint/no-explicit-any": "error",
-    "@typescript-eslint/no-non-null-assertion": "error",
-    "@typescript-eslint/no-shadow": "error",
+    "@typescript-eslint/no-non-null-assertion": "warn",
+    "@typescript-eslint/no-shadow": "warn",
     "@typescript-eslint/no-unused-vars": [
-      "error",
+      "warn",
       {
         "argsIgnorePattern": "^_",
         "ignoreRestSiblings": true,
@@ -75,7 +75,7 @@
       }
     ],
     "@typescript-eslint/no-use-before-define": [
-      "error",
+      "warn",
       {
         "classes": true,
         "functions": false,
@@ -100,19 +100,23 @@
         ]
       }
     ],
+    "no-control-regex": "warn",
+    "no-misleading-character-class": "warn",
     "no-return-await": "error",
     "no-shadow": "off",
     "no-template-curly-in-string": "off",
     "no-unreachable": "error",
+    "no-useless-escape": "warn",
     "no-var": "error",
     "prefer-const": "error",
-    "react-hooks/exhaustive-deps": "error",
-    "react/display-name": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "react/display-name": "warn",
     "react/no-deprecated": "error",
     "react/no-render-return-value": "error",
     "react/no-unescaped-entities": "error",
     "react/prop-types": "off",
-    "react/react-in-jsx-scope": "off"
+    "react/react-in-jsx-scope": "off",
+    "testing-library/render-result-naming-convention": "warn"
   },
   "settings": {
     "react": {

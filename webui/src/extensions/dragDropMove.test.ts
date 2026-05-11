@@ -95,7 +95,11 @@ function createMockDragEvent(overrides: Partial<DragEvent> = {}): DragEvent {
 
 // ── Mock view factory (for tests that don't need document verification) ──
 
-function createMockView(content: string = 'hello world', selectionFrom: number = 0, selectionTo: number = 5): EditorView {
+function createMockView(
+  content: string = 'hello world',
+  selectionFrom: number = 0,
+  selectionTo: number = 5,
+): EditorView {
   const state = EditorState.create({
     doc: content,
     selection: { anchor: selectionFrom, head: selectionTo },
@@ -113,7 +117,6 @@ function createMockView(content: string = 'hello world', selectionFrom: number =
 // ══════════════════════════════════════════════════════════════════════
 
 describe('dragDropMove handlers', () => {
-
   // -----------------------------------------------------------------------
   // dragstart handler
   // -----------------------------------------------------------------------

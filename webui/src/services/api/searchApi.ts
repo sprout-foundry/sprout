@@ -2,7 +2,7 @@
  * Search domain API — adapter-aware search operations.
  */
 
-import {
+import type {
   SearchOptions,
   SearchResponse,
   SearchReplaceRequest,
@@ -28,7 +28,10 @@ export async function search(fetchFn: typeof fetch, query: string, options?: Sea
   return response.json();
 }
 
-export async function searchReplace(fetchFn: typeof fetch, request: SearchReplaceRequest): Promise<SearchReplaceResponse> {
+export async function searchReplace(
+  fetchFn: typeof fetch,
+  request: SearchReplaceRequest,
+): Promise<SearchReplaceResponse> {
   const response = await fetchFn('/api/search/replace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -38,7 +41,11 @@ export async function searchReplace(fetchFn: typeof fetch, request: SearchReplac
   return response.json();
 }
 
-export async function searchSemantic(fetchFn: typeof fetch, query: string, options?: SemanticSearchOptions): Promise<SemanticSearchResponse> {
+export async function searchSemantic(
+  fetchFn: typeof fetch,
+  query: string,
+  options?: SemanticSearchOptions,
+): Promise<SemanticSearchResponse> {
   const params = new URLSearchParams({ query });
   if (options?.top_k) params.set('top_k', String(options.top_k));
   if (options?.threshold != null) params.set('threshold', String(options.threshold));
@@ -58,12 +65,17 @@ export async function searchSemanticBuild(fetchFn: typeof fetch): Promise<{ stat
   const response = await fetchFn('/api/search/semantic/build', { method: 'POST' });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error((data as Record<string, unknown>).error as string || 'Failed to start build');
+    throw new Error(((data as Record<string, unknown>).error as string) || 'Failed to start build');
   }
   return response.json();
 }
 
-export async function searchSemanticPreview(fetchFn: typeof fetch, file: string, startLine: number, context?: number): Promise<SemanticSearchPreviewResponse> {
+export async function searchSemanticPreview(
+  fetchFn: typeof fetch,
+  file: string,
+  startLine: number,
+  context?: number,
+): Promise<SemanticSearchPreviewResponse> {
   const params = new URLSearchParams({ file, start_line: String(startLine) });
   if (context) params.set('context', String(context));
   const response = await fetchFn(`/api/search/semantic/preview?${params}`);

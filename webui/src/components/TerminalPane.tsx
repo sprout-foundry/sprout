@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { X, TriangleAlert, Terminal } from 'lucide-react';
 import type { Terminal as XTerm } from '@xterm/xterm';
+import type { SearchAddon } from '@xterm/addon-search';
+import type { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { useTheme } from '../contexts/ThemeContext';
 import TerminalSearchBar from './TerminalSearchBar';
 import TerminalContextMenu from './TerminalContextMenu';
@@ -47,11 +49,25 @@ interface TerminalPaneProps {
 }
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
-  ({ isActive, isConnected = true, showCloseButton, onClose, onConnectionChange, preferredShell, fontSize, reattachSessionId, onProcessExit, copyOnSelect = false }, ref) => {
+  (
+    {
+      isActive,
+      isConnected = true,
+      showCloseButton,
+      onClose,
+      onConnectionChange,
+      preferredShell,
+      fontSize,
+      reattachSessionId,
+      onProcessExit,
+      copyOnSelect = false,
+    },
+    ref,
+  ) => {
     const { themePack } = useTheme();
 
     // ── Search state (needed before hooks so we can wire callbacks) ──
-    const searchAddonRef = useRef<import('@xterm/addon-search').SearchAddon | null>(null);
+    const searchAddonRef = useRef<SearchAddon | null>(null);
     const searchInitialQueryRef = useRef<string | null>(null);
 
     // ═══════════════════════════════════════════════════════════════════
@@ -97,54 +113,64 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     // 4. PTY input handler with reverse-i-search overlay tracking
     // ═══════════════════════════════════════════════════════════════════
-    const terminalWSRefForPty = useRef<import('../services/terminalWebSocket').TerminalWebSocketService | null>(null);
+    const terminalWSRefForPty = useRef<TerminalWebSocketService | null>(null);
 
-    const {
-      reverseSearchVisible,
-      reverseSearchQuery,
-      handlePtyInput,
-      resetReverseSearch,
-    } = useReverseSearch({
+    const { reverseSearchVisible, reverseSearchQuery, handlePtyInput, resetReverseSearch } = useReverseSearch({
       terminalWSRef: terminalWSRefForPty,
     });
 
     // ═══════════════════════════════════════════════════════════════════
     // 5. xterm initialization hook
     // ═══════════════════════════════════════════════════════════════════
-    const onData = useCallback((data: string) => {
-      if (wasmActiveRef.current) {
-        handleWasmInput(data);
-      } else {
-        handlePtyInput(data);
-      }
-    }, [handleWasmInput, handlePtyInput, wasmActiveRef]);
+    const onData = useCallback(
+      (data: string) => {
+        if (wasmActiveRef.current) {
+          handleWasmInput(data);
+        } else {
+          handlePtyInput(data);
+        }
+      },
+      [handleWasmInput, handlePtyInput, wasmActiveRef],
+    );
 
-    const onPaste = useCallback((text: string) => {
-      if (wasmActiveRef.current) {
-        handleWasmInput(text);
-      } else {
-        handlePtyInput(text);
-      }
-    }, [handleWasmInput, handlePtyInput, wasmActiveRef]);
+    const onPaste = useCallback(
+      (text: string) => {
+        if (wasmActiveRef.current) {
+          handleWasmInput(text);
+        } else {
+          handlePtyInput(text);
+        }
+      },
+      [handleWasmInput, handlePtyInput, wasmActiveRef],
+    );
 
-    const onSearchResults = useCallback((resultIndex: number | undefined, resultCount: number | undefined) => {
-      setSearchResults(resultIndex, resultCount);
-    }, [setSearchResults]);
+    const onSearchResults = useCallback(
+      (resultIndex: number | undefined, resultCount: number | undefined) => {
+        setSearchResults(resultIndex, resultCount);
+      },
+      [setSearchResults],
+    );
 
-    const onSearchToggle = useCallback((selection: string | null) => {
-      if (searchVisible) {
-        searchAddonRef.current?.clearDecorations();
-        setSearchVisible(false);
-      } else {
-        searchInitialQueryRef.current = selection;
-        setSearchVisible(true);
-      }
-    }, [searchVisible, setSearchVisible]);
+    const onSearchToggle = useCallback(
+      (selection: string | null) => {
+        if (searchVisible) {
+          searchAddonRef.current?.clearDecorations();
+          setSearchVisible(false);
+        } else {
+          searchInitialQueryRef.current = selection;
+          setSearchVisible(true);
+        }
+      },
+      [searchVisible, setSearchVisible],
+    );
 
     // Save scrollback for dispose — needs session's terminalWSRef
-    const onSaveScrollbackForDispose = useCallback((sessionId: string) => {
-      saveScrollback(sessionId);
-    }, [saveScrollback]);
+    const onSaveScrollbackForDispose = useCallback(
+      (sessionId: string) => {
+        saveScrollback(sessionId);
+      },
+      [saveScrollback],
+    );
 
     // ═══════════════════════════════════════════════════════════════════
     // We need session hook's sendResize BEFORE creating xterm hook's
@@ -155,7 +181,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
 
     // Temporarily null — will be wired after session hook creates it
-    const sessionTerminalWSRef = useRef<import('../services/terminalWebSocket').TerminalWebSocketService | null>(null);
+    const sessionTerminalWSRef = useRef<TerminalWebSocketService | null>(null);
 
     const getSessionIdForXterm = useCallback((): string | undefined => {
       return sessionTerminalWSRef.current?.getSessionId() ?? undefined;
@@ -196,13 +222,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     // 7. Session hook
     // ═══════════════════════════════════════════════════════════════════
-    const {
-      paneConnected,
-      terminalWSRef,
-      eventHandlerRef,
-      sendResize,
-      lastRestoreTimeRef,
-    } = useTerminalSession({
+    const { paneConnected, terminalWSRef, eventHandlerRef, sendResize, lastRestoreTimeRef } = useTerminalSession({
       isActive,
       isConnected,
       xtermRef,
@@ -306,17 +326,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           onSearchError={handleSearchError}
           initialQuery={searchInitialQueryRef.current}
         />
-        <div
-          className="terminal-pane-content"
-          onClick={() => xtermRef.current?.focus()}
-        >
+        <div className="terminal-pane-content" onClick={() => xtermRef.current?.focus()}>
           <div ref={xtermContainerRef} className="terminal-xterm" />
-          {!wasmActive && (
-            <ReverseSearchOverlay
-              query={reverseSearchQuery}
-              visible={reverseSearchVisible}
-            />
-          )}
+          {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
         </div>
         {!paneConnected && !wasmActive && !wasmLoading && (
           <div className="terminal-status-inline">
@@ -326,7 +338,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
         )}
         {wasmLoading && (
           <div className="terminal-status-inline">
-            <Terminal size={14} className="inline-block mr-1 align-text-bottom" style={{ animation: 'spin 1s linear infinite' }} />
+            <Terminal
+              size={14}
+              className="inline-block mr-1 align-text-bottom"
+              style={{ animation: 'spin 1s linear infinite' }}
+            />
             Initializing browser shell (loading WebAssembly)...
           </div>
         )}

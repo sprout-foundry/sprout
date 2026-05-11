@@ -15,20 +15,9 @@
  * Exported factory: {@link errorLensPlugin}
  */
 
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  ViewPlugin,
-  type ViewUpdate,
-  WidgetType,
-} from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { type Extension, Annotation } from '@codemirror/state';
-import {
-  forEachDiagnostic,
-  diagnosticCount,
-  type Diagnostic,
-} from '@codemirror/lint';
+import { forEachDiagnostic, diagnosticCount, type Diagnostic } from '@codemirror/lint';
 
 import './errorLens.css';
 import { debugLog } from '../utils/log';
@@ -82,9 +71,7 @@ function normalizeSeverity(severity: string): string {
 
 /** Numeric priority for determining primary severity when multiple diagnostics share a line. */
 function severityPriority(severity: string): number {
-  return (
-    ({ error: 4, warning: 3, info: 2, hint: 1 } as Record<string, number>)[severity] ?? 2
-  );
+  return ({ error: 4, warning: 3, info: 2, hint: 1 } as Record<string, number>)[severity] ?? 2;
 }
 
 /**
@@ -108,10 +95,7 @@ export function computeErrorLensDecorations(view: EditorView): DecorationSet {
   const { from: viewFrom, to: viewTo } = view.viewport;
 
   // Collect diagnostics by line number
-  const diagnosticsByLine = new Map<
-    number,
-    Array<{ message: string; severity: string }>
-  >();
+  const diagnosticsByLine = new Map<number, Array<{ message: string; severity: string }>>();
 
   forEachDiagnostic(view.state, (d: Diagnostic) => {
     const line = view.state.doc.lineAt(d.from);
@@ -181,8 +165,7 @@ class ErrorLensPluginValue {
     if (update.transactions.some((t) => t.annotation(errorLensAnnotation))) return;
 
     // Recompute when document changes, viewport scrolls, or diagnostics change
-    const diagsChanged =
-      diagnosticCount(update.startState) !== diagnosticCount(update.state);
+    const diagsChanged = diagnosticCount(update.startState) !== diagnosticCount(update.state);
     if (update.docChanged || update.viewportChanged || diagsChanged) {
       this.scheduleUpdate();
     }

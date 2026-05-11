@@ -881,7 +881,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	response.InputResolved = true
 	response.OCRAttempted = true
 
-	analysis, err := processor.AnalyzeImageWithPrompt(imagePath, prompt)
+	analysis, err := processor.AnalyzeImage(imagePath, prompt)
 	if err != nil {
 		errMsg := err.Error()
 

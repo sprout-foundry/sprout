@@ -201,6 +201,15 @@ func (s *JSONLFileStore) Size() int {
 	return len(s.records)
 }
 
+// LoadAll returns a copy of all records currently in the store.
+func (s *JSONLFileStore) LoadAll() ([]VectorRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]VectorRecord, len(s.records))
+	copy(result, s.records)
+	return result, nil
+}
+
 // Close releases any resources held by the store.
 // After calling Close, the store should not be used further.
 // Only writes to disk if the store has been modified since creation or last write.

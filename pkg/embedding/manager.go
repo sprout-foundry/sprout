@@ -3,6 +3,7 @@ package embedding
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -170,9 +171,8 @@ func (m *EmbeddingManager) IndexSize() int {
 }
 
 // BuildIndex runs a full index build for the workspace.
-// It does not block the caller indefinitely: a 30-second timeout is applied
-// internally via context.WithTimeout(). The building flag prevents concurrent
-// builds.
+// It acquires the building lock, validates workspace size, and delegates to
+// buildIndexLocked for the actual work.
 func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) {
 	m.mu.Lock()
 	if m.building {
@@ -188,6 +188,14 @@ func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) 
 		m.mu.Unlock()
 	}()
 
+	return m.buildIndexLocked(ctx)
+}
+
+// buildIndexLocked performs the actual index build. The caller must have
+// already acquired the building lock. Used by both BuildIndex and
+// BuildIndexBackground to avoid the deadlock of calling BuildIndex from
+// a path that already set the building flag.
+func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
@@ -246,7 +254,7 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 			return
 		}
 
-		stats, err := m.BuildIndex(ctx)
+		stats, err := m.buildIndexLocked(ctx)
 		ch <- &BuildResult{
 			Stats: stats,
 			Err:  err,
@@ -265,18 +273,20 @@ type BuildResult struct {
 // AutoBuildWhenReady runs a background index build after a short delay.
 // This is called at agent startup so the index is ready for duplicate
 // detection and context enrichment without waiting for an explicit query.
-// Errors are logged but never fatal.
+// A 2-minute timeout prevents the build from hanging indefinitely.
 func (m *EmbeddingManager) AutoBuildWhenReady() {
 	// Wait a few seconds so we don't compete with startup I/O.
 	time.Sleep(3 * time.Second)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 	stats, err := m.BuildIndex(ctx)
 	if err != nil {
-		// Not fatal — agent works fine without the index.
+		log.Printf("embedding: auto-build failed: %v", err)
 		return
 	}
-	_ = stats
+	log.Printf("embedding: auto-build complete: %d files, %d units in %s",
+		stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
 }
 
 // UpdateFile incrementally updates the index for a single file.

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { MouseEvent, WheelEvent } from 'react';
 import { Image as ImageIcon, Code2, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import ViewerToolbar from './ViewerToolbar';
 import './SvgPreview.css';
+import { sanitizeSvg } from '../utils/svgSanitize';
 
 interface SvgPreviewProps {
   content: string;
@@ -21,6 +22,9 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
   const [svgDimensions, setSvgDimensions] = useState<Dimensions | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Sanitize SVG content to prevent XSS attacks
+  const sanitizedContent = useMemo(() => sanitizeSvg(content), [content]);
 
   // Transform state
   const [zoom, setZoom] = useState<number>(1);
@@ -82,14 +86,14 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
     }
 
     try {
-      const dims = parseSvgDimensions(content);
+      const dims = parseSvgDimensions(sanitizedContent);
       setSvgDimensions(dims);
     } catch (err) {
       setError('Failed to parse SVG content');
     } finally {
       setLoading(false);
     }
-  }, [content, parseSvgDimensions]);
+  }, [content, sanitizedContent, parseSvgDimensions]);
 
   // Fit to window calculation
   const fitToWindow = useCallback(() => {
@@ -197,11 +201,11 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
 
   // Open SVG in browser
   const handleOpenInBrowser = useCallback(() => {
-    const blob = new Blob([content], { type: 'image/svg+xml' });
+    const blob = new Blob([sanitizedContent], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }, [content]);
+  }, [sanitizedContent]);
 
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
@@ -330,7 +334,7 @@ function SvgPreview({ content, fileName, sourcePath }: SvgPreviewProps): JSX.Ele
             width: svgDimensions ? `${svgDimensions.width}px` : 'auto',
             height: svgDimensions ? `${svgDimensions.height}px` : 'auto',
           }}
-          dangerouslySetInnerHTML={{ __html: content }}
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         />
       </div>
 

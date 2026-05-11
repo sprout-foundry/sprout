@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import type { EditorBuffer, EditorPane } from '../types/editor';
+import type { EditorBuffer, EditorFileEntry, EditorPane } from '../types/editor';
 
 interface UseTabOpenParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;
@@ -33,7 +33,7 @@ export function useTabOpen({
 }: UseTabOpenParams) {
   // Open a file in an editor pane
   const openFile = useCallback(
-    (file: Record<string, unknown>) => {
+    (file: EditorFileEntry) => {
       const filePath = file.path;
       const currentBuffers = buffersRef.current;
       const currentActivePane = activePaneIdRef.current;
@@ -58,7 +58,7 @@ export function useTabOpen({
       const newBuffer: EditorBuffer = {
         id: bufferId,
         kind: 'file',
-        file: file as unknown as EditorBuffer['file'],
+        file: file,
         content: '',
         originalContent: '',
         cursorPosition: { line: 0, column: 0 },
@@ -141,8 +141,7 @@ export function useTabOpen({
       }
 
       const currentPanes = panesRef.current;
-      const targetPane =
-        currentPanes.find((p) => p.id === activePaneId) || getRightmostPane(currentPanes);
+      const targetPane = currentPanes.find((p) => p.id === activePaneId) || getRightmostPane(currentPanes);
       const targetPaneId = targetPane?.id ?? activePaneId;
 
       const bufferId = `buffer-${options.kind}-${Date.now()}`;

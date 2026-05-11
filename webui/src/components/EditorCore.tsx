@@ -55,10 +55,17 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { EditorView, ViewUpdate } from '@codemirror/view';
-import { EditorState, Extension, Compartment } from '@codemirror/state';
+import type { ViewUpdate } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
+import type { Extension, Compartment } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
-import { buildLSPPluginExtensions, lspSyncOnDocChange, registerEditorView, unregisterEditorView } from '../extensions/lspExtensions';
+import {
+  buildLSPPluginExtensions,
+  lspSyncOnDocChange,
+  registerEditorView,
+  unregisterEditorView,
+} from '../extensions/lspExtensions';
 import { debugLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
@@ -200,7 +207,12 @@ export default function EditorCore(props: EditorCoreProps): JSX.Element | null {
           // 1. The LSP client is available
           // 2. The view is still the same (not replaced by file switch)
           // 3. The language hasn't changed (prevents stale LSP for rapid switching)
-          if (client && viewRef.current === capturedView && capturedView.dom?.isConnected && lastLSPLanguageRef.current === currentLangId) {
+          if (
+            client &&
+            viewRef.current === capturedView &&
+            capturedView.dom?.isConnected &&
+            lastLSPLanguageRef.current === currentLangId
+          ) {
             const lspExtensions = [
               ...buildLSPPluginExtensions(client, currentFilePath, currentLangId),
               ...lspSyncOnDocChange(currentLangId),
@@ -251,7 +263,18 @@ export default function EditorCore(props: EditorCoreProps): JSX.Element | null {
     //
     // NOTE: Compartment reconfiguration is used for runtime setting changes
     // (word wrap, font size, etc.) that don't require full recreation.
-  }, [containerRef, initialContent, extensions, lspCompartment, className, filePath, languageId, onViewCreated, onViewDestroying, onUpdate]);
+  }, [
+    containerRef,
+    initialContent,
+    extensions,
+    lspCompartment,
+    className,
+    filePath,
+    languageId,
+    onViewCreated,
+    onViewDestroying,
+    onUpdate,
+  ]);
 
   // This component renders nothing — it mounts the editor into containerRef.
   return null;

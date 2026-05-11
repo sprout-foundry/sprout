@@ -2,13 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
 import type { FuzzyResult } from '../utils/fuzzyMatch';
-import {
-  type SymbolInfo,
-  type SymbolKind,
-  KIND_ICONS,
-  extractSymbols,
-  buildScopePaths,
-} from '../utils/symbolUtils';
+import { type SymbolInfo, type SymbolKind, KIND_ICONS, extractSymbols, buildScopePaths } from '../utils/symbolUtils';
 import './GoToSymbolOverlay.css';
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -235,9 +229,7 @@ function GoToSymbolOverlay({
                 />
                 <span className="goto-symbol-line">:{symbol.line}</span>
               </div>
-              {scopePath && (
-                <span className="goto-symbol-scope">{scopePath}</span>
-              )}
+              {scopePath && <span className="goto-symbol-scope">{scopePath}</span>}
             </div>
           );
         })}

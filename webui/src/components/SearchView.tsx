@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
-import {
-  Search,
-  Replace,
-  ChevronDown,
-  ChevronUp,
-  X,
-  AlertCircle,
-  Loader2,
-  ChevronRight,
-  Brain,
-} from 'lucide-react';
+import { Search, Replace, ChevronDown, ChevronUp, X, AlertCircle, Loader2, ChevronRight, Brain } from 'lucide-react';
 import './SearchView.css';
 import type { SearchViewProps, SearchContextMenuState } from './search/types';
 import { useSearchState } from './search/useSearchState';
@@ -43,19 +33,13 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
   const [contextMenu, setContextMenu] = useState<SearchContextMenuState | null>(null);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
-  const onRowContextMenu = useCallback(
-    (e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
-      createRowContextMenuHandler(setContextMenu)(e, filePath, lineNumber, lineText);
-    },
-    [],
-  );
+  const onRowContextMenu = useCallback((e: MouseEvent, filePath: string, lineNumber: number, lineText: string) => {
+    createRowContextMenuHandler(setContextMenu)(e, filePath, lineNumber, lineText);
+  }, []);
 
-  const onFileHeaderContextMenu = useCallback(
-    (e: MouseEvent, filePath: string) => {
-      createFileHeaderContextMenuHandler(setContextMenu)(e, filePath);
-    },
-    [],
-  );
+  const onFileHeaderContextMenu = useCallback((e: MouseEvent, filePath: string) => {
+    createFileHeaderContextMenuHandler(setContextMenu)(e, filePath);
+  }, []);
 
   // ── Semantic hover preview state ─────────────────────────────
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
@@ -78,9 +62,7 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
             snippet: data.snippet,
           });
           const rect = e.currentTarget.getBoundingClientRect();
-          const x = rect.right + 8 + 500 > window.innerWidth
-            ? rect.left - 508
-            : rect.right + 8;
+          const x = rect.right + 8 + 500 > window.innerWidth ? rect.left - 508 : rect.right + 8;
           setPreviewPosition({ x, y: rect.top });
         } catch {
           // Preview not available — silently ignore
@@ -116,18 +98,42 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
 
   // ── Destructure state for readability ────────────────────────
   const {
-    searchQuery, replaceQuery, setReplaceQuery,
-    caseSensitive, wholeWord, useRegex, semanticMode,
-    toggleCaseSensitive, toggleWholeWord, toggleRegex, toggleSemanticMode,
-    filteredResults, semanticResults, semanticDuration, duplicateClusters,
-    truncated, displayMatches, displayFiles,
-    isSearching, error, replaceStatus,
-    showReplace, setShowReplace, handleReplace,
-    excludePatterns, setExcludePatterns,
-    semanticThreshold, setSemanticThreshold,
-    indexStatus, isBuilding,
-    expandedFiles, toggleFile,
-    handleSearchChange, handleSearchKeyDown, handleClear, handleFileClick,
+    searchQuery,
+    replaceQuery,
+    setReplaceQuery,
+    caseSensitive,
+    wholeWord,
+    useRegex,
+    semanticMode,
+    toggleCaseSensitive,
+    toggleWholeWord,
+    toggleRegex,
+    toggleSemanticMode,
+    filteredResults,
+    semanticResults,
+    semanticDuration,
+    duplicateClusters,
+    truncated,
+    displayMatches,
+    displayFiles,
+    isSearching,
+    error,
+    replaceStatus,
+    showReplace,
+    setShowReplace,
+    handleReplace,
+    excludePatterns,
+    setExcludePatterns,
+    semanticThreshold,
+    setSemanticThreshold,
+    indexStatus,
+    isBuilding,
+    expandedFiles,
+    toggleFile,
+    handleSearchChange,
+    handleSearchKeyDown,
+    handleClear,
+    handleFileClick,
   } = state;
 
   // ── Render ───────────────────────────────────────────────────
@@ -321,8 +327,10 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
             {clustersExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             <span className="search-duplicate-summary-icon">⑙</span>
             <span>
-              {duplicateClusters.reduce((sum, c) => sum + (c.count ?? c.files.length), 0)} result{duplicateClusters.reduce((sum, c) => sum + (c.count ?? c.files.length), 0) === 1 ? '' : 's'} share similar patterns across{' '}
-              {new Set(duplicateClusters.flatMap(c => c.files)).size} file{new Set(duplicateClusters.flatMap(c => c.files)).size === 1 ? '' : 's'}
+              {duplicateClusters.reduce((sum, c) => sum + (c.count ?? c.files.length), 0)} result
+              {duplicateClusters.reduce((sum, c) => sum + (c.count ?? c.files.length), 0) === 1 ? '' : 's'} share
+              similar patterns across {new Set(duplicateClusters.flatMap((c) => c.files)).size} file
+              {new Set(duplicateClusters.flatMap((c) => c.files)).size === 1 ? '' : 's'}
             </span>
           </button>
           {clustersExpanded && (
@@ -330,10 +338,12 @@ function SearchView({ onFileClick }: SearchViewProps): JSX.Element {
               {duplicateClusters.map((cluster, idx) => (
                 <div key={idx} className="search-duplicate-cluster-item">
                   <span className="search-duplicate-cluster-label">
-                    Cluster {idx + 1}: ~{(cluster.similarity * 100).toFixed(0)}% similar — {cluster.count ?? cluster.files.length} result{(cluster.count ?? cluster.files.length) === 1 ? '' : 's'}
+                    Cluster {idx + 1}: ~{(cluster.similarity * 100).toFixed(0)}% similar —{' '}
+                    {cluster.count ?? cluster.files.length} result
+                    {(cluster.count ?? cluster.files.length) === 1 ? '' : 's'}
                   </span>
                   <span className="search-duplicate-cluster-files">
-                    {cluster.files.map(f => getRelativePath(f)).join(', ')}
+                    {cluster.files.map((f) => getRelativePath(f)).join(', ')}
                   </span>
                 </div>
               ))}

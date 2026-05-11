@@ -15,7 +15,8 @@
 
 import { useRef, useCallback } from 'react';
 import type { Extension } from '@codemirror/state';
-import { EditorView, keymap, type KeyBinding } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
+import { keymap, type KeyBinding } from '@codemirror/view';
 import { searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { jumpToDefinition, findReferences, renameSymbol } from '@codemirror/lsp-client';
 
@@ -29,8 +30,7 @@ import type { EditorBuffer } from '../types/editor';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface KeymapActions extends EditorHotkeyActions {
-}
+export interface KeymapActions extends EditorHotkeyActions {}
 
 export interface UseEditorKeymapsReturn {
   hotkeyActionsRef: React.MutableRefObject<KeymapActions | null>;

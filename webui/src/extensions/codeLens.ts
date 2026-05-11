@@ -113,45 +113,51 @@ function stripComments(content: string, languageId?: string): string {
   let inBlockComment = false;
   let inString: string | null = null; // '"' | "'" | '`' | null
 
-  return lines.map(line => {
-    let result = '';
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
+  return lines
+    .map((line) => {
+      let result = '';
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
 
-      // Inside a string — pass through, handle escape sequences
-      if (inString) {
-        result += ch;
-        if (ch === '\\' && i + 1 < line.length) {
-          result += line[++i];
+        // Inside a string — pass through, handle escape sequences
+        if (inString) {
+          result += ch;
+          if (ch === '\\' && i + 1 < line.length) {
+            result += line[++i];
+            continue;
+          }
+          if (ch === inString) inString = null;
           continue;
         }
-        if (ch === inString) inString = null;
-        continue;
-      }
 
-      // Inside a block comment — look for */
-      if (inBlockComment) {
-        if (ch === '*' && line[i + 1] === '/') {
-          inBlockComment = false;
-          i++; // skip /
+        // Inside a block comment — look for */
+        if (inBlockComment) {
+          if (ch === '*' && line[i + 1] === '/') {
+            inBlockComment = false;
+            i++; // skip /
+          }
+          continue;
         }
-        continue;
+
+        // Check for comment start (only outside strings)
+        if (ch === '/' && line[i + 1] === '/') break; // rest of line is comment
+        if (ch === '/' && line[i + 1] === '*') {
+          inBlockComment = true;
+          i++;
+          continue;
+        }
+
+        // Python # comments (only outside strings and block comments)
+        if (isPython && ch === '#') break;
+
+        // Check for string start
+        if (ch === '"' || ch === "'" || ch === '`') inString = ch;
+
+        result += ch;
       }
-
-      // Check for comment start (only outside strings)
-      if (ch === '/' && line[i + 1] === '/') break; // rest of line is comment
-      if (ch === '/' && line[i + 1] === '*') { inBlockComment = true; i++; continue; }
-
-      // Python # comments (only outside strings and block comments)
-      if (isPython && ch === '#') break;
-
-      // Check for string start
-      if (ch === '"' || ch === "'" || ch === '`') inString = ch;
-
-      result += ch;
-    }
-    return result;
-  }).join('\n');
+      return result;
+    })
+    .join('\n');
 }
 
 /**

@@ -2,7 +2,7 @@
  * Onboarding domain API — adapter-aware onboarding operations.
  */
 
-import { OnboardingStatusResponse, CompleteOnboardingRequest, CompleteOnboardingResponse } from './types';
+import type { OnboardingStatusResponse, CompleteOnboardingRequest, CompleteOnboardingResponse } from './types';
 
 export async function getOnboardingStatus(fetchFn: typeof fetch): Promise<OnboardingStatusResponse> {
   const response = await fetchFn('/api/onboarding/status');
@@ -10,7 +10,10 @@ export async function getOnboardingStatus(fetchFn: typeof fetch): Promise<Onboar
   return response.json();
 }
 
-export async function completeOnboarding(fetchFn: typeof fetch, payload: CompleteOnboardingRequest): Promise<CompleteOnboardingResponse> {
+export async function completeOnboarding(
+  fetchFn: typeof fetch,
+  payload: CompleteOnboardingRequest,
+): Promise<CompleteOnboardingResponse> {
   const response = await fetchFn('/api/onboarding/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

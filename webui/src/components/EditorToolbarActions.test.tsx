@@ -46,12 +46,7 @@ describe('Core actions always present', () => {
   it('contains the four expected action IDs in order', () => {
     const { result } = renderActions();
     const ids = result.current.map((a: ToolbarAction) => a.id);
-    expect(ids).toEqual([
-      'word-wrap',
-      'minimap',
-      'whitespace-rendering',
-      'relative-line-numbers',
-    ]);
+    expect(ids).toEqual(['word-wrap', 'minimap', 'whitespace-rendering', 'relative-line-numbers']);
   });
 
   it('each action has a title and onClick handler', () => {
@@ -186,13 +181,7 @@ describe('Format document action', () => {
   it('format-document action appears after the four core actions', () => {
     const { result } = renderActions({ onFormatDocument: vi.fn() });
     const ids = result.current.map((a: ToolbarAction) => a.id);
-    expect(ids).toEqual([
-      'word-wrap',
-      'minimap',
-      'whitespace-rendering',
-      'relative-line-numbers',
-      'format-document',
-    ]);
+    expect(ids).toEqual(['word-wrap', 'minimap', 'whitespace-rendering', 'relative-line-numbers', 'format-document']);
   });
 });
 
@@ -394,10 +383,9 @@ describe('Action static properties', () => {
 describe('Memoization', () => {
   it('returns the same array reference when props are unchanged', () => {
     const props = makeProps();
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 
@@ -412,10 +400,9 @@ describe('Memoization', () => {
 
   it('returns a new array reference when wordWrapEnabled changes', () => {
     const props = makeProps();
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 
@@ -428,10 +415,9 @@ describe('Memoization', () => {
 
   it('returns a new array reference when minimapEnabled changes', () => {
     const props = makeProps();
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 
@@ -444,10 +430,9 @@ describe('Memoization', () => {
 
   it('returns a new array reference when whitespaceRenderingMode changes', () => {
     const props = makeProps();
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 
@@ -460,10 +445,9 @@ describe('Memoization', () => {
 
   it('returns a new array reference when relativeLineNumbersEnabled changes', () => {
     const props = makeProps();
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 
@@ -475,10 +459,9 @@ describe('Memoization', () => {
   });
 
   it('returns a new array reference when onFormatDocument is added', () => {
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: makeProps() },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: makeProps(),
+    });
 
     expect(result.current).toHaveLength(4);
 
@@ -490,10 +473,9 @@ describe('Memoization', () => {
   });
 
   it('returns a new array reference when onToggleLinkedScroll is added', () => {
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: makeProps() },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: makeProps(),
+    });
 
     expect(result.current).toHaveLength(4);
 
@@ -506,10 +488,9 @@ describe('Memoization', () => {
 
   it('returns a new array reference when linkedScrollEnabled changes', () => {
     const props = makeProps({ onToggleLinkedScroll: vi.fn(), linkedScrollEnabled: false });
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 
@@ -522,10 +503,9 @@ describe('Memoization', () => {
 
   it('returns a new array reference when a callback function reference changes', () => {
     const props = makeProps();
-    const { result, rerender } = renderHook(
-      (p: EditorToolbarActionsProps) => EditorToolbarActions(p),
-      { initialProps: props },
-    );
+    const { result, rerender } = renderHook((p: EditorToolbarActionsProps) => EditorToolbarActions(p), {
+      initialProps: props,
+    });
 
     const firstResult = result.current;
 

@@ -5,8 +5,20 @@
  * whole-word matching, and regex mode, styled similarly to VS Code's search toggles.
  */
 
-import { EditorView, type Panel, type ViewUpdate } from '@codemirror/view';
-import { search, SearchQuery, setSearchQuery, getSearchQuery, findNext, findPrevious, selectMatches, replaceNext, replaceAll, closeSearchPanel } from '@codemirror/search';
+import type { EditorView } from '@codemirror/view';
+import { type Panel, type ViewUpdate } from '@codemirror/view';
+import {
+  search,
+  SearchQuery,
+  setSearchQuery,
+  getSearchQuery,
+  findNext,
+  findPrevious,
+  selectMatches,
+  replaceNext,
+  replaceAll,
+  closeSearchPanel,
+} from '@codemirror/search';
 
 import './searchPanel.css';
 
@@ -277,7 +289,9 @@ function createCustomSearchPanel(view: EditorView, onSave?: () => void): Panel {
     dom,
     update,
     mount,
-    get top() { return false; },
+    get top() {
+      return false;
+    },
   };
 }
 
@@ -290,7 +304,5 @@ function createCustomSearchPanel(view: EditorView, onSave?: () => void): Panel {
  *   the search panel has focus. If not provided, the save shortcut is ignored.
  */
 export function customSearchExtension(onSave?: () => void) {
-  return [
-    search({ createPanel: (view: EditorView) => createCustomSearchPanel(view, onSave) }),
-  ];
+  return [search({ createPanel: (view: EditorView) => createCustomSearchPanel(view, onSave) })];
 }

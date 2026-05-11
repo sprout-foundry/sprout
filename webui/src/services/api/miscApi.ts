@@ -2,7 +2,7 @@
  * Stats/Health/Providers/Misc domain API — adapter-aware operations.
  */
 
-import {
+import type {
   StatsResponse,
   ProviderOption,
   ProviderModelsResponse,
@@ -37,7 +37,9 @@ export async function checkHealth(fetchFn: typeof fetch): Promise<boolean> {
 
 // ── Providers ──────────────────────────────────────────────────────
 
-export async function getProviders(fetchFn: typeof fetch): Promise<{ providers: ProviderOption[]; current_provider?: string; current_model?: string }> {
+export async function getProviders(
+  fetchFn: typeof fetch,
+): Promise<{ providers: ProviderOption[]; current_provider?: string; current_model?: string }> {
   const response = await fetchFn('/api/providers');
   if (!response.ok) throw new Error('Failed to fetch providers');
   return response.json();
@@ -71,7 +73,10 @@ export async function getChanges(fetchFn: typeof fetch): Promise<ChangesResponse
 
 export async function getRevisionDetails(fetchFn: typeof fetch, revisionId: string): Promise<RevisionDetailResponse> {
   const cacheBuster = Date.now();
-  const response = await fetchFn(`/api/history/revision?revision_id=${encodeURIComponent(revisionId)}&_=${cacheBuster}`, { cache: 'no-store' });
+  const response = await fetchFn(
+    `/api/history/revision?revision_id=${encodeURIComponent(revisionId)}&_=${cacheBuster}`,
+    { cache: 'no-store' },
+  );
   if (!response.ok) throw new Error('Failed to fetch revision details');
   return response.json();
 }
@@ -104,7 +109,11 @@ export async function fixFromDeepReview(fetchFn: typeof fetch, reviewOutput: str
   return response.json();
 }
 
-export async function startFixFromDeepReview(fetchFn: typeof fetch, reviewOutput: string, options?: { fixPrompt?: string; selectedItems?: string[] }): Promise<DeepReviewFixStartResponse> {
+export async function startFixFromDeepReview(
+  fetchFn: typeof fetch,
+  reviewOutput: string,
+  options?: { fixPrompt?: string; selectedItems?: string[] },
+): Promise<DeepReviewFixStartResponse> {
   const response = await fetchFn('/api/git/deep-review/fix/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -118,7 +127,11 @@ export async function startFixFromDeepReview(fetchFn: typeof fetch, reviewOutput
   return response.json();
 }
 
-export async function getFixFromDeepReviewStatus(fetchFn: typeof fetch, jobId: string, since = 0): Promise<DeepReviewFixStatusResponse> {
+export async function getFixFromDeepReviewStatus(
+  fetchFn: typeof fetch,
+  jobId: string,
+  since = 0,
+): Promise<DeepReviewFixStatusResponse> {
   const response = await fetchFn(`/api/git/deep-review/fix/status?job_id=${encodeURIComponent(jobId)}&since=${since}`);
   if (!response.ok) throw new Error('Failed to get fix status');
   return response.json();

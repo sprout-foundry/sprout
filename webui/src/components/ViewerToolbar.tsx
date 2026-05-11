@@ -46,39 +46,21 @@ function ViewerToolbar({
   return (
     <div className="viewer-toolbar">
       <div className="viewer-toolbar-group">
-        <button
-          className="viewer-toolbar-btn"
-          onClick={onZoomOut}
-          disabled={zoom <= minZoom}
-          title="Zoom out"
-        >
+        <button className="viewer-toolbar-btn" onClick={onZoomOut} disabled={zoom <= minZoom} title="Zoom out">
           <ZoomOut size={16} />
         </button>
 
         <span className="viewer-toolbar-zoom-display">{getZoomDisplay()}</span>
 
-        <button
-          className="viewer-toolbar-btn"
-          onClick={onZoomIn}
-          disabled={zoom >= maxZoom}
-          title="Zoom in"
-        >
+        <button className="viewer-toolbar-btn" onClick={onZoomIn} disabled={zoom >= maxZoom} title="Zoom in">
           <ZoomIn size={16} />
         </button>
 
-        <button
-          className="viewer-toolbar-btn"
-          onClick={onFitToWindow}
-          title="Fit to window"
-        >
+        <button className="viewer-toolbar-btn" onClick={onFitToWindow} title="Fit to window">
           <Maximize2 size={16} />
         </button>
 
-        <button
-          className="viewer-toolbar-btn"
-          onClick={onResetZoom}
-          title="1:1 actual size"
-        >
+        <button className="viewer-toolbar-btn" onClick={onResetZoom} title="1:1 actual size">
           1:1
         </button>
       </div>

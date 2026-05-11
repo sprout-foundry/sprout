@@ -97,9 +97,7 @@ export default function useWebSocketEvents({
             }),
           }));
         } else if (backendProcessing) {
-          debugLog(
-            '[reconnect] Backend still processing but frontend is idle — restoring processing state',
-          );
+          debugLog('[reconnect] Backend still processing but frontend is idle — restoring processing state');
           activeRequestsRef.current = 1;
           setState(() => ({
             isProcessing: true,

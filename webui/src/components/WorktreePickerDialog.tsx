@@ -77,20 +77,14 @@ export const WorktreePickerDialog: React.FC<WorktreePickerDialogProps> = ({
             <GitBranch className="wt-picker-icon" size={18} />
             Select Worktree
           </h2>
-          <button
-            className="wt-picker-close"
-            onClick={onClose}
-            aria-label="Close dialog"
-          >
+          <button className="wt-picker-close" onClick={onClose} aria-label="Close dialog">
             <X size={18} />
           </button>
         </div>
 
         {/* Content */}
         <div className="wt-picker-content">
-          {error && (
-            <div className="wt-picker-error">{error}</div>
-          )}
+          {error && <div className="wt-picker-error">{error}</div>}
 
           {isLoading ? (
             <div className="wt-picker-loading">
@@ -118,12 +112,8 @@ export const WorktreePickerDialog: React.FC<WorktreePickerDialogProps> = ({
                       <GitBranch size={14} />
                       <span className="wt-picker-item-branch">{wt.branch}</span>
                       <span className="wt-picker-item-path">{wt.path}</span>
-                      {wt.is_current && (
-                        <span className="wt-picker-badge">active</span>
-                      )}
-                      {isDisabled && (
-                        <span className="wt-picker-badge assigned">assigned</span>
-                      )}
+                      {wt.is_current && <span className="wt-picker-badge">active</span>}
+                      {isDisabled && <span className="wt-picker-badge assigned">assigned</span>}
                     </button>
                   </li>
                 );

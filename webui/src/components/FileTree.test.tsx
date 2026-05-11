@@ -22,8 +22,6 @@ jest.mock('../../../packages/ui/src/components/ThemedDialog', () => ({
   showThemedPrompt: jest.fn().mockResolvedValue(null),
 }));
 
-
-
 // Mock navigator.clipboard
 const mockClipboardWriteText = jest.fn().mockResolvedValue(undefined);
 Object.assign(navigator, {
@@ -789,7 +787,15 @@ describe('FileTree ignored files toggle', () => {
       }
       if (path === 'output') {
         return [
-          { name: 'build.log', path: 'output/build.log', isDir: false, size: 50, modified: 500, ext: '.log', gitStatus: 'ignored' },
+          {
+            name: 'build.log',
+            path: 'output/build.log',
+            isDir: false,
+            size: 50,
+            modified: 500,
+            ext: '.log',
+            gitStatus: 'ignored',
+          },
         ];
       }
       return [];
@@ -1052,7 +1058,8 @@ describe('FileTree drag-and-drop', () => {
   it('shows drop-on-root class when dragging over file-list background with a nested file', async () => {
     const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
       if (path === '.') return [{ name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' }];
-      if (path === 'src') return [{ name: 'utils.go', path: 'src/utils.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
+      if (path === 'src')
+        return [{ name: 'utils.go', path: 'src/utils.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
       return [];
     });
 
@@ -1097,7 +1104,8 @@ describe('FileTree drag-and-drop', () => {
     const onRenamePath = jest.fn().mockResolvedValue(undefined);
     const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
       if (path === '.') return [{ name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' }];
-      if (path === 'src') return [{ name: 'helper.go', path: 'src/helper.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
+      if (path === 'src')
+        return [{ name: 'helper.go', path: 'src/helper.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
       return [];
     });
 
@@ -1131,7 +1139,8 @@ describe('FileTree drag-and-drop', () => {
           { name: 'lib', path: 'lib', isDir: true, size: 0, modified: 0, ext: '' },
         ];
       }
-      if (path === 'src') return [{ name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' }];
+      if (path === 'src')
+        return [{ name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' }];
       return [];
     });
 
@@ -1167,7 +1176,8 @@ describe('FileTree drag-and-drop', () => {
   it('clears drop-on-root on drag end', async () => {
     const customFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
       if (path === '.') return [{ name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '' }];
-      if (path === 'src') return [{ name: 'nested.go', path: 'src/nested.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
+      if (path === 'src')
+        return [{ name: 'nested.go', path: 'src/nested.go', isDir: false, size: 50, modified: 500, ext: '.go' }];
       return [];
     });
 
@@ -1227,9 +1237,7 @@ describe('FileTree callback props – onFetchFiles', () => {
     const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
 
     await act(async () => {
-      root.render(
-        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1240,9 +1248,7 @@ describe('FileTree callback props – onFetchFiles', () => {
     const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
 
     await act(async () => {
-      root.render(
-        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1256,9 +1262,7 @@ describe('FileTree callback props – onFetchFiles', () => {
     const customFetchFiles = jest.fn().mockResolvedValue(mockFiles);
 
     await act(async () => {
-      root.render(
-        <FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={customFetchFiles} />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={customFetchFiles} />);
     });
     await flushPromises();
 
@@ -1268,9 +1272,7 @@ describe('FileTree callback props – onFetchFiles', () => {
 
   it('renders empty tree when onFetchFiles is NOT provided', async () => {
     await act(async () => {
-      root.render(
-        <FileTree onFileSelect={jest.fn()} rootPath="." />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." />);
     });
     await flushPromises();
 
@@ -1290,14 +1292,7 @@ describe('FileTree callback props – onDeletePath', () => {
   async function renderWithCallbacks(callbacks = {}) {
     const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          onFetchFiles={onFetchFiles}
-          {...callbacks}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} {...callbacks} />);
     });
     await flushPromises();
     return { onFetchFiles };
@@ -1356,14 +1351,7 @@ describe('FileTree callback props – onRenamePath', () => {
   async function renderWithCallbacks(callbacks = {}) {
     const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          onFetchFiles={onFetchFiles}
-          {...callbacks}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} {...callbacks} />);
     });
     await flushPromises();
     return { onFetchFiles };
@@ -1400,7 +1388,9 @@ describe('FileTree callback props – onRenamePath', () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushPromises();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     await flushPromises();
 
     expect(onRenamePath).toHaveBeenCalledWith('main.go', 'main_renamed.go');
@@ -1430,7 +1420,9 @@ describe('FileTree callback props – onRenamePath', () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushPromises();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     await flushPromises();
 
     // onRenamePath was called (no ApiService fallback used)
@@ -1446,14 +1438,7 @@ describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
   async function renderWithCallbacks(callbacks = {}) {
     const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          onFetchFiles={onFetchFiles}
-          {...callbacks}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} {...callbacks} />);
     });
     await flushPromises();
     return { onFetchFiles };
@@ -1487,7 +1472,9 @@ describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushPromises();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     await flushPromises();
 
     expect(onCreateFile).toHaveBeenCalledWith('.', 'newfile.ts');
@@ -1518,7 +1505,9 @@ describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushPromises();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     await flushPromises();
 
     expect(onCreateFolder).toHaveBeenCalledWith('.', 'myfolder');
@@ -1548,7 +1537,9 @@ describe('FileTree callback props – onCreateFile and onCreateFolder', () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await flushPromises();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     await flushPromises();
 
     // onCreateFile was called (no ApiService fallback used)
@@ -1564,14 +1555,7 @@ describe('FileTree callback props – onOpenInFileBrowser', () => {
   async function renderWithCallbacks(callbacks = {}) {
     const onFetchFiles = jest.fn().mockResolvedValue(mockFiles);
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          onFetchFiles={onFetchFiles}
-          {...callbacks}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} {...callbacks} />);
     });
     await flushPromises();
   }
@@ -1625,14 +1609,7 @@ describe('FileTree data prop – files', () => {
     ];
 
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          files={initialFiles}
-          onFetchFiles={onFetchFiles}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." files={initialFiles} onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1656,14 +1633,7 @@ describe('FileTree data prop – files', () => {
 
     // Render with first files
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          files={firstFiles}
-          onFetchFiles={onFetchFiles}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." files={firstFiles} onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1673,14 +1643,7 @@ describe('FileTree data prop – files', () => {
 
     // Re-render with different files
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          files={secondFiles}
-          onFetchFiles={onFetchFiles}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." files={secondFiles} onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1705,14 +1668,7 @@ describe('FileTree data prop – files', () => {
     ];
 
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          files={initialFiles}
-          onFetchFiles={onFetchFiles}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." files={initialFiles} onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1743,21 +1699,13 @@ describe('FileTree data prop – files', () => {
   it('calls onFetchFiles on mount when files prop is not provided', async () => {
     const onFetchFiles = jest.fn().mockImplementation(async (path: string): Promise<FileInfo[]> => {
       if (path === '.') {
-        return [
-          { name: 'hello.go', path: 'hello.go', isDir: false, size: 80, modified: 800, ext: '.go' },
-        ];
+        return [{ name: 'hello.go', path: 'hello.go', isDir: false, size: 80, modified: 800, ext: '.go' }];
       }
       return [];
     });
 
     await act(async () => {
-      root.render(
-        <FileTree
-          onFileSelect={jest.fn()}
-          rootPath="."
-          onFetchFiles={onFetchFiles}
-        />,
-      );
+      root.render(<FileTree onFileSelect={jest.fn()} rootPath="." onFetchFiles={onFetchFiles} />);
     });
     await flushPromises();
 
@@ -1772,10 +1720,13 @@ describe('FileTree data prop – files', () => {
     const onFetchFiles = jest.fn().mockResolvedValue([]);
     const initialFiles: FileInfo[] = [
       {
-        name: 'src', path: 'src', isDir: true, size: 0, modified: 0, ext: '',
-        children: [
-          { name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' },
-        ],
+        name: 'src',
+        path: 'src',
+        isDir: true,
+        size: 0,
+        modified: 0,
+        ext: '',
+        children: [{ name: 'app.tsx', path: 'src/app.tsx', isDir: false, size: 50, modified: 500, ext: '.tsx' }],
       },
       { name: 'main.go', path: 'main.go', isDir: false, size: 100, modified: 1000, ext: '.go' },
     ];

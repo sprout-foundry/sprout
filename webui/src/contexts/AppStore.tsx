@@ -108,7 +108,7 @@ class AppStore {
     }
 
     this.state = newState as AppState;
-    this.listeners.forEach(l => l());
+    this.listeners.forEach((l) => l());
   }
 }
 
@@ -178,10 +178,7 @@ function useAppStore(): AppStore {
 export function useAppStoreState(): AppState {
   const store = useAppStore();
   const getSnapshot = useCallback(() => store.getSnapshot(), [store]);
-  return useSyncExternalStore(
-    store.getSubscribe(),
-    getSnapshot,
-  );
+  return useSyncExternalStore(store.getSubscribe(), getSnapshot);
 }
 
 /**
@@ -198,9 +195,12 @@ export function useAppStoreState(): AppState {
  */
 export function useAppStoreSetState(): AppStoreSetState {
   const store = useAppStore();
-  return useCallback((updater: (prev: AppState) => Partial<AppState>) => {
-    store.set(updater);
-  }, [store]);
+  return useCallback(
+    (updater: (prev: AppState) => Partial<AppState>) => {
+      store.set(updater);
+    },
+    [store],
+  );
 }
 
 /**
@@ -225,10 +225,7 @@ export function useAppStoreSetState(): AppStoreSetState {
 export function useAppState<R>(selector: (s: AppState) => R): R {
   const store = useAppStore();
   const getSnapshot = useCallback(() => selector(store.getSnapshot()), [store, selector]);
-  return useSyncExternalStore(
-    store.getSubscribe(),
-    getSnapshot,
-  );
+  return useSyncExternalStore(store.getSubscribe(), getSnapshot);
 }
 
 /**
@@ -252,7 +249,7 @@ export function useAppStateField<K extends keyof AppState>(key: K): AppState[K] 
   // useCallback ensures a stable getSnapshot reference for this (store, key) pair.
   const getSnapshot = useCallback(() => store.getSnapshot()[key], [store, key]);
   return useSyncExternalStore(
-    store.getSubscribe(),   // stable reference — no re-subscription on render
+    store.getSubscribe(), // stable reference — no re-subscription on render
     getSnapshot,
   );
 }

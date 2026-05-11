@@ -49,9 +49,12 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
   }, []);
 
   // Handle dismiss individual notification
-  const handleDismiss = useCallback((id: string) => {
-    removeNotification(id);
-  }, [removeNotification]);
+  const handleDismiss = useCallback(
+    (id: string) => {
+      removeNotification(id);
+    },
+    [removeNotification],
+  );
 
   // Handle dismiss all notifications
   const handleDismissAll = useCallback(() => {
@@ -62,7 +65,7 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!isOpen) return;
-    const timer = setInterval(() => setTick(t => t + 1), 60000);
+    const timer = setInterval(() => setTick((t) => t + 1), 60000);
     return () => clearInterval(timer);
   }, [isOpen]);
 
@@ -148,11 +151,7 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
       <div className="notification-center-header">
         <h2 className="notification-center-title">Notifications</h2>
         {notifications.length > 0 && (
-          <button
-            className="notification-center-dismiss-all"
-            onClick={handleDismissAll}
-            type="button"
-          >
+          <button className="notification-center-dismiss-all" onClick={handleDismissAll} type="button">
             Dismiss All
           </button>
         )}
@@ -162,16 +161,15 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
       <div className="notification-center-content" aria-live="polite">
         {notifications.length === 0 ? (
           <div className="notification-center-empty">
-            <div className="notification-center-empty-icon" aria-hidden="true">🔔</div>
+            <div className="notification-center-empty-icon" aria-hidden="true">
+              🔔
+            </div>
             <p className="notification-center-empty-text">No notifications</p>
           </div>
         ) : (
           <ul className="notification-center-list" role="list">
             {[...notifications].reverse().map((notification) => (
-              <li
-                key={notification.id}
-                className={`notification-center-item type-${notification.type}`}
-              >
+              <li key={notification.id} className={`notification-center-item type-${notification.type}`}>
                 {/* Type icon */}
                 <span className="notification-center-item-icon" aria-hidden="true">
                   {getNotificationIcon(notification.type)}
@@ -181,9 +179,7 @@ function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenter
                 <div className="notification-center-item-content">
                   <div className="notification-center-item-header">
                     <span className="notification-center-item-title">{notification.title}</span>
-                    <span className="notification-center-item-time">
-                      {formatRelativeTime(notification.createdAt)}
-                    </span>
+                    <span className="notification-center-item-time">{formatRelativeTime(notification.createdAt)}</span>
                   </div>
                   <p className="notification-center-item-message">{notification.message}</p>
                 </div>

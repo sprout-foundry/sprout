@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react';
 import { clientFetch } from '../../services/clientSession';
-import { ApiService } from '../../services/api';
-import { useLog } from '../../utils/log';
+import type { ApiService } from '../../services/api';
+import type { useLog } from '../../utils/log';
 import type { FileResult } from './types';
-import {
-  MAX_INDEXED_FILES,
-  MAX_INDEXED_DIRECTORIES,
-  SKIP_DIRECTORIES,
-  MAX_DIRECTORY_DEPTH,
-} from './constants';
+import { MAX_INDEXED_FILES, MAX_INDEXED_DIRECTORIES, SKIP_DIRECTORIES, MAX_DIRECTORY_DEPTH } from './constants';
 
 interface UseFileIndexResult {
   allFiles: FileResult[];

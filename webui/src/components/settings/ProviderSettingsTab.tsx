@@ -35,13 +35,29 @@ export default function ProviderSettingsTab({
   settings,
   onRequestProviderSetup,
   editingProvider,
-  providerName, providerApiBase, providerModelName, providerContextSize, providerEnvVar,
-  providerSupportsVision, providerVisionModel, providerModelContextSizes,
-  loadingProviderInfo, currentProviderInfo,
-  setEditingProvider, setProviderName, setProviderApiBase, setProviderModelName,
-  setProviderContextSize, setProviderEnvVar, setProviderSupportsVision,
-  setProviderVisionModel, setProviderModelContextSizes,
-  resetProviderForm, handleAddProvider, handleUpdateProvider, handleDeleteProvider,
+  providerName,
+  providerApiBase,
+  providerModelName,
+  providerContextSize,
+  providerEnvVar,
+  providerSupportsVision,
+  providerVisionModel,
+  providerModelContextSizes,
+  loadingProviderInfo,
+  currentProviderInfo,
+  setEditingProvider,
+  setProviderName,
+  setProviderApiBase,
+  setProviderModelName,
+  setProviderContextSize,
+  setProviderEnvVar,
+  setProviderSupportsVision,
+  setProviderVisionModel,
+  setProviderModelContextSizes,
+  resetProviderForm,
+  handleAddProvider,
+  handleUpdateProvider,
+  handleDeleteProvider,
 }: ProviderSettingsTabProps) {
   const customProviders = settings.custom_providers || {};
   const providerEntries = Object.entries(customProviders);
@@ -84,11 +100,7 @@ export default function ProviderSettingsTab({
         ) : (
           <div className="settings-empty">
             No provider configured
-            <button
-              type="button"
-              className="onboarding-reopen-btn"
-              onClick={() => onRequestProviderSetup?.()}
-            >
+            <button type="button" className="onboarding-reopen-btn" onClick={() => onRequestProviderSetup?.()}>
               <Cog size={14} />
               Set up provider
             </button>

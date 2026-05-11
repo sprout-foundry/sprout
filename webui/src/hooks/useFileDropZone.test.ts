@@ -68,10 +68,16 @@ function createFileDataTransfer(fileNames: string[], sizes?: number[]): MockData
     files,
     types: ['Files'],
     items: {
-      add: (_file: File) => { /* no-op in mock */ },
-      clear: () => { /* no-op */ },
+      add: (_file: File) => {
+        /* no-op in mock */
+      },
+      clear: () => {
+        /* no-op */
+      },
     },
-    setData: (_type: string, _data: string) => { /* no-op */ },
+    setData: (_type: string, _data: string) => {
+      /* no-op */
+    },
     getData: (_type: string) => null,
   };
 
@@ -88,10 +94,16 @@ function createNonFileDataTransfer(): MockDataTransfer {
     files: [],
     types: ['text/plain', 'application/json'],
     items: {
-      add: () => { /* no-op */ },
-      clear: () => { /* no-op */ },
+      add: () => {
+        /* no-op */
+      },
+      clear: () => {
+        /* no-op */
+      },
     },
-    setData: (_type: string, _data: string) => { /* no-op */ },
+    setData: (_type: string, _data: string) => {
+      /* no-op */
+    },
     getData: (_type: string) => null,
   };
 }
@@ -103,10 +115,16 @@ function createEmptyDataTransfer(): MockDataTransfer {
     files: [],
     types: [],
     items: {
-      add: () => { /* no-op */ },
-      clear: () => { /* no-op */ },
+      add: () => {
+        /* no-op */
+      },
+      clear: () => {
+        /* no-op */
+      },
     },
-    setData: (_type: string, _data: string) => { /* no-op */ },
+    setData: (_type: string, _data: string) => {
+      /* no-op */
+    },
     getData: (_type: string) => null,
   };
 }
@@ -387,7 +405,7 @@ describe('useFileDropZone', () => {
       setupHook(jest.fn());
 
       const dt = createFileDataTransfer(['test.txt']);
-      
+
       // Multiple dragenter events should increment counter
       fireDragEvent('dragenter', dt);
       fireDragEvent('dragenter', dt);
@@ -474,15 +492,9 @@ describe('useFileDropZone', () => {
       expect(droppedFiles[0].name).toBe('small.txt');
 
       // Warning should have been logged for the large file
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[useFileDropZone]'),
-      );
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('big.txt'),
-      );
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('20.0 MB'),
-      );
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[useFileDropZone]'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('big.txt'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('20.0 MB'));
 
       warnSpy.mockRestore();
     });

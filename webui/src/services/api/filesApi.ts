@@ -2,7 +2,7 @@
  * Files domain API — adapter-aware file operations.
  */
 
-import { FilesResponse, CreateItemResponse, DeleteItemResponse, RenameItemResponse } from './types';
+import type { FilesResponse, CreateItemResponse, DeleteItemResponse, RenameItemResponse } from './types';
 
 export async function getFiles(fetchFn: typeof fetch): Promise<FilesResponse> {
   const response = await fetchFn('/api/files');
@@ -10,7 +10,11 @@ export async function getFiles(fetchFn: typeof fetch): Promise<FilesResponse> {
   return response.json();
 }
 
-export async function createItem(fetchFn: typeof fetch, path: string, isDirectory = false): Promise<CreateItemResponse> {
+export async function createItem(
+  fetchFn: typeof fetch,
+  path: string,
+  isDirectory = false,
+): Promise<CreateItemResponse> {
   const response = await fetchFn('/api/create', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -29,7 +29,14 @@ export interface PaneLayoutManagerProps {
   contextPanelRef: RefObject<unknown>;
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
-  chatSessions?: Array<{ id: string; name?: string; is_pinned?: boolean; is_default?: boolean; active_query?: boolean; worktree_path?: string }>;
+  chatSessions?: Array<{
+    id: string;
+    name?: string;
+    is_pinned?: boolean;
+    is_default?: boolean;
+    active_query?: boolean;
+    worktree_path?: string;
+  }>;
 
   // Chat state for active chat pane
   messages: Message[];
@@ -333,7 +340,15 @@ function PaneLayoutManager({
           dragStartSizeRef.current.set(sizeKey, paneSizes[sizeKey] || 50);
         }
         const sizeAtDragStart = dragStartSizeRef.current.get(sizeKey) ?? 50;
-        const maxAllowed = 100 - MIN_PANE_WIDTH_PERCENT * Math.max(0, Object.keys(paneSizes).filter(k => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:')).length - 1);
+        const maxAllowed =
+          100 -
+          MIN_PANE_WIDTH_PERCENT *
+            Math.max(
+              0,
+              Object.keys(paneSizes).filter(
+                (k) => !k.startsWith('group:') && !k.startsWith('nested:') && !k.startsWith('grid:'),
+              ).length - 1,
+            );
         const newSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowed, sizeAtDragStart + deltaPercent));
         updatePaneSize(sizeKey, newSize);
       },
@@ -461,7 +476,13 @@ function PaneLayoutManager({
             activeChatQueries={activeChatQueries}
             defaultChatIds={defaultChatIds}
             chatWorktreePaths={chatWorktreePaths}
-            onCreateChat={onCreateChat ? () => { onCreateChat().catch((err) => console.warn('[EditorTabs] Failed to create chat:', err)); } : undefined}
+            onCreateChat={
+              onCreateChat
+                ? () => {
+                    onCreateChat().catch((err) => console.warn('[EditorTabs] Failed to create chat:', err));
+                  }
+                : undefined
+            }
             onCreateChatInWorktree={onCreateChatInWorktree}
             onDeleteChatWithWorktree={onDeleteChatWithWorktree}
             onRenameChat={onRenameChat}
@@ -495,7 +516,9 @@ function PaneLayoutManager({
                 subagentActivities,
                 onStopProcessing,
                 chatId: activeChatId || undefined,
-                worktreePath: perChatCache?.[activeChatId || '']?.worktreePath ?? chatSessions?.find((s) => s.id === activeChatId)?.worktree_path,
+                worktreePath:
+                  perChatCache?.[activeChatId || '']?.worktreePath ??
+                  chatSessions?.find((s) => s.id === activeChatId)?.worktree_path,
                 workspaceRoot: undefined,
                 onWorktreeChange: undefined,
                 onToolPillClick: (toolId: string) =>
@@ -544,8 +567,14 @@ function PaneLayoutManager({
 
   // ── 2×2 Grid layout ────────────────────────────────────────────
   if (paneLayout === 'split-grid' && panes.length === 4) {
-    const colSplit = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes['grid:col'] ?? 50));
-    const rowSplit = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes['grid:row'] ?? 50));
+    const colSplit = Math.max(
+      MIN_PANE_WIDTH_PERCENT,
+      Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes['grid:col'] ?? 50),
+    );
+    const rowSplit = Math.max(
+      MIN_PANE_WIDTH_PERCENT,
+      Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes['grid:row'] ?? 50),
+    );
 
     const positionOrder: Record<string, number> = {
       primary: 0,
@@ -605,7 +634,10 @@ function PaneLayoutManager({
     if (panes.length === 2) {
       const [firstPane, secondPane] = panes;
       const splitAxis = paneLayout === 'split-horizontal' ? 'vertical' : 'horizontal';
-      const firstPaneSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50));
+      const firstPaneSize = Math.max(
+        MIN_PANE_WIDTH_PERCENT,
+        Math.min(100 - MIN_PANE_WIDTH_PERCENT, paneSizes[firstPane.id] || 50),
+      );
       const secondPaneSize = 100 - firstPaneSize;
 
       return (
@@ -624,7 +656,7 @@ function PaneLayoutManager({
     return (
       <>
         {(() => {
-          const rawSizes = panes.map(p => paneSizes[p.id] || (100 / panes.length));
+          const rawSizes = panes.map((p) => paneSizes[p.id] || 100 / panes.length);
           const totalSize = rawSizes.reduce((a, b) => a + b, 0);
           return (
             <>

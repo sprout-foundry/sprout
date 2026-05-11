@@ -60,7 +60,9 @@ export default function EmbeddingSettingsTab({
     };
 
     init();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -108,9 +110,7 @@ export default function EmbeddingSettingsTab({
           <span style={{ fontWeight: 500 }}>Index Status</span>
         </div>
         {status === null ? (
-          <div style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>
-            Unable to fetch status
-          </div>
+          <div style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>Unable to fetch status</div>
         ) : status.building || isRebuilding ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
             <Loader2 size={14} className="spinning" />
@@ -124,9 +124,7 @@ export default function EmbeddingSettingsTab({
         ) : status.available && status.init_error ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-error)' }}>
             <AlertTriangle size={14} />
-            <span style={{ fontSize: '13px' }}>
-              Initialization failed: {status.init_error}
-            </span>
+            <span style={{ fontSize: '13px' }}>Initialization failed: {status.init_error}</span>
           </div>
         ) : status.available ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
@@ -170,15 +168,19 @@ export default function EmbeddingSettingsTab({
           onClick={handleRebuild}
           disabled={isRebuilding || status?.building}
           style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-primary)',
-            background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 12px',
+            borderRadius: '6px',
+            border: '1px solid var(--border-primary)',
+            background: 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            fontSize: '13px',
             cursor: isRebuilding ? 'not-allowed' : 'pointer',
           }}
         >
-          {isRebuilding || status?.building
-            ? <Loader2 size={14} className="spinning" />
-            : <RefreshCw size={14} />}
+          {isRebuilding || status?.building ? <Loader2 size={14} className="spinning" /> : <RefreshCw size={14} />}
           {isRebuilding || status?.building ? 'Building...' : 'Rebuild Index'}
         </button>
         {error && <span style={{ color: 'var(--accent-error)', fontSize: '12px' }}>{error}</span>}

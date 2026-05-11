@@ -34,11 +34,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
             <PanelRightClose size={14} />
           </button>
         )}
-        <WorkspaceBar
-          isConnected={isConnected}
-          isMobile={isMobile}
-          isMobileMenuOpen={isSidebarOpen}
-        />
+        <WorkspaceBar isConnected={isConnected} isMobile={isMobile} isMobileMenuOpen={isSidebarOpen} />
       </div>
     </div>
   );

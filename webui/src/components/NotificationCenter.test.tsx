@@ -84,7 +84,9 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
   };
 }
 
-function renderNotificationCenter(props: { isOpen?: boolean; onClose?: () => void; positionRef?: { current: HTMLDivElement | null } } = {}) {
+function renderNotificationCenter(
+  props: { isOpen?: boolean; onClose?: () => void; positionRef?: { current: HTMLDivElement | null } } = {},
+) {
   const isOpen = props.isOpen ?? true;
   const onClose = props.onClose ?? vi.fn();
   const positionRef = props.positionRef ?? { current: null };
@@ -297,10 +299,7 @@ describe('Dismiss individual notification', () => {
 
 describe('Dismiss all notifications', () => {
   it('calls clearNotifications when Dismiss All button is clicked', () => {
-    mockNotifications = [
-      makeNotification({ id: 'a', title: 'A' }),
-      makeNotification({ id: 'b', title: 'B' }),
-    ];
+    mockNotifications = [makeNotification({ id: 'a', title: 'A' }), makeNotification({ id: 'b', title: 'B' })];
     renderNotificationCenter({ isOpen: true });
 
     const dismissAllBtn = container.querySelector('.notification-center-dismiss-all');
@@ -650,7 +649,13 @@ describe('Multiple notifications', () => {
     const now = Date.now();
     mockNotifications = [
       makeNotification({ id: 'a', type: 'info', title: 'Info Title', message: 'Info message', createdAt: now }),
-      makeNotification({ id: 'b', type: 'error', title: 'Error Title', message: 'Error message', createdAt: now - 60000 }),
+      makeNotification({
+        id: 'b',
+        type: 'error',
+        title: 'Error Title',
+        message: 'Error message',
+        createdAt: now - 60000,
+      }),
     ];
     renderNotificationCenter({ isOpen: true });
 
@@ -671,11 +676,7 @@ describe('Multiple notifications', () => {
   });
 
   it('each notification item has its own copy and dismiss buttons', () => {
-    mockNotifications = [
-      makeNotification({ id: 'a' }),
-      makeNotification({ id: 'b' }),
-      makeNotification({ id: 'c' }),
-    ];
+    mockNotifications = [makeNotification({ id: 'a' }), makeNotification({ id: 'b' }), makeNotification({ id: 'c' })];
     renderNotificationCenter({ isOpen: true });
 
     const copyButtons = container.querySelectorAll('.notification-center-item-copy');

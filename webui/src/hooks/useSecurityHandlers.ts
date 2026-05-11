@@ -35,7 +35,7 @@ export function useSecurityHandlers({
         type: 'security_approval_response',
         data: { request_id: requestId, approved },
       });
-      setState((prev) => ({ securityApprovalRequest: null }));
+      setState((_prev) => ({ securityApprovalRequest: null }));
     },
     [eventsProvider, setState],
   );
@@ -47,7 +47,7 @@ export function useSecurityHandlers({
         type: 'security_prompt_response',
         data: { request_id: requestId, response },
       });
-      setState((prev) => ({ securityPromptRequest: null }));
+      setState((_prev) => ({ securityPromptRequest: null }));
     },
     [eventsProvider, setState],
   );
@@ -59,7 +59,7 @@ export function useSecurityHandlers({
         type: 'ask_user_response',
         data: { request_id: requestId, response },
       });
-      setState((prev) => ({ askUserRequest: null }));
+      setState((_prev) => ({ askUserRequest: null }));
     },
     [eventsProvider, setState],
   );
@@ -71,13 +71,13 @@ export function useSecurityHandlers({
         type: 'model_change',
         data: { provider, model },
       });
-      setState((prev) => ({ modelSelectionRequest: null }));
+      setState((_prev) => ({ modelSelectionRequest: null }));
     },
     [eventsProvider, provider, setState],
   );
 
   const handleModelSelectionClose = useCallback(() => {
-    setState((prev) => ({ modelSelectionRequest: null }));
+    setState((_prev) => ({ modelSelectionRequest: null }));
   }, [setState]);
 
   return {

@@ -14,7 +14,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { EditorView } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
 import type { ReferenceInfo } from '../components/FindAllReferencesOverlay';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
@@ -33,18 +33,18 @@ export interface UseEditorSemanticReturn {
   refsSymbolName: string;
   refsResults: ReferenceInfo[];
   refsLoading: boolean;
-  
+
   // Setters
   setShowGoToWorkspaceSymbol: (v: boolean) => void;
   setShowFindRefs: (v: boolean) => void;
-  
+
   // Handlers
   handleGoToLine: (line: number) => void;
   handleGoToDefinition: () => void;
   handleFindAllReferences: () => void;
   handleSelectReference: (filePath: string, line: number) => void;
   handleSelectWorkspaceSymbol: (filePath: string, line?: number) => void;
-  
+
   // Refs
   bufferStateRef: React.MutableRefObject<EditorBuffer | null>;
   localContentRef: React.MutableRefObject<string>;
@@ -129,13 +129,14 @@ export function useEditorSemantic(
       return;
     }
 
-    const languageId = resolveLanguageId(
-      buf.languageOverride,
-      buf.file.ext?.replace(/^\./, ''),
-      buf.file.name,
-    ).languageId ?? '';
+    const languageId =
+      resolveLanguageId(buf.languageOverride, buf.file.ext?.replace(/^\./, ''), buf.file.name).languageId ?? '';
     if (!isSemanticLanguage(languageId)) {
-      notificationBus.notify('info', 'Go to Definition', 'Semantic definition is currently available for TypeScript/JavaScript and Go files.');
+      notificationBus.notify(
+        'info',
+        'Go to Definition',
+        'Semantic definition is currently available for TypeScript/JavaScript and Go files.',
+      );
       return;
     }
 
@@ -145,9 +146,19 @@ export function useEditorSemantic(
     const column = selection.head - lineInfo.from + 1;
 
     try {
-      const result = await apiService.getSemanticDefinition(buf.file.path, localContentRef.current, languageId, line, column);
+      const result = await apiService.getSemanticDefinition(
+        buf.file.path,
+        localContentRef.current,
+        languageId,
+        line,
+        column,
+      );
       if (!result.capabilities?.definition) {
-        notificationBus.notify('warning', 'Go to Definition', 'Semantic engine is not available for this language in this environment.');
+        notificationBus.notify(
+          'warning',
+          'Go to Definition',
+          'Semantic engine is not available for this language in this environment.',
+        );
         return;
       }
 
@@ -192,13 +203,14 @@ export function useEditorSemantic(
       return;
     }
 
-    const languageId = resolveLanguageId(
-      buf.languageOverride,
-      buf.file.ext?.replace(/^\./, ''),
-      buf.file.name,
-    ).languageId ?? '';
+    const languageId =
+      resolveLanguageId(buf.languageOverride, buf.file.ext?.replace(/^\./, ''), buf.file.name).languageId ?? '';
     if (!isSemanticLanguage(languageId)) {
-      notificationBus.notify('info', 'Find All References', 'Semantic references are currently available for TypeScript/JavaScript and Go files.');
+      notificationBus.notify(
+        'info',
+        'Find All References',
+        'Semantic references are currently available for TypeScript/JavaScript and Go files.',
+      );
       return;
     }
 
@@ -213,11 +225,21 @@ export function useEditorSemantic(
     setRefsResults([]);
 
     try {
-      const result = await apiService.getSemanticReferences(buf.file.path, localContentRef.current, languageId, line, column);
+      const result = await apiService.getSemanticReferences(
+        buf.file.path,
+        localContentRef.current,
+        languageId,
+        line,
+        column,
+      );
       setRefsLoading(false);
 
       if (!result.capabilities?.references) {
-        notificationBus.notify('warning', 'Find All References', 'Semantic references are not available for this language in this environment.');
+        notificationBus.notify(
+          'warning',
+          'Find All References',
+          'Semantic references are not available for this language in this environment.',
+        );
         setShowFindRefs(false);
         return;
       }
@@ -242,54 +264,60 @@ export function useEditorSemantic(
   // Select reference
   // ---------------------------------------------------------------------------
 
-  const handleSelectReference = useCallback((filePath: string, line: number) => {
-    const buf = bufferStateRef.current;
-    if (!buf) return;
+  const handleSelectReference = useCallback(
+    (filePath: string, line: number) => {
+      const buf = bufferStateRef.current;
+      if (!buf) return;
 
-    if (filePath === buf.file.path) {
-      handleGoToLine(line);
-      viewRef.current?.focus();
-      return;
-    }
+      if (filePath === buf.file.path) {
+        handleGoToLine(line);
+        viewRef.current?.focus();
+        return;
+      }
 
-    const fileName = filePath.split('/').pop() || filePath;
-    const dotIndex = fileName.lastIndexOf('.');
-    const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+      const fileName = filePath.split('/').pop() || filePath;
+      const dotIndex = fileName.lastIndexOf('.');
+      const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
 
-    openWorkspaceBuffer({
-      kind: 'file',
-      path: filePath,
-      title: fileName,
-      ext,
-    });
+      openWorkspaceBuffer({
+        kind: 'file',
+        path: filePath,
+        title: fileName,
+        ext,
+      });
 
-    requestAnimationFrame(() => {
-      document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
-    });
-  }, [handleGoToLine, openWorkspaceBuffer]);
+      requestAnimationFrame(() => {
+        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+      });
+    },
+    [handleGoToLine, openWorkspaceBuffer],
+  );
 
   // ---------------------------------------------------------------------------
   // Select workspace symbol
   // ---------------------------------------------------------------------------
 
-  const handleSelectWorkspaceSymbol = useCallback((filePath: string, line?: number) => {
-    const fileName = filePath.split('/').pop() || filePath;
-    const dotIndex = fileName.lastIndexOf('.');
-    const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
+  const handleSelectWorkspaceSymbol = useCallback(
+    (filePath: string, line?: number) => {
+      const fileName = filePath.split('/').pop() || filePath;
+      const dotIndex = fileName.lastIndexOf('.');
+      const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : undefined;
 
-    openWorkspaceBuffer({
-      kind: 'file',
-      path: filePath,
-      title: fileName,
-      ext,
-    });
-
-    if (line !== undefined && line !== null) {
-      requestAnimationFrame(() => {
-        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+      openWorkspaceBuffer({
+        kind: 'file',
+        path: filePath,
+        title: fileName,
+        ext,
       });
-    }
-  }, [openWorkspaceBuffer]);
+
+      if (line !== undefined && line !== null) {
+        requestAnimationFrame(() => {
+          document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+        });
+      }
+    },
+    [openWorkspaceBuffer],
+  );
 
   return {
     showGoToWorkspaceSymbol,

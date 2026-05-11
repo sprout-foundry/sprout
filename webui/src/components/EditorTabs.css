@@ -480,7 +480,9 @@
   border-radius: 4px 4px 0 0;
   cursor: pointer;
   font-size: 12px;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
   flex-shrink: 0;
 }
 
@@ -505,7 +507,9 @@
   cursor: pointer;
   border-radius: 4px 4px 0 0;
   flex-shrink: 0;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .tab.new-worktree:hover {

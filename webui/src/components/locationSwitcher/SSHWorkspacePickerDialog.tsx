@@ -32,7 +32,9 @@ export const SSHWorkspacePickerDialog: React.FC<SSHWorkspacePickerDialogProps> =
       <div className="ssh-workspace-picker-dialog">
         <div className="ssh-workspace-picker-header">
           <Server size={14} />
-          <span>Select workspace on <strong>{sshPickerHostAlias}</strong></span>
+          <span>
+            Select workspace on <strong>{sshPickerHostAlias}</strong>
+          </span>
         </div>
         <div className="ssh-workspace-picker-body">
           {/* Recent workspaces for this host */}
@@ -116,16 +118,12 @@ export const SSHWorkspacePickerDialog: React.FC<SSHWorkspacePickerDialogProps> =
           </div>
         </div>
         <div className="ssh-workspace-picker-footer">
-          <button
-            type="button"
-            className="ssh-workspace-picker-dismiss"
-            onClick={() => setShow(false)}
-          >
+          <button type="button" className="ssh-workspace-picker-dismiss" onClick={() => setShow(false)}>
             Work in home directory
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 };

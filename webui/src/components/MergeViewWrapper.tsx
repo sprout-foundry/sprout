@@ -9,7 +9,8 @@ import {
   unifiedMergeView,
 } from '@codemirror/merge';
 import { EditorView, keymap, lineNumbers } from '@codemirror/view';
-import { EditorState, Extension } from '@codemirror/state';
+import type { Extension } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
@@ -97,29 +98,28 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   const isDark = theme === 'dark';
 
   // Build base extensions shared by both panes
-  const buildBaseExtensions = useCallback((editable?: boolean) => {
-    const syntaxStyle = isDark ? oneDarkHighlightStyle : defaultHighlightStyle;
-    const extensions: Extension[] = [
-      lineNumbers(),
-      keymap.of(defaultKeymap),
-      syntaxHighlighting(syntaxStyle),
-    ];
+  const buildBaseExtensions = useCallback(
+    (editable?: boolean) => {
+      const syntaxStyle = isDark ? oneDarkHighlightStyle : defaultHighlightStyle;
+      const extensions: Extension[] = [lineNumbers(), keymap.of(defaultKeymap), syntaxHighlighting(syntaxStyle)];
 
-    if (fileName) {
-      const ext = fileName.split('.').pop();
-      const languageId = detectLanguage(ext || '', fileName);
-      const langExtensions = getLanguageExtensions(languageId);
-      if (langExtensions.length > 0) {
-        extensions.push(...langExtensions);
+      if (fileName) {
+        const ext = fileName.split('.').pop();
+        const languageId = detectLanguage(ext || '', fileName);
+        const langExtensions = getLanguageExtensions(languageId);
+        if (langExtensions.length > 0) {
+          extensions.push(...langExtensions);
+        }
       }
-    }
 
-    if (readOnly && !editable) {
-      extensions.push(EditorState.readOnly.of(true));
-    }
+      if (readOnly && !editable) {
+        extensions.push(EditorState.readOnly.of(true));
+      }
 
-    return extensions;
-  }, [fileName, isDark, readOnly]);
+      return extensions;
+    },
+    [fileName, isDark, readOnly],
+  );
 
   // Build extensions for the editable pane B in side-by-side mode.
   // Includes history for Ctrl+Z / Ctrl+Shift+Z support and revert keybindings.
@@ -142,14 +142,14 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
         gutter,
         mergeControls,
         collapseUnchanged,
-      })
+      }),
     );
 
     extensions.push(
       keymap.of([
         { key: 'Alt-ArrowUp', run: goToPreviousChunk, preventDefault: true },
         { key: 'Alt-ArrowDown', run: goToNextChunk, preventDefault: true },
-      ])
+      ]),
     );
 
     return extensions;
@@ -310,7 +310,16 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     };
     // Only recreate when structural config changes; content updates handled separately
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, buildBaseExtensions, buildEditableExtensions, highlightChanges, gutter, collapseUnchanged, sideBySideNavigation, updateSbsHunkInfo]);
+  }, [
+    mode,
+    buildBaseExtensions,
+    buildEditableExtensions,
+    highlightChanges,
+    gutter,
+    collapseUnchanged,
+    sideBySideNavigation,
+    updateSbsHunkInfo,
+  ]);
 
   // Update side-by-side content in-place without tearing down the MergeView.
   // Uses a ref to track the last prop content that was synced, so user edits
@@ -370,7 +379,8 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     };
   }, [mode, buildUnifiedExtensions, modifiedContent]);
 
-  const wrapperClassName = `merge-view-wrapper ${mode === 'side-by-side' ? 'side-by-side' : 'unified'} ${className}`.trim();
+  const wrapperClassName =
+    `merge-view-wrapper ${mode === 'side-by-side' ? 'side-by-side' : 'unified'} ${className}`.trim();
 
   return (
     <div className={wrapperClassName} style={style}>

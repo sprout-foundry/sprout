@@ -45,15 +45,39 @@ interface MCPSettingsTabProps {
 export default function MCPSettingsTab({
   settings,
   editingServer,
-  serverName, serverCommand, serverArgs, serverEnvVars, newEnvKey, newEnvValue,
-  credentialServer, credentialEntries, credentialLoading, newCredentialKey, newCredentialValue,
+  serverName,
+  serverCommand,
+  serverArgs,
+  serverEnvVars,
+  newEnvKey,
+  newEnvValue,
+  credentialServer,
+  credentialEntries,
+  credentialLoading,
+  newCredentialKey,
+  newCredentialValue,
   savingKey,
-  setEditingServer, setServerName, setServerCommand, setServerArgs, setServerEnvVars,
-  setNewEnvKey, setNewEnvValue, setCredentialEntries, setNewCredentialKey, setNewCredentialValue,
-  renderToggle, renderTextInput,
-  resetServerForm, handleAddServer, handleUpdateServer, handleDeleteServer,
-  handleLoadCredentials, handleSaveCredential, handleDeleteCredential,
-  handleAddCredentialEntry, handleCloseCredentials,
+  setEditingServer,
+  setServerName,
+  setServerCommand,
+  setServerArgs,
+  setServerEnvVars,
+  setNewEnvKey,
+  setNewEnvValue,
+  setCredentialEntries,
+  setNewCredentialKey,
+  setNewCredentialValue,
+  renderToggle,
+  renderTextInput,
+  resetServerForm,
+  handleAddServer,
+  handleUpdateServer,
+  handleDeleteServer,
+  handleLoadCredentials,
+  handleSaveCredential,
+  handleDeleteCredential,
+  handleAddCredentialEntry,
+  handleCloseCredentials,
 }: MCPSettingsTabProps) {
   const mcpSettings = settings.mcp || {};
   const servers = mcpSettings.servers || {};
@@ -108,13 +132,9 @@ export default function MCPSettingsTab({
                     setEditingServer({ mode: 'edit', originalName: name });
                     setServerName(name);
                     setServerCommand((server.command as string) || '');
-                    setServerArgs(
-                      Array.isArray(server.args) ? (server.args as unknown[]).map(String).join(' ') : '',
-                    );
+                    setServerArgs(Array.isArray(server.args) ? (server.args as unknown[]).map(String).join(' ') : '');
                     const existingEnv = (server.env as Record<string, string>) || {};
-                    setServerEnvVars(
-                      Object.entries(existingEnv).map(([key, value]) => ({ key, value })),
-                    );
+                    setServerEnvVars(Object.entries(existingEnv).map(([key, value]) => ({ key, value })));
                     setNewEnvKey('');
                     setNewEnvValue('');
                   }}

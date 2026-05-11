@@ -40,27 +40,27 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
 
   const handlePersonaClick = () => {
     if (!supportsSettings) return;
-    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('sprout:open-settings-focus', { detail: { focus: 'persona' } }));
+    window.dispatchEvent(
+      new CustomEvent<OpenSettingsFocusEventDetail>('sprout:open-settings-focus', { detail: { focus: 'persona' } }),
+    );
   };
 
   const handleProviderModelClick = () => {
     if (!supportsSettings) return;
-    window.dispatchEvent(new CustomEvent<OpenSettingsFocusEventDetail>('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
+    window.dispatchEvent(
+      new CustomEvent<OpenSettingsFocusEventDetail>('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
+    );
   };
 
   /** Format the internal persona ID (e.g. "code_reviewer") into a display label (e.g. "Code Reviewer").
       Persona IDs are expected to be ASCII-only (lowercase letters and underscores).
   */
   const formatPersonaLabel = (id: string): string => {
-    return id
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    return id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   if (!isConnected || !stats) {
-    return (
-      <div className={`status-bar ${isConnected ? 'connected' : 'disconnected'}`} />
-    );
+    return <div className={`status-bar ${isConnected ? 'connected' : 'disconnected'}`} />;
   }
 
   const contextPercent = stats.context_usage_percent as number | undefined;
@@ -68,7 +68,8 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
   const provider = stats.provider as string | undefined;
   const model = stats.model as string | undefined;
   const persona = stats.persona as string | undefined;
-  const connectionPhase = (stats.connection_phase as string | undefined) || (isConnected ? 'connected' : 'disconnected');
+  const connectionPhase =
+    (stats.connection_phase as string | undefined) || (isConnected ? 'connected' : 'disconnected');
   const transportSessionId = stats.transport_session_id as string | undefined;
   const contextStatus = getContextStatus();
 
@@ -86,10 +87,7 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
           </button>
         )}
         {contextPercent != null && (
-          <span
-            className={`status-item context-${contextStatus}`}
-            title="Context usage"
-          >
+          <span className={`status-item context-${contextStatus}`} title="Context usage">
             {contextPercent.toFixed(1)}%
           </span>
         )}

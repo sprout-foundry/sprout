@@ -16,9 +16,7 @@ import { LSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
 
 /** Semantic language IDs that support hover. */
-const HOVER_LANGUAGES = new Set([
-  'typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'go',
-]);
+const HOVER_LANGUAGES = new Set(['typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'go']);
 
 /**
  * Build a CodeMirror extension that shows hover tooltips via the semantic API.
@@ -30,10 +28,7 @@ const HOVER_LANGUAGES = new Set([
  * @param getFilePath - returns the current file path (for API calls)
  * @param getContent - returns the current document content (for API calls)
  */
-export function createHoverTooltipExtension(
-  getFilePath: () => string | undefined,
-  getContent: () => string,
-) {
+export function createHoverTooltipExtension(getFilePath: () => string | undefined, getContent: () => string) {
   const api = ApiService.getInstance();
 
   const source: HoverTooltipSource = async (view: EditorView, pos: number) => {
@@ -115,8 +110,5 @@ export function formatMarkdown(md: string): string {
 }
 
 export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

@@ -83,7 +83,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   const apiService = ApiService.getInstance();
 
   const handleToggleContextPanel = React.useCallback(() => {
-    setIsContextPanelCollapsed(prev => {
+    setIsContextPanelCollapsed((prev) => {
       if (prev) {
         contextPanelRef.current?.openTab('subagents');
       } else {
@@ -107,10 +107,7 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   return (
     <ErrorBoundary panelName="Context Panel">
       {isTablet && !isContextPanelCollapsed && (
-        <div
-          className="context-panel-backdrop"
-          onClick={() => contextPanelRef.current?.closePanel()}
-        />
+        <div className="context-panel-backdrop" onClick={() => contextPanelRef.current?.closePanel()} />
       )}
       <ContextPanel
         ref={contextPanelRef}

@@ -637,7 +637,9 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--text-primary);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .sidebar .onboarding-reopen-btn:hover {
@@ -661,8 +663,12 @@
 
 /* ── Spinning animation (for Loader2 icons) ──────────────────── */
 @keyframes settings-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .sidebar .spinning {

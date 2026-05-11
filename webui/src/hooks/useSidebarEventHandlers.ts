@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { RefObject } from 'react';
 import { supportsSettings } from '../config/mode';
 import type { FileTreeHandle } from '../components/SidebarFilesSection';
+import type { SectionTab } from './useSidebarState';
 
 interface OpenSettingsFocusEventDetail {
   focus?: 'persona' | 'provider';
@@ -11,7 +12,7 @@ interface UseSidebarEventHandlersParams {
   effectiveSidebarCollapsed: boolean;
   isMobile: boolean;
   onSidebarToggle?: () => void;
-  onSectionChange?: (section: import('../hooks/useSidebarState').SectionTab) => void;
+  onSectionChange?: (section: SectionTab) => void;
   finalOnMobileMenuToggle?: () => void;
   fileTreeRef: RefObject<FileTreeHandle | null>;
   settingsFocusTarget: 'persona' | 'provider' | null;
@@ -98,7 +99,14 @@ export function useSidebarEventHandlers({
 
     window.addEventListener('sprout:open-settings-focus', handleOpenSettingsFocus);
     return () => window.removeEventListener('sprout:open-settings-focus', handleOpenSettingsFocus);
-  }, [effectiveSidebarCollapsed, isMobile, onSidebarToggle, finalOnMobileMenuToggle, onSectionChange, setSettingsFocusTarget]);
+  }, [
+    effectiveSidebarCollapsed,
+    isMobile,
+    onSidebarToggle,
+    finalOnMobileMenuToggle,
+    onSectionChange,
+    setSettingsFocusTarget,
+  ]);
 
   // Focus the targeted settings control once it renders
   useEffect(() => {

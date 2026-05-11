@@ -1,10 +1,11 @@
+import type { EditorBuffer } from '../types/editor';
 import { useEffect } from 'react';
 import type { ChatSession } from '../services/chatSessions';
 
 export interface UseChatSessionsSyncParams {
   chatSessions: ChatSession[] | undefined;
   activeChatId: string | null | undefined;
-  buffersRef: React.RefObject<Map<string, any>>;
+  buffersRef: React.RefObject<Map<string, EditorBuffer>>;
   updateBufferTitle: (id: string, title: string) => void;
   updateBufferMetadata: (id: string, metadata: Record<string, unknown>) => void;
   openWorkspaceBuffer: (options: {
@@ -31,10 +32,10 @@ export const useChatSessionsSync = ({
     if (!chatSessions || chatSessions.length === 0) return;
     const currentBuffers = buffersRef.current;
     if (!currentBuffers) return;
-    
-    chatSessions.forEach(session => {
+
+    chatSessions.forEach((session) => {
       const existing = Array.from(currentBuffers.values()).find(
-        b => b.kind === 'chat' && b.metadata?.chatId === session.id
+        (b) => b.kind === 'chat' && b.metadata?.chatId === session.id,
       );
       if (existing) {
         // Update tab title if the session was renamed
@@ -59,6 +60,6 @@ export const useChatSessionsSync = ({
         });
       }
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatSessions, activeChatId]);
 };

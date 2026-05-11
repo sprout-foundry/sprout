@@ -1,13 +1,5 @@
 import { useState } from 'react';
-import {
-  Plus,
-  X,
-  ChevronRight,
-  ChevronDown,
-  GitBranch,
-  AlertCircle,
-  RefreshCw,
-} from 'lucide-react';
+import { Plus, X, ChevronRight, ChevronDown, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
 import { useWorktrees } from '../hooks/useWorktrees';
 import { showThemedConfirm } from './ThemedDialog';
 import './WorktreePanel.css';
@@ -131,7 +123,9 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
   };
 
   const handleRemove = async (path: string) => {
-    const confirmed = await showThemedConfirm(`Are you sure you want to remove this worktree?\n\nPath: ${path}`, { type: 'danger' });
+    const confirmed = await showThemedConfirm(`Are you sure you want to remove this worktree?\n\nPath: ${path}`, {
+      type: 'danger',
+    });
     if (!confirmed) {
       return;
     }
@@ -180,9 +174,7 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
         {worktrees.length === 0 ? (
           <div className="worktree-empty">
             <p>No git worktrees found.</p>
-            <p className="worktree-empty-hint">
-              Create a worktree to run isolated chats for scoped feature work.
-            </p>
+            <p className="worktree-empty-hint">Create a worktree to run isolated chats for scoped feature work.</p>
             <button className="worktree-btn-primary" onClick={() => setIsCreateDialogOpen(true)}>
               <Plus size={16} />
               Create Worktree
@@ -192,15 +184,17 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
           <div className="worktree-list">
             <div className="worktree-item is-main">
               <div className="worktree-item-header">
-                <button className="worktree-expand-btn" onClick={toggleExpand} aria-label={expandedWorktrees ? 'Collapse' : 'Expand'}>
+                <button
+                  className="worktree-expand-btn"
+                  onClick={toggleExpand}
+                  aria-label={expandedWorktrees ? 'Collapse' : 'Expand'}
+                >
                   {expandedWorktrees ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
                 <div className="worktree-item-info">
                   <GitBranch size={16} className="worktree-branch-icon" />
                   <span className="worktree-branch">{currentBranch || 'HEAD'}</span>
-                  {expandedWorktrees && worktrees[0] && (
-                    <span className="worktree-path">{worktrees[0].path}</span>
-                  )}
+                  {expandedWorktrees && worktrees[0] && <span className="worktree-path">{worktrees[0].path}</span>}
                 </div>
               </div>
             </div>
@@ -221,12 +215,7 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
                       <GitBranch size={16} className="worktree-branch-icon" />
                       <span className="worktree-branch">{wt.branch || 'HEAD'}</span>
                       <span className="worktree-path">{wt.path}</span>
-                      {wt.parent_branch && (
-                        <span className="worktree-parent">
-                          {' '}
-                          from {wt.parent_branch}
-                        </span>
-                      )}
+                      {wt.parent_branch && <span className="worktree-parent"> from {wt.parent_branch}</span>}
                     </div>
                     <button
                       className="worktree-remove-btn"

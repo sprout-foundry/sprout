@@ -5,12 +5,7 @@ import type { SymbolInfo } from '../../utils/symbolUtils';
 import type { PaletteMode, FileResult, PaletteResult } from './types';
 import { parsePrefixAndQuery } from './utils';
 import { toWorkspaceRelativePath, getDirectoryName } from './utils';
-import {
-  VISIBLE_COMMANDS,
-  MAX_FILE_RESULTS,
-  MAX_SYMBOL_RESULTS,
-  NAVIGABLE_KINDS,
-} from './constants';
+import { VISIBLE_COMMANDS, MAX_FILE_RESULTS, MAX_SYMBOL_RESULTS, NAVIGABLE_KINDS } from './constants';
 
 interface UsePaletteResultsOptions {
   query: string;
@@ -33,7 +28,8 @@ interface UsePaletteResultsReturn {
 }
 
 function usePaletteResults(options: UsePaletteResultsOptions): UsePaletteResultsReturn {
-  const { query, mode, allFiles, allSymbols, scopePaths, workspaceRoot, activeBufferFileExtension, selectedIndex } = options;
+  const { query, mode, allFiles, allSymbols, scopePaths, workspaceRoot, activeBufferFileExtension, selectedIndex } =
+    options;
 
   // ── Resolve effective mode and search query ────────────────────────────
 
@@ -109,7 +105,12 @@ function usePaletteResults(options: UsePaletteResultsOptions): UsePaletteResults
 
     // ── Commands ─────────────────────────────────────────────────────────
     if (em === 'all' || em === 'commands') {
-      const cmdResults: FuzzyResult<typeof VISIBLE_COMMANDS[number]>[] = fuzzyFilter(trimmed, VISIBLE_COMMANDS, (c) => c.label, 50);
+      const cmdResults: FuzzyResult<(typeof VISIBLE_COMMANDS)[number]>[] = fuzzyFilter(
+        trimmed,
+        VISIBLE_COMMANDS,
+        (c) => c.label,
+        50,
+      );
       if (cmdResults.length > 0) {
         items.push({ kind: 'commands-header', highlightedLabel: 'Commands', score: Infinity });
         for (const r of cmdResults) {
@@ -154,7 +155,11 @@ function usePaletteResults(options: UsePaletteResultsOptions): UsePaletteResults
     if ((em === 'all' || em === 'symbols') && allSymbols.length > 0) {
       const symResults: FuzzyResult<SymbolInfo>[] = fuzzyFilter(trimmed, allSymbols, (s) => s.name, MAX_SYMBOL_RESULTS);
       if (symResults.length > 0) {
-        items.push({ kind: 'symbols-header', highlightedLabel: `Symbols (${activeBufferFileExtension || 'current file'})`, score: -2 });
+        items.push({
+          kind: 'symbols-header',
+          highlightedLabel: `Symbols (${activeBufferFileExtension || 'current file'})`,
+          score: -2,
+        });
         for (const r of symResults) {
           const scope = scopePaths.get(r.item.line);
           items.push({

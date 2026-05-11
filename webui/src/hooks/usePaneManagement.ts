@@ -185,7 +185,7 @@ export function usePaneManagement({
       setPaneSizes((prev) => {
         // Count only actual pane IDs (exclude group:*, nested:*, grid:* keys)
         const actualPaneKeys = Object.keys(prev).filter(
-          key => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:')
+          (key) => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:'),
         );
         const currentPanesCount = actualPaneKeys.length;
 

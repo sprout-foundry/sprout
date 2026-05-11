@@ -149,7 +149,10 @@ function ChatTabBar({
   const handleMenuDeleteWithWorktree = useCallback(async () => {
     const id = contextMenu.sessionId;
     if (!id || !contextMenu.canDelete || !onDeleteWithWorktree) return;
-    const confirmed = await showThemedConfirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?', { type: 'danger' });
+    const confirmed = await showThemedConfirm(
+      'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?',
+      { type: 'danger' },
+    );
     if (!confirmed) return;
     onDeleteWithWorktree(id);
     closeContextMenu();
@@ -286,7 +289,9 @@ function ChatTabBar({
           disabled={!onTogglePin || !contextMenu.sessionId}
         >
           <Pin size={13} />
-          <span className="menu-item-label">{contextSessionId ? sessions.find((s) => s.id === contextSessionId)?.is_pinned ? 'Unpin' : 'Pin' : 'Pin'}</span>
+          <span className="menu-item-label">
+            {contextSessionId ? (sessions.find((s) => s.id === contextSessionId)?.is_pinned ? 'Unpin' : 'Pin') : 'Pin'}
+          </span>
         </button>
         <div className="context-menu-divider" />
         <button
@@ -310,12 +315,7 @@ function ChatTabBar({
           </button>
         )}
         <div className="context-menu-divider" />
-        <button
-          className="context-menu-item"
-          onClick={handleMenuDeleteAll}
-          type="button"
-          disabled={!onDeleteAll}
-        >
+        <button className="context-menu-item" onClick={handleMenuDeleteAll} type="button" disabled={!onDeleteAll}>
           <Trash2 size={13} />
           <span className="menu-item-label">Close All Chats</span>
         </button>

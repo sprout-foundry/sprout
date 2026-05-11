@@ -32,10 +32,7 @@ export const writeRecentWorkspaces = (paths: string[]) => {
   if (typeof window === 'undefined') {
     return;
   }
-  window.localStorage.setItem(
-    RECENT_WORKSPACES_KEY,
-    JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES))
-  );
+  window.localStorage.setItem(RECENT_WORKSPACES_KEY, JSON.stringify(paths.slice(0, MAX_RECENT_WORKSPACES)));
 };
 
 export const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
@@ -60,7 +57,7 @@ export const readRemoteRecentWorkspaces = (): Record<string, string[]> => {
               .filter(Boolean)
               .slice(0, MAX_RECENT_WORKSPACES)
           : [],
-      ])
+      ]),
     );
   } catch {
     return {};
@@ -96,7 +93,7 @@ export const readSSHFavoriteWorkspaces = (): Record<string, string[]> => {
               .filter(Boolean)
               .slice(0, MAX_RECENT_WORKSPACES)
           : [],
-      ])
+      ]),
     );
   } catch {
     return {};

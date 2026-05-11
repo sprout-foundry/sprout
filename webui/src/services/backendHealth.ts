@@ -22,7 +22,9 @@ async function checkBackendHealth(): Promise<boolean> {
   try {
     /* Use adapter's fetch if installed, otherwise use clientFetch */
     const adapter = getAdapter();
-    const fetchFn = adapter ? (input: RequestInfo | URL, init?: RequestInit) => adapter.fetch(input, init) : clientFetch;
+    const fetchFn = adapter
+      ? (input: RequestInfo | URL, init?: RequestInit) => adapter.fetch(input, init)
+      : clientFetch;
     const response = await fetchFn(HEALTH_ENDPOINT);
 
     /* Consider backend reachable if it responds with any 2xx status */
@@ -60,7 +62,7 @@ function notifyReachabilityChange(newReachable: boolean): void {
   }
 
   isReachable = newReachable;
-  callbacks.forEach(callback => {
+  callbacks.forEach((callback) => {
     try {
       callback(newReachable);
     } catch (err) {
@@ -70,7 +72,9 @@ function notifyReachabilityChange(newReachable: boolean): void {
 }
 
 /* Start polling backend health */
-export function startHealthPolling(config: { intervalMs?: number; onReachabilityChange?: (isReachable: boolean) => void } = {}): void {
+export function startHealthPolling(
+  config: { intervalMs?: number; onReachabilityChange?: (isReachable: boolean) => void } = {},
+): void {
   if (isPolling) {
     /* Already polling — just register the additional callback */
     if (config.onReachabilityChange) {
@@ -89,13 +93,13 @@ export function startHealthPolling(config: { intervalMs?: number; onReachability
   debugLog('[backendHealth] Starting health polling with interval:', intervalMs, 'ms');
 
   /* Perform initial check immediately */
-  checkBackendHealth().then(reachable => {
+  checkBackendHealth().then((reachable) => {
     notifyReachabilityChange(reachable);
   });
 
   /* Set up periodic polling */
   pollTimer = setInterval(() => {
-    checkBackendHealth().then(reachable => {
+    checkBackendHealth().then((reachable) => {
       notifyReachabilityChange(reachable);
     });
   }, intervalMs);
@@ -129,7 +133,7 @@ export function onReachabilityChange(callback: (isReachable: boolean) => void): 
 
   /* Return cleanup function */
   return () => {
-    callbacks = callbacks.filter(cb => cb !== callback);
+    callbacks = callbacks.filter((cb) => cb !== callback);
   };
 }
 

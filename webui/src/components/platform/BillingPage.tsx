@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { useLog } from '../../utils/log';
-import { getBillingStatus, getProrationRecords, BillingStatus, ProrationRecord } from '../../services/billingService';
+import type { BillingStatus, ProrationRecord } from '../../services/billingService';
+import { getBillingStatus, getProrationRecords } from '../../services/billingService';
 import ProrationDisplay from './ProrationDisplay';
 import InvoiceHistory from './InvoiceHistory';
 import './PlatformPages.css';
@@ -121,9 +122,7 @@ const BillingPage: React.FC = () => {
         <p>View your current plan and token usage statistics.</p>
       </div>
 
-      {loading && (
-        <div className="platform-page-loading">Loading billing information...</div>
-      )}
+      {loading && <div className="platform-page-loading">Loading billing information...</div>}
 
       {error && (
         <div className="platform-page-error">
@@ -148,7 +147,8 @@ const BillingPage: React.FC = () => {
                 <h3 className="platform-card-title">Payment Issue</h3>
               </div>
               <div className="platform-card-body">
-                We had trouble processing your recent payment. Please update your payment method to avoid service interruption.
+                We had trouble processing your recent payment. Please update your payment method to avoid service
+                interruption.
               </div>
             </div>
           )}
@@ -159,7 +159,8 @@ const BillingPage: React.FC = () => {
                 <h3 className="platform-card-title">Service Suspended</h3>
               </div>
               <div className="platform-card-body">
-                Your service has been temporarily suspended due to payment issues. Please update your payment method to restore access.
+                Your service has been temporarily suspended due to payment issues. Please update your payment method to
+                restore access.
               </div>
             </div>
           )}
@@ -168,13 +169,11 @@ const BillingPage: React.FC = () => {
           <div className="platform-card">
             <div className="platform-card-header">
               <h3 className="platform-card-title">Current Plan</h3>
-              <span className="platform-status-badge running">
-                {billing.tier.toUpperCase()}
-              </span>
+              <span className="platform-status-badge running">{billing.tier.toUpperCase()}</span>
             </div>
             <div className="platform-card-body">
-              You are on the <strong>{billing.tier}</strong> plan.
-              Usage resets on {formatDate(billing.usage.period_end)}.
+              You are on the <strong>{billing.tier}</strong> plan. Usage resets on{' '}
+              {formatDate(billing.usage.period_end)}.
             </div>
           </div>
 
@@ -182,12 +181,8 @@ const BillingPage: React.FC = () => {
           <div className="platform-metric-grid">
             <div className="platform-metric-card">
               <div className="platform-metric-label">Tokens Used</div>
-              <div className="platform-metric-value">
-                {formatNumber(billing.usage.tokens_used)}
-              </div>
-              <div className="platform-metric-sub">
-                of {formatNumber(billing.usage.tokens_limit)} this period
-              </div>
+              <div className="platform-metric-value">{formatNumber(billing.usage.tokens_used)}</div>
+              <div className="platform-metric-sub">of {formatNumber(billing.usage.tokens_limit)} this period</div>
             </div>
 
             <div className="platform-metric-card">
@@ -195,22 +190,14 @@ const BillingPage: React.FC = () => {
               <div className="platform-metric-value">
                 {formatNumber(Math.max(0, billing.usage.tokens_limit - billing.usage.tokens_used))}
               </div>
-              <div className="platform-metric-sub">
-                Resets on {formatDate(billing.usage.period_end)}
-              </div>
+              <div className="platform-metric-sub">Resets on {formatDate(billing.usage.period_end)}</div>
             </div>
 
             {billing.overage && (
               <div className="platform-metric-card warning">
-                <div className="platform-metric-label">
-                  Overage
-                </div>
-                <div className="platform-metric-value">
-                  {formatNumber(billing.overage.tokens)}
-                </div>
-                <div className="platform-metric-sub">
-                  Additional cost: {formatCurrency(billing.overage.cost)}
-                </div>
+                <div className="platform-metric-label">Overage</div>
+                <div className="platform-metric-value">{formatNumber(billing.overage.tokens)}</div>
+                <div className="platform-metric-sub">Additional cost: {formatCurrency(billing.overage.cost)}</div>
               </div>
             )}
           </div>
@@ -231,20 +218,18 @@ const BillingPage: React.FC = () => {
                 <div className="platform-progress-bar">
                   <div
                     className={`platform-progress-fill ${getProgressClass(
-                      calculateUsagePercent(billing.usage.tokens_used, billing.usage.tokens_limit)
+                      calculateUsagePercent(billing.usage.tokens_used, billing.usage.tokens_limit),
                     )}`}
                     style={{
-                      width: `${calculateUsagePercent(
-                        billing.usage.tokens_used,
-                        billing.usage.tokens_limit
-                      )}%`,
+                      width: `${calculateUsagePercent(billing.usage.tokens_used, billing.usage.tokens_limit)}%`,
                     }}
                   />
                 </div>
               </div>
 
               <div style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                <strong>Billing Period:</strong> {formatDate(billing.usage.period_start)} - {formatDate(billing.usage.period_end)}
+                <strong>Billing Period:</strong> {formatDate(billing.usage.period_start)} -{' '}
+                {formatDate(billing.usage.period_end)}
               </div>
             </div>
           </div>
@@ -291,14 +276,11 @@ const BillingPage: React.FC = () => {
           {billing.overage && (
             <div className="platform-card warning">
               <div className="platform-card-header">
-                <h3 className="platform-card-title">
-                  Overage Detected
-                </h3>
+                <h3 className="platform-card-title">Overage Detected</h3>
               </div>
               <div className="platform-card-body">
-                You have exceeded your token limit for this period.
-                Additional tokens used will incur an extra charge of {formatCurrency(billing.overage.cost)}.
-                Consider upgrading your plan to avoid overage charges.
+                You have exceeded your token limit for this period. Additional tokens used will incur an extra charge of{' '}
+                {formatCurrency(billing.overage.cost)}. Consider upgrading your plan to avoid overage charges.
               </div>
             </div>
           )}

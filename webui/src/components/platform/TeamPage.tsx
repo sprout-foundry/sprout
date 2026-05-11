@@ -110,9 +110,7 @@ const TeamPage: React.FC = () => {
         <p>Manage team members and invitations.</p>
       </div>
 
-      {loading && (
-        <div className="platform-page-loading">Loading team information...</div>
-      )}
+      {loading && <div className="platform-page-loading">Loading team information...</div>}
 
       {error && (
         <div className="platform-page-error">
@@ -142,7 +140,8 @@ const TeamPage: React.FC = () => {
               {team.members.length > 0
                 ? `${team.members.length} team ${team.members.length === 1 ? 'member' : 'members'}`
                 : 'No members yet'}
-              {team.invites.length > 0 && ` and ${team.invites.length} pending ${team.invites.length === 1 ? 'invitation' : 'invitations'}`}
+              {team.invites.length > 0 &&
+                ` and ${team.invites.length} pending ${team.invites.length === 1 ? 'invitation' : 'invitations'}`}
             </div>
           </div>
 
@@ -160,18 +159,12 @@ const TeamPage: React.FC = () => {
                   <div key={member.id} className="platform-list-item">
                     {getMemberIcon(member)}
                     <div className="platform-list-item-content">
-                      <div className="platform-list-item-title">
-                        {member.name || member.email}
-                      </div>
+                      <div className="platform-list-item-title">{member.name || member.email}</div>
                       <div className="platform-list-item-subtitle">{member.email}</div>
                     </div>
                     <div className="platform-list-item-meta">
-                      <span className={getRoleBadgeClass(member.role)}>
-                        {member.role}
-                      </span>
-                      <div className="platform-list-item-time">
-                        Joined {formatDate(member.joined_at)}
-                      </div>
+                      <span className={getRoleBadgeClass(member.role)}>{member.role}</span>
+                      <div className="platform-list-item-time">Joined {formatDate(member.joined_at)}</div>
                     </div>
                   </div>
                 ))}
@@ -197,17 +190,11 @@ const TeamPage: React.FC = () => {
                     </div>
                     <div className="platform-list-item-content">
                       <div className="platform-list-item-title">{invite.email}</div>
-                      <div className="platform-list-item-subtitle">
-                        Expires {formatDate(invite.expires_at)}
-                      </div>
+                      <div className="platform-list-item-subtitle">Expires {formatDate(invite.expires_at)}</div>
                     </div>
                     <div className="platform-list-item-meta">
-                      <span className={getRoleBadgeClass(invite.role)}>
-                        {invite.role}
-                      </span>
-                      <div className="platform-list-item-time">
-                        Invited {formatDate(invite.invited_at)}
-                      </div>
+                      <span className={getRoleBadgeClass(invite.role)}>{invite.role}</span>
+                      <div className="platform-list-item-time">Invited {formatDate(invite.invited_at)}</div>
                     </div>
                   </div>
                 ))}

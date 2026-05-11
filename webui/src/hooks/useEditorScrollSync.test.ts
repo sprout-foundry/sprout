@@ -97,11 +97,7 @@ function renderTestHook(
   };
   let hookReturn: any = null;
 
-  const {
-    paneId = 'pane-1',
-    filePath = '/test/file.ts',
-    isLinkedScrollEnabled = false,
-  } = options;
+  const { paneId = 'pane-1', filePath = '/test/file.ts', isLinkedScrollEnabled = false } = options;
 
   function HookWrapper() {
     hookReturn = useEditorScrollSync({
@@ -230,9 +226,7 @@ describe('handleScrollUpdate — scroll position persistence', () => {
     });
 
     // At least one call has the correct scroll values
-    const matchingCall = updateBufferScroll.mock.calls.find(
-      (call) => call[1].top === 250 && call[1].left === 30,
-    );
+    const matchingCall = updateBufferScroll.mock.calls.find((call) => call[1].top === 250 && call[1].left === 30);
     expect(matchingCall).toBeDefined();
   });
 });

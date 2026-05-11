@@ -27,7 +27,9 @@
   flex-direction: column;
   transform: scale(1);
   opacity: 1;
-  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+  transition:
+    transform 0.2s ease-out,
+    opacity 0.2s ease-out;
 }
 
 /* Worktree Chat Dialog Header */
@@ -372,7 +374,8 @@
 }
 
 @keyframes wt-chat-shake {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateX(0);
   }
   25% {

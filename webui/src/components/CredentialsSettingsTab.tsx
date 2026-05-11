@@ -41,7 +41,9 @@ function CredentialsSettingsTab(): JSX.Element {
   const [pendingDeleteProvider, setPendingDeleteProvider] = useState<string | null>(null);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, { success: boolean; error?: string; model_count?: number }>>({});
+  const [testResults, setTestResults] = useState<
+    Record<string, { success: boolean; error?: string; model_count?: number }>
+  >({});
   const [expandedPoolProvider, setExpandedPoolProvider] = useState<string | null>(null);
   const [poolKeys, setPoolKeys] = useState<Record<string, string[]>>({});
   const [addPoolValue, setAddPoolValue] = useState('');
@@ -119,10 +121,11 @@ function CredentialsSettingsTab(): JSX.Element {
       }
       setPendingDeleteProvider(null);
 
-      api.deleteProviderCredential(provider.provider)
+      api
+        .deleteProviderCredential(provider.provider)
         .then(() => {
           addNotification('success', 'Credentials', `${provider.display_name} credential deleted`, 3000);
-          setTestResults(prev => {
+          setTestResults((prev) => {
             const next = { ...prev };
             delete next[provider.provider];
             return next;
@@ -145,7 +148,7 @@ function CredentialsSettingsTab(): JSX.Element {
 
   const handleTestConnection = async (provider: CredentialProvider) => {
     setTestingProvider(provider.provider);
-    setTestResults(prev => {
+    setTestResults((prev) => {
       const next = { ...prev };
       delete next[provider.provider];
       return next;
@@ -153,7 +156,7 @@ function CredentialsSettingsTab(): JSX.Element {
 
     try {
       const result = await api.testProviderConnection(provider.provider);
-      setTestResults(prev => ({
+      setTestResults((prev) => ({
         ...prev,
         [provider.provider]: {
           success: result.success,
@@ -162,7 +165,7 @@ function CredentialsSettingsTab(): JSX.Element {
         },
       }));
     } catch (err) {
-      setTestResults(prev => ({
+      setTestResults((prev) => ({
         ...prev,
         [provider.provider]: {
           success: false,
@@ -183,7 +186,7 @@ function CredentialsSettingsTab(): JSX.Element {
     try {
       setPoolActionLoading(true);
       const poolData = await api.getKeyPool(provider.provider);
-      setPoolKeys(prev => ({
+      setPoolKeys((prev) => ({
         ...prev,
         [provider.provider]: poolData.masked_keys || [],
       }));
@@ -212,7 +215,7 @@ function CredentialsSettingsTab(): JSX.Element {
       // Refresh pool keys if expanded
       if (expandedPoolProvider === provider.provider) {
         const poolData = await api.getKeyPool(provider.provider);
-        setPoolKeys(prev => ({
+        setPoolKeys((prev) => ({
           ...prev,
           [provider.provider]: poolData.masked_keys || [],
         }));
@@ -231,12 +234,9 @@ function CredentialsSettingsTab(): JSX.Element {
       await api.removeKeyFromPool(provider.provider, index);
       addNotification('success', 'Credentials', 'Key removed from pool', 3000);
       // Refresh pool keys and provider list
-      const [poolData] = await Promise.all([
-        api.getKeyPool(provider.provider).catch(() => null),
-        fetchCredentials(),
-      ]);
+      const [poolData] = await Promise.all([api.getKeyPool(provider.provider).catch(() => null), fetchCredentials()]);
       if (poolData) {
-        setPoolKeys(prev => ({
+        setPoolKeys((prev) => ({
           ...prev,
           [provider.provider]: poolData.masked_keys || [],
         }));
@@ -279,16 +279,56 @@ function CredentialsSettingsTab(): JSX.Element {
     };
 
     if (keyPoolSize > 1) {
-      return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, var(--bg-elevated, #fff))', color: 'var(--color-warning, #f59e0b)' }}>pool</span>;
+      return (
+        <span
+          style={{
+            ...baseStyle,
+            background: 'color-mix(in srgb, var(--color-warning, #f59e0b) 15%, var(--bg-elevated, #fff))',
+            color: 'var(--color-warning, #f59e0b)',
+          }}
+        >
+          pool
+        </span>
+      );
     }
 
     switch (source) {
       case 'environment':
-        return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--color-success, #22c55e) 15%, var(--bg-elevated, #fff))', color: 'var(--color-success, #22c55e)' }}>env</span>;
+        return (
+          <span
+            style={{
+              ...baseStyle,
+              background: 'color-mix(in srgb, var(--color-success, #22c55e) 15%, var(--bg-elevated, #fff))',
+              color: 'var(--color-success, #22c55e)',
+            }}
+          >
+            env
+          </span>
+        );
       case 'stored':
-        return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--color-info, #3b82f6) 15%, var(--bg-elevated, #fff))', color: 'var(--color-info, #3b82f6)' }}>stored</span>;
+        return (
+          <span
+            style={{
+              ...baseStyle,
+              background: 'color-mix(in srgb, var(--color-info, #3b82f6) 15%, var(--bg-elevated, #fff))',
+              color: 'var(--color-info, #3b82f6)',
+            }}
+          >
+            stored
+          </span>
+        );
       default:
-        return <span style={{ ...baseStyle, background: 'color-mix(in srgb, var(--text-muted, #888) 10%, var(--bg-elevated, #fff))', color: 'var(--text-muted, #888)' }}>none</span>;
+        return (
+          <span
+            style={{
+              ...baseStyle,
+              background: 'color-mix(in srgb, var(--text-muted, #888) 10%, var(--bg-elevated, #fff))',
+              color: 'var(--text-muted, #888)',
+            }}
+          >
+            none
+          </span>
+        );
     }
   };
 
@@ -351,9 +391,7 @@ function CredentialsSettingsTab(): JSX.Element {
 
       {/* Provider list */}
       <div className="crud-list">
-        {providers.length === 0 && (
-          <div className="settings-empty">No providers with credentials configured</div>
-        )}
+        {providers.length === 0 && <div className="settings-empty">No providers with credentials configured</div>}
 
         {providers.map((provider) => {
           const isEditing = editingProvider === provider.provider;
@@ -478,20 +516,26 @@ function CredentialsSettingsTab(): JSX.Element {
                     <button
                       type="button"
                       className="crud-btn"
-                      title={testingProvider === provider.provider
-                        ? 'Testing connection…'
-                        : !provider.requires_api_key
-                          ? 'Test if local provider service is reachable'
-                          : provider.has_stored_credential || provider.has_env_credential
-                            ? 'Test connection'
-                            : 'No credential configured - save a key first'}
+                      title={
+                        testingProvider === provider.provider
+                          ? 'Testing connection…'
+                          : !provider.requires_api_key
+                            ? 'Test if local provider service is reachable'
+                            : provider.has_stored_credential || provider.has_env_credential
+                              ? 'Test connection'
+                              : 'No credential configured - save a key first'
+                      }
                       onClick={() => handleTestConnection(provider)}
-                      disabled={testingProvider === provider.provider ||
-                        (provider.requires_api_key && !provider.has_stored_credential && !provider.has_env_credential)}
+                      disabled={
+                        testingProvider === provider.provider ||
+                        (provider.requires_api_key && !provider.has_stored_credential && !provider.has_env_credential)
+                      }
                     >
                       <RefreshCw
                         size={12}
-                        style={testingProvider === provider.provider ? { animation: 'spin 1s linear infinite' } : undefined}
+                        style={
+                          testingProvider === provider.provider ? { animation: 'spin 1s linear infinite' } : undefined
+                        }
                       />
                     </button>
                   </>
@@ -502,12 +546,24 @@ function CredentialsSettingsTab(): JSX.Element {
               {hasPool && isPoolExpanded && (
                 <div className="crud-inline-form" style={{ marginTop: 'var(--space-3)' }}>
                   <div style={{ marginBottom: 'var(--space-3)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        color: 'var(--text-tertiary)',
+                        marginBottom: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
                       <Key size={12} />
                       Configured Keys ({providerPoolKeys.length})
                     </div>
                     {providerPoolKeys.length === 0 ? (
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No keys in pool</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                        No keys in pool
+                      </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         {providerPoolKeys.map((maskedKey, idx) => (

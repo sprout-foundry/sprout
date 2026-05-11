@@ -28,12 +28,7 @@ export interface Selection {
 // ─── Main Entry Point ─────────────────────────────────────────────
 
 /** Compute all static code actions for the given cursor position (no LSP needed). */
-export function computeStaticActions(
-  doc: Doc,
-  lineNum: number,
-  selection: Selection,
-  filePath: string,
-): CodeAction[] {
+export function computeStaticActions(doc: Doc, lineNum: number, selection: Selection, filePath: string): CodeAction[] {
   const actions: CodeAction[] = [];
   const ext = filePath.split('.').pop()?.toLowerCase() || '';
 
@@ -87,10 +82,7 @@ export function computeStaticActions(
   if (leadingSpacesMatch) {
     const spaceCount = leadingSpacesMatch[1].length;
     if (spaceCount >= 2 && (spaceCount % 2 === 0 || spaceCount % 4 === 0)) {
-      const tabifyContent = doc.toString().replace(
-        new RegExp(`^ {${spaceCount}}`, 'gm'),
-        '\t',
-      );
+      const tabifyContent = doc.toString().replace(new RegExp(`^ {${spaceCount}}`, 'gm'), '\t');
       if (tabifyContent !== doc.toString()) {
         actions.push({
           title: 'Convert spaces to tabs',
@@ -220,10 +212,7 @@ export function computeStaticActions(
 // ─── Import Line Detection ────────────────────────────────────────
 
 /** Check if the given line number is near an import declaration (within 3 lines). */
-export function isNearImportLine(
-  lineNum: number,
-  doc: Doc,
-): boolean {
+export function isNearImportLine(lineNum: number, doc: Doc): boolean {
   const start = Math.max(1, lineNum - 3);
   const end = Math.min(doc.lines, lineNum + 3);
 
@@ -265,24 +254,56 @@ export function findUnusedJsImports(doc: Doc, filePath: string): CodeAction[] {
   for (let i = 1; i <= scanEnd; i++) {
     const line = doc.line(i);
     const text = line.text.trim();
-    
+
     // Handle type-only imports: strip "type " keyword for pattern matching
     const importText = text.replace(/^import\s+type\s+/, 'import ');
 
     // Named imports: import { a, b, c } from 'module'
     const namedMatch = importText.match(importPattern);
     if (namedMatch) {
-      const symbols = namedMatch[1] ? namedMatch[1].split(',').map(s => s.trim()).filter(Boolean) : [];
+      const symbols = namedMatch[1]
+        ? namedMatch[1]
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
       const isStar = namedMatch[2] === '*';
       const isDefault = namedMatch[3] !== undefined;
       const defaultName = namedMatch[3];
 
       if (isStar) {
-        imports.push({ lineNum: i, path: namedMatch[4], symbols: ['*'], isDefault: false, isStar: true, lineText: line.text, from: line.from, to: line.to });
+        imports.push({
+          lineNum: i,
+          path: namedMatch[4],
+          symbols: ['*'],
+          isDefault: false,
+          isStar: true,
+          lineText: line.text,
+          from: line.from,
+          to: line.to,
+        });
       } else if (isDefault && defaultName) {
-        imports.push({ lineNum: i, path: namedMatch[4], symbols: [defaultName], isDefault: true, isStar: false, lineText: line.text, from: line.from, to: line.to });
+        imports.push({
+          lineNum: i,
+          path: namedMatch[4],
+          symbols: [defaultName],
+          isDefault: true,
+          isStar: false,
+          lineText: line.text,
+          from: line.from,
+          to: line.to,
+        });
       } else if (symbols.length > 0) {
-        imports.push({ lineNum: i, path: namedMatch[4], symbols, isDefault: false, isStar: false, lineText: line.text, from: line.from, to: line.to });
+        imports.push({
+          lineNum: i,
+          path: namedMatch[4],
+          symbols,
+          isDefault: false,
+          isStar: false,
+          lineText: line.text,
+          from: line.from,
+          to: line.to,
+        });
       }
       continue;
     }
@@ -290,7 +311,16 @@ export function findUnusedJsImports(doc: Doc, filePath: string): CodeAction[] {
     // Default imports: import Component from 'module'
     const defaultMatch = importText.match(defaultImportPattern);
     if (defaultMatch) {
-      imports.push({ lineNum: i, path: defaultMatch[2], symbols: [defaultMatch[1]], isDefault: true, isStar: false, lineText: line.text, from: line.from, to: line.to });
+      imports.push({
+        lineNum: i,
+        path: defaultMatch[2],
+        symbols: [defaultMatch[1]],
+        isDefault: true,
+        isStar: false,
+        lineText: line.text,
+        from: line.from,
+        to: line.to,
+      });
     }
   }
 
@@ -337,7 +367,7 @@ export function findUnusedJsImports(doc: Doc, filePath: string): CodeAction[] {
           ],
         });
       } else if (unusedSymbols.length > 0) {
-        const remainingSymbols = imp.symbols.filter(s => !unusedSymbols.includes(s));
+        const remainingSymbols = imp.symbols.filter((s) => !unusedSymbols.includes(s));
 
         if (remainingSymbols.length === 0) {
           // All remaining are unused, remove the line
@@ -429,10 +459,17 @@ export function findUnusedGoImports(doc: Doc, filePath: string): CodeAction[] {
             const path = match[1];
             // Match aliased imports like: fmt "fmt" or "fmt"
             const idMatch = blockText.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+"[^"]+"/);
-            let id = idMatch ? idMatch[1] : path.split('/').pop() || path;
+            const id = idMatch ? idMatch[1] : path.split('/').pop() || path;
             // Skip underscore imports (used for side effects only)
             if (id === '_') continue;
-            imports.push({ lineNum: j, path, identifier: id, from: blockLine.from, to: blockLine.to, lineText: blockLine.text });
+            imports.push({
+              lineNum: j,
+              path,
+              identifier: id,
+              from: blockLine.from,
+              to: blockLine.to,
+              lineText: blockLine.text,
+            });
           }
         }
         inImportBlock = false;
@@ -447,7 +484,7 @@ export function findUnusedGoImports(doc: Doc, filePath: string): CodeAction[] {
     if (match) {
       const path = match[1];
       const aliasMatch = text.match(/^import\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+/);
-      let id = aliasMatch ? aliasMatch[1] : path.split('/').pop() || path;
+      const id = aliasMatch ? aliasMatch[1] : path.split('/').pop() || path;
       // Skip underscore imports (used for side effects only)
       if (id === '_') continue;
       imports.push({ lineNum: i, path, identifier: id, from: line.from, to: line.to, lineText: line.text });

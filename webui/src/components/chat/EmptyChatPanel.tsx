@@ -21,8 +21,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
           <CloudOff size={48} className="chat-offline-icon" aria-hidden="true" />
           <h3 className="chat-offline-title">No Server Connection</h3>
           <p className="chat-offline-description">
-            Chat requires a connection to your Sprout server.
-            Your editor and terminal remain available while offline.
+            Chat requires a connection to your Sprout server. Your editor and terminal remain available while offline.
           </p>
           <button
             className="chat-offline-retry-btn"
@@ -44,14 +43,18 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
           <div className="welcome-icon">
             <Bot size={32} />
           </div>
-          <div className="welcome-text">
-            No AI provider configured
-          </div>
+          <div className="welcome-text">No AI provider configured</div>
           <div className="welcome-hint">
-            AI features require a provider to be set up. The editor, terminal, file tree, and git panels are fully functional without one.
+            AI features require a provider to be set up. The editor, terminal, file tree, and git panels are fully
+            functional without one.
           </div>
           {onRequestProviderSetup && (
-            <button type="button" className="provider-setup-btn" onClick={onRequestProviderSetup} aria-label="Open provider setup">
+            <button
+              type="button"
+              className="provider-setup-btn"
+              onClick={onRequestProviderSetup}
+              aria-label="Open provider setup"
+            >
               <Settings size={14} />
               Configure Provider
             </button>

@@ -129,7 +129,9 @@ describe('WelcomeTab', () => {
       const callbacks = renderWithCallbacks();
 
       const dismissBtn = container!.querySelector('[title="Dismiss welcome tab"]') as HTMLElement;
-      act(() => { dismissBtn.click(); });
+      act(() => {
+        dismissBtn.click();
+      });
 
       expect(callbacks.onDismiss).toHaveBeenCalledTimes(1);
     });
@@ -159,28 +161,36 @@ describe('WelcomeTab', () => {
     it('calls onOpenCommandPalette when clicking "Open Command Palette"', () => {
       const callbacks = renderWithCallbacks();
 
-      act(() => { findButtonByText(/open command palette/i)!.click(); });
+      act(() => {
+        findButtonByText(/open command palette/i)!.click();
+      });
       expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
     });
 
     it('calls onOpenTerminal when clicking "Open Terminal"', () => {
       const callbacks = renderWithCallbacks();
 
-      act(() => { findButtonByText(/open terminal/i)!.click(); });
+      act(() => {
+        findButtonByText(/open terminal/i)!.click();
+      });
       expect(callbacks.onOpenTerminal).toHaveBeenCalledTimes(1);
     });
 
     it('calls onViewGit when clicking "View Git History"', () => {
       const callbacks = renderWithCallbacks();
 
-      act(() => { findButtonByText(/view git history/i)!.click(); });
+      act(() => {
+        findButtonByText(/view git history/i)!.click();
+      });
       expect(callbacks.onViewGit).toHaveBeenCalledTimes(1);
     });
 
     it('calls onStartChat when clicking "Start Chat"', () => {
       const callbacks = renderWithCallbacks();
 
-      act(() => { findButtonByText(/start chat/i)!.click(); });
+      act(() => {
+        findButtonByText(/start chat/i)!.click();
+      });
       expect(callbacks.onStartChat).toHaveBeenCalledTimes(1);
     });
 
@@ -195,7 +205,9 @@ describe('WelcomeTab', () => {
       ];
 
       buttons.forEach((btn) => {
-        expect(() => { if (btn) btn.click(); }).not.toThrow();
+        expect(() => {
+          if (btn) btn.click();
+        }).not.toThrow();
       });
     });
   });
@@ -277,7 +289,9 @@ describe('WelcomeTab', () => {
       const docButton = findResourceCardByText('Documentation');
       expect(docButton).not.toBeNull();
 
-      act(() => { docButton!.click(); });
+      act(() => {
+        docButton!.click();
+      });
       expect(window.open).toHaveBeenCalledWith('https://sprout.dev/docs', '_blank');
     });
 
@@ -287,7 +301,9 @@ describe('WelcomeTab', () => {
       const settingsButton = findResourceCardByText('Settings');
       expect(settingsButton).not.toBeNull();
 
-      act(() => { settingsButton!.click(); });
+      act(() => {
+        settingsButton!.click();
+      });
       expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
     });
 
@@ -297,7 +313,9 @@ describe('WelcomeTab', () => {
       const shortcutsButton = findResourceCardByText('Keyboard Shortcuts');
       expect(shortcutsButton).not.toBeNull();
 
-      act(() => { shortcutsButton!.click(); });
+      act(() => {
+        shortcutsButton!.click();
+      });
       expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
     });
 
@@ -306,7 +324,9 @@ describe('WelcomeTab', () => {
 
       const resourceButtons = container!.querySelectorAll('button.resource-card');
       resourceButtons.forEach((btn) => {
-        expect(() => { btn.click(); }).not.toThrow();
+        expect(() => {
+          btn.click();
+        }).not.toThrow();
       });
     });
   });

@@ -1,5 +1,6 @@
 import type { SproutSettings, ProviderOption } from '../../services/api';
 import type { SubagentTypeInfo } from '../../services/api/types';
+import type { ApiService } from '../../services/api';
 
 /**
  * Shared context passed to domain-specific mutation hooks.
@@ -7,7 +8,7 @@ import type { SubagentTypeInfo } from '../../services/api/types';
  */
 export interface MutationContext {
   /** API service instance */
-  api: ReturnType<typeof import('../../services/api').ApiService.getInstance>;
+  api: ReturnType<typeof ApiService.getInstance>;
   /** Reference to current settings (kept up-to-date by useSettingsState) */
   settingsRef: React.MutableRefObject<SproutSettings | null>;
   /** Callback to notify parent component of settings changes */
@@ -29,7 +30,18 @@ export type SubagentTypeEntry = SubagentTypeInfo;
  * Legacy flat tab IDs — kept for backward compatibility with useSettingsState.
  * New code should use SettingsSection / SettingsSubsection from SECTION_GROUPS.
  */
-export type SettingsSubTab = 'general' | 'security' | 'credentials' | 'performance' | 'subagents' | 'commit-review' | 'pdf-ocr' | 'mcp' | 'providers' | 'skills' | 'embeddings';
+export type SettingsSubTab =
+  | 'general'
+  | 'security'
+  | 'credentials'
+  | 'performance'
+  | 'subagents'
+  | 'commit-review'
+  | 'pdf-ocr'
+  | 'mcp'
+  | 'providers'
+  | 'skills'
+  | 'embeddings';
 
 export interface EditorPreferences {
   autoSaveEnabled: boolean;
@@ -70,11 +82,18 @@ export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor';
 
 export type SettingsSubsection =
   // Agent (session scope)
-  | 'agent-general' | 'agent-behavior' | 'agent-subagents' | 'agent-skills'
+  | 'agent-general'
+  | 'agent-behavior'
+  | 'agent-subagents'
+  | 'agent-skills'
   // Workspace (workspace scope)
-  | 'workspace-embeddings' | 'workspace-mcp'
+  | 'workspace-embeddings'
+  | 'workspace-mcp'
   // Environment (global scope)
-  | 'env-providers' | 'env-performance' | 'env-commit-review' | 'env-ocr'
+  | 'env-providers'
+  | 'env-performance'
+  | 'env-commit-review'
+  | 'env-ocr'
   // Editor
   | 'editor-preferences';
 
@@ -126,9 +145,7 @@ export const SECTION_GROUPS: SectionDef[] = [
     label: 'Editor',
     scope: 'runtime',
     description: 'Editor display preferences (this session only)',
-    subsections: [
-      { id: 'editor-preferences', label: 'Display' },
-    ],
+    subsections: [{ id: 'editor-preferences', label: 'Display' }],
   },
 ];
 

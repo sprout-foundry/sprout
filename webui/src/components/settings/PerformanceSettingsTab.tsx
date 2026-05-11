@@ -4,9 +4,7 @@ interface PerformanceSettingsTabProps {
   renderNumberInput: FieldRenderers['renderNumberInput'];
 }
 
-export default function PerformanceSettingsTab({
-  renderNumberInput,
-}: PerformanceSettingsTabProps) {
+export default function PerformanceSettingsTab({ renderNumberInput }: PerformanceSettingsTabProps) {
   return (
     <div className="section">
       <h4>API Timeouts</h4>

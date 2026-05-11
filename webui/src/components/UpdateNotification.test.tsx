@@ -23,9 +23,14 @@ import UpdateNotification from './UpdateNotification';
 const mockAddNotification = jest.fn();
 jest.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
-  return Object.assign(function NotificationProviderMock({ children }: { children: React.ReactNode }) { return children; }, {
-    useNotifications: () => ({ addNotification: mockAddNotification }),
-  });
+  return Object.assign(
+    function NotificationProviderMock({ children }: { children: React.ReactNode }) {
+      return children;
+    },
+    {
+      useNotifications: () => ({ addNotification: mockAddNotification }),
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -177,7 +182,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockDesktopApi = createMockDesktopApi();
-  
+
   // Set up window.sproutDesktop API
   Object.defineProperty(window, 'sproutDesktop', {
     value: mockDesktopApi,
@@ -292,9 +297,10 @@ describe('UpdateNotification - Checking State', () => {
     mockDesktopApi.isUpdatePending.mockResolvedValue({ pending: false });
     let resolveCheck: ((value: DesktopApiResponse<CheckResult>) => void) | null = null;
     mockDesktopApi.checkForUpdates.mockImplementation(
-      () => new Promise((resolve) => {
-        resolveCheck = resolve;
-      })
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = resolve;
+        }),
     );
 
     // Act: Render component
@@ -447,7 +453,7 @@ describe('UpdateNotification - Update Available State', () => {
       'success',
       'Update Available',
       'Version 2.0.0 is ready to install',
-      0 // Don't auto-dismiss
+      0, // Don't auto-dismiss
     );
   });
 });
@@ -561,7 +567,7 @@ describe('UpdateNotification - Downloading State', () => {
       'success',
       'Update Available',
       'Version 2.0.0 is ready to install.',
-      0
+      0,
     );
   });
 });
@@ -627,7 +633,7 @@ describe('UpdateNotification - Pending Install State', () => {
     // Click cancel button
     const cancelButton = getByLabelText('Cancel update installation');
     expect(cancelButton).toBeTruthy();
-    
+
     await act(async () => {
       cancelButton?.click();
     });
@@ -659,7 +665,7 @@ describe('UpdateNotification - Pending Install State', () => {
 
     // Click cancel button
     const cancelButton = getByLabelText('Cancel update installation');
-    
+
     await act(async () => {
       cancelButton?.click();
     });
@@ -668,7 +674,7 @@ describe('UpdateNotification - Pending Install State', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'info',
       'Update Cancelled',
-      'Update installation has been cancelled.'
+      'Update installation has been cancelled.',
     );
   });
 });
@@ -700,7 +706,7 @@ describe('UpdateNotification - Install Now Action', () => {
     // Click install now button
     const installButton = getByLabelText('Install update now');
     expect(installButton).toBeTruthy();
-    
+
     await act(async () => {
       installButton?.click();
     });
@@ -730,7 +736,7 @@ describe('UpdateNotification - Install Now Action', () => {
 
     // Click install now button
     const installButton = getByLabelText('Install update now');
-    
+
     await act(async () => {
       installButton?.click();
     });
@@ -739,7 +745,7 @@ describe('UpdateNotification - Install Now Action', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'success',
       'Installing Update',
-      'Sprout will restart to apply the update.'
+      'Sprout will restart to apply the update.',
     );
   });
 
@@ -765,17 +771,13 @@ describe('UpdateNotification - Install Now Action', () => {
 
     // Click install now button
     const installButton = getByLabelText('Install update now');
-    
+
     await act(async () => {
       installButton?.click();
     });
 
     // Assert: Should have sent error notification
-    expect(mockAddNotification).toHaveBeenCalledWith(
-      'error',
-      'Update Failed',
-      'Installation failed'
-    );
+    expect(mockAddNotification).toHaveBeenCalledWith('error', 'Update Failed', 'Installation failed');
   });
 
   test('sends error notification when install throws exception', async () => {
@@ -797,7 +799,7 @@ describe('UpdateNotification - Install Now Action', () => {
 
     // Click install now button
     const installButton = getByLabelText('Install update now');
-    
+
     await act(async () => {
       installButton?.click();
     });
@@ -806,7 +808,7 @@ describe('UpdateNotification - Install Now Action', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'error',
       'Update Failed',
-      'An error occurred while installing the update'
+      'An error occurred while installing the update',
     );
   });
 });
@@ -839,7 +841,7 @@ describe('UpdateNotification - Defer Install Action', () => {
     // Click defer button
     const deferButton = getByLabelText('Defer update installation');
     expect(deferButton).toBeTruthy();
-    
+
     await act(async () => {
       deferButton?.click();
     });
@@ -870,7 +872,7 @@ describe('UpdateNotification - Defer Install Action', () => {
 
     // Click defer button
     const deferButton = getByLabelText('Defer update installation');
-    
+
     await act(async () => {
       deferButton?.click();
     });
@@ -905,7 +907,7 @@ describe('UpdateNotification - Defer Install Action', () => {
 
     // Click defer button
     const deferButton = getByLabelText('Defer update installation');
-    
+
     await act(async () => {
       deferButton?.click();
     });
@@ -914,7 +916,7 @@ describe('UpdateNotification - Defer Install Action', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'info',
       'Update Deferred',
-      'Update will be installed when you quit Sprout.'
+      'Update will be installed when you quit Sprout.',
     );
   });
 
@@ -940,23 +942,19 @@ describe('UpdateNotification - Defer Install Action', () => {
 
     // Click defer button
     const deferButton = getByLabelText('Defer update installation');
-    
+
     await act(async () => {
       deferButton?.click();
     });
 
     // Assert: Should have sent error notification
-    expect(mockAddNotification).toHaveBeenCalledWith(
-      'error',
-      'Update Failed',
-      'Failed to defer update'
-    );
+    expect(mockAddNotification).toHaveBeenCalledWith('error', 'Update Failed', 'Failed to defer update');
   });
 
   test('shows pending banner even when deferUpdate API is not available', async () => {
     // Arrange: Setup API without deferUpdate
     mockDesktopApi.isUpdatePending.mockResolvedValue({ pending: false });
-    
+
     // Act: Render component first
     renderComponent();
 
@@ -975,7 +973,7 @@ describe('UpdateNotification - Defer Install Action', () => {
     // Click defer button - this should work even without deferUpdate API
     const deferButton = getByLabelText('Defer update installation');
     expect(deferButton).toBeTruthy();
-    
+
     await act(async () => {
       deferButton?.click();
     });
@@ -990,9 +988,9 @@ describe('UpdateNotification - Defer Install Action', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'info',
       'Update Deferred',
-      'Update will be installed on next quit.'
+      'Update will be installed on next quit.',
     );
-    
+
     // Also check that the component set pendingInstall state
     // The banner text should appear (or at least the component should have transitioned)
     // Note: This might not render the pending banner immediately depending on state timing
@@ -1031,7 +1029,7 @@ describe('UpdateNotification - Check Again Action', () => {
     // Click check again button
     const checkButton = getByLabelText('Check for updates');
     expect(checkButton).toBeTruthy();
-    
+
     await act(async () => {
       checkButton?.click();
     });
@@ -1063,14 +1061,15 @@ describe('UpdateNotification - Check Again Action', () => {
     // Make the next check take time
     let resolveCheck: (() => void) | null = null;
     mockDesktopApi.checkForUpdates.mockImplementation(
-      () => new Promise((resolve) => {
-        resolveCheck = () => resolve({ ok: false });
-      })
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = () => resolve({ ok: false });
+        }),
     );
 
     // Click check again button
     const checkButton = getByLabelText('Check for updates');
-    
+
     act(() => {
       checkButton?.click();
     });
@@ -1105,7 +1104,7 @@ describe('UpdateNotification - Event Listeners', () => {
   test('cleans up event listeners on unmount', () => {
     // Act: Render and unmount component
     renderComponent();
-    
+
     const unsubscribeError = mockDesktopApi.onUpdateError.mock.results[0]?.value;
     const unsubscribeAvailable = mockDesktopApi.onUpdateAvailable.mock.results[0]?.value;
     const unsubscribeProgress = mockDesktopApi.onUpdateDownloadProgress.mock.results[0]?.value;
@@ -1140,12 +1139,7 @@ describe('UpdateNotification - Event Listeners', () => {
     });
 
     // Assert: Should have sent notification
-    expect(mockAddNotification).toHaveBeenCalledWith(
-      'warning',
-      'Update Error',
-      'Failed to download update',
-      undefined
-    );
+    expect(mockAddNotification).toHaveBeenCalledWith('warning', 'Update Error', 'Failed to download update', undefined);
   });
 
   test('handles update available events from main process', () => {
@@ -1249,11 +1243,7 @@ describe('UpdateNotification - API Error Handling', () => {
     });
 
     // Assert: Should have sent warning notification
-    expect(mockAddNotification).toHaveBeenCalledWith(
-      'warning',
-      'Update Check',
-      'Network timeout'
-    );
+    expect(mockAddNotification).toHaveBeenCalledWith('warning', 'Update Check', 'Network timeout');
   });
 
   test('sends notification when checkForUpdates throws exception', async () => {
@@ -1278,7 +1268,7 @@ describe('UpdateNotification - API Error Handling', () => {
     expect(mockAddNotification).toHaveBeenCalledWith(
       'error',
       'Update Check',
-      'An error occurred while checking for updates'
+      'An error occurred while checking for updates',
     );
   });
 
@@ -1327,17 +1317,13 @@ describe('UpdateNotification - API Error Handling', () => {
 
     // Click install now button
     const installButton = getByLabelText('Install update now');
-    
+
     await act(async () => {
       installButton?.click();
     });
 
     // Assert: Should have sent error notification
-    expect(mockAddNotification).toHaveBeenCalledWith(
-      'error',
-      'Update Failed',
-      'Update installation is not available'
-    );
+    expect(mockAddNotification).toHaveBeenCalledWith('error', 'Update Failed', 'Update installation is not available');
   });
 });
 
@@ -1397,7 +1383,7 @@ describe('UpdateNotification - Edge Cases', () => {
 
     // Click cancel button
     const cancelButton = getByLabelText('Cancel update installation');
-    
+
     await act(async () => {
       cancelButton?.click();
     });
@@ -1535,9 +1521,10 @@ describe('UpdateNotification - Accessibility', () => {
     mockDesktopApi.isUpdatePending.mockResolvedValue({ pending: false });
     let resolveCheck: (() => void) | null = null;
     mockDesktopApi.checkForUpdates.mockImplementation(
-      () => new Promise((resolve) => {
-        resolveCheck = () => resolve({ ok: false });
-      })
+      () =>
+        new Promise((resolve) => {
+          resolveCheck = () => resolve({ ok: false });
+        }),
     );
 
     // Act: Render component

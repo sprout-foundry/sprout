@@ -26,42 +26,25 @@ describe('isBinaryFile', () => {
   });
 
   describe('returns true for audio/video files', () => {
-    it.each([
-      'song.mp3',
-      'song.mp4',
-      'audio.wav',
-      'music.ogg',
-      'clip.mpg',
-      'movie.mpeg',
-      'video.avi',
-      'clip.mov',
-    ])('"%s" is binary', (fileName) => {
-      expect(isBinaryFile(fileName)).toBe(true);
-    });
+    it.each(['song.mp3', 'song.mp4', 'audio.wav', 'music.ogg', 'clip.mpg', 'movie.mpeg', 'video.avi', 'clip.mov'])(
+      '"%s" is binary',
+      (fileName) => {
+        expect(isBinaryFile(fileName)).toBe(true);
+      },
+    );
   });
 
   describe('returns true for archive files', () => {
-    it.each([
-      'archive.zip',
-      'archive.tar',
-      'archive.gz',
-      'archive.bz2',
-      'archive.xz',
-      'archive.7z',
-      'archive.rar',
-    ])('"%s" is binary', (fileName) => {
-      expect(isBinaryFile(fileName)).toBe(true);
-    });
+    it.each(['archive.zip', 'archive.tar', 'archive.gz', 'archive.bz2', 'archive.xz', 'archive.7z', 'archive.rar'])(
+      '"%s" is binary',
+      (fileName) => {
+        expect(isBinaryFile(fileName)).toBe(true);
+      },
+    );
   });
 
   describe('returns true for executable files', () => {
-    it.each([
-      'program.exe',
-      'library.dll',
-      'lib.so',
-      'lib.dylib',
-      'module.wasm',
-    ])('"%s" is binary', (fileName) => {
+    it.each(['program.exe', 'library.dll', 'lib.so', 'lib.dylib', 'module.wasm'])('"%s" is binary', (fileName) => {
       expect(isBinaryFile(fileName)).toBe(true);
     });
   });
@@ -121,13 +104,7 @@ describe('isBinaryFile', () => {
   });
 
   describe('returns false for files without extension', () => {
-    it.each([
-      'Makefile',
-      'LICENSE',
-      'README',
-      'Dockerfile',
-      'vendiror',
-    ])('"%s" is not binary', (fileName) => {
+    it.each(['Makefile', 'LICENSE', 'README', 'Dockerfile', 'vendiror'])('"%s" is not binary', (fileName) => {
       expect(isBinaryFile(fileName)).toBe(false);
     });
   });

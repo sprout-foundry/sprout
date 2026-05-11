@@ -53,7 +53,7 @@ export async function parseConsentRequired(response: Response): Promise<ConsentR
 export async function issueConsent(
   fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
   path: string,
-  operation: 'read' | 'write'
+  operation: 'read' | 'write',
 ): Promise<string> {
   const response = await fetchFn('/api/file/consent', {
     method: 'POST',
@@ -101,27 +101,29 @@ export async function withConsentRetry(
 export async function writeFileWithFetch(
   fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
   filePath: string,
-  content: string
+  content: string,
 ): Promise<Response> {
   const baseUrl = `/api/file?path=${encodeURIComponent(filePath)}`;
   const body = JSON.stringify({ content });
 
   return withConsentRetry(
-    () => fetchFn(baseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    }),
+    () =>
+      fetchFn(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }),
     filePath,
     'write',
-    (token) => fetchFn(baseUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        [consentTokenHeader]: token,
-      },
-      body,
-    }),
+    (token) =>
+      fetchFn(baseUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [consentTokenHeader]: token,
+        },
+        body,
+      }),
     fetchFn,
   );
 }

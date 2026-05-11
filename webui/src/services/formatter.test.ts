@@ -11,7 +11,13 @@ jest.mock('prettier', () => ({
   __esModule: true,
 }));
 
-import { formatCode, formatCodeWithConfigDiscovery, isFormattable, setConfigFetcher, clearConfigCache } from './formatter';
+import {
+  formatCode,
+  formatCodeWithConfigDiscovery,
+  isFormattable,
+  setConfigFetcher,
+  clearConfigCache,
+} from './formatter';
 
 // Get a reference to the mocked format function
 const mockedFormat = jest.requireMock('prettier').format as jest.Mock;
@@ -28,14 +34,28 @@ beforeEach(() => {
 
 describe('isFormattable', () => {
   const supported = [
-    '.js', '.jsx', '.mjs', '.cjs',
-    '.ts', '.tsx',
-    '.css', '.scss', '.less',
-    '.html', '.htm', '.vue',
-    '.json', '.json5', '.jsonc',
-    '.md', '.markdown', '.mdx',
-    '.yaml', '.yml',
-    '.graphql', '.gql',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+    '.ts',
+    '.tsx',
+    '.css',
+    '.scss',
+    '.less',
+    '.html',
+    '.htm',
+    '.vue',
+    '.json',
+    '.json5',
+    '.jsonc',
+    '.md',
+    '.markdown',
+    '.mdx',
+    '.yaml',
+    '.yml',
+    '.graphql',
+    '.gql',
   ];
 
   for (const ext of supported) {
@@ -171,65 +191,89 @@ describe('formatCode — Prettier options', () => {
   it('calls Prettier with typescript parser for .ts files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'app.ts');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'typescript',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'typescript',
+      }),
+    );
   });
 
   it('calls Prettier with typescript parser for .tsx files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'App.tsx');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'typescript',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'typescript',
+      }),
+    );
   });
 
   it('calls Prettier with json parser for .json files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'data.json');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'json',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'json',
+      }),
+    );
   });
 
   it('calls Prettier with css parser for .css files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'style.css');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'css',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'css',
+      }),
+    );
   });
 
   it('calls Prettier with html parser for .html files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'index.html');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'html',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'html',
+      }),
+    );
   });
 
   it('calls Prettier with markdown parser for .md files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'readme.md');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'markdown',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'markdown',
+      }),
+    );
   });
 
   it('calls Prettier with yaml parser for .yaml files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'config.yaml');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'yaml',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'yaml',
+      }),
+    );
   });
 
   it('calls Prettier with graphql parser for .graphql files', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'query.graphql');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'graphql',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'graphql',
+      }),
+    );
   });
 
   it('always includes standard formatting options', async () => {
@@ -317,41 +361,56 @@ describe('formatCode — edge cases', () => {
     mockedFormat.mockResolvedValue('formatted');
     const r = await formatCode('const x=1', 'app.JS');
     expect(r.error).toBeUndefined();
-    expect(mockedFormat).toHaveBeenCalledWith('const x=1', expect.objectContaining({
-      parser: 'babel',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'const x=1',
+      expect.objectContaining({
+        parser: 'babel',
+      }),
+    );
   });
 
   it('handles uppercase .TS extension', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('const x:number=1', 'app.TS');
-    expect(mockedFormat).toHaveBeenCalledWith('const x:number=1', expect.objectContaining({
-      parser: 'typescript',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'const x:number=1',
+      expect.objectContaining({
+        parser: 'typescript',
+      }),
+    );
   });
 
   it('handles .Tsx extension (case-insensitive)', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'file.Tsx');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'typescript',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'typescript',
+      }),
+    );
   });
 
   it('handles file path with directories — correct extension extraction', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', '/home/user/project/src/App.tsx');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'typescript',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'typescript',
+      }),
+    );
   });
 
   it('handles nested relative path', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', './src/components/utils/helper.ts');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'typescript',
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'typescript',
+      }),
+    );
   });
 
   it('is idempotent (formatting formatted code returns same result)', async () => {
@@ -382,27 +441,33 @@ describe('formatCode — config merging', () => {
   it('uses default options when no config provided', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'app.js');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'babel',
-      semi: true,
-      singleQuote: true,
-      tabWidth: 2,
-      trailingComma: 'all',
-      printWidth: 80,
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'babel',
+        semi: true,
+        singleQuote: true,
+        tabWidth: 2,
+        trailingComma: 'all',
+        printWidth: 80,
+      }),
+    );
   });
 
   it('merges user config with defaults (user config takes precedence)', async () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCode('input', 'app.js', undefined, { singleQuote: false, printWidth: 100 });
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'babel',
-      semi: true, // default
-      singleQuote: false, // from user config
-      tabWidth: 2, // default
-      trailingComma: 'all', // default
-      printWidth: 100, // from user config
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'babel',
+        semi: true, // default
+        singleQuote: false, // from user config
+        tabWidth: 2, // default
+        trailingComma: 'all', // default
+        printWidth: 100, // from user config
+      }),
+    );
   });
 
   it('allows full override of all default options', async () => {
@@ -414,14 +479,17 @@ describe('formatCode — config merging', () => {
       trailingComma: 'none',
       printWidth: 120,
     });
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'babel',
-      semi: false,
-      singleQuote: false,
-      tabWidth: 4,
-      trailingComma: 'none',
-      printWidth: 120,
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'babel',
+        semi: false,
+        singleQuote: false,
+        tabWidth: 4,
+        trailingComma: 'none',
+        printWidth: 120,
+      }),
+    );
   });
 });
 
@@ -442,11 +510,14 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
     await formatCodeWithConfigDiscovery('input', 'src/app.js');
 
     expect(mockFetcher).toHaveBeenCalledWith('src/app.js');
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'babel',
-      singleQuote: false,
-      tabWidth: 4,
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'babel',
+        singleQuote: false,
+        tabWidth: 4,
+      }),
+    );
   });
 
   it('uses empty config when fetcher returns empty', async () => {
@@ -455,12 +526,15 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
     mockedFormat.mockResolvedValue('formatted');
     await formatCodeWithConfigDiscovery('input', 'app.js');
 
-    expect(mockedFormat).toHaveBeenCalledWith('input', expect.objectContaining({
-      parser: 'babel',
-      semi: true,
-      singleQuote: true,
-      tabWidth: 2,
-    }));
+    expect(mockedFormat).toHaveBeenCalledWith(
+      'input',
+      expect.objectContaining({
+        parser: 'babel',
+        semi: true,
+        singleQuote: true,
+        tabWidth: 2,
+      }),
+    );
   });
 
   it('caches config (single fetch regardless of directory)', async () => {

@@ -3,11 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../../contexts/HotkeyContext';
 import { useLog } from '../../utils/log';
-import {
-  extractSymbols,
-  buildScopePaths,
-  KIND_ICONS,
-} from '../../utils/symbolUtils';
+import { extractSymbols, buildScopePaths, KIND_ICONS } from '../../utils/symbolUtils';
 import { ApiService } from '../../services/api';
 import useFileIndex from './useFileIndex';
 import usePaletteResults from './usePaletteResults';
@@ -65,23 +61,17 @@ function CommandPalette({
 
   // ── Palette results ────────────────────────────────────────────────────
 
-  const {
-    results,
-    navigableItems,
-    selectedFlatIndex,
-    effectiveMode,
-    searchQuery,
-    toNavigableIndex,
-  } = usePaletteResults({
-    query,
-    mode,
-    allFiles,
-    allSymbols,
-    scopePaths,
-    workspaceRoot,
-    activeBufferFileExtension,
-    selectedIndex,
-  });
+  const { results, navigableItems, selectedFlatIndex, effectiveMode, searchQuery, toNavigableIndex } =
+    usePaletteResults({
+      query,
+      mode,
+      allFiles,
+      allSymbols,
+      scopePaths,
+      workspaceRoot,
+      activeBufferFileExtension,
+      selectedIndex,
+    });
 
   // Sync refs for handleKeyDown closure
   selectedIndexRef.current = selectedIndex;
@@ -219,12 +209,7 @@ function CommandPalette({
           ? 'Type a command…'
           : 'Search commands, files & symbols…';
 
-  const prefixIcon =
-    effectiveMode === 'commands'
-      ? '>'
-      : effectiveMode === 'symbols'
-        ? '@'
-        : '';
+  const prefixIcon = effectiveMode === 'commands' ? '>' : effectiveMode === 'symbols' ? '@' : '';
 
   const hintLabel =
     !hasQuery && mode !== 'all'
@@ -235,7 +220,13 @@ function CommandPalette({
 
   return (
     <div className="command-palette-overlay" onClick={handleOverlayClick} role="presentation">
-      <div className="command-palette-container" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Command Palette">
+      <div
+        className="command-palette-container"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command Palette"
+      >
         {/* Mode tab bar */}
         <div className="command-palette-mode-bar">
           {MODE_TABS.map((tab) => (
@@ -325,14 +316,24 @@ function CommandPalette({
                   key={`file-${filePath}`}
                   data-selected={isSelected}
                   className={`command-palette-item ${isSelected ? 'command-palette-selected' : ''}`}
-                  onClick={() => { onOpenFile(filePath); onClose(); }}
+                  onClick={() => {
+                    onOpenFile(filePath);
+                    onClose();
+                  }}
                   onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}
                 >
                   <span className="command-palette-file-icon">📄</span>
                   <span className="command-palette-file-meta">
-                    <span className="command-palette-file-name" dangerouslySetInnerHTML={{ __html: item.highlightedLabel }} />
+                    <span
+                      className="command-palette-file-name"
+                      dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
+                    />
                     {item.fileDirectory && (
-                      <span className="command-palette-file-path" title={item.fileDirectory} dangerouslySetInnerHTML={{ __html: item.secondaryHighlightedLabel || item.fileDirectory }} />
+                      <span
+                        className="command-palette-file-path"
+                        title={item.fileDirectory}
+                        dangerouslySetInnerHTML={{ __html: item.secondaryHighlightedLabel || item.fileDirectory }}
+                      />
                     )}
                   </span>
                 </div>
@@ -355,12 +356,17 @@ function CommandPalette({
                   }}
                   onMouseEnter={() => setSelectedIndex(toNavigableIndex(index))}
                 >
-                  <span className={`command-palette-symbol-icon goto-symbol-kind goto-symbol-kind-${item.symbolKind || 'function'}`}>{icon}</span>
+                  <span
+                    className={`command-palette-symbol-icon goto-symbol-kind goto-symbol-kind-${item.symbolKind || 'function'}`}
+                  >
+                    {icon}
+                  </span>
                   <span className="command-palette-file-meta">
-                    <span className="command-palette-file-name" dangerouslySetInnerHTML={{ __html: item.highlightedLabel }} />
-                    {item.scopePath && (
-                      <span className="command-palette-symbol-scope">{item.scopePath}</span>
-                    )}
+                    <span
+                      className="command-palette-file-name"
+                      dangerouslySetInnerHTML={{ __html: item.highlightedLabel }}
+                    />
+                    {item.scopePath && <span className="command-palette-symbol-scope">{item.scopePath}</span>}
                   </span>
                   {item.symbolLine !== undefined && (
                     <span className="command-palette-symbol-line">:{item.symbolLine}</span>

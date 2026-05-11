@@ -24,18 +24,14 @@ jest.mock('../extensions/languageRegistry', () => {
       if (override != null && override !== '') {
         return { languageId: override, isAutoDetected: false };
       }
-      const match = mockEntries.find(
-        (e) => ext && e.extensions.includes(ext.toLowerCase()),
-      );
+      const match = mockEntries.find((e) => ext && e.extensions.includes(ext.toLowerCase()));
       return { languageId: match?.id ?? null, isAutoDetected: !!match };
     },
   };
 });
 
 jest.mock('lucide-react', () => ({
-  GitBranch: (props: any) => (
-    <svg data-testid="git-branch-icon" {...props} />
-  ),
+  GitBranch: (props: any) => <svg data-testid="git-branch-icon" {...props} />,
 }));
 
 // ---------------------------------------------------------------------------
@@ -67,7 +63,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  act(() => { root.unmount(); });
+  act(() => {
+    root.unmount();
+  });
   container.remove();
 });
 
@@ -92,7 +90,9 @@ function queryByText(parent: HTMLElement, text: string) {
 describe('StatusBar', () => {
   // ---- 1. Renders with no props ----
   test('renders with no props — shows "No Git" on left side, no right section', async () => {
-    await act(async () => { root.render(<StatusBar />); });
+    await act(async () => {
+      root.render(<StatusBar />);
+    });
 
     expect(getByText(container, 'No Git')).toBeTruthy();
 
@@ -102,7 +102,9 @@ describe('StatusBar', () => {
 
   // ---- 2. Shows git branch name ----
   test('shows git branch name when branch prop is provided', async () => {
-    await act(async () => { root.render(<StatusBar branch="feature/my-branch" />); });
+    await act(async () => {
+      root.render(<StatusBar branch="feature/my-branch" />);
+    });
 
     expect(getByText(container, 'feature/my-branch')).toBeTruthy();
     expect(queryByText(container, 'No Git')).toBeNull();
@@ -110,7 +112,9 @@ describe('StatusBar', () => {
 
   // ---- 3. Semantic HTML ----
   test('renders as a <footer> with aria-label for landmark navigation', async () => {
-    await act(async () => { root.render(<StatusBar />); });
+    await act(async () => {
+      root.render(<StatusBar />);
+    });
 
     const footer = container.querySelector('footer.statusbar');
     expect(footer).toBeTruthy();
@@ -123,7 +127,9 @@ describe('StatusBar', () => {
 
   // ---- 4. Shows right section when buffer is provided ----
   test('shows right section with cursor, language, encoding, line endings, indentation when buffer is provided', async () => {
-    await act(async () => { root.render(<StatusBar branch="main" buffer={makeBuffer()} />); });
+    await act(async () => {
+      root.render(<StatusBar branch="main" buffer={makeBuffer()} />);
+    });
 
     const right = container.querySelector('.statusbar-right');
     expect(right).toBeTruthy();
@@ -221,11 +227,7 @@ describe('StatusBar', () => {
   // ---- 9. Line endings detection ----
   test('shows "LF" when content contains no CRLF', async () => {
     await act(async () => {
-      root.render(
-        <StatusBar
-          buffer={makeBuffer({ content: 'line1\nline2\nline3' })}
-        />,
-      );
+      root.render(<StatusBar buffer={makeBuffer({ content: 'line1\nline2\nline3' })} />);
     });
 
     expect(getByText(container, 'LF')).toBeTruthy();
@@ -233,11 +235,7 @@ describe('StatusBar', () => {
 
   test('shows "CRLF" when content contains only \\r\\n', async () => {
     await act(async () => {
-      root.render(
-        <StatusBar
-          buffer={makeBuffer({ content: 'line1\r\nline2\r\nline3' })}
-        />,
-      );
+      root.render(<StatusBar buffer={makeBuffer({ content: 'line1\r\nline2\r\nline3' })} />);
     });
 
     // After removing all \r\n sequences, no bare \n remains → hasBareLF=false → "CRLF".
@@ -246,11 +244,7 @@ describe('StatusBar', () => {
 
   test('shows "Mixed" when content has both CRLF and bare LF', async () => {
     await act(async () => {
-      root.render(
-        <StatusBar
-          buffer={makeBuffer({ content: 'line1\nline2\r\nline3' })}
-        />,
-      );
+      root.render(<StatusBar buffer={makeBuffer({ content: 'line1\nline2\r\nline3' })} />);
     });
 
     // After removing \r\n, bare \n remains → hasBareLF=true + hasCRLF=true → "Mixed".
@@ -259,7 +253,9 @@ describe('StatusBar', () => {
 
   // ---- 10. No buffer ----
   test('does not render right section when buffer is null', async () => {
-    await act(async () => { root.render(<StatusBar branch="main" buffer={null} />); });
+    await act(async () => {
+      root.render(<StatusBar branch="main" buffer={null} />);
+    });
 
     expect(container.querySelector('.statusbar-right')).toBeNull();
   });
@@ -277,9 +273,7 @@ describe('StatusBar', () => {
     });
 
     expect(container.querySelector('.statusbar-right')).toBeTruthy();
-    expect(
-      container.querySelector('.statusbar-item-cursor'),
-    ).toBeNull();
+    expect(container.querySelector('.statusbar-item-cursor')).toBeNull();
   });
 
   test('does not show cursor position when cursorPosition has non-numeric values', async () => {
@@ -293,9 +287,7 @@ describe('StatusBar', () => {
       );
     });
 
-    expect(
-      container.querySelector('.statusbar-item-cursor'),
-    ).toBeNull();
+    expect(container.querySelector('.statusbar-item-cursor')).toBeNull();
   });
 
   // ---- 12. Plain text for unknown extensions ----
@@ -315,7 +307,9 @@ describe('StatusBar', () => {
 
   // ---- 13. Title attributes for accessibility ----
   test('items have title attributes for accessibility', async () => {
-    await act(async () => { root.render(<StatusBar branch="main" buffer={makeBuffer()} />); });
+    await act(async () => {
+      root.render(<StatusBar branch="main" buffer={makeBuffer()} />);
+    });
 
     expect(container.querySelector('[title="Branch: main"]')).toBeTruthy();
     expect(container.querySelector('[title="Cursor position"]')).toBeTruthy();
@@ -327,7 +321,9 @@ describe('StatusBar', () => {
 
   // ---- 14. Cursor position is aria-hidden ----
   test('cursor position span has aria-hidden to avoid screen reader spam', async () => {
-    await act(async () => { root.render(<StatusBar buffer={makeBuffer()} />); });
+    await act(async () => {
+      root.render(<StatusBar buffer={makeBuffer()} />);
+    });
 
     const cursorEl = document.querySelector('.statusbar-item-cursor');
     expect(cursorEl).toBeTruthy();
@@ -336,21 +332,27 @@ describe('StatusBar', () => {
 
   // ---- 15. Empty branch string shows "No Git" ----
   test('empty string branch shows "No Git"', async () => {
-    await act(async () => { root.render(<StatusBar branch="" />); });
+    await act(async () => {
+      root.render(<StatusBar branch="" />);
+    });
 
     expect(getByText(container, 'No Git')).toBeTruthy();
   });
 
   // ---- 16. Custom encoding when provided ----
   test('shows custom encoding when encoding prop is provided', async () => {
-    await act(async () => { root.render(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />); });
+    await act(async () => {
+      root.render(<StatusBar buffer={makeBuffer()} encoding="ISO-8859-1" />);
+    });
 
     expect(getByText(container, 'ISO-8859-1')).toBeTruthy();
   });
 
   // ---- 17. Custom indentation when provided ----
   test('shows custom indentation when indentation prop is provided', async () => {
-    await act(async () => { root.render(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />); });
+    await act(async () => {
+      root.render(<StatusBar buffer={makeBuffer()} indentation="Tabs: 4" />);
+    });
 
     expect(getByText(container, 'Tabs: 4')).toBeTruthy();
   });

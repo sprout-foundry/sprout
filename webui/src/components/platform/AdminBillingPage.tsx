@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
 import { debugLog } from '../../utils/log';
-import { processRefund, getRefunds, getDunningReport, RefundRequest, Refund, DunningReport } from '../../services/billingService';
+import type { RefundRequest, Refund, DunningReport } from '../../services/billingService';
+import { processRefund, getRefunds, getDunningReport } from '../../services/billingService';
 import './PlatformPages.css';
 
 const AdminBillingPage: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'refunds' | 'dunning'>('refunds');
-  
+
   // Refund state
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [refundForm, setRefundForm] = useState<RefundRequest>({
@@ -159,9 +160,7 @@ const AdminBillingPage: React.FC = () => {
             <div className="platform-card-body">
               <form onSubmit={handleRefundSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
-                    Charge ID *
-                  </label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Charge ID *</label>
                   <input
                     type="text"
                     value={refundForm.charge_id}
@@ -173,9 +172,7 @@ const AdminBillingPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
-                    User ID *
-                  </label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>User ID *</label>
                   <input
                     type="text"
                     value={refundForm.user_id}
@@ -204,9 +201,7 @@ const AdminBillingPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>
-                    Reason *
-                  </label>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Reason *</label>
                   <select
                     value={refundForm.reason}
                     onChange={(e) => setRefundForm({ ...refundForm, reason: e.target.value })}
@@ -232,18 +227,12 @@ const AdminBillingPage: React.FC = () => {
                 {refundResult && (
                   <div className="platform-card running">
                     <div className="platform-card-body">
-                      <p style={{ color: '#22c55e' }}>
-                        Refund processed successfully! ID: {refundResult.id}
-                      </p>
+                      <p style={{ color: '#22c55e' }}>Refund processed successfully! ID: {refundResult.id}</p>
                     </div>
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  className="platform-button platform-button-primary"
-                  disabled={processingRefund}
-                >
+                <button type="submit" className="platform-button platform-button-primary" disabled={processingRefund}>
                   {processingRefund ? 'Processing...' : 'Process Refund'}
                 </button>
               </form>
@@ -282,11 +271,11 @@ const AdminBillingPage: React.FC = () => {
                           <td style={{ padding: '12px', fontFamily: 'monospace', fontSize: '12px' }}>
                             {refund.user_id ?? '—'}
                           </td>
-                          <td style={{ padding: '12px', fontWeight: '600' }}>
-                            {formatCurrency(refund.amount)}
-                          </td>
+                          <td style={{ padding: '12px', fontWeight: '600' }}>{formatCurrency(refund.amount)}</td>
                           <td style={{ padding: '12px' }}>
-                            <span className={`platform-status-badge ${refund.refund_type === 'full' ? 'running' : 'warning'}`}>
+                            <span
+                              className={`platform-status-badge ${refund.refund_type === 'full' ? 'running' : 'warning'}`}
+                            >
                               {refund.refund_type.toUpperCase()}
                             </span>
                           </td>
@@ -327,15 +316,11 @@ const AdminBillingPage: React.FC = () => {
                 </div>
                 <div className="platform-metric-card">
                   <div className="platform-metric-label">Recovery Rate</div>
-                  <div className="platform-metric-value">
-                    {Math.round(dunningReport.recovery_rate * 100)}%
-                  </div>
+                  <div className="platform-metric-value">{Math.round(dunningReport.recovery_rate * 100)}%</div>
                 </div>
               </div>
             ) : (
-              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                No dunning report available.
-              </p>
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>No dunning report available.</p>
             )}
           </div>
         </div>

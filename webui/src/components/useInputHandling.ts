@@ -27,7 +27,9 @@ export function useInputHandling({ value, onChange, inputRef, attachedImageCount
 
   // Cleanup effect for mounted ref
   useEffect(() => {
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   // Sync external value prop changes to draftValue
@@ -54,10 +56,7 @@ export function useInputHandling({ value, onChange, inputRef, attachedImageCount
     if (document.activeElement !== inputRef.current) return;
 
     const { start, end } = selectionRef.current;
-    inputRef.current.setSelectionRange(
-      Math.min(start, draftValue.length),
-      Math.min(end, draftValue.length),
-    );
+    inputRef.current.setSelectionRange(Math.min(start, draftValue.length), Math.min(end, draftValue.length));
   }, [draftValue]);
 
   // Auto-resize textarea

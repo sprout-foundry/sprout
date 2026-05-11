@@ -64,19 +64,11 @@ function renderOverlay(props: {
   const container = document.createElement('div');
   document.body.appendChild(container);
 
-  const {
-    visible = true,
-    onSelectSymbol = jest.fn(),
-    onClose = jest.fn(),
-  } = props;
+  const { visible = true, onSelectSymbol = jest.fn(), onClose = jest.fn() } = props;
 
   act(() => {
     ReactDOM.render(
-      <GoToWorkspaceSymbolOverlay
-        visible={visible}
-        onSelectSymbol={onSelectSymbol}
-        onClose={onClose}
-      />,
+      <GoToWorkspaceSymbolOverlay visible={visible} onSelectSymbol={onSelectSymbol} onClose={onClose} />,
       container,
     );
   });
@@ -204,10 +196,12 @@ describe('GoToWorkspaceSymbolOverlay', () => {
 
     const input = view.el.querySelector('.goto-workspace-symbol-input');
     act(() => {
-      input.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'Escape',
-        bubbles: true,
-      }));
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          bubbles: true,
+        }),
+      );
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);

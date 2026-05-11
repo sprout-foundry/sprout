@@ -88,7 +88,11 @@ export async function deleteChatSession(
   return res.json();
 }
 
-export async function deleteAllChatSessions(): Promise<{ message: string; deleted_count: number; active_chat_id: string }> {
+export async function deleteAllChatSessions(): Promise<{
+  message: string;
+  deleted_count: number;
+  active_chat_id: string;
+}> {
   const res = await clientFetch('/api/chat-sessions/delete-all', { method: 'POST' });
   if (!res.ok) throw new Error('Failed to delete all chat sessions');
   return res.json();
@@ -117,13 +121,18 @@ export async function switchChatSession(id: string): Promise<ChatSessionSwitchRe
   return res.json();
 }
 
-export async function getChatSessionWorktree(chatId: string): Promise<{ message: string; chat_id: string; worktree_path: string }> {
+export async function getChatSessionWorktree(
+  chatId: string,
+): Promise<{ message: string; chat_id: string; worktree_path: string }> {
   const res = await clientFetch(`/api/chat-session/${chatId}/worktree`);
   if (!res.ok) throw new Error('Failed to get chat session worktree');
   return res.json();
 }
 
-export async function setChatSessionWorktree(chatId: string, worktreePath: string): Promise<{
+export async function setChatSessionWorktree(
+  chatId: string,
+  worktreePath: string,
+): Promise<{
   message: string;
   chat_id: string;
   worktree_path: string;
@@ -138,7 +147,10 @@ export async function setChatSessionWorktree(chatId: string, worktreePath: strin
   return res.json();
 }
 
-export async function switchChatSessionWorktree(chatId: string, worktreePath: string): Promise<{
+export async function switchChatSessionWorktree(
+  chatId: string,
+  worktreePath: string,
+): Promise<{
   message: string;
   chat_id: string;
   worktree_path: string;
@@ -159,7 +171,11 @@ export async function listWorktrees(): Promise<WorktreeListResponse> {
   return res.json();
 }
 
-export async function createWorktree(path: string, branch: string, baseRef?: string): Promise<{
+export async function createWorktree(
+  path: string,
+  branch: string,
+  baseRef?: string,
+): Promise<{
   message: string;
   path: string;
   branch: string;

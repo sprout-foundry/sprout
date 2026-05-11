@@ -89,13 +89,7 @@ export function CommandInputActions({
       >
         <Plus size={16} />
       </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: 'none' }}
-        onChange={handleFileSelect}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileSelect} />
       <button
         type="button"
         className="new-session-button"

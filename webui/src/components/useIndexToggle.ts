@@ -10,10 +10,7 @@ interface UseIndexToggleReturn {
   handleToggleIndexClick: () => void;
 }
 
-export function useIndexToggle({
-  isIndexEnabled = false,
-  onToggleIndex,
-}: UseIndexToggleOptions): UseIndexToggleReturn {
+export function useIndexToggle({ isIndexEnabled = false, onToggleIndex }: UseIndexToggleOptions): UseIndexToggleReturn {
   // Optimistic state for the index toggle — provides immediate visual feedback
   // while waiting for the stats poll to confirm. Reset whenever the prop changes.
   const [optimisticIndexEnabled, setOptimisticIndexEnabled] = useState<boolean | null>(null);

@@ -10,9 +10,14 @@ jest.mock('../services/api', () => ({
 }));
 jest.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
-  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
-    useNotifications: () => ({ addNotification: noop }),
-  });
+  return Object.assign(
+    function NotificationProviderMock({ children }) {
+      return children;
+    },
+    {
+      useNotifications: () => ({ addNotification: noop }),
+    },
+  );
 });
 
 const MINIMAL_CHAT_PROPS = {

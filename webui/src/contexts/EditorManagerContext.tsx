@@ -9,7 +9,7 @@ import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering'
 import { EditorSettingsProvider, useEditorSettings as useSettings } from './EditorSettingsContext';
 import { PaneManagerProvider, usePaneManager as usePaneContext } from './PaneManagerContext';
 import { BufferManagerProvider, useBufferManager as useBufferContext } from './BufferManagerContext';
-import { PaneBridge } from './BufferManagerContext';
+import type { PaneBridge } from './BufferManagerContext';
 
 // ---------------------------------------------------------------------------
 // Re-export constants and hooks for backward compatibility
@@ -112,9 +112,7 @@ interface EditorManagerProviderProps {
 export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ children }) => {
   return (
     <EditorSettingsProvider>
-      <SettingsToPaneProvider>
-        {children}
-      </SettingsToPaneProvider>
+      <SettingsToPaneProvider>{children}</SettingsToPaneProvider>
     </EditorSettingsProvider>
   );
 };
@@ -123,11 +121,7 @@ export const EditorManagerProvider: React.FC<EditorManagerProviderProps> = ({ ch
 const SettingsToPaneProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const settings = useSettings();
 
-  return (
-    <PaneToBufferProvider settings={settings}>
-      {children}
-    </PaneToBufferProvider>
-  );
+  return <PaneToBufferProvider settings={settings}>{children}</PaneToBufferProvider>;
 };
 
 const PaneToBufferProvider: React.FC<{
@@ -174,23 +168,26 @@ const PaneToBufferBridge: React.FC<{
   activeBufferIdRef.current = pane.activeBufferId;
   panesRef.current = pane.panes;
 
-  const paneBridge: PaneBridge = React.useMemo(() => ({
-    get activePaneId() { return activePaneIdRef.current; },
-    get activeBufferId() { return activeBufferIdRef.current; },
-    get panes() { return panesRef.current; },
-    setActiveBufferId: pane.setActiveBufferId,
-    setActivePaneId: pane.setActivePaneId,
-    setPanes: pane.setPanes,
-    switchPane: pane.switchPane,
-    closeBuffer: (id: string) => closeBufferRef.current?.(id),
-    moveBufferToPane: pane.moveBufferToPane,
-  }), [
-    pane.setActiveBufferId,
-    pane.setActivePaneId,
-    pane.setPanes,
-    pane.switchPane,
-    pane.moveBufferToPane,
-  ]);
+  const paneBridge: PaneBridge = React.useMemo(
+    () => ({
+      get activePaneId() {
+        return activePaneIdRef.current;
+      },
+      get activeBufferId() {
+        return activeBufferIdRef.current;
+      },
+      get panes() {
+        return panesRef.current;
+      },
+      setActiveBufferId: pane.setActiveBufferId,
+      setActivePaneId: pane.setActivePaneId,
+      setPanes: pane.setPanes,
+      switchPane: pane.switchPane,
+      closeBuffer: (id: string) => closeBufferRef.current?.(id),
+      moveBufferToPane: pane.moveBufferToPane,
+    }),
+    [pane.setActiveBufferId, pane.setActivePaneId, pane.setPanes, pane.switchPane, pane.moveBufferToPane],
+  );
 
   return (
     <BufferManagerProvider
@@ -199,9 +196,7 @@ const PaneToBufferBridge: React.FC<{
       isFormatOnSaveEnabled={settings.isFormatOnSaveEnabled}
       autoSaveInterval={settings.autoSaveInterval}
     >
-      <CombinedContextProvider closeBufferRef={closeBufferRef}>
-        {children}
-      </CombinedContextProvider>
+      <CombinedContextProvider closeBufferRef={closeBufferRef}>{children}</CombinedContextProvider>
     </BufferManagerProvider>
   );
 };
@@ -217,110 +212,109 @@ const CombinedContextProvider: React.FC<{
   // Store closeBuffer for PaneManager to use
   closeBufferRef.current = buffer.closeBuffer;
 
-  const value = React.useMemo<EditorManagerContextValue>(() => ({
-    // From BufferManager
-    buffers: buffer.buffers,
-    openFile: buffer.openFile,
-    openWorkspaceBuffer: buffer.openWorkspaceBuffer,
-    openCompareBuffer: buffer.openCompareBuffer,
-    closeBuffer: buffer.closeBuffer,
-    reorderBuffers: buffer.reorderBuffers,
-    moveBufferToPane: buffer.moveBufferToPane,
-    switchToBuffer: buffer.switchToBuffer,
-    updateBufferContent: buffer.updateBufferContent,
-    updateBufferCursor: buffer.updateBufferCursor,
-    updateBufferScroll: buffer.updateBufferScroll,
-    updateBufferMetadata: buffer.updateBufferMetadata,
-    updateBufferTitle: buffer.updateBufferTitle,
-    saveBuffer: buffer.saveBuffer,
-    setBufferModified: buffer.setBufferModified,
-    setBufferOriginalContent: buffer.setBufferOriginalContent,
-    setBufferExternallyModified: buffer.setBufferExternallyModified,
-    clearBufferExternallyModified: buffer.clearBufferExternallyModified,
-    setBufferLanguageOverride: buffer.setBufferLanguageOverride,
-    saveAllBuffers: buffer.saveAllBuffers,
-    toggleBufferPin: buffer.toggleBufferPin,
-    setBufferPinned: buffer.setBufferPinned,
-    setBufferClosable: buffer.setBufferClosable,
-    reloadBufferFromDisk: buffer.reloadBufferFromDisk,
+  const value = React.useMemo<EditorManagerContextValue>(
+    () => ({
+      // From BufferManager
+      buffers: buffer.buffers,
+      openFile: buffer.openFile,
+      openWorkspaceBuffer: buffer.openWorkspaceBuffer,
+      openCompareBuffer: buffer.openCompareBuffer,
+      closeBuffer: buffer.closeBuffer,
+      reorderBuffers: buffer.reorderBuffers,
+      moveBufferToPane: buffer.moveBufferToPane,
+      switchToBuffer: buffer.switchToBuffer,
+      updateBufferContent: buffer.updateBufferContent,
+      updateBufferCursor: buffer.updateBufferCursor,
+      updateBufferScroll: buffer.updateBufferScroll,
+      updateBufferMetadata: buffer.updateBufferMetadata,
+      updateBufferTitle: buffer.updateBufferTitle,
+      saveBuffer: buffer.saveBuffer,
+      setBufferModified: buffer.setBufferModified,
+      setBufferOriginalContent: buffer.setBufferOriginalContent,
+      setBufferExternallyModified: buffer.setBufferExternallyModified,
+      clearBufferExternallyModified: buffer.clearBufferExternallyModified,
+      setBufferLanguageOverride: buffer.setBufferLanguageOverride,
+      saveAllBuffers: buffer.saveAllBuffers,
+      toggleBufferPin: buffer.toggleBufferPin,
+      setBufferPinned: buffer.setBufferPinned,
+      setBufferClosable: buffer.setBufferClosable,
+      reloadBufferFromDisk: buffer.reloadBufferFromDisk,
 
-    // From PaneManager
-    panes: pane.panes,
-    paneLayout: pane.paneLayout,
-    activePaneId: pane.activePaneId,
-    activeBufferId: pane.activeBufferId,
-    paneSizes: pane.paneSizes,
-    isLinkedScrollEnabled: pane.isLinkedScrollEnabled,
-    closePane: pane.closePane,
-    switchPane: pane.switchPane,
-    splitPane: pane.splitPane,
-    closeSplit: pane.closeSplit,
-    setPaneLayout: pane.setPaneLayout,
-    updatePaneSize: pane.updatePaneSize,
-    toggleLinkedScroll: pane.toggleLinkedScroll,
+      // From PaneManager
+      panes: pane.panes,
+      paneLayout: pane.paneLayout,
+      activePaneId: pane.activePaneId,
+      activeBufferId: pane.activeBufferId,
+      paneSizes: pane.paneSizes,
+      isLinkedScrollEnabled: pane.isLinkedScrollEnabled,
+      closePane: pane.closePane,
+      switchPane: pane.switchPane,
+      splitPane: pane.splitPane,
+      closeSplit: pane.closeSplit,
+      setPaneLayout: pane.setPaneLayout,
+      updatePaneSize: pane.updatePaneSize,
+      toggleLinkedScroll: pane.toggleLinkedScroll,
 
-    // From Settings
-    isAutoSaveEnabled: settings.isAutoSaveEnabled,
-    setAutoSaveEnabled: settings.setAutoSaveEnabled,
-    whitespaceRenderingMode: settings.whitespaceRenderingMode,
-    setWhitespaceRenderingMode: settings.setWhitespaceRenderingMode,
-    autoSaveInterval: settings.autoSaveInterval,
-    isFormatOnSaveEnabled: settings.isFormatOnSaveEnabled,
-    setFormatOnSaveEnabled: settings.setFormatOnSaveEnabled,
-    maxPanes: settings.maxPanes,
-    setMaxPanes: settings.setMaxPanes,
-  }), [
-    buffer.buffers,
-    buffer.openFile,
-    buffer.openWorkspaceBuffer,
-    buffer.openCompareBuffer,
-    buffer.closeBuffer,
-    buffer.reorderBuffers,
-    buffer.moveBufferToPane,
-    buffer.switchToBuffer,
-    buffer.updateBufferContent,
-    buffer.updateBufferCursor,
-    buffer.updateBufferScroll,
-    buffer.updateBufferMetadata,
-    buffer.updateBufferTitle,
-    buffer.saveBuffer,
-    buffer.setBufferModified,
-    buffer.setBufferOriginalContent,
-    buffer.setBufferExternallyModified,
-    buffer.clearBufferExternallyModified,
-    buffer.setBufferLanguageOverride,
-    buffer.saveAllBuffers,
-    buffer.toggleBufferPin,
-    buffer.setBufferPinned,
-    buffer.setBufferClosable,
-    buffer.reloadBufferFromDisk,
-    pane.panes,
-    pane.paneLayout,
-    pane.activePaneId,
-    pane.activeBufferId,
-    pane.paneSizes,
-    pane.isLinkedScrollEnabled,
-    pane.closePane,
-    pane.switchPane,
-    pane.splitPane,
-    pane.closeSplit,
-    pane.setPaneLayout,
-    pane.updatePaneSize,
-    pane.toggleLinkedScroll,
-    settings.isAutoSaveEnabled,
-    settings.setAutoSaveEnabled,
-    settings.whitespaceRenderingMode,
-    settings.setWhitespaceRenderingMode,
-    settings.autoSaveInterval,
-    settings.isFormatOnSaveEnabled,
-    settings.setFormatOnSaveEnabled,
-    settings.maxPanes,
-    settings.setMaxPanes,
-  ]);
-
-  return (
-    <EditorManagerContext.Provider value={value}>
-      {children}
-    </EditorManagerContext.Provider>
+      // From Settings
+      isAutoSaveEnabled: settings.isAutoSaveEnabled,
+      setAutoSaveEnabled: settings.setAutoSaveEnabled,
+      whitespaceRenderingMode: settings.whitespaceRenderingMode,
+      setWhitespaceRenderingMode: settings.setWhitespaceRenderingMode,
+      autoSaveInterval: settings.autoSaveInterval,
+      isFormatOnSaveEnabled: settings.isFormatOnSaveEnabled,
+      setFormatOnSaveEnabled: settings.setFormatOnSaveEnabled,
+      maxPanes: settings.maxPanes,
+      setMaxPanes: settings.setMaxPanes,
+    }),
+    [
+      buffer.buffers,
+      buffer.openFile,
+      buffer.openWorkspaceBuffer,
+      buffer.openCompareBuffer,
+      buffer.closeBuffer,
+      buffer.reorderBuffers,
+      buffer.moveBufferToPane,
+      buffer.switchToBuffer,
+      buffer.updateBufferContent,
+      buffer.updateBufferCursor,
+      buffer.updateBufferScroll,
+      buffer.updateBufferMetadata,
+      buffer.updateBufferTitle,
+      buffer.saveBuffer,
+      buffer.setBufferModified,
+      buffer.setBufferOriginalContent,
+      buffer.setBufferExternallyModified,
+      buffer.clearBufferExternallyModified,
+      buffer.setBufferLanguageOverride,
+      buffer.saveAllBuffers,
+      buffer.toggleBufferPin,
+      buffer.setBufferPinned,
+      buffer.setBufferClosable,
+      buffer.reloadBufferFromDisk,
+      pane.panes,
+      pane.paneLayout,
+      pane.activePaneId,
+      pane.activeBufferId,
+      pane.paneSizes,
+      pane.isLinkedScrollEnabled,
+      pane.closePane,
+      pane.switchPane,
+      pane.splitPane,
+      pane.closeSplit,
+      pane.setPaneLayout,
+      pane.updatePaneSize,
+      pane.toggleLinkedScroll,
+      settings.isAutoSaveEnabled,
+      settings.setAutoSaveEnabled,
+      settings.whitespaceRenderingMode,
+      settings.setWhitespaceRenderingMode,
+      settings.autoSaveInterval,
+      settings.isFormatOnSaveEnabled,
+      settings.setFormatOnSaveEnabled,
+      settings.maxPanes,
+      settings.setMaxPanes,
+    ],
   );
+
+  return <EditorManagerContext.Provider value={value}>{children}</EditorManagerContext.Provider>;
 };

@@ -9,11 +9,7 @@ export interface ModelSelectionModalProps {
   onSelectModel: (model: string) => void;
 }
 
-function ModelSelectionModal({
-  provider,
-  onClose,
-  onSelectModel,
-}: ModelSelectionModalProps): JSX.Element {
+function ModelSelectionModal({ provider, onClose, onSelectModel }: ModelSelectionModalProps): JSX.Element {
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,16 +39,19 @@ function ModelSelectionModal({
     }
   }, [selectedModel, onSelectModel]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-    }
-    if (e.key === 'Enter' && selectedModel) {
-      e.preventDefault();
-      handleSelect();
-    }
-  }, [onClose, selectedModel, handleSelect]);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+      if (e.key === 'Enter' && selectedModel) {
+        e.preventDefault();
+        handleSelect();
+      }
+    },
+    [onClose, selectedModel, handleSelect],
+  );
 
   // Auto-focus the first model in the list when loaded
   useEffect(() => {
@@ -98,19 +97,13 @@ function ModelSelectionModal({
         {/* Body */}
         <div className="model-selection-body">
           <div className="model-selection-message">
-            The configured model is not available for provider <strong>{provider}</strong>.
-            Please select a different model to continue.
+            The configured model is not available for provider <strong>{provider}</strong>. Please select a different
+            model to continue.
           </div>
 
-          {loading && (
-            <div className="model-selection-loading">Loading available models...</div>
-          )}
+          {loading && <div className="model-selection-loading">Loading available models...</div>}
 
-          {error && (
-            <div className="model-selection-error">
-              {error}
-            </div>
-          )}
+          {error && <div className="model-selection-error">{error}</div>}
 
           {!loading && !error && models.length === 0 && (
             <div className="model-selection-empty">No models available for this provider.</div>
@@ -118,12 +111,7 @@ function ModelSelectionModal({
 
           {!loading && !error && models.length > 0 && (
             <div className="model-selection-list-wrapper">
-              <ul
-                ref={listRef}
-                className="model-selection-list"
-                role="listbox"
-                aria-label="Available models"
-              >
+              <ul ref={listRef} className="model-selection-list" role="listbox" aria-label="Available models">
                 {models.map((model) => (
                   <li key={model}>
                     <button
@@ -142,9 +130,7 @@ function ModelSelectionModal({
                       role="option"
                     >
                       <span className="model-selection-item-text">{model}</span>
-                      {selectedModel === model && (
-                        <span className="model-selection-item-check">✓</span>
-                      )}
+                      {selectedModel === model && <span className="model-selection-item-check">✓</span>}
                     </button>
                   </li>
                 ))}

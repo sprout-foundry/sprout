@@ -41,7 +41,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFetch = jest.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve({ tier: 'free', usage: { tokens_used: 0, tokens_limit: 1000, period_start: '', period_end: '' } }),
+    json: () =>
+      Promise.resolve({
+        tier: 'free',
+        usage: { tokens_used: 0, tokens_limit: 1000, period_start: '', period_end: '' },
+      }),
   });
   getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
 });

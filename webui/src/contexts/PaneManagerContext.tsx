@@ -55,13 +55,9 @@ interface PaneManagerProviderProps {
   closeBuffer: (bufferId: string) => void | Promise<void>;
 }
 
-export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({ 
-  children, 
-  maxPanes, 
-  closeBuffer 
-}) => {
+export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({ children, maxPanes, closeBuffer }) => {
   const [panes, setPanes] = useState<EditorPane[]>([
-    { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' }
+    { id: 'pane-1', bufferId: 'buffer-chat', isActive: true, position: 'primary' },
   ]);
   const [paneLayout, setPaneLayoutState] = useState<PaneLayout>('single');
   const [activePaneId, setActivePaneId] = useState<string | null>('pane-1');
@@ -69,96 +65,111 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({
   const [paneSizes, setPaneSizes] = useState<PaneSize>({ 'pane-1': 100 });
   const [isLinkedScrollEnabled, setIsLinkedScrollEnabled] = useState(false);
 
-  const switchPane = useCallback((paneId: string) => {
-    setActivePaneId(paneId);
-    const pane = panes.find(p => p.id === paneId);
-    if (pane?.bufferId) {
-      setActiveBufferId(pane.bufferId);
-    }
-  }, [panes]);
+  const switchPane = useCallback(
+    (paneId: string) => {
+      setActivePaneId(paneId);
+      const pane = panes.find((p) => p.id === paneId);
+      if (pane?.bufferId) {
+        setActiveBufferId(pane.bufferId);
+      }
+    },
+    [panes],
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const splitPane = useCallback((paneId: string, direction: 'vertical' | 'horizontal') => {
-    if (panes.length >= maxPanes) return null;
+  const splitPane = useCallback(
+    (paneId: string, direction: 'vertical' | 'horizontal') => {
+      if (panes.length >= maxPanes) return null;
 
-    const newPaneId = `pane-${Date.now()}`;
+      const newPaneId = `pane-${Date.now()}`;
 
-    // Determine the position for the new pane based on current count
-    const positionValues: Array<'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary' | 'senary'> =
-      ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary', 'senary'];
-    const newPosition = positionValues[panes.length];
+      // Determine the position for the new pane based on current count
+      const positionValues: Array<'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'quinary' | 'senary'> = [
+        'primary',
+        'secondary',
+        'tertiary',
+        'quaternary',
+        'quinary',
+        'senary',
+      ];
+      const newPosition = positionValues[panes.length];
 
-    const newPanes: EditorPane[] = [
-      ...panes,
-      {
-        id: newPaneId,
-        bufferId: null,
-        isActive: false,
-        position: newPosition
+      const newPanes: EditorPane[] = [
+        ...panes,
+        {
+          id: newPaneId,
+          bufferId: null,
+          isActive: false,
+          position: newPosition,
+        },
+      ];
+
+      setPanes(newPanes);
+
+      // Update layout and distribute sizes evenly
+      const newPaneCount = panes.length + 1;
+      if (panes.length === 1) {
+        setPaneLayoutState(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
+        setPaneSizes({
+          [panes[0].id]: 50,
+          [newPaneId]: 50,
+        });
+      } else {
+        const evenSize = 100 / newPaneCount;
+        const newSizes: Record<string, number> = {};
+        newPanes.forEach((pane) => {
+          newSizes[pane.id] = evenSize;
+        });
+        setPaneSizes(newSizes);
       }
-    ];
 
-    setPanes(newPanes);
+      setActivePaneId(newPaneId);
+      return newPaneId;
+    },
+    [panes, maxPanes],
+  );
 
-    // Update layout and distribute sizes evenly
-    const newPaneCount = panes.length + 1;
-    if (panes.length === 1) {
-      setPaneLayoutState(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
-      setPaneSizes({
-        [panes[0].id]: 50,
-        [newPaneId]: 50
-      });
-    } else {
-      const evenSize = 100 / newPaneCount;
+  const closePane = useCallback(
+    (paneId: string) => {
+      if (panes.length === 1) return;
+
+      const pane = panes.find((p) => p.id === paneId);
+      if (pane?.bufferId) {
+        closeBuffer(pane.bufferId);
+      }
+
+      const remaining = panes.filter((p) => p.id !== paneId);
+      setPanes(remaining);
+
+      const evenSize = remaining.length === 1 ? 100 : 100 / remaining.length;
       const newSizes: Record<string, number> = {};
-      newPanes.forEach(pane => {
-        newSizes[pane.id] = evenSize;
+      remaining.forEach((p) => {
+        newSizes[p.id] = evenSize;
       });
       setPaneSizes(newSizes);
-    }
 
-    setActivePaneId(newPaneId);
-    return newPaneId;
-  }, [panes, maxPanes]);
+      if (paneId === activePaneId) {
+        setActivePaneId(remaining[0]?.id || null);
+      }
 
-  const closePane = useCallback((paneId: string) => {
-    if (panes.length === 1) return;
-
-    const pane = panes.find(p => p.id === paneId);
-    if (pane?.bufferId) {
-      closeBuffer(pane.bufferId);
-    }
-
-    const remaining = panes.filter(p => p.id !== paneId);
-    setPanes(remaining);
-
-    const evenSize = remaining.length === 1 ? 100 : 100 / remaining.length;
-    const newSizes: Record<string, number> = {};
-    remaining.forEach(p => {
-      newSizes[p.id] = evenSize;
-    });
-    setPaneSizes(newSizes);
-
-    if (paneId === activePaneId) {
-      setActivePaneId(remaining[0]?.id || null);
-    }
-
-    if (remaining.length === 1) {
-      setPaneLayoutState('single');
-    }
-  }, [panes, activePaneId, closeBuffer]);
+      if (remaining.length === 1) {
+        setPaneLayoutState('single');
+      }
+    },
+    [panes, activePaneId, closeBuffer],
+  );
 
   const closeSplit = useCallback(() => {
-    const activePane = panes.find(p => p.id === activePaneId);
+    const activePane = panes.find((p) => p.id === activePaneId);
 
-    panes.forEach(pane => {
+    panes.forEach((pane) => {
       if (pane.position !== 'primary' && pane.id !== activePaneId) {
         closePane(pane.id);
       }
     });
 
-    setPanes(prev => {
-      const primaryPane = prev.find(p => p.position === 'primary');
+    setPanes((prev) => {
+      const primaryPane = prev.find((p) => p.position === 'primary');
       return primaryPane ? [primaryPane] : prev;
     });
 
@@ -172,41 +183,49 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({
     }
   }, [panes, activePaneId, closePane]);
 
-  const setPaneLayout = useCallback((layout: PaneLayout) => {
-    setPaneLayoutState(layout);
+  const setPaneLayout = useCallback(
+    (layout: PaneLayout) => {
+      setPaneLayoutState(layout);
 
-    if (layout === 'single') {
-      const primary = panes.find(p => p.position === 'primary');
-      setPanes(prev => {
-        const p = prev.find(pp => pp.position === 'primary');
-        return p ? [p] : prev;
-      });
-      if (primary) {
-        setActivePaneId(primary.id);
+      if (layout === 'single') {
+        const primary = panes.find((p) => p.position === 'primary');
+        setPanes((prev) => {
+          const p = prev.find((pp) => pp.position === 'primary');
+          return p ? [p] : prev;
+        });
+        if (primary) {
+          setActivePaneId(primary.id);
+        }
       }
-    }
-  }, [panes]);
+    },
+    [panes],
+  );
 
-  const moveBufferToPane = useCallback((bufferId: string, paneId: string) => {
-    setPanes((prev) => prev.map((pane) => {
-      if (pane.id === paneId) {
-        return { ...pane, bufferId };
-      }
-      if (pane.bufferId === bufferId) {
-        return { ...pane, bufferId: null };
-      }
-      return pane;
-    }));
+  const moveBufferToPane = useCallback(
+    (bufferId: string, paneId: string) => {
+      setPanes((prev) =>
+        prev.map((pane) => {
+          if (pane.id === paneId) {
+            return { ...pane, bufferId };
+          }
+          if (pane.bufferId === bufferId) {
+            return { ...pane, bufferId: null };
+          }
+          return pane;
+        }),
+      );
 
-    if (activePaneId === paneId) {
-      setActiveBufferId(bufferId);
-    }
-  }, [activePaneId]);
+      if (activePaneId === paneId) {
+        setActiveBufferId(bufferId);
+      }
+    },
+    [activePaneId],
+  );
 
   const updatePaneSize = useCallback((paneId: string, size: number) => {
-    setPaneSizes(prev => {
+    setPaneSizes((prev) => {
       const actualPaneKeys = Object.keys(prev).filter(
-        key => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:')
+        (key) => !key.startsWith('group:') && !key.startsWith('nested:') && !key.startsWith('grid:'),
       );
       const currentPanesCount = actualPaneKeys.length;
 
@@ -214,60 +233,59 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({
       const clampedSize = Math.max(MIN_PANE_WIDTH_PERCENT, Math.min(maxAllowedSize, size));
       return {
         ...prev,
-        [paneId]: clampedSize
+        [paneId]: clampedSize,
       };
     });
   }, []);
 
   const toggleLinkedScroll = useCallback(() => {
-    setIsLinkedScrollEnabled(prev => !prev);
+    setIsLinkedScrollEnabled((prev) => !prev);
   }, []);
 
-  const value = React.useMemo<PaneManagerContextValue>(() => ({
-    panes,
-    paneLayout,
-    activePaneId,
-    activeBufferId,
-    paneSizes,
-    isLinkedScrollEnabled,
-    moveBufferToPane,
-    closePane,
-    switchPane,
-    splitPane,
-    closeSplit,
-    setPaneLayout,
-    updatePaneSize,
-    toggleLinkedScroll,
-    setActiveBufferId,
-    setActivePaneId,
-    setPanes,
-    setPaneLayoutState,
-    setPaneSizes,
-  }), [
-    panes,
-    paneLayout,
-    activePaneId,
-    activeBufferId,
-    paneSizes,
-    isLinkedScrollEnabled,
-    moveBufferToPane,
-    closePane,
-    switchPane,
-    splitPane,
-    closeSplit,
-    setPaneLayout,
-    updatePaneSize,
-    toggleLinkedScroll,
-    setActiveBufferId,
-    setActivePaneId,
-    setPanes,
-    setPaneLayoutState,
-    setPaneSizes,
-  ]);
-
-  return (
-    <PaneManagerContext.Provider value={value}>
-      {children}
-    </PaneManagerContext.Provider>
+  const value = React.useMemo<PaneManagerContextValue>(
+    () => ({
+      panes,
+      paneLayout,
+      activePaneId,
+      activeBufferId,
+      paneSizes,
+      isLinkedScrollEnabled,
+      moveBufferToPane,
+      closePane,
+      switchPane,
+      splitPane,
+      closeSplit,
+      setPaneLayout,
+      updatePaneSize,
+      toggleLinkedScroll,
+      setActiveBufferId,
+      setActivePaneId,
+      setPanes,
+      setPaneLayoutState,
+      setPaneSizes,
+    }),
+    [
+      panes,
+      paneLayout,
+      activePaneId,
+      activeBufferId,
+      paneSizes,
+      isLinkedScrollEnabled,
+      moveBufferToPane,
+      closePane,
+      switchPane,
+      splitPane,
+      closeSplit,
+      setPaneLayout,
+      updatePaneSize,
+      toggleLinkedScroll,
+      setActiveBufferId,
+      setActivePaneId,
+      setPanes,
+      setPaneLayoutState,
+      setPaneSizes,
+    ],
   );
+
+  return <PaneManagerContext.Provider value={value}>{children}</PaneManagerContext.Provider>;
 };

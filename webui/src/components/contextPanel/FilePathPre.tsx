@@ -23,17 +23,11 @@ export function FilePathPre({ text }: { text: string }): JSX.Element {
         className="tool-output-file-link"
         role="button"
         tabIndex={0}
-        onClick={() =>
-          window.dispatchEvent(
-            new CustomEvent('sprout:open-in-editor', { detail: { path: filePath } }),
-          )
-        }
+        onClick={() => window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path: filePath } }))}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            window.dispatchEvent(
-              new CustomEvent('sprout:open-in-editor', { detail: { path: filePath } }),
-            );
+            window.dispatchEvent(new CustomEvent('sprout:open-in-editor', { detail: { path: filePath } }));
           }
         }}
       >

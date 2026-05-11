@@ -84,7 +84,7 @@ function renderSettingsPanel(settings: typeof MINIMAL_SETTINGS) {
           onSettingsChanged={mockOnSettingsChanged}
           onRequestProviderSetup={mockOnRequestProviderSetup}
         />
-      </NotificationProvider>
+      </NotificationProvider>,
     );
   });
 }

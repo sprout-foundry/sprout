@@ -59,9 +59,5 @@ export function useEditorFileType(buffer: EditorBuffer | null | undefined): File
       isHtmlPreviewBuffer,
       isMarkdownFile,
     };
-  }, [
-    buffer?.kind,
-    buffer?.file?.ext,
-    buffer?.metadata?.previewKind,
-  ]);
+  }, [buffer?.kind, buffer?.file?.ext, buffer?.metadata?.previewKind]);
 }

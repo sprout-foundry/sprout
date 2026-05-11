@@ -74,10 +74,7 @@ describe('splitByCommas', () => {
   });
 
   it('handles nested parens', () => {
-    expect(splitByCommas('fn(func(int, string)), b: int')).toEqual([
-      'fn(func(int, string))',
-      'b: int',
-    ]);
+    expect(splitByCommas('fn(func(int, string)), b: int')).toEqual(['fn(func(int, string))', 'b: int']);
   });
 
   it('handles nested brackets', () => {
@@ -93,11 +90,7 @@ describe('splitByCommas', () => {
   });
 
   it('strips leading whitespace from each param', () => {
-    expect(splitByCommas('a: int,  b: string,   c: bool')).toEqual([
-      'a: int',
-      'b: string',
-      'c: bool',
-    ]);
+    expect(splitByCommas('a: int,  b: string,   c: bool')).toEqual(['a: int', 'b: string', 'c: bool']);
   });
 
   it('handles three params', () => {
@@ -261,10 +254,7 @@ describe('renderSignature', () => {
       signatures: [
         {
           label: 'foo(a: int, b: string) void',
-          parameters: [
-            { label: 'a: int' },
-            { label: 'b: string' },
-          ],
+          parameters: [{ label: 'a: int' }, { label: 'b: string' }],
         },
       ],
       activeSignature: 0,
@@ -358,40 +348,68 @@ describe('renderSignature', () => {
 
 describe('signatureHelpExtension', () => {
   it('returns empty array for null languageId', () => {
-    const result = signatureHelpExtension(() => 'test.ts', () => 'code', null);
+    const result = signatureHelpExtension(
+      () => 'test.ts',
+      () => 'code',
+      null,
+    );
     expect(result).toEqual([]);
   });
 
   it('returns empty array for unsupported language', () => {
-    const result = signatureHelpExtension(() => 'test.py', () => 'code', 'python');
+    const result = signatureHelpExtension(
+      () => 'test.py',
+      () => 'code',
+      'python',
+    );
     expect(result).toEqual([]);
   });
 
   it('returns empty array for undefined languageId', () => {
-    const result = signatureHelpExtension(() => 'test.txt', () => 'code', undefined);
+    const result = signatureHelpExtension(
+      () => 'test.txt',
+      () => 'code',
+      undefined,
+    );
     expect(result).toEqual([]);
   });
 
   it('returns non-empty array for supported language (TypeScript)', () => {
-    const result = signatureHelpExtension(() => 'test.ts', () => 'code', 'typescript');
+    const result = signatureHelpExtension(
+      () => 'test.ts',
+      () => 'code',
+      'typescript',
+    );
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('returns non-empty array for Go', () => {
-    const result = signatureHelpExtension(() => 'test.go', () => 'code', 'go');
+    const result = signatureHelpExtension(
+      () => 'test.go',
+      () => 'code',
+      'go',
+    );
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('returns non-empty array for JavaScript', () => {
-    const result = signatureHelpExtension(() => 'test.js', () => 'code', 'javascript');
+    const result = signatureHelpExtension(
+      () => 'test.js',
+      () => 'code',
+      'javascript',
+    );
     expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('includes theme in result for supported language', () => {
-    const result = signatureHelpExtension(() => 'test.ts', () => 'code', 'typescript');
+    const result = signatureHelpExtension(
+      () => 'test.ts',
+      () => 'code',
+      'typescript',
+    );
     // Should include the mocked theme string
     expect(result.some((item) => item === 'mockTheme')).toBe(true);
   });

@@ -5,13 +5,21 @@ import { setNestedValue } from './settingsHelpers';
 import { useMCPServerMutations } from './useMCPServerMutations';
 import { useProviderMutations } from './useProviderMutations';
 import type { MutationContext } from './types';
+import type { ApiService } from '../../services/api';
+
+type AddNotificationFn = (
+  type: 'success' | 'error' | 'info',
+  title: string,
+  message: string,
+  duration?: number,
+) => string;
 
 interface MutationHookParams {
   settings: SproutSettings | null;
   onSettingsChanged: (settings: SproutSettings) => void;
-  addNotification: ReturnType<typeof import('../../contexts/NotificationContext').useNotifications>['addNotification'];
+  addNotification: AddNotificationFn;
   configViewLayer: 'session' | 'workspace' | 'global';
-  api: ReturnType<typeof import('../../services/api').ApiService.getInstance>;
+  api: ReturnType<typeof ApiService.getInstance>;
   setProvenanceSources: (v: Record<string, string>) => void;
   // MCP server state
   editingServer: { mode: 'add' | 'edit'; originalName?: string } | null;
@@ -32,7 +40,13 @@ interface MutationHookParams {
   credentialServer: string | null;
   setCredentialServer: (v: string | null) => void;
   credentialEntries: Array<{ key: string; value: string; status: string }>;
-  setCredentialEntries: (v: Array<{ key: string; value: string; status: string }> | ((prev: Array<{ key: string; value: string; status: string }>) => Array<{ key: string; value: string; status: string }>)) => void;
+  setCredentialEntries: (
+    v:
+      | Array<{ key: string; value: string; status: string }>
+      | ((
+          prev: Array<{ key: string; value: string; status: string }>,
+        ) => Array<{ key: string; value: string; status: string }>),
+  ) => void;
   credentialLoading: boolean;
   setCredentialLoading: (v: boolean) => void;
   newCredentialKey: string;
@@ -68,30 +82,57 @@ interface MutationHookParams {
 
 export function useSettingsMutation(params: MutationHookParams) {
   const {
-    settings, onSettingsChanged, addNotification, configViewLayer, api, setProvenanceSources,
+    settings,
+    onSettingsChanged,
+    addNotification,
+    configViewLayer,
+    api,
+    setProvenanceSources,
     settingsRef,
-    editingServer, setEditingServer,
-    serverName, setServerName,
-    serverCommand, setServerCommand,
-    serverArgs, setServerArgs,
-    serverEnvVars, setServerEnvVars,
-    newEnvKey, setNewEnvKey,
-    newEnvValue, setNewEnvValue,
-    credentialServer, setCredentialServer,
-    credentialEntries, setCredentialEntries,
-    credentialLoading, setCredentialLoading,
-    newCredentialKey, setNewCredentialKey,
-    newCredentialValue, setNewCredentialValue,
-    editingProvider, setEditingProvider,
-    providerName, setProviderName,
-    providerApiBase, setProviderApiBase,
-    providerModelName, setProviderModelName,
-    providerContextSize, setProviderContextSize,
-    providerEnvVar, setProviderEnvVar,
-    providerSupportsVision, setProviderSupportsVision,
-    providerVisionModel, setProviderVisionModel,
-    providerModelContextSizes, setProviderModelContextSizes,
-    creatingWorkspaceConfig, setCreatingWorkspaceConfig,
+    editingServer,
+    setEditingServer,
+    serverName,
+    setServerName,
+    serverCommand,
+    setServerCommand,
+    serverArgs,
+    setServerArgs,
+    serverEnvVars,
+    setServerEnvVars,
+    newEnvKey,
+    setNewEnvKey,
+    newEnvValue,
+    setNewEnvValue,
+    credentialServer,
+    setCredentialServer,
+    credentialEntries,
+    setCredentialEntries,
+    credentialLoading,
+    setCredentialLoading,
+    newCredentialKey,
+    setNewCredentialKey,
+    newCredentialValue,
+    setNewCredentialValue,
+    editingProvider,
+    setEditingProvider,
+    providerName,
+    setProviderName,
+    providerApiBase,
+    setProviderApiBase,
+    providerModelName,
+    setProviderModelName,
+    providerContextSize,
+    setProviderContextSize,
+    providerEnvVar,
+    setProviderEnvVar,
+    providerSupportsVision,
+    setProviderSupportsVision,
+    providerVisionModel,
+    setProviderVisionModel,
+    providerModelContextSizes,
+    setProviderModelContextSizes,
+    creatingWorkspaceConfig,
+    setCreatingWorkspaceConfig,
     setLayerData,
   } = params;
 
@@ -112,31 +153,52 @@ export function useSettingsMutation(params: MutationHookParams) {
 
   const mcpMutations = useMCPServerMutations({
     ctx: mutationContext,
-    editingServer, setEditingServer,
-    serverName, setServerName,
-    serverCommand, setServerCommand,
-    serverArgs, setServerArgs,
-    serverEnvVars, setServerEnvVars,
-    newEnvKey, setNewEnvKey,
-    newEnvValue, setNewEnvValue,
-    credentialServer, setCredentialServer,
-    credentialEntries, setCredentialEntries,
-    credentialLoading, setCredentialLoading,
-    newCredentialKey, setNewCredentialKey,
-    newCredentialValue, setNewCredentialValue,
+    editingServer,
+    setEditingServer,
+    serverName,
+    setServerName,
+    serverCommand,
+    setServerCommand,
+    serverArgs,
+    setServerArgs,
+    serverEnvVars,
+    setServerEnvVars,
+    newEnvKey,
+    setNewEnvKey,
+    newEnvValue,
+    setNewEnvValue,
+    credentialServer,
+    setCredentialServer,
+    credentialEntries,
+    setCredentialEntries,
+    credentialLoading,
+    setCredentialLoading,
+    newCredentialKey,
+    setNewCredentialKey,
+    newCredentialValue,
+    setNewCredentialValue,
   });
 
   const providerMutations = useProviderMutations({
     ctx: mutationContext,
-    editingProvider, setEditingProvider,
-    providerName, setProviderName,
-    providerApiBase, setProviderApiBase,
-    providerModelName, setProviderModelName,
-    providerContextSize, setProviderContextSize,
-    providerEnvVar, setProviderEnvVar,
-    providerSupportsVision, setProviderSupportsVision,
-    providerVisionModel, setProviderVisionModel,
-    providerModelContextSizes, setProviderModelContextSizes,
+    editingProvider,
+    setEditingProvider,
+    providerName,
+    setProviderName,
+    providerApiBase,
+    setProviderApiBase,
+    providerModelName,
+    setProviderModelName,
+    providerContextSize,
+    setProviderContextSize,
+    providerEnvVar,
+    setProviderEnvVar,
+    providerSupportsVision,
+    setProviderSupportsVision,
+    providerVisionModel,
+    setProviderVisionModel,
+    providerModelContextSizes,
+    setProviderModelContextSizes,
   });
 
   /* ─── Core settings mutation ───────────────────────────── */
@@ -164,9 +226,12 @@ export function useSettingsMutation(params: MutationHookParams) {
         await api.updateSettings({ [keyOrPath]: value }, layer);
         addNotification('success', 'Settings', 'Saved', 3000);
         if (configViewLayer === 'session') {
-          api.getSettingsProvenance()
+          api
+            .getSettingsProvenance()
             .then((data) => setProvenanceSources(data.sources || {}))
-            .catch(() => { /* keep current badges */ });
+            .catch(() => {
+              /* keep current badges */
+            });
         }
       } catch (err) {
         debugLog('[SettingsPanel] failed to save setting:', err);

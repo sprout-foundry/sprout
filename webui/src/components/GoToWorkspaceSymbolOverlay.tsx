@@ -21,9 +21,7 @@ interface FileGroup {
 }
 
 /** Flattened item for keyboard navigation (either a file header or a symbol) */
-type NavigationItem =
-  | { type: 'header'; file: string }
-  | { type: 'symbol'; file: string; symbol: WorkspaceSymbolInfo };
+type NavigationItem = { type: 'header'; file: string } | { type: 'symbol'; file: string; symbol: WorkspaceSymbolInfo };
 
 interface GoToWorkspaceSymbolOverlayProps {
   visible: boolean;
@@ -357,9 +355,7 @@ function GoToWorkspaceSymbolOverlay({
         )}
 
         {/* Error state */}
-        {error && !loading && (
-          <div className="goto-workspace-symbol-empty">{error}</div>
-        )}
+        {error && !loading && <div className="goto-workspace-symbol-empty">{error}</div>}
 
         {/* Empty state with query */}
         {isEmpty && hasQuery && !loading && (
@@ -367,14 +363,13 @@ function GoToWorkspaceSymbolOverlay({
         )}
 
         {/* Empty state without query */}
-        {isEmpty && !hasQuery && !loading && (
-          <div className="goto-workspace-symbol-empty">No symbols in workspace</div>
-        )}
+        {isEmpty && !hasQuery && !loading && <div className="goto-workspace-symbol-empty">No symbols in workspace</div>}
 
         {/* Symbol count */}
         {!isEmpty && !loading && !hasQuery && (
           <div className="goto-workspace-symbol-count">
-            {totalSymbols} symbol{totalSymbols !== 1 ? 's' : ''} in {fileGroups.length} file{fileGroups.length !== 1 ? 's' : ''}
+            {totalSymbols} symbol{totalSymbols !== 1 ? 's' : ''} in {fileGroups.length} file
+            {fileGroups.length !== 1 ? 's' : ''}
             {totalCount > 0 && totalCount !== totalSymbols ? ` (${totalCount} total indexed)` : ''}
           </div>
         )}
@@ -400,9 +395,7 @@ function GoToWorkspaceSymbolOverlay({
               return (
                 <div key={group.file} className="goto-workspace-symbol-file-group">
                   {/* File header */}
-                  <div className="goto-workspace-symbol-file-header">
-                    {group.file}
-                  </div>
+                  <div className="goto-workspace-symbol-file-header">{group.file}</div>
 
                   {/* Symbols under this file */}
                   {symbolDisplayItems.map(({ displayIdx, symbol }) => {
@@ -418,7 +411,9 @@ function GoToWorkspaceSymbolOverlay({
                         onClick={() => handleItemClick({ type: 'symbol', file: group.file, symbol })}
                         onMouseEnter={() => handleItemMouseEnter(displayIdx)}
                       >
-                        <span className={`goto-workspace-symbol-kind goto-workspace-symbol-kind-${symbol.kind}`}>{icon}</span>
+                        <span className={`goto-workspace-symbol-kind goto-workspace-symbol-kind-${symbol.kind}`}>
+                          {icon}
+                        </span>
                         <span
                           className="goto-workspace-symbol-name"
                           dangerouslySetInnerHTML={{

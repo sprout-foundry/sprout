@@ -60,7 +60,7 @@ function byteSize(data: string): number {
  */
 function isHighSurrogate(char: string): boolean {
   const code = char.charCodeAt(0);
-  return code >= 0xD800 && code <= 0xDBFF;
+  return code >= 0xd800 && code <= 0xdbff;
 }
 
 /**
@@ -68,7 +68,7 @@ function isHighSurrogate(char: string): boolean {
  */
 function isLowSurrogate(char: string): boolean {
   const code = char.charCodeAt(0);
-  return code >= 0xDC00 && code <= 0xDFFF;
+  return code >= 0xdc00 && code <= 0xdfff;
 }
 
 /**

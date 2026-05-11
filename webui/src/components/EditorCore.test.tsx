@@ -66,7 +66,7 @@ vi.mock('../utils/log', () => ({
 
 // Mock EditorView from @codemirror/view
 vi.mock('@codemirror/view', () => {
-  const mockFn = vi.fn(function() {
+  const mockFn = vi.fn(function () {
     return {
       destroy: vi.fn(),
       dispatch: vi.fn(),
@@ -339,7 +339,10 @@ describe('LSP registration/unregistration', () => {
       filePath: '/src/test.ts',
     });
 
-    expect((lspExtensions as any)._mocks.mockRegisterEditorView).toHaveBeenCalledWith('/src/test.ts', expect.anything());
+    expect((lspExtensions as any)._mocks.mockRegisterEditorView).toHaveBeenCalledWith(
+      '/src/test.ts',
+      expect.anything(),
+    );
   });
 
   it('skips registerEditorView for __workspace/ paths', () => {
@@ -391,7 +394,7 @@ describe('Async LSP extension initialization', () => {
 
     // Wait for async LSP init
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     const lspService = getLSPClientService();
@@ -408,7 +411,7 @@ describe('Async LSP extension initialization', () => {
     });
 
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     const view = (EditorView as any).mock.results[0].value;
@@ -475,7 +478,7 @@ describe('Async LSP extension initialization', () => {
     const view2 = (EditorView as any).mock.results[1].value;
 
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     // view1 should not receive dispatch (it was replaced)
@@ -497,7 +500,7 @@ describe('Async LSP extension initialization', () => {
 
     // Wait for async LSP init
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     // LSP reconfigure should NOT be called because view is disconnected
@@ -756,9 +759,7 @@ describe('Callback handling', () => {
 describe('Error handling', () => {
   it('catches LSP initialization errors and logs them', async () => {
     const lspService = getLSPClientService();
-    lspService.getClientForLanguage.mockRejectedValue(
-      new Error('LSP connection failed'),
-    );
+    lspService.getClientForLanguage.mockRejectedValue(new Error('LSP connection failed'));
 
     renderEditorCore({
       languageId: 'typescript',
@@ -766,7 +767,7 @@ describe('Error handling', () => {
     });
 
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(debugLog).toHaveBeenCalledWith(
@@ -785,7 +786,7 @@ describe('Error handling', () => {
     });
 
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
     expect(EditorView).toHaveBeenCalled();

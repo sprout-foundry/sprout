@@ -11,10 +11,7 @@ import { clientFetch } from './clientSession';
 // Types from @codemirror/lsp-client
 import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-client';
 import type { EditorView } from '@codemirror/view';
-import {
-  LSPClient as LSPClientClass,
-  languageServerExtensions,
-} from '@codemirror/lsp-client';
+import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirror/lsp-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -129,10 +126,7 @@ export interface TransportWithClose extends Transport {
  * @param onClose - Optional callback called when WebSocket closes after connection
  * @returns Promise that resolves to a TransportWithClose once WebSocket connects
  */
-export async function createTransport(
-  wsUrl: string,
-  onClose?: () => void,
-): Promise<TransportWithClose> {
+export async function createTransport(wsUrl: string, onClose?: () => void): Promise<TransportWithClose> {
   return new Promise<TransportWithClose>((resolve, reject) => {
     const handlers: Set<(value: string) => void> = new Set();
 
@@ -445,7 +439,7 @@ class LSPClientService {
         }
       }
 
-      console.log('[LSPClientService] Loaded LSP status for', this.statusCache.size, 'languages');
+      console.warn('[LSPClientService] Loaded LSP status for', this.statusCache.size, 'languages');
     } catch (err) {
       console.error('[LSPClientService] Failed to fetch LSP status:', err);
       // Leave cache empty on error - assume no LSP available
@@ -496,7 +490,11 @@ class LSPClientService {
       // Close the transport WebSocket if we have a close function
       const closeFn = this.transportCloseFns.get(languageId);
       if (closeFn) {
-        try { closeFn(); } catch { /* ignore */ }
+        try {
+          closeFn();
+        } catch {
+          /* ignore */
+        }
         this.transportCloseFns.delete(languageId);
       }
       try {
@@ -515,7 +513,7 @@ class LSPClientService {
 
     // Check if available
     if (!this.isSupported(languageId)) {
-      console.log('[LSPClientService] LSP not available for:', languageId);
+      console.warn('[LSPClientService] LSP not available for:', languageId);
       return null;
     }
 
@@ -546,10 +544,10 @@ class LSPClientService {
     try {
       // Create WebSocket transport with onClose callback
       const wsUrl = this.getWebSocketURL(languageId);
-      console.log('[LSPClientService] Connecting to:', wsUrl);
+      console.warn('[LSPClientService] Connecting to:', wsUrl);
 
       const transport = await createTransport(wsUrl, () => {
-        console.log('[LSPClientService] Transport closed for:', languageId);
+        console.warn('[LSPClientService] Transport closed for:', languageId);
         // Mark as disconnected (to work around connected getter bug)
         this.disconnectedLanguages.add(languageId);
         const client = this.clients.get(languageId);
@@ -608,7 +606,7 @@ class LSPClientService {
       // Update state to connected
       this.setClientState(languageId, 'connected');
 
-      console.log('[LSPClientService] Connected LSP client for:', languageId);
+      console.warn('[LSPClientService] Connected LSP client for:', languageId);
 
       return client;
     } catch (err) {
@@ -670,11 +668,15 @@ class LSPClientService {
    * Disconnect and clean up all LSP clients.
    */
   cleanup(): void {
-    console.log('[LSPClientService] Cleaning up clients');
+    console.warn('[LSPClientService] Cleaning up clients');
 
     // Close all WebSocket connections first
     this.transportCloseFns.forEach((close) => {
-      try { close(); } catch { /* ignore */ }
+      try {
+        close();
+      } catch {
+        /* ignore */
+      }
     });
     this.transportCloseFns.clear();
 
@@ -744,14 +746,16 @@ class LSPClientService {
     this.reconnectAttempts.set(languageId, attempts);
 
     if (attempts > MAX_RECONNECT_ATTEMPTS) {
-      console.log(`[LSPClientService] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${languageId}, giving up`);
+      console.warn(
+        `[LSPClientService] Max reconnect attempts (${MAX_RECONNECT_ATTEMPTS}) reached for ${languageId}, giving up`,
+      );
       this.setClientState(languageId, 'disconnected');
       return;
     }
 
     const backoff = Math.min(1000 * Math.pow(2, attempts - 1), MAX_RECONNECT_BACKOFF_MS);
 
-    console.log(`[LSPClientService] Scheduling reconnect for ${languageId} in ${backoff}ms (attempt ${attempts})`);
+    console.warn(`[LSPClientService] Scheduling reconnect for ${languageId} in ${backoff}ms (attempt ${attempts})`);
     this.setClientState(languageId, 'reconnecting');
 
     const timer = setTimeout(() => {

@@ -7,12 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  saveScrollback,
-  loadScrollback,
-  deleteScrollback,
-  cleanupOldEntries,
-} from './terminalScrollback';
+import { saveScrollback, loadScrollback, deleteScrollback, cleanupOldEntries } from './terminalScrollback';
 
 // ---------------------------------------------------------------------------
 // In-memory IndexedDB fake (jsdom does not include IndexedDB)
@@ -184,10 +179,7 @@ function createFakeIndexedDB(): typeof indexedDB {
           }
           return new FakeObjectStore(name, dbState.get(name)!);
         },
-        transaction(
-          storeNames: string | string[],
-          mode: IDBTransactionMode = 'readonly',
-        ) {
+        transaction(storeNames: string | string[], mode: IDBTransactionMode = 'readonly') {
           const names = Array.isArray(storeNames) ? storeNames : [storeNames];
           return new FakeTransaction(names, mode, dbState);
         },
@@ -276,11 +268,7 @@ class FakeObjectStore {
     private data: StoreData,
   ) {}
 
-  createIndex(
-    indexName: string,
-    keyPath: string,
-    _opts?: IDBIndexParameters,
-  ): FakeIndex {
+  createIndex(indexName: string, keyPath: string, _opts?: IDBIndexParameters): FakeIndex {
     const idx = new FakeIndex(indexName, keyPath, this.data);
     this._indexCache.set(indexName, idx);
     return idx;
@@ -317,9 +305,7 @@ class FakeIndex {
     private data: StoreData,
   ) {}
 
-  openCursor(
-    range?: IDBKeyRange | null,
-  ): IDBRequest<IDBCursorWithValue | null> {
+  openCursor(range?: IDBKeyRange | null): IDBRequest<IDBCursorWithValue | null> {
     const all = Array.from(this.data.entries());
 
     const filter = (entry: DBEntry) => {
@@ -611,7 +597,9 @@ describe('terminalScrollback', () => {
   describe('error resilience', () => {
     it('saveScrollback does not throw when IndexedDB fails', async () => {
       (globalThis as any).indexedDB = {
-        open: () => { throw new Error('fail'); },
+        open: () => {
+          throw new Error('fail');
+        },
       };
       await expect(saveScrollback('bad', 'data')).resolves.toBeUndefined();
       setupFakeIndexedDB();
@@ -619,7 +607,9 @@ describe('terminalScrollback', () => {
 
     it('loadScrollback returns null when IndexedDB fails', async () => {
       (globalThis as any).indexedDB = {
-        open: () => { throw new Error('fail'); },
+        open: () => {
+          throw new Error('fail');
+        },
       };
       expect(await loadScrollback('bad')).toBeNull();
       setupFakeIndexedDB();
@@ -627,7 +617,9 @@ describe('terminalScrollback', () => {
 
     it('deleteScrollback does not throw when IndexedDB fails', async () => {
       (globalThis as any).indexedDB = {
-        open: () => { throw new Error('fail'); },
+        open: () => {
+          throw new Error('fail');
+        },
       };
       await expect(deleteScrollback('bad')).resolves.toBeUndefined();
       setupFakeIndexedDB();
@@ -635,7 +627,9 @@ describe('terminalScrollback', () => {
 
     it('cleanupOldEntries does not throw when IndexedDB fails', async () => {
       (globalThis as any).indexedDB = {
-        open: () => { throw new Error('fail'); },
+        open: () => {
+          throw new Error('fail');
+        },
       };
       await expect(cleanupOldEntries()).resolves.toBeUndefined();
       setupFakeIndexedDB();

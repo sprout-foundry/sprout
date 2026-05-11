@@ -3,10 +3,7 @@ import { getDirectoryName, toWorkspaceRelativePath } from './CommandPalette';
 describe('CommandPalette path formatting', () => {
   it('collapses absolute file paths to be relative to the workspace root', () => {
     expect(
-      toWorkspaceRelativePath(
-        '/workspace/project/src/components/deep/ReallyImportantFile.tsx',
-        '/workspace/project',
-      ),
+      toWorkspaceRelativePath('/workspace/project/src/components/deep/ReallyImportantFile.tsx', '/workspace/project'),
     ).toBe('src/components/deep/ReallyImportantFile.tsx');
   });
 
@@ -21,9 +18,7 @@ describe('CommandPalette path formatting', () => {
   });
 
   it('returns the raw path when workspace root does not match', () => {
-    expect(toWorkspaceRelativePath('/other/path/file.ts', '/workspace/project')).toBe(
-      '/other/path/file.ts',
-    );
+    expect(toWorkspaceRelativePath('/other/path/file.ts', '/workspace/project')).toBe('/other/path/file.ts');
   });
 
   it('returns empty string when path equals workspace root', () => {

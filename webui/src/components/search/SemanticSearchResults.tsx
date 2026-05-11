@@ -20,13 +20,7 @@ function SemanticSearchResults({
     <>
       {results.map((result) => {
         if (result.type === 'file') {
-          return (
-            <SemanticFileResult
-              key={`file-${result.file}`}
-              result={result}
-              onFileClick={onFileClick}
-            />
-          );
+          return <SemanticFileResult key={`file-${result.file}`} result={result} onFileClick={onFileClick} />;
         }
 
         return (
@@ -72,9 +66,7 @@ function SemanticFileResult({ result, onFileClick }: SemanticFileResultProps): J
       <div className="search-semantic-result-meta">
         <span className="search-semantic-result-file">{getRelativePath(result.file)}</span>
         <SimilarityBar similarity={result.similarity} />
-        <span className="search-semantic-result-similarity">
-          {(result.similarity * 100).toFixed(0)}%
-        </span>
+        <span className="search-semantic-result-similarity">{(result.similarity * 100).toFixed(0)}%</span>
         {hasCluster && (
           <span className="search-semantic-result-cluster-badge" title={`Cluster ${result.cluster_id}`}>
             {result.cluster_id}
@@ -119,22 +111,16 @@ function SemanticCodeUnitResult({
     >
       <div className="search-semantic-result-main">
         <span className="search-semantic-result-name">{result.name}</span>
-        {result.signature && (
-          <span className="search-semantic-result-signature">{result.signature}</span>
-        )}
+        {result.signature && <span className="search-semantic-result-signature">{result.signature}</span>}
       </div>
       <div className="search-semantic-result-meta">
         <span className="search-semantic-result-file">{getRelativePath(result.file)}</span>
         <span className="search-semantic-result-lines">
           {result.start_line}–{result.end_line}
         </span>
-        {result.language && (
-          <span className="search-semantic-result-lang">{result.language}</span>
-        )}
+        {result.language && <span className="search-semantic-result-lang">{result.language}</span>}
         <SimilarityBar similarity={result.similarity} />
-        <span className="search-semantic-result-similarity">
-          {(result.similarity * 100).toFixed(0)}%
-        </span>
+        <span className="search-semantic-result-similarity">{(result.similarity * 100).toFixed(0)}%</span>
         {hasCluster && (
           <span className="search-semantic-result-cluster-badge" title={`Cluster ${result.cluster_id}`}>
             {result.cluster_id}

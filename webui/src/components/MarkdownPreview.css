@@ -169,7 +169,7 @@
 }
 
 /* Checkboxes */
-.markdown-preview-body input[type="checkbox"] {
+.markdown-preview-body input[type='checkbox'] {
   margin-right: 6px;
 }
 
@@ -184,6 +184,6 @@
   align-items: flex-start;
 }
 
-.markdown-preview-body li.task-list-item input[type="checkbox"] {
+.markdown-preview-body li.task-list-item input[type='checkbox'] {
   margin-top: 4px;
 }

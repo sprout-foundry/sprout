@@ -35,32 +35,38 @@ export function useTabDragReorder({
     e.dataTransfer.setData('text/plain', bufferId);
   }, []);
 
-  const handleDrop = useCallback((targetBufferId: string, sourceBufferId?: string | null) => {
-    const draggedId = sourceBufferId ?? draggingIdRef.current;
-    if (!draggedId || draggedId === targetBufferId) {
+  const handleDrop = useCallback(
+    (targetBufferId: string, sourceBufferId?: string | null) => {
+      const draggedId = sourceBufferId ?? draggingIdRef.current;
+      if (!draggedId || draggedId === targetBufferId) {
+        draggingIdRef.current = null;
+        return;
+      }
+      reorderBuffers(draggedId, targetBufferId);
       draggingIdRef.current = null;
-      return;
-    }
-    reorderBuffers(draggedId, targetBufferId);
-    draggingIdRef.current = null;
-  }, [reorderBuffers]);
+    },
+    [reorderBuffers],
+  );
 
   const resolveDraggedBufferId = useCallback((e: DragEvent): string | null => {
     return draggingIdRef.current || e.dataTransfer.getData('text/plain') || null;
   }, []);
 
-  const handlePaneDrop = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    // Must use resolveDraggedBufferId (not raw ref) to handle cross-pane drops
-    // where handleDragStart fired on a different EditorTabs/hook instance.
-    const draggedId = resolveDraggedBufferId(e);
-    if (!draggedId || !paneId) {
+  const handlePaneDrop = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      // Must use resolveDraggedBufferId (not raw ref) to handle cross-pane drops
+      // where handleDragStart fired on a different EditorTabs/hook instance.
+      const draggedId = resolveDraggedBufferId(e);
+      if (!draggedId || !paneId) {
+        draggingIdRef.current = null;
+        return;
+      }
+      moveBufferToPane(draggedId, paneId);
       draggingIdRef.current = null;
-      return;
-    }
-    moveBufferToPane(draggedId, paneId);
-    draggingIdRef.current = null;
-  }, [paneId, moveBufferToPane, resolveDraggedBufferId]);
+    },
+    [paneId, moveBufferToPane, resolveDraggedBufferId],
+  );
 
   const handleDragEnd = useCallback(() => {
     draggingIdRef.current = null;

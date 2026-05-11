@@ -2,8 +2,8 @@ import React from 'react';
 import { Server, Loader2, RefreshCw } from 'lucide-react';
 import { supportsSSH } from '../../config/mode';
 import { collapseHomePath } from './pathUtils';
-import { SSHHostEntry, SSHSessionEntry } from '../../services/api';
-import { SwitchingState, SSHFailureState, RemoteWorkspaceContext, WorkspaceDirectory } from './types';
+import type { SSHHostEntry, SSHSessionEntry } from '../../services/api';
+import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext, WorkspaceDirectory } from './types';
 
 export interface SSHPanelProps {
   remoteContext: RemoteWorkspaceContext | null;
@@ -40,15 +40,33 @@ export interface SSHPanelProps {
 }
 
 export const SSHPanel: React.FC<SSHPanelProps> = ({
-  remoteContext, workspaceRoot, switchingState, sshFailure,
-  showExpiredSessionRecovery, isConnected, isLoading,
-  sshHosts, sshSessions, isOpeningSshHost, isClosingSshSession,
-  selectedSshBrowseHost, focusedSshSessionKey, sshSessionPathDrafts,
-  sshSessionSuggestions, sshSessionSuggestionsLoading, sshSessionSuggestionsError,
+  remoteContext,
+  workspaceRoot,
+  switchingState,
+  sshFailure,
+  showExpiredSessionRecovery,
+  isConnected,
+  isLoading,
+  sshHosts,
+  sshSessions,
+  isOpeningSshHost,
+  isClosingSshSession,
+  selectedSshBrowseHost,
+  focusedSshSessionKey,
+  sshSessionPathDrafts,
+  sshSessionSuggestions,
+  sshSessionSuggestionsLoading,
+  sshSessionSuggestionsError,
   sshHomePaths,
-  handleRefresh, handleReloadWithoutSSHPath, handleOpenSshHost, handleCloseSshSession,
-  updateSshSessionPathDraft, getSshSessionTargetPath, addSSHFavoriteWorkspace,
-  setSelectedSshBrowseHost, setFocusedSshSessionKey,
+  handleRefresh,
+  handleReloadWithoutSSHPath,
+  handleOpenSshHost,
+  handleCloseSshSession,
+  updateSshSessionPathDraft,
+  getSshSessionTargetPath,
+  addSSHFavoriteWorkspace,
+  setSelectedSshBrowseHost,
+  setFocusedSshSessionKey,
   sshPanelRef,
 }) => {
   if (!supportsSSH) return null;
@@ -66,11 +84,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
           <div>{switchingState.error}</div>
           {showExpiredSessionRecovery ? (
             <div className="location-switcher-error-actions">
-              <button
-                type="button"
-                className="location-switcher-session-btn"
-                onClick={handleReloadWithoutSSHPath}
-              >
+              <button type="button" className="location-switcher-session-btn" onClick={handleReloadWithoutSSHPath}>
                 Reload Without SSH Path
               </button>
             </div>
@@ -136,7 +150,9 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
           <>
             <div className="location-switcher-section-header" role="presentation">
               {sshHosts.length === 1 ? (
-                <>SSH — <strong>{sshHosts[0].alias}</strong></>
+                <>
+                  SSH — <strong>{sshHosts[0].alias}</strong>
+                </>
               ) : (
                 'SSH Hosts'
               )}
@@ -169,13 +185,11 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
               </button>
             </div>
           </>
-        ) : (
-          !remoteContext ? (
-            <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
-              <span className="location-switcher-item-text">No SSH hosts found in ~/.ssh/config</span>
-            </div>
-          ) : null
-        )}
+        ) : !remoteContext ? (
+          <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
+            <span className="location-switcher-item-text">No SSH hosts found in ~/.ssh/config</span>
+          </div>
+        ) : null}
 
         {/* Active SSH sessions */}
         {sshSessions.length > 0 ? (
@@ -192,10 +206,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
               >
                 <span className="location-switcher-item-text">{session.host_alias}</span>
                 <span className="location-switcher-item-meta">
-                  {collapseHomePath(
-                    session.remote_workspace_path || '$HOME',
-                    sshHomePaths[session.host_alias]
-                  )}
+                  {collapseHomePath(session.remote_workspace_path || '$HOME', sshHomePaths[session.host_alias])}
                 </span>
                 <div className="location-switcher-session-retarget">
                   <input
@@ -216,9 +227,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
                     </div>
                   ) : null}
                   {focusedSshSessionKey === session.key && sshSessionSuggestionsError[session.key] ? (
-                    <div className="location-switcher-session-error">
-                      {sshSessionSuggestionsError[session.key]}
-                    </div>
+                    <div className="location-switcher-session-error">{sshSessionSuggestionsError[session.key]}</div>
                   ) : null}
                   {focusedSshSessionKey === session.key && (sshSessionSuggestions[session.key] || []).length > 0 ? (
                     <div className="location-switcher-directory-list location-switcher-session-suggestions">
@@ -252,9 +261,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
                     className="location-switcher-session-btn"
                     onClick={() => handleOpenSshHost(session.host_alias, getSshSessionTargetPath(session))}
                     disabled={
-                      Boolean(isOpeningSshHost) ||
-                      Boolean(isClosingSshSession) ||
-                      !getSshSessionTargetPath(session)
+                      Boolean(isOpeningSshHost) || Boolean(isClosingSshSession) || !getSshSessionTargetPath(session)
                     }
                   >
                     Open Path
@@ -269,9 +276,7 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
                       }
                     }}
                     disabled={
-                      Boolean(isOpeningSshHost) ||
-                      Boolean(isClosingSshSession) ||
-                      !getSshSessionTargetPath(session)
+                      Boolean(isOpeningSshHost) || Boolean(isClosingSshSession) || !getSshSessionTargetPath(session)
                     }
                   >
                     Save

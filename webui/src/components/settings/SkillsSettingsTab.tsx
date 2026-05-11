@@ -5,10 +5,7 @@ interface SkillsSettingsTabProps {
   toggleSkill: (skillName: string, enabled: boolean) => Promise<void>;
 }
 
-export default function SkillsSettingsTab({
-  settings,
-  toggleSkill,
-}: SkillsSettingsTabProps) {
+export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSettingsTabProps) {
   const skills = settings.skills || {};
   const skillEntries = Object.entries(skills);
 

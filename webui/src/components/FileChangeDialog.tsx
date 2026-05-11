@@ -19,7 +19,14 @@ interface FileChangeDialogProps {
 
 /* ── Internal dialog component ───────────────────────────────── */
 
-function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, originalContent, modifiedContent, onResolve }: FileChangeDialogProps): JSX.Element {
+function FileChangeDialog({
+  fileName,
+  deleted,
+  hasUnsavedChanges,
+  originalContent,
+  modifiedContent,
+  onResolve,
+}: FileChangeDialogProps): JSX.Element {
   const [showMergeView, setShowMergeView] = useState(false);
   const hasMergeContent = !!(originalContent && modifiedContent);
 
@@ -124,9 +131,7 @@ function FileChangeDialog({ fileName, deleted, hasUnsavedChanges, originalConten
 
   // Conflict mode (has unsaved changes)
   if (hasUnsavedChanges) {
-    const cardClass = showMergeView
-      ? 'themed-dialog-card themed-dialog-card--merge-expanded'
-      : 'themed-dialog-card';
+    const cardClass = showMergeView ? 'themed-dialog-card themed-dialog-card--merge-expanded' : 'themed-dialog-card';
 
     return (
       <div className="themed-dialog-overlay" onClick={() => onResolve('keep-mine')} onKeyDown={handleKeyDown}>

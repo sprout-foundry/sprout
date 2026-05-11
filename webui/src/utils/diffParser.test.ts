@@ -40,12 +40,7 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles context lines (space prefix)', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -1,3 +1,3 @@',
-      ' context',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -1,3 +1,3 @@', ' context'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     expect(result.original).toBe('context');
@@ -53,13 +48,7 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles removed lines (- prefix)', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -1,2 +1,1 @@',
-      ' kept',
-      '-removed',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -1,2 +1,1 @@', ' kept', '-removed'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     expect(result.original).toBe('kept\nremoved');
@@ -67,13 +56,7 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles added lines (+ prefix)', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -1,1 +1,2 @@',
-      ' kept',
-      '+added',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -1,1 +1,2 @@', ' kept', '+added'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     expect(result.original).toBe('kept');
@@ -185,23 +168,14 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles hunk header without count for empty range', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -0,0 +1 @@',
-      '+single line',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -0,0 +1 @@', '+single line'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     expect(result.modified).toBe('single line');
   });
 
   it('handles diff with only header lines and no hunk content', () => {
-    const diff = [
-      'diff --git a/x b/x',
-      '--- a/x',
-      '+++ b/x',
-    ].join('\n');
+    const diff = ['diff --git a/x b/x', '--- a/x', '+++ b/x'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     expect(result.original).toBe('');
@@ -209,13 +183,7 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles hunk with empty context line (single space)', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -1,2 +1,2 @@',
-      ' ',
-      ' content',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -1,2 +1,2 @@', ' ', ' content'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     // The " " line becomes empty string after slice(1)
@@ -224,13 +192,7 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles lines with special characters in content', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -1,2 +1,2 @@',
-      '-old: a & b <c>',
-      '+new: x | y {z}',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -1,2 +1,2 @@', '-old: a & b <c>', '+new: x | y {z}'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     expect(result.original).toBe('old: a & b <c>');
@@ -238,13 +200,7 @@ describe('parseUnifiedDiffToDocuments', () => {
   });
 
   it('handles tab-indented content', () => {
-    const diff = [
-      '--- a/f',
-      '+++ b/f',
-      '@@ -1,2 +1,2 @@',
-      '\tpackage main',
-      '\tfunc main() {}',
-    ].join('\n');
+    const diff = ['--- a/f', '+++ b/f', '@@ -1,2 +1,2 @@', '\tpackage main', '\tfunc main() {}'].join('\n');
 
     const result = parseUnifiedDiffToDocuments(diff);
     // Tab is not ' ', so these lines are not recognized as context.

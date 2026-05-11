@@ -118,9 +118,7 @@ export async function formatCode(
   }
 
   // Get formatting options (config takes precedence over defaults)
-  const formatOptions = prettierConfig
-    ? mergeOptions(prettierConfig)
-    : DEFAULT_OPTIONS;
+  const formatOptions = prettierConfig ? mergeOptions(prettierConfig) : DEFAULT_OPTIONS;
 
   try {
     const formatted = await format(content, {

@@ -21,16 +21,7 @@ import type {
 } from '@sprout/ui';
 
 // Re-export for downstream consumers
-export type {
-  Message,
-  ToolExecution,
-  SubagentActivity,
-  LogEntry,
-  TodoStatus,
-  TodoItem,
-  FileEdit,
-  ToolRef,
-};
+export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, FileEdit, ToolRef };
 
 // ── WebUI-specific Types ─────────────────────────────────────────────
 

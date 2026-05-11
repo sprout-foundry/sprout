@@ -33,19 +33,25 @@ interface LSPCodeActionResult {
   title: string;
   kind?: string;
   edit?: {
-    changes?: Record<string, Array<{
-      range: { start: { line: number; character: number }; end: { line: number; character: number } };
-      newText: string;
-    }>>;
+    changes?: Record<
+      string,
+      Array<{
+        range: { start: { line: number; character: number }; end: { line: number; character: number } };
+        newText: string;
+      }>
+    >;
   };
 }
 
 /** LSP WorkspaceEdit fragment for convertLSPEdits. */
 interface LSPWorkspaceEdit {
-  changes?: Record<string, Array<{
-    range: { start: { line: number; character: number }; end: { line: number; character: number } };
-    newText: string;
-  }>>;
+  changes?: Record<
+    string,
+    Array<{
+      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      newText: string;
+    }>
+  >;
 }
 
 /** CodeActionEdit describes a single text replacement within a file. */
@@ -62,7 +68,11 @@ export interface CodeAction {
   edits: CodeActionEdit[];
 }
 
-export interface CodeActionState { actions: CodeAction[]; loading: boolean; line: number; }
+export interface CodeActionState {
+  actions: CodeAction[];
+  loading: boolean;
+  line: number;
+}
 
 /** Configuration provided by the host editor. */
 interface CodeActionsConfig {
@@ -72,7 +82,9 @@ interface CodeActionsConfig {
 }
 
 export const codeActionsConfig = Facet.define<CodeActionsConfig, Required<CodeActionsConfig>>({
-  combine(configs) { return configs[0] as Required<CodeActionsConfig>; },
+  combine(configs) {
+    return configs[0] as Required<CodeActionsConfig>;
+  },
 });
 
 const setCodeActions = SE.define<CodeActionState>();
@@ -105,7 +117,8 @@ class LightbulbWidget extends WidgetType {
 
   toDOM() {
     const span = document.createElement('span');
-    span.className = 'cm-codeAction-lightbulb' + (this._hasActions ? ' cm-codeAction-has-actions' : ' cm-codeAction-loading');
+    span.className =
+      'cm-codeAction-lightbulb' + (this._hasActions ? ' cm-codeAction-has-actions' : ' cm-codeAction-loading');
     span.setAttribute('aria-hidden', 'true');
     span.innerHTML = this._hasActions ? '💡' : '<span class="cm-codeAction-spinner"></span>';
     span.addEventListener('mousedown', (e) => {
@@ -128,8 +141,12 @@ class LightbulbWidget extends WidgetType {
 // ─── Code Actions Plugin ──────────────────────────────────────────
 
 class LightbulbGutterMarker extends GutterMarker {
-  constructor(private _widget: LightbulbWidget) { super(); }
-  toDOM() { return this._widget.toDOM(); }
+  constructor(private _widget: LightbulbWidget) {
+    super();
+  }
+  toDOM() {
+    return this._widget.toDOM();
+  }
 }
 
 class CodeActionsPlugin implements PluginValue {
@@ -229,7 +246,7 @@ class CodeActionsPlugin implements PluginValue {
             range: { start: startPos, end: endPos },
             context: { diagnostics: [] },
           };
-          const lspResult = await lspClient.request('textDocument/codeAction', params) as LSPCodeActionResult[];
+          const lspResult = (await lspClient.request('textDocument/codeAction', params)) as LSPCodeActionResult[];
 
           if (lspResult && Array.isArray(lspResult)) {
             semanticActions = lspResult.map((action) => ({
@@ -271,8 +288,8 @@ class CodeActionsPlugin implements PluginValue {
 
       // Merge static actions with semantic actions (static first, then semantic)
       // Deduplicate by title in case both provide the same action
-      const seenTitles = new Set(staticActions.map(a => a.title));
-      const mergedActions = [...staticActions, ...semanticActions.filter(a => !seenTitles.has(a.title))];
+      const seenTitles = new Set(staticActions.map((a) => a.title));
+      const mergedActions = [...staticActions, ...semanticActions.filter((a) => !seenTitles.has(a.title))];
 
       this.view.dispatch({
         effects: setCodeActions.of({ actions: mergedActions, loading: false, line: lineNum }),
@@ -293,10 +310,7 @@ class CodeActionsPlugin implements PluginValue {
    * For edits in other files, stores only filePath and raw position info;
    * these are forwarded via onApplyEdits.
    */
-  private convertLSPEdits(
-    edit: LSPWorkspaceEdit | undefined,
-    plugin: LSPPlugin,
-  ): CodeActionEdit[] {
+  private convertLSPEdits(edit: LSPWorkspaceEdit | undefined, plugin: LSPPlugin): CodeActionEdit[] {
     if (!edit?.changes) return [];
 
     const edits: CodeActionEdit[] = [];
@@ -376,12 +390,8 @@ class CodeActionsPlugin implements PluginValue {
 
     // Collect edits for the current file only
     const filePath = this.config.getFilePath();
-    const currentFileEdits = action.edits.filter(
-      (e) => !e.filePath || e.filePath === filePath,
-    );
-    const otherFileEdits = action.edits.filter(
-      (e) => e.filePath && e.filePath !== filePath,
-    );
+    const currentFileEdits = action.edits.filter((e) => !e.filePath || e.filePath === filePath);
+    const otherFileEdits = action.edits.filter((e) => e.filePath && e.filePath !== filePath);
 
     if (currentFileEdits.length > 0) {
       // Sort edits in reverse order so positions remain valid
@@ -445,7 +455,8 @@ class CodeActionsPlugin implements PluginValue {
       icon.innerHTML = this.kindEmoji(action.kind);
       item.appendChild(icon);
 
-      const label = document.createElement('span');      label.className = 'cm-codeAction-menu-label';
+      const label = document.createElement('span');
+      label.className = 'cm-codeAction-menu-label';
       label.textContent = action.title;
       item.appendChild(label);
 

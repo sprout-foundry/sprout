@@ -21,10 +21,10 @@ import SecurityPromptDialog from './components/SecurityPromptDialog';
 import AskUserDialog from './components/AskUserDialog';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import { ApiService } from './services/api';
-import type { AppState } from './types/app';
 import { debugLog } from './utils/log';
 import { useSidebarState } from './hooks/useSidebarState';
 import { useWebSocketEventHandler } from './hooks/useWebSocketEventHandler';
+import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHandler';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
 import useOnboarding from './hooks/useOnboarding';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -126,19 +126,14 @@ function AppInner() {
 
   const apiService = ApiService.getInstance();
 
-  const {
-    handleModelChange,
-    handleProviderChange,
-    handleViewChange,
-    pendingProviderRef,
-  } = useModelProviderHandlers({
+  const { handleModelChange, handleProviderChange, handleViewChange, pendingProviderRef } = useModelProviderHandlers({
     state,
     setState,
     pendingProviderChangeRef,
     pendingProviderChangeValueRef,
   });
 
-  const wsEventHandlerRefs: import('./hooks/useWebSocketEventHandler').UseWebSocketEventHandlerRefs = {
+  const wsEventHandlerRefs: UseWebSocketEventHandlerRefs = {
     activeRequestsRef,
     activeChatIdRef,
     pendingProviderRef,
@@ -181,13 +176,9 @@ function AppInner() {
     setState,
   });
 
-  const {
-    handleGitCommit,
-    handleGitAICommit,
-    handleGitStage,
-    handleGitUnstage,
-    handleGitDiscard,
-  } = useGitHandlers({ setGitRefreshToken });
+  const { handleGitCommit, handleGitAICommit, handleGitStage, handleGitUnstage, handleGitDiscard } = useGitHandlers({
+    setGitRefreshToken,
+  });
 
   // ── Initialization ───────────────────────────────────────────────
 
@@ -222,7 +213,7 @@ function AppInner() {
 
   const handleCompleteOnboarding = useCallback(async () => {
     await onComplete((vals) => {
-      setState(prev => ({
+      setState((_prev) => ({
         provider: vals.provider,
         model: vals.model,
       }));
@@ -239,10 +230,13 @@ function AppInner() {
 
   const recentLogs = useMemo(() => state.logs.slice(-MAX_PERSISTED_LOGS), [state.logs]);
 
-  const stats = useMemo(() => ({
-    queryCount: state.queryCount,
-    filesModified: 0, // TODO: track modified files from buffers
-  }), [state.queryCount]);
+  const stats = useMemo(
+    () => ({
+      queryCount: state.queryCount,
+      filesModified: 0, // TODO: track modified files from buffers
+    }),
+    [state.queryCount],
+  );
 
   // ── Render ───────────────────────────────────────────────────────
 
@@ -259,103 +253,103 @@ function AppInner() {
             <HotkeyProvider>
               <EditorManagerProvider>
                 <UIManager>
-                    <AppContent
-                        state={state}
-                        inputValue={inputValue}
-                        onInputChange={setInputValue}
-                        isMobile={isMobile}
-                        isTablet={isTablet}
-                        isSidebarOpen={isSidebarOpen}
-                        sidebarCollapsed={sidebarCollapsed}
-                        isTerminalExpanded={isTerminalExpanded}
-                        selectedSection={selectedSection}
-                        sidebarWidth={sidebarWidth}
-                        sidebarWidthRef={sidebarWidthRef}
-                        onSectionChange={setSelectedSection}
-                        onSidebarWidthChange={setSidebarWidth}
-                        onSidebarWidthPersist={persistSidebarWidth}
-                        onSidebarWidthReset={resetSidebarWidth}
-                        stats={stats}
-                        recentFiles={recentFiles}
-                        recentLogs={recentLogs}
-                        gitRefreshToken={gitRefreshToken}
-                        onSidebarToggle={handleSidebarToggle}
-                        onToggleSidebar={toggleSidebar}
-                        onCloseSidebar={closeSidebar}
-                        onViewChange={handleViewChange}
-                        onModelChange={handleModelChange}
-                        onProviderChange={handleProviderChange}
-                        onSendMessage={chatManager.handleSendMessage}
-                        onQueueMessage={chatManager.handleQueueMessage}
-                        onStopProcessing={chatManager.handleStopProcessing}
-                        queuedMessagesCount={chatManager.queuedMessagesCount}
-                        onGitCommit={handleGitCommit}
-                        onGitAICommit={handleGitAICommit}
-                        onGitStage={handleGitStage}
-                        onGitUnstage={handleGitUnstage}
-                        onGitDiscard={handleGitDiscard}
-                        onTerminalOutput={handleTerminalOutput}
-                        onTerminalExpandedChange={setIsTerminalExpanded}
-                        isConnected={state.isConnected}
-                        chatSessions={state.chatSessions}
-                        activeChatId={state.activeChatId}
-                        onActiveChatChange={chatManager.handleActiveChatChange}
-                        onCreateChat={chatManager.handleCreateChat}
-                        onDeleteChat={chatManager.handleDeleteChat}
-                        onRenameChat={chatManager.handleRenameChat}
-                        perChatCache={state.perChatCache}
+                  <AppContent
+                    state={state}
+                    inputValue={inputValue}
+                    onInputChange={setInputValue}
+                    isMobile={isMobile}
+                    isTablet={isTablet}
+                    isSidebarOpen={isSidebarOpen}
+                    sidebarCollapsed={sidebarCollapsed}
+                    isTerminalExpanded={isTerminalExpanded}
+                    selectedSection={selectedSection}
+                    sidebarWidth={sidebarWidth}
+                    sidebarWidthRef={sidebarWidthRef}
+                    onSectionChange={setSelectedSection}
+                    onSidebarWidthChange={setSidebarWidth}
+                    onSidebarWidthPersist={persistSidebarWidth}
+                    onSidebarWidthReset={resetSidebarWidth}
+                    stats={stats}
+                    recentFiles={recentFiles}
+                    recentLogs={recentLogs}
+                    gitRefreshToken={gitRefreshToken}
+                    onSidebarToggle={handleSidebarToggle}
+                    onToggleSidebar={toggleSidebar}
+                    onCloseSidebar={closeSidebar}
+                    onViewChange={handleViewChange}
+                    onModelChange={handleModelChange}
+                    onProviderChange={handleProviderChange}
+                    onSendMessage={chatManager.handleSendMessage}
+                    onQueueMessage={chatManager.handleQueueMessage}
+                    onStopProcessing={chatManager.handleStopProcessing}
+                    queuedMessagesCount={chatManager.queuedMessagesCount}
+                    onGitCommit={handleGitCommit}
+                    onGitAICommit={handleGitAICommit}
+                    onGitStage={handleGitStage}
+                    onGitUnstage={handleGitUnstage}
+                    onGitDiscard={handleGitDiscard}
+                    onTerminalOutput={handleTerminalOutput}
+                    onTerminalExpandedChange={setIsTerminalExpanded}
+                    isConnected={state.isConnected}
+                    chatSessions={state.chatSessions}
+                    activeChatId={state.activeChatId}
+                    onActiveChatChange={chatManager.handleActiveChatChange}
+                    onCreateChat={chatManager.handleCreateChat}
+                    onDeleteChat={chatManager.handleDeleteChat}
+                    onRenameChat={chatManager.handleRenameChat}
+                    perChatCache={state.perChatCache}
+                  />
+                  <Notification />
+                  <UpdateNotification />
+                  {state.securityApprovalRequest && (
+                    <SecurityApprovalDialog
+                      requestId={state.securityApprovalRequest.requestId}
+                      toolName={state.securityApprovalRequest.toolName}
+                      riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
+                      reasoning={state.securityApprovalRequest.reasoning}
+                      command={state.securityApprovalRequest.command}
+                      riskType={state.securityApprovalRequest.riskType}
+                      target={state.securityApprovalRequest.target}
+                      onRespond={handleSecurityApprovalResponse}
                     />
-                    <Notification />
-                    <UpdateNotification />
-                    {state.securityApprovalRequest && (
-                        <SecurityApprovalDialog
-                          requestId={state.securityApprovalRequest.requestId}
-                          toolName={state.securityApprovalRequest.toolName}
-                          riskLevel={state.securityApprovalRequest.riskLevel as 'SAFE' | 'CAUTION' | 'DANGEROUS'}
-                          reasoning={state.securityApprovalRequest.reasoning}
-                          command={state.securityApprovalRequest.command}
-                          riskType={state.securityApprovalRequest.riskType}
-                          target={state.securityApprovalRequest.target}
-                          onRespond={handleSecurityApprovalResponse}
-                        />
-                    )}
-                    {state.securityPromptRequest && (
-                        <SecurityPromptDialog
-                          requestId={state.securityPromptRequest.requestId}
-                          prompt={state.securityPromptRequest.prompt}
-                          filePath={state.securityPromptRequest.filePath}
-                          concern={state.securityPromptRequest.concern}
-                          onRespond={handleSecurityPromptResponse}
-                        />
-                    )}
-                    {state.askUserRequest && (
-                        <AskUserDialog
-                          requestId={state.askUserRequest.requestId}
-                          question={state.askUserRequest.question}
-                          onRespond={handleAskUserResponse}
-                        />
-                    )}
-                    {state.modelSelectionRequest && (
-                        <ModelSelectionModal
-                          provider={state.modelSelectionRequest.provider}
-                          onClose={handleModelSelectionClose}
-                          onSelectModel={handleModelSelectionResponse}
-                        />
-                    )}
-                    <OnboardingDialog
-                        onboarding={onboarding}
-                        selectedProvider={selectedProvider}
-                        recommendedProviders={recommendedProviders}
-                        advancedProviders={advancedProviders}
-                        windowsGuidance={windowsGuidance}
-                        onProviderChange={onProviderChange}
-                        onComplete={handleCompleteOnboarding}
-                        onSkip={onSkip}
-                        onRefresh={refreshProviderList}
-                        onInstallWsl={onInstallWsl}
-                        onInstallGitBash={onInstallGitBash}
-                        updateOnboarding={updateOnboarding}
+                  )}
+                  {state.securityPromptRequest && (
+                    <SecurityPromptDialog
+                      requestId={state.securityPromptRequest.requestId}
+                      prompt={state.securityPromptRequest.prompt}
+                      filePath={state.securityPromptRequest.filePath}
+                      concern={state.securityPromptRequest.concern}
+                      onRespond={handleSecurityPromptResponse}
                     />
+                  )}
+                  {state.askUserRequest && (
+                    <AskUserDialog
+                      requestId={state.askUserRequest.requestId}
+                      question={state.askUserRequest.question}
+                      onRespond={handleAskUserResponse}
+                    />
+                  )}
+                  {state.modelSelectionRequest && (
+                    <ModelSelectionModal
+                      provider={state.modelSelectionRequest.provider}
+                      onClose={handleModelSelectionClose}
+                      onSelectModel={handleModelSelectionResponse}
+                    />
+                  )}
+                  <OnboardingDialog
+                    onboarding={onboarding}
+                    selectedProvider={selectedProvider}
+                    recommendedProviders={recommendedProviders}
+                    advancedProviders={advancedProviders}
+                    windowsGuidance={windowsGuidance}
+                    onProviderChange={onProviderChange}
+                    onComplete={handleCompleteOnboarding}
+                    onSkip={onSkip}
+                    onRefresh={refreshProviderList}
+                    onInstallWsl={onInstallWsl}
+                    onInstallGitBash={onInstallGitBash}
+                    updateOnboarding={updateOnboarding}
+                  />
                 </UIManager>
               </EditorManagerProvider>
             </HotkeyProvider>

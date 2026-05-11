@@ -1,5 +1,5 @@
 import { useRef, useState, useMemo, useCallback } from 'react';
-import { EditorView as CMEditorView } from '@codemirror/view';
+import type { EditorView as CMEditorView } from '@codemirror/view';
 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -52,7 +52,23 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   const { compartments, buildExtensions } = useEditorExtensions();
 
-  const { panes, buffers, updateBufferContent, updateBufferCursor, updateBufferScroll, setBufferModified, splitPane, openWorkspaceBuffer, setBufferLanguageOverride, isLinkedScrollEnabled, toggleLinkedScroll, whitespaceRenderingMode, setWhitespaceRenderingMode, isFormatOnSaveEnabled, setFormatOnSaveEnabled } = useEditorManager();
+  const {
+    panes,
+    buffers,
+    updateBufferContent,
+    updateBufferCursor,
+    updateBufferScroll,
+    setBufferModified,
+    splitPane,
+    openWorkspaceBuffer,
+    setBufferLanguageOverride,
+    isLinkedScrollEnabled,
+    toggleLinkedScroll,
+    whitespaceRenderingMode,
+    setWhitespaceRenderingMode,
+    isFormatOnSaveEnabled,
+    setFormatOnSaveEnabled,
+  } = useEditorManager();
   const { themePack, customHighlightStyle } = useTheme();
   const { hotkeys } = useHotkeys();
 
@@ -81,7 +97,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // during external replacements (file reloads, auto-reload, initial loads).
   const isExternalUpdateRef = useRef<boolean>(false);
 
-  const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({ bufferRef, updateBufferCursor, isExternalUpdateRef });
+  const { selectionInfo, setSelectionInfo, handleCursorUpdate } = useEditorCursor({
+    bufferRef,
+    updateBufferCursor,
+    isExternalUpdateRef,
+  });
 
   const { handleSave, saveRef } = useEditorFileIO(
     viewRef,
@@ -132,19 +152,9 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   const onUpdateRef = useRef(onUpdate);
   onUpdateRef.current = onUpdate;
 
-  const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(
-    hotkeys,
-    viewRef,
-    bufferRef,
-  );
+  const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(hotkeys, viewRef, bufferRef);
 
-  const semantic = useEditorSemantic(
-    viewRef,
-    bufferRef,
-    localContent,
-    isSemanticLanguage,
-    openWorkspaceBuffer,
-  );
+  const semantic = useEditorSemantic(viewRef, bufferRef, localContent, isSemanticLanguage, openWorkspaceBuffer);
 
   semanticHandlerRefs.handleGoToDefinition.current = semantic.handleGoToDefinition;
   semanticHandlerRefs.handleFindAllReferences.current = semantic.handleFindAllReferences;
@@ -213,10 +223,13 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onGoToWorkspaceSymbol: () => semantic.setShowGoToWorkspaceSymbol(true),
   });
 
-  const contextMenuCallbacks = useMemo(() => ({
-    onGoToDefinition: semantic.handleGoToDefinition,
-    onFindAllReferences: semantic.handleFindAllReferences,
-  }), [semantic.handleGoToDefinition, semantic.handleFindAllReferences]);
+  const contextMenuCallbacks = useMemo(
+    () => ({
+      onGoToDefinition: semantic.handleGoToDefinition,
+      onFindAllReferences: semantic.handleFindAllReferences,
+    }),
+    [semantic.handleGoToDefinition, semantic.handleFindAllReferences],
+  );
 
   const contextMenu = useEditorContextMenu(buffer, bufferRef, viewRef, contextMenuCallbacks);
 
@@ -321,13 +334,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   }
 
   if (fileType.isBinary && buffer) {
-    return (
-      <BinaryFileViewer
-        fileName={buffer.file.name}
-        filePath={buffer.file.path}
-        fileSize={buffer.file.size}
-      />
-    );
+    return <BinaryFileViewer fileName={buffer.file.name} filePath={buffer.file.path} fileSize={buffer.file.size} />;
   }
 
   if (fileType.isSvgPreviewBuffer || fileType.isHtmlPreviewBuffer) {
@@ -395,11 +402,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           </div>
           <div className="editor-skeleton-content">
             {Array.from({ length: 25 }, (_, i) => (
-              <Skeleton
-                key={i}
-                width={`${40 + Math.floor((i * 53) % 60)}%`}
-                height="14px"
-              />
+              <Skeleton key={i} width={`${40 + Math.floor((i * 53) % 60)}%`} height="14px" />
             ))}
           </div>
           <span className="sr-only">Loading file...</span>
@@ -420,7 +423,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
           </div>
         ) : (
           <>
-            <div className={`pane-content${markdownPreviewMode === 'split' ? ' pane-content-md-editor-side' : ''}`} onContextMenu={contextMenu.handleEditorContextMenu}>
+            <div
+              className={`pane-content${markdownPreviewMode === 'split' ? ' pane-content-md-editor-side' : ''}`}
+              onContextMenu={contextMenu.handleEditorContextMenu}
+            >
               <div ref={editorRef} className="editor" />
             </div>
             {markdownPreviewMode === 'split' && (
@@ -440,10 +446,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         setWhitespaceRenderingMode={setWhitespaceRenderingMode}
       />
 
-      <EditorContextMenu
-        contextMenu={contextMenu}
-        isSemanticLanguage={isSemanticLanguage}
-      />
+      <EditorContextMenu contextMenu={contextMenu} isSemanticLanguage={isSemanticLanguage} />
     </div>
   );
 }

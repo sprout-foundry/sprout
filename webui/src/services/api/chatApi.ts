@@ -2,7 +2,7 @@
  * Chat/Agent domain API — adapter-aware chat operations.
  */
 
-import { UploadImageResponse } from './types';
+import type { UploadImageResponse } from './types';
 
 export async function sendQuery(fetchFn: typeof fetch, query: string, chatId?: string): Promise<void> {
   const reqBody: Record<string, string> = { query };

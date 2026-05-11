@@ -251,7 +251,7 @@ const getBufferIcon = (buffer: EditorBuffer): ReactNode => {
  */
 function getChatId(buffer: EditorBuffer): string | undefined {
   if (buffer.kind !== 'chat') return undefined;
-  return (buffer.metadata?.chatId as string | undefined);
+  return buffer.metadata?.chatId as string | undefined;
 }
 
 function EditorTabs({
@@ -290,13 +290,7 @@ function EditorTabs({
   buffersRef.current = buffers;
 
   // ── Drag-and-drop tab reorder ─────────────────────────────────
-  const {
-    handleDragStart,
-    handleDrop,
-    resolveDraggedBufferId,
-    handlePaneDrop,
-    handleDragEnd,
-  } = useTabDragReorder({
+  const { handleDragStart, handleDrop, resolveDraggedBufferId, handlePaneDrop, handleDragEnd } = useTabDragReorder({
     paneId,
     reorderBuffers,
     moveBufferToPane,
@@ -404,15 +398,18 @@ function EditorTabs({
   };
 
   // ── Inline rename handlers ────────────────────────────────────
-  const startRename = useCallback((buffer: EditorBuffer) => {
-    // Only allow renaming chat tabs that are not default sessions
-    const chatId = getChatId(buffer);
-    if (!chatId) return;
-    const session = chatSessions?.find((s) => s.id === chatId);
-    if (session?.is_default) return;
-    setRenamingBufferId(buffer.id);
-    setRenameValue(buffer.file.name);
-  }, [chatSessions]);
+  const startRename = useCallback(
+    (buffer: EditorBuffer) => {
+      // Only allow renaming chat tabs that are not default sessions
+      const chatId = getChatId(buffer);
+      if (!chatId) return;
+      const session = chatSessions?.find((s) => s.id === chatId);
+      if (session?.is_default) return;
+      setRenamingBufferId(buffer.id);
+      setRenameValue(buffer.file.name);
+    },
+    [chatSessions],
+  );
 
   const commitRename = useCallback(() => {
     if (!renamingBufferId || !renameValue.trim()) {
@@ -446,11 +443,14 @@ function EditorTabs({
     [commitRename, cancelRename],
   );
 
-  const handleTabDoubleClick = useCallback((buffer: EditorBuffer) => {
-    if (buffer.kind === 'chat') {
-      startRename(buffer);
-    }
-  }, [startRename]);
+  const handleTabDoubleClick = useCallback(
+    (buffer: EditorBuffer) => {
+      if (buffer.kind === 'chat') {
+        startRename(buffer);
+      }
+    },
+    [startRename],
+  );
 
   // ── Close confirmation ────────────────────────────────────────
   const handleConfirmClose = () => {
@@ -509,7 +509,9 @@ function EditorTabs({
         // The prop is typed as () => void but the actual implementation may
         // return a Promise (handleCreateChat is async). Duck-type check.
         if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
-          (result as unknown as Promise<unknown>).catch((err: unknown) => console.warn('[EditorTabs] Failed to create chat:', err));
+          (result as unknown as Promise<unknown>).catch((err: unknown) =>
+            console.warn('[EditorTabs] Failed to create chat:', err),
+          );
         }
       } catch (err) {
         console.warn('[EditorTabs] Failed to create chat:', err);
@@ -522,7 +524,9 @@ function EditorTabs({
       try {
         const result = onCreateChatInWorktree();
         if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
-          (result as unknown as Promise<unknown>).catch((err: unknown) => console.warn('[EditorTabs] Failed to create worktree chat:', err));
+          (result as unknown as Promise<unknown>).catch((err: unknown) =>
+            console.warn('[EditorTabs] Failed to create worktree chat:', err),
+          );
         }
       } catch (err) {
         console.warn('[EditorTabs] Failed to create worktree chat:', err);
@@ -537,7 +541,7 @@ function EditorTabs({
 
   // Pre-compute chat-specific context menu data (avoid IIFEs in JSX)
   const contextChatId = activeContextBuffer?.kind === 'chat' ? getChatId(activeContextBuffer) : undefined;
-  const contextIsDefaultChat = contextChatId ? defaultChatIds?.has(contextChatId) ?? false : false;
+  const contextIsDefaultChat = contextChatId ? (defaultChatIds?.has(contextChatId) ?? false) : false;
   const contextHasWorktree = contextChatId ? chatWorktreePaths?.has(contextChatId) : false;
 
   const handleContextAction = (action: () => void | Promise<void>) => {
@@ -578,9 +582,9 @@ function EditorTabs({
               const isRenaming = buffer.id === renamingBufferId;
 
               // Chat-specific data lookups (all O(1))
-              const hasActiveQuery = chatId ? activeChatQueries?.has(chatId) ?? false : false;
+              const hasActiveQuery = chatId ? (activeChatQueries?.has(chatId) ?? false) : false;
               const worktreePath = chatId ? chatWorktreePaths?.get(chatId) : undefined;
-              const isDefaultChat = chatId ? defaultChatIds?.has(chatId) ?? false : false;
+              const isDefaultChat = chatId ? (defaultChatIds?.has(chatId) ?? false) : false;
 
               return (
                 <div
@@ -641,7 +645,9 @@ function EditorTabs({
                         onClick={(e) => e.stopPropagation()}
                       />
                     ) : (
-                      <span className="tab-name" title={buffer.file.path}>{buffer.file.name}</span>
+                      <span className="tab-name" title={buffer.file.path}>
+                        {buffer.file.name}
+                      </span>
                     )}
                     {buffer.isModified && <span className="tab-modified">●</span>}
                     {buffer.externallyModified && (
@@ -797,9 +803,7 @@ function EditorTabs({
             ))}
             <button
               className="context-menu-item"
-              onClick={() =>
-                handleContextAction(() => toggleBufferPin(activeContextBuffer.id))
-              }
+              onClick={() => handleContextAction(() => toggleBufferPin(activeContextBuffer.id))}
               disabled={!activeContextBuffer.isPinned && activeContextBuffer.isClosable === false}
             >
               <Pin size={14} fill={activeContextBuffer.isPinned ? 'currentColor' : 'none'} />
@@ -846,7 +850,8 @@ function EditorTabs({
               <PanelRightOpen size={14} />
               <span>Close other tabs in split</span>
             </button>
-            {activeContextBuffer.isClosable !== false && (activeContextBuffer.kind === 'chat' || !activeContextBuffer.isPinned) ? (
+            {activeContextBuffer.isClosable !== false &&
+            (activeContextBuffer.kind === 'chat' || !activeContextBuffer.isPinned) ? (
               <>
                 <button
                   className="context-menu-item danger"
@@ -861,7 +866,10 @@ function EditorTabs({
                     className="context-menu-item danger"
                     onClick={() =>
                       handleContextAction(async () => {
-                        const confirmed = await showThemedConfirm('This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?', { type: 'danger' });
+                        const confirmed = await showThemedConfirm(
+                          'This will permanently delete the chat session and remove the git worktree directory from disk. Are you sure?',
+                          { type: 'danger' },
+                        );
                         if (!confirmed) return;
                         if (contextChatId) {
                           onDeleteChatWithWorktree(contextChatId);
@@ -934,7 +942,9 @@ function EditorTabs({
                 className="context-menu-item danger"
                 onClick={async () => {
                   setEmptyAreaContextMenu(null);
-                  const confirmed = await showThemedConfirm('Close all chat sessions except the active one?', { type: 'warning' });
+                  const confirmed = await showThemedConfirm('Close all chat sessions except the active one?', {
+                    type: 'warning',
+                  });
                   if (confirmed) {
                     onDeleteAllChats();
                   }

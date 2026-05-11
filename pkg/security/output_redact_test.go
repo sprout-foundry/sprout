@@ -1,7 +1,6 @@
 package security
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,8 +10,7 @@ import (
 // envSecretValues from os.Environ() for sensitive env vars.
 func TestNewOutputRedactor(t *testing.T) {
 	// Set a sensitive env var before constructing the redactor.
-	os.Setenv("TEST_SECRET_KEY_FOR_LEdit", "sk-test-long-secret-value-12345")
-	defer os.Unsetenv("TEST_SECRET_KEY_FOR_LEdit")
+	t.Setenv("TEST_SECRET_KEY_FOR_LEdit", "sk-test-long-secret-value-12345")
 
 	r := NewOutputRedactor()
 
@@ -41,8 +39,7 @@ func TestRedactToolOutput_NoSecrets(t *testing.T) {
 func TestRedactToolOutput_EnvVarValue(t *testing.T) {
 	const varName = "LEdit_TEST_API_KEY"
 	const varValue = "sk-unique-test-key-x9y8z7w6v5u4t3s2"
-	os.Setenv(varName, varValue)
-	defer os.Unsetenv(varName)
+	t.Setenv(varName, varValue)
 
 	r := NewOutputRedactor()
 
@@ -137,8 +134,7 @@ func TestRedactToolOutput_MixedSecrets(t *testing.T) {
 	// value that DetectSecurityConcerns would filter out on pattern match.
 	// Use only chars D-Z and digits 4-9 to avoid triggering false-positive filters.
 	const varValue = "SUPERSECRETVALUEDFFGHJKLMNQPRSTUVWXYZDFFGHJKLMNQP"
-	os.Setenv(varName, varValue)
-	defer os.Unsetenv(varName)
+	t.Setenv(varName, varValue)
 
 	r := NewOutputRedactor()
 
@@ -170,8 +166,7 @@ func TestRedactToolOutput_MixedSecrets(t *testing.T) {
 func TestRedactFileContent(t *testing.T) {
 	const varName = "LEdit_FILECONTENT_SECRET"
 	const varValue = "filecontentsecretvaluezyxwvutsrqponmlkjihgfedcba0"
-	os.Setenv(varName, varValue)
-	defer os.Unsetenv(varName)
+	t.Setenv(varName, varValue)
 
 	r := NewOutputRedactor()
 
@@ -190,8 +185,7 @@ func TestRedactFileContent(t *testing.T) {
 func TestRedactToolOutput_PathValuesSkipped(t *testing.T) {
 	// "SECRET" keyword is in the name so IsSensitiveEnvName → true,
 	// but the value contains "/" so it should be skipped.
-	os.Setenv("LEdit_PATHLIKE_SECRET", "/usr/local/bin/secret-tool")
-	defer os.Unsetenv("LEdit_PATHLIKE_SECRET")
+	t.Setenv("LEdit_PATHLIKE_SECRET", "/usr/local/bin/secret-tool")
 
 	r := NewOutputRedactor()
 
@@ -208,8 +202,7 @@ func TestRedactToolOutput_PathValuesSkipped(t *testing.T) {
 // TestRedactToolOutput_ShortValuesSkipped verifies that env var values
 // shorter than 8 chars are NOT scanned.
 func TestRedactToolOutput_ShortValuesSkipped(t *testing.T) {
-	os.Setenv("LEdit_SHORT_SECRET", "abc123")
-	defer os.Unsetenv("LEdit_SHORT_SECRET")
+	t.Setenv("LEdit_SHORT_SECRET", "abc123")
 
 	r := NewOutputRedactor()
 
@@ -225,8 +218,7 @@ func TestRedactToolOutput_ShortValuesSkipped(t *testing.T) {
 // TestRedactToolOutput_HTTPValuesSkipped verifies that env var values
 // starting with http:// or https:// are NOT scanned.
 func TestRedactToolOutput_HTTPValuesSkipped(t *testing.T) {
-	os.Setenv("LEdit_HTTP_SECRET", "https://api.example.com/v1/secret-key-here")
-	defer os.Unsetenv("LEdit_HTTP_SECRET")
+	t.Setenv("LEdit_HTTP_SECRET", "https://api.example.com/v1/secret-key-here")
 
 	r := NewOutputRedactor()
 

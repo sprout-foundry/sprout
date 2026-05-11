@@ -104,14 +104,14 @@ const handleConnectionStatus = (ctx: EventHandlerContext): void => {
   const { event, setState, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef } = ctx;
   const logEntry = createLogEntry(event);
   const data = (event.data ?? {}) as Record<string, unknown>;
-  if (data.client_id && data.client_id !== getWebUIClientId()) return;
+  if (data.client_id && String(data.client_id) !== getWebUIClientId()) return;
   logEntry.category = 'system';
-  logEntry.level = data.connected ? 'success' : 'warning';
+  logEntry.level = data.connected === true ? 'success' : 'warning';
   const incomingSessionId = typeof data.session_id === 'string' ? data.session_id : null;
-  const newConnectionState = data.connected;
+  const newConnectionState = data.connected === true;
   const phase = newConnectionState
-    ? (data.reconnected ? 'reconnected' : 'connected')
-    : (data.reconnecting ? 'reconnecting' : 'disconnected');
+    ? (data.reconnected === true ? 'reconnected' : 'connected')
+    : (data.reconnecting === true ? 'reconnecting' : 'disconnected');
 
   if (newConnectionState !== lastConnectionStateRef.current) {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
@@ -665,9 +665,10 @@ export function useWebSocketEventHandler({
     if (filteredEvents.includes(event.type)) return;
 
     const perChatEvents = new Set(['query_started', 'stream_chunk', 'query_completed', 'query_progress', 'tool_start', 'tool_end', 'todo_update', 'subagent_activity', 'agent_message', 'error']);
-    if (perChatEvents.has(event.type) && event.data?.chat_id && activeChatIdRef.current && event.data.chat_id !== activeChatIdRef.current) return;
+    const eventData = (event.data ?? {}) as Record<string, unknown>;
+    if (perChatEvents.has(event.type) && eventData.chat_id && activeChatIdRef.current && String(eventData.chat_id) !== activeChatIdRef.current) return;
 
-    debugLog('[msg] Received event:', event.type, event.data);
+    debugLog('[msg] Received event:', event.type, eventData);
 
     const ctx: EventHandlerContext = {
       event, setState, activeRequestsRef, activeChatIdRef,

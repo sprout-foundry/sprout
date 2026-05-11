@@ -254,16 +254,16 @@ describe('processRefund', () => {
 
   it('throws error on HTTP error with status code (unlike other functions)', async () => {
     setupMockAdapter(() => Promise.resolve(makeErrorResponse(400)));
-    await expect(
-      processRefund({ charge_id: 'ch-1', reason: 'duplicate', user_id: 'user-1' })
-    ).rejects.toThrow('Status: 400');
+    await expect(processRefund({ charge_id: 'ch-1', reason: 'duplicate', user_id: 'user-1' })).rejects.toThrow(
+      'Status: 400',
+    );
   });
 
   it('throws error on fetch exception', async () => {
     setupMockAdapter(() => Promise.reject(new Error('Network error')));
-    await expect(
-      processRefund({ charge_id: 'ch-1', reason: 'duplicate', user_id: 'user-1' })
-    ).rejects.toThrow('Network error');
+    await expect(processRefund({ charge_id: 'ch-1', reason: 'duplicate', user_id: 'user-1' })).rejects.toThrow(
+      'Network error',
+    );
   });
 
   it('sends correct POST body with request', async () => {
@@ -276,7 +276,17 @@ describe('processRefund', () => {
       expect(body.reason).toBe('customer error');
       expect(body.user_id).toBe('user-1');
       expect(body.amount).toBe(250);
-      return Promise.resolve(makeOkResponse({ id: 'ref-1', charge_id: 'ch-1', amount: 250, reason: 'customer error', status: 'succeeded', refund_type: 'partial', created_at: '2024-01-01' }));
+      return Promise.resolve(
+        makeOkResponse({
+          id: 'ref-1',
+          charge_id: 'ch-1',
+          amount: 250,
+          reason: 'customer error',
+          status: 'succeeded',
+          refund_type: 'partial',
+          created_at: '2024-01-01',
+        }),
+      );
     });
     await processRefund({
       charge_id: 'ch-1',
@@ -292,7 +302,17 @@ describe('processRefund', () => {
       const body = JSON.parse(options?.body);
       expect(body.charge_id).toBe('ch-1');
       expect(body.amount).toBeUndefined();
-      return Promise.resolve(makeOkResponse({ id: 'ref-1', charge_id: 'ch-1', amount: 500, reason: 'duplicate', status: 'succeeded', refund_type: 'full', created_at: '2024-01-01' }));
+      return Promise.resolve(
+        makeOkResponse({
+          id: 'ref-1',
+          charge_id: 'ch-1',
+          amount: 500,
+          reason: 'duplicate',
+          status: 'succeeded',
+          refund_type: 'full',
+          created_at: '2024-01-01',
+        }),
+      );
     });
     await processRefund({
       charge_id: 'ch-1',
@@ -396,7 +416,16 @@ describe('getDunningReport', () => {
   });
 
   it('calls adapter.fetch with correct URL', async () => {
-    const mockAdapter = setupMockAdapter(() => Promise.resolve(makeOkResponse({ total_failed_payments: 0, recovered_payments: 0, suspended_subscriptions: 0, recovery_rate: 0 })));
+    const mockAdapter = setupMockAdapter(() =>
+      Promise.resolve(
+        makeOkResponse({
+          total_failed_payments: 0,
+          recovered_payments: 0,
+          suspended_subscriptions: 0,
+          recovery_rate: 0,
+        }),
+      ),
+    );
     await getDunningReport();
     expect(mockAdapter.fetch).toHaveBeenCalledWith('/api/admin/billing/dunning/report');
   });
@@ -447,11 +476,15 @@ describe('createBillingPortalSession', () => {
   });
 
   it('extracts data.url from response (not full response)', async () => {
-    setupMockAdapter(() => Promise.resolve(makeOkResponse({
-      url: 'https://portal.example.com/abc',
-      id: 'portal-session-123',
-      expires_at: 1234567890,
-    })));
+    setupMockAdapter(() =>
+      Promise.resolve(
+        makeOkResponse({
+          url: 'https://portal.example.com/abc',
+          id: 'portal-session-123',
+          expires_at: 1234567890,
+        }),
+      ),
+    );
     const result = await createBillingPortalSession('http://app.example.com');
     // Should return just the url field, not the full object
     expect(result).toBe('https://portal.example.com/abc');

@@ -22,32 +22,33 @@ export interface UseGitHandlersReturn {
   handleGitDiscard: (files: string[]) => Promise<void>;
 }
 
-export function useGitHandlers({
-  setGitRefreshToken,
-}: UseGitHandlersOptions): UseGitHandlersReturn {
-  const handleGitCommit = useCallback(async (message: string, files: string[]) => {
-    debugLog('Git commit:', message, files);
-    try {
-      const response = await clientFetch('/api/git/commit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, files }),
-      });
+export function useGitHandlers({ setGitRefreshToken }: UseGitHandlersOptions): UseGitHandlersReturn {
+  const handleGitCommit = useCallback(
+    async (message: string, files: string[]) => {
+      debugLog('Git commit:', message, files);
+      try {
+        const response = await clientFetch('/api/git/commit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, files }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create commit');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create commit');
+        }
+
+        const data = await response.json();
+        debugLog('Commit successful:', data);
+        setGitRefreshToken((k) => k + 1);
+        return data;
+      } catch (err) {
+        console.error('Failed to commit:', err);
+        throw err;
       }
-
-      const data = await response.json();
-      debugLog('Commit successful:', data);
-      setGitRefreshToken((k) => k + 1);
-      return data;
-    } catch (err) {
-      console.error('Failed to commit:', err);
-      throw err;
-    }
-  }, [setGitRefreshToken]);
+    },
+    [setGitRefreshToken],
+  );
 
   const handleGitAICommit = useCallback(async (): Promise<{
     commitMessage: string;
@@ -70,65 +71,74 @@ export function useGitHandlers({
     };
   }, []);
 
-  const handleGitStage = useCallback(async (files: string[]) => {
-    debugLog('Git stage:', files);
-    try {
-      for (const file of files) {
-        const response = await clientFetch('/api/git/stage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: file }),
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to stage ${file}`);
+  const handleGitStage = useCallback(
+    async (files: string[]) => {
+      debugLog('Git stage:', files);
+      try {
+        for (const file of files) {
+          const response = await clientFetch('/api/git/stage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: file }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to stage ${file}`);
+          }
         }
+        setGitRefreshToken((k) => k + 1);
+      } catch (err) {
+        console.error('Failed to stage files:', err);
+        throw err;
       }
-      setGitRefreshToken((k) => k + 1);
-    } catch (err) {
-      console.error('Failed to stage files:', err);
-      throw err;
-    }
-  }, [setGitRefreshToken]);
+    },
+    [setGitRefreshToken],
+  );
 
-  const handleGitUnstage = useCallback(async (files: string[]) => {
-    debugLog('Git unstage:', files);
-    try {
-      for (const file of files) {
-        const response = await clientFetch('/api/git/unstage', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: file }),
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to unstage ${file}`);
+  const handleGitUnstage = useCallback(
+    async (files: string[]) => {
+      debugLog('Git unstage:', files);
+      try {
+        for (const file of files) {
+          const response = await clientFetch('/api/git/unstage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: file }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to unstage ${file}`);
+          }
         }
+        setGitRefreshToken((k) => k + 1);
+      } catch (err) {
+        console.error('Failed to unstage files:', err);
+        throw err;
       }
-      setGitRefreshToken((k) => k + 1);
-    } catch (err) {
-      console.error('Failed to unstage files:', err);
-      throw err;
-    }
-  }, [setGitRefreshToken]);
+    },
+    [setGitRefreshToken],
+  );
 
-  const handleGitDiscard = useCallback(async (files: string[]) => {
-    debugLog('Git discard:', files);
-    try {
-      for (const file of files) {
-        const response = await clientFetch('/api/git/discard', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: file }),
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to discard ${file}`);
+  const handleGitDiscard = useCallback(
+    async (files: string[]) => {
+      debugLog('Git discard:', files);
+      try {
+        for (const file of files) {
+          const response = await clientFetch('/api/git/discard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: file }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to discard ${file}`);
+          }
         }
+        setGitRefreshToken((k) => k + 1);
+      } catch (err) {
+        console.error('Failed to discard files:', err);
+        throw err;
       }
-      setGitRefreshToken((k) => k + 1);
-    } catch (err) {
-      console.error('Failed to discard files:', err);
-      throw err;
-    }
-  }, [setGitRefreshToken]);
+    },
+    [setGitRefreshToken],
+  );
 
   return {
     handleGitCommit,

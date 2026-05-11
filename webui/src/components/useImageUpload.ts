@@ -28,9 +28,7 @@ export function useImageUpload({ inputRef }: UseImageUploadOptions) {
     imagesRef.current = attachedImages;
   }, [attachedImages]);
 
-  const previewImage = previewImageId
-    ? attachedImages.find((img) => img.id === previewImageId) || null
-    : null;
+  const previewImage = previewImageId ? attachedImages.find((img) => img.id === previewImageId) || null : null;
 
   // Handle paste event for images
   const handlePaste = useCallback((e: ReactClipboardEvent) => {
@@ -57,25 +55,28 @@ export function useImageUpload({ inputRef }: UseImageUploadOptions) {
   }, []);
 
   // Handle file selection from input
-  const handleFileSelect = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const preview = URL.createObjectURL(file);
-      const imageId = crypto.randomUUID();
-      setAttachedImages((prev) => [
-        ...prev,
-        {
-          id: imageId,
-          file,
-          preview,
-        },
-      ]);
-      // Reset input so same file can be selected again
-      e.target.value = '';
-      // Focus back to textarea
-      inputRef.current?.focus();
-    }
-  }, [inputRef]);
+  const handleFileSelect = useCallback(
+    (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const preview = URL.createObjectURL(file);
+        const imageId = crypto.randomUUID();
+        setAttachedImages((prev) => [
+          ...prev,
+          {
+            id: imageId,
+            file,
+            preview,
+          },
+        ]);
+        // Reset input so same file can be selected again
+        e.target.value = '';
+        // Focus back to textarea
+        inputRef.current?.focus();
+      }
+    },
+    [inputRef],
+  );
 
   // Click handler for upload button
   const handleUploadClick = useCallback(() => {

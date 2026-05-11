@@ -13,7 +13,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { EditorView } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
 
 import { ApiService } from '../services/api';
 import { setConfigFetcher } from '../services/formatter';
@@ -91,11 +91,8 @@ export function useEditorContextMenu(
     const buf = bufferRef.current;
     if (!buf || !buf.file || buf.file.isDir) return '';
     if (buf.kind !== 'file') return '';
-    const langId = resolveLanguageId(
-      buf.languageOverride,
-      buf.file.ext?.replace(/^\./, ''),
-      buf.file.name,
-    ).languageId ?? '';
+    const langId =
+      resolveLanguageId(buf.languageOverride, buf.file.ext?.replace(/^\./, ''), buf.file.name).languageId ?? '';
     return langId;
   }, []);
 

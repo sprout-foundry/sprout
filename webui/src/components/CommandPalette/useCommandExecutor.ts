@@ -24,9 +24,15 @@ interface UseCommandExecutorReturn {
 }
 
 const RESET_PREFS_KEYS = [
-  'sprout.editor.paneLayout', 'sprout.editor.paneSizes', 'sprout-terminal-height',
-  'sprout-terminal-expanded', 'sprout-sidebar-collapsed', 'sprout-sidebar-width',
-  'sprout.contextPanel.width', 'sprout.contextPanel.collapsed', 'editor:minimap-enabled',
+  'sprout.editor.paneLayout',
+  'sprout.editor.paneSizes',
+  'sprout-terminal-height',
+  'sprout-terminal-expanded',
+  'sprout-sidebar-collapsed',
+  'sprout-sidebar-width',
+  'sprout.contextPanel.width',
+  'sprout.contextPanel.collapsed',
+  'editor:minimap-enabled',
   'filetree-show-ignored',
 ];
 
@@ -92,7 +98,9 @@ function useCommandExecutor(options: UseCommandExecutorOptions): UseCommandExecu
           window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_terminal_vertical' } }));
           break;
         case 'split_terminal_horizontal':
-          window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }));
+          window.dispatchEvent(
+            new CustomEvent('sprout:hotkey', { detail: { commandId: 'split_terminal_horizontal' } }),
+          );
           break;
         case 'editor_toggle_word_wrap':
           window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_toggle_word_wrap' } }));
@@ -131,10 +139,18 @@ function useCommandExecutor(options: UseCommandExecutorOptions): UseCommandExecu
           window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'focus_prev_tab' } }));
           break;
         case 'reset_saved_layout': {
-          if (!(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))) break;
+          if (
+            !(await showThemedConfirm('Reset all saved layout settings? This cannot be undone.', { type: 'danger' }))
+          ) {
+            break;
+          }
           clearLayoutSnapshot();
           for (const key of RESET_PREFS_KEYS) {
-            try { window.localStorage.removeItem(key); } catch (err) { debugLog('[resetPreferences] localStorage.removeItem failed:', err); }
+            try {
+              window.localStorage.removeItem(key);
+            } catch (err) {
+              debugLog('[resetPreferences] localStorage.removeItem failed:', err);
+            }
           }
           window.location.reload();
           return;

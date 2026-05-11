@@ -43,9 +43,7 @@ export function ChatFooter({
           </span>
         </div>
         {(queryProgress as Record<string, unknown>).details != null && (
-          <div className="progress-details">
-            {(queryProgress as Record<string, unknown>).details as ReactNode}
-          </div>
+          <div className="progress-details">{(queryProgress as Record<string, unknown>).details as ReactNode}</div>
         )}
       </div>,
     );

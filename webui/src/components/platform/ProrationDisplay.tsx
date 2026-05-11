@@ -1,5 +1,5 @@
 import React from 'react';
-import { ProrationRecord } from '../../services/billingService';
+import type { ProrationRecord } from '../../services/billingService';
 
 interface ProrationDisplayProps {
   prorationRecords: ProrationRecord[];
@@ -34,7 +34,7 @@ export const ProrationDisplay: React.FC<ProrationDisplayProps> = ({ prorationRec
         <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
           Prorations are adjustments made when you change your plan mid-billing cycle.
         </div>
-        
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {prorationRecords.map((record) => (
             <div
@@ -66,7 +66,8 @@ export const ProrationDisplay: React.FC<ProrationDisplayProps> = ({ prorationRec
                     color: record.type === 'credit' ? '#22c55e' : '#ef4444',
                   }}
                 >
-                  {record.type === 'credit' ? '+' : '-'}{formatCurrency(record.amount_cents)}
+                  {record.type === 'credit' ? '+' : '-'}
+                  {formatCurrency(record.amount_cents)}
                 </div>
               </div>
               <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>

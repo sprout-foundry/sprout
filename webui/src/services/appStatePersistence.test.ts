@@ -27,11 +27,7 @@ vi.mock('./notificationBus', () => ({
 
 // ── Imports ──────────────────────────────────────────────────────────
 
-import {
-  getUIContextScope,
-  getAppStateStorageKey,
-  loadPersistedAppState,
-} from './appStatePersistence';
+import { getUIContextScope, getAppStateStorageKey, loadPersistedAppState } from './appStatePersistence';
 import { APP_STATE_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
 import { notificationBus } from './notificationBus';
 
@@ -50,9 +46,15 @@ function createStorageMock(): StorageMock {
   return {
     store,
     getItem: vi.fn((key: string) => store[key] ?? null),
-    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
-    removeItem: vi.fn((key: string) => { delete store[key]; }),
-    clear: vi.fn(() => { Object.keys(store).forEach(k => delete store[k]); }),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value;
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      Object.keys(store).forEach((k) => delete store[k]);
+    }),
   };
 }
 
@@ -304,10 +306,12 @@ describe('loadPersistedAppState', () => {
     it('parses messages with timestamp strings into Date objects', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
-        messages: [
-          { role: 'user', content: 'hello', timestamp: '2024-01-01T00:00:00Z' },
-        ],
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
+        messages: [{ role: 'user', content: 'hello', timestamp: '2024-01-01T00:00:00Z' }],
       };
       ls.setItem(`sprout:webui:state:v2:100:local`, JSON.stringify(data));
       const result = loadPersistedAppState();
@@ -320,7 +324,11 @@ describe('loadPersistedAppState', () => {
     it('handles messages without timestamp', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
         messages: [{ role: 'assistant', content: 'hi' }],
       };
       ls.setItem(`sprout:webui:state:v2:100:local`, JSON.stringify(data));
@@ -332,7 +340,11 @@ describe('loadPersistedAppState', () => {
     it('handles toolRefs as array in messages', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
         messages: [{ role: 'assistant', content: '', toolRefs: ['ref1', 'ref2'] }],
       };
       ls.setItem(`sprout:webui:state:v2:100:local`, JSON.stringify(data));
@@ -343,7 +355,11 @@ describe('loadPersistedAppState', () => {
     it('handles toolRefs as non-array (undefined)', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
         messages: [{ role: 'assistant', content: '', toolRefs: 'not-an-array' }],
       };
       ls.setItem(`sprout:webui:state:v2:100:local`, JSON.stringify(data));
@@ -354,7 +370,11 @@ describe('loadPersistedAppState', () => {
     it('handles messages not being an array', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
         messages: 'not-an-array',
       };
       ls.setItem(`sprout:webui:state:v2:100:local`, JSON.stringify(data));
@@ -375,7 +395,11 @@ describe('loadPersistedAppState', () => {
     it('parses fileEdits with timestamp strings into Date objects', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
         messages: [],
         fileEdits: [{ path: 'foo.go', timestamp: '2024-01-01T00:00:00Z' }],
       };
@@ -389,7 +413,11 @@ describe('loadPersistedAppState', () => {
     it('handles fileEdits not being an array', () => {
       ls.setItem(INSTANCE_PID_STORAGE_KEY, '100');
       const data = {
-        provider: '', model: '', sessionId: null, queryCount: 0, currentView: 'chat',
+        provider: '',
+        model: '',
+        sessionId: null,
+        queryCount: 0,
+        currentView: 'chat',
         messages: [],
         fileEdits: 'not-an-array',
       };

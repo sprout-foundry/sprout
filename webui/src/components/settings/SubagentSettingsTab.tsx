@@ -15,7 +15,11 @@ interface SubagentSettingsTabProps {
   renderNumberInput: FieldRenderers['renderNumberInput'];
   renderSelect: FieldRenderers['renderSelect'];
   api: { updateSubagentType: (id: string, data: Record<string, unknown>) => Promise<unknown> };
-  setSubagentTypes: (v: Record<string, SubagentTypeInfo> | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>)) => void;
+  setSubagentTypes: (
+    v:
+      | Record<string, SubagentTypeInfo>
+      | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>),
+  ) => void;
 }
 
 export default function SubagentSettingsTab({
@@ -93,7 +97,8 @@ export default function SubagentSettingsTab({
             <div style={{ marginTop: 'var(--space-3)' }}>
               {renderNumberInput('subagent_max_parallel', 'Maximum parallel subagents', 1, 10)}
               <div className="config-help" style={{ marginTop: 'var(--space-2)' }}>
-                Controls how many subagents can run simultaneously. Set to 0 or disable above to run all subagents serially.
+                Controls how many subagents can run simultaneously. Set to 0 or disable above to run all subagents
+                serially.
               </div>
             </div>
           )}
@@ -116,8 +121,8 @@ export default function SubagentSettingsTab({
       <div style={{ marginTop: 'var(--space-5)' }}>
         <h4>Per-Persona Overrides</h4>
         <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
-          Set a specific provider and/or model for individual personas. Empty values inherit from the default
-          subagent settings above.
+          Set a specific provider and/or model for individual personas. Empty values inherit from the default subagent
+          settings above.
         </div>
 
         {personaEntries.length === 0 && <div className="settings-empty">No personas available</div>}
@@ -126,8 +131,7 @@ export default function SubagentSettingsTab({
           {personaEntries.map(([personaId, persona]) => {
             const isSaving = subagentSavingPersona === personaId;
             const personaProvider = persona.provider || '';
-            const personaModelsForProvider =
-              subagentProviders.find((p) => p.id === personaProvider)?.models || [];
+            const personaModelsForProvider = subagentProviders.find((p) => p.id === personaProvider)?.models || [];
 
             return (
               <div key={personaId} className="persona-mapping-row">

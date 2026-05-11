@@ -68,10 +68,7 @@ const originalContentField = StateField.define<string>({
  * @param originalLines — Lines of the original (saved) text.
  * @returns Set of 1-based line numbers that differ from the original.
  */
-export function computeModifiedLines(
-  currentLines: string[],
-  originalLines: string[],
-): Set<number> {
+export function computeModifiedLines(currentLines: string[], originalLines: string[]): Set<number> {
   const result = new Set<number>();
 
   // Fast path: identical content
@@ -151,10 +148,7 @@ export function computeModifiedLines(
  * then marks everything in between as modified.  This is O(n) but less
  * precise than LCS (over-marks in some cases).
  */
-function computeModifiedLinesFastPath(
-  currentLines: string[],
-  originalLines: string[],
-): Set<number> {
+function computeModifiedLinesFastPath(currentLines: string[], originalLines: string[]): Set<number> {
   const result = new Set<number>();
 
   // Find common prefix length
@@ -167,8 +161,8 @@ function computeModifiedLinesFastPath(
   // Find common suffix length (not overlapping prefix)
   let suffixLen = 0;
   while (
-    suffixLen < (currentLines.length - prefixLen) &&
-    suffixLen < (originalLines.length - prefixLen) &&
+    suffixLen < currentLines.length - prefixLen &&
+    suffixLen < originalLines.length - prefixLen &&
     currentLines[currentLines.length - 1 - suffixLen] === originalLines[originalLines.length - 1 - suffixLen]
   ) {
     suffixLen++;
@@ -206,9 +200,7 @@ const unsavedHighlightPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate): void {
       // Rebuild on document changes, viewport changes, or when
       // originalContent is updated via StateEffect.
-      const origChanged = update.transactions.some((tr) =>
-        tr.effects.some((e) => e.is(setOriginalContent)),
-      );
+      const origChanged = update.transactions.some((tr) => tr.effects.some((e) => e.is(setOriginalContent)));
 
       if (update.viewportChanged || update.docChanged || origChanged) {
         this.decorations = this.buildDecorations(update.view);

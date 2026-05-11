@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  parseReviewGuidance,
-  reviewGuidanceToMarkdown,
-  type ParsedReviewGuidance,
-} from './reviewFormatting';
+import { parseReviewGuidance, reviewGuidanceToMarkdown, type ParsedReviewGuidance } from './reviewFormatting';
 
 describe('parseReviewGuidance', () => {
   describe('empty / null / undefined input', () => {
@@ -112,12 +108,7 @@ describe('parseReviewGuidance', () => {
         SHOULD_FIX: ['Should'],
       });
       const result = parseReviewGuidance(json);
-      expect(result.sections.map((s) => s.id)).toEqual([
-        'MUST_FIX',
-        'SHOULD_FIX',
-        'VERIFY',
-        'SUGGEST',
-      ]);
+      expect(result.sections.map((s) => s.id)).toEqual(['MUST_FIX', 'SHOULD_FIX', 'VERIFY', 'SUGGEST']);
     });
 
     it('custom sections appear after recognized sections', () => {
@@ -228,9 +219,7 @@ describe('parseReviewGuidance', () => {
 
     it('captures extra string fields on the entry', () => {
       const json = JSON.stringify({
-        SHOULD_FIX: [
-          { issue: 'Perf problem', severity: 'high', category: 'performance' },
-        ],
+        SHOULD_FIX: [{ issue: 'Perf problem', severity: 'high', category: 'performance' }],
       });
       const result = parseReviewGuidance(json);
       const entry = result.sections[0].entries[0];
@@ -477,10 +466,7 @@ describe('reviewGuidanceToMarkdown', () => {
         {
           id: 'MUST_FIX',
           title: 'Must Fix',
-          entries: [
-            { issue: 'Fix A' },
-            { issue: 'Fix B' },
-          ],
+          entries: [{ issue: 'Fix A' }, { issue: 'Fix B' }],
         },
       ],
     };

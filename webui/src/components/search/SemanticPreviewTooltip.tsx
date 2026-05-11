@@ -42,9 +42,7 @@ function SemanticPreviewTooltip({
       }}
       onMouseLeave={onMouseLeave}
     >
-      <div className="search-semantic-preview-header">
-        {getRelativePath(previewData.file)}
-      </div>
+      <div className="search-semantic-preview-header">{getRelativePath(previewData.file)}</div>
       <pre className="search-semantic-preview-code">
         {previewData.snippet.map((line) => (
           <div

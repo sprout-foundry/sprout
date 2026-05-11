@@ -2,12 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
 import { ApiService } from '../../services/api';
 import { useLog } from '../../utils/log';
-import type {
-  DuplicateCluster,
-  SearchResult,
-  SemanticSearchResult,
-  SearchState,
-} from './types';
+import type { DuplicateCluster, SearchResult, SemanticSearchResult, SearchState } from './types';
 import { DEBOUNCE_DELAY } from './types';
 
 /** Strip leading ./ from a path. */

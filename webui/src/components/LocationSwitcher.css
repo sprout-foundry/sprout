@@ -789,7 +789,10 @@
   color: var(--text-secondary);
   font-size: 11px;
   cursor: pointer;
-  transition: color 0.12s var(--ease-out), background-color 0.12s var(--ease-out), border-color 0.12s var(--ease-out);
+  transition:
+    color 0.12s var(--ease-out),
+    background-color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
 }
 
 .location-switcher-footer-refresh:hover {

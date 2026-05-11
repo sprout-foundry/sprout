@@ -1,5 +1,5 @@
 import React from 'react';
-import { RemoteWorkspaceContext } from './types';
+import type { RemoteWorkspaceContext } from './types';
 import { collapseHomePath, getPathDisplayName } from './pathUtils';
 
 export interface WorkspaceSSHFavoritesProps {
@@ -40,14 +40,8 @@ export const WorkspaceSSHFavorites: React.FC<WorkspaceSSHFavoritesProps> = ({
       </div>
       <div className="location-switcher-recent-list">
         {favorites.length === 0 ? (
-          <div
-            className="location-switcher-item location-switcher-item-empty"
-            role="option"
-            aria-selected={false}
-          >
-            <span className="location-switcher-item-text">
-              No saved paths on this host yet
-            </span>
+          <div className="location-switcher-item location-switcher-item-empty" role="option" aria-selected={false}>
+            <span className="location-switcher-item-text">No saved paths on this host yet</span>
           </div>
         ) : (
           favorites.map((path) => (
@@ -55,12 +49,8 @@ export const WorkspaceSSHFavorites: React.FC<WorkspaceSSHFavoritesProps> = ({
               key={`remote-favorite-${remoteContext.hostAlias}-${path}`}
               className="location-switcher-item location-switcher-item-session"
             >
-              <span className="location-switcher-item-text">
-                {getPathDisplayName(path)}
-              </span>
-              <span className="location-switcher-item-meta">
-                {collapseHomePath(path, remoteContext.homePath)}
-              </span>
+              <span className="location-switcher-item-text">{getPathDisplayName(path)}</span>
+              <span className="location-switcher-item-meta">{collapseHomePath(path, remoteContext.homePath)}</span>
               <div className="location-switcher-session-actions">
                 <button
                   type="button"

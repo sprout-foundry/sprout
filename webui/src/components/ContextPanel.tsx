@@ -1,20 +1,5 @@
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useImperativeHandle,
-  forwardRef,
-} from 'react';
-import {
-  Bot,
-  Wrench,
-  History,
-  ListTodo,
-  Clock,
-  Activity,
-  PanelRightOpen,
-  PanelRightClose,
-} from 'lucide-react';
+import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { Bot, Wrench, History, ListTodo, Clock, Activity, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import './ContextPanel.css';
 import TodoPanel from './TodoPanel';
 import RevisionListPanel from './RevisionListPanel';
@@ -74,11 +59,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // Revision / session managers (depend on chatTab from state)
   const revisionManager = useRevisionManager(chatProps, state.chatTab);
-  const sessionManager = useSessionManager(
-    chatProps,
-    state.chatTab,
-    chatProps?.isProcessing ?? false,
-  );
+  const sessionManager = useSessionManager(chatProps, state.chatTab, chatProps?.isProcessing ?? false);
 
   const statusMetrics = useStatusMetrics(chatProps, toolExecutions, maxQueryId);
   const subagentRuns = useSubagentRuns(chatProps);
@@ -177,9 +158,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   // ── Computed counts for tabs ──────────────────────────────────────
 
-  const activeToolCount = toolExecutions.filter(
-    (t) => t.status === 'started' || t.status === 'running',
-  ).length;
+  const activeToolCount = toolExecutions.filter((t) => t.status === 'started' || t.status === 'running').length;
 
   const activeSubagentCount = subagentRuns.filter(
     ({ tool }) => tool.status === 'started' || tool.status === 'running',
@@ -195,19 +174,13 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         id: 'subagents',
         label: 'Subagents',
         icon: <Bot size={14} />,
-        count:
-          activeSubagentCount > 0
-            ? `${activeSubagentCount} active`
-            : `${subagentRuns.length} total`,
+        count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total`,
       },
       {
         id: 'tools',
         label: 'Tool Executions',
         icon: <Wrench size={14} />,
-        count:
-          activeToolCount > 0
-            ? `${activeToolCount} active`
-            : `${toolExecutions.length} total`,
+        count: activeToolCount > 0 ? `${activeToolCount} active` : `${toolExecutions.length} total`,
       },
       {
         id: 'changes',
@@ -400,8 +373,4 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 ContextPanel.displayName = 'ContextPanel';
 
 export default ContextPanel;
-export type {
-  ContextPanelHandle,
-  ContextPanelProps,
-  ChatContextPanelProps,
-} from './contextPanel/types';
+export type { ContextPanelHandle, ContextPanelProps, ChatContextPanelProps } from './contextPanel/types';

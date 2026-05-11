@@ -18,6 +18,7 @@ import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
 import { useInstances } from '../hooks/useInstances';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
+import type { ContextPanelHandle } from './contextPanel/types';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useFileHandler } from '../hooks/useFileHandler';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
@@ -81,18 +82,61 @@ interface AppContentProps {
 }
 
 const AppContent: React.FC<AppContentProps> = ({
-  state, inputValue, onInputChange, isMobile, isTablet, isSidebarOpen,
-  sidebarCollapsed, isTerminalExpanded, selectedSection, sidebarWidth,
-  sidebarWidthRef, onSectionChange, onSidebarWidthChange, onSidebarWidthPersist,
-  onSidebarWidthReset, stats, recentFiles, recentLogs, gitRefreshToken,
-  onSidebarToggle, onToggleSidebar, onCloseSidebar, onViewChange, onModelChange,
-  onProviderChange, onSendMessage, onQueueMessage, onStopProcessing,
-  queuedMessagesCount, onGitCommit, onGitAICommit, onGitStage, onGitUnstage,
-  onGitDiscard, onTerminalExpandedChange, isConnected, backendReachable,
-  onRetryConnection, chatSessions, activeChatId, perChatCache,
-  onActiveChatChange, onCreateChat, onDeleteChat, onRenameChat,
+  state,
+  inputValue,
+  onInputChange,
+  isMobile,
+  isTablet,
+  isSidebarOpen,
+  sidebarCollapsed,
+  isTerminalExpanded,
+  selectedSection,
+  sidebarWidth,
+  sidebarWidthRef,
+  onSectionChange,
+  onSidebarWidthChange,
+  onSidebarWidthPersist,
+  onSidebarWidthReset,
+  stats,
+  recentFiles,
+  recentLogs,
+  gitRefreshToken,
+  onSidebarToggle,
+  onToggleSidebar,
+  onCloseSidebar,
+  onViewChange,
+  onModelChange,
+  onProviderChange,
+  onSendMessage,
+  onQueueMessage,
+  onStopProcessing,
+  queuedMessagesCount,
+  onGitCommit,
+  onGitAICommit,
+  onGitStage,
+  onGitUnstage,
+  onGitDiscard,
+  onTerminalExpandedChange,
+  isConnected,
+  backendReachable,
+  onRetryConnection,
+  chatSessions,
+  activeChatId,
+  perChatCache,
+  onActiveChatChange,
+  onCreateChat,
+  onDeleteChat,
+  onRenameChat,
 }) => {
-  const { buffers, activeBufferId, openFile, openWorkspaceBuffer, updateBufferTitle, updateBufferMetadata, closeBuffer } = useEditorManager();
+  const {
+    buffers,
+    activeBufferId,
+    openFile,
+    openWorkspaceBuffer,
+    updateBufferTitle,
+    updateBufferMetadata,
+    closeBuffer,
+  } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   const { notifications } = useNotifications();
@@ -102,21 +146,43 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const notificationBellRef = useRef<HTMLDivElement>(null);
   const hotkeysConfigPath = useHotkeysConfig(apiService, isConnected);
-  const { instances, selectedInstancePID, isSwitchingInstance, onInstanceChange: handleInstanceChange } = useInstances({ apiService, isConnected });
+  const {
+    instances,
+    selectedInstancePID,
+    isSwitchingInstance,
+    onInstanceChange: handleInstanceChange,
+  } = useInstances({ apiService, isConnected });
   const buffersRef = useRef(buffers);
   buffersRef.current = buffers;
 
   const initialViewSyncRef = useRef(false);
 
-  useChatSessionsSync({ chatSessions, activeChatId, buffersRef, updateBufferTitle, updateBufferMetadata, openWorkspaceBuffer });
+  useChatSessionsSync({
+    chatSessions,
+    activeChatId,
+    buffersRef,
+    updateBufferTitle,
+    updateBufferMetadata,
+    openWorkspaceBuffer,
+  });
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
-  const handlePrimaryViewChange = useCallback((view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
-    if (view === 'chat') {
-      openWorkspaceBuffer({ kind: 'chat', path: '__workspace/chat', title: 'Chat', ext: '.chat', isPinned: true, isClosable: false });
-    }
-    onViewChange(view);
-  }, [onViewChange, openWorkspaceBuffer]);
+  const handlePrimaryViewChange = useCallback(
+    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
+      if (view === 'chat') {
+        openWorkspaceBuffer({
+          kind: 'chat',
+          path: '__workspace/chat',
+          title: 'Chat',
+          ext: '.chat',
+          isPinned: true,
+          isClosable: false,
+        });
+      }
+      onViewChange(view);
+    },
+    [onViewChange, openWorkspaceBuffer],
+  );
 
   const { handleFileClick } = useFileHandler({ onViewChange, openFile });
 
@@ -125,7 +191,7 @@ const AppContent: React.FC<AppContentProps> = ({
   }, []);
 
   const currentBuffer = activeBufferId ? buffers.get(activeBufferId) : null;
-  const contextPanelRef = useRef<any>(null);
+  const contextPanelRef = useRef<ContextPanelHandle>(null);
   const showContextSidebar = currentBuffer?.kind === 'chat';
 
   useEffect(() => {
@@ -147,75 +213,156 @@ const AppContent: React.FC<AppContentProps> = ({
     window.dispatchEvent(new CustomEvent('toggle-context-panel'));
   };
 
-  const handleOpenRevisionDiff = useCallback((options: { path: string; diff: string; title: string }) => {
-    onViewChange('editor');
-    openWorkspaceBuffer({
-      kind: 'diff',
-      path: `__workspace/revision/${options.path}-${Date.now()}`,
-      title: `${options.title}: ${options.path.split('/').pop() || options.path}`,
-      ext: '.diff',
-      metadata: {
-        sourcePath: options.path,
-        diff: { message: 'success', path: options.path, has_staged: false, has_unstaged: false, staged_diff: '', unstaged_diff: '', diff: options.diff },
-        diffMode: 'combined',
-        modeOptions: ['combined'],
-        title: options.title,
-      },
-    });
-  }, [onViewChange, openWorkspaceBuffer]);
+  const handleOpenRevisionDiff = useCallback(
+    (options: { path: string; diff: string; title: string }) => {
+      onViewChange('editor');
+      openWorkspaceBuffer({
+        kind: 'diff',
+        path: `__workspace/revision/${options.path}-${Date.now()}`,
+        title: `${options.title}: ${options.path.split('/').pop() || options.path}`,
+        ext: '.diff',
+        metadata: {
+          sourcePath: options.path,
+          diff: {
+            message: 'success',
+            path: options.path,
+            has_staged: false,
+            has_unstaged: false,
+            staged_diff: '',
+            unstaged_diff: '',
+            diff: options.diff,
+          },
+          diffMode: 'combined',
+          modeOptions: ['combined'],
+          title: options.title,
+        },
+      });
+    },
+    [onViewChange, openWorkspaceBuffer],
+  );
 
   const { handleOpenHotkeysConfig } = useAppContentHotkeys({
-    activeBufferId, buffersRef, onSidebarToggle, onTerminalExpandedChange,
-    isTerminalExpanded, openWorkspaceBuffer, onViewChange, handlePrimaryViewChange,
-    closeBuffer, setCommandPaletteMode, setIsCommandPaletteOpen,
-    hotkeysConfigPath, openFile,
+    activeBufferId,
+    buffersRef,
+    onSidebarToggle,
+    onTerminalExpandedChange,
+    isTerminalExpanded,
+    openWorkspaceBuffer,
+    onViewChange,
+    handlePrimaryViewChange,
+    closeBuffer,
+    setCommandPaletteMode,
+    setIsCommandPaletteOpen,
+    hotkeysConfigPath,
+    openFile,
   });
 
   const {
-    gitStatus, gitBranches, workspaceRoot, selectedFiles, activeDiffSelectionKey,
-    activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, isGitLoading,
-    isGitActing, isGeneratingCommitMessage, gitActionError, gitActionWarning,
-    isReviewLoading, isReviewFixing, reviewError, reviewFixResult, reviewFixLogs,
-    reviewFixSessionID, deepReview, handleToggleFileSelection,
-    handleToggleSectionSelection, clearSelectedFiles, handleSelectFiles,
-    handlePreviewGitFile, handleStageSelected, handleUnstageSelected,
-    handleDiscardSelected, handleStageFile, handleUnstageFile, handleDiscardFile,
-    handleSectionAction, handleGitCommitClick, handleGenerateCommitMessage,
-    handleRunReview, handleFixFromReview, handleDiffModeChange, handleCheckoutBranch,
-    handleCreateBranch, handlePull, handlePush, handleLoadCommits,
-    handleLoadCommitDetail, handleLoadCommitFileDiff, handleCheckoutCommit,
-    handleRevertCommit, refreshGitStatus, commitMessage, setCommitMessage,
+    gitStatus,
+    gitBranches,
+    workspaceRoot,
+    selectedFiles,
+    activeDiffSelectionKey,
+    activeDiffPath,
+    activeDiff,
+    diffMode,
+    isDiffLoading,
+    diffError,
+    isGitLoading,
+    isGitActing,
+    isGeneratingCommitMessage,
+    gitActionError,
+    gitActionWarning,
+    isReviewLoading,
+    isReviewFixing,
+    reviewError,
+    reviewFixResult,
+    reviewFixLogs,
+    reviewFixSessionID,
+    deepReview,
+    handleToggleFileSelection,
+    handleToggleSectionSelection,
+    clearSelectedFiles,
+    handleSelectFiles,
+    handlePreviewGitFile,
+    handleStageSelected,
+    handleUnstageSelected,
+    handleDiscardSelected,
+    handleStageFile,
+    handleUnstageFile,
+    handleDiscardFile,
+    handleSectionAction,
+    handleGitCommitClick,
+    handleGenerateCommitMessage,
+    handleRunReview,
+    handleFixFromReview,
+    handleDiffModeChange,
+    handleCheckoutBranch,
+    handleCreateBranch,
+    handlePull,
+    handlePush,
+    handleLoadCommits,
+    handleLoadCommitDetail,
+    handleLoadCommitFileDiff,
+    handleCheckoutCommit,
+    handleRevertCommit,
+    refreshGitStatus,
+    commitMessage,
+    setCommitMessage,
   } = useGitWorkspace({
-    fetchFn: sproutFetch, gitRefreshToken, selectedGitFilePath: null,
-    onViewChange, onGitCommit, onGitAICommit, onGitStage, onGitUnstage,
-    onGitDiscard, openWorkspaceBuffer,
+    fetchFn: sproutFetch,
+    gitRefreshToken,
+    selectedGitFilePath: null,
+    onViewChange,
+    onGitCommit,
+    onGitAICommit,
+    onGitStage,
+    onGitUnstage,
+    onGitDiscard,
+    openWorkspaceBuffer,
   });
 
   const chatProps = {
-    messages: state.messages, onSendMessage, onQueueMessage,
-    queuedMessagesCount, inputValue, onInputChange,
-    isProcessing: state.isProcessing, lastError: state.lastError,
+    messages: state.messages,
+    onSendMessage,
+    onQueueMessage,
+    queuedMessagesCount,
+    inputValue,
+    onInputChange,
+    isProcessing: state.isProcessing,
+    lastError: state.lastError,
     toolExecutions: state.toolExecutions,
-    queryProgress: state.queryProgress, currentTodos, onStopProcessing,
+    queryProgress: state.queryProgress,
+    currentTodos,
+    onStopProcessing,
     onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
-    stats: state.stats, isConnected: state.isConnected, backendReachable,
+    stats: state.stats,
+    isConnected: state.isConnected,
+    backendReachable,
     onRetryConnection,
   };
   const reviewProps = {
-    review: deepReview, reviewError, reviewFixResult, reviewFixLogs,
-    reviewFixSessionID, isReviewLoading, isReviewFixing,
+    review: deepReview,
+    reviewError,
+    reviewFixResult,
+    reviewFixLogs,
+    reviewFixSessionID,
+    isReviewLoading,
+    isReviewFixing,
     onFixFromReview: handleFixFromReview,
   };
   const diffState = {
-    activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError,
+    activeDiffPath,
+    activeDiff,
+    diffMode,
+    isDiffLoading,
+    diffError,
     onDiffModeChange: handleDiffModeChange,
   };
 
   return (
     <div className="app">
-      {isMobile && isSidebarOpen && (
-        <div className="mobile-overlay" onClick={onCloseSidebar} />
-      )}
+      {isMobile && isSidebarOpen && <div className="mobile-overlay" onClick={onCloseSidebar} />}
       <ErrorBoundary panelName="Sidebar">
         <Sidebar
           isConnected={state.isConnected}
@@ -371,7 +518,7 @@ const AppContent: React.FC<AppContentProps> = ({
               : null
           }
           notificationCount={notifications.length}
-          onToggleNotificationCenter={() => setIsNotificationCenterOpen(prev => !prev)}
+          onToggleNotificationCenter={() => setIsNotificationCenterOpen((prev) => !prev)}
           notificationCenterRef={notificationBellRef}
         />
         <NotificationCenter

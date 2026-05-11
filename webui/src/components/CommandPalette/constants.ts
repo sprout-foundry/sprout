@@ -46,8 +46,11 @@ export const COMMAND_DEFINITIONS: CommandDef[] = [
   { id: 'editor_goto_symbol', label: 'Go to Symbol in File', category: 'Editor' },
 ];
 
-export const VISIBLE_COMMANDS = COMMAND_DEFINITIONS.filter(cmd => {
-  if (!supportsLocalTerminal && (cmd.id === 'toggle_terminal' || cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')) {
+export const VISIBLE_COMMANDS = COMMAND_DEFINITIONS.filter((cmd) => {
+  if (
+    !supportsLocalTerminal &&
+    (cmd.id === 'toggle_terminal' || cmd.id === 'split_terminal_vertical' || cmd.id === 'split_terminal_horizontal')
+  ) {
     return false;
   }
   return true;
@@ -58,7 +61,16 @@ export const VISIBLE_COMMANDS = COMMAND_DEFINITIONS.filter(cmd => {
 export const MAX_FILE_RESULTS = 100;
 export const MAX_INDEXED_FILES = 12000;
 export const MAX_INDEXED_DIRECTORIES = 3000;
-export const SKIP_DIRECTORIES = new Set(['.git', 'node_modules', '.next', 'dist', 'build', '__pycache__', '.venv', 'vendor']);
+export const SKIP_DIRECTORIES = new Set([
+  '.git',
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+  '__pycache__',
+  '.venv',
+  'vendor',
+]);
 export const MAX_DIRECTORY_DEPTH = 8;
 export const MAX_SYMBOL_RESULTS = 100;
 

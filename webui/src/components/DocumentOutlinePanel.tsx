@@ -1,23 +1,9 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
 import './DocumentOutlinePanel.css';
-import {
-  extractSymbols,
-  findSymbolScopeEnd,
-  KIND_ICONS,
-  CONTAINER_KINDS,
-  type SymbolInfo,
-} from '../utils/symbolUtils';
+import { extractSymbols, findSymbolScopeEnd, KIND_ICONS, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
-import {
-  ChevronRight,
-  ChevronDown,
-  Search,
-  ListTree,
-  UnfoldVertical,
-  FoldVertical,
-  FileCode,
-} from 'lucide-react';
+import { ChevronRight, ChevronDown, Search, ListTree, UnfoldVertical, FoldVertical, FileCode } from 'lucide-react';
 
 /**
  * Tree node structure for the outline
@@ -54,11 +40,7 @@ interface DocumentOutlinePanelProps {
  * Build a hierarchical tree from flat symbol list based on scope containment.
  * Container symbols (function, method, class, interface) can contain other symbols.
  */
-function buildSymbolTree(
-  symbols: SymbolInfo[],
-  content: string,
-  languageId: string | undefined,
-): OutlineTreeNode[] {
+function buildSymbolTree(symbols: SymbolInfo[], content: string, languageId: string | undefined): OutlineTreeNode[] {
   if (symbols.length === 0) return [];
 
   const lines = content.split('\n');
@@ -81,7 +63,7 @@ function buildSymbolTree(
 
   for (const sym of sortedSymbols) {
     const isContainer = CONTAINER_KINDS.has(sym.kind);
-    const endLine = isContainer ? containerRanges.get(sym.line) ?? sym.line : -1;
+    const endLine = isContainer ? (containerRanges.get(sym.line) ?? sym.line) : -1;
 
     const node: OutlineTreeNode = {
       symbol: sym,
@@ -123,10 +105,7 @@ function buildSymbolTree(
 /**
  * Collect all container ancestors for a given node (depth-first traversal)
  */
-function collectAllAncestors(
-  node: OutlineTreeNode,
-  targetLine: number,
-): OutlineTreeNode[] {
+function collectAllAncestors(node: OutlineTreeNode, targetLine: number): OutlineTreeNode[] {
   const ancestors: OutlineTreeNode[] = [];
   const stack: OutlineTreeNode[] = [node];
 
@@ -149,17 +128,12 @@ function collectAllAncestors(
 /**
  * Get all container ancestors for a line (outermost → innermost)
  */
-function getContainerAncestors(
-  line: number,
-  rootNodes: OutlineTreeNode[],
-): OutlineTreeNode[] {
+function getContainerAncestors(line: number, rootNodes: OutlineTreeNode[]): OutlineTreeNode[] {
   for (const root of rootNodes) {
     if (line >= root.symbol.line && line <= root.containerEndLine) {
       // Collect all ancestors, then filter to those where line is within scope
       const allAncestors = collectAllAncestors(root, line);
-      return allAncestors.filter(
-        (anc) => line >= anc.symbol.line && line <= anc.containerEndLine,
-      );
+      return allAncestors.filter((anc) => line >= anc.symbol.line && line <= anc.containerEndLine);
     }
   }
   return [];
@@ -215,9 +189,7 @@ function DocumentOutlinePanel({
     // Filter tree: include nodes that match or have matching descendants
     function filterNode(node: OutlineTreeNode): OutlineTreeNode | null {
       const matches = matchingLines.has(node.symbol.line);
-      const filteredChildren = node.children
-        .map(filterNode)
-        .filter((n): n is OutlineTreeNode => n !== null);
+      const filteredChildren = node.children.map(filterNode).filter((n): n is OutlineTreeNode => n !== null);
 
       if (matches || filteredChildren.length > 0) {
         return { ...node, children: filteredChildren };
@@ -232,7 +204,7 @@ function DocumentOutlinePanel({
   const enclosingSymbols = useMemo(() => {
     if (cursorLine < 1 || symbolTree.length === 0) return [];
     const ancestors = getContainerAncestors(cursorLine, symbolTree);
-    return ancestors.map(a => a.symbol);
+    return ancestors.map((a) => a.symbol);
   }, [cursorLine, symbolTree]);
 
   // Auto-expand ancestors of cursor position
@@ -241,7 +213,7 @@ function DocumentOutlinePanel({
     if (symbolTree.length === 0) return;
     const ancestors = getContainerAncestors(cursorLine, symbolTree);
     if (ancestors.length > 0) {
-      setExpandedNodes(prev => {
+      setExpandedNodes((prev) => {
         const next = new Set(prev);
         for (const anc of ancestors) next.add(anc.symbol.line);
         return next;
@@ -252,7 +224,7 @@ function DocumentOutlinePanel({
   // Expand containers matching search
   useEffect(() => {
     if (!searchQuery || filteredSymbols.length === 0) return;
-    setExpandedNodes(prev => {
+    setExpandedNodes((prev) => {
       const next = new Set(prev);
       for (const sym of filteredSymbols) {
         if (CONTAINER_KINDS.has(sym.kind)) next.add(sym.line);
@@ -266,9 +238,7 @@ function DocumentOutlinePanel({
     if (!treeRef.current || enclosingSymbols.length === 0) return;
 
     const activeLine = enclosingSymbols[enclosingSymbols.length - 1].line;
-    const activeElement = treeRef.current.querySelector(
-      `[data-line="${activeLine}"]`,
-    );
+    const activeElement = treeRef.current.querySelector(`[data-line="${activeLine}"]`);
 
     if (activeElement) {
       activeElement.scrollIntoView({ behavior: 'auto', block: 'nearest' });
@@ -301,9 +271,10 @@ function DocumentOutlinePanel({
 
   // Handle toggling expansion of a single container line (called from tree nodes)
   const handleToggleLine = useCallback((line: number) => {
-    setExpandedNodes(prev => {
+    setExpandedNodes((prev) => {
       const next = new Set(prev);
-      if (next.has(line)) next.delete(line); else next.add(line);
+      if (next.has(line)) next.delete(line);
+      else next.add(line);
       return next;
     });
   }, []);
@@ -505,19 +476,13 @@ function TreeNodeWithState({
             aria-label={isExpanded ? 'Collapse' : 'Expand'}
             style={{ background: 'transparent', border: 'none', padding: 0 }}
           >
-            {isExpanded ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronRight size={14} />
-            )}
+            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </button>
         ) : (
           <span style={{ width: 14 }} />
         )}
 
-        <span className={`outline-kind-icon ${node.symbol.kind}`}>
-          {KIND_ICONS[node.symbol.kind]}
-        </span>
+        <span className={`outline-kind-icon ${node.symbol.kind}`}>{KIND_ICONS[node.symbol.kind]}</span>
 
         {searchQuery && highlightedName ? (
           <span

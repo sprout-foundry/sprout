@@ -1,5 +1,13 @@
 import type { VirtuosoHandle } from 'react-virtuoso';
-import type { Message, ToolExecution, SubagentActivity, TodoItem, SubagentRun, LiveLogLine, ChatProps } from '@sprout/ui';
+import type {
+  Message,
+  ToolExecution,
+  SubagentActivity,
+  TodoItem,
+  SubagentRun,
+  LiveLogLine,
+  ChatProps,
+} from '@sprout/ui';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from '@sprout/ui';
 
 // Re-export shared types for convenience

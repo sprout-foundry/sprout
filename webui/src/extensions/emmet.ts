@@ -21,15 +21,7 @@ import {
 /**
  * Language IDs for which Emmet should be active.
  */
-const EMMET_LANGUAGE_IDS = new Set([
-  'html',
-  'xml',
-  'css',
-  'sass',
-  'scss',
-  'javascript-jsx',
-  'typescript-jsx',
-]);
+const EMMET_LANGUAGE_IDS = new Set(['html', 'xml', 'css', 'sass', 'scss', 'javascript-jsx', 'typescript-jsx']);
 
 /**
  * Map from our language IDs to Emmet syntax strings.

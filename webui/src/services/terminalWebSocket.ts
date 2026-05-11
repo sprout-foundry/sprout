@@ -254,7 +254,10 @@ class TerminalWebSocketService {
           this.persistSessionId();
           // Emit session_restored with scrollback so the UI can clear + replay
           // instead of blindly appending (which causes duplication).
-          this.notifyCallbacks({ type: 'session_restored', data: { session_id: this.sessionId, scrollback: data.data.scrollback || '' } });
+          this.notifyCallbacks({
+            type: 'session_restored',
+            data: { session_id: this.sessionId, scrollback: data.data.scrollback || '' },
+          });
           // Notify that we're now ready to send commands
           this.notifyCallbacks({ type: 'session_ready', data: { session_id: this.sessionId } });
           return;
@@ -469,13 +472,13 @@ class TerminalWebSocketService {
    *  the server so it can properly detach from the backend PTY session.
    *  Unlike disconnect(), this does NOT clear the persisted sessionId --
    *  resume() will restore it for reattachment.
-   *  
+   *
    *  IMPORTANT: This method sets ws.onclose = null to prevent the async
    *  close event from firing and triggering unwanted side effects. The
    *  TerminalPane component's useEffect watches isConnected, so we must
    *  ensure that when resume() is called, the pane can reconnect without
    *  tearing down and recreating its xterm instance.
-   *  
+   *
    *  We use a separate flag to track freeze state so the TerminalPane can
    *  distinguish between a freeze (temporary) and a disconnect (permanent).
    */
@@ -509,7 +512,7 @@ class TerminalWebSocketService {
   }
 
   /** Resume after tab unfreeze. Triggers immediate reconnection with session restore.
-   *  
+   *
    *  IMPORTANT: This method is called when the page becomes visible again.
    *  At this point, the TerminalPane component may still be mounted with
    *  isActive=true. We need to ensure the reconnection doesn't cause the

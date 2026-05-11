@@ -1,12 +1,6 @@
-import { useState, useMemo, CSSProperties } from 'react';
-import {
-  Bot,
-  CheckCircle2,
-  XCircle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-} from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { useState, useMemo } from 'react';
+import { Bot, CheckCircle2, XCircle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { LiveLog, groupSubagentRuns } from '@sprout/ui';
 import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';

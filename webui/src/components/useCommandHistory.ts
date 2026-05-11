@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useLog } from '../utils/log';
+import type { useLog } from '../utils/log';
 import { ApiService } from '../services/api';
 import {
   type CommandHistoryState,
@@ -25,9 +25,7 @@ export function useCommandHistory({ log, draftValue, updateValue }: UseCommandHi
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const currentHistoryValue =
-    isHistoryMode && history.index >= 0
-      ? history.commands[history.commands.length - 1 - history.index] ?? ''
-      : null;
+    isHistoryMode && history.index >= 0 ? (history.commands[history.commands.length - 1 - history.index] ?? '') : null;
 
   // Load history from localStorage and terminal on mount
   const loadHistory = useCallback(async () => {

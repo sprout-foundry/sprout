@@ -10,11 +10,7 @@ const originalError = console.error;
 beforeAll(() => {
   Element.prototype.scrollIntoView = jest.fn();
   console.error = (...args: any[]) => {
-    if (
-      typeof args[0] === 'string' &&
-      args[0].includes('ReactDOM.render is no longer supported')
-    )
-      return;
+    if (typeof args[0] === 'string' && args[0].includes('ReactDOM.render is no longer supported')) return;
     originalError.call(console, ...args);
   };
 });
@@ -43,9 +39,7 @@ const tsContent = [
 
 /** Helper to grab names rendered in the tree. */
 function renderedNames(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('.outline-node-name')).map(
-    (el) => el.textContent,
-  );
+  return Array.from(container.querySelectorAll('.outline-node-name')).map((el) => el.textContent);
 }
 
 /** Shared props builder. */
@@ -111,10 +105,7 @@ function renderWithAutoExpand(content: string, targetLine: number) {
 
 /** Simulate typing into the search input (jsdom compat). */
 function typeSearch(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value',
-  ).set!;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set!;
   setter.call(input, value);
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -130,14 +121,18 @@ describe('DocumentOutlinePanel', () => {
       const { container, unmount } = renderPanel({ isFileOpen: false });
       try {
         expect(container.querySelector('.outline-empty-text')?.textContent).toContain('No file open');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('shows "No symbols found" for comment-only content', () => {
       const { container, unmount } = renderPanel({ content: '// only comments\n/* block */\n' });
       try {
         expect(container.querySelector('.outline-empty-text')?.textContent).toContain('No symbols found');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('renders symbol tree when content has extractable symbols', () => {
@@ -145,14 +140,18 @@ describe('DocumentOutlinePanel', () => {
       try {
         expect(container.querySelectorAll('.outline-tree-node').length).toBeGreaterThan(0);
         expect(renderedNames(container)).toContain('topLevel');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('always shows "Outline" in the panel header', () => {
       const { container, unmount } = renderPanel({ isFileOpen: false });
       try {
         expect(container.querySelector('.outline-panel-title')?.textContent).toBe('Outline');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 
@@ -164,7 +163,9 @@ describe('DocumentOutlinePanel', () => {
       try {
         expect(renderedNames(container)).toContain('foo');
         expect(container.querySelector('.outline-kind-icon.function')).not.toBeNull();
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('displays a class symbol', () => {
@@ -172,25 +173,29 @@ describe('DocumentOutlinePanel', () => {
       try {
         expect(renderedNames(container)).toContain('Foo');
         expect(container.querySelector('.outline-kind-icon.class')).not.toBeNull();
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('displays an interface symbol', () => {
       const { container, unmount } = renderPanel({ content: 'interface MyInterface { name: string; }\n' });
       try {
         expect(renderedNames(container).some((n) => n?.includes('MyInterface'))).toBe(true);
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('shows nested children for class with methods after cursor moves inside', () => {
-      const { container, unmount } = renderWithAutoExpand(
-        'class MyClass {\n  myMethod() {}\n}\n', 2,
-      );
+      const { container, unmount } = renderWithAutoExpand('class MyClass {\n  myMethod() {}\n}\n', 2);
       try {
         expect(renderedNames(container)).toContain('MyClass');
         expect(container.querySelector('.outline-children')).not.toBeNull();
         expect(renderedNames(container)).toContain('myMethod');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 
@@ -203,7 +208,9 @@ describe('DocumentOutlinePanel', () => {
         const input = container.querySelector('.outline-search-input') as HTMLInputElement;
         act(() => typeSearch(input, 'topLevel'));
         expect(renderedNames(container)).toContain('topLevel');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('clears search and shows all symbols again', () => {
@@ -217,7 +224,9 @@ describe('DocumentOutlinePanel', () => {
         expect(names).toContain('alpha');
         expect(names).toContain('beta');
         expect(names).toContain('gamma');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 
@@ -233,7 +242,9 @@ describe('DocumentOutlinePanel', () => {
         const active = container.querySelector('.outline-tree-node.active');
         expect(active).not.toBeNull();
         expect(active?.querySelector('.outline-node-name')?.textContent).toBe('topLevel');
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 
@@ -251,7 +262,9 @@ describe('DocumentOutlinePanel', () => {
           helloNode.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
         expect(props.onNavigateToSymbol).toHaveBeenCalledWith(1);
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 
@@ -269,7 +282,9 @@ describe('DocumentOutlinePanel', () => {
           btns[btns.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
         });
         expect(container.querySelector('.outline-children')).toBeNull();
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('expand all button restores collapsed children', () => {
@@ -282,19 +297,21 @@ describe('DocumentOutlinePanel', () => {
         expect(container.querySelector('.outline-children')).toBeNull();
         act(() => expandBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })));
         expect(container.querySelector('.outline-children')).not.toBeNull();
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
 
     it('chevron on container shows correct aria-expanded when expanded', () => {
-      const { container, unmount } = renderWithAutoExpand(
-        'class MyClass {\n  methodA() {}\n}\n', 2,
-      );
+      const { container, unmount } = renderWithAutoExpand('class MyClass {\n  methodA() {}\n}\n', 2);
       try {
         const chevron = container.querySelector('.outline-node-chevron');
         expect(chevron).not.toBeNull();
         expect(chevron.getAttribute('aria-expanded')).toBe('true');
         expect(chevron.classList.contains('expanded')).toBe(true);
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 
@@ -311,7 +328,9 @@ describe('DocumentOutlinePanel', () => {
         expect(container.querySelector('.outline-search-input')).toBeNull();
         expect(container.querySelector('.outline-panel-tree')).toBeNull();
         expect(container.querySelector('.outline-panel-toggle')).not.toBeNull();
-      } finally { unmount(); }
+      } finally {
+        unmount();
+      }
     });
   });
 });

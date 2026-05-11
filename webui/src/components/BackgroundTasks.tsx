@@ -220,9 +220,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
             </div>
           )}
 
-          {isLoading && count === 0 && !error && (
-            <div className="background-tasks-empty">Loading...</div>
-          )}
+          {isLoading && count === 0 && !error && <div className="background-tasks-empty">Loading...</div>}
 
           {!error && count === 0 && !isLoading && (
             <div className="background-tasks-empty">No background tasks running</div>

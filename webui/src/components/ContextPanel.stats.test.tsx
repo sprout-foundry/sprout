@@ -15,9 +15,14 @@ jest.mock('../services/api', () => ({
 // ContextPanel uses useLog() which requires NotificationContext.
 jest.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
-  return Object.assign(function NotificationProviderMock({ children }) { return children; }, {
-    useNotifications: () => ({ addNotification: noop }),
-  });
+  return Object.assign(
+    function NotificationProviderMock({ children }) {
+      return children;
+    },
+    {
+      useNotifications: () => ({ addNotification: noop }),
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------

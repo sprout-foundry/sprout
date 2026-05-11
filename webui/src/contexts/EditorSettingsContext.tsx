@@ -108,31 +108,30 @@ export const EditorSettingsProvider: React.FC<EditorSettingsProviderProps> = ({ 
     }
   }, []);
 
-  const value = React.useMemo<EditorSettingsContextValue>(() => ({
-    isAutoSaveEnabled,
-    setAutoSaveEnabled,
-    whitespaceRenderingMode,
-    setWhitespaceRenderingMode,
-    autoSaveInterval,
-    isFormatOnSaveEnabled,
-    setFormatOnSaveEnabled,
-    maxPanes,
-    setMaxPanes,
-  }), [
-    isAutoSaveEnabled,
-    setAutoSaveEnabled,
-    whitespaceRenderingMode,
-    setWhitespaceRenderingMode,
-    autoSaveInterval,
-    isFormatOnSaveEnabled,
-    setFormatOnSaveEnabled,
-    maxPanes,
-    setMaxPanes,
-  ]);
-
-  return (
-    <EditorSettingsContext.Provider value={value}>
-      {children}
-    </EditorSettingsContext.Provider>
+  const value = React.useMemo<EditorSettingsContextValue>(
+    () => ({
+      isAutoSaveEnabled,
+      setAutoSaveEnabled,
+      whitespaceRenderingMode,
+      setWhitespaceRenderingMode,
+      autoSaveInterval,
+      isFormatOnSaveEnabled,
+      setFormatOnSaveEnabled,
+      maxPanes,
+      setMaxPanes,
+    }),
+    [
+      isAutoSaveEnabled,
+      setAutoSaveEnabled,
+      whitespaceRenderingMode,
+      setWhitespaceRenderingMode,
+      autoSaveInterval,
+      isFormatOnSaveEnabled,
+      setFormatOnSaveEnabled,
+      maxPanes,
+      setMaxPanes,
+    ],
   );
+
+  return <EditorSettingsContext.Provider value={value}>{children}</EditorSettingsContext.Provider>;
 };

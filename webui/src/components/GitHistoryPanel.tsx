@@ -8,9 +8,16 @@ import GitHistoryContextMenu from './GitHistoryContextMenu';
 import './GitHistoryPanel.css';
 
 interface GitHistoryPanelProps {
-  onLoadCommits: (limit: number, offset: number, opts?: { signal?: AbortSignal }) => Promise<{ commits: GitCommitSummary[]; total: number }>;
+  onLoadCommits: (
+    limit: number,
+    offset: number,
+    opts?: { signal?: AbortSignal },
+  ) => Promise<{ commits: GitCommitSummary[]; total: number }>;
   onLoadCommitDetail: (hash: string) => Promise<GitCommitDetail>;
-  onLoadCommitFileDiff: (hash: string, filePath: string) => Promise<{ message: string; hash: string; path: string; diff: string }>;
+  onLoadCommitFileDiff: (
+    hash: string,
+    filePath: string,
+  ) => Promise<{ message: string; hash: string; path: string; diff: string }>;
   onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
   onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   isActing: boolean;
@@ -155,7 +162,11 @@ function GitHistoryPanel({
   if (selectedCommit) {
     return (
       <div className="git-history-panel">
-        <GitHistoryContextMenu onCheckoutCommit={onCheckoutCommit} onRevertCommit={onRevertCommit} isActing={isActing} />
+        <GitHistoryContextMenu
+          onCheckoutCommit={onCheckoutCommit}
+          onRevertCommit={onRevertCommit}
+          isActing={isActing}
+        />
         <CommitDetailPanel
           onLoadCommitDetail={onLoadCommitDetail}
           onLoadCommitFileDiff={onLoadCommitFileDiff}

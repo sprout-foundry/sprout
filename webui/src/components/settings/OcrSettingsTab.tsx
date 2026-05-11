@@ -5,10 +5,7 @@ interface OcrSettingsTabProps {
   renderTextInput: FieldRenderers['renderTextInput'];
 }
 
-export default function OcrSettingsTab({
-  renderToggle,
-  renderTextInput,
-}: OcrSettingsTabProps) {
+export default function OcrSettingsTab({ renderToggle, renderTextInput }: OcrSettingsTabProps) {
   return (
     <div className="section">
       <h4>PDF OCR</h4>

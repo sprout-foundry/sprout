@@ -7,8 +7,8 @@
  * Adapter and PlatformNavItem types are imported from @sprout/ui (canonical source).
  */
 
-// Import canonical types from @sprout/ui
-import type { APIAdapter, PlatformNavItem } from '@sprout/ui';
+// Import and use APIAdapter locally
+import type { APIAdapter } from '@sprout/ui';
 
 // Re-export for downstream consumers
 export type { APIAdapter, PlatformNavItem } from '@sprout/ui';
@@ -22,7 +22,7 @@ let activeAdapter: APIAdapter | null = null;
  */
 export function installAdapter(adapter: APIAdapter): void {
   activeAdapter = adapter;
-  console.log(`[apiAdapter] Installed: ${adapter.name}`);
+  console.warn(`[apiAdapter] Installed: ${adapter.name}`);
 }
 
 /**

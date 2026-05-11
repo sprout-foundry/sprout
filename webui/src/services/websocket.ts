@@ -163,7 +163,10 @@ class WebSocketService {
         this.onReconnectCallback();
       }
 
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: true, reconnected: isReconnect, queuedMessageCount: this.pendingQueue.length } });
+      this.notifyCallbacks({
+        type: 'connection_status',
+        data: { connected: true, reconnected: isReconnect, queuedMessageCount: this.pendingQueue.length },
+      });
     };
 
     this.ws.onclose = (event) => {
@@ -171,7 +174,10 @@ class WebSocketService {
       this.stopPingInterval();
       this.stopPongWatchdog();
       const willReconnect = !this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts;
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: false, reconnecting: willReconnect, queuedMessageCount: this.pendingQueue.length } });
+      this.notifyCallbacks({
+        type: 'connection_status',
+        data: { connected: false, reconnecting: willReconnect, queuedMessageCount: this.pendingQueue.length },
+      });
 
       // Only reconnect if not intentionally closed and not already reconnecting
       if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -179,7 +185,7 @@ class WebSocketService {
         // Use exponential backoff with jitter: base * (2 ^ (attempt - 1)) + random(0-1000ms), capped at 30s
         const backoffDelay = Math.min(
           this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
-          30000
+          30000,
         );
         this.reconnectTimeout = setTimeout(() => {
           debugLog(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);

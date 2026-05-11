@@ -21,7 +21,8 @@ import type { Terminal, ILinkProvider, ILink, IDisposable } from '@xterm/xterm';
  * - (?::(\d+))? - Capture group 3: optional column number after colon
  * - (?=$|[\s),;:]) - Lookahead: must end at line end or before whitespace/delimiter/colon
  */
-const _originalPattern = /(?<=^|[\s(])(\.?\/?(?:[\w.\/_-]+\/)?[\w_-]+\.[a-zA-Z][\w]*)(?::(\d+))(?::(\d+))?(?=$|[\s),;:])/g;
+const _originalPattern =
+  /(?<=^|[\s(])(\.?\/?(?:[\w.\/_-]+\/)?[\w_-]+\.[a-zA-Z][\w]*)(?::(\d+))(?::(\d+))?(?=$|[\s),;:])/g;
 export const filePathPatternSource = _originalPattern.source;
 export const filePathPattern = new RegExp(filePathPatternSource, 'g');
 

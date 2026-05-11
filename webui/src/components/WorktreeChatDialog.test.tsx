@@ -91,15 +91,13 @@ function renderDialog(props: DialogProps = {}) {
 /**
  * Convenience: re-render the dialog with updated props on the existing root.
  */
-function rerenderDialog(
-  props: {
-    isOpen?: boolean;
-    isCreating?: boolean;
-    error?: string | null;
-    onClose?: ReturnType<typeof jest.fn>;
-    onSubmit?: ReturnType<typeof jest.fn>;
-  },
-) {
+function rerenderDialog(props: {
+  isOpen?: boolean;
+  isCreating?: boolean;
+  error?: string | null;
+  onClose?: ReturnType<typeof jest.fn>;
+  onSubmit?: ReturnType<typeof jest.fn>;
+}) {
   const { isOpen = true, isCreating = false, error = null, onClose, onSubmit } = props;
   act(() => {
     root!.render(
@@ -119,10 +117,7 @@ function rerenderDialog(
  */
 function setInputValue(selector: string, value: string) {
   const input = document.querySelector(selector) as HTMLInputElement;
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value',
-  )!.set!;
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
   act(() => {
     nativeInputValueSetter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -144,9 +139,7 @@ function clickCheckbox(selector: string) {
  * Submit the dialog form by clicking the create button inside act().
  */
 function clickCreateButton() {
-  const btn = document.querySelector(
-    '.wt-chat-dialog-btn-create',
-  ) as HTMLButtonElement;
+  const btn = document.querySelector('.wt-chat-dialog-btn-create') as HTMLButtonElement;
   act(() => {
     btn.click();
   });
@@ -183,16 +176,12 @@ describe('WorktreeChatDialog', () => {
   test('calls onClose when clicking the overlay (outside the card)', () => {
     const { onClose } = renderDialog({ isOpen: true });
 
-    const overlay = document.querySelector(
-      '.wt-chat-dialog-overlay',
-    ) as HTMLElement;
+    const overlay = document.querySelector('.wt-chat-dialog-overlay') as HTMLElement;
 
     act(() => {
       // Simulate a click directly on the overlay (not on any child).
       // React's handleOverlayClick checks e.target === e.currentTarget.
-      overlay.dispatchEvent(
-        new MouseEvent('click', { bubbles: true, cancelable: true }),
-      );
+      overlay.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -204,9 +193,7 @@ describe('WorktreeChatDialog', () => {
     const card = document.querySelector('.wt-chat-dialog-card') as HTMLElement;
 
     act(() => {
-      card.dispatchEvent(
-        new MouseEvent('click', { bubbles: true, cancelable: true }),
-      );
+      card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     });
 
     // Clicking inside the card should not close the dialog
@@ -241,9 +228,7 @@ describe('WorktreeChatDialog', () => {
     const branchInput = document.querySelector('#wt-branch') as HTMLInputElement;
     const baseRefInput = document.querySelector('#wt-base-ref') as HTMLInputElement;
     const nameInput = document.querySelector('#wt-name') as HTMLInputElement;
-    const checkbox = document.querySelector(
-      '#wt-auto-switch',
-    ) as HTMLInputElement;
+    const checkbox = document.querySelector('#wt-auto-switch') as HTMLInputElement;
 
     expect(branchInput.disabled).toBe(true);
     expect(baseRefInput.disabled).toBe(true);
@@ -251,18 +236,14 @@ describe('WorktreeChatDialog', () => {
     expect(checkbox.disabled).toBe(true);
 
     // Cancel button should also be disabled
-    const cancelBtn = document.querySelector(
-      '.wt-chat-dialog-btn-cancel',
-    ) as HTMLButtonElement;
+    const cancelBtn = document.querySelector('.wt-chat-dialog-btn-cancel') as HTMLButtonElement;
     expect(cancelBtn.disabled).toBe(true);
   });
 
   test('create button is disabled when branch is empty', () => {
     const { onSubmit } = renderDialog({ isOpen: true });
 
-    const createBtn = document.querySelector(
-      '.wt-chat-dialog-btn-create',
-    ) as HTMLButtonElement;
+    const createBtn = document.querySelector('.wt-chat-dialog-btn-create') as HTMLButtonElement;
 
     // Initially branch is empty, so create button should be disabled
     expect(createBtn.disabled).toBe(true);
@@ -316,9 +297,7 @@ describe('WorktreeChatDialog', () => {
     const { onSubmit } = renderDialog({ isOpen: true });
 
     // Verify checkbox is checked by default
-    const checkbox = document.querySelector(
-      '#wt-auto-switch',
-    ) as HTMLInputElement;
+    const checkbox = document.querySelector('#wt-auto-switch') as HTMLInputElement;
     expect(checkbox.checked).toBe(true);
 
     // Uncheck it (defaults to true, so a click unchecks it)
@@ -342,9 +321,7 @@ describe('WorktreeChatDialog', () => {
   test('shows loading state text when isCreating is true', () => {
     renderDialog({ isOpen: true, isCreating: true });
 
-    const createBtn = document.querySelector(
-      '.wt-chat-dialog-btn-create',
-    ) as HTMLButtonElement;
+    const createBtn = document.querySelector('.wt-chat-dialog-btn-create') as HTMLButtonElement;
 
     expect(createBtn.disabled).toBe(true);
     expect(createBtn.textContent).toContain('Creating...');

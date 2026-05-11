@@ -143,8 +143,10 @@ const PaneToBufferProvider: React.FC<{
   // Use ref pattern to break circular dependency
   const closeBufferRef = React.useRef<((bufferId: string) => void | Promise<void>) | null>(null);
 
+  const stableCloseBuffer = React.useCallback((id: string) => closeBufferRef.current?.(id), []);
+
   return (
-    <PaneManagerProvider maxPanes={settings.maxPanes} closeBuffer={(id) => closeBufferRef.current?.(id)}>
+    <PaneManagerProvider maxPanes={settings.maxPanes} closeBuffer={stableCloseBuffer}>
       <PaneToBufferBridge settings={settings} closeBufferRef={closeBufferRef}>
         {children}
       </PaneToBufferBridge>

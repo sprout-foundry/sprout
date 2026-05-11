@@ -223,7 +223,7 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({
     setIsLinkedScrollEnabled(prev => !prev);
   }, []);
 
-  const value: PaneManagerContextValue = {
+  const value = React.useMemo<PaneManagerContextValue>(() => ({
     panes,
     paneLayout,
     activePaneId,
@@ -243,7 +243,27 @@ export const PaneManagerProvider: React.FC<PaneManagerProviderProps> = ({
     setPanes,
     setPaneLayoutState,
     setPaneSizes,
-  };
+  }), [
+    panes,
+    paneLayout,
+    activePaneId,
+    activeBufferId,
+    paneSizes,
+    isLinkedScrollEnabled,
+    moveBufferToPane,
+    closePane,
+    switchPane,
+    splitPane,
+    closeSplit,
+    setPaneLayout,
+    updatePaneSize,
+    toggleLinkedScroll,
+    setActiveBufferId,
+    setActivePaneId,
+    setPanes,
+    setPaneLayoutState,
+    setPaneSizes,
+  ]);
 
   return (
     <PaneManagerContext.Provider value={value}>

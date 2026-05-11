@@ -10,7 +10,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *ProviderChangeData, clientID string) {
 	// Use the active chat's agent for provider changes.
 	ctx, activeChatID := ws.getActiveChatContext(clientID)
 
@@ -19,24 +19,6 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		// If no provider is configured (editor mode) or the configured model is not available,
 		// update the config first so that a new agent can be created with the requested provider.
 		if errors.Is(err, ErrNoProviderConfigured) || errors.Is(err, agent.ErrModelNotAvailable) || (err != nil && isProviderConfigError(err)) {
-			data, ok := msg["data"].(map[string]interface{})
-			if !ok {
-				_ = safeConn.WriteJSON(map[string]interface{}{
-					"type": "error",
-					"data": map[string]string{"message": "Invalid provider change payload"},
-				})
-				return
-			}
-			providerName, _ := data["provider"].(string)
-			providerName = strings.TrimSpace(providerName)
-			if providerName == "" {
-				_ = safeConn.WriteJSON(map[string]interface{}{
-					"type": "error",
-					"data": map[string]string{"message": "Provider is required"},
-				})
-				return
-			}
-
 			// Use a layered config manager to update the provider directly.
 			cm, createErr := ws.getLayeredConfigManager(clientID)
 			if createErr != nil {
@@ -46,7 +28,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 				})
 				return
 			}
-			providerType, parseErr := cm.MapStringToClientType(providerName)
+			providerType, parseErr := cm.MapStringToClientType(data.Provider)
 			if parseErr != nil {
 				_ = safeConn.WriteJSON(map[string]interface{}{
 					"type": "error",
@@ -100,26 +82,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 		return
 	}
 
-	data, ok := msg["data"].(map[string]interface{})
-	if !ok {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Invalid provider change payload"},
-		})
-		return
-	}
-
-	providerName, _ := data["provider"].(string)
-	providerName = strings.TrimSpace(providerName)
-	if providerName == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Provider is required"},
-		})
-		return
-	}
-
-	providerType, err := clientAgent.GetConfigManager().MapStringToClientType(providerName)
+	providerType, err := clientAgent.GetConfigManager().MapStringToClientType(data.Provider)
 	if err != nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -171,7 +134,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, msg ma
 	ws.publishProviderState(clientID)
 }
 
-func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *ModelChangeData, clientID string) {
 	// Use the active chat's agent for model changes.
 	ctx, activeChatID := ws.getActiveChatContext(clientID)
 
@@ -195,25 +158,6 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		return
 	}
 
-	data, ok := msg["data"].(map[string]interface{})
-	if !ok {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Invalid model change payload"},
-		})
-		return
-	}
-
-	modelName, _ := data["model"].(string)
-	modelName = strings.TrimSpace(modelName)
-	if modelName == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Model is required"},
-		})
-		return
-	}
-
 	// Check active query for the active chat, not the global client
 	if ctx != nil && activeChatID != "" && ctx.hasActiveQueryForChat(activeChatID) {
 		_ = safeConn.WriteJSON(map[string]interface{}{
@@ -227,8 +171,8 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 	previousModel := clientAgent.GetModel()
 	providerChanged := false
 
-	if providerName, _ := data["provider"].(string); strings.TrimSpace(providerName) != "" {
-		providerType, err := clientAgent.GetConfigManager().MapStringToClientType(providerName)
+	if data.Provider != "" {
+		providerType, err := clientAgent.GetConfigManager().MapStringToClientType(data.Provider)
 		if err == nil && providerType != clientAgent.GetProviderType() {
 			if err := clientAgent.SetProvider(providerType); err != nil {
 				_ = safeConn.WriteJSON(map[string]interface{}{
@@ -241,7 +185,7 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 		}
 	}
 
-	if err := clientAgent.SetModel(modelName); err != nil {
+	if err := clientAgent.SetModel(data.Model); err != nil {
 		if providerChanged && previousProvider != "" {
 			if rollbackErr := clientAgent.SetProvider(previousProvider); rollbackErr != nil {
 				log.Printf("webui: failed to rollback provider change after model switch failure: provider=%s model=%s rollback_err=%v", previousProvider, previousModel, rollbackErr)
@@ -287,7 +231,7 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, msg map[s
 }
 
 // handlePersonaChangeMessage handles persona change requests from the webui.
-func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, data *PersonaChangeData, clientID string) {
 	// Use the active chat's agent for persona changes.
 	ctx, activeChatID := ws.getActiveChatContext(clientID)
 
@@ -296,25 +240,6 @@ func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Agent is not available"},
-		})
-		return
-	}
-
-	data, ok := msg["data"].(map[string]interface{})
-	if !ok {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Invalid persona change payload"},
-		})
-		return
-	}
-
-	personaID, _ := data["persona"].(string)
-	personaID = strings.TrimSpace(personaID)
-	if personaID == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Persona is required"},
 		})
 		return
 	}
@@ -328,7 +253,7 @@ func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, msg map
 		return
 	}
 
-	if err := clientAgent.ApplyPersona(personaID); err != nil {
+	if err := clientAgent.ApplyPersona(data.Persona); err != nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": err.Error()},

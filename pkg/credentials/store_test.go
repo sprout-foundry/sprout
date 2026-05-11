@@ -10,6 +10,7 @@ import (
 func TestGetConfigDir_CustomEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	got, err := GetConfigDir()
 	if err != nil {
@@ -25,6 +26,7 @@ func TestGetConfigDir_XDGEnv(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", xdgDir)
 	// Ensure LEDIT_CONFIG is not set
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 
 	got, err := GetConfigDir()
 	if err != nil {
@@ -39,6 +41,7 @@ func TestGetConfigDir_XDGEnv(t *testing.T) {
 func TestGetConfigDir_Default(t *testing.T) {
 	// Ensure neither LEDIT_CONFIG nor XDG_CONFIG_HOME are set
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	got, err := GetConfigDir()
@@ -56,6 +59,7 @@ func TestGetConfigDir_Default(t *testing.T) {
 func TestGetAPIKeysPath(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	got, err := GetAPIKeysPath()
 	if err != nil {
@@ -70,6 +74,7 @@ func TestGetAPIKeysPath(t *testing.T) {
 func TestLoad_FileNotFound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	// Don't create the file
 
 	store, err := Load()
@@ -87,6 +92,7 @@ func TestLoad_FileNotFound(t *testing.T) {
 func TestLoad_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
 	if err := os.WriteFile(path, []byte("not-json{{{"), 0600); err != nil {
@@ -107,6 +113,7 @@ func TestLoad_InvalidJSON(t *testing.T) {
 func TestLoad_NilStoreJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
 	if err := os.WriteFile(path, []byte("null"), 0600); err != nil {
@@ -128,6 +135,7 @@ func TestLoad_NilStoreJSON(t *testing.T) {
 func TestSave_NilStore(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	if err := Save(nil); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -146,6 +154,7 @@ func TestSave_NilStore(t *testing.T) {
 func TestSave_ValidStore(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{"openai": "sk-test123", "anthropic": "sk-abc"}
 	if err := Save(store); err != nil {
@@ -175,6 +184,7 @@ func TestSave_ValidStore(t *testing.T) {
 func TestSave_LoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	original := Store{"provider-a": "key-a", "provider-b": "key-b"}
 	if err := Save(original); err != nil {
@@ -199,6 +209,7 @@ func TestSave_LoadRoundTrip(t *testing.T) {
 func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	// Don't set any env var or store anything
 
 	resolved, err := resolve("missing-provider", "")
@@ -219,6 +230,7 @@ func TestResolve_NoEnvVarAndNoStored(t *testing.T) {
 func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	// Store an env var with surrounding whitespace
 	t.Setenv("TRIM_ME_KEY", "  trim-value  ")
 
@@ -240,6 +252,7 @@ func TestResolve_WhitespaceTrimmedEnvVar(t *testing.T) {
 func TestResolvePrefersEnvironmentOverStoredKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("TEST_PROVIDER_API_KEY", "env-key")
 
 	store := Store{
@@ -266,6 +279,7 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 
@@ -293,6 +307,7 @@ func TestResolveFallsBackToStoredKey(t *testing.T) {
 func TestGetConfigDir_WhitespaceLEDITConfig(t *testing.T) {
 	// LEDIT_CONFIG is set to whitespace-only — should be treated as empty
 	t.Setenv("LEDIT_CONFIG", "   \t  ")
+	t.Setenv("SPROUT_CONFIG", "   \t  ")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	got, err := GetConfigDir()
@@ -309,6 +324,7 @@ func TestGetConfigDir_WhitespaceLEDITConfig(t *testing.T) {
 
 func TestGetConfigDir_WhitespaceXDGConfigHome(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "   \t  ")
 
 	got, err := GetConfigDir()
@@ -338,6 +354,7 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 	}
 	// Set LEDIT_CONFIG to a sub-directory of the read-only dir that doesn't exist
 	t.Setenv("LEDIT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
+	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "subdir", "nested"))
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := GetAPIKeysPath()
@@ -353,6 +370,7 @@ func TestGetAPIKeysPath_GetConfigDirFails(t *testing.T) {
 func TestLoad_ReadError(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	path := filepath.Join(dir, "api_keys.json")
 	if err := os.WriteFile(path, []byte(`{"key":"val"}`), 0600); err != nil {
@@ -386,6 +404,7 @@ func TestSave_WriteError(t *testing.T) {
 
 	// Point LEDIT_CONFIG to the read-only directory itself (already exists)
 	t.Setenv("LEDIT_CONFIG", readOnlyDir)
+	t.Setenv("SPROUT_CONFIG", readOnlyDir)
 
 	store := Store{"test": "value"}
 	err := Save(store)
@@ -404,6 +423,7 @@ func TestResolve_EnvVarSetButEmpty(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("EMPTY_KEY", "")
@@ -426,6 +446,7 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	t.Setenv("WS_KEY", "   \t  ")
@@ -446,6 +467,7 @@ func TestResolve_EnvVarWhitespaceOnly(t *testing.T) {
 func TestResolve_StoredValueWithWhitespace(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	// Force file backend to avoid keyring state pollution
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend() // Reset backend cache for this test

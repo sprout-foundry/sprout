@@ -19,35 +19,14 @@ import (
 // Returns the temp dir path and a cleanup function.
 func setupMCPTestEnv(t *testing.T) (string, func()) {
 	t.Helper()
-	origConfig := os.Getenv("LEDIT_CONFIG")
-	origGithub := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-	origAutoDiscover := os.Getenv("LEDIT_MCP_AUTO_DISCOVER")
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	// Clear github token to prevent auto-discovery adding servers
-	if origGithub != "" {
-		t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
-	}
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 	// Disable auto-discovery to ensure empty server list in tests
 	t.Setenv("LEDIT_MCP_AUTO_DISCOVER", "false")
-	cleanup := func() {
-		if origGithub != "" {
-			t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", origGithub)
-		} else {
-			os.Unsetenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-		}
-		if origConfig != "" {
-			os.Setenv("LEDIT_CONFIG", origConfig)
-		} else {
-			os.Unsetenv("LEDIT_CONFIG")
-		}
-		if origAutoDiscover != "" {
-			t.Setenv("LEDIT_MCP_AUTO_DISCOVER", origAutoDiscover)
-		} else {
-			os.Unsetenv("LEDIT_MCP_AUTO_DISCOVER")
-		}
-	}
-	return tmpDir, cleanup
+	return tmpDir, func() {}
 }
 
 // shouldSkipIfRealMCPConfigExists skips the test if ~/.config/sprout/mcp_config.json
@@ -373,11 +352,7 @@ func TestSetupCustomMCPServer_EOFStdin(t *testing.T) {
 
 func TestPromptForGitHubToken_EOFStdin(t *testing.T) {
 	// Clear the env var so promptForGitHubToken tries to read from stdin
-	origToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-	if origToken != "" {
-		os.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
-		defer os.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", origToken)
-	}
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
 
 	restoreStdin := replaceStdinWithClosedPipe(t)
 	defer restoreStdin()
@@ -400,15 +375,7 @@ func TestPromptForGitHubToken_EOFStdin(t *testing.T) {
 func TestPromptForGitHubToken_EmptyTokenInput(t *testing.T) {
 	// When GITHUB_PERSONAL_ACCESS_TOKEN is set, promptForGitHubToken returns it
 	// without reading stdin. Test that behavior when env var is set.
-	origToken := os.Getenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-	os.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "test-token-12345")
-	defer func() {
-		if origToken != "" {
-			os.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", origToken)
-		} else {
-			os.Unsetenv("GITHUB_PERSONAL_ACCESS_TOKEN")
-		}
-	}()
+	t.Setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "test-token-12345")
 
 	token, err := promptForGitHubToken(bufio.NewReader(os.Stdin))
 	if err != nil {

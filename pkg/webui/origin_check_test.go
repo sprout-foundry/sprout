@@ -3,7 +3,6 @@ package webui
 
 import (
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -57,8 +56,7 @@ func TestAllowedOriginsParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set the environment variable
-			os.Setenv("SPROUT_ALLOWED_ORIGINS", tt.envValue)
-			defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+			t.Setenv("SPROUT_ALLOWED_ORIGINS", tt.envValue)
 
 			// Create a minimal event bus for testing
 			eventBus := events.NewEventBus()
@@ -86,8 +84,7 @@ func TestAllowedOriginsParsing(t *testing.T) {
 // validates origins against the allowedOrigins list.
 func TestCheckOrigin_AllowedOrigins(t *testing.T) {
 	// Set up allowed origins
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com,https://test.com:3000,http://app.internal")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com,https://test.com:3000,http://app.internal")
 
 	// Create server with localhost binding (not 0.0.0.0)
 	eventBus := events.NewEventBus()
@@ -180,8 +177,8 @@ func TestCheckOrigin_AllowedOrigins(t *testing.T) {
 // are configured, the existing behavior is preserved.
 func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 	// Ensure no allowed origins env var is set
-	os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
-	os.Unsetenv("LEDIT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
+	t.Setenv("LEDIT_ALLOWED_ORIGINS", "")
 
 	// Test with localhost binding
 	eventBus := events.NewEventBus()
@@ -279,8 +276,7 @@ func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 // is still allowed (0.0.0.0 takes precedence for backwards compatibility).
 func TestCheckOrigin_AllowedOriginsWithZeroZeroZeroZero(t *testing.T) {
 	// Set allowed origins
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com")
 
 	// Create server with 0.0.0.0 binding
 	eventBus := events.NewEventBus()
@@ -329,7 +325,7 @@ func TestCheckOrigin_AllowedOriginsWithZeroZeroZeroZero(t *testing.T) {
 // TestCheckOrigin_IPV6Binding verifies origin checking with IPv6 binding (::).
 func TestCheckOrigin_IPV6Binding(t *testing.T) {
 	// Ensure no allowed origins env var is set
-	os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "::")
@@ -372,8 +368,7 @@ func TestCheckOrigin_IPV6Binding(t *testing.T) {
 // TestCheckOrigin_InvalidOrigin verifies graceful handling of malformed origins.
 func TestCheckOrigin_InvalidOrigin(t *testing.T) {
 	// Set allowed origins
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
@@ -421,8 +416,7 @@ func TestCheckOrigin_InvalidOrigin(t *testing.T) {
 // TestCheckOrigin_CaseInsensitive verifies that origin comparison is case-insensitive.
 func TestCheckOrigin_CaseInsensitive(t *testing.T) {
 	// Set allowed origins with mixed case
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "HTTPS://Example.COM:3000,http://LOCALHOST:8080")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "HTTPS://Example.COM:3000,http://LOCALHOST:8080")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
@@ -480,8 +474,8 @@ func TestCheckOrigin_CaseInsensitive(t *testing.T) {
 // TestCheckOrigin_IPv6Localhost verifies that IPv6 localhost (::1) is
 // accepted as a local connection, just like 127.0.0.1.
 func TestCheckOrigin_IPv6Localhost(t *testing.T) {
-	os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
-	os.Unsetenv("LEDIT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
+	t.Setenv("LEDIT_ALLOWED_ORIGINS", "")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
@@ -536,8 +530,7 @@ func TestCheckOrigin_IPv6Localhost(t *testing.T) {
 // configuring "https://example.com:443" still matches a browser sending
 // "Origin: https://example.com" (browsers strip default ports).
 func TestCheckOrigin_DefaultPortNormalization(t *testing.T) {
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com,http://test.com")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com,http://test.com")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
@@ -595,8 +588,7 @@ func TestCheckOrigin_DefaultPortNormalization(t *testing.T) {
 // TestCheckOrigin_DefaultPortNormalization_ConfigWithPort verifies the
 // reverse: configuring with default port matches browser without port.
 func TestCheckOrigin_DefaultPortNormalization_ConfigWithPort(t *testing.T) {
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com:443,http://test.com:80")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com:443,http://test.com:80")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
@@ -646,8 +638,7 @@ func TestCheckOrigin_DefaultPortNormalization_ConfigWithPort(t *testing.T) {
 // include trailing slashes, so a config with a trailing slash
 // should still match.
 func TestCheckOrigin_TrailingSlash(t *testing.T) {
-	os.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com/,https://test.com")
-	defer os.Unsetenv("SPROUT_ALLOWED_ORIGINS")
+	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com/,https://test.com")
 
 	eventBus := events.NewEventBus()
 	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")

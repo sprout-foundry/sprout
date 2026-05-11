@@ -11,7 +11,7 @@ import { buildKeyString, HotkeyProvider } from './HotkeyContext';
 
 // Mock the ApiService module so the provider can mount without real API calls.
 // The loadHotkeys callback will fail gracefully (sets isLoaded=true in finally).
-jest.mock('../services/api', () => {
+vi.mock('../services/api', () => {
   class MockApiService {
     private static instance: MockApiService;
     static getInstance() {
@@ -33,7 +33,7 @@ jest.mock('../services/api', () => {
 // HotkeyProvider uses useLog() which requires NotificationContext.
 // We provide a minimal mock with plain arrow functions to avoid heavy module
 // resolution cascade that causes OOM under Node 22 + Jest 27.
-jest.mock('../contexts/NotificationContext', () => {
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -60,7 +60,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -253,7 +253,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
     // Wait for the provider's async initialization to settle
     await flushPromises();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true });
@@ -273,7 +273,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
     await flushPromises();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // Create and focus an input element
@@ -300,7 +300,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
     await flushPromises();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // Create and focus an input element
@@ -327,7 +327,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
     await flushPromises();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true });
@@ -349,7 +349,7 @@ describe('fallback hotkeys are wired to hotkey commands', () => {
 
     await flushPromises();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // Ctrl+Z is not in the fallback hotkeys
@@ -405,7 +405,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     // Simulate the environment where the listener registered successfully.
     expect(registeredCallback).not.toBeNull();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // Simulate Electron sending a desktop hotkey for a global command
@@ -431,7 +431,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     container.appendChild(input);
     input.focus();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // split_editor_horizontal has global: false in the fallback hotkeys.
@@ -455,7 +455,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     // Ensure no input is focused (document.body is focused)
     document.body.focus();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     registeredCallback!('split_editor_horizontal');
@@ -480,7 +480,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     container.appendChild(editable);
     editable.focus();
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // close_all_editors has global: true, should fire even with contentEditable focused
@@ -522,7 +522,7 @@ describe('desktop hotkey bridge (Electron onDesktopHotkey)', () => {
     await flushPromises();
 
     // No crash — the provider should work fine without the desktop API
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // Web hot keys should still work

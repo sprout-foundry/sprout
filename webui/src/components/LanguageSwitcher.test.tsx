@@ -6,7 +6,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../extensions/languageRegistry', () => {
+vi.mock('../extensions/languageRegistry', () => {
   const mockEntries: Array<{ id: string; name: string; extensions: string[] }> = [
     { id: 'javascript', name: 'JavaScript', extensions: ['js', 'mjs', 'cjs'] },
     { id: 'typescript', name: 'TypeScript', extensions: ['ts'] },
@@ -20,12 +20,12 @@ jest.mock('../extensions/languageRegistry', () => {
   return {
     allLanguageEntries: mockEntries,
     getLanguageExtensions: () => [],
-    resolveLanguageId: jest.fn(),
-    detectLanguage: jest.fn(),
+    resolveLanguageId: vi.fn(),
+    detectLanguage: vi.fn(),
   };
 });
 
-jest.mock('lucide-react', () => ({
+vi.mock('lucide-react', () => ({
   Check: () => <span data-testid="check-icon" />,
   FileCode: () => <span data-testid="filecode-icon" />,
 }));
@@ -40,9 +40,9 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn() as jest.Mock;
+  global.cancelAnimationFrame = vi.fn() as vi.Mock;
   // jsdom does not implement scrollIntoView
-  Element.prototype.scrollIntoView = jest.fn() as jest.Mock;
+  Element.prototype.scrollIntoView = vi.fn() as vi.Mock;
 });
 
 // ---------------------------------------------------------------------------
@@ -53,7 +53,7 @@ let mountPoint: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mountPoint = document.createElement('div');
   document.body.appendChild(mountPoint);
 });
@@ -76,11 +76,11 @@ afterEach(() => {
 interface RenderOptions {
   currentLanguageId?: string | null;
   isAutoDetected?: boolean;
-  onLanguageChange?: jest.Mock;
+  onLanguageChange?: vi.Mock;
 }
 
 function renderSwitcher(opts: RenderOptions = {}) {
-  const { currentLanguageId = null, isAutoDetected = true, onLanguageChange = jest.fn() } = opts;
+  const { currentLanguageId = null, isAutoDetected = true, onLanguageChange = vi.fn() } = opts;
 
   // eslint-disable-next-line testing-library/no-unnecessary-act
   act(() => {

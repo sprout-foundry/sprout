@@ -12,12 +12,12 @@ import { computeBracketDecorations, MAX_DEPTH } from './bracketColorization';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/view', () => ({
-  Decoration: { mark: jest.fn(() => ({ range: jest.fn() })), set: jest.fn(), none: [] },
-  ViewPlugin: { fromClass: jest.fn() },
-  EditorView: { baseTheme: jest.fn(() => []) },
+vi.mock('@codemirror/view', () => ({
+  Decoration: { mark: vi.fn(() => ({ range: vi.fn() })), set: vi.fn(), none: [] },
+  ViewPlugin: { fromClass: vi.fn() },
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
 // ── computeBracketDecorations tests ─────────────────────────────────
 

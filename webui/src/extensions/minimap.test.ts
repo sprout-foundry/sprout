@@ -8,16 +8,16 @@
 import { minimapExtension, showMinimap } from './minimap';
 import { showMinimap as showMinimapOriginal } from '@replit/codemirror-minimap';
 
-jest.mock('@codemirror/view', () => ({
-  EditorView: { baseTheme: jest.fn(() => []) },
+vi.mock('@codemirror/view', () => ({
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
 
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
 const mockComputeResult = Symbol('showMinimap.compute.result');
-jest.mock('@replit/codemirror-minimap', () => ({
+vi.mock('@replit/codemirror-minimap', () => ({
   showMinimap: {
-    compute: jest.fn(() => mockComputeResult),
+    compute: vi.fn(() => mockComputeResult),
   },
 }));
 
@@ -39,7 +39,7 @@ describe('minimap', () => {
 
   it('the compute callback returns config with blocks display and always overlay', () => {
     minimapExtension();
-    const computeCall = (showMinimapOriginal.compute as jest.Mock).mock.calls[0];
+    const computeCall = (showMinimapOriginal.compute as vi.Mock).mock.calls[0];
     const callbackFn = computeCall[1];
     const config = callbackFn(null as any);
     expect(config.displayText).toBe('blocks');
@@ -49,7 +49,7 @@ describe('minimap', () => {
 
   it('the create callback returns a div with class cm-minimap-container', () => {
     minimapExtension();
-    const computeCall = (showMinimapOriginal.compute as jest.Mock).mock.calls[0];
+    const computeCall = (showMinimapOriginal.compute as vi.Mock).mock.calls[0];
     const callbackFn = computeCall[1];
     const config = callbackFn(null as any);
     const result = config.create({} as any);

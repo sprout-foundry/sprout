@@ -7,53 +7,53 @@ import { createRoot, type Root } from 'react-dom/client';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockFreeze = jest.fn();
-const mockResume = jest.fn();
-const mockGetInstance = jest.fn();
-const mockFreezeAll = jest.fn();
-const mockResumeAll = jest.fn();
+const mockFreeze = vi.fn();
+const mockResume = vi.fn();
+const mockGetInstance = vi.fn();
+const mockFreezeAll = vi.fn();
+const mockResumeAll = vi.fn();
 
-jest.mock('../services/websocket', () => {
+vi.mock('../services/websocket', () => {
   class MockWebSocketService {
     static getInstance = mockGetInstance;
     freeze = mockFreeze;
     resume = mockResume;
-    connect = jest.fn();
-    disconnect = jest.fn();
+    connect = vi.fn();
+    disconnect = vi.fn();
   }
   return { WebSocketService: MockWebSocketService };
 });
 
-jest.mock('../contexts/EventsContext', () => ({
+vi.mock('../contexts/EventsContext', () => ({
   useEvents: () => ({
     freeze: mockFreeze,
     resume: mockResume,
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    onEvent: jest.fn(),
-    removeEvent: jest.fn(),
-    sendEvent: jest.fn(),
-    isConnected: jest.fn().mockReturnValue(true),
-    onReconnect: jest.fn(),
-    resetAndReconnect: jest.fn(),
-    getQueuedMessageCount: jest.fn().mockReturnValue(0),
-    flushQueuedMessages: jest.fn().mockReturnValue(0),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    onEvent: vi.fn(),
+    removeEvent: vi.fn(),
+    sendEvent: vi.fn(),
+    isConnected: vi.fn().mockReturnValue(true),
+    onReconnect: vi.fn(),
+    resetAndReconnect: vi.fn(),
+    getQueuedMessageCount: vi.fn().mockReturnValue(0),
+    flushQueuedMessages: vi.fn().mockReturnValue(0),
   }),
 }));
 
-jest.mock('../services/terminalWebSocket', () => {
+vi.mock('../services/terminalWebSocket', () => {
   class MockTerminalWebSocketService {
-    static createInstance = jest.fn();
-    static getInstance = jest.fn();
+    static createInstance = vi.fn();
+    static getInstance = vi.fn();
     static freezeAll = mockFreezeAll;
     static resumeAll = mockResumeAll;
-    static registerInstance = jest.fn();
-    static unregisterInstance = jest.fn();
+    static registerInstance = vi.fn();
+    static unregisterInstance = vi.fn();
     static instances = new Set();
-    freeze = jest.fn();
-    resume = jest.fn();
-    connect = jest.fn();
-    disconnect = jest.fn();
+    freeze = vi.fn();
+    resume = vi.fn();
+    connect = vi.fn();
+    disconnect = vi.fn();
   }
   return { TerminalWebSocketService: MockTerminalWebSocketService };
 });
@@ -70,8 +70,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.useFakeTimers();
-  jest.clearAllMocks();
+  vi.useFakeTimers();
+  vi.clearAllMocks();
 
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -93,7 +93,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
-  jest.useRealTimers();
+  vi.useRealTimers();
 });
 
 function fireVisibilityChange(state: 'visible' | 'hidden'): void {
@@ -174,7 +174,7 @@ describe('usePageVisibility', () => {
 
     // Advance past the debounce window (500ms)
     act(() => {
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
     });
 
     expect(mockFreeze).toHaveBeenCalledTimes(1);
@@ -200,7 +200,7 @@ describe('usePageVisibility', () => {
     expect(mockResumeAll).not.toHaveBeenCalled();
 
     act(() => {
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
     });
 
     expect(mockResume).toHaveBeenCalledTimes(1);
@@ -216,7 +216,7 @@ describe('usePageVisibility', () => {
     // Rapid toggle: visible → hidden → visible within 100ms
     fireVisibilityChange('hidden');
     act(() => {
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
     });
     fireVisibilityChange('visible');
 
@@ -226,7 +226,7 @@ describe('usePageVisibility', () => {
 
     // Advance past debounce window
     act(() => {
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
     });
 
     // Only resume should have been called (the final state was visible)
@@ -245,14 +245,14 @@ describe('usePageVisibility', () => {
     fireVisibilityChange('hidden');
     // Wait 200ms
     act(() => {
-      jest.advanceTimersByTime(200);
+      vi.advanceTimersByTime(200);
     });
     // Show the page again
     fireVisibilityChange('visible');
 
     // Advance past the debounce — the page is now visible
     act(() => {
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
     });
 
     // The stale freeze should have been skipped — only resume should execute
@@ -274,7 +274,7 @@ describe('usePageVisibility', () => {
 
     // Advance timers after unmount — the mountedRef guard should prevent execution
     act(() => {
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
     });
 
     expect(mockFreeze).not.toHaveBeenCalled();
@@ -282,7 +282,7 @@ describe('usePageVisibility', () => {
   });
 
   it('removes the visibilitychange event listener on unmount', () => {
-    const spy = jest.spyOn(document, 'removeEventListener');
+    const spy = vi.spyOn(document, 'removeEventListener');
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     act(() => {
@@ -305,21 +305,21 @@ describe('usePageVisibility', () => {
     // Rapid cycle: visible → hidden → visible → hidden → visible
     fireVisibilityChange('hidden');
     act(() => {
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
     });
     fireVisibilityChange('visible');
     act(() => {
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
     });
     fireVisibilityChange('hidden');
     act(() => {
-      jest.advanceTimersByTime(100);
+      vi.advanceTimersByTime(100);
     });
     fireVisibilityChange('visible');
 
     // Advance past debounce window
     act(() => {
-      jest.advanceTimersByTime(500);
+      vi.advanceTimersByTime(500);
     });
 
     // Only resume should execute (final state was visible)

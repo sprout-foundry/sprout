@@ -5,43 +5,43 @@ import { act, createElement } from 'react';
 import Sidebar from './Sidebar';
 import { ApiService } from '../services/api';
 
-jest.mock('./SettingsPanel', () => () => <div data-testid="settings-panel" />);
-jest.mock('./FileTree', () => () => <div data-testid="file-tree" />);
-jest.mock('./SearchView', () => () => <div data-testid="search-view" />);
-jest.mock('./GitSidebarPanel', () => () => <div data-testid="git-panel" />);
-jest.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
-jest.mock('./SproutLogo', () => () => <div data-testid="sprout-logo" />);
-jest.mock('./LocationSwitcher', () => () => <div data-testid="location-switcher" />);
-jest.mock('./ResizeHandle', () => () => null);
-jest.mock('../contexts/ThemeContext', () => ({
+vi.mock('./SettingsPanel', () => () => <div data-testid="settings-panel" />);
+vi.mock('./FileTree', () => () => <div data-testid="file-tree" />);
+vi.mock('./SearchView', () => () => <div data-testid="search-view" />);
+vi.mock('./GitSidebarPanel', () => () => <div data-testid="git-panel" />);
+vi.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
+vi.mock('./SproutLogo', () => () => <div data-testid="sprout-logo" />);
+vi.mock('./LocationSwitcher', () => () => <div data-testid="location-switcher" />);
+vi.mock('./ResizeHandle', () => () => null);
+vi.mock('../contexts/ThemeContext', () => ({
   useTheme: () => ({
     themePack: { id: 'default' },
     availableThemePacks: [],
-    setThemePack: jest.fn(),
-    importTheme: jest.fn(() => ({ success: true })),
-    removeTheme: jest.fn(),
+    setThemePack: vi.fn(),
+    importTheme: vi.fn(() => ({ success: true })),
+    removeTheme: vi.fn(),
   }),
 }));
-jest.mock('../contexts/HotkeyContext', () => ({
+vi.mock('../contexts/HotkeyContext', () => ({
   useHotkeys: () => ({
-    applyPreset: jest.fn(),
+    applyPreset: vi.fn(),
   }),
 }));
-jest.mock('../services/api', () => {
-  const actual = jest.requireActual('../services/api');
+vi.mock('../services/api', () => {
+  const actual = vi.importActual('../services/api');
   return {
     ...actual,
     ApiService: {
-      getInstance: jest.fn(),
+      getInstance: vi.fn(),
     },
   };
 });
 
 // Sidebar uses useLog() which requires NotificationContext.
-// We provide a minimal mock with plain arrow functions (no jest.fn()) so Jest
+// We provide a minimal mock with plain arrow functions (no vi.fn()) so Jest
 // doesn't need to transform NotificationContext.tsx, avoiding a heavy module
 // resolution cascade that causes OOM under Node 22 + Jest 27.
-jest.mock('../contexts/NotificationContext', () => {
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -74,10 +74,10 @@ describe('Sidebar provider selection', () => {
     root = createRoot(container);
 
     apiServiceMock = {
-      getSettings: jest.fn().mockResolvedValue({}),
-      getProviders: jest.fn(),
+      getSettings: vi.fn().mockResolvedValue({}),
+      getProviders: vi.fn(),
     };
-    (ApiService.getInstance as jest.Mock).mockReturnValue(apiServiceMock);
+    (ApiService.getInstance as vi.Mock).mockReturnValue(apiServiceMock);
   });
 
   afterEach(() => {
@@ -85,8 +85,8 @@ describe('Sidebar provider selection', () => {
       root.unmount();
     });
     container.remove();
-    jest.restoreAllMocks();
-    jest.clearAllMocks();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it('does not let a stale provider fetch overwrite a user selection', async () => {
@@ -115,7 +115,7 @@ describe('Sidebar provider selection', () => {
       current_model: 'gpt-4o-mini',
     });
 
-    const onProviderChange = jest.fn();
+    const onProviderChange = vi.fn();
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {

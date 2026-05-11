@@ -8,28 +8,28 @@ import { EditorManagerProvider, useEditorManager, MAX_PANES, MIN_PANE_WIDTH_PERC
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/fileAccess', () => ({
-  writeFileWithConsent: jest.fn().mockResolvedValue({
+vi.mock('../services/fileAccess', () => ({
+  writeFileWithConsent: vi.fn().mockResolvedValue({
     ok: true,
     json: () => Promise.resolve({ message: 'File saved successfully' }),
   }),
 }));
 
-jest.mock('./SproutAdapterContext', () => ({
-  ...jest.requireActual('./SproutAdapterContext'),
+vi.mock('./SproutAdapterContext', () => ({
+  ...vi.importActual('./SproutAdapterContext'),
   useSproutFetch: () =>
-    jest.fn().mockResolvedValue({
+    vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ message: 'File saved successfully' }),
     }),
 }));
 
-jest.mock('../services/formatter', () => ({
-  formatWithPrettier: jest.fn().mockResolvedValue(undefined),
-  getPrettierParser: jest.fn().mockReturnValue(null),
+vi.mock('../services/formatter', () => ({
+  formatWithPrettier: vi.fn().mockResolvedValue(undefined),
+  getPrettierParser: vi.fn().mockReturnValue(null),
 }));
 
-jest.mock('./NotificationContext', () => {
+vi.mock('./NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -57,7 +57,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   latestContext = undefined;
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   localStorage.removeItem('sprout.editor.layoutState');

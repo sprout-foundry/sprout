@@ -64,7 +64,7 @@ function createMockIDBDatabase() {
   const db: Record<string, unknown> = {
     objectStoreNames: { contains: () => true },
     createObjectStore: () => {},
-    close: jest.fn(),
+    close: vi.fn(),
     transaction: () => {
       const store = {
         getAll: () => createSyncResolvingRequest([]),
@@ -110,15 +110,15 @@ function createMockFetch(responseOverrides?: Map<string, Partial<Response>>) {
 // ── Test lifecycle ──────────────────────────────────────────────────────────
 
 beforeEach(() => {
-  jest.restoreAllMocks();
-  jest.clearAllMocks();
+  vi.restoreAllMocks();
+  vi.clearAllMocks();
   resetWasmShell();
 
   capturedFetchUrls = [];
 
   // Suppress expected console output
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 
   // ── IndexedDB mock ──────────────────────────────────────────────────────
   const mockDB = createMockIDBDatabase();
@@ -127,7 +127,7 @@ beforeEach(() => {
   };
 
   // ── document.createElement mock ──────────────────────────────────────────
-  jest.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+  vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
     if (tag === 'script') {
       // Create a real script element so dispatchEvent works properly
       mockScript = _origCreateElement('script') as unknown as HTMLScriptElement;
@@ -146,7 +146,7 @@ beforeEach(() => {
   //     script.onerror = () => reject();
   //   });
   // So by the time we hit the next microtask, onload is already set.
-  jest.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => {
+  vi.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => {
     if (node === mockScript) {
       queueMicrotask(() => {
         mockScript.dispatchEvent(new Event('load'));
@@ -181,7 +181,7 @@ beforeEach(() => {
   (window as unknown as Record<string, unknown>).fetch = createMockFetch();
 
   // ── WebAssembly.instantiate mock ─────────────────────────────────────────
-  jest.spyOn(WebAssembly, 'instantiate').mockImplementation(async () => ({
+  vi.spyOn(WebAssembly, 'instantiate').mockImplementation(async () => ({
     instance: {} as WebAssembly.Instance,
     module: {} as WebAssembly.Module,
   }));
@@ -189,7 +189,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetWasmShell();
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
   delete (window as unknown as Record<string, unknown>).SproutWasm;
   delete (window as unknown as Record<string, unknown>).__sproutStore;
   delete (window as unknown as Record<string, unknown>).Go;
@@ -353,7 +353,7 @@ describe('initWasmShell — configurable paths', () => {
   describe('wasmExecUrl script loading error', () => {
     it('rejects when the script fails to load', async () => {
       // Override appendChild to dispatch an error event instead of load
-      (document.head.appendChild as jest.Mock).mockImplementation((node: Node) => {
+      (document.head.appendChild as vi.Mock).mockImplementation((node: Node) => {
         if (node === mockScript) {
           queueMicrotask(() => {
             mockScript.dispatchEvent(new Event('error'));
@@ -368,7 +368,7 @@ describe('initWasmShell — configurable paths', () => {
     it('includes custom wasmExecUrl in the error when script load fails', async () => {
       const customUrl = '/custom/broken/wasm_exec.js';
 
-      (document.head.appendChild as jest.Mock).mockImplementation((node: Node) => {
+      (document.head.appendChild as vi.Mock).mockImplementation((node: Node) => {
         if (node === mockScript) {
           queueMicrotask(() => {
             mockScript.dispatchEvent(new Event('error'));

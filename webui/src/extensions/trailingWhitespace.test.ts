@@ -11,16 +11,16 @@ import { findTrailingWhitespaceStart } from './trailingWhitespace';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   Decoration: {
-    mark: jest.fn(() => ({ range: jest.fn() })),
+    mark: vi.fn(() => ({ range: vi.fn() })),
     none: [],
-    set: jest.fn(),
+    set: vi.fn(),
   },
-  ViewPlugin: { fromClass: jest.fn() },
-  EditorView: { baseTheme: jest.fn(() => []) },
+  ViewPlugin: { fromClass: vi.fn() },
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
 // ── findTrailingWhitespaceStart tests ───────────────────────────────
 

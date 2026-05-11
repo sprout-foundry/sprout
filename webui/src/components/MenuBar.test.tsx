@@ -13,7 +13,7 @@ import { NotificationProvider } from '../contexts/NotificationContext';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/api', () => {
+vi.mock('../services/api', () => {
   class MockApiService {
     private static instance: MockApiService;
     static getInstance() {
@@ -52,7 +52,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -381,7 +381,7 @@ describe('MenuBar', () => {
     await renderMenuBar();
     openMenu(0); // File
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     // Click "New File"
@@ -402,7 +402,7 @@ describe('MenuBar', () => {
     openMenu(0); // File
 
     // "New File" should be highlighted at index 0
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:hotkey', handler);
 
     act(() => {
@@ -417,7 +417,7 @@ describe('MenuBar', () => {
   });
 
   test('clicking "About sprout" shows an alert() and closes the menu', async () => {
-    const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     await renderMenuBar();
     openMenu(4); // Help
 
@@ -690,7 +690,7 @@ describe('MenuBar', () => {
     await renderMenuBar();
     openMenu(4); // Help
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     window.addEventListener('sprout:open-hotkeys-config', handler);
 
     const items = getDropdownItems();
@@ -706,7 +706,7 @@ describe('MenuBar', () => {
   });
 
   test('clicking "Report Issue" opens the GitHub issues URL', async () => {
-    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     await renderMenuBar();
     openMenu(4); // Help
 

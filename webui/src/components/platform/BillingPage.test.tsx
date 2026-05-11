@@ -9,16 +9,16 @@ import { getAdapter } from '../../services/apiAdapter';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../../services/apiAdapter', () => ({
-  getAdapter: jest.fn(),
+vi.mock('../../services/apiAdapter', () => ({
+  getAdapter: vi.fn(),
 }));
 
-jest.mock('../../utils/log', () => ({
+vi.mock('../../utils/log', () => ({
   useLog: () => ({
-    error: jest.fn(),
-    warn: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
   }),
 }));
 
@@ -28,7 +28,7 @@ jest.mock('../../utils/log', () => ({
 
 let container: HTMLDivElement;
 let root: Root;
-let mockFetch: jest.Mock;
+let mockFetch: vi.Mock;
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -38,8 +38,8 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
-  mockFetch = jest.fn().mockResolvedValue({
+  vi.clearAllMocks();
+  mockFetch = vi.fn().mockResolvedValue({
     ok: true,
     json: () =>
       Promise.resolve({

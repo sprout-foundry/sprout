@@ -269,6 +269,11 @@ func classifySingleCommand(cmd string) SecurityRisk {
 		return SecurityDangerous
 	}
 
+	// Check for path traversal in redirection targets (e.g., > /tmp/../etc/passwd)
+	if containsRedirection(cmd) && hasRedirectionTraversalToSystemDir(cmd) {
+		return SecurityDangerous
+	}
+
 	if isPrivilegedPackageInstall(cmdLower) {
 		return SecurityCaution
 	}

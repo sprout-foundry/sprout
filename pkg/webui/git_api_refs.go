@@ -117,12 +117,14 @@ func (ws *ReactWebServer) handleAPIGitCommitMessage(w http.ResponseWriter, r *ht
 	}
 
 	// Match /commit flow: detect branch and staged file actions.
+	var branch string
 	branchOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "rev-parse", "--abbrev-ref", "HEAD").CombinedOutput()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to get branch name: %v", err), http.StatusInternalServerError)
-		return
+		// Initial commit: HEAD doesn't exist yet, use empty branch.
+		branch = ""
+	} else {
+		branch = strings.TrimSpace(string(branchOutput))
 	}
-	branch := strings.TrimSpace(string(branchOutput))
 
 	stagedFilesOutput, err := ws.gitCommandForWorkspace(workspaceRoot, "diff", "--cached", "--name-status").CombinedOutput()
 	if err != nil {

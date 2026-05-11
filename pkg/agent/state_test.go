@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -348,6 +349,84 @@ func TestPreviousSummaryMethods(t *testing.T) {
 	if agent.GetPreviousSummary() != testSummary {
 		t.Errorf("Expected summary %q, got %q", testSummary, agent.GetPreviousSummary())
 	}
+}
+
+// TestValidateStateFilePath tests the validateStateFilePath function
+// for path traversal and security validation.
+func TestValidateStateFilePath(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		expectErr bool
+	}{
+		// Valid cases
+		{"simple filename", ".coder_state.json", false},
+		{"regular filename", "test_state.json", false},
+		{"filename with multiple dots", "my.state.file.json", false},
+		{"hidden file with dot prefix", ".hidden_state", false},
+		{"whitespace trimmed to valid", "  test_state.json  ", false},
+
+		// Invalid cases: empty/whitespace
+		{"empty string", "", true},
+		{"whitespace only", "   ", true},
+		{"tab only", "\t", true},
+		{"newline only", "\n", true},
+
+		// Invalid cases: absolute paths
+		{"absolute Unix path", "/etc/passwd", true},
+
+		// Note: On Linux, backslashes are valid filename characters,
+		// so Windows paths are NOT rejected. This is expected behavior
+		// on Unix-like systems (filepath.IsAbs uses OS-specific rules).
+
+		// Invalid cases: null bytes
+		{"null byte in filename", "state\x00.json", true},
+		{"null byte path traversal", "state.json\x00/../../etc/passwd", true},
+
+		// Invalid cases: path traversal
+		{"parent traversal", "../../etc/passwd", true},
+		{"disguised traversal", "foo/../../bar", true},
+		{"double dot alone", "..", true},
+		{"complex traversal", "./../../../tmp/evil", true},
+
+		// Edge case: single dot (filepath.Clean(".") = ".", which is a no-op for directory writes)
+		{"single dot current dir", ".", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := validateStateFilePath(tt.input)
+			if tt.expectErr && err == nil {
+				t.Errorf("expected error for input %q, got nil", tt.input)
+			}
+			if !tt.expectErr && err != nil {
+				t.Errorf("expected no error for input %q, got: %v", tt.input, err)
+			}
+		})
+	}
+
+	// Test symlink rejection (requires filesystem setup)
+	t.Run("symlink rejected", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		target := filepath.Join(tmpDir, "target.txt")
+		link := filepath.Join(tmpDir, "link_state.json")
+		if err := os.WriteFile(target, []byte("test"), 0644); err != nil {
+			t.Fatalf("failed to create target: %v", err)
+		}
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+		// Change to temp dir so the relative symlink path resolves
+		origDir, _ := os.Getwd()
+		if err := os.Chdir(tmpDir); err != nil {
+			t.Fatalf("failed to chdir: %v", err)
+		}
+		defer os.Chdir(origDir)
+		_, err := validateStateFilePath("link_state.json")
+		if err == nil {
+			t.Error("expected error for symlink path, got nil")
+		}
+	})
 }
 
 // Helper function to check if string contains substring

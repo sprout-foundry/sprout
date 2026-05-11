@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -71,18 +72,73 @@ func (a *Agent) replaceTaskActions(actions []TaskAction) {
 	taskActionsMu.Unlock()
 }
 
+// validateStateFilePath validates that a filename is safe for state file operations.
+// It prevents:
+//   1. Absolute path writes (e.g., /etc/passwd)
+//   2. Path traversal via ".." components (e.g., ../../etc/passwd)
+//   3. Null bytes in filenames (cross-platform consistency)
+//   4. Symlinks that could redirect writes to arbitrary files
+//
+// Only simple filenames or safe relative paths within the current directory are allowed.
+func validateStateFilePath(filename string) (string, error) {
+	trimmed := strings.TrimSpace(filename)
+	if trimmed == "" {
+		return "", fmt.Errorf("state file path cannot be empty")
+	}
+
+	// Reject null bytes (valid on some filesystems but confusing and dangerous)
+	if strings.Contains(trimmed, "\x00") {
+		return "", fmt.Errorf("state file path %q contains invalid null byte", filename)
+	}
+
+	// Clean the path to resolve any "." or ".." segments
+	cleaned := filepath.Clean(trimmed)
+
+	// Reject absolute paths
+	if filepath.IsAbs(cleaned) {
+		return "", fmt.Errorf("state file path %q cannot be an absolute path", filename)
+	}
+
+	// Reject paths that still contain ".." after cleaning (path traversal)
+	if strings.Contains(cleaned, "..") {
+		return "", fmt.Errorf("state file path %q contains invalid path traversal components", filename)
+	}
+
+	// Ensure path doesn't start with path separator (extra check for Windows compatibility)
+	if strings.HasPrefix(cleaned, string(os.PathSeparator)) || strings.HasPrefix(cleaned, "/") {
+		return "", fmt.Errorf("state file path %q cannot start with path separator", filename)
+	}
+
+	// Reject symlinks to prevent writes to arbitrary files outside the working directory
+	if info, err := os.Lstat(cleaned); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("state file path %q is a symlink; symlinks are not allowed for security", filename)
+	}
+
+	return cleaned, nil
+}
+
 // SaveStateToFile saves agent state to a file
 func (a *Agent) SaveStateToFile(filename string) error {
+	validatedPath, err := validateStateFilePath(filename)
+	if err != nil {
+		return err
+	}
+
 	stateData, err := a.ExportState()
 	if err != nil {
 		return fmt.Errorf("failed to export state: %w", err)
 	}
-	return os.WriteFile(filename, stateData, 0644)
+	return os.WriteFile(validatedPath, stateData, 0644)
 }
 
 // LoadStateFromFile loads agent state from a file
 func (a *Agent) LoadStateFromFile(filename string) error {
-	data, err := os.ReadFile(filename)
+	validatedPath, err := validateStateFilePath(filename)
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(validatedPath)
 	if err != nil {
 		return fmt.Errorf("failed to read state file: %w", err)
 	}
@@ -91,7 +147,12 @@ func (a *Agent) LoadStateFromFile(filename string) error {
 
 // LoadSummaryFromFile loads ONLY the compact summary from a state file for minimal continuity
 func (a *Agent) LoadSummaryFromFile(filename string) error {
-	data, err := os.ReadFile(filename)
+	validatedPath, err := validateStateFilePath(filename)
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(validatedPath)
 	if err != nil {
 		return fmt.Errorf("failed to read summary file: %w", err)
 	}

@@ -7,23 +7,23 @@ import { LocalEventsProvider } from './localEventsProvider';
 // ---------------------------------------------------------------------------
 
 const mockInstance = {
-  connect: jest.fn(),
-  disconnect: jest.fn(),
-  onEvent: jest.fn(),
-  removeEvent: jest.fn(),
-  sendEvent: jest.fn(),
-  isConnected: jest.fn().mockReturnValue(true),
-  onReconnect: jest.fn(),
-  freeze: jest.fn(),
-  resume: jest.fn(),
-  resetAndReconnect: jest.fn(),
-  getQueuedMessageCount: jest.fn().mockReturnValue(0),
-  flushQueuedMessages: jest.fn().mockReturnValue(0),
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  onEvent: vi.fn(),
+  removeEvent: vi.fn(),
+  sendEvent: vi.fn(),
+  isConnected: vi.fn().mockReturnValue(true),
+  onReconnect: vi.fn(),
+  freeze: vi.fn(),
+  resume: vi.fn(),
+  resetAndReconnect: vi.fn(),
+  getQueuedMessageCount: vi.fn().mockReturnValue(0),
+  flushQueuedMessages: vi.fn().mockReturnValue(0),
 };
 
-jest.mock('./websocket', () => ({
+vi.mock('./websocket', () => ({
   WebSocketService: {
-    getInstance: jest.fn(() => mockInstance),
+    getInstance: vi.fn(() => mockInstance),
   },
 }));
 
@@ -33,7 +33,7 @@ jest.mock('./websocket', () => ({
 
 beforeEach(() => {
   // Reset all mock call counts but don't reset the getInstance implementation
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   // Restore the getInstance implementation after clearAllMocks nukes it
   const { WebSocketService } = require('./websocket');
   WebSocketService.getInstance.mockImplementation(() => mockInstance);
@@ -58,14 +58,14 @@ describe('LocalEventsProvider', () => {
 
   it('delegates onEvent() to WebSocketService', () => {
     const provider = new LocalEventsProvider();
-    const cb = jest.fn();
+    const cb = vi.fn();
     provider.onEvent(cb);
     expect(mockInstance.onEvent).toHaveBeenCalledWith(cb);
   });
 
   it('delegates removeEvent() to WebSocketService', () => {
     const provider = new LocalEventsProvider();
-    const cb = jest.fn();
+    const cb = vi.fn();
     provider.removeEvent(cb);
     expect(mockInstance.removeEvent).toHaveBeenCalledWith(cb);
   });
@@ -87,7 +87,7 @@ describe('LocalEventsProvider', () => {
 
   it('delegates onReconnect() to WebSocketService', () => {
     const provider = new LocalEventsProvider();
-    const cb = jest.fn();
+    const cb = vi.fn();
     provider.onReconnect(cb);
     expect(mockInstance.onReconnect).toHaveBeenCalledWith(cb);
 

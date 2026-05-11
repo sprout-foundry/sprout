@@ -6,7 +6,7 @@ import StatusBar from './StatusBar';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../extensions/languageRegistry', () => {
+vi.mock('../extensions/languageRegistry', () => {
   const mockEntries: Array<{ id: string; name: string; extensions: string[] }> = [
     { id: 'typescript', name: 'TypeScript', extensions: ['ts'] },
     { id: 'typescript-jsx', name: 'TypeScript (JSX)', extensions: ['tsx'] },
@@ -30,7 +30,7 @@ jest.mock('../extensions/languageRegistry', () => {
   };
 });
 
-jest.mock('lucide-react', () => ({
+vi.mock('lucide-react', () => ({
   GitBranch: (props: any) => <svg data-testid="git-branch-icon" {...props} />,
 }));
 

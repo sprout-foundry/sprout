@@ -20,9 +20,9 @@ const defaultMockResponse = {
   total: 2,
 };
 
-const mockGetWorkspaceSymbols = jest.fn().mockResolvedValue(defaultMockResponse);
+const mockGetWorkspaceSymbols = vi.fn().mockResolvedValue(defaultMockResponse);
 
-jest.mock('../services/api', () => ({
+vi.mock('../services/api', () => ({
   ApiService: {
     getInstance: () => ({
       getWorkspaceSymbols: mockGetWorkspaceSymbols,
@@ -30,7 +30,7 @@ jest.mock('../services/api', () => ({
   },
 }));
 
-jest.mock('lucide-react', () => ({
+vi.mock('lucide-react', () => ({
   Loader2: () => <span data-testid="loader">Loading</span>,
 }));
 
@@ -38,7 +38,7 @@ jest.mock('lucide-react', () => ({
 
 const originalError = console.error;
 beforeAll(() => {
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.requestAnimationFrame = (cb) => setTimeout(cb, 0);
   console.error = (...args: any[]) => {
     if (typeof args[0] === 'string' && args[0].includes('ReactDOM.render is no longer supported')) return;
@@ -64,7 +64,7 @@ function renderOverlay(props: {
   const container = document.createElement('div');
   document.body.appendChild(container);
 
-  const { visible = true, onSelectSymbol = jest.fn(), onClose = jest.fn() } = props;
+  const { visible = true, onSelectSymbol = vi.fn(), onClose = vi.fn() } = props;
 
   act(() => {
     ReactDOM.render(
@@ -91,7 +91,7 @@ function renderOverlay(props: {
  */
 async function waitForAsync() {
   await act(async () => {
-    jest.runAllTimers();
+    vi.runAllTimers();
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -168,7 +168,7 @@ describe('GoToWorkspaceSymbolOverlay', () => {
 
   // 6. Calls onSelectSymbol with correct filePath and line when a symbol item is clicked
   it('calls onSelectSymbol with correct filePath and line when item is clicked', async () => {
-    const onSelectSymbol = jest.fn();
+    const onSelectSymbol = vi.fn();
 
     const view = renderOverlay({ visible: true, onSelectSymbol });
     await waitForAsync();
@@ -189,7 +189,7 @@ describe('GoToWorkspaceSymbolOverlay', () => {
 
   // 7. Calls onClose when Escape is pressed
   it('calls onClose when Escape is pressed', async () => {
-    const onClose = jest.fn();
+    const onClose = vi.fn();
 
     const view = renderOverlay({ visible: true, onClose });
     await waitForAsync();
@@ -211,13 +211,13 @@ describe('GoToWorkspaceSymbolOverlay', () => {
 
   // 8. Debounces API calls (only one call after typing multiple characters)
   it('debounces API calls when typing multiple characters', async () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     const view = renderOverlay({ visible: true });
 
     // Wait for initial mount fetch (empty query)
     await act(async () => {
-      jest.advanceTimersByTime(0);
+      vi.advanceTimersByTime(0);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -250,7 +250,7 @@ describe('GoToWorkspaceSymbolOverlay', () => {
 
     // Advance timers past the debounce delay (300ms)
     await act(async () => {
-      jest.advanceTimersByTime(350);
+      vi.advanceTimersByTime(350);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -260,6 +260,6 @@ describe('GoToWorkspaceSymbolOverlay', () => {
     expect(mockGetWorkspaceSymbols).toHaveBeenCalledWith('abc');
 
     view.unmount();
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 });

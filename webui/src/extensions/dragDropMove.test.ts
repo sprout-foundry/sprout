@@ -74,8 +74,8 @@ function withDropPos(view: EditorView, pos: number | null): EditorView {
 // ── Mock DragEvent factory ──────────────────────────────────────────
 
 function createMockDragEvent(overrides: Partial<DragEvent> = {}): DragEvent {
-  const preventDefault = jest.fn();
-  const stopPropagation = jest.fn();
+  const preventDefault = vi.fn();
+  const stopPropagation = vi.fn();
   const dataTransfer = {
     effectAllowed: 'none' as DataTransferEffectAllowed,
     dropEffect: 'none' as DataTransferDropEffect,
@@ -107,8 +107,8 @@ function createMockView(
 
   return {
     state,
-    dispatch: jest.fn(),
-    posAtCoords: jest.fn().mockReturnValue(0),
+    dispatch: vi.fn(),
+    posAtCoords: vi.fn().mockReturnValue(0),
   } as unknown as EditorView;
 }
 
@@ -142,8 +142,8 @@ describe('dragDropMove handlers', () => {
       });
       const viewWithNoSelection = {
         state,
-        dispatch: jest.fn(),
-        posAtCoords: jest.fn(),
+        dispatch: vi.fn(),
+        posAtCoords: vi.fn(),
       } as unknown as EditorView;
 
       const event = createMockDragEvent();

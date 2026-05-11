@@ -6,8 +6,8 @@
  * deterministically, which covers extension detection, size limits, error fallback, etc.
  */
 
-jest.mock('prettier', () => ({
-  format: jest.fn(),
+vi.mock('prettier', () => ({
+  format: vi.fn(),
   __esModule: true,
 }));
 
@@ -19,8 +19,10 @@ import {
   clearConfigCache,
 } from './formatter';
 
-// Get a reference to the mocked format function
-const mockedFormat = jest.requireMock('prettier').format as jest.Mock;
+// Get a reference to the mocked format function — vi.mock('prettier', ...) above
+// ensures that any import of 'prettier' gets the mock, so we import directly.
+import { format as _mockedFormat } from 'prettier';
+const mockedFormat = _mockedFormat as vi.Mock;
 
 beforeEach(() => {
   mockedFormat.mockReset();
@@ -503,7 +505,7 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
   });
 
   it('fetches config when config fetcher is set', async () => {
-    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false, tabWidth: 4 });
+    const mockFetcher = vi.fn().mockResolvedValue({ singleQuote: false, tabWidth: 4 });
     setConfigFetcher(mockFetcher);
 
     mockedFormat.mockResolvedValue('formatted');
@@ -521,7 +523,7 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
   });
 
   it('uses empty config when fetcher returns empty', async () => {
-    setConfigFetcher(jest.fn().mockResolvedValue({}));
+    setConfigFetcher(vi.fn().mockResolvedValue({}));
 
     mockedFormat.mockResolvedValue('formatted');
     await formatCodeWithConfigDiscovery('input', 'app.js');
@@ -538,7 +540,7 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
   });
 
   it('caches config (single fetch regardless of directory)', async () => {
-    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    const mockFetcher = vi.fn().mockResolvedValue({ singleQuote: false });
     setConfigFetcher(mockFetcher);
 
     mockedFormat.mockResolvedValue('formatted');
@@ -552,7 +554,7 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
   });
 
   it('fetches config again after cache clear', async () => {
-    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    const mockFetcher = vi.fn().mockResolvedValue({ singleQuote: false });
     setConfigFetcher(mockFetcher);
 
     mockedFormat.mockResolvedValue('formatted');
@@ -567,7 +569,7 @@ describe('formatCodeWithConfigDiscovery — config discovery', () => {
   });
 
   it('fails gracefully when config fetcher throws', async () => {
-    setConfigFetcher(jest.fn().mockRejectedValue(new Error('network error')));
+    setConfigFetcher(vi.fn().mockRejectedValue(new Error('network error')));
 
     mockedFormat.mockResolvedValue('formatted');
     const result = await formatCodeWithConfigDiscovery('input', 'app.js');
@@ -588,7 +590,7 @@ describe('clearConfigCache', () => {
   });
 
   it('clears cached config', async () => {
-    const mockFetcher = jest.fn().mockResolvedValue({ singleQuote: false });
+    const mockFetcher = vi.fn().mockResolvedValue({ singleQuote: false });
     setConfigFetcher(mockFetcher);
 
     mockedFormat.mockResolvedValue('formatted');

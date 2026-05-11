@@ -20,20 +20,20 @@ import { EditorView as _EditorView } from '@codemirror/view';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../contexts/EditorManagerContext', () => ({
-  useEditorManager: jest.fn(),
+vi.mock('../contexts/EditorManagerContext', () => ({
+  useEditorManager: vi.fn(),
 }));
 
-jest.mock('../contexts/HotkeyContext', () => ({
-  useHotkeys: jest.fn(),
+vi.mock('../contexts/HotkeyContext', () => ({
+  useHotkeys: vi.fn(),
 }));
 
-jest.mock('../contexts/ThemeContext', () => ({
-  useTheme: jest.fn(),
+vi.mock('../contexts/ThemeContext', () => ({
+  useTheme: vi.fn(),
 }));
 
 // EditorPane uses useLog() which requires NotificationContext.
-jest.mock('../contexts/NotificationContext', () => {
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -45,29 +45,29 @@ jest.mock('../contexts/NotificationContext', () => {
   );
 });
 
-jest.mock('../services/api', () => ({
+vi.mock('../services/api', () => ({
   ApiService: {
-    getInstance: jest.fn(),
+    getInstance: vi.fn(),
   },
 }));
 
-jest.mock('../services/fileAccess', () => ({
-  readFileWithConsent: jest.fn(),
+vi.mock('../services/fileAccess', () => ({
+  readFileWithConsent: vi.fn(),
 }));
 
-jest.mock('../utils/clipboard', () => ({
-  copyToClipboard: jest.fn(),
+vi.mock('../utils/clipboard', () => ({
+  copyToClipboard: vi.fn(),
 }));
 
-jest.mock('./EditorToolbar', () => () => <div data-testid="editor-toolbar" />);
-jest.mock('./ImageViewer', () => () => <div data-testid="image-viewer" />);
-jest.mock('./SvgPreview', () => () => <div data-testid="svg-preview" />);
-jest.mock('./GoToSymbolOverlay', () => {
+vi.mock('./EditorToolbar', () => () => <div data-testid="editor-toolbar" />);
+vi.mock('./ImageViewer', () => () => <div data-testid="image-viewer" />);
+vi.mock('./SvgPreview', () => () => <div data-testid="svg-preview" />);
+vi.mock('./GoToSymbolOverlay', () => {
   const MockComponent = () => null;
   MockComponent.getEnclosingSymbols = () => [];
   return MockComponent;
 });
-jest.mock('./LanguageSwitcher', () => {
+vi.mock('./LanguageSwitcher', () => {
   return function MockLanguageSwitcher(props: any) {
     return (
       <button
@@ -86,9 +86,9 @@ jest.mock('./LanguageSwitcher', () => {
 // heavy ESM @codemirror/lang-* and @codemirror/legacy-modes packages that
 // Jest (27.x) cannot handle.
 // NOTE: react-scripts sets resetMocks:true globally, which clears
-// jest.fn() implementations before each test.  Use plain arrow functions
+// vi.fn() implementations before each test.  Use plain arrow functions
 // for module-level mocks so they survive the reset.
-jest.mock('../extensions/languageRegistry', () => {
+vi.mock('../extensions/languageRegistry', () => {
   const entries = [
     { id: 'typescript', name: 'TypeScript', extensions: ['ts', 'tsx'] },
     { id: 'javascript', name: 'JavaScript', extensions: ['js', 'jsx'] },
@@ -132,38 +132,38 @@ jest.mock('../extensions/languageRegistry', () => {
   };
 });
 
-jest.mock('../extensions/diffGutter', () => ({
+vi.mock('../extensions/diffGutter', () => ({
   diffGutter: () => [],
   updateDiffGutter: () => {},
   clearDiffGutter: () => {},
 }));
 
-jest.mock('../extensions/lintDiagnostics', () => ({
+vi.mock('../extensions/lintDiagnostics', () => ({
   lintDiagnostics: () => [],
   clearDiagnostics: () => {},
   createDebouncedDiagnosticsUpdater: () => ({ update: () => {}, cancel: () => {} }),
 }));
 
-jest.mock('../extensions/cursorHistory', () => ({
+vi.mock('../extensions/cursorHistory', () => ({
   cursorHistoryPlugin: () => [],
   navigateCursorBack: () => false,
   navigateCursorForward: () => false,
 }));
 
-jest.mock('../extensions/indentGuides', () => ({
+vi.mock('../extensions/indentGuides', () => ({
   indentGuidesPlugin: () => [],
 }));
 
-jest.mock('../extensions/minimap', () => ({
+vi.mock('../extensions/minimap', () => ({
   minimapExtension: () => [],
   showMinimap: { compute: () => null },
 }));
 
-jest.mock('../extensions/emmet', () => ({
+vi.mock('../extensions/emmet', () => ({
   createEmmetCompartment: () => {
     const mockCompartment = {
-      of: jest.fn((ext: any) => ext),
-      reconfigure: jest.fn((ext: any) => ({ reconfigure: ext })),
+      of: vi.fn((ext: any) => ext),
+      reconfigure: vi.fn((ext: any) => ({ reconfigure: ext })),
     };
     return mockCompartment;
   },
@@ -171,27 +171,27 @@ jest.mock('../extensions/emmet', () => ({
   buildEmmetExtensions: () => [],
 }));
 
-jest.mock('../extensions/autoCloseTag', () => ({
+vi.mock('../extensions/autoCloseTag', () => ({
   createAutoCloseTagCompartment: () => {
     const mockCompartment = {
-      of: jest.fn((exts: any) => []),
-      reconfigure: jest.fn((exts: any) => ({ type: 'StateEffect' })),
+      of: vi.fn((exts: any) => []),
+      reconfigure: vi.fn((exts: any) => ({ type: 'StateEffect' })),
     };
     return mockCompartment;
   },
-  getInitialAutoCloseTagExtensions: jest.fn(() => []),
-  buildAutoCloseTagExtensions: jest.fn(() => []),
+  getInitialAutoCloseTagExtensions: vi.fn(() => []),
+  buildAutoCloseTagExtensions: vi.fn(() => []),
 }));
 
-jest.mock('../extensions/snippets', () => ({
+vi.mock('../extensions/snippets', () => ({
   tabExpandSnippets: () => [],
-  setSnippetLanguage: jest.fn(),
+  setSnippetLanguage: vi.fn(),
 }));
 
 // Mock CodeMirror packages — their ESM internals break Jest 27.
-// Factories create stub jest.fn()s; the actual implementations are
+// Factories create stub vi.fn()s; the actual implementations are
 // configured in beforeEach (after resetMocks runs).
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   EditorView: class MockEditorView {
     state: any;
     dom: any;
@@ -220,58 +220,58 @@ jest.mock('@codemirror/view', () => ({
   dropCursor: () => [],
   scrollPastEnd: () => [],
   Decoration: {
-    mark: jest.fn(() => ({ range: jest.fn() })),
-    set: jest.fn(),
+    mark: vi.fn(() => ({ range: vi.fn() })),
+    set: vi.fn(),
     none: [],
-    widget: jest.fn(),
+    widget: vi.fn(),
   },
 }));
 
-jest.mock('@codemirror/state', () => {
+vi.mock('@codemirror/state', () => {
   const mockCompartment = {
-    of: jest.fn((ext: any) => ext),
-    reconfigure: jest.fn((ext: any) => ({ reconfigure: ext })),
+    of: vi.fn((ext: any) => ext),
+    reconfigure: vi.fn((ext: any) => ({ reconfigure: ext })),
   };
   return {
     EditorState: {
-      create: jest.fn(),
+      create: vi.fn(),
       allowMultipleSelections: { of: (v: any) => v },
     },
-    Compartment: jest.fn(() => mockCompartment),
+    Compartment: vi.fn(() => mockCompartment),
     Facet: {
-      define: jest.fn(() => ({
-        of: jest.fn((v: any) => ({ facetOf: v })),
+      define: vi.fn(() => ({
+        of: vi.fn((v: any) => ({ facetOf: v })),
       })),
     },
     EditorSelection: {
-      create: jest.fn(),
-      range: jest.fn(),
+      create: vi.fn(),
+      range: vi.fn(),
     },
     Transaction: {
       addToHistory: {
-        of: jest.fn((v: any) => v),
+        of: vi.fn((v: any) => v),
       },
     },
   };
 });
 
-jest.mock('@codemirror/commands', () => ({
+vi.mock('@codemirror/commands', () => ({
   defaultKeymap: [],
   indentWithTab: {},
   history: () => [],
 }));
 
-jest.mock('@codemirror/search', () => ({
+vi.mock('@codemirror/search', () => ({
   search: () => [],
   searchKeymap: [],
-  openSearchPanel: jest.fn(),
-  replaceAll: jest.fn(),
-  selectNextOccurrence: jest.fn(),
-  selectSelectionMatches: jest.fn(),
+  openSearchPanel: vi.fn(),
+  replaceAll: vi.fn(),
+  selectNextOccurrence: vi.fn(),
+  selectSelectionMatches: vi.fn(),
   highlightSelectionMatches: () => [],
 }));
 
-jest.mock('@codemirror/autocomplete', () => ({
+vi.mock('@codemirror/autocomplete', () => ({
   autocompletion: () => [],
   closeBrackets: () => [],
   snippet: (template: string) => () => template,
@@ -279,7 +279,7 @@ jest.mock('@codemirror/autocomplete', () => ({
   hasPrevSnippetField: () => false,
 }));
 
-jest.mock('@codemirror/language', () => ({
+vi.mock('@codemirror/language', () => ({
   syntaxHighlighting: (s: any) => s,
   defaultHighlightStyle: [],
   codeFolding: () => [],
@@ -290,7 +290,7 @@ jest.mock('@codemirror/language', () => ({
   highlightActiveLine: () => [],
 }));
 
-jest.mock('@codemirror/theme-one-dark', () => ({
+vi.mock('@codemirror/theme-one-dark', () => ({
   oneDarkHighlightStyle: [],
 }));
 
@@ -360,19 +360,19 @@ const mockBuffer = {
   metadata: {},
 };
 
-const mockUseEditorManager = useEditorManager as jest.MockedFunction<typeof useEditorManager>;
+const mockUseEditorManager = useEditorManager as vi.MockedFunction<typeof useEditorManager>;
 
 const defaultMockEditorManager = {
   panes: [{ id: 'pane-1', bufferId: 'buffer-1', isActive: true }],
   buffers: new Map([['buffer-1', { ...mockBuffer }]]),
-  updateBufferContent: jest.fn(),
-  updateBufferCursor: jest.fn(),
-  saveBuffer: jest.fn(),
-  setBufferModified: jest.fn(),
-  setBufferOriginalContent: jest.fn(),
-  splitPane: jest.fn(),
-  openWorkspaceBuffer: jest.fn(),
-  setBufferLanguageOverride: jest.fn(),
+  updateBufferContent: vi.fn(),
+  updateBufferCursor: vi.fn(),
+  saveBuffer: vi.fn(),
+  setBufferModified: vi.fn(),
+  setBufferOriginalContent: vi.fn(),
+  splitPane: vi.fn(),
+  openWorkspaceBuffer: vi.fn(),
+  setBufferLanguageOverride: vi.fn(),
 };
 
 const flushPromises = async () => {
@@ -439,35 +439,35 @@ describe('EditorPane', () => {
 
     // ── CodeMirror mock setup (resetMocks clears before each test) ──
     EditorState.create.mockImplementation(({ doc }) => createMockState(typeof doc === 'string' ? doc : ''));
-    (Compartment as jest.Mock).mockImplementation(() => ({
-      of: jest.fn().mockReturnValue([]),
-      reconfigure: jest.fn().mockReturnValue({}),
+    (Compartment as vi.Mock).mockImplementation(() => ({
+      of: vi.fn().mockReturnValue([]),
+      reconfigure: vi.fn().mockReturnValue({}),
     }));
 
     // ── copyToClipboard — tests assert on .toHaveBeenCalledWith ──
-    (copyToClipboard as jest.Mock).mockResolvedValue(undefined);
+    (copyToClipboard as vi.Mock).mockResolvedValue(undefined);
 
     // ── Context & service mocks ──
     apiServiceMock = {
-      getWorkspace: jest.fn().mockResolvedValue({
+      getWorkspace: vi.fn().mockResolvedValue({
         workspace_root: '/home/user/project',
         daemon_root: '/home/user/project/.sprout',
       }),
-      getGitDiff: jest.fn().mockResolvedValue({ diff: '' }),
+      getGitDiff: vi.fn().mockResolvedValue({ diff: '' }),
     };
-    (ApiService.getInstance as jest.Mock).mockReturnValue(apiServiceMock);
+    (ApiService.getInstance as vi.Mock).mockReturnValue(apiServiceMock);
 
     mockUseEditorManager.mockReturnValue({ ...defaultMockEditorManager });
 
-    (useHotkeys as jest.MockedFunction<typeof useHotkeys>).mockReturnValue({ hotkeys: [] });
+    (useHotkeys as vi.MockedFunction<typeof useHotkeys>).mockReturnValue({ hotkeys: [] });
 
-    (useTheme as jest.MockedFunction<typeof useTheme>).mockReturnValue({
+    (useTheme as vi.MockedFunction<typeof useTheme>).mockReturnValue({
       theme: 'dark',
       themePack: { id: 'dark', mode: 'dark', editorSyntaxStyle: 'one-dark' },
       customHighlightStyle: undefined,
     });
 
-    (readFileWithConsent as jest.Mock).mockResolvedValue({
+    (readFileWithConsent as vi.Mock).mockResolvedValue({
       ok: true,
       statusText: 'OK',
       text: () => Promise.resolve('line1\nline2\nline3'),
@@ -479,7 +479,7 @@ describe('EditorPane', () => {
       root.unmount();
     });
     container.remove();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // ── Context menu tests ──
@@ -541,7 +541,7 @@ describe('EditorPane', () => {
       });
       await flushPromises();
 
-      const listener = jest.fn();
+      const listener = vi.fn();
       window.addEventListener('sprout:reveal-in-explorer', listener);
 
       const paneContent = container.querySelector('.pane-content');
@@ -1076,7 +1076,7 @@ describe('EditorPane', () => {
       // readFileWithConsent returns content with CRLF line endings.
       // loadFile() calls detectLineEnding() on the API response text,
       // so the mock response determines the detected line ending.
-      (readFileWithConsent as jest.Mock).mockResolvedValue({
+      (readFileWithConsent as vi.Mock).mockResolvedValue({
         ok: true,
         statusText: 'OK',
         text: () => Promise.resolve('line1\r\nline2\r\nline3\r\n'),
@@ -1096,7 +1096,7 @@ describe('EditorPane', () => {
 
     it('shows "UTF-8 · Mixed" when file content has both LF and CRLF', async () => {
       // readFileWithConsent returns content with mixed line endings.
-      (readFileWithConsent as jest.Mock).mockResolvedValue({
+      (readFileWithConsent as vi.Mock).mockResolvedValue({
         ok: true,
         statusText: 'OK',
         text: () => Promise.resolve('line1\nline2\r\nline3\n'),

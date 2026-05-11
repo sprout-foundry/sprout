@@ -400,16 +400,12 @@ func TestDisplayConversationPreview_Empty(t *testing.T) {
 	testAgent := newIsolatedTestAgent(t)
 	defer testAgent.Shutdown()
 
-	// No messages added
+	// No messages added — displayConversationPreview prints nothing when GetLastMessages returns empty
 	output := captureOutput(func() {
 		displayConversationPreview(testAgent)
 	})
 
-	// Should still show header but no messages
-	// When there are no messages, GetLastMessages returns an empty slice
-	// and the display function should still show the header section
-	assert.NotContains(t, output, "[you] You:")
-	assert.NotContains(t, output, "[bot] Assistant:")
+	assert.Empty(t, output, "displayConversationPreview should produce no output when there are no messages")
 }
 
 // TestSessionsCommand_MultipleSessions tests listing and selecting from multiple sessions

@@ -10,8 +10,8 @@
 // ── Mock CodeMirror modules and ./emmet (ESM internals break Jest 27) ──
 
 // Mock ./emmet first — it imports @emmetio/codemirror6-plugin (ESM-only)
-jest.mock('./emmet', () => ({
-  isEmmetLanguage: jest.fn((lang: string | null) => {
+vi.mock('./emmet', () => ({
+  isEmmetLanguage: vi.fn((lang: string | null) => {
     if (!lang) return false;
     return ['html', 'xml', 'css', 'sass', 'scss', 'javascript-jsx'].includes(lang);
   }),
@@ -21,29 +21,29 @@ jest.mock('./emmet', () => ({
 import { getSnippetsForLanguage, setSnippetLanguage, getSnippetLanguage, tabExpandSnippets } from './snippets';
 import { keymap } from '@codemirror/view';
 
-jest.mock('@codemirror/view', () => ({
-  EditorView: { baseTheme: jest.fn(() => 'mockBaseTheme') },
+vi.mock('@codemirror/view', () => ({
+  EditorView: { baseTheme: vi.fn(() => 'mockBaseTheme') },
   keymap: {
-    of: jest.fn((bindings) => ({ _keymapOf: bindings })),
+    of: vi.fn((bindings) => ({ _keymapOf: bindings })),
   },
 }));
 
-jest.mock('@codemirror/state', () => ({
+vi.mock('@codemirror/state', () => ({
   Facet: {
-    define: jest.fn(() => ({
-      of: jest.fn((v: any) => ({ facetOf: v })),
+    define: vi.fn(() => ({
+      of: vi.fn((v: any) => ({ facetOf: v })),
     })),
   },
-  Compartment: jest.fn(() => ({
-    of: jest.fn((v: any) => v),
-    reconfigure: jest.fn((v: any) => ({ reconfigure: v })),
+  Compartment: vi.fn(() => ({
+    of: vi.fn((v: any) => v),
+    reconfigure: vi.fn((v: any) => ({ reconfigure: v })),
   })),
 }));
 
-jest.mock('@codemirror/autocomplete', () => ({
-  snippet: jest.fn((template) => () => template),
-  hasNextSnippetField: jest.fn(() => false),
-  hasPrevSnippetField: jest.fn(() => false),
+vi.mock('@codemirror/autocomplete', () => ({
+  snippet: vi.fn((template) => () => template),
+  hasNextSnippetField: vi.fn(() => false),
+  hasPrevSnippetField: vi.fn(() => false),
 }));
 
 // ── getSnippetsForLanguage tests ────────────────────────────────────
@@ -1579,10 +1579,10 @@ describe('tabExpandSnippets', () => {
   });
 
   it('keymap.of was called during construction', () => {
-    (keymap.of as jest.Mock).mockClear();
+    (keymap.of as vi.Mock).mockClear();
     tabExpandSnippets();
     expect(keymap.of).toHaveBeenCalled();
-    expect((keymap.of as jest.Mock).mock.calls[0][0][0].key).toBe('Tab');
-    expect(typeof (keymap.of as jest.Mock).mock.calls[0][0][0].run).toBe('function');
+    expect((keymap.of as vi.Mock).mock.calls[0][0][0].key).toBe('Tab');
+    expect(typeof (keymap.of as vi.Mock).mock.calls[0][0][0].run).toBe('function');
   });
 });

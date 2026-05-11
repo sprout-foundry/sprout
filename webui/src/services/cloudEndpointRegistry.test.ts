@@ -559,12 +559,28 @@ describe('cloudEndpointRegistry', () => {
       const getResult = classifyEndpoint('/api/workspace', 'GET');
       expect(getResult).not.toBeNull();
       expect(getResult?.category).toBe('synthetic');
-      expect(getResult?.syntheticResponse).toEqual({ workspace_root: '/', daemon_root: '/' });
+      expect(getResult?.syntheticResponse).toEqual({
+        workspace_root: '/',
+        daemon_root: '/',
+        is_project: false,
+        project_markers: [],
+        needs_workspace_selection: false,
+        suggested_projects: [],
+        recent_workspaces: [],
+      });
 
       const postResult = classifyEndpoint('/api/workspace', 'POST');
       expect(postResult).not.toBeNull();
       expect(postResult?.category).toBe('synthetic');
-      expect(postResult?.syntheticResponse).toEqual({ workspace_root: '/', daemon_root: '/' });
+      expect(postResult?.syntheticResponse).toEqual({
+        workspace_root: '/',
+        daemon_root: '/',
+        is_project: false,
+        project_markers: [],
+        needs_workspace_selection: false,
+        suggested_projects: [],
+        recent_workspaces: [],
+      });
     });
 
     it('should classify /api/workspace/symbols as foundry-backend (not synthetic)', () => {

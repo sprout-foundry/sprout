@@ -10,8 +10,8 @@ import { NotificationProvider } from '../contexts/NotificationContext';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockOnSettingsChanged = jest.fn();
-const mockOnRequestProviderSetup = jest.fn();
+const mockOnSettingsChanged = vi.fn();
+const mockOnRequestProviderSetup = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Constants

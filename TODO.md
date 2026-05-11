@@ -849,16 +849,24 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - TYPESCRIPT: Replace `(message: any)` and `(edit: any)` casts in localStorage deserialization with proper partial types — typed `Message` and `FileEdit` interfaces exist but aren't used. `webui/src/services/appStatePersistence.ts`
 [x] - TYPESCRIPT: Replace `(stats: any)` casts where typed `StatsResponse` exists — 3 locations in App.tsx. `webui/src/hooks/useWebSocketEventHandler.ts:492,693`
 [x] - TYPESCRIPT: Replace `(response.chat_session as any).active_query` with proper type — unsafe type assertion for non-typed field. `webui/src/hooks/useChatSessionManager.ts:144`
+[x] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
 [] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
+[x] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
 [] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
+[x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
 [] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
 
 ### Test Quality
 
+[x] - TESTING: Fix 208 frontend test failures from Jest→Vitest migration — tests using `jest.fn()`, `jest.spyOn()`, `jest.useFakeTimers()`, `jest.clearAllMocks()` fail with `ReferenceError: jest is not defined`; migrate to Vitest equivalents (`vi.fn()`, `vi.spyOn()`, etc.). `webui/src/utils/log.test.tsx` and others
 [] - TESTING: Fix 208 frontend test failures from Jest→Vitest migration — tests using `jest.fn()`, `jest.spyOn()`, `jest.useFakeTimers()`, `jest.clearAllMocks()` fail with `ReferenceError: jest is not defined`; migrate to Vitest equivalents (`vi.fn()`, `vi.spyOn()`, etc.). `webui/src/utils/log.test.tsx` and others
+[x] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/`
 [] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/`
+[x] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
 [] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
+[x] - TESTING: Add tests for `pkg/lsp/semantic` (6.2% coverage) — nearly untested. `pkg/lsp/semantic/`
 [] - TESTING: Add tests for `pkg/lsp/semantic` (6.2% coverage) — nearly untested. `pkg/lsp/semantic/`
+[x] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
 [] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
 [] - TESTING: Add tests for `pkg/lsp/proxy` (15.6% coverage). `pkg/lsp/proxy/`
 [] - TESTING: Add tests for `pkg/spec`, `pkg/types`, `pkg/ui` — packages with no tests. `pkg/spec/`, `pkg/types/`, `pkg/ui/`

@@ -815,55 +815,33 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [x] - REFACTOR: Deduplicate `populateAgentStats` copied inline in `gatherStatsForClientIDLocked` (~30 lines duplicated). `pkg/webui/api_files.go`
 [x] - REFACTOR: Deduplicate agent creation paths — test client and production client paths duplicate ~40 lines (sub-manager creation, agent struct, output router, debug logger, history load, embedding restore) — extract common init helper. `pkg/agent/agent.go`
-[] - REFACTOR: Deduplicate agent creation paths — test client and production client paths duplicate ~40 lines (sub-manager creation, agent struct, output router, debug logger, history load, embedding restore) — extract common init helper. `pkg/agent/agent.go`
 [x] - REFACTOR: Deduplicate exit code extraction in `shell.go` (lines 78-88 identical to 124-133) — extract `extractExitCode(err error) int`. `pkg/agent_tools/shell.go`
-[] - REFACTOR: Deduplicate exit code extraction in `shell.go` (lines 78-88 identical to 124-133) — extract `extractExitCode(err error) int`. `pkg/agent_tools/shell.go`
 [x] - REFACTOR: Deduplicate formatting logic between `ViewHistory` and `RollbackChanges` (~50% duplicated grouping/formatting) — extract shared `formatRevision`. `pkg/agent_tools/history.go`
-[] - REFACTOR: Deduplicate formatting logic between `ViewHistory` and `RollbackChanges` (~50% duplicated grouping/formatting) — extract shared `formatRevision`. `pkg/agent_tools/history.go`
 
 ### Performance
 
 [x] - PERFORMANCE: Fix localStorage writes on every stream tick in App.tsx — `state.messages` in effect deps causes localStorage write on every `stream_chunk` event (per character); throttle to only persist on `query_completed`. `webui/src/hooks/useAppStatePersistence.ts:55-70`
-[] - PERFORMANCE: Fix localStorage writes on every stream tick in App.tsx — `state.messages` in effect deps causes localStorage write on every `stream_chunk` event (per character); throttle to only persist on `query_completed`. `webui/src/hooks/useAppStatePersistence.ts:55-70`
 [x] - PERFORMANCE: Cap unbounded `logs` array in App.tsx state — every event appends to logs; `recentLogs` slices last 1000 for display but full array never shrinks; cap with `logs: [...prev.logs.slice(-1000), newEntry]` in setState. `webui/src/hooks/useWebSocketEventHandler.ts`
-[] - PERFORMANCE: Cap unbounded `logs` array in App.tsx state — every event appends to logs; `recentLogs` slices last 1000 for display but full array never shrinks; cap with `logs: [...prev.logs.slice(-1000), newEntry]` in setState. `webui/src/hooks/useWebSocketEventHandler.ts`
 [x] - PERFORMANCE: Memoize `EditorManagerContext` value object (35+ fields) with `useMemo` — currently recreated every render causing all consumers to re-render. `webui/src/contexts/EditorManagerContext.tsx`
-[] - PERFORMANCE: Memoize `EditorManagerContext` value object (35+ fields) with `useMemo` — currently recreated every render causing all consumers to re-render. `webui/src/contexts/EditorManagerContext.tsx`
 [x] - PERFORMANCE: Add `React.memo` to `AppContent`, `Sidebar`, and `TerminalPane` — currently re-render on every App.tsx state update. `webui/src/components/AppContent.tsx`, `webui/src/components/Sidebar.tsx`, `webui/src/components/TerminalPane.tsx`
-[] - PERFORMANCE: Add `React.memo` to `AppContent`, `Sidebar`, and `TerminalPane` — currently re-render on every App.tsx state update. `webui/src/components/AppContent.tsx`, `webui/src/components/Sidebar.tsx`, `webui/src/components/TerminalPane.tsx`
 [x] - PERFORMANCE: Fix duplicate `connection_status` event in websocket.ts `onopen` — `notifyCallbacks` fires twice in succession causing two unnecessary state updates. `webui/src/services/websocket.ts`
-[] - PERFORMANCE: Fix duplicate `connection_status` event in websocket.ts `onopen` — `notifyCallbacks` fires twice in succession causing two unnecessary state updates. `webui/src/services/websocket.ts`
 [x] - PERFORMANCE: Reduce `handleEvent` setState fan-out in App.tsx — every event creates new AppState via spread, triggering full subtree diff; split state into independent slices (messages, logs, todos, etc.) to minimize re-render scope. `webui/src/hooks/useWebSocketEventHandler.ts:649-710`
-[] - PERFORMANCE: Reduce `handleEvent` setState fan-out in App.tsx — every event creates new AppState via spread, triggering full subtree diff; split state into independent slices (messages, logs, todos, etc.) to minimize re-render scope. `webui/src/hooks/useWebSocketEventHandler.ts:649-710`
 
 ### Security
 
 [x] - SECURITY: Add HTTP security headers to all responses — missing `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy`, `Referrer-Policy`; add as middleware on the HTTP mux. `pkg/webui/server.go`
-[] - SECURITY: Add HTTP security headers to all responses — missing `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy`, `Referrer-Policy`; add as middleware on the HTTP mux. `pkg/webui/server.go`
 [x] - SECURITY: Add optional authentication for service mode — zero auth on any API endpoint; for localhost-only this is acceptable but `SPROUT_TRUSTED_USER_HEADER` implies service mode; add `SPROUT_AUTH_TOKEN` env var check for write endpoints. `pkg/webui/server.go`
-[] - SECURITY: Add optional authentication for service mode — zero auth on any API endpoint; for localhost-only this is acceptable but `SPROUT_TRUSTED_USER_HEADER` implies service mode; add `SPROUT_AUTH_TOKEN` env var check for write endpoints. `pkg/webui/server.go`
 [x] - SECURITY: Sanitize SVG content before `dangerouslySetInnerHTML` in SvgPreview — raw SVG can contain `<script>` or event handlers; strip or validate before rendering. `webui/src/components/SvgPreview.tsx:333`
-[] - SECURITY: Sanitize SVG content before `dangerouslySetInnerHTML` in SvgPreview — raw SVG can contain `<script>` or event handlers; strip or validate before rendering. `webui/src/components/SvgPreview.tsx:333`
 [x] - SECURITY: Add user ID filtering to WebSocket event routing in service mode — `shouldForwardEventToConnection` filters by `client_id`/`chat_id` but not `userID`; in multi-tenant service mode events could leak between users. `pkg/webui/websocket.go:210`
-[] - SECURITY: Add user ID filtering to WebSocket event routing in service mode — `shouldForwardEventToConnection` filters by `client_id`/`chat_id` but not `userID`; in multi-tenant service mode events could leak between users. `pkg/webui/websocket.go:210`
 [x] - SECURITY: Use cryptographic random for WebSocket session IDs — currently `fmt.Sprintf("ws_%d", time.Now().UnixNano())` is predictable; use `crypto/rand` + `hex.EncodeToString`. `pkg/webui/websocket.go:155`
-[] - SECURITY: Use cryptographic random for WebSocket session IDs — currently `fmt.Sprintf("ws_%d", time.Now().UnixNano())` is predictable; use `crypto/rand` + `hex.EncodeToString`. `pkg/webui/websocket.go:155`
 [x] - SECURITY: Add strict input validation for WebSocket messages — `handleWebSocketMessage` accepts arbitrary JSON and extracts fields without type-safe structs; could accept oversized or malicious payloads. `pkg/webui/websocket.go`
-[] - SECURITY: Add strict input validation for WebSocket messages — `handleWebSocketMessage` accepts arbitrary JSON and extracts fields without type-safe structs; could accept oversized or malicious payloads. `pkg/webui/websocket.go`
 [x] - SECURITY: Add runtime defense-in-depth to file tool handlers — `read.go`, `write.go`, `edit.go` delegate all path safety to `filesystem.SafeResolvePathWithBypass`; add local path validation as secondary check. `pkg/agent_tools/read.go:43`, `pkg/agent_tools/write.go:15`, `pkg/agent_tools/edit.go:83`
-[] - SECURITY: Add runtime defense-in-depth to file tool handlers — `read.go`, `write.go`, `edit.go` delegate all path safety to `filesystem.SafeResolvePathWithBypass`; add local path validation as secondary check. `pkg/agent_tools/read.go:43`, `pkg/agent_tools/write.go:15`, `pkg/agent_tools/edit.go:83`
 [x] - SECURITY: Add content size limits to `edit.go` and `write.go` — `read.go` caps at 80KB/10MB but edit/write have no limits; LLM could write megabytes in a single operation. `pkg/agent_tools/edit.go`, `pkg/agent_tools/write.go`
-[] - SECURITY: Add content size limits to `edit.go` and `write.go` — `read.go` caps at 80KB/10MB but edit/write have no limits; LLM could write megabytes in a single operation. `pkg/agent_tools/edit.go`, `pkg/agent_tools/write.go`
 [x] - SECURITY: Fix pipe-to-shell detection bypass in `security.go` — `echo 'test'| bash` (no space before pipe) evades the classifier; add pattern for `\|bash` without leading space. `pkg/agent_tools/security.go:169-178`
-[] - SECURITY: Fix pipe-to-shell detection bypass in `security.go` — `echo 'test'| bash` (no space before pipe) evades the classifier; add pattern for `\|bash` without leading space. `pkg/agent_tools/security.go:169-178`
 [x] - SECURITY: Tighten `isSafeShellCommand` to validate target paths — whitelists `rm`, `mv`, `chmod`, `chown` without verifying the target path is within workspace; `rm -rf /tmp/../etc/` matches safe prefix but targets dangerous path. `pkg/agent_tools/security.go:304-437`
-[] - SECURITY: Tighten `isSafeShellCommand` to validate target paths — whitelists `rm`, `mv`, `chmod`, `chown` without verifying the target path is within workspace; `rm -rf /tmp/../etc/` matches safe prefix but targets dangerous path. `pkg/agent_tools/security.go:304-437`
 [x] - SECURITY: Validate git `args` parameter in `ExecuteGitOperation` — `args` passed directly to `exec.Command("git", ...)` without validation; agent could inject `--upload-pack` or other dangerous flags. `pkg/agent_tools/git.go:100-127`
-[] - SECURITY: Validate git `args` parameter in `ExecuteGitOperation` — `args` passed directly to `exec.Command("git", ...)` without validation; agent could inject `--upload-pack` or other dangerous flags. `pkg/agent_tools/git.go:100-127`
 [x] - SECURITY: Validate `TodoWrite` status/priority against known values — `ValidTodos` map exists but is never checked; invalid status/priority accepted silently. `pkg/agent_tools/todo.go:26`
-[] - SECURITY: Validate `TodoWrite` status/priority against known values — `ValidTodos` map exists but is never checked; invalid status/priority accepted silently. `pkg/agent_tools/todo.go:26`
 [x] - SECURITY: Add path validation to `SaveStateToFile` — filename not validated before write; could write state files anywhere. `pkg/agent/state.go`
-[] - SECURITY: Add path validation to `SaveStateToFile` — filename not validated before write; could write state files anywhere. `pkg/agent/state.go`
 
 ### TypeScript Quality
 

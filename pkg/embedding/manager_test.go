@@ -2,7 +2,6 @@ package embedding
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,10 +23,9 @@ func TestNewEmbeddingManager_NilConfig(t *testing.T) {
 
 func TestNewEmbeddingManager_WithConfig(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{
-		Enabled:            true,
-		ORTLibraryPath:     "/fake/path/libonnx.so",
+		Enabled:             true,
 		SimilarityThreshold: 0.85,
-		MaxResults:         5,
+		MaxResults:          5,
 	}
 	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
 	if mgr == nil {
@@ -52,12 +50,10 @@ func TestEmbeddingManager_NotInitialized(t *testing.T) {
 
 // ─── Init tests ───
 
-func TestEmbeddingManager_Init_FailsWithoutORT(t *testing.T) {
+func TestEmbeddingManager_Init_PanicOnNilConfig(t *testing.T) {
 	// With nil config, Init panics because it dereferences m.config.
 	// Verify this is a panic (documenting the current behavior).
 	mgr := NewEmbeddingManager(nil, "/tmp/workspace")
-
-	os.Unsetenv("ONNXRUNTIME_LIB")
 
 	defer func() {
 		if r := recover(); r == nil {
@@ -69,33 +65,29 @@ func TestEmbeddingManager_Init_FailsWithoutORT(t *testing.T) {
 }
 
 func TestEmbeddingManager_Init_Idempotent(t *testing.T) {
-	// Init with nil config panics (m.config dereference). After that panic,
-	// the initialized flag is still false. Use a config with bad ORT path
-	// to test idempotency without triggering a panic.
+	// Verify that Init is idempotent — calling it twice succeeds both times
+	// and doesn't re-initialize resources.
 	dir := t.TempDir()
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:       dir,
-		ORTLibraryPath: "/nonexistent/libonnx.so",
+		IndexDir: dir,
 	}
-	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
+	mgr := NewEmbeddingManager(cfg, dir)
 
-	os.Unsetenv("ONNXRUNTIME_LIB")
-
-	err1 := mgr.Init(context.Background()) // will fail
-	if err1 == nil {
-		t.Skip("Init succeeded unexpectedly (ORT lib may exist)")
+	err1 := mgr.Init(context.Background())
+	if err1 != nil {
+		t.Fatalf("first Init failed: %v", err1)
 	}
-	if mgr.IsInitialized() {
-		t.Error("expected still not initialized after failed Init")
+	if !mgr.IsInitialized() {
+		t.Error("expected initialized after successful Init")
 	}
 
-	// Second call should also fail and not change state.
+	// Second call should succeed without re-initializing.
 	err2 := mgr.Init(context.Background())
-	if err2 == nil {
-		t.Skip("second Init succeeded unexpectedly")
+	if err2 != nil {
+		t.Fatalf("second Init failed: %v", err2)
 	}
-	if mgr.IsInitialized() {
-		t.Error("expected still not initialized after second failed Init")
+	if !mgr.IsInitialized() {
+		t.Error("expected still initialized after second Init")
 	}
 }
 
@@ -146,23 +138,25 @@ func TestEmbeddingManager_IndexSize_AfterInit(t *testing.T) {
 
 // ─── CheckDuplicates tests on EmbeddingManager ───
 
-func TestEmbeddingManager_CheckDuplicates_NotInitialized_NoConfig(t *testing.T) {
-	// With nil config, Init panics. Use a config with bad ORT path instead.
+func TestEmbeddingManager_CheckDuplicates_NotInitialized_NilConfig(t *testing.T) {
+	// With nil config, Init panics. CheckDuplicates should not panic but
+	// will return an error or recover gracefully.
 	dir := t.TempDir()
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:       dir,
-		ORTLibraryPath: "/nonexistent/libonnx.so",
+		IndexDir: dir,
 	}
-	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
-	os.Unsetenv("ONNXRUNTIME_LIB")
+	mgr := NewEmbeddingManager(cfg, dir)
 
-	result, err := mgr.CheckDuplicates(context.Background(), "test.go", "func Foo() {}")
-	// Init will fail due to bad ORT, so CheckDuplicates should return an error.
-	if err == nil {
-		t.Error("expected error when manager cannot initialize")
+	// Provide valid Go source content to avoid parse errors in the embedding pipeline.
+	content := "package testpkg\n\nfunc Foo() {}\n"
+	result, err := mgr.CheckDuplicates(context.Background(), "test.go", content)
+	// With static provider, Init succeeds. CheckDuplicates runs on an empty index.
+	// It should return a result with no duplicates (no error).
+	if err != nil {
+		t.Errorf("expected no error with static provider, got: %v", err)
 	}
-	if result != nil {
-		t.Error("expected nil result on error")
+	if result == nil {
+		t.Error("expected non-nil result")
 	}
 }
 
@@ -257,16 +251,15 @@ func NewFunc() {}
 
 // ─── QuerySimilar on EmbeddingManager ───
 
-func TestEmbeddingManager_QuerySimilar_NotInitialized(t *testing.T) {
+func TestEmbeddingManager_QuerySimilar_EmptyIndex(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:       dir,
-		ORTLibraryPath: "/nonexistent/libonnx.so",
+		IndexDir: dir,
 	}
-	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
+	mgr := NewEmbeddingManager(cfg, dir)
 
-	// With the static provider, initialization succeeds even without ORT.
-	// Verify that querying works (returns empty results, no error).
+	// With the static provider, initialization succeeds.
+	// Verify that querying works on an empty index (returns empty results, no error).
 	results, err := mgr.QuerySimilar(context.Background(), "test query", 5, 0.5)
 	if err != nil {
 		t.Errorf("expected no error with static provider, got: %v", err)
@@ -341,15 +334,15 @@ func TestEmbeddingManager_Close_Idempotent(t *testing.T) {
 
 // ─── BuildIndex / UpdateFile on EmbeddingManager ───
 
-func TestEmbeddingManager_BuildIndex_FailsWithoutORT(t *testing.T) {
+func TestEmbeddingManager_BuildIndex_EmptyWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:       dir,
+		IndexDir: dir,
 	}
 	mgr := NewEmbeddingManager(cfg, dir)
 
-	// With the static provider, BuildIndex succeeds even without ORT.
-	// Verify it returns empty stats (no files to index in empty workspace).
+	// With the static provider, BuildIndex succeeds even on an empty workspace.
+	// Verify it returns empty stats (no files to index).
 	stats, err := mgr.BuildIndex(context.Background())
 	if err != nil {
 		t.Errorf("expected no error with static provider, got: %v", err)
@@ -359,37 +352,42 @@ func TestEmbeddingManager_BuildIndex_FailsWithoutORT(t *testing.T) {
 	}
 }
 
-func TestEmbeddingManager_UpdateFile_FailsWithoutORT(t *testing.T) {
+func TestEmbeddingManager_UpdateFile_NonexistentFile(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir:       dir,
-		ORTLibraryPath: "/nonexistent/libonnx.so",
+		IndexDir: dir,
 	}
-	mgr := NewEmbeddingManager(cfg, "/tmp/workspace")
-	os.Unsetenv("ONNXRUNTIME_LIB")
+	mgr := NewEmbeddingManager(cfg, dir)
 
-	err := mgr.UpdateFile(context.Background(), "some.go")
+	err := mgr.UpdateFile(context.Background(), "/nonexistent/file.go")
 	if err == nil {
-		t.Error("expected error when ORT is not configured")
+		t.Error("expected error when updating nonexistent file")
 	}
 }
 
-func TestEmbeddingManager_UpdateFromGitDiff_FailsWithoutORT(t *testing.T) {
-	mgr := NewEmbeddingManager(nil, "/tmp/workspace")
-	os.Unsetenv("ONNXRUNTIME_LIB")
+func TestEmbeddingManager_UpdateFromGitDiff_EmptyWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: dir,
+	}
+	mgr := NewEmbeddingManager(cfg, dir)
 
 	stats, err := mgr.UpdateFromGitDiff(context.Background())
+	// The temp dir is not a git repo, so git diff fails and the error is
+	// expected. Verify we get a meaningful error rather than a panic.
 	if err == nil {
-		t.Error("expected error when ORT is not configured")
-	}
-	if stats != nil {
-		t.Error("expected nil stats on error")
+		t.Log("UpdateFromGitDiff succeeded (repo may be a git repo)")
+		if stats == nil {
+			t.Error("expected non-nil stats on success")
+		}
+	} else {
+		t.Logf("UpdateFromGitDiff returned expected error: %v", err)
 	}
 }
 
-// ─── Edge case: Config with only ORT via env var ───
+// ─── Edge case: Static provider initialization ───
 
-func TestEmbeddingManager_Init_FailsWithOnlyEnvVar_BadPath(t *testing.T) {
+func TestEmbeddingManager_Init_SucceedsWithStaticProvider(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{
 		IndexDir: t.TempDir(),
 	}

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { AppState } from '../types/app';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import { debugLog } from '../utils/log';
+import { appendCappedLog } from '../utils/logCap';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { trimMessages } from '../utils/messageWindow';
 import { getWebUIClientId } from '../services/clientSession';
@@ -122,7 +123,7 @@ const handleConnectionStatus = (ctx: EventHandlerContext): void => {
           connection_phase: phase,
           transport_session_id: incomingSessionId || prev.stats?.transport_session_id || prev.sessionId || '',
         },
-        logs: [...prev.logs, logEntry],
+        logs: appendCappedLog(prev.logs, logEntry),
       }));
     }, 300);
   }
@@ -151,7 +152,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
     subagentActivities: [],
     queryProgress: null,
     currentTodos: [],
-    logs: [...prev.logs, logEntry],
+    logs: appendCappedLog(prev.logs, logEntry),
   }));
   debugLog('[>>] Query started:', startedQuery);
 };
@@ -230,7 +231,7 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
         }
         return tool;
       }),
-      logs: [...prev.logs, logEntry],
+      logs: appendCappedLog(prev.logs, logEntry),
     };
   });
   debugLog('[OK] Query completed');
@@ -281,7 +282,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       };
       const messages = [...messagesWithNewline];
       addToolRefToMessage(messages, updated[existingIdx].id);
-      return { ...prev, messages, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+      return { ...prev, messages, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
     }
 
     const newTool: ToolExecution = {
@@ -290,7 +291,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
     };
     const messages = [...messagesWithNewline];
     addToolRefToMessage(messages, newTool.id);
-    return { ...prev, messages, toolExecutions: [...prev.toolExecutions, newTool], logs: [...prev.logs, logEntry] };
+    return { ...prev, messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
   });
   debugLog('[tool] Tool start:', event.data?.tool_name);
 };
@@ -328,7 +329,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
         arguments: event.data?.arguments != null ? String(event.data.arguments) : undefined,
         result: result || error,
       };
-      return { ...prev, toolExecutions: [...prev.toolExecutions, fallbackExecution], logs: [...prev.logs, logEntry] };
+      return { ...prev, toolExecutions: [...prev.toolExecutions, fallbackExecution], logs: appendCappedLog(prev.logs, logEntry) };
     }
 
     const messagesAfterTool = prev.messages.map((msg, idx) => {
@@ -337,7 +338,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
       }
       return msg;
     });
-    return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: [...prev.logs, logEntry] };
+    return { ...prev, messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: appendCappedLog(prev.logs, logEntry) };
   });
   debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
 };
@@ -365,9 +366,9 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
   };
 
   if (!activity.message) {
-    setState(prev => ({ ...prev, logs: [...prev.logs, logEntry] }));
+    setState(prev => ({ ...prev, logs: appendCappedLog(prev.logs, logEntry) }));
   } else {
-    setState(prev => ({ ...prev, subagentActivities: [...prev.subagentActivities, activity].slice(-500), logs: [...prev.logs, logEntry] }));
+    setState(prev => ({ ...prev, subagentActivities: [...prev.subagentActivities, activity].slice(-500), logs: appendCappedLog(prev.logs, logEntry) }));
   }
 };
 
@@ -399,11 +400,11 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
           const row = updated[i];
           if (row.tool === parsedToolName && !row.endTime && row.status !== 'running') {
             updated[i] = { ...row, status: 'running' };
-            return { ...prev, toolExecutions: updated, logs: [...prev.logs, logEntry] };
+            return { ...prev, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
           }
         }
       }
-      return { ...prev, logs: [...prev.logs, logEntry] };
+      return { ...prev, logs: appendCappedLog(prev.logs, logEntry) };
     });
   } else if ((category === 'warning' || category === 'error') && !suppressInChat) {
     logEntry.category = 'system';
@@ -415,7 +416,7 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
         const prefixedMsg = category === 'error' ? `\n\nWarning: ${cleanedMsg}` : `\n\nNote: ${cleanedMsg}`;
         newMessages[newMessages.length - 1] = { ...lastMessage, content: (lastMessage.content || '') + prefixedMsg };
       }
-      return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+      return { ...prev, messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
     });
   } else if (category === 'info_rendered' && cleanedMsg && !suppressInChat) {
     logEntry.category = 'system';
@@ -426,7 +427,7 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
       if (lastMessage && lastMessage.type === 'assistant') {
         newMessages[newMessages.length - 1] = { ...lastMessage, content: (lastMessage.content || '') + `\n\nInfo: ${cleanedMsg}` };
       }
-      return { ...prev, messages: newMessages, logs: [...prev.logs, logEntry] };
+      return { ...prev, messages: newMessages, logs: appendCappedLog(prev.logs, logEntry) };
     });
   }
 };
@@ -438,7 +439,7 @@ const handleTodoUpdate = (ctx: EventHandlerContext): void => {
   logEntry.category = 'tool';
   logEntry.level = 'info';
   const normalizedTodos = normalizeTodoList(event.data?.todos);
-  setState(prev => ({ ...prev, currentTodos: normalizedTodos, logs: [...prev.logs, logEntry] }));
+  setState(prev => ({ ...prev, currentTodos: normalizedTodos, logs: appendCappedLog(prev.logs, logEntry) }));
 };
 
 // Handle file_changed event
@@ -455,7 +456,7 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
     linesDeleted: event.data.lines_deleted,
   };
   setState(prev => ({
-    ...prev, logs: [...prev.logs, logEntry], fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
+    ...prev, logs: appendCappedLog(prev.logs, logEntry), fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
   }));
   debugLog('[edit] File changed:', event.data.path);
 };
@@ -473,7 +474,7 @@ const handleError = (ctx: EventHandlerContext): void => {
   if (errorCode === 'model_not_available') {
     setState(prev => ({
       ...prev, isProcessing: activeRequestsRef.current > 0, queryProgress: null,
-      modelSelectionRequest: { provider: prev.provider }, logs: [...prev.logs, logEntry],
+      modelSelectionRequest: { provider: prev.provider }, logs: appendCappedLog(prev.logs, logEntry),
     }));
     debugLog('[model-not-available] Model not available, showing selection modal');
     return;
@@ -487,7 +488,7 @@ const handleError = (ctx: EventHandlerContext): void => {
       messages: trimMessages([...prev.messages, {
         id: generateMessageId(), type: 'assistant', content: `[FAIL] Error: ${errorMessage}`, timestamp: new Date(),
       }]),
-      logs: [...prev.logs, logEntry],
+      logs: appendCappedLog(prev.logs, logEntry),
     }));
     apiService.getStats().then((stats: any) => {
       if (stats) {
@@ -507,7 +508,7 @@ const handleError = (ctx: EventHandlerContext): void => {
       messages: trimMessages([...prev.messages, {
         id: generateMessageId(), type: 'assistant', content: `[FAIL] Error: ${errorMessage}`, timestamp: new Date(),
       }]),
-      logs: [...prev.logs, logEntry],
+      logs: appendCappedLog(prev.logs, logEntry),
     }));
   }
   console.error('[FAIL] Error event:', event.data);
@@ -530,7 +531,7 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
     provider: event.data?.provider || prev.provider,
     model: event.data?.model || prev.model,
     stats: { ...prev.stats, ...event.data },
-    logs: [...prev.logs, logEntry],
+    logs: appendCappedLog(prev.logs, logEntry),
   }));
 };
 
@@ -562,7 +563,7 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
         riskType: event.data.risk_type != null ? String(event.data.risk_type) : undefined,
         target: event.data.target != null ? String(event.data.target) : undefined,
       },
-      logs: [...prev.logs, logEntry],
+      logs: appendCappedLog(prev.logs, logEntry),
     }));
   }
   debugLog('[security] Approval request:', event.data?.tool_name, event.data?.risk_level);
@@ -584,7 +585,7 @@ const handleSecurityPromptRequest = (ctx: EventHandlerContext): void => {
       filePath: event.data.file_path != null ? String(event.data.file_path) : undefined,
       concern: event.data.concern != null ? String(event.data.concern) : undefined,
     },
-    logs: [...prev.logs, logEntry],
+    logs: appendCappedLog(prev.logs, logEntry),
   }));
   debugLog('[security] Prompt request:', event.data?.file_path, event.data?.concern);
 };
@@ -603,7 +604,7 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
       requestId: String(event.data.request_id || ''),
       question: String(event.data.question || ''),
     },
-    logs: [...prev.logs, logEntry],
+    logs: appendCappedLog(prev.logs, logEntry),
   }));
   debugLog('[ask_user] Question:', event.data?.question);
 };
@@ -682,7 +683,7 @@ export function useWebSocketEventHandler({
       default:
         const logEntry = createLogEntry(event);
         logEntry.level = 'warning';
-        setState(prev => ({ ...prev, logs: [...prev.logs, logEntry] }));
+        setState(prev => ({ ...prev, logs: appendCappedLog(prev.logs, logEntry) }));
         debugLog('[?] Unknown event type:', event.type, event.data);
     }
   }, [activeChatIdRef, lastConnectionStateRef, connectionTimeoutRef, pendingProviderChangeRef, pendingProviderChangeValueRef, activeRequestsRef, setState, apiService, pendingProviderRef]);

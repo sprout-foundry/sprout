@@ -95,7 +95,7 @@ func TestPopulateFromEnvironment(t *testing.T) {
 					if v == "" {
 						os.Unsetenv(k)
 					} else {
-						os.Setenv(k, v)
+						t.Setenv(k, v)
 					}
 				}
 			}()
@@ -105,7 +105,7 @@ func TestPopulateFromEnvironment(t *testing.T) {
 				if v == "" {
 					os.Unsetenv(k)
 				} else {
-					os.Setenv(k, v)
+					t.Setenv(k, v)
 				}
 			}
 
@@ -190,19 +190,12 @@ func TestPopulateFromJSONEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			origVal, origSet := os.LookupEnv("LEDIT_API_KEYS_JSON")
-			defer func() {
-				if origSet {
-					os.Setenv("LEDIT_API_KEYS_JSON", origVal)
-				} else {
-					os.Unsetenv("LEDIT_API_KEYS_JSON")
-				}
-			}()
+			// t.Setenv handles cleanup automatically; no need to save/restore.
 
 			if tt.envValue == "" {
-				os.Unsetenv("LEDIT_API_KEYS_JSON")
+				t.Setenv("LEDIT_API_KEYS_JSON", "")
 			} else {
-				os.Setenv("LEDIT_API_KEYS_JSON", tt.envValue)
+				t.Setenv("LEDIT_API_KEYS_JSON", tt.envValue)
 			}
 
 			keys := make(APIKeys)

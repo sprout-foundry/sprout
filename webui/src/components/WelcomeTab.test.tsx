@@ -16,7 +16,7 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
 });
 
 // ---------------------------------------------------------------------------
@@ -24,19 +24,19 @@ beforeAll(() => {
 // ---------------------------------------------------------------------------
 
 const defaultCallbacks = {
-  onDismiss: jest.fn(),
-  onOpenCommandPalette: jest.fn(),
-  onOpenTerminal: jest.fn(),
-  onViewGit: jest.fn(),
-  onStartChat: jest.fn(),
+  onDismiss: vi.fn(),
+  onOpenCommandPalette: vi.fn(),
+  onOpenTerminal: vi.fn(),
+  onViewGit: vi.fn(),
+  onStartChat: vi.fn(),
 };
 
 let container: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  jest.spyOn(window, 'open').mockImplementation(() => null);
+  vi.clearAllMocks();
+  vi.spyOn(window, 'open').mockImplementation(() => null);
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -52,7 +52,7 @@ afterEach(() => {
     container.remove();
     container = null;
   }
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 /** Render WelcomeTab with all callbacks (allows overriding individual ones). */

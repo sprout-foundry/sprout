@@ -4,41 +4,41 @@ import { getWebUIClientId, persistTabWorkspacePath, getTabWorkspacePath } from '
 // Mock window with isolated storage per "tab"
 function createMockWindow(sessionStore: Record<string, string>, localStore: Record<string, string>) {
   const storage = {
-    getItem: jest.fn((key: string) => sessionStore[key] ?? null),
-    setItem: jest.fn((key: string, value: string) => {
+    getItem: vi.fn((key: string) => sessionStore[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
       sessionStore[key] = value;
     }),
-    removeItem: jest.fn((key: string) => {
+    removeItem: vi.fn((key: string) => {
       delete sessionStore[key];
     }),
-    clear: jest.fn(() => {
+    clear: vi.fn(() => {
       for (const k of Object.keys(sessionStore)) delete sessionStore[k];
     }),
     get length() {
       return Object.keys(sessionStore).length;
     },
-    key: jest.fn(),
+    key: vi.fn(),
   };
   const ls = {
-    getItem: jest.fn((key: string) => localStore[key] ?? null),
-    setItem: jest.fn((key: string, value: string) => {
+    getItem: vi.fn((key: string) => localStore[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
       localStore[key] = value;
     }),
-    removeItem: jest.fn((key: string) => {
+    removeItem: vi.fn((key: string) => {
       delete localStore[key];
     }),
-    clear: jest.fn(() => {
+    clear: vi.fn(() => {
       for (const k of Object.keys(localStore)) delete localStore[k];
     }),
     get length() {
       return Object.keys(localStore).length;
     },
-    key: jest.fn(),
+    key: vi.fn(),
   };
   return {
     sessionStorage: storage,
     localStorage: ls,
-    crypto: { randomUUID: jest.fn(() => `mock-uuid-${Math.random().toString(36).slice(2)}`) },
+    crypto: { randomUUID: vi.fn(() => `mock-uuid-${Math.random().toString(36).slice(2)}`) },
   };
 }
 

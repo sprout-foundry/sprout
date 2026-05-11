@@ -9,9 +9,9 @@
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/state', () => {
-  const mockCompartment = jest.fn(() => ({
-    reconfigure: jest.fn(() => ({ type: 'StateEffect' })),
+vi.mock('@codemirror/state', () => {
+  const mockCompartment = vi.fn(() => ({
+    reconfigure: vi.fn(() => ({ type: 'StateEffect' })),
   }));
 
   return {
@@ -20,12 +20,12 @@ jest.mock('@codemirror/state', () => {
   };
 });
 
-jest.mock('@codemirror/view', () => ({}));
+vi.mock('@codemirror/view', () => ({}));
 
-jest.mock('@emmetio/codemirror6-plugin', () => {
-  const abbreviationTracker = jest.fn(() => [{ type: 'AbbreviationTracker' }]);
-  const wrapWithAbbreviation = jest.fn(() => ({ type: 'WrapWithAbbreviation' }));
-  const expandAbbreviation = jest.fn(() => ({ type: 'ExpandAbbreviation' }));
+vi.mock('@emmetio/codemirror6-plugin', () => {
+  const abbreviationTracker = vi.fn(() => [{ type: 'AbbreviationTracker' }]);
+  const wrapWithAbbreviation = vi.fn(() => ({ type: 'WrapWithAbbreviation' }));
+  const expandAbbreviation = vi.fn(() => ({ type: 'ExpandAbbreviation' }));
 
   return {
     abbreviationTracker,
@@ -40,7 +40,7 @@ jest.mock('@emmetio/codemirror6-plugin', () => {
       jsx: 'jsx',
       tsx: 'tsx',
     },
-    default: jest.fn(),
+    default: vi.fn(),
   };
 });
 
@@ -115,7 +115,7 @@ describe('createEmmetCompartment', () => {
 
   it('returns a value that can be used in reconfigureEmmet', () => {
     const compartment = createEmmetCompartment();
-    const view = { dispatch: jest.fn() };
+    const view = { dispatch: vi.fn() };
     // Should not throw
     expect(() => {
       reconfigureEmmet(compartment, view as any, 'html');

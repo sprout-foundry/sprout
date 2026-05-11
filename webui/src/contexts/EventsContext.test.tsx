@@ -11,18 +11,18 @@ import type { EventsProvider, SproutEvent, SproutEventCallback } from '../types/
 
 function createMockEventsProvider(overrides: Partial<EventsProvider> = {}): EventsProvider {
   return {
-    connect: jest.fn(),
-    disconnect: jest.fn(),
-    onEvent: jest.fn(),
-    removeEvent: jest.fn(),
-    sendEvent: jest.fn(),
-    isConnected: jest.fn().mockReturnValue(true),
-    onReconnect: jest.fn(),
-    freeze: jest.fn(),
-    resume: jest.fn(),
-    resetAndReconnect: jest.fn(),
-    getQueuedMessageCount: jest.fn().mockReturnValue(0),
-    flushQueuedMessages: jest.fn().mockReturnValue(0),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    onEvent: vi.fn(),
+    removeEvent: vi.fn(),
+    sendEvent: vi.fn(),
+    isConnected: vi.fn().mockReturnValue(true),
+    onReconnect: vi.fn(),
+    freeze: vi.fn(),
+    resume: vi.fn(),
+    resetAndReconnect: vi.fn(),
+    getQueuedMessageCount: vi.fn().mockReturnValue(0),
+    flushQueuedMessages: vi.fn().mockReturnValue(0),
     ...overrides,
   };
 }
@@ -47,7 +47,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   latestProvider = undefined;
 });
 
@@ -85,7 +85,7 @@ function requireCtx(): EventsProvider {
 
 describe('useEvents', () => {
   it('throws an error when used outside of EventsContextProvider', () => {
-    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect(() => {
       act(() => {
@@ -195,11 +195,11 @@ describe('EventsContextProvider', () => {
     // Exercise all methods
     p.connect();
     p.disconnect();
-    p.onEvent(jest.fn());
-    p.removeEvent(jest.fn());
+    p.onEvent(vi.fn());
+    p.removeEvent(vi.fn());
     p.sendEvent({ type: 'test' });
     p.isConnected();
-    p.onReconnect(jest.fn());
+    p.onReconnect(vi.fn());
     p.freeze();
     p.resume();
     p.resetAndReconnect();

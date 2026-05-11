@@ -6,7 +6,7 @@ import { CloudAdapter, type CloudAdapterConfig } from './cloudAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 
 // Mock clientSession module
-jest.mock('./clientSession', () => ({
+vi.mock('./clientSession', () => ({
   WEBUI_CLIENT_ID_HEADER: 'x-webui-client-id',
   getWebUIClientId: () => 'test-client-id-123',
 }));
@@ -92,7 +92,7 @@ if (typeof Request === 'undefined') {
 describe('CloudAdapter', () => {
   let adapter: CloudAdapter;
   let mockConfig: CloudAdapterConfig;
-  let mockFetch: jest.Mock;
+  let mockFetch: vi.Mock;
 
   beforeEach(() => {
     // Setup mock config
@@ -109,12 +109,12 @@ describe('CloudAdapter', () => {
     adapter = new CloudAdapter(mockConfig);
 
     // Mock global fetch
-    mockFetch = jest.fn();
+    mockFetch = vi.fn();
     global.fetch = mockFetch;
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('constructor and properties', () => {
@@ -299,6 +299,22 @@ describe('CloudAdapter', () => {
     });
   });
 
+const workspaceSyntheticResponse = {
+    workspace_root: '/',
+    daemon_root: '/',
+    is_project: false,
+    project_markers: [] as string[],
+    needs_workspace_selection: false,
+    suggested_projects: [] as Array<{ path: string; name: string; markers: string[] }>,
+    recent_workspaces: [] as Array<{
+      path: string;
+      name: string;
+      last_used: string;
+      markers: string[];
+      session_count: number;
+    }>,
+  };
+
   describe('fetch - workspace endpoint synthetic response', () => {
     it('should return synthetic response for GET /api/workspace', async () => {
       const response = await adapter.fetch('/api/workspace', {
@@ -307,7 +323,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+      expect(data).toEqual(workspaceSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -322,7 +338,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+      expect(data).toEqual(workspaceSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -341,7 +357,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+      expect(data).toEqual(workspaceSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -353,7 +369,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ workspace_root: '/', daemon_root: '/' });
+      expect(data).toEqual(workspaceSyntheticResponse);
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();

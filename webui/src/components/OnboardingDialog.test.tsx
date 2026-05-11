@@ -26,7 +26,7 @@ import type { OnboardingProviderOption } from '../services/api';
 // ---------------------------------------------------------------------------
 
 // Mock lucide-react icons
-jest.mock('lucide-react', () => ({
+vi.mock('lucide-react', () => ({
   X: ({ size }: { size?: number }) =>
     require('react').createElement('svg', {
       width: size,
@@ -170,13 +170,13 @@ const renderOnboardingDialog = (
   callbacks: any = {},
 ) => {
   const defaultCallbacks = {
-    onProviderChange: jest.fn(),
-    onComplete: jest.fn().mockImplementation(async () => {}),
-    onSkip: jest.fn().mockImplementation(async () => {}),
-    onRefresh: jest.fn().mockImplementation(async () => {}),
-    onInstallWsl: jest.fn().mockImplementation(async () => {}),
-    onInstallGitBash: jest.fn().mockImplementation(async () => {}),
-    updateOnboarding: jest.fn(),
+    onProviderChange: vi.fn(),
+    onComplete: vi.fn().mockImplementation(async () => {}),
+    onSkip: vi.fn().mockImplementation(async () => {}),
+    onRefresh: vi.fn().mockImplementation(async () => {}),
+    onInstallWsl: vi.fn().mockImplementation(async () => {}),
+    onInstallGitBash: vi.fn().mockImplementation(async () => {}),
+    updateOnboarding: vi.fn(),
   };
 
   const props = {
@@ -243,7 +243,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('calls onProviderChange when a recommended provider is clicked', async () => {
-      const onProviderChange = jest.fn();
+      const onProviderChange = vi.fn();
       renderOnboardingDialog(
         { ...mockOnboarding, open: true },
         null,
@@ -293,7 +293,7 @@ describe('OnboardingDialog', () => {
 
     it('completely tests provider toggle functionality', async () => {
       const allProviders = [...mockRecommendedProviders, ...mockAdvancedProviders];
-      const updateOnboarding = jest.fn();
+      const updateOnboarding = vi.fn();
       const onboardingWithProviders = {
         ...mockOnboarding,
         open: true,
@@ -403,7 +403,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('selects model when clicking on a model option', async () => {
-      const updateOnboarding = jest.fn();
+      const updateOnboarding = vi.fn();
       const selectedProvider = mockRecommendedProviders[0];
 
       renderOnboardingDialog(
@@ -503,7 +503,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('updates API key when user types in the input field', () => {
-      const updateOnboarding = jest.fn();
+      const updateOnboarding = vi.fn();
       const selectedProvider = mockRecommendedProviders[0];
       const onboardingWithProvider = {
         ...mockOnboarding,
@@ -665,7 +665,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('calls onSkip when skip button is clicked', async () => {
-      const onSkip = jest.fn();
+      const onSkip = vi.fn();
       renderOnboardingDialog(
         { ...mockOnboarding, open: true },
         null,
@@ -693,7 +693,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('calls onRefresh when refresh button is clicked', async () => {
-      const onRefresh = jest.fn();
+      const onRefresh = vi.fn();
       renderOnboardingDialog(
         { ...mockOnboarding, open: true },
         null,
@@ -733,7 +733,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('calls onComplete when complete button is clicked', async () => {
-      const onComplete = jest.fn();
+      const onComplete = vi.fn();
       renderOnboardingDialog(
         { ...mockOnboarding, open: true },
         null,
@@ -842,7 +842,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('calls onInstallWsl when install WSL button is clicked', async () => {
-      const onInstallWsl = jest.fn();
+      const onInstallWsl = vi.fn();
       renderOnboardingDialog(
         { ...mockOnboarding, open: true },
         null,
@@ -902,7 +902,7 @@ describe('OnboardingDialog', () => {
     });
 
     it('closes dialog when close button is clicked', async () => {
-      const updateOnboarding = jest.fn();
+      const updateOnboarding = vi.fn();
       renderOnboardingDialog(
         { ...mockOnboarding, open: true, isReonboarding: true },
         null,

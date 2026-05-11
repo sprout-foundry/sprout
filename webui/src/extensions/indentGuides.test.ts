@@ -11,16 +11,16 @@ import { measureIndent, computeGuidePositions } from './indentGuides';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   WidgetType: class {},
-  Decoration: { widget: jest.fn(), none: [], set: jest.fn() },
-  ViewPlugin: { fromClass: jest.fn() },
-  EditorView: { baseTheme: jest.fn(() => []) },
+  Decoration: { widget: vi.fn(), none: [], set: vi.fn() },
+  ViewPlugin: { fromClass: vi.fn() },
+  EditorView: { baseTheme: vi.fn(() => []) },
 }));
-jest.mock('@codemirror/language', () => ({
-  getIndentUnit: jest.fn(),
+vi.mock('@codemirror/language', () => ({
+  getIndentUnit: vi.fn(),
 }));
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
 // ── measureIndent tests ────────────────────────────────────────────
 

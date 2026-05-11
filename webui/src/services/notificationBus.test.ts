@@ -7,19 +7,19 @@ import type { NotificationType } from '../contexts/NotificationContext';
 // ---------------------------------------------------------------------------
 
 beforeAll(() => {
-  jest.spyOn(console, 'error').mockImplementation(() => {});
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'info').mockImplementation(() => {});
-  jest.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
 afterAll(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 beforeEach(() => {
   notificationBus._resetForTesting();
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ describe('NotificationBus', () => {
 
       for (const [type, consoleMethod] of mapping) {
         notificationBus._resetForTesting();
-        jest.clearAllMocks();
+        vi.clearAllMocks();
 
         notificationBus.notify(type, 'T', 'M');
         expect(console[consoleMethod]).toHaveBeenCalledWith('[Notification] T: M');
@@ -80,7 +80,7 @@ describe('NotificationBus', () => {
   // =========================================================================
   describe('notify() — listener emission', () => {
     it('emits an event to a single subscriber', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'Title', 'Hello');
@@ -94,8 +94,8 @@ describe('NotificationBus', () => {
     });
 
     it('emits to multiple subscribers', () => {
-      const handler1 = jest.fn();
-      const handler2 = jest.fn();
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
       notificationBus.onNotification(handler1);
       notificationBus.onNotification(handler2);
 
@@ -106,7 +106,7 @@ describe('NotificationBus', () => {
     });
 
     it('passes duration when provided', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('warning', 'T', 'M', 5000);
@@ -116,8 +116,8 @@ describe('NotificationBus', () => {
     });
 
     it('does not emit to a listener that was added after notify()', () => {
-      const handler1 = jest.fn();
-      const handler2 = jest.fn();
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
 
       notificationBus.onNotification(handler1);
       notificationBus.notify('info', 'First', 'Only handler1');
@@ -134,7 +134,7 @@ describe('NotificationBus', () => {
   // =========================================================================
   describe('event IDs', () => {
     it('generates an id for each notification', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'T', 'M');
@@ -145,7 +145,7 @@ describe('NotificationBus', () => {
     });
 
     it('generates unique IDs across notifications', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'A', 'a');
@@ -158,7 +158,7 @@ describe('NotificationBus', () => {
     });
 
     it('IDs follow the pattern notify_{counter}_{timestamp}', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'T', 'M');
@@ -168,7 +168,7 @@ describe('NotificationBus', () => {
     });
 
     it('increments the counter for each notification', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'A', 'a');
@@ -190,7 +190,7 @@ describe('NotificationBus', () => {
   // =========================================================================
   describe('onNotification() — unsubscribe', () => {
     it('returned function unsubscribes the listener', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const unsubscribe = notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'Before', 'visible');
@@ -201,7 +201,7 @@ describe('NotificationBus', () => {
     });
 
     it('calling unsubscribe twice is safe (no-op)', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const unsubscribe = notificationBus.onNotification(handler);
 
       unsubscribe();
@@ -212,8 +212,8 @@ describe('NotificationBus', () => {
     });
 
     it('unsubscribing one listener does not affect others', () => {
-      const handler1 = jest.fn();
-      const handler2 = jest.fn();
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
 
       notificationBus.onNotification(handler1);
       const unsub2 = notificationBus.onNotification(handler2);
@@ -227,7 +227,7 @@ describe('NotificationBus', () => {
     });
 
     it('same listener registered twice receives event twice', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
       notificationBus.onNotification(handler);
 
@@ -237,7 +237,7 @@ describe('NotificationBus', () => {
     });
 
     it('removeNotificationListener removes ALL registrations of the same reference', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
       notificationBus.onNotification(handler);
 
@@ -253,7 +253,7 @@ describe('NotificationBus', () => {
       // NOTE: removeNotificationListener uses reference equality and removes ALL
       // entries matching the listener reference. This is a known behavior of the
       // filter-based implementation.
-      const handler = jest.fn();
+      const handler = vi.fn();
       const unsub1 = notificationBus.onNotification(handler);
       notificationBus.onNotification(handler);
 
@@ -270,8 +270,8 @@ describe('NotificationBus', () => {
   // =========================================================================
   describe('removeNotificationListener()', () => {
     it('removes a specific listener', () => {
-      const handler1 = jest.fn();
-      const handler2 = jest.fn();
+      const handler1 = vi.fn();
+      const handler2 = vi.fn();
 
       notificationBus.onNotification(handler1);
       notificationBus.onNotification(handler2);
@@ -285,7 +285,7 @@ describe('NotificationBus', () => {
     });
 
     it('is a no-op for a listener that was never added', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       // Should not throw
       notificationBus.removeNotificationListener(handler);
 
@@ -296,7 +296,7 @@ describe('NotificationBus', () => {
     });
 
     it('works the same as the unsubscribe function returned by onNotification', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       const unsubscribe = notificationBus.onNotification(handler);
 
       // Both approaches should remove the listener equally
@@ -382,7 +382,7 @@ describe('NotificationBus', () => {
   // =========================================================================
   describe('_resetForTesting()', () => {
     it('clears all listeners', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus._resetForTesting();
@@ -400,7 +400,7 @@ describe('NotificationBus', () => {
     });
 
     it('resets the ID counter', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
       notificationBus.onNotification(handler);
 
       notificationBus.notify('info', 'Before', 'reset');
@@ -423,7 +423,7 @@ describe('NotificationBus', () => {
   // =========================================================================
   describe('integration scenarios', () => {
     it('full lifecycle: subscribe → notify → assert → unsubscribe → notify → assert', () => {
-      const handler = jest.fn();
+      const handler = vi.fn();
 
       // Subscribe
       const unsub = notificationBus.onNotification(handler);
@@ -445,9 +445,9 @@ describe('NotificationBus', () => {
     });
 
     it('multiple independent listeners with different lifetimes', () => {
-      const handlerA = jest.fn();
-      const handlerB = jest.fn();
-      const handlerC = jest.fn();
+      const handlerA = vi.fn();
+      const handlerB = vi.fn();
+      const handlerC = vi.fn();
 
       notificationBus.onNotification(handlerA);
       const unsubB = notificationBus.onNotification(handlerB);

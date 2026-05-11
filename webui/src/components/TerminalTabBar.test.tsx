@@ -8,7 +8,7 @@ import { TerminalTabBar } from '@sprout/ui';
 // Mock ContextMenu: renders children into a simple div when isOpen
 // ---------------------------------------------------------------------------
 
-jest.mock('./ContextMenu', () => {
+vi.mock('./ContextMenu', () => {
   return function MockContextMenu({ isOpen, children }: any) {
     if (!isOpen) return null;
     return <div data-testid="context-menu">{children}</div>;
@@ -28,10 +28,10 @@ const defaultSessions = [
 const defaultProps = {
   sessions: defaultSessions,
   activeSessionId: 's1',
-  onSwitch: jest.fn(),
-  onCreate: jest.fn(),
-  onClose: jest.fn(),
-  onRename: jest.fn(),
+  onSwitch: vi.fn(),
+  onCreate: vi.fn(),
+  onClose: vi.fn(),
+  onRename: vi.fn(),
 };
 
 function renderWithProps(props = {}) {
@@ -128,7 +128,7 @@ describe('TerminalTabBar', () => {
     }
     // Clean up any portal elements left by ContextMenu mock
     document.querySelectorAll('[data-testid="context-menu"]').forEach((el) => el.remove());
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   // ── 1. Renders tabs ──────────────────────────────────────
@@ -246,10 +246,10 @@ describe('TerminalTabBar', () => {
     const singleSessionProps = {
       sessions: [{ id: 's1', name: 'Solo' }],
       activeSessionId: 's1',
-      onSwitch: jest.fn(),
-      onCreate: jest.fn(),
-      onClose: jest.fn(),
-      onRename: jest.fn(),
+      onSwitch: vi.fn(),
+      onCreate: vi.fn(),
+      onClose: vi.fn(),
+      onRename: vi.fn(),
     };
 
     const view = renderWithProps(singleSessionProps);
@@ -793,10 +793,10 @@ describe('TerminalTabBar', () => {
     const singleSessionProps = {
       sessions: [{ id: 's1', name: 'Solo' }],
       activeSessionId: 's1',
-      onSwitch: jest.fn(),
-      onCreate: jest.fn(),
-      onClose: jest.fn(),
-      onRename: jest.fn(),
+      onSwitch: vi.fn(),
+      onCreate: vi.fn(),
+      onClose: vi.fn(),
+      onRename: vi.fn(),
     };
 
     const view = renderWithProps(singleSessionProps);

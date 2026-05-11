@@ -78,7 +78,7 @@ globalThis.cancelAnimationFrame = mockCancelRaf as any;
 
 let mockCapturedPluginClass: any = null;
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   EditorView: class MockEditorView {},
   ViewPlugin: {
     fromClass(cls: any) {
@@ -97,7 +97,7 @@ jest.mock('@codemirror/view', () => ({
   },
 }));
 
-jest.mock('@codemirror/state', () => ({}));
+vi.mock('@codemirror/state', () => ({}));
 
 // Grab the mock ViewPlugin for helper access.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -155,7 +155,7 @@ function createMockUpdate(view: any, overrides: { viewportChanged?: boolean } = 
 function spyOnDispatch() {
   const captured: CustomEvent[] = [];
   const orig = document.dispatchEvent.bind(document);
-  const spy = jest.fn((event: Event) => {
+  const spy = vi.fn((event: Event) => {
     captured.push(event as CustomEvent);
     return true;
   });

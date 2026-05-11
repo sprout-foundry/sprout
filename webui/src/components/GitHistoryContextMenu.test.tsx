@@ -1,6 +1,6 @@
-jest.mock('./ThemedDialog', () => ({
-  showThemedConfirm: jest.fn().mockResolvedValue(false),
-  showThemedPrompt: jest.fn().mockResolvedValue(null),
+vi.mock('./ThemedDialog', () => ({
+  showThemedConfirm: vi.fn().mockResolvedValue(false),
+  showThemedPrompt: vi.fn().mockResolvedValue(null),
 }));
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
@@ -21,25 +21,25 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
 });
 
-jest.mock('../utils/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/clipboard', () => ({
+  copyToClipboard: vi.fn().mockResolvedValue(undefined),
 }));
 
 Object.defineProperty(navigator, 'clipboard', {
   value: {
-    writeText: jest.fn().mockResolvedValue(undefined),
-    readText: jest.fn().mockResolvedValue(''),
+    writeText: vi.fn().mockResolvedValue(undefined),
+    readText: vi.fn().mockResolvedValue(''),
   },
   writable: true,
   configurable: true,
 });
 
 const mockApiService = {
-  checkoutGitCommit: jest.fn().mockResolvedValue({ message: 'success', commit: 'abc123' }),
-  revertGitCommit: jest.fn().mockResolvedValue({ message: 'success', commit: 'abc123' }),
+  checkoutGitCommit: vi.fn().mockResolvedValue({ message: 'success', commit: 'abc123' }),
+  revertGitCommit: vi.fn().mockResolvedValue({ message: 'success', commit: 'abc123' }),
 };
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   mockApiService.checkoutGitCommit.mockClear();
   mockApiService.revertGitCommit.mockClear();
 
@@ -393,7 +393,7 @@ describe('GitHistoryContextMenu', () => {
   // 15. Checkout cancelled (user clicks Cancel) closes menu without calling API
   test('checkout cancelled closes menu without calling API', async () => {
     mountContextMenu();
-    jest.spyOn(window, 'confirm').mockReturnValue(false);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     fireContextMenu(commitRow!);
 
@@ -410,7 +410,7 @@ describe('GitHistoryContextMenu', () => {
   // 16. Revert cancelled (user clicks Cancel) closes menu without calling API
   test('revert cancelled closes menu without calling API', async () => {
     mountContextMenu();
-    jest.spyOn(window, 'confirm').mockReturnValue(false);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     fireContextMenu(commitRow!);
 

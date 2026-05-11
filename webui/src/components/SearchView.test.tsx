@@ -8,24 +8,24 @@ import { ApiService } from '../services/api';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('../utils/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/clipboard', () => ({
+  copyToClipboard: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../services/clientSession', () => ({
-  clientFetch: jest.fn(),
+vi.mock('../services/clientSession', () => ({
+  clientFetch: vi.fn(),
 }));
 
-jest.mock('../services/api', () => ({
+vi.mock('../services/api', () => ({
   ApiService: {
-    getInstance: jest.fn(),
+    getInstance: vi.fn(),
   },
 }));
 
 // SearchView uses useLog() transitively, which requires NotificationContext.
 // We provide a minimal mock with plain arrow functions to avoid heavy module
 // resolution cascade that causes OOM under Node 22 + Jest 27.
-jest.mock('../contexts/NotificationContext', () => {
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -98,28 +98,28 @@ beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-const mockSearchFn = jest.fn().mockResolvedValue(MOCK_SEARCH_RESPONSE);
+const mockSearchFn = vi.fn().mockResolvedValue(MOCK_SEARCH_RESPONSE);
 
 beforeEach(() => {
-  jest.useFakeTimers();
+  vi.useFakeTimers();
   // Re-mock rAF afterjest.useFakeTimers overrides it
   global.requestAnimationFrame = syncRAF;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
 
   // Reset mockReturnValue on getInstance, but do NOT use clearAllMocks
   // because it wipes mockResolvedValue from mockSearchFn.
-  (ApiService.getInstance as jest.Mock).mockClear();
-  (ApiService.getInstance as jest.Mock).mockReturnValue({
+  (ApiService.getInstance as vi.Mock).mockClear();
+  (ApiService.getInstance as vi.Mock).mockReturnValue({
     search: mockSearchFn,
   });
 
   // Clear call history on specific mocks (preserve implementations)
   mockSearchFn.mockClear();
   mockSearchFn.mockResolvedValue(MOCK_SEARCH_RESPONSE);
-  (copyToClipboard as jest.Mock).mockClear();
+  (copyToClipboard as vi.Mock).mockClear();
   defaultOnFileClick.mockClear();
 });
 
@@ -130,7 +130,7 @@ afterEach(() => {
   if (container) container.remove();
   // Clean up any portal containers leftover
   document.querySelectorAll('.context-menu').forEach((el) => el.remove());
-  jest.useRealTimers();
+  vi.useRealTimers();
 });
 
 const flushPromises = async () => {
@@ -139,10 +139,10 @@ const flushPromises = async () => {
   });
 };
 
-const defaultOnFileClick = jest.fn();
+const defaultOnFileClick = vi.fn();
 
 /** Render SearchView and trigger debounced search. */
-async function renderSearch(props: { onFileClick?: jest.Mock } = {}) {
+async function renderSearch(props: { onFileClick?: vi.Mock } = {}) {
   const onFileClick = props.onFileClick || defaultOnFileClick;
 
   await act(async () => {
@@ -162,7 +162,7 @@ async function renderSearch(props: { onFileClick?: jest.Mock } = {}) {
 
   // Advance past debounce delay
   await act(async () => {
-    jest.advanceTimersByTime(400);
+    vi.advanceTimersByTime(400);
   });
   await flushPromises();
 
@@ -305,7 +305,7 @@ describe('SearchView context menu - clipboard and editor actions', () => {
   });
 
   it('"Open in editor" calls onFileClick with correct path and line number', async () => {
-    const onFileClick = jest.fn();
+    const onFileClick = vi.fn();
     await renderSearch({ onFileClick });
 
     fireContextMenuOnMatch();

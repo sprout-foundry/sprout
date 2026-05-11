@@ -766,3 +766,30 @@ func ImportStateFromJSONFile(filename string) (*ConversationState, error) {
 
 	return &state, nil
 }
+
+// === Test Helpers ===
+
+// SetGetStateDirFunc sets the getStateDirFunc for testing purposes.
+// Returns the previous function so it can be restored after the test.
+func SetGetStateDirFunc(fn func() (string, error)) func() (string, error) {
+	old := getStateDirFunc
+	getStateDirFunc = fn
+	return old
+}
+
+// SetGetStateDirForTest is a convenience helper that sets getStateDirFunc
+// to return a fixed directory for testing.
+func SetGetStateDirForTest(dir string) func() (string, error) {
+	return SetGetStateDirFunc(func() (string, error) {
+		return dir, nil
+	})
+}
+
+// SetGetStateDirForTestError is a convenience helper that sets getStateDirFunc
+// to return an error for testing error handling.
+func SetGetStateDirForTestError(msg string) func() (string, error) {
+	err := fmt.Errorf("%s", msg)
+	return SetGetStateDirFunc(func() (string, error) {
+		return "", err
+	})
+}

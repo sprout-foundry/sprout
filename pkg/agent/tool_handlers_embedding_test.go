@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -258,12 +257,10 @@ func TestHandleEmbeddingIndexBuild_InitError(t *testing.T) {
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
-	os.Unsetenv("ONNXRUNTIME_LIB")
 	agent.embeddingMgr = em
 
-	// The build now runs in background; handleEmbeddingIndexBuild returns
-	// immediately with a confirmation message. The Init failure will be
-	// reported via a build_failed event in the background goroutine.
+	// The build runs in background; handleEmbeddingIndexBuild returns
+	// immediately with a confirmation message.
 	result, err := handleEmbeddingIndexBuild(context.Background(), agent, em)
 	if err != nil {
 		t.Fatalf("handleEmbeddingIndexBuild should return immediately without error, got: %v", err)
@@ -272,8 +269,7 @@ func TestHandleEmbeddingIndexBuild_InitError(t *testing.T) {
 		t.Errorf("expected background message, got: %s", result)
 	}
 
-	// Wait briefly for the background goroutine to complete and verify
-	// the build_failed event was published.
+	// Wait briefly for the background goroutine to complete.
 	time.Sleep(100 * time.Millisecond)
 }
 
@@ -285,7 +281,6 @@ func TestHandleEmbeddingIndexUpdate_InitError(t *testing.T) {
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
-	os.Unsetenv("ONNXRUNTIME_LIB")
 	agent.embeddingMgr = em
 
 	result, err := handleEmbeddingIndexUpdate(context.Background(), agent, em)

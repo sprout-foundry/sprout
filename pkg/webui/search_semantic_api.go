@@ -127,7 +127,7 @@ func (ws *ReactWebServer) handleAPISemanticSearch(w http.ResponseWriter, r *http
 // EmbeddingIndexStatus represents the current state of the embedding index.
 type EmbeddingIndexStatus struct {
 	Available    bool   `json:"available"`     // whether embedding manager exists
-	Initialized  bool   `json:"initialized"`   // whether ONNX provider is initialized
+	Initialized  bool   `json:"initialized"`   // whether embedding provider is initialized
 	Building     bool   `json:"building"`      // whether an index build is in progress
 	RecordCount  int    `json:"record_count"`  // number of indexed code units
 	Workspace    string `json:"workspace"`     // workspace root path

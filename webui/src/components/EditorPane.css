@@ -38,11 +38,12 @@
   height: 100%;
 }
 
-/* .cm-content should not have height constraint - it needs to grow
-   to fit content so scrolling works properly */
+/* .cm-content is absolutely positioned inside .cm-scroller.
+   Its height is content-driven; do not add height constraints
+   or CodeMirror's scroll calculations will be wrong. */
 .pane-content .editor .cm-content {
   width: 100%;
-  min-height: 100%;
+  min-height: 0;
 }
 
 .pane-footer {

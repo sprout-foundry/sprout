@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 type conversationSummaryMetrics struct {
@@ -297,7 +296,7 @@ func (a *Agent) GenerateConversationSummary() string {
 	}
 
 	// Add todo summary (using TodoRead to get current state)
-	todos := tools.TodoRead()
+	todos := a.GetTodoManager().Read()
 	if len(todos) > 0 {
 		completed := 0
 		for _, t := range todos {
@@ -351,7 +350,7 @@ func (a *Agent) GenerateCompactSummary() string {
 	summary.WriteString("════════════════════════════\n\n")
 
 	// Add accomplished todos
-	todos := tools.TodoRead()
+	todos := a.GetTodoManager().Read()
 	if len(todos) > 0 {
 		summary.WriteString("[OK] ACCOMPLISHED TASKS:\n")
 		summary.WriteString("─────────────────────────────\n")

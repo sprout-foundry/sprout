@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -14,6 +15,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 )
+
+// sessionCleanupOnce ensures session cleanup runs only once per process,
+// preventing repeated cleanup in daemon mode where multiple agents are created.
+var sessionCleanupOnce sync.Once
 
 func isDebugEnvEnabled() bool {
 	value := strings.TrimSpace(configuration.GetEnvSimple("DEBUG"))
@@ -73,6 +78,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		output:              outputMgr,
 		security:            securityMgr,
 		mcpSub:              mcpMgr,
+		todoMgr:             tools.NewTodoManager(),
 	}
 
 	// Set up output router
@@ -99,15 +105,16 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.state.SetCurrentContextTokens(0)
 		agent.state.SetContextWarningIssued(false)
 
-		// Clear old todos at session start
-		tools.TodoWrite([]tools.TodoItem{})
+		// Clean up old sessions once per process. Uses sync.Once so daemon
+		// mode (which creates agents per chat session) only runs cleanup on
+		// the very first agent, not on every subsequent chat session.
+		sessionCleanupOnce.Do(func() {
+			if err := cleanupMemorySessions(); err != nil && agent.debug {
+				fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
+			}
+		})
 
-		// Clean up old sessions (keep only most recent 20 for this working directory scope)
-		if err := cleanupMemorySessions(); err != nil && agent.debug {
-			fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
-		}
-
-		// Pre-initialize tool registry to avoid first-use overhead
+		// Pre-initialize tool registry to avoid first-use overhead (safe: sync.Once)
 		if agent.debug {
 			agent.Logger().Info("Pre-initializing tool registry...")
 		}

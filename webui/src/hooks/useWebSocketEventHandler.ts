@@ -139,8 +139,8 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   logEntry.category = 'query';
   logEntry.level = 'info';
   const data = (event.data ?? {}) as Record<string, unknown>;
-  const startedQuery = data.query || '';
-  const isClearCommand = String(startedQuery).trim().toLowerCase() === '/clear';
+  const startedQuery = String(data.query || '');
+  const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
 
   setState(prev => ({
     isProcessing: true,
@@ -705,8 +705,9 @@ export function useWebSocketEventHandler({
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] syncing state after websocket reconnect');
     apiService.getStats()
-      .then((stats: Record<string, unknown>) => {
-        const backendProcessing = stats?.is_processing === true;
+      .then((stats: unknown) => {
+        const statsRecord = stats as Record<string, unknown>;
+        const backendProcessing = statsRecord.is_processing === true;
         activeRequestsRef.current = backendProcessing ? 1 : 0;
         setState(prev => {
           const nextToolExecutions = backendProcessing ? prev.toolExecutions : prev.toolExecutions.map((tool) => {
@@ -718,7 +719,7 @@ export function useWebSocketEventHandler({
           return {
             isConnected: true, isProcessing: backendProcessing, queryProgress: backendProcessing ? prev.queryProgress : null,
             lastError: null, toolExecutions: nextToolExecutions,
-            stats: { ...prev.stats, ...stats, connection_phase: 'reconnected' },
+            stats: { ...prev.stats, ...statsRecord, connection_phase: 'reconnected' },
           };
         });
       })

@@ -3,7 +3,6 @@ package webui
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -13,7 +12,7 @@ import (
 // handleSecurityApprovalResponse processes security approval responses from the webui.
 // The webui sends a { "type": "security_approval_response", "data": { "request_id": "...", "approved": true/false } }
 // message when the user approves or rejects a security warning.
-func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
+func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, data *SecurityApprovalResponseData, clientID string) {
 	// Route to the currently active chat's agent, since the security dialog
 	// is always shown in the context of the active chat view.
 	_, activeChatID := ws.getActiveChatContext(clientID)
@@ -27,26 +26,6 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg
 		return
 	}
 
-	data, ok := msg["data"].(map[string]interface{})
-	if !ok {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Invalid security approval response payload"},
-		})
-		return
-	}
-
-	requestID, _ := data["request_id"].(string)
-	if requestID == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "request_id is required"},
-		})
-		return
-	}
-
-	approved, _ := data["approved"].(bool)
-
 	mgr := clientAgent.GetSecurityApprovalMgr()
 	if mgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
@@ -56,41 +35,21 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, msg
 		return
 	}
 
-	if !mgr.RespondToApproval(requestID, approved) {
+	if !mgr.RespondToApproval(data.RequestID, data.Approved) {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": fmt.Sprintf("No pending security request with id: %s", requestID)},
+			"data": map[string]string{"message": fmt.Sprintf("No pending security request with id: %s", data.RequestID)},
 		})
 		return
 	}
 
-	log.Printf("Security approval response received: request_id=%s approved=%v", requestID, approved)
+	log.Printf("Security approval response received: request_id=%s approved=%v", data.RequestID, data.Approved)
 }
 
 // handleSecurityPromptResponse processes security prompt responses from the webui.
 // The webui sends a { "type": "security_prompt_response", "data": { "request_id": "...", "response": true/false } }
 // message when the user responds to a file security concern prompt.
-func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	data, ok := msg["data"].(map[string]interface{})
-	if !ok {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Invalid security prompt response payload"},
-		})
-		return
-	}
-
-	requestID, _ := data["request_id"].(string)
-	if requestID == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "request_id is required"},
-		})
-		return
-	}
-
-	response, _ := data["response"].(bool)
-
+func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, data *SecurityPromptResponseData, clientID string) {
 	mgr := security.GetGlobalApprovalManager()
 	if mgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
@@ -100,17 +59,17 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 		return
 	}
 
-	if mgr.RespondToApproval(requestID, response) {
+	if mgr.RespondToApproval(data.RequestID, data.Response) {
 		ws.publishClientEvent(clientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
 			"status":     "responded",
-			"request_id": requestID,
-			"response":   response,
+			"request_id": data.RequestID,
+			"response":   data.Response,
 		})
-		log.Printf("Security prompt response received: request_id=%s response=%v", requestID, response)
+		log.Printf("Security prompt response received: request_id=%s response=%v", data.RequestID, data.Response)
 	} else {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": fmt.Sprintf("No pending security prompt with id: %s", requestID)},
+			"data": map[string]string{"message": fmt.Sprintf("No pending security prompt with id: %s", data.RequestID)},
 		})
 	}
 }
@@ -118,35 +77,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, msg m
 // handleAskUserResponse processes ask_user responses from the webui.
 // The webui sends a { "type": "ask_user_response", "data": { "request_id": "...", "response": "..." } }
 // message when the user responds to a question prompt.
-func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, msg map[string]interface{}, clientID string) {
-	data, ok := msg["data"].(map[string]interface{})
-	if !ok {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Invalid ask_user response payload"},
-		})
-		return
-	}
-
-	requestID, _ := data["request_id"].(string)
-	if requestID == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "request_id is required"},
-		})
-		return
-	}
-
-	response, _ := data["response"].(string)
-	response = strings.TrimSpace(response)
-	if response == "" {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "response cannot be empty"},
-		})
-		return
-	}
-
+func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, data *AskUserResponseData, clientID string) {
 	mgr := agenttools.GetGlobalAskUserManager()
 	if mgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
@@ -156,12 +87,12 @@ func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, msg map[stri
 		return
 	}
 
-	if mgr.RespondToAskUser(requestID, response) {
-		log.Printf("Ask user response received: request_id=%s response_length=%d", requestID, len(response))
+	if mgr.RespondToAskUser(data.RequestID, data.Response) {
+		log.Printf("Ask user response received: request_id=%s response_length=%d", data.RequestID, len(data.Response))
 	} else {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
-			"data": map[string]string{"message": fmt.Sprintf("No pending ask_user request with id: %s", requestID)},
+			"data": map[string]string{"message": fmt.Sprintf("No pending ask_user request with id: %s", data.RequestID)},
 		})
 	}
 }

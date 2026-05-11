@@ -59,7 +59,7 @@ export function useChatSessionManager({
       if (activeChatId) {
         try {
           const switchResp = await switchChatSession(activeChatId);
-          initialMessages = switchResp.chat_session.messages
+          initialMessages = (switchResp.chat_session.messages ?? [])
             .filter((m) => m.role === 'user' || m.role === 'assistant')
             .map((m, i) => ({
               id: `chat-${activeChatId}-${i}`,
@@ -140,7 +140,7 @@ export function useChatSessionManager({
           timestamp: new Date(),
           ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
         }));
-      const backendIsActive = !!(response.chat_session as any).active_query;
+      const backendIsActive = response.chat_session.active_query;
 
       setState(prev => {
         const useBackendMessages = backendMessages.length >= prev.messages.length;

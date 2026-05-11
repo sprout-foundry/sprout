@@ -201,14 +201,6 @@ type EmbeddingIndexConfig struct {
 	// Default: "bundled"
 	Provider string `json:"provider,omitempty"`
 
-	// ORTLibraryPath is the path to the ONNX Runtime shared library.
-	// If empty, the system will try to find it automatically.
-	ORTLibraryPath string `json:"ort_library_path,omitempty"`
-
-	// ModelDir is the directory containing the ONNX model and tokenizer files.
-	// If empty, uses the bundled models in the binary.
-	ModelDir string `json:"model_dir,omitempty"`
-
 	// IndexDir is the directory where the embedding index JSONL files are stored.
 	// If empty, uses ~/.config/sprout/embeddings/
 	IndexDir string `json:"index_dir,omitempty"`
@@ -458,12 +450,6 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if override.EmbeddingIndex.Provider != "" {
 			result.EmbeddingIndex.Provider = override.EmbeddingIndex.Provider
-		}
-		if override.EmbeddingIndex.ORTLibraryPath != "" {
-			result.EmbeddingIndex.ORTLibraryPath = override.EmbeddingIndex.ORTLibraryPath
-		}
-		if override.EmbeddingIndex.ModelDir != "" {
-			result.EmbeddingIndex.ModelDir = override.EmbeddingIndex.ModelDir
 		}
 		if override.EmbeddingIndex.IndexDir != "" {
 			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir

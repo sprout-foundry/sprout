@@ -147,6 +147,6 @@ storybook-static
 # Static embedding model source files (built into static_model.bin)
 pkg/embedding/staticmodel/
 
-# Old ONNX model files (replaced by static_model.bin)
+# Old model files (replaced by static_model.bin)
 pkg/embedding/models/
 pkg/embedding/staticmodel/mkembed

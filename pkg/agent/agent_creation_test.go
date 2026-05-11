@@ -46,6 +46,7 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 	// Persist LEDIT_CONFIG for the test lifetime so any code path that reads
 	// the env var directly (bypassing configManager) stays isolated.
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 
 	agent, err := NewAgentWithModel("test:test")
 	if err != nil {

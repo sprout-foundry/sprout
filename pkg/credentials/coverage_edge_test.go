@@ -25,6 +25,7 @@ func TestGetConfigDir_HomeError(t *testing.T) {
 
 	// Also clear LEDIT_CONFIG and XDG_CONFIG_HOME to force the home dir path
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := GetConfigDir()
@@ -47,6 +48,7 @@ func TestLoad_GetAPIKeysPathError(t *testing.T) {
 		}
 	}()
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := Load()
@@ -68,6 +70,7 @@ func TestSave_GetAPIKeysPathError(t *testing.T) {
 		}
 	}()
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err := Save(Store{"test": "val"})
@@ -91,6 +94,7 @@ func TestResolve_LoadError(t *testing.T) {
 		}
 	}()
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// No env var set, so Resolve falls through to Load()
@@ -115,6 +119,7 @@ func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 		}
 	}()
 	t.Setenv("LEDIT_CONFIG", "")
+	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	// Explicitly unset the named env var so os.Getenv returns empty
 	t.Setenv("SOME_UNSET_VAR", "")
@@ -143,6 +148,7 @@ func TestSave_WriteFileError(t *testing.T) {
 	// but the configDir itself may be writable by owner. To force WriteFile failure,
 	// remove write permission after the directory is created.
 	t.Setenv("LEDIT_CONFIG", readOnlyDir)
+	t.Setenv("SPROUT_CONFIG", readOnlyDir)
 	// Pre-create the directory so GetConfigDir's MkdirAll succeeds
 	// then make it read-only for files
 	configDir, err := GetConfigDir()
@@ -165,6 +171,7 @@ func TestSave_WriteFileError(t *testing.T) {
 func TestSaveAndLoad_LargeStore(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := make(Store, 500)
 	for i := 0; i < 500; i++ {
@@ -195,6 +202,7 @@ func TestSaveAndLoad_LargeStore(t *testing.T) {
 func TestResolve_SpecialCharProviderNames(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
 		"provider/with/slashes":  "key-slashes",
@@ -226,6 +234,7 @@ func TestResolve_SpecialCharProviderNames(t *testing.T) {
 func TestResolve_EnvVarSpecialChars(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	cases := []struct {
 		envVal string
@@ -268,6 +277,7 @@ func TestResolve_EnvVarSpecialChars(t *testing.T) {
 func TestConcurrentSaveLoad(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	// Pre-populate the store
 	initialStore := make(Store, 10)
@@ -312,6 +322,7 @@ func TestConcurrentSaveLoad(t *testing.T) {
 func TestResolve_NilLikeEmptyProvider(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	resolved, err := resolve("", "")
 	if err != nil {
@@ -341,6 +352,7 @@ func TestLoad_GetAPIKeysPathErrorViaReadOnlyParent(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	t.Setenv("LEDIT_CONFIG", filepath.Join(readOnlyDir, "sub", "deep"))
+	t.Setenv("SPROUT_CONFIG", filepath.Join(readOnlyDir, "sub", "deep"))
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := Load()
@@ -354,6 +366,7 @@ func TestLoad_GetAPIKeysPathErrorViaReadOnlyParent(t *testing.T) {
 func TestResolve_EnvVarSetButProvidedNameNotInEnv(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{"fallback-provider": "stored-value"}
 	if err := Save(store); err != nil {

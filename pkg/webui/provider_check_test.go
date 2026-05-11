@@ -20,15 +20,8 @@ func TestIsProviderAvailable(t *testing.T) {
 		}
 
 		// Point configuration to our temp dir
-		old := os.Getenv("LEDIT_CONFIG")
-		os.Setenv("LEDIT_CONFIG", dir)
-		defer func() {
-			if old == "" {
-				os.Unsetenv("LEDIT_CONFIG")
-			} else {
-				os.Setenv("LEDIT_CONFIG", old)
-			}
-		}()
+				t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 		result := isProviderAvailable()
 		if result {
@@ -47,15 +40,8 @@ func TestIsProviderAvailable(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		old := os.Getenv("LEDIT_CONFIG")
-		os.Setenv("LEDIT_CONFIG", dir)
-		defer func() {
-			if old == "" {
-				os.Unsetenv("LEDIT_CONFIG")
-			} else {
-				os.Setenv("LEDIT_CONFIG", old)
-			}
-		}()
+				t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 
 		result := isProviderAvailable()
 		if !result {

@@ -27,22 +27,30 @@ export interface ChatSessionsResponse {
   total_sessions: number;
 }
 
+export interface ChatSessionSwitchResponseChatSession {
+  id: string;
+  name: string;
+  messages?: Array<{ role: string; content: string; reasoning_content?: string }>;
+  total_tokens?: number;
+  total_cost?: number;
+  session_id?: string;
+  agent_state?: string;
+  active_query: boolean;
+  is_default: boolean;
+  is_pinned: boolean;
+  provider?: string;
+  model?: string;
+  worktree_path?: string;
+  created_at: string;
+  last_active_at: string;
+  message_count: number;
+  current_session_id: string;
+}
+
 export interface ChatSessionSwitchResponse {
   message: string;
   active_chat_id: string;
-  chat_session: {
-    id: string;
-    name: string;
-    messages: Array<{ role: string; content: string; reasoning_content?: string }>;
-    total_tokens?: number;
-    total_cost?: number;
-    session_id?: string;
-    agent_state?: string;
-    provider?: string;
-    model?: string;
-    worktree_path?: string;
-    [key: string]: unknown;
-  };
+  chat_session: ChatSessionSwitchResponseChatSession;
 }
 
 export interface WorktreeListResponse {

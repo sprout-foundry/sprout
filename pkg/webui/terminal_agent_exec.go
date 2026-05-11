@@ -147,27 +147,46 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// Wait for the sentinel line to appear in the output.
 	for {
 		select {
-		case <-sentinelCtx.Done():
-			// Sentinel timeout or caller cancellation.
-			// Try to interrupt the running command so the session can be reused.
+			case <-sentinelCtx.Done():
+			// Determine the cause: caller cancellation vs sentinel timeout
+			callerErr := ctx.Err()
+
+			if callerErr != nil {
+				// Caller context cancelled — check if it's a timeout (not user interrupt)
+				if callerErr == context.DeadlineExceeded {
+					// Tool executor timed out — promote to background instead of killing
+					// The command is still running in this PTY session
+					accumulatedOutput := stripANSI(buf.String())
+					log.Printf("PTY session %s: tool executor timed out, promoting to background session", session.ID)
+					return accumulatedOutput, -1, fmt.Errorf("COMMAND_PROMOTED_TO_BACKGROUND:%s", session.ID)
+				}
+				// User interrupt — Ctrl+C and close the session
+				session.mutex.RLock()
+				if session.Pty != nil {
+					// Best-effort Ctrl+C to interrupt any running command
+					_, _ = session.Pty.Write([]byte{3})
+				}
+				session.mutex.RUnlock()
+				log.Printf("PTY session %s: user cancelled, closing session for recreation", session.ID)
+				sid := session.ID
+				go func() {
+					time.Sleep(100 * time.Millisecond)
+					if err := tm.CloseSession(sid); err != nil {
+						log.Printf("PTY session %s: failed to close after user cancel: %v", sid, err)
+					}
+				}()
+				return stripANSI(buf.String()), -1, sentinelCtx.Err()
+			}
+
+			// Sentinel timeout — the command is stuck (no sentinel in 30s)
+			// Ctrl+C and close the session so it can be recreated
 			session.mutex.RLock()
 			if session.Pty != nil {
-				// Best-effort Ctrl+C to interrupt any running command so the
-				// session can be reused. Error is ignored — the PTY may already
-				// be closed or the command may have already exited.
+				// Best-effort Ctrl+C to interrupt any running command
 				_, _ = session.Pty.Write([]byte{3})
 			}
 			session.mutex.RUnlock()
-
-			// Determine the cause: caller cancellation vs sentinel timeout.
-			// In either case, the shell state is unknown — close the session
-			// so a fresh one is created on the next command.
-			callerCancelled := ctx.Err() != nil
-			if !callerCancelled {
-				log.Printf("PTY session %s: sentinel not detected within %s, closing session for recreation", session.ID, sentinelTimeout)
-			} else {
-				log.Printf("PTY session %s: caller cancelled, closing session for recreation", session.ID)
-			}
+			log.Printf("PTY session %s: sentinel not detected within %s, closing session for recreation", session.ID, sentinelTimeout)
 			sid := session.ID
 			go func() {
 				time.Sleep(100 * time.Millisecond)

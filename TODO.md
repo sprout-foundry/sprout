@@ -846,7 +846,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 ### TypeScript Quality
 
 [] - TYPESCRIPT: Replace `handleEvent(event: any)` with typed `WsEvent` — entire 800-line event handler is untyped; `WsEvent` type should exist in events. `webui/src/hooks/useWebSocketEventHandler.ts:649`
-[] - TYPESCRIPT: Replace `(message: any)` and `(edit: any)` casts in localStorage deserialization with proper partial types — typed `Message` and `FileEdit` interfaces exist but aren't used. `webui/src/hooks/useAppStatePersistence.ts:30-40`
+[x] - TYPESCRIPT: Replace `(message: any)` and `(edit: any)` casts in localStorage deserialization with proper partial types — typed `Message` and `FileEdit` interfaces exist but aren't used. `webui/src/services/appStatePersistence.ts`
 [] - TYPESCRIPT: Replace `(stats: any)` casts where typed `StatsResponse` exists — 3 locations in App.tsx. `webui/src/hooks/useWebSocketEventHandler.ts:492,693`
 [] - TYPESCRIPT: Replace `(response.chat_session as any).active_query` with proper type — unsafe type assertion for non-typed field. `webui/src/hooks/useChatSessionManager.ts:144`
 [] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`

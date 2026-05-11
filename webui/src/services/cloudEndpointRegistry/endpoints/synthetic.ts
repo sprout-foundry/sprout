@@ -105,7 +105,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/workspace',
     methods: ['GET', 'POST'],
     category: 'synthetic',
-    syntheticResponse: { workspace_root: '/', daemon_root: '/' },
+    syntheticResponse: { workspace_root: '/', daemon_root: '/', is_project: false, project_markers: [], needs_workspace_selection: false, suggested_projects: [], recent_workspaces: [] },
     description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
   },
 ];

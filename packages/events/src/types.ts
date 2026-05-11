@@ -18,6 +18,9 @@ export interface SproutEvent {
 /** Callback invoked for each incoming event */
 export type SproutEventCallback = (event: SproutEvent) => void;
 
+/** Alias for SproutEvent, matching the WsEvent shape used by the webui WebSocketService. */
+export type WsEvent = SproutEvent;
+
 /**
  * EventsProvider — abstraction over the real-time event transport.
  *

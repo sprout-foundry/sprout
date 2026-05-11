@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { AppState } from '../types/app';
+import type { WsEvent } from '@sprout/events';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
@@ -77,11 +78,11 @@ const normalizeTodoList = (
 // ── Event Handler Helpers ───────────────────────────────────────────────
 
 interface EventHandlerContext {
-  event: any;
+  event: WsEvent;
   setState: AppStoreSetState;
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
-  apiService: any;
+  apiService: { getStats: () => Promise<unknown> };
   pendingProviderRef: React.MutableRefObject<string>;
   pendingProviderChangeRef: React.MutableRefObject<boolean>;
   pendingProviderChangeValueRef: React.MutableRefObject<string | null>;
@@ -89,7 +90,7 @@ interface EventHandlerContext {
   lastConnectionStateRef: React.MutableRefObject<boolean>;
 }
 
-const createLogEntry = (event: any): LogEntry => ({
+const createLogEntry = (event: WsEvent): LogEntry => ({
   id: `${Date.now()}-${Math.random()}`,
   type: event.type,
   timestamp: new Date(),
@@ -102,14 +103,15 @@ const createLogEntry = (event: any): LogEntry => ({
 const handleConnectionStatus = (ctx: EventHandlerContext): void => {
   const { event, setState, activeRequestsRef, connectionTimeoutRef, lastConnectionStateRef } = ctx;
   const logEntry = createLogEntry(event);
-  if (event.data?.client_id && event.data.client_id !== getWebUIClientId()) return;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  if (data.client_id && data.client_id !== getWebUIClientId()) return;
   logEntry.category = 'system';
-  logEntry.level = event.data.connected ? 'success' : 'warning';
-  const incomingSessionId = typeof event.data?.session_id === 'string' ? event.data.session_id : null;
-  const newConnectionState = event.data.connected;
+  logEntry.level = data.connected ? 'success' : 'warning';
+  const incomingSessionId = typeof data.session_id === 'string' ? data.session_id : null;
+  const newConnectionState = data.connected;
   const phase = newConnectionState
-    ? (event.data?.reconnected ? 'reconnected' : 'connected')
-    : (event.data?.reconnecting ? 'reconnecting' : 'disconnected');
+    ? (data.reconnected ? 'reconnected' : 'connected')
+    : (data.reconnecting ? 'reconnecting' : 'disconnected');
 
   if (newConnectionState !== lastConnectionStateRef.current) {
     if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
@@ -136,8 +138,9 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'query';
   logEntry.level = 'info';
-  const startedQuery = event.data?.query || '';
-  const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const startedQuery = data.query || '';
+  const isClearCommand = String(startedQuery).trim().toLowerCase() === '/clear';
 
   setState(prev => ({
     isProcessing: true,
@@ -159,8 +162,9 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
 // Handle query_progress event
 const handleQueryProgress = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
-  setState(prev => ({ queryProgress: event.data }));
-  debugLog('[>>] Query progress:', event.data);
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  setState(prev => ({ queryProgress: data }));
+  debugLog('[>>] Query progress:', data);
 };
 
 // Handle stream_chunk event
@@ -169,8 +173,9 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'stream';
   logEntry.level = 'info';
-  const chunkContent = event.data.chunk || '';
-  const chunkType = event.data.content_type || 'assistant_text';
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const chunkContent = String(data.chunk || '');
+  const chunkType = String(data.content_type || 'assistant_text');
 
   setState(prev => {
     const newMessages = [...prev.messages];
@@ -199,8 +204,9 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   logEntry.category = 'query';
   logEntry.level = 'success';
   if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
-  const completedQuery = String(event.data?.query || '').trim().toLowerCase();
-  const completedResponse = event.data?.response;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const completedQuery = String(data.query || '').trim().toLowerCase();
+  const completedResponse = data.response;
   const wasClearCommand = completedQuery === '/clear';
 
   setState(prev => {
@@ -241,13 +247,14 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
   logEntry.level = 'info';
-  const toolCallID = String(event.data?.tool_call_id || '');
-  const toolName = String(event.data?.tool_name || 'unknown_tool');
-  const rawArgs = event.data?.arguments != null ? String(event.data.arguments) : undefined;
-  const displayName = String(event.data?.display_name || toolName);
-  const persona = typeof event.data?.persona === 'string' ? event.data.persona : undefined;
-  const isSubagent = !!event.data?.is_subagent;
-  const subagentType: ToolExecution['subagentType'] = event.data?.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const toolCallID = String(data.tool_call_id || '');
+  const toolName = String(data.tool_name || 'unknown_tool');
+  const rawArgs = data.arguments != null ? String(data.arguments) : undefined;
+  const displayName = String(data.display_name || toolName);
+  const persona = typeof data.persona === 'string' ? data.persona : undefined;
+  const isSubagent = !!data.is_subagent;
+  const subagentType: ToolExecution['subagentType'] = data.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
 
   setState(prev => {
     const messagesWithNewline = prev.messages.map((msg, idx) => {
@@ -291,7 +298,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
     addToolRefToMessage(messages, newTool.id);
     return { messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
   });
-  debugLog('[tool] Tool start:', event.data?.tool_name);
+  debugLog('[tool] Tool start:', data.tool_name);
 };
 
 // Handle tool_end event
@@ -299,11 +306,12 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
-  logEntry.level = event.data?.status === 'failed' ? 'error' : 'info';
-  const toolCallID = String(event.data?.tool_call_id || '');
-  const status: ToolExecution['status'] = event.data?.status === 'failed' ? 'error' : 'completed';
-  const result = event.data?.result != null ? String(event.data.result) : undefined;
-  const error = event.data?.error != null ? String(event.data.error) : undefined;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  logEntry.level = data.status === 'failed' ? 'error' : 'info';
+  const toolCallID = String(data.tool_call_id || '');
+  const status: ToolExecution['status'] = data.status === 'failed' ? 'error' : 'completed';
+  const result = data.result != null ? String(data.result) : undefined;
+  const error = data.error != null ? String(data.error) : undefined;
 
   setState(prev => {
     let matched = false;
@@ -311,7 +319,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
       const existingID = getToolCallId(t.details) || t.id;
       const match = toolCallID && existingID === toolCallID;
       if (!match) {
-        const nameMatch = !toolCallID && t.tool === event.data?.tool_name && !t.endTime;
+        const nameMatch = !toolCallID && t.tool === data.tool_name && !t.endTime;
         if (!nameMatch) return t;
       }
       matched = true;
@@ -320,11 +328,11 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
 
     if (!matched) {
       const fallbackExecution: ToolExecution = {
-        id: toolCallID || `${event.data?.tool_name || 'tool'}-${Date.now()}`,
-        tool: String(event.data?.tool_name || 'unknown_tool'), status,
-        message: String(event.data?.display_name || event.data?.tool_name || 'Tool'),
+        id: toolCallID || `${data.tool_name || 'tool'}-${Date.now()}`,
+        tool: String(data.tool_name || 'unknown_tool'), status,
+        message: String(data.display_name || data.tool_name || 'Tool'),
         startTime: new Date(), endTime: new Date(), details: event.data,
-        arguments: event.data?.arguments != null ? String(event.data.arguments) : undefined,
+        arguments: data.arguments != null ? String(data.arguments) : undefined,
         result: result || error,
       };
       return { toolExecutions: [...prev.toolExecutions, fallbackExecution], logs: appendCappedLog(prev.logs, logEntry) };
@@ -338,7 +346,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
     });
     return { messages: messagesAfterTool, toolExecutions: updatedExecutions, logs: appendCappedLog(prev.logs, logEntry) };
   });
-  debugLog('[tool] Tool end:', event.data?.tool_name, event.data?.status);
+  debugLog('[tool] Tool end:', data.tool_name, data.status);
 };
 
 // Handle subagent_activity event
@@ -347,20 +355,21 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
   logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
   const activity: SubagentActivity = {
     id: String(event.id || `${Date.now()}-${Math.random()}`),
-    toolCallId: String(event.data?.tool_call_id || ''),
-    toolName: String(event.data?.tool_name || 'run_subagent'),
-    phase: event.data?.phase === 'spawn' || event.data?.phase === 'complete' ? event.data.phase : 'output',
-    message: String(event.data?.message || '').trim(),
+    toolCallId: String(data.tool_call_id || ''),
+    toolName: String(data.tool_name || 'run_subagent'),
+    phase: data.phase === 'spawn' || data.phase === 'complete' ? (data.phase as 'spawn' | 'complete' | 'output') : 'output',
+    message: String(data.message || '').trim(),
     timestamp: new Date(),
-    taskId: typeof event.data?.task_id === 'string' ? event.data.task_id : undefined,
-    persona: typeof event.data?.persona === 'string' ? event.data.persona : undefined,
-    isParallel: event.data?.is_parallel === true,
-    provider: typeof event.data?.provider === 'string' ? event.data.provider : undefined,
-    model: typeof event.data?.model === 'string' ? event.data.model : undefined,
-    taskCount: typeof event.data?.task_count === 'number' ? event.data.task_count : undefined,
-    failures: typeof event.data?.failures === 'number' ? event.data.failures : undefined,
+    taskId: typeof data.task_id === 'string' ? data.task_id : undefined,
+    persona: typeof data.persona === 'string' ? data.persona : undefined,
+    isParallel: data.is_parallel === true,
+    provider: typeof data.provider === 'string' ? data.provider : undefined,
+    model: typeof data.model === 'string' ? data.model : undefined,
+    taskCount: typeof data.task_count === 'number' ? data.task_count : undefined,
+    failures: typeof data.failures === 'number' ? data.failures : undefined,
   };
 
   if (!activity.message) {
@@ -374,8 +383,9 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
 const handleAgentMessage = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
-  let category = String(event.data?.category || 'info');
-  const message = String(event.data?.message || '');
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  let category = String(data.category || 'info');
+  const message = String(data.message || '');
   const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();
   const suppressInChat = shouldSuppressAgentMessageInChat(cleanedMsg);
 
@@ -387,8 +397,8 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
 
   if (category === 'tool_log' && cleanedMsg) {
     logEntry.category = 'tool';
-    const toolAction = String(event.data?.action || 'tool');
-    const toolTarget = String(event.data?.target || '');
+    const toolAction = String(data.action || 'tool');
+    const toolTarget = String(data.target || '');
     const parsedToolName = extractToolNameFromToolLogTarget(toolTarget);
 
     setState(prev => {
@@ -436,7 +446,8 @@ const handleTodoUpdate = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
   logEntry.level = 'info';
-  const normalizedTodos = normalizeTodoList(event.data?.todos);
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const normalizedTodos = normalizeTodoList(data.todos);
   setState(prev => ({ currentTodos: normalizedTodos, logs: appendCappedLog(prev.logs, logEntry) }));
 };
 
@@ -446,17 +457,18 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'file';
   logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
   const newFileEdit = {
-    path: event.data.path || event.data.file_path || 'Unknown',
-    action: event.data.action || event.data.operation || 'edited',
+    path: String(data.path || data.file_path || 'Unknown'),
+    action: String(data.action || data.operation || 'edited'),
     timestamp: new Date(),
-    linesAdded: event.data.lines_added,
-    linesDeleted: event.data.lines_deleted,
+    linesAdded: typeof data.lines_added === 'number' ? data.lines_added : undefined,
+    linesDeleted: typeof data.lines_deleted === 'number' ? data.lines_deleted : undefined,
   };
   setState(prev => ({
     logs: appendCappedLog(prev.logs, logEntry), fileEdits: [...prev.fileEdits, newFileEdit].slice(-50),
   }));
-  debugLog('[edit] File changed:', event.data.path);
+  debugLog('[edit] File changed:', data.path);
 };
 
 // Handle error event
@@ -466,8 +478,9 @@ const handleError = (ctx: EventHandlerContext): void => {
   logEntry.category = 'system';
   logEntry.level = 'error';
   if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
-  const errorMessage = event.data?.message || 'Unknown error';
-  const errorCode = event.data?.code as string | undefined;
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  const errorMessage = String(data.message || 'Unknown error');
+  const errorCode = typeof data.code === 'string' ? data.code : undefined;
 
   if (errorCode === 'model_not_available') {
     setState(prev => ({
@@ -488,9 +501,10 @@ const handleError = (ctx: EventHandlerContext): void => {
       }]),
       logs: appendCappedLog(prev.logs, logEntry),
     }));
-    apiService.getStats().then((stats: any) => {
+    apiService.getStats().then((stats: unknown) => {
       if (stats) {
-        setState(prev => ({ provider: stats.provider || prev.provider, model: stats.model || prev.model }));
+        const statsRecord = stats as Record<string, unknown>;
+        setState(prev => ({ provider: String(statsRecord.provider || prev.provider), model: String(statsRecord.model || prev.model) }));
       }
     }).catch((err: unknown) => {
       debugLog('[App] Failed to sync provider state after error:', {
@@ -509,7 +523,7 @@ const handleError = (ctx: EventHandlerContext): void => {
       logs: appendCappedLog(prev.logs, logEntry),
     }));
   }
-  console.error('[FAIL] Error event:', event.data);
+  console.error('[FAIL] Error event:', data);
 };
 
 // Handle metrics_update event
@@ -518,16 +532,17 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'info';
+  const data = (event.data ?? {}) as Record<string, unknown>;
 
-  if (pendingProviderChangeRef.current && event.data?.provider === pendingProviderChangeValueRef.current) {
+  if (pendingProviderChangeRef.current && data.provider === pendingProviderChangeValueRef.current) {
     pendingProviderChangeRef.current = false;
     pendingProviderChangeValueRef.current = null;
   }
 
   setState(prev => ({
-    provider: event.data?.provider || prev.provider,
-    model: event.data?.model || prev.model,
-    stats: { ...prev.stats, ...event.data },
+    provider: String(data.provider || prev.provider),
+    model: String(data.model || prev.model),
+    stats: { ...prev.stats, ...data },
     logs: appendCappedLog(prev.logs, logEntry),
   }));
 };
@@ -535,8 +550,9 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
 // Handle workspace_changed event
 const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
   const { event } = ctx;
-  debugLog('[workspace] Workspace changed:', event.data);
-  if (!event.data?.client_id || event.data.client_id === getWebUIClientId()) {
+  const data = (event.data ?? {}) as Record<string, unknown>;
+  debugLog('[workspace] Workspace changed:', data);
+  if (!data.client_id || String(data.client_id) === getWebUIClientId()) {
     window.location.reload();
   }
 };
@@ -618,11 +634,11 @@ export interface UseWebSocketEventHandlerRefs {
 export interface UseWebSocketEventHandlerParams {
   setState: AppStoreSetState;
   refs: UseWebSocketEventHandlerRefs;
-  apiService: any;
+  apiService: { getStats: () => Promise<unknown> };
 }
 
 export interface UseWebSocketEventHandlerReturn {
-  handleEvent: (event: any) => void;
+  handleEvent: (event: WsEvent) => void;
   handleReconnect: () => void;
 }
 
@@ -641,7 +657,7 @@ export function useWebSocketEventHandler({
     connectionTimeoutRef, lastConnectionStateRef,
   } = refs;
 
-  const handleEvent = useCallback((event: any) => {
+  const handleEvent = useCallback((event: WsEvent) => {
     const filteredEvents = ['liveReload', 'reconnect', 'overlay', 'hash', 'ok', 'hot', 'ping'];
     if (filteredEvents.includes(event.type)) return;
 
@@ -685,7 +701,7 @@ export function useWebSocketEventHandler({
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] syncing state after websocket reconnect');
     apiService.getStats()
-      .then((stats: any) => {
+      .then((stats: Record<string, unknown>) => {
         const backendProcessing = stats?.is_processing === true;
         activeRequestsRef.current = backendProcessing ? 1 : 0;
         setState(prev => {

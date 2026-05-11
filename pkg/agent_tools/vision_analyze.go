@@ -103,79 +103,25 @@ func (vp *VisionProcessor) extractImageReferences(text string) []string {
 	return unique
 }
 
-// AnalyzeImage processes a single image with the vision model
-func (vp *VisionProcessor) AnalyzeImage(imagePath string) (VisionAnalysis, error) {
+// AnalyzeImage processes a single image with the vision model.
+// If optionalPrompt is provided and non-empty, it is used as the prompt;
+// otherwise the default vision prompt for imagePath is created.
+func (vp *VisionProcessor) AnalyzeImage(imagePath string, optionalPrompt ...string) (VisionAnalysis, error) {
 	// Download or read the image
 	imageData, imageType, err := vp.GetImageData(imagePath)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("failed to get image data: %w", err)
 	}
 
-	// Create vision analysis prompt
-	prompt := vp.CreateVisionPrompt(imagePath)
-
-	// Create message with image
-	messages := []api.Message{
-		{
-			Role:    "user",
-			Content: prompt,
-			Images:  []api.ImageData{{Base64: imageData, Type: imageType}},
-		},
-	}
-
-	// Get vision analysis using the vision-enabled method
-	response, err := vp.visionClient.SendVisionRequest(messages, nil, "", false)
-	if err != nil {
-		return VisionAnalysis{}, fmt.Errorf("vision request failed: %w", err)
-	}
-
-	// Store usage information for cost tracking
-	if response.Usage.TotalTokens > 0 {
-		lastVisionUsage = &VisionUsageInfo{
-			PromptTokens:     response.Usage.PromptTokens,
-			CompletionTokens: response.Usage.CompletionTokens,
-			TotalTokens:      response.Usage.TotalTokens,
-			EstimatedCost:    response.Usage.EstimatedCost,
-		}
-	}
-
-	// Extract response content
-	if len(response.Choices) == 0 {
-		return VisionAnalysis{}, fmt.Errorf("no response from vision model")
-	}
-
-	resultText := response.Choices[0].Message.Content
-
-	// Try to parse as JSON first, fall back to plain text
-	var analysis VisionAnalysis
-	if err := json.Unmarshal([]byte(resultText), &analysis); err != nil {
-		// If JSON parsing fails, use as plain description
-		analysis = VisionAnalysis{
-			ImagePath:   imagePath,
-			Description: resultText,
-		}
+	// Use optional prompt if provided and non-empty, otherwise create default
+	var prompt string
+	if len(optionalPrompt) > 0 && optionalPrompt[0] != "" {
+		prompt = optionalPrompt[0]
 	} else {
-		// Ensure image path is set
-		analysis.ImagePath = imagePath
-	}
-
-	return analysis, nil
-}
-
-// AnalyzeImageWithPrompt analyzes an image with a custom prompt
-func (vp *VisionProcessor) AnalyzeImageWithPrompt(imagePath string, customPrompt string) (VisionAnalysis, error) {
-	// Download or read the image
-	imageData, imageType, err := vp.GetImageData(imagePath)
-	if err != nil {
-		return VisionAnalysis{}, fmt.Errorf("failed to get image data: %w", err)
-	}
-
-	// Use custom prompt or default
-	prompt := customPrompt
-	if prompt == "" {
 		prompt = vp.CreateVisionPrompt(imagePath)
 	}
 
+	// Create message with image
 	messages := []api.Message{
 		{
 			Role:    "user",

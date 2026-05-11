@@ -155,8 +155,6 @@ class WebSocketService {
         }
       }
 
-      this.notifyCallbacks({ type: 'connection_status', data: { connected: true, reconnected: isReconnect, queuedMessageCount: this.pendingQueue.length } });
-
       // Fire the reconnect callback so the application can sync state
       // (e.g., request fresh stats, check for stuck processing state).
       // This MUST fire before the connection_status notification so that

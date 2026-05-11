@@ -156,10 +156,20 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		return ctx
 	}
 
+	// Determine workspace root for the new client context.
+	workspaceRoot := ws.workspaceRoot
+
+	// If the current workspace is not a project, try to restore from recent workspaces.
+	if !isProjectRoot(workspaceRoot) {
+		if recent := GetMostRecentWorkspace(); recent != "" && isProjectRoot(recent) {
+			workspaceRoot = recent
+		}
+	}
+
 	var ctx *webClientContext
 	if clientID == defaultWebClientID {
 		ctx = &webClientContext{
-			WorkspaceRoot:  ws.workspaceRoot,
+			WorkspaceRoot:  workspaceRoot,
 			SSHHostAlias:   ws.sshHostAlias,
 			SSHSessionKey:  ws.sshSessionKey,
 			SSHLauncherURL: ws.sshLauncherURL,

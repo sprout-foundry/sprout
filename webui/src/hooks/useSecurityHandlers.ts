@@ -6,11 +6,11 @@
  */
 
 import { useCallback } from 'react';
-import type { LocalEventsProvider } from '../services/localEventsProvider';
+import type { EventsProvider } from '@sprout/events';
 import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseSecurityHandlersOptions {
-  eventsProvider: LocalEventsProvider;
+  eventsProvider: EventsProvider;
   provider: string;
   setState: AppStoreSetState;
 }

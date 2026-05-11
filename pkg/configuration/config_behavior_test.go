@@ -48,6 +48,7 @@ func TestNewConfigDefaults(t *testing.T) {
 func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	original := NewConfig()
 	original.LastUsedProvider = "deepinfra"
@@ -238,6 +239,7 @@ func TestLoadReturnsDefaultWhenNoConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	// Point to an empty temp dir — no config.json exists yet
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -249,6 +251,7 @@ func TestLoadReturnsDefaultWhenNoConfigFile(t *testing.T) {
 func TestSaveProducesValidJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	cfg := NewConfig()
 	cfg.LastUsedProvider = "ollama-local"

@@ -11,17 +11,17 @@
 const mockCreateElement = () => ({ tagName: 'div', className: '', innerHTML: '', textContent: '' });
 const mockCreateSpan = () => ({ tagName: 'span', className: '', innerHTML: '', textContent: '' });
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   ViewPlugin: {
-    fromClass: jest.fn((Class) => ({ type: 'Plugin', Class })),
+    fromClass: vi.fn((Class) => ({ type: 'Plugin', Class })),
   },
   EditorView: {
-    theme: jest.fn(() => []),
+    theme: vi.fn(() => []),
     dom: {},
-    coordsAtPos: jest.fn(),
-    plugin: jest.fn(),
+    coordsAtPos: vi.fn(),
+    plugin: vi.fn(),
   },
-  gutter: jest.fn(() => ({ type: 'Gutter' })),
+  gutter: vi.fn(() => ({ type: 'Gutter' })),
   GutterMarker: class MockGutterMarker {
     toDOM() {
       return mockCreateSpan();
@@ -40,38 +40,38 @@ jest.mock('@codemirror/view', () => ({
   },
 }));
 
-jest.mock('@codemirror/state', () => {
+vi.mock('@codemirror/state', () => {
   // Create a mock function for Facet.define that has a .of method
-  const mockDefine = jest.fn((config) => {
+  const mockDefine = vi.fn((config) => {
     const facet = { type: 'Facet', config };
-    facet.of = jest.fn((value) => ({ type: 'FacetOf', value }));
+    facet.of = vi.fn((value) => ({ type: 'FacetOf', value }));
     return facet;
   });
 
   return {
     StateField: {
-      define: jest.fn((config) => ({ type: 'StateField', config })),
+      define: vi.fn((config) => ({ type: 'StateField', config })),
     },
     Facet: {
       define: mockDefine,
     },
     StateEffect: {
-      define: jest.fn(() => ({ type: 'StateEffect' })),
+      define: vi.fn(() => ({ type: 'StateEffect' })),
     },
-    RangeSetBuilder: jest.fn(() => ({
-      add: jest.fn().mockReturnThis(),
-      finish: jest.fn().mockReturnValue([]),
+    RangeSetBuilder: vi.fn(() => ({
+      add: vi.fn().mockReturnThis(),
+      finish: vi.fn().mockReturnValue([]),
     })),
   };
 });
 
-jest.mock('../services/api', () => {
+vi.mock('../services/api', () => {
   const mockApi = {
-    getSemanticCodeActions: jest.fn().mockResolvedValue({ code_actions: [] }),
+    getSemanticCodeActions: vi.fn().mockResolvedValue({ code_actions: [] }),
   };
   return {
     ApiService: {
-      getInstance: jest.fn(() => mockApi),
+      getInstance: vi.fn(() => mockApi),
     },
   };
 });
@@ -79,42 +79,42 @@ jest.mock('../services/api', () => {
 // ── LSP mocks ─────────────────────────────────────────────────────────
 
 /** Mock LSPClient returned by getClientForLanguageSync. */
-const mockLspSync = jest.fn().mockResolvedValue(undefined);
-const mockLspRequest = jest.fn().mockResolvedValue([]);
+const mockLspSync = vi.fn().mockResolvedValue(undefined);
+const mockLspRequest = vi.fn().mockResolvedValue([]);
 const mockLspClient = {
   sync: mockLspSync,
   request: mockLspRequest,
 };
 
 /** Mock LSPPlugin.get return value. */
-const mockToPosition = jest.fn((offset: number) => ({ line: 1, character: offset }));
-const mockFromPosition = jest.fn((pos: { line: number; character: number }) => pos.line * 10 + pos.character);
+const mockToPosition = vi.fn((offset: number) => ({ line: 1, character: offset }));
+const mockFromPosition = vi.fn((pos: { line: number; character: number }) => pos.line * 10 + pos.character);
 const mockLspPluginInstance = {
   toPosition: mockToPosition,
   fromPosition: mockFromPosition,
 };
 
-jest.mock('@codemirror/lsp-client', () => ({
+vi.mock('@codemirror/lsp-client', () => ({
   LSPPlugin: {
-    get: jest.fn(() => mockLspPluginInstance),
+    get: vi.fn(() => mockLspPluginInstance),
   },
 }));
 
-jest.mock('./lspExtensions', () => ({
-  getClientForLanguageSync: jest.fn(() => null),
+vi.mock('./lspExtensions', () => ({
+  getClientForLanguageSync: vi.fn(() => null),
 }));
 
-jest.mock('../services/lspClientService', () => ({
+vi.mock('../services/lspClientService', () => ({
   getFileURI: (filePath: string) => `file:///${filePath}`,
   uriToFilePath: (uri: string) => uri.replace(/^file:\/{1,3}/, ''),
 }));
 
-jest.mock('./languageRegistry', () => ({
-  resolveLanguageId: jest.fn(),
+vi.mock('./languageRegistry', () => ({
+  resolveLanguageId: vi.fn(),
 }));
 
-jest.mock('../utils/log', () => ({
-  debugLog: jest.fn(),
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
 }));
 
 // ── Module under test ─────────────────────────────────────────────────
@@ -142,7 +142,7 @@ const mockDebugLog = require('../utils/log').debugLog;
 // ── Test setup ───────────────────────────────────────────────────────
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   // Reset LSP mocks to safe defaults
   mockLspSync.mockResolvedValue(undefined);
   mockLspRequest.mockResolvedValue([]);
@@ -195,7 +195,7 @@ describe('codeActionsKeybinding', () => {
 
     // Mock view with no plugin
     const mockView = {
-      plugin: jest.fn().mockReturnValue(null),
+      plugin: vi.fn().mockReturnValue(null),
     };
 
     const result = keybinding.run(mockView);
@@ -205,11 +205,11 @@ describe('codeActionsKeybinding', () => {
   it('run function calls showMenu on plugin and returns true', () => {
     const keybinding = codeActionsKeybinding();
 
-    const mockShowMenu = jest.fn();
+    const mockShowMenu = vi.fn();
     const mockPlugin = { showMenu: mockShowMenu };
 
     const mockView = {
-      plugin: jest.fn().mockReturnValue(mockPlugin),
+      plugin: vi.fn().mockReturnValue(mockPlugin),
     };
 
     const result = keybinding.run(mockView);
@@ -286,7 +286,7 @@ describe('createCodeActionsExtension', () => {
   });
 
   it('accepts optional onApplyEdits callback', () => {
-    const onApplyEdits = jest.fn();
+    const onApplyEdits = vi.fn();
     const extension = createCodeActionsExtension(
       () => 'test.ts',
       () => 'const x = 1;',
@@ -385,11 +385,11 @@ describe('Edge cases', () => {
     const keybinding = codeActionsKeybinding();
 
     const mockPlugin = {
-      showMenu: jest.fn(),
+      showMenu: vi.fn(),
     };
 
     const mockView = {
-      plugin: jest.fn().mockReturnValue(mockPlugin),
+      plugin: vi.fn().mockReturnValue(mockPlugin),
       state: {
         selection: {
           main: {
@@ -429,7 +429,7 @@ describe('Action kind emoji mapping (through public API)', () => {
     ];
 
     MockApiService.getInstance.mockReturnValueOnce({
-      getSemanticCodeActions: jest.fn().mockResolvedValue({ code_actions: mockActions }),
+      getSemanticCodeActions: vi.fn().mockResolvedValue({ code_actions: mockActions }),
     });
 
     const api = MockApiService.getInstance();
@@ -479,12 +479,12 @@ describe('LSP CodeAction integration', () => {
 
     class FakeState {
       doc = doc;
-      facet = jest.fn().mockReturnValue({
+      facet = vi.fn().mockReturnValue({
         getFilePath: () => filePath,
         getContent: () => content,
         onApplyEdits: undefined,
       });
-      field = jest.fn().mockReturnValue({ actions: [], loading: false, line: -1 });
+      field = vi.fn().mockReturnValue({ actions: [], loading: false, line: -1 });
       selection = {
         main: { head: headPos, from: headPos, to: headPos, empty: true },
       };
@@ -496,10 +496,10 @@ describe('LSP CodeAction integration', () => {
 
     const view = {
       state,
-      plugin: jest.fn().mockReturnValue(null),
+      plugin: vi.fn().mockReturnValue(null),
       dom: { contains: () => false },
-      coordsAtPos: jest.fn().mockReturnValue({ bottom: 100, left: 50 }),
-      dispatch: jest.fn((spec: unknown) => {
+      coordsAtPos: vi.fn().mockReturnValue({ bottom: 100, left: 50 }),
+      dispatch: vi.fn((spec: unknown) => {
         // Capture dispatched effects for assertions
         if (spec && typeof spec === 'object' && 'effects' in spec) {
           effects.push((spec as { effects: unknown }).effects as never);

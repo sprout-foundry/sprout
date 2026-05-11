@@ -7,7 +7,7 @@ import { getEnclosingSymbols } from '../utils/symbolUtils';
 // Mocks
 // ---------------------------------------------------------------------------
 
-jest.mock('lucide-react', () => ({
+vi.mock('lucide-react', () => ({
   ChevronRight: (props: any) => <svg data-testid="chevron-right" {...props} />,
 }));
 
@@ -192,7 +192,7 @@ describe('EditorBreadcrumb title attributes', () => {
 
 describe('EditorBreadcrumb click handling', () => {
   test('clicking non-current segment calls onNavigate with correct path', () => {
-    const onNavigate = jest.fn();
+    const onNavigate = vi.fn();
     renderBreadcrumb({
       filePath: 'src/components/App.tsx',
       onNavigate,
@@ -214,7 +214,7 @@ describe('EditorBreadcrumb click handling', () => {
   });
 
   test('clicking the current (last) span segment does NOT cause errors', () => {
-    const onNavigate = jest.fn();
+    const onNavigate = vi.fn();
     renderBreadcrumb({
       filePath: 'src/components/App.tsx',
       onNavigate,
@@ -248,7 +248,7 @@ describe('EditorBreadcrumb click handling', () => {
   });
 
   test('clicking all non-current segments with a 4-level path calls onNavigate correctly', () => {
-    const onNavigate = jest.fn();
+    const onNavigate = vi.fn();
     renderBreadcrumb({
       filePath: 'src/features/auth/LoginForm.tsx',
       onNavigate,
@@ -280,7 +280,7 @@ describe('EditorBreadcrumb click handling', () => {
   });
 
   test('keyboard activation with Enter key calls onNavigate', () => {
-    const onNavigate = jest.fn();
+    const onNavigate = vi.fn();
     renderBreadcrumb({
       filePath: 'src/components/App.tsx',
       onNavigate,
@@ -508,7 +508,7 @@ describe('EditorBreadcrumb symbol rendering', () => {
 
 describe('EditorBreadcrumb symbol click handling', () => {
   test('clicking non-current symbol calls onNavigateToSymbol with correct line', () => {
-    const onNavigateToSymbol = jest.fn();
+    const onNavigateToSymbol = vi.fn();
     const symbols: BreadcrumbSymbol[] = [
       { name: 'MyClass', line: 10, kind: 'class' },
       { name: 'render', line: 25, kind: 'method' },
@@ -530,7 +530,7 @@ describe('EditorBreadcrumb symbol click handling', () => {
   });
 
   test('clicking current (last) symbol does NOT call onNavigateToSymbol', () => {
-    const onNavigateToSymbol = jest.fn();
+    const onNavigateToSymbol = vi.fn();
     const symbols: BreadcrumbSymbol[] = [
       { name: 'MyClass', line: 10, kind: 'class' },
       { name: 'render', line: 25, kind: 'method' },
@@ -571,7 +571,7 @@ describe('EditorBreadcrumb symbol click handling', () => {
   });
 
   test('keyboard Enter on symbol calls onNavigateToSymbol', () => {
-    const onNavigateToSymbol = jest.fn();
+    const onNavigateToSymbol = vi.fn();
     const symbols: BreadcrumbSymbol[] = [
       { name: 'MyClass', line: 10, kind: 'class' },
       { name: 'render', line: 25, kind: 'method' },
@@ -597,7 +597,7 @@ describe('EditorBreadcrumb symbol click handling', () => {
 
 describe('EditorBreadcrumb path and symbol interaction', () => {
   test('last path segment becomes clickable when symbols are present', () => {
-    const onNavigate = jest.fn();
+    const onNavigate = vi.fn();
     const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({
@@ -613,7 +613,7 @@ describe('EditorBreadcrumb path and symbol interaction', () => {
   });
 
   test('clicking last path segment calls onNavigate when symbols present', () => {
-    const onNavigate = jest.fn();
+    const onNavigate = vi.fn();
     const symbols: BreadcrumbSymbol[] = [{ name: 'myFunc', line: 5, kind: 'function' }];
 
     renderBreadcrumb({

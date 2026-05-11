@@ -4,23 +4,23 @@
 // (@marijn/find-cluster-break) that Jest/CRA cannot transform.
 import { getEditorKeymap, getLineIndent } from './editorHotkeys';
 
-jest.mock('@codemirror/search', () => ({
-  selectSelectionMatches: jest.fn(() => true),
-  selectNextOccurrence: jest.fn(() => true),
+vi.mock('@codemirror/search', () => ({
+  selectSelectionMatches: vi.fn(() => true),
+  selectNextOccurrence: vi.fn(() => true),
 }));
 
-jest.mock('@codemirror/state', () => ({
+vi.mock('@codemirror/state', () => ({
   EditorSelection: {
-    create: jest.fn((ranges, mainIndex = 0) => ({
+    create: vi.fn((ranges, mainIndex = 0) => ({
       ranges,
       mainIndex,
       main: ranges[mainIndex] || ranges[0],
     })),
-    cursor: jest.fn((pos) => ({ anchor: pos, head: pos })),
-    range: jest.fn((from, to) => ({ from, to })),
+    cursor: vi.fn((pos) => ({ anchor: pos, head: pos })),
+    range: vi.fn((from, to) => ({ from, to })),
   },
   EditorState: {
-    create: jest.fn(),
+    create: vi.fn(),
   },
   Compartment: class {
     of() {
@@ -35,7 +35,7 @@ jest.mock('@codemirror/state', () => ({
   },
 }));
 
-jest.mock('@codemirror/view', () => ({
+vi.mock('@codemirror/view', () => ({
   EditorView: class {
     constructor() {}
     destroy() {}
@@ -58,16 +58,16 @@ jest.mock('@codemirror/view', () => ({
   },
 }));
 
-jest.mock('@codemirror/language', () => ({
+vi.mock('@codemirror/language', () => ({
   bracketMatching: () => [],
   indentOnInput: () => [],
   foldGutter: () => [],
   foldKeymap: () => [],
 }));
 
-jest.mock('@codemirror/commands', () => ({
-  toggleLineComment: jest.fn(() => true),
-  toggleBlockComment: jest.fn(() => true),
+vi.mock('@codemirror/commands', () => ({
+  toggleLineComment: vi.fn(() => true),
+  toggleBlockComment: vi.fn(() => true),
   defaultKeymap: [],
   indentWithTab: {},
   history: () => [],
@@ -75,9 +75,9 @@ jest.mock('@codemirror/commands', () => ({
   redo: {},
 }));
 
-jest.mock('../extensions/cursorHistory', () => ({
-  navigateCursorBack: jest.fn(() => true),
-  navigateCursorForward: jest.fn(() => true),
+vi.mock('../extensions/cursorHistory', () => ({
+  navigateCursorBack: vi.fn(() => true),
+  navigateCursorForward: vi.fn(() => true),
 }));
 
 describe('getLineIndent', () => {
@@ -107,7 +107,7 @@ describe('getLineIndent', () => {
 });
 
 describe('getEditorKeymap', () => {
-  const emptyActions = { onSave: jest.fn(), onGoToLine: jest.fn() };
+  const emptyActions = { onSave: vi.fn(), onGoToLine: vi.fn() };
 
   describe('hotkeyToCodeMirror (indirect via getEditorKeymap)', () => {
     it('translates Ctrl+Enter → Mod-Enter for editor_insert_line_below', () => {
@@ -290,8 +290,8 @@ describe('getEditorKeymap', () => {
     });
 
     it('invokes onToggleWordWrap and returns true when run is called', () => {
-      const onToggleWordWrap = jest.fn();
-      const actions = { onSave: jest.fn(), onGoToLine: jest.fn(), onToggleWordWrap };
+      const onToggleWordWrap = vi.fn();
+      const actions = { onSave: vi.fn(), onGoToLine: vi.fn(), onToggleWordWrap };
       const entries: HotkeyEntry[] = [{ key: 'Alt+Z', command_id: 'editor_toggle_word_wrap' }];
       const keymap = getEditorKeymap(entries, actions);
       const toggleWrap = keymap.find((b) => b.key === 'Alt-z');

@@ -3,12 +3,12 @@
 import { act, createElement, createRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
-jest.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
-jest.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
-jest.mock('../services/api', () => ({
+vi.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
+vi.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
+vi.mock('../services/api', () => ({
   // No longer used by ContextPanel — kept for any transitive imports
 }));
-jest.mock('../contexts/NotificationContext', () => {
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -31,10 +31,10 @@ const MINIMAL_CHAT_PROPS = {
   isProcessing: false,
   lastError: null,
   queryProgress: null,
-  onLoadRevisionHistory: jest.fn().mockResolvedValue({ revisions: [] }),
-  onLoadSessions: jest.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
-  onRestoreSession: jest.fn().mockResolvedValue({ messages: [] }),
-  onLoadRevisionDetails: jest.fn().mockResolvedValue({ revision: { files: [] } }),
+  onLoadRevisionHistory: vi.fn().mockResolvedValue({ revisions: [] }),
+  onLoadSessions: vi.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
+  onRestoreSession: vi.fn().mockResolvedValue({ messages: [] }),
+  onLoadRevisionDetails: vi.fn().mockResolvedValue({ revision: { files: [] } }),
 };
 
 function makeChatProps(overrides: Record<string, unknown> = {}) {
@@ -52,7 +52,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   window.localStorage.setItem('sprout.contextPanel.collapsed', '0');
   window.localStorage.setItem('sprout.contextPanel.tab.chat', 'subagents');
   Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1280 });
@@ -81,7 +81,7 @@ async function renderPanel(props: Record<string, unknown>, ref?: React.RefObject
 
 describe('ContextPanel desktop collapse behavior', () => {
   it('collapses the desktop panel (showing rail) and reports the new state', async () => {
-    const onCollapsedChange = jest.fn();
+    const onCollapsedChange = vi.fn();
     const panelRef = createRef<any>();
 
     await renderPanel(makeChatProps({ onCollapsedChange }), panelRef);

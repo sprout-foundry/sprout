@@ -19,17 +19,17 @@ beforeAll(() => {
     cb(Date.now());
     return rafId;
   }) as typeof requestAnimationFrame;
-  global.cancelAnimationFrame = jest.fn();
+  global.cancelAnimationFrame = vi.fn();
 });
 
-jest.mock('../utils/clipboard', () => ({
-  copyToClipboard: jest.fn().mockResolvedValue(undefined),
+vi.mock('../utils/clipboard', () => ({
+  copyToClipboard: vi.fn().mockResolvedValue(undefined),
 }));
 
 Object.defineProperty(navigator, 'clipboard', {
   value: {
-    writeText: jest.fn().mockResolvedValue(undefined),
-    readText: jest.fn().mockResolvedValue(''),
+    writeText: vi.fn().mockResolvedValue(undefined),
+    readText: vi.fn().mockResolvedValue(''),
   },
   writable: true,
   configurable: true,
@@ -42,14 +42,14 @@ Object.defineProperty(navigator, 'clipboard', {
 let mountPoint: HTMLDivElement | null = null;
 let chatContainer: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
-const onInsertAtCursor = jest.fn();
+const onInsertAtCursor = vi.fn();
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   onInsertAtCursor.mockClear();
 
   // Create a chat container (holds message bubbles) as a sibling to the React mount.

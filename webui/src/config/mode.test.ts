@@ -10,10 +10,10 @@ describe('mode config (default / local mode)', () => {
   let modeModule: typeof import('./mode');
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     delete process.env.REACT_APP_SPROUT_MODE;
-    jest.resetModules();
-    modeModule = require('./mode');
+    vi.resetModules();
+    modeModule = await import('./mode');
   });
 
   afterAll(() => {
@@ -22,7 +22,7 @@ describe('mode config (default / local mode)', () => {
     } else {
       process.env.REACT_APP_SPROUT_MODE = originalEnv;
     }
-    jest.resetModules();
+    vi.resetModules();
   });
 
   it('exports mode as "local" when REACT_APP_SPROUT_MODE is not set', () => {
@@ -62,12 +62,12 @@ describe('mode config (cloud mode)', () => {
   let modeModule: typeof import('./mode');
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Set the env var before importing the module
     process.env.REACT_APP_SPROUT_MODE = 'cloud';
-    jest.resetModules();
+    vi.resetModules();
 
-    modeModule = require('./mode');
+    modeModule = await import('./mode');
   });
 
   afterAll(() => {
@@ -77,7 +77,7 @@ describe('mode config (cloud mode)', () => {
     } else {
       process.env.REACT_APP_SPROUT_MODE = originalEnv;
     }
-    jest.resetModules();
+    vi.resetModules();
   });
 
   it('exports mode as "cloud" when REACT_APP_SPROUT_MODE is "cloud"', () => {
@@ -119,12 +119,12 @@ describe('mode config (invalid env var value)', () => {
   let modeModule: typeof import('./mode');
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Any value other than 'cloud' should default to 'local'
     process.env.REACT_APP_SPROUT_MODE = 'staging';
-    jest.resetModules();
+    vi.resetModules();
 
-    modeModule = require('./mode');
+    modeModule = await import('./mode');
   });
 
   afterAll(() => {
@@ -133,7 +133,7 @@ describe('mode config (invalid env var value)', () => {
     } else {
       process.env.REACT_APP_SPROUT_MODE = originalEnv;
     }
-    jest.resetModules();
+    vi.resetModules();
   });
 
   it('falls back to "local" mode for unrecognized values', () => {
@@ -156,11 +156,11 @@ describe('mode config (empty string env var)', () => {
   let modeModule: typeof import('./mode');
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     process.env.REACT_APP_SPROUT_MODE = '';
-    jest.resetModules();
+    vi.resetModules();
 
-    modeModule = require('./mode');
+    modeModule = await import('./mode');
   });
 
   afterAll(() => {
@@ -169,7 +169,7 @@ describe('mode config (empty string env var)', () => {
     } else {
       process.env.REACT_APP_SPROUT_MODE = originalEnv;
     }
-    jest.resetModules();
+    vi.resetModules();
   });
 
   it('treats empty string as local mode', () => {
@@ -184,17 +184,17 @@ describe('mode config flag invariants', () => {
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
   describe('in local mode', () => {
-    beforeAll(() => {
+    beforeAll(async () => {
       delete process.env.REACT_APP_SPROUT_MODE;
-      jest.resetModules();
-      modeModule = require('./mode');
+      vi.resetModules();
+      modeModule = await import('./mode');
     });
 
     afterAll(() => {
       if (originalEnv !== undefined) {
         process.env.REACT_APP_SPROUT_MODE = originalEnv;
       }
-      jest.resetModules();
+      vi.resetModules();
     });
 
     it('supportsSSH is true without an adapter (local default)', () => {
@@ -215,10 +215,10 @@ describe('mode config flag invariants', () => {
   });
 
   describe('in cloud mode', () => {
-    beforeAll(() => {
+    beforeAll(async () => {
       process.env.REACT_APP_SPROUT_MODE = 'cloud';
-      jest.resetModules();
-      modeModule = require('./mode');
+      vi.resetModules();
+      modeModule = await import('./mode');
     });
 
     afterAll(() => {
@@ -227,7 +227,7 @@ describe('mode config flag invariants', () => {
       } else {
         process.env.REACT_APP_SPROUT_MODE = originalEnv;
       }
-      jest.resetModules();
+      vi.resetModules();
     });
 
     // Without an adapter installed, the local default (true) applies even
@@ -255,7 +255,7 @@ describe('with CloudAdapter installed', () => {
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     process.env.REACT_APP_SPROUT_MODE = 'local';
   });
 
@@ -265,7 +265,7 @@ describe('with CloudAdapter installed', () => {
     } else {
       process.env.REACT_APP_SPROUT_MODE = originalEnv;
     }
-    jest.resetModules();
+    vi.resetModules();
   });
 
   it('adapter flags override build-time defaults', async () => {
@@ -309,7 +309,7 @@ describe('with custom adapter installed', () => {
   const originalEnv = process.env.REACT_APP_SPROUT_MODE;
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     process.env.REACT_APP_SPROUT_MODE = 'local';
   });
 
@@ -319,7 +319,7 @@ describe('with custom adapter installed', () => {
     } else {
       process.env.REACT_APP_SPROUT_MODE = originalEnv;
     }
-    jest.resetModules();
+    vi.resetModules();
   });
 
   it('custom adapter flags are read exactly as provided', async () => {

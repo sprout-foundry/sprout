@@ -13,7 +13,7 @@ import (
 )
 
 // EmbeddingManager manages the embedding index lifecycle.
-// It lazily initializes the ONNX Runtime provider and IndexManager
+// It lazily initializes the static embedding provider and IndexManager
 // on first use, and caches them for subsequent calls.
 type EmbeddingManager struct {
 	mu            sync.Mutex
@@ -39,7 +39,7 @@ func NewEmbeddingManager(cfg *configuration.EmbeddingIndexConfig, workspaceRoot 
 	}
 }
 
-// Init initializes the ONNX Runtime provider and opens the vector store.
+// Init initializes the static embedding provider and opens the vector store.
 // This is idempotent — calling it multiple times is safe.
 // If a previous Init() failed, the cached error is returned immediately.
 func (m *EmbeddingManager) Init(ctx context.Context) error {
@@ -65,7 +65,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		m.config = &configuration.EmbeddingIndexConfig{}
 	}
 
-	// Initialize static embedding provider (no CGO, no ONNX)
+	// Initialize static embedding provider
 	provider, err := NewStaticProvider()
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: init provider: %w", err)

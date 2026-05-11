@@ -565,20 +565,18 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
   logEntry.level = 'warning';
   const data = (event.data ?? {}) as Record<string, unknown>;
   if (data.status === 'responded') return;
-  if (data) {
-    setState(prev => ({
-      securityApprovalRequest: {
-        requestId: String(data.request_id || ''),
-        toolName: String(data.tool_name || ''),
-        riskLevel: String(data.risk_level || 'CAUTION'),
-        reasoning: String(data.reasoning || ''),
-        command: data.command != null ? String(data.command) : undefined,
-        riskType: data.risk_type != null ? String(data.risk_type) : undefined,
-        target: data.target != null ? String(data.target) : undefined,
-      },
-      logs: appendCappedLog(prev.logs, logEntry),
-    }));
-  }
+  setState(prev => ({
+    securityApprovalRequest: {
+      requestId: String(data.request_id || ''),
+      toolName: String(data.tool_name || ''),
+      riskLevel: String(data.risk_level || 'CAUTION'),
+      reasoning: String(data.reasoning || ''),
+      command: data.command != null ? String(data.command) : undefined,
+      riskType: data.risk_type != null ? String(data.risk_type) : undefined,
+      target: data.target != null ? String(data.target) : undefined,
+    },
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
   debugLog('[security] Approval request:', data.tool_name, data.risk_level);
 };
 

@@ -325,6 +325,7 @@ func setupCredentialBackend(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	credentials.ResetStorageBackend()
 }

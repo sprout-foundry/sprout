@@ -9,6 +9,7 @@ import (
 func TestResolveProviderReturnsStoredKey(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
 
 	err := credentials.Save(credentials.Store{
@@ -30,6 +31,7 @@ func TestResolveProviderReturnsStoredKey(t *testing.T) {
 func TestResolveProviderReturnsEmptyWithMissingCredential(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
 	t.Setenv("OPENAI_API_KEY", "")
 
 	resolved, err := credentials.ResolveProvider("openai")

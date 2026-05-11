@@ -306,6 +306,16 @@ func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	return a.embeddingMgr
 }
 
+// GetTodoManager returns the per-agent todo manager.
+// This ensures session isolation in daemon mode where multiple agents
+// run concurrently.
+func (a *Agent) GetTodoManager() *tools.TodoManager {
+	if a.todoMgr == nil {
+		a.todoMgr = tools.NewTodoManager()
+	}
+	return a.todoMgr
+}
+
 // GenerateResponse generates a simple response using the current model without tool calls
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking

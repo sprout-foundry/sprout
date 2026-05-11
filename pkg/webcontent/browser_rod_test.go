@@ -65,3 +65,39 @@ func TestRodRenderer_CloseBeforeRender(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "closed")
 }
+
+func TestGetNavigationTimeout(t *testing.T) {
+	tests := []struct {
+		name          string
+		url           string
+		expectedDelay time.Duration
+	}{
+		// Localhost URLs — 10s timeout
+		{"http localhost with port", "http://localhost:8080/foo", localhostTimeout},
+		{"http localhost plain", "http://localhost", localhostTimeout},
+		{"http 127.0.0.1 with port", "http://127.0.0.1:3000/bar", localhostTimeout},
+		{"http [::1] with port", "http://[::1]:9000/baz", localhostTimeout},
+		{"https localhost with port", "https://localhost:8443/qux", localhostTimeout},
+		{"https 127.0.0.1 with port", "https://127.0.0.1:443/test", localhostTimeout},
+		{"https [::1] with port", "https://[::1]:8080/test", localhostTimeout},
+
+		// Remote URLs — 30s timeout
+		{"https remote", "https://example.com/page", remoteTimeout},
+		{"http remote", "http://example.com", remoteTimeout},
+		{"https github", "https://github.com/user/repo", remoteTimeout},
+		{"https with path and query", "https://api.example.com/v1?key=value", remoteTimeout},
+
+		// Edge cases
+		{"localhost no port (http)", "http://localhost", localhostTimeout},
+		{"localhost no port (https)", "https://localhost", localhostTimeout},
+		{"127.0.0.1 no port (http)", "http://127.0.0.1", localhostTimeout},
+		{"127.0.0.1 no port (https)", "https://127.0.0.1", localhostTimeout},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getNavigationTimeout(tt.url)
+			assert.Equal(t, tt.expectedDelay, got, "url=%q", tt.url)
+		})
+	}
+}

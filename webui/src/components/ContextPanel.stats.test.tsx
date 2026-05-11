@@ -7,13 +7,13 @@ import { createRoot } from 'react-dom/client';
 // Mock heavy child components that ContextPanel imports
 // ---------------------------------------------------------------------------
 
-jest.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
-jest.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
-jest.mock('../services/api', () => ({
+vi.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
+vi.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
+vi.mock('../services/api', () => ({
   // No longer used by ContextPanel — kept for any transitive imports
 }));
 // ContextPanel uses useLog() which requires NotificationContext.
-jest.mock('../contexts/NotificationContext', () => {
+vi.mock('../contexts/NotificationContext', () => {
   const noop = () => {};
   return Object.assign(
     function NotificationProviderMock({ children }) {
@@ -59,10 +59,10 @@ const MINIMAL_CHAT_PROPS = {
   isProcessing: false,
   lastError: null,
   queryProgress: null,
-  onLoadRevisionHistory: jest.fn().mockResolvedValue({ revisions: [] }),
-  onLoadSessions: jest.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
-  onRestoreSession: jest.fn().mockResolvedValue({ messages: [] }),
-  onLoadRevisionDetails: jest.fn().mockResolvedValue({ revision: { files: [] } }),
+  onLoadRevisionHistory: vi.fn().mockResolvedValue({ revisions: [] }),
+  onLoadSessions: vi.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
+  onRestoreSession: vi.fn().mockResolvedValue({ messages: [] }),
+  onLoadRevisionDetails: vi.fn().mockResolvedValue({ revision: { files: [] } }),
 };
 
 function makeChatProps(overrides: Record<string, unknown> = {}) {
@@ -128,7 +128,7 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 
   // Ensure panel is not collapsed and status tab is active.
   // The component reads these from localStorage in a useEffect on mount.

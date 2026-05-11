@@ -13,7 +13,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -170,7 +170,7 @@ function HookRunner({ containerRef, onFilesDropped }: HookRunnerProps): JSX.Elem
   return createElement('div');
 }
 
-function setupHook(callback: jest.Mock) {
+function setupHook(callback: vi.Mock) {
   const ref = { current: container as HTMLDivElement };
 
   act(() => {
@@ -189,9 +189,9 @@ describe('useFileDropZone', () => {
 
   describe('event listener registration', () => {
     it('attaches dragenter, dragover, dragleave, and drop listeners to the container', () => {
-      const spyOn = jest.spyOn(container, 'addEventListener');
+      const spyOn = vi.spyOn(container, 'addEventListener');
 
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       expect(spyOn).toHaveBeenCalledWith('dragenter', expect.any(Function));
       expect(spyOn).toHaveBeenCalledWith('dragover', expect.any(Function));
@@ -201,9 +201,9 @@ describe('useFileDropZone', () => {
     });
 
     it('removes all event listeners on unmount', () => {
-      const spyRemove = jest.spyOn(container, 'removeEventListener');
+      const spyRemove = vi.spyOn(container, 'removeEventListener');
 
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       act(() => {
         root.unmount();
@@ -221,23 +221,23 @@ describe('useFileDropZone', () => {
 
   describe('handleDragEnter', () => {
     it('does not throw when a file drag enters the container', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       const dt = createFileDataTransfer(['test.txt']);
       expect(() => fireDragEvent('dragenter', dt)).not.toThrow();
     });
 
     it('does not throw for non-file drags (internal drags)', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       const dt = createNonFileDataTransfer();
       expect(() => fireDragEvent('dragenter', dt)).not.toThrow();
     });
 
     it('does not call preventDefault for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyPrevent = jest.fn();
+      const spyPrevent = vi.fn();
       const originalPreventDefault = Event.prototype.preventDefault;
       Event.prototype.preventDefault = spyPrevent;
 
@@ -248,9 +248,9 @@ describe('useFileDropZone', () => {
     });
 
     it('does not call stopPropagation for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyStop = jest.fn();
+      const spyStop = vi.fn();
       const originalStopPropagation = Event.prototype.stopPropagation;
       Event.prototype.stopPropagation = spyStop;
 
@@ -261,10 +261,10 @@ describe('useFileDropZone', () => {
     });
 
     it('calls preventDefault and stopPropagation for file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyPrevent = jest.fn();
-      const spyStop = jest.fn();
+      const spyPrevent = vi.fn();
+      const spyStop = vi.fn();
       const originalPreventDefault = Event.prototype.preventDefault;
       const originalStopPropagation = Event.prototype.stopPropagation;
       Event.prototype.preventDefault = spyPrevent;
@@ -283,9 +283,9 @@ describe('useFileDropZone', () => {
 
   describe('handleDragOver', () => {
     it('does not call preventDefault for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyPrevent = jest.fn();
+      const spyPrevent = vi.fn();
       const originalPreventDefault = Event.prototype.preventDefault;
       Event.prototype.preventDefault = spyPrevent;
 
@@ -296,9 +296,9 @@ describe('useFileDropZone', () => {
     });
 
     it('does not call stopPropagation for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyStop = jest.fn();
+      const spyStop = vi.fn();
       const originalStopPropagation = Event.prototype.stopPropagation;
       Event.prototype.stopPropagation = spyStop;
 
@@ -309,13 +309,13 @@ describe('useFileDropZone', () => {
     });
 
     it('prevents default for file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       // First trigger dragenter to set isFileDrag
       fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
 
       // Now dragover should call preventDefault
-      const spyPrevent = jest.fn();
+      const spyPrevent = vi.fn();
       const originalPreventDefault = Event.prototype.preventDefault;
       Event.prototype.preventDefault = spyPrevent;
 
@@ -326,7 +326,7 @@ describe('useFileDropZone', () => {
     });
 
     it('sets dropEffect to copy when tracking a file drag', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       // First trigger dragenter to set isFileDrag
       const enterDt = createFileDataTransfer(['test.txt']);
@@ -344,7 +344,7 @@ describe('useFileDropZone', () => {
 
   describe('handleDragLeave', () => {
     it('resets drag state when counter reaches 0 (leaving container)', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       // Trigger file drag enter (counter = 1)
       fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
@@ -354,7 +354,7 @@ describe('useFileDropZone', () => {
     });
 
     it('does not reset drag state when counter > 0 (moving to child)', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       // Trigger file drag enter (counter = 1)
       fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
@@ -369,16 +369,16 @@ describe('useFileDropZone', () => {
     });
 
     it('does not reset drag state for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       // Fire dragleave without a prior file dragenter — should not reset
       fireDragEvent('dragleave', createNonFileDataTransfer(), null);
     });
 
     it('does not call preventDefault for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyPrevent = jest.fn();
+      const spyPrevent = vi.fn();
       const originalPreventDefault = Event.prototype.preventDefault;
       Event.prototype.preventDefault = spyPrevent;
 
@@ -389,9 +389,9 @@ describe('useFileDropZone', () => {
     });
 
     it('does not call stopPropagation for non-file drags', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
-      const spyStop = jest.fn();
+      const spyStop = vi.fn();
       const originalStopPropagation = Event.prototype.stopPropagation;
       Event.prototype.stopPropagation = spyStop;
 
@@ -402,7 +402,7 @@ describe('useFileDropZone', () => {
     });
 
     it('handles multiple rapid dragenter events correctly', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       const dt = createFileDataTransfer(['test.txt']);
 
@@ -422,16 +422,16 @@ describe('useFileDropZone', () => {
 
   describe('dragend safety net', () => {
     it('registers a dragend listener on the document', () => {
-      const spyAdd = jest.spyOn(document, 'addEventListener');
-      setupHook(jest.fn());
+      const spyAdd = vi.spyOn(document, 'addEventListener');
+      setupHook(vi.fn());
 
       expect(spyAdd).toHaveBeenCalledWith('dragend', expect.any(Function));
       spyAdd.mockRestore();
     });
 
     it('removes the dragend listener on unmount', () => {
-      const spyRemove = jest.spyOn(document, 'removeEventListener');
-      setupHook(jest.fn());
+      const spyRemove = vi.spyOn(document, 'removeEventListener');
+      setupHook(vi.fn());
 
       act(() => {
         root.unmount();
@@ -442,7 +442,7 @@ describe('useFileDropZone', () => {
     });
 
     it('resets drag state when dragend fires on document', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       // Start a file drag (sets isFileDrag=true, counter=1, isDragging=true)
       fireDragEvent('dragenter', createFileDataTransfer(['test.txt']));
@@ -453,7 +453,7 @@ describe('useFileDropZone', () => {
       });
 
       // A subsequent drop should NOT call onFilesDropped (state was reset)
-      const callback: jest.Mock = jest.fn();
+      const callback: vi.Mock = vi.fn();
       // ... rather, we verify the overlay would hide: no new dragenter → no isDragging.
       // The key invariant: after dragend, a fresh dragenter correctly starts a new drag.
       fireDragEvent('dragenter', createFileDataTransfer(['fresh.txt']));
@@ -466,7 +466,7 @@ describe('useFileDropZone', () => {
 
   describe('handleDrop', () => {
     it('calls onFilesDropped with the dropped files', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['hello.txt', 'world.rs']));
@@ -479,8 +479,8 @@ describe('useFileDropZone', () => {
     });
 
     it('filters out files larger than MAX_DROP_FILE_SIZE (10 MB)', () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const callback = jest.fn();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['small.txt', 'big.txt'], [1024, 20 * 1024 * 1024]));
@@ -500,8 +500,8 @@ describe('useFileDropZone', () => {
     });
 
     it('does not call onFilesDropped when all files are too large', () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const callback = jest.fn();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['huge.txt'], [15 * 1024 * 1024]));
@@ -511,7 +511,7 @@ describe('useFileDropZone', () => {
     });
 
     it('does not call onFilesDropped when drop has no files', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createEmptyDataTransfer());
@@ -520,7 +520,7 @@ describe('useFileDropZone', () => {
     });
 
     it('resets isDragging state after drop (allows subsequent drag)', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       // Drop first time
@@ -533,7 +533,7 @@ describe('useFileDropZone', () => {
     });
 
     it('calls onFilesDropped even without a preceding dragenter', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       // Drop without prior dragenter — handler checks dataTransfer.files directly
@@ -543,7 +543,7 @@ describe('useFileDropZone', () => {
     });
 
     it('processes files in order', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['first.ts', 'second.rs', 'third.go']));
@@ -558,7 +558,7 @@ describe('useFileDropZone', () => {
 
   describe('edge cases', () => {
     it('handles null containerRef.current gracefully', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       const nullRef = { current: null as HTMLDivElement | null };
 
       // Should not throw when container is null
@@ -568,8 +568,8 @@ describe('useFileDropZone', () => {
     });
 
     it('updates onFilesDropped callback via ref (no listener re-registration)', () => {
-      const callback1 = jest.fn();
-      const callback2 = jest.fn();
+      const callback1 = vi.fn();
+      const callback2 = vi.fn();
 
       const ref = { current: container as HTMLDivElement };
 
@@ -591,11 +591,11 @@ describe('useFileDropZone', () => {
     });
 
     it('calls stopImmediatePropagation on drop event', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       const dt = createFileDataTransfer(['test.txt']);
       const event = createDragEvent('drop', dt);
-      const spy = jest.spyOn(event, 'stopImmediatePropagation');
+      const spy = vi.spyOn(event, 'stopImmediatePropagation');
 
       act(() => {
         container.dispatchEvent(event);
@@ -606,7 +606,7 @@ describe('useFileDropZone', () => {
     });
 
     it('accepts files exactly at the MAX_DROP_FILE_SIZE boundary (10 MB)', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['exact.txt'], [10 * 1024 * 1024]));
@@ -619,8 +619,8 @@ describe('useFileDropZone', () => {
     });
 
     it('rejects files just over the MAX_DROP_FILE_SIZE boundary', () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const callback = jest.fn();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['over.txt'], [10 * 1024 * 1024 + 1]));
@@ -630,7 +630,7 @@ describe('useFileDropZone', () => {
     });
 
     it('handles multiple rapid dragenter events without error', () => {
-      setupHook(jest.fn());
+      setupHook(vi.fn());
 
       const dt = createFileDataTransfer(['test.txt']);
       for (let i = 0; i < 50; i++) {
@@ -640,7 +640,7 @@ describe('useFileDropZone', () => {
     });
 
     it('handles zero-byte files (empty files)', () => {
-      const callback = jest.fn();
+      const callback = vi.fn();
       setupHook(callback);
 
       fireDragEvent('drop', createFileDataTransfer(['empty.txt'], [0]));
@@ -653,8 +653,8 @@ describe('useFileDropZone', () => {
     });
 
     it('warns and filters each oversized file individually', () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const callback = jest.fn();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const callback = vi.fn();
       setupHook(callback);
 
       // All files are too large

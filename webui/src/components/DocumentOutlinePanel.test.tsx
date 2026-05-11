@@ -8,7 +8,7 @@ import DocumentOutlinePanel from './DocumentOutlinePanel';
 
 const originalError = console.error;
 beforeAll(() => {
-  Element.prototype.scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = vi.fn();
   console.error = (...args: any[]) => {
     if (typeof args[0] === 'string' && args[0].includes('ReactDOM.render is no longer supported')) return;
     originalError.call(console, ...args);
@@ -48,10 +48,10 @@ function defaultProps(overrides: Record<string, any> = {}) {
     content: '',
     fileExtension: '.ts',
     cursorLine: 1,
-    onNavigateToSymbol: jest.fn(),
+    onNavigateToSymbol: vi.fn(),
     isFileOpen: true,
     isCollapsed: false,
-    onToggleCollapse: jest.fn(),
+    onToggleCollapse: vi.fn(),
     ...overrides,
   };
 }

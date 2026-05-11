@@ -229,8 +229,9 @@ export function useSettingsState(
         .then((data) => {
           if (!cancelled) setProvenanceSources(data.sources || {});
         })
-        .catch(() => {
+        .catch((err) => {
           if (!cancelled) setProvenanceSources({});
+          debugLog('[SettingsPanel] Failed to fetch settings provenance:', err);
         });
       return () => {
         cancelled = true;

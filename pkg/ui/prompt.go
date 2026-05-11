@@ -98,5 +98,11 @@ func PromptForSelectionWithOptions(options []NumericPromptOption, prompt string)
 	}
 
 	DisplayNumberedListWithDescriptions(options)
-	return PromptForSelection(nil, prompt)
+
+	// Extract display names so PromptForSelection can validate bounds correctly
+	displayNames := make([]string, len(options))
+	for i, opt := range options {
+		displayNames[i] = opt.DisplayName
+	}
+	return PromptForSelection(displayNames, prompt)
 }

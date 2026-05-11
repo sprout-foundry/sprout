@@ -1,6 +1,9 @@
 package tools
 
-import "strings"
+import (
+	"path"
+	"strings"
+)
 
 // isSafeShellCommand checks if a command is safe (read-only or workspace operations).
 // Rejects commands with output redirection (> or >>) unless to /tmp/.
@@ -243,8 +246,19 @@ func isSafeShellCommand(cmd string) bool {
 		"chmod ", "chown ", "chgrp ", // workspace permissions
 		"strip ", "install ",
 	}
+	// Common workspace operations that are safe.
+	// NOTE: This block relies on isDangerousPattern (called first in classifySingleCommand)
+	// for source-path validation of multi-path commands like cp/mv. If a command has any
+	// system path argument, isDangerousPattern catches it before reaching this block.
 	for _, prefix := range safeWorkspacePrefixes {
 		if strings.HasPrefix(cmd, prefix) {
+			argsAfterCmd := cmd[len(prefix):]
+			// Check ALL arguments (not just destination) to catch:
+			//   cp /etc/shadow /tmp/stolen   (unsafe source)
+			//   cp config.txt /etc/config    (unsafe destination)
+			if hasSystemPathTarget(argsAfterCmd) {
+				return false // targets system path — NOT safe
+			}
 			return true
 		}
 	}
@@ -304,6 +318,17 @@ func isDangerousPattern(cmd string) bool {
 	for _, op := range dangerousSys {
 		if strings.Contains(cmd, op) {
 			return true
+		}
+	}
+
+	// Check for workspace commands targeting system directories
+	prefixes := []string{"chmod ", "chown ", "chgrp ", "cp ", "mv ", "mkdir -p", "touch ", "tee ", "ln ", "install ", "strip "}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(cmdLower, prefix) {
+			argsAfterCmd := cmd[len(prefix):]
+			if hasSystemPathTarget(argsAfterCmd) {
+				return true
+			}
 		}
 	}
 
@@ -462,5 +487,93 @@ func isSafeRmRfPrefix(cmdLower string) bool {
 			break // only check the first path component
 		}
 	}
+	return false
+}
+
+// pathIsWorkspaceSafe checks whether a file path argument is safe for workspace operations.
+// A path is considered safe if:
+//   - It is a relative path (no leading /) — assumed to be within the workspace
+//   - It is under /tmp/ (temporary files)
+//   - It is /dev/null, /dev/stdout, or /dev/stderr
+//   - It is a hyphen ("-") which is stdin/stdout in many commands
+//
+// Path traversal is handled by path.Clean which resolves all ".." segments lexically.
+// If path.Clean produces a result starting with "/tmp/", all parent directory references
+// have been resolved — the path cannot escape /tmp. No additional ".." check is needed.
+// This is a string-only heuristic — no filesystem access.
+func pathIsWorkspaceSafe(pathStr string) bool {
+	if pathStr == "" || pathStr == "-" {
+		return true
+	}
+
+	// Clean the path to resolve . and .. segments.
+	// path.Clean fully resolves all ".." for absolute paths: if the result starts
+	// with "/tmp/" the path is guaranteed to be within /tmp.
+	cleaned := path.Clean(pathStr)
+
+	// Absolute paths must be under safe prefixes
+	if strings.HasPrefix(cleaned, "/") {
+		if cleaned == "/tmp" || strings.HasPrefix(cleaned, "/tmp/") {
+			return true
+		}
+		if cleaned == "/dev/null" || cleaned == "/dev/stdout" || cleaned == "/dev/stderr" {
+			return true
+		}
+		// All other absolute paths are unsafe
+		return false
+	}
+
+	// Relative paths are safe (assumed within workspace)
+	return true
+}
+
+// extractTargetPath extracts the primary target path from a filesystem-mutating command.
+// For commands like "chmod 755 /etc/shadow", it extracts "/etc/shadow".
+// For "mv src/ dest/", it extracts the destination "dest/".
+// Returns the last non-flag argument. Returns empty if no non-flag arg exists.
+func extractTargetPath(args string) string {
+	parts := strings.Fields(args)
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Return the last argument that is not a flag.
+	// For commands like "mv src dest", the destination is the last argument.
+	// For commands like "chmod 755 file", the target is the last argument.
+	for i := len(parts) - 1; i >= 0; i-- {
+		if !strings.HasPrefix(parts[i], "-") {
+			return parts[i]
+		}
+	}
+	return ""
+}
+
+// hasSystemPathTarget checks if any path argument in the command targets a system directory.
+// This handles commands like "mv /etc/passwd /tmp" where the source is system file,
+// and "touch /etc/evil" where the target is system file.
+// Also extracts paths from --flag=VALUE style arguments (e.g., --reference=/etc/shadow).
+func hasSystemPathTarget(args string) bool {
+	parts := strings.Fields(args)
+	if len(parts) == 0 {
+		return false
+	}
+
+	// Check each argument that looks like a path (not a standalone flag)
+	for _, part := range parts {
+		if strings.HasPrefix(part, "-") {
+			// Handle --flag=VALUE style arguments where VALUE may be a path
+			if eqIdx := strings.Index(part, "="); eqIdx >= 0 {
+				val := part[eqIdx+1:]
+				if val != "" && !pathIsWorkspaceSafe(val) {
+					return true
+				}
+			}
+			continue // Skip standalone flags
+		}
+		if !pathIsWorkspaceSafe(part) {
+			return true
+		}
+	}
+
 	return false
 }

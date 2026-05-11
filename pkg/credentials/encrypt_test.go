@@ -14,9 +14,8 @@ import (
 func TestEncryptDecryptRoundTrip(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create a test store
 	store := Store{
@@ -71,9 +70,8 @@ func TestPlaintextDetection(t *testing.T) {
 
 func TestEncryptionStatus(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Test with no files
 	status, err := CheckEncryptionStatus()
@@ -109,9 +107,8 @@ func TestEncryptionStatus(t *testing.T) {
 
 func TestLoadSaveRoundTrip(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create and save a store
 	store := Store{
@@ -136,9 +133,8 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 
 func TestLoadNonExistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Load should return empty store, not error
 	store, err := Load()
@@ -147,10 +143,8 @@ func TestLoadNonExistentFile(t *testing.T) {
 }
 
 func TestResolveWithEnvVar(t *testing.T) {
-	originalEnv := os.Getenv("TEST_API_KEY")
-	defer os.Setenv("TEST_API_KEY", originalEnv)
 
-	os.Setenv("TEST_API_KEY", "env-value")
+	t.Setenv("TEST_API_KEY", "env-value")
 
 	resolved, err := resolve("test", "TEST_API_KEY")
 	require.NoError(t, err)
@@ -165,9 +159,8 @@ func TestResolveWithStoredKey(t *testing.T) {
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Create a stored key
 	store := Store{"test": "stored-value"}
@@ -175,9 +168,7 @@ func TestResolveWithStoredKey(t *testing.T) {
 	require.NoError(t, err)
 
 	// Clear env var
-	originalEnv := os.Getenv("TEST_API_KEY")
-	defer os.Setenv("TEST_API_KEY", originalEnv)
-	os.Unsetenv("TEST_API_KEY")
+	t.Setenv("TEST_API_KEY", "")
 
 	resolved, err := resolve("test", "TEST_API_KEY")
 	require.NoError(t, err)
@@ -189,9 +180,8 @@ func TestResolveWithStoredKey(t *testing.T) {
 
 func TestMachineKeyGeneration(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Generate a new key
 	identity, err := LoadOrCreateMachineKey()
@@ -230,9 +220,8 @@ func TestPassphraseEncryption(t *testing.T) {
 
 func TestConfigDirCreation(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", filepath.Join(tmpDir, "nonexistent"))
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", filepath.Join(tmpDir, "nonexistent"))
+	t.Setenv("SPROUT_CONFIG", filepath.Join(tmpDir, "nonexistent"))
 
 	configDir, err := GetConfigDir()
 	require.NoError(t, err)
@@ -248,9 +237,8 @@ func TestConfigDirCreation(t *testing.T) {
 // returning an error.
 func TestCorruptedKeyFileRegeneration(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Get the key path
 	keyPath, err := GetMachineKeyPath()
@@ -281,9 +269,8 @@ func TestCorruptedKeyFileRegeneration(t *testing.T) {
 // simultaneously. This test ensures the file locking mechanism works correctly.
 func TestConcurrentMachineKeyGeneration(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Remove any existing key to ensure we're testing generation
 	keyPath := filepath.Join(tmpDir, "key.age")
@@ -359,9 +346,8 @@ func TestConcurrentMachineKeyGeneration(t *testing.T) {
 // encrypted with passphrase via `sprout keys encrypt --passphrase`).
 func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	passphrase := "TestPassphrase123"
 	plaintext := []byte(`{"provider": "sk-secret-key"}`)
@@ -371,9 +357,7 @@ func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set the env var so DecryptStore can fall back to it
-	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
-	os.Setenv("LEDIT_KEY_PASSPHRASE", passphrase)
-	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+	t.Setenv("LEDIT_KEY_PASSPHRASE", passphrase)
 
 	// DecryptStore should succeed via passphrase fallback
 	decrypted, err := DecryptStore(encrypted)
@@ -385,9 +369,8 @@ func TestDecryptStore_WithPassphraseEnvVar(t *testing.T) {
 // a clear error when both machine key and SPROUT_KEY_PASSPHRASE are tried but fail.
 func TestDecryptStore_WrongPassphraseInEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	passphrase := "CorrectPassphrase123"
 	plaintext := []byte(`{"provider": "sk-secret-key"}`)
@@ -396,9 +379,7 @@ func TestDecryptStore_WrongPassphraseInEnvVar(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set a WRONG passphrase env var
-	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
-	os.Setenv("LEDIT_KEY_PASSPHRASE", "WrongPassphrase456")
-	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+	t.Setenv("LEDIT_KEY_PASSPHRASE", "WrongPassphrase456")
 
 	_, err = DecryptStore(encrypted)
 	require.Error(t, err)
@@ -423,9 +404,8 @@ func TestDecryptStore_SizeLimit(t *testing.T) {
 // machine key and passphrase env var are available, machine key is tried first.
 func TestDecryptStore_MachineKeyPreferredOverPassphrase(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Ensure a machine key exists
 	identity, err := LoadOrCreateMachineKey()
@@ -439,9 +419,7 @@ func TestDecryptStore_MachineKeyPreferredOverPassphrase(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set a wrong passphrase env var — machine key should still work
-	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
-	os.Setenv("LEDIT_KEY_PASSPHRASE", "WrongPassphrase999")
-	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+	t.Setenv("LEDIT_KEY_PASSPHRASE", "WrongPassphrase999")
 
 	decrypted, err := DecryptStore(encrypted)
 	require.NoError(t, err)
@@ -453,6 +431,7 @@ func TestDecryptStore_MachineKeyPreferredOverPassphrase(t *testing.T) {
 func TestGetEncryptionMode_NoModeFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	mode, err := GetEncryptionMode()
 	require.NoError(t, err)
@@ -464,6 +443,7 @@ func TestGetEncryptionMode_NoModeFile(t *testing.T) {
 func TestSetAndGetEncryptionMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Set machine-key mode
 	err := SetEncryptionMode("machine-key")
@@ -495,6 +475,7 @@ func TestSetAndGetEncryptionMode(t *testing.T) {
 func TestSetEncryptionMode_InvalidMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	err := SetEncryptionMode("invalid")
 	require.Error(t, err)
@@ -507,9 +488,8 @@ func TestSetEncryptionMode_InvalidMode(t *testing.T) {
 func TestSave_RespectsPassphraseMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
-	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
-	os.Setenv("LEDIT_KEY_PASSPHRASE", "")
-	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
 
 	// Set mode to passphrase mode
 	err := SetEncryptionMode("passphrase")
@@ -527,6 +507,7 @@ func TestSave_RespectsPassphraseMode(t *testing.T) {
 func TestSave_RespectsMachineKeyMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Generate a machine key so it exists in the temp dir
 	_, err := LoadOrCreateMachineKey()
@@ -559,6 +540,7 @@ func TestSave_RespectsMachineKeyMode(t *testing.T) {
 func TestDecryptStore_DoesNotSetMachineKeyMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Ensure a machine key exists
 	_, err := LoadOrCreateMachineKey()
@@ -589,6 +571,7 @@ func TestDecryptStore_DoesNotSetMachineKeyMode(t *testing.T) {
 func TestDecryptStore_DoesNotSetPassphraseMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	passphrase := "DecryptPassphraseTest99"
 	plaintext := []byte(`{"provider": "passphrase-secret"}`)
@@ -620,6 +603,7 @@ func TestDecryptStore_DoesNotSetPassphraseMode(t *testing.T) {
 func TestCheckEncryptionStatus_UsesModeFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	passphrase := "StatusTestPassphrase123"
 	plaintext := []byte(`{"provider": "test-key"}`)
@@ -706,10 +690,10 @@ func TestDecryptStore_PlaintextSizeLimit(t *testing.T) {
 func TestSave_AutoSetsMachineKeyMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 	// Ensure SPROUT_KEY_PASSPHRASE is not set
 	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
 	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
-	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
 
 	// Ensure no mode file exists
 	mode, err := GetEncryptionMode()
@@ -732,6 +716,7 @@ func TestSave_AutoSetsMachineKeyMode(t *testing.T) {
 func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	passphrase := "LegacyPassphrase123"
 	store := Store{"provider": "legacy-secret-key"}
@@ -785,9 +770,8 @@ func TestSave_LegacyPassphraseFilePreserved(t *testing.T) {
 // machine key nor passphrase is available.
 func TestDecryptStore_NoMachineKeyNoPassphrase(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalConfig := os.Getenv("LEDIT_CONFIG")
-	os.Setenv("LEDIT_CONFIG", tmpDir)
-	defer os.Setenv("LEDIT_CONFIG", originalConfig)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	passphrase := "TestPass123"
 	plaintext := []byte(`{"provider": "sk-key"}`)
@@ -795,9 +779,7 @@ func TestDecryptStore_NoMachineKeyNoPassphrase(t *testing.T) {
 	require.NoError(t, err)
 
 	// Clear passphrase env var
-	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
-	os.Setenv("LEDIT_KEY_PASSPHRASE", "")
-	defer os.Setenv("LEDIT_KEY_PASSPHRASE", originalPassphrase)
+	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
 
 	// No machine key exists (no key.age file), no passphrase — should fail with guidance
 	_, err = DecryptStore(encrypted)

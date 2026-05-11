@@ -246,7 +246,9 @@ func TestDefaultRotator_Isolation(t *testing.T) {
 
 func setupFileBackend(t *testing.T) {
 	t.Helper()
-	t.Setenv("LEDIT_CONFIG", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
 	ResetStorageBackend()
 }

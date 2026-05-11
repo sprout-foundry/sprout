@@ -22,13 +22,16 @@ const (
 func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux := ws.setupRoutes(ctx)
 
-	// Wrap mux with user ID extraction middleware
-	var handler http.Handler = mux
+	// Wrap mux with security headers middleware (applies to all responses)
+	var handler http.Handler = securityHeadersMiddleware(mux)
+
+	// Wrap with user ID extraction middleware for service mode
 	if ws.serviceMode && ws.trustedUserHeader != "" {
+		inner := handler
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := ws.contextWithUserID(r.Context(), r)
 			r = r.WithContext(ctx)
-			mux.ServeHTTP(w, r)
+			inner.ServeHTTP(w, r)
 		})
 	}
 

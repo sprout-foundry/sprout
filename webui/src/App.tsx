@@ -13,6 +13,7 @@ import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import { EventsContextProvider } from '@sprout/events';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
+import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
 import './App.css';
 import './components/UpdateNotification.css';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
@@ -37,7 +38,7 @@ import { MAX_PERSISTED_LOGS } from './constants/app';
 // ── App Component ─────────────────────────────────────────────────────
 
 function App() {
-  const [state, setState] = useState<AppState>(() => {
+  const initialState = useMemo(() => {
     const persisted = loadPersistedAppState();
     return {
       provider: persisted?.provider || 'unknown',
@@ -64,7 +65,18 @@ function App() {
       askUserRequest: null,
       modelSelectionRequest: null,
     };
-  });
+  }, []);
+
+  return (
+    <AppStoreProvider initialState={initialState}>
+      <AppInner />
+    </AppStoreProvider>
+  );
+}
+
+function AppInner() {
+  const state = useAppStoreState();
+  const setState = useAppStoreSetState();
 
   const [inputValue, setInputValue] = useState('');
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
@@ -206,12 +218,11 @@ function App() {
   const handleCompleteOnboarding = useCallback(async () => {
     await onComplete((vals) => {
       setState(prev => ({
-        ...prev,
         provider: vals.provider,
         model: vals.model,
       }));
     });
-  }, [onComplete]);
+  }, [onComplete, setState]);
 
   // ── Terminal Handler ─────────────────────────────────────────────
 

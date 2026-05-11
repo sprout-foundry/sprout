@@ -7,7 +7,7 @@
  */
 
 import { useCallback } from 'react';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { MutableRefObject } from 'react';
 import type { AppState, Message } from '../types/app';
 import {
   listChatSessions,
@@ -24,9 +24,10 @@ import {
   createChatSessionInWorktree,
 } from '../services/chatSessions';
 import { debugLog } from '../utils/log';
+import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseChatSessionsOptions {
-  setState: Dispatch<SetStateAction<AppState>>;
+  setState: AppStoreSetState;
   activeChatIdRef: MutableRefObject<string | null>;
   activeRequestsRef: MutableRefObject<number>;
 }
@@ -79,7 +80,6 @@ export function useChatSessions({
         }
       }
       setState((prev) => ({
-        ...prev,
         chatSessions: response.chat_sessions,
         activeChatId: prev.activeChatId || activeChatId,
         // Only set initial messages if we have none yet (don't clobber live messages)
@@ -130,7 +130,6 @@ export function useChatSessions({
       // backend response.
       activeRequestsRef.current = restoredIsProcessing ? 1 : 0;
       return {
-        ...prev,
         // Use id optimistically — overwritten by response.active_chat_id below
         activeChatId: id,
         messages: cached?.messages ?? [],
@@ -176,7 +175,7 @@ export function useChatSessions({
         const backendProvider = (response.chat_session as Record<string, unknown>).provider as string | undefined;
         const backendModel = (response.chat_session as Record<string, unknown>).model as string | undefined;
         return {
-          ...prev,
+          
           activeChatId: response.active_chat_id,
           messages: useBackendMessages ? backendMessages : prev.messages,
           isProcessing: finalIsProcessing,
@@ -187,7 +186,7 @@ export function useChatSessions({
 
       // Refresh session list to reflect updated active state
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       // Rollback the eagerly-updated ref so subsequent switches aren't confused
       activeChatIdRef.current = currentId;
@@ -201,12 +200,12 @@ export function useChatSessions({
       const response = await createChatSession();
       const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
       const message = error instanceof Error ? error.message : 'Failed to create new chat';
-      setState((prev) => ({ ...prev, lastError: message }));
+      setState((prev) => ({ lastError: message }));
       return null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,11 +222,11 @@ export function useChatSessions({
             // We reference handleActiveChatChange through a local alias to avoid circular deps.
             await handleActiveChatChange(sessionsResp.active_chat_id);
           } else {
-            setState((prev) => ({ ...prev, chatSessions: [], activeChatId: null, messages: [] }));
+            setState((prev) => ({ chatSessions: [], activeChatId: null, messages: [] }));
           }
         } else {
           const sessionsResp = await listChatSessions();
-          setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
         }
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
@@ -241,7 +240,7 @@ export function useChatSessions({
     try {
       await renameChatSession(id, name);
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       debugLog('[chat] Failed to rename chat session:', error);
     }
@@ -253,13 +252,13 @@ export function useChatSessions({
       const response = await deleteAllChatSessions();
       // Reload chat sessions after deletion
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
       // Switch to the active/default session returned by the API
       await handleActiveChatChange(response.active_chat_id);
     } catch (error) {
       debugLog('[chat] Failed to delete all chat sessions:', error);
       const message = error instanceof Error ? error.message : 'Failed to delete all chat sessions';
-      setState((prev) => ({ ...prev, lastError: message }));
+      setState((prev) => ({ lastError: message }));
       throw error;
     }
   }, [setState, handleActiveChatChange]);
@@ -280,11 +279,11 @@ export function useChatSessions({
       await setChatSessionWorktree(chatId, worktreePath);
       // Refresh session list to reflect updated worktree
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
     } catch (error) {
       debugLog('[worktree] Failed to set chat session worktree:', error);
       const message = error instanceof Error ? error.message : 'Failed to set worktree';
-      setState((prev) => ({ ...prev, lastError: message }));
+      setState((prev) => ({ lastError: message }));
       throw error;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -295,7 +294,7 @@ export function useChatSessions({
       const response = await switchChatSessionWorktree(chatId, worktreePath);
       // Refresh session list to reflect updated worktree
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
       // Also update the active chat ID if this is the active chat
       if (chatId === activeChatIdRef.current) {
         const backendMessages: Message[] = (response.chat_session.messages ?? [])
@@ -309,7 +308,7 @@ export function useChatSessions({
           }));
         const backendIsActive = !!(response.chat_session as Record<string, unknown>).active_query;
         setState((prev) => ({
-          ...prev,
+          
           messages: backendMessages,
           isProcessing: backendIsActive,
         }));
@@ -317,7 +316,7 @@ export function useChatSessions({
     } catch (error) {
       debugLog('[worktree] Failed to switch chat session worktree:', error);
       const message = error instanceof Error ? error.message : 'Failed to switch worktree';
-      setState((prev) => ({ ...prev, lastError: message }));
+      setState((prev) => ({ lastError: message }));
       throw error;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,7 +340,7 @@ export function useChatSessions({
     } catch (error) {
       debugLog('[worktree] Failed to create worktree:', error);
       const message = error instanceof Error ? error.message : 'Failed to create worktree';
-      setState((prev) => ({ ...prev, lastError: message }));
+      setState((prev) => ({ lastError: message }));
       throw error;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,7 +351,7 @@ export function useChatSessions({
       const response = await createChatSessionInWorktree({ branch, base_ref: baseRef, name, auto_switch_workspace: autoSwitch });
       const newId = (response.chat_session as Record<string, unknown>).id as string;
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ ...prev, chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
       
       // If auto-switch was requested, switch to the new chat
       if (autoSwitch && newId) {
@@ -363,7 +362,7 @@ export function useChatSessions({
     } catch (error) {
       debugLog('[chat] Failed to create chat in worktree:', error);
       const message = error instanceof Error ? error.message : 'Failed to create chat in worktree';
-      setState((prev) => ({ ...prev, lastError: message }));
+      setState((prev) => ({ lastError: message }));
       throw error;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -10,7 +10,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
-import { EventsContextProvider } from '@sprout/events';
+import { EventsContextProvider, useEvents } from '@sprout/events';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
@@ -67,9 +67,15 @@ function App() {
     };
   }, []);
 
+  const eventsProvider = useMemo(() => new LocalEventsProvider(), []);
+
   return (
     <AppStoreProvider initialState={initialState}>
-      <AppInner />
+      <NotificationProvider>
+        <EventsContextProvider provider={eventsProvider}>
+          <AppInner />
+        </EventsContextProvider>
+      </NotificationProvider>
     </AppStoreProvider>
   );
 }
@@ -77,6 +83,7 @@ function App() {
 function AppInner() {
   const state = useAppStoreState();
   const setState = useAppStoreSetState();
+  const events = useEvents();
 
   const [inputValue, setInputValue] = useState('');
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
@@ -116,8 +123,6 @@ function AppInner() {
   const pendingProviderChangeValueRef = useRef<string | null>(null);
 
   // ── Hooks ───────────────────────────────────────────────────────
-
-  const eventsProvider = useMemo(() => new LocalEventsProvider(), []);
 
   const apiService = ApiService.getInstance();
 
@@ -171,7 +176,7 @@ function AppInner() {
     handleModelSelectionResponse,
     handleModelSelectionClose,
   } = useSecurityHandlers({
-    eventsProvider,
+    eventsProvider: events,
     provider: state.provider,
     setState,
   });
@@ -187,7 +192,7 @@ function AppInner() {
   // ── Initialization ───────────────────────────────────────────────
 
   useAppInitialization({
-    eventsProvider,
+    eventsProvider: events,
     handleEvent,
     connectionTimeoutRef,
     loadChatSessions: chatManager.loadChatSessions,
@@ -250,13 +255,11 @@ function AppInner() {
     >
       <SproutAdapterProvider>
         <PlatformNavProvider>
-          <EventsContextProvider provider={eventsProvider}>
-            <ThemeProvider>
-              <NotificationProvider>
-                <HotkeyProvider>
-                  <EditorManagerProvider>
-                    <UIManager>
-                      <AppContent
+          <ThemeProvider>
+            <HotkeyProvider>
+              <EditorManagerProvider>
+                <UIManager>
+                    <AppContent
                         state={state}
                         inputValue={inputValue}
                         onInputChange={setInputValue}
@@ -301,10 +304,10 @@ function AppInner() {
                         onDeleteChat={chatManager.handleDeleteChat}
                         onRenameChat={chatManager.handleRenameChat}
                         perChatCache={state.perChatCache}
-                      />
-                      <Notification />
-                      <UpdateNotification />
-                      {state.securityApprovalRequest && (
+                    />
+                    <Notification />
+                    <UpdateNotification />
+                    {state.securityApprovalRequest && (
                         <SecurityApprovalDialog
                           requestId={state.securityApprovalRequest.requestId}
                           toolName={state.securityApprovalRequest.toolName}
@@ -315,8 +318,8 @@ function AppInner() {
                           target={state.securityApprovalRequest.target}
                           onRespond={handleSecurityApprovalResponse}
                         />
-                      )}
-                      {state.securityPromptRequest && (
+                    )}
+                    {state.securityPromptRequest && (
                         <SecurityPromptDialog
                           requestId={state.securityPromptRequest.requestId}
                           prompt={state.securityPromptRequest.prompt}
@@ -324,22 +327,22 @@ function AppInner() {
                           concern={state.securityPromptRequest.concern}
                           onRespond={handleSecurityPromptResponse}
                         />
-                      )}
-                      {state.askUserRequest && (
+                    )}
+                    {state.askUserRequest && (
                         <AskUserDialog
                           requestId={state.askUserRequest.requestId}
                           question={state.askUserRequest.question}
                           onRespond={handleAskUserResponse}
                         />
-                      )}
-                      {state.modelSelectionRequest && (
+                    )}
+                    {state.modelSelectionRequest && (
                         <ModelSelectionModal
                           provider={state.modelSelectionRequest.provider}
                           onClose={handleModelSelectionClose}
                           onSelectModel={handleModelSelectionResponse}
                         />
-                      )}
-                      <OnboardingDialog
+                    )}
+                    <OnboardingDialog
                         onboarding={onboarding}
                         selectedProvider={selectedProvider}
                         recommendedProviders={recommendedProviders}
@@ -352,13 +355,11 @@ function AppInner() {
                         onInstallWsl={onInstallWsl}
                         onInstallGitBash={onInstallGitBash}
                         updateOnboarding={updateOnboarding}
-                      />
-                    </UIManager>
-                  </EditorManagerProvider>
-                </HotkeyProvider>
-              </NotificationProvider>
-            </ThemeProvider>
-          </EventsContextProvider>
+                    />
+                </UIManager>
+              </EditorManagerProvider>
+            </HotkeyProvider>
+          </ThemeProvider>
         </PlatformNavProvider>
       </SproutAdapterProvider>
     </ErrorBoundary>

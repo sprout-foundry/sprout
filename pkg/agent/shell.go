@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -60,15 +59,6 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	a.debugLog("Executing shell command: %s\n", command)
 
 	fullResult, err := tools.ExecuteShellCommand(ctx, command)
-
-	// Check for timeout promotion — this is NOT a failure
-	var timeoutPromoted *tools.ErrShellTimeoutPromoted
-	if errors.As(err, &timeoutPromoted) {
-		a.AddTaskAction("command_timeout_background",
-			fmt.Sprintf("Timed out, moved to background: %s (session: %s)", command, timeoutPromoted.SessionID),
-			command)
-		return timeoutPromoted.Message, nil
-	}
 
 	a.debugLog("Shell command result: %s, error: %v\n", fullResult, err)
 

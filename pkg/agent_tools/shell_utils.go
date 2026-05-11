@@ -1,6 +1,8 @@
 package tools
 
-import "strings"
+import (
+	"strings"
+)
 
 // stripQuotedSections replaces the content of quoted strings (single and double
 // quotes) with spaces, preserving string length. This is used before pattern
@@ -169,8 +171,8 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 	if strings.Contains(cmd, "chmod 777") || strings.Contains(cmd, "chmod 666") {
 		return "insecure_permissions"
 	}
-	if (strings.Contains(cmd, "curl") || strings.Contains(cmd, "wget")) &&
-		(strings.Contains(cmd, "| bash") || strings.Contains(cmd, "| sh")) {
+	// Pipe to any shell or script interpreter — arbitrary code execution via pipe
+	if pipeToShellPattern.MatchString(strings.ToLower(cmd)) {
 		return "remote_code_execution"
 	}
 	if strings.HasPrefix(cmdLower, "eval ") || cmd == "eval" {

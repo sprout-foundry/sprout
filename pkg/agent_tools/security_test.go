@@ -531,3 +531,216 @@ func TestRiskTypeClassification(t *testing.T) {
 		})
 	}
 }
+
+// TestPathIsWorkspaceSafe tests path validation for workspace operations
+func TestPathIsWorkspaceSafe(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"empty string", "", true},
+		{"stdin/stdout", "-", true},
+		{"relative path", "src/main.go", true},
+		{"relative path with subdir", "pkg/agent_tools/security.go", true},
+		{"relative with .", "./script.sh", true},
+		{"relative with .. (stays relative)", "../other/file.txt", true},
+		{"absolute /tmp", "/tmp", true},
+		{"absolute /tmp file", "/tmp/output.txt", true},
+		{"absolute /tmp subdir", "/tmp/subdir/file.txt", true},
+		{"absolute /tmp with .", "/tmp/./file.txt", true},
+		{"/dev/null", "/dev/null", true},
+		{"/dev/stdout", "/dev/stdout", true},
+		{"/dev/stderr", "/dev/stderr", true},
+		{"absolute /etc", "/etc/passwd", false},
+		{"absolute /usr", "/usr/local/bin/test", false},
+		{"absolute /root", "/root/.ssh/authorized_keys", false},
+		{"absolute /var", "/var/log/test.log", false},
+		{"absolute /opt", "/opt/test", false},
+		{"absolute /boot", "/boot/test", false},
+		{"absolute /lib", "/lib/test.so", false},
+		{"/tmp/../etc/traversal", "/tmp/../etc/passwd", false},
+		{"/tmp/../etc/clean", "/tmp/../etc/ssh/sshd_config", false},
+		{"/tmp/subdir/../../etc", "/tmp/subdir/../../etc/passwd", false},
+		{"absolute /", "/", false},
+		{"absolute home", "/home/user/file.txt", false},
+		// Triple-dot directory name under /tmp — NOT traversal (path.Clean resolves ".." only)
+		{"/tmp/.../file (triple dot, not traversal)", "/tmp/.../file", true},
+		{"/tmp/.../subdir/file", "/tmp/.../subdir/file", true},
+		{"/tmp/..dotfile", "/tmp/..dotfile", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := pathIsWorkspaceSafe(tt.path)
+			if result != tt.expected {
+				t.Errorf("pathIsWorkspaceSafe(%q) = %v, want %v", tt.path, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestExtractTargetPath tests target path extraction from commands
+func TestExtractTargetPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     string
+		expected string
+	}{
+		{"chmod with mode", "755 script.sh", "script.sh"},
+		{"chmod absolute", "777 /etc/passwd", "/etc/passwd"},
+		{"chown", "user:group file.txt", "file.txt"},
+		{"chmod flags", "-R 755 /var/log", "/var/log"},
+		{"chmod multiple flags", "-R -v 755 src/", "src/"},
+		{"mv relative", "file1.txt file2.txt", "file2.txt"},
+		{"mv absolute", "/etc/passwd /tmp/stolen", "/tmp/stolen"},
+		{"mv with flags", "-v src/ dest/", "dest/"},
+		{"cp relative", "src/file.txt dest/", "dest/"},
+		{"cp absolute", "/etc/shadow /tmp/shadow", "/tmp/shadow"},
+		{"touch relative", "newfile.txt", "newfile.txt"},
+		{"touch absolute", "/etc/evil", "/etc/evil"},
+		{"mkdir -p relative", "-p src/newdir", "src/newdir"},
+		{"mkdir -p absolute", "-p /etc/evil", "/etc/evil"},
+		{"ln relative", "-s link target", "target"},
+		{"ln absolute", "-s /usr/bin/evil /usr/local/bin/evil", "/usr/local/bin/evil"},
+		{"tee relative", "-a log.txt", "log.txt"},
+		{"tee absolute", "-a /var/log/evil", "/var/log/evil"},
+		{"empty args", "", ""},
+		{"single arg", "file.txt", "file.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractTargetPath(tt.args)
+			if result != tt.expected {
+				t.Errorf("extractTargetPath(%q) = %q, want %q", tt.args, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestPathValidationInSafeCommands tests that path validation blocks dangerous operations
+func TestPathValidationInSafeCommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		expected SecurityRisk
+	}{
+		// chmod tests
+		{"chmod relative safe", "chmod 755 script.sh", SecuritySafe},
+		{"chmod relative with flags safe", "chmod -R 755 src/", SecuritySafe},
+		{"chmod absolute dangerous", "chmod 755 /etc/passwd", SecurityDangerous},
+		{"chmod absolute /etc dangerous", "chmod 777 /etc/hosts", SecurityDangerous},
+		{"chmod absolute /usr dangerous", "chmod 755 /usr/local/bin/test", SecurityDangerous},
+		{"chmod absolute /var dangerous", "chmod 644 /var/log/test.log", SecurityDangerous},
+		// mv tests
+		{"mv relative safe", "mv file1.txt file2.txt", SecuritySafe},
+		{"mv relative dir safe", "mv src/ dest/", SecuritySafe},
+		{"mv absolute src dangerous", "mv /etc/passwd /tmp/stolen", SecurityDangerous},
+		{"mv absolute dest dangerous", "mv src/ /etc/evil", SecurityDangerous},
+		{"mv absolute both dangerous", "mv /etc/passwd /etc/backup", SecurityDangerous},
+		// cp tests
+		{"cp relative safe", "cp src/file.txt dest/", SecuritySafe},
+		{"cp absolute src dangerous", "cp /etc/shadow /tmp/shadow", SecurityDangerous},
+		{"cp absolute dest dangerous", "cp config.txt /etc/config", SecurityDangerous},
+		// mkdir tests
+		{"mkdir -p relative safe", "mkdir -p src/newdir", SecuritySafe},
+		{"mkdir -p absolute dangerous", "mkdir -p /etc/evil", SecurityDangerous},
+		{"mkdir -p /var dangerous", "mkdir -p /var/log/evil", SecurityDangerous},
+		{"mkdir -p /usr dangerous", "mkdir -p /usr/local/share/evil", SecurityDangerous},
+		// touch tests
+		{"touch relative safe", "touch newfile.txt", SecuritySafe},
+		{"touch absolute dangerous", "touch /etc/evil", SecurityDangerous},
+		{"touch /var dangerous", "touch /var/log/evil.log", SecurityDangerous},
+		// chown tests
+		{"chown relative safe", "chown user:group file.txt", SecuritySafe},
+		{"chown absolute dangerous", "chown root /etc/passwd", SecurityDangerous},
+		{"chown /root dangerous", "chown user /root/.ssh/authorized_keys", SecurityDangerous},
+		// ln tests
+		{"ln relative safe", "ln -s link target", SecuritySafe},
+		{"ln absolute dangerous", "ln -s /usr/bin/evil /usr/local/bin/evil", SecurityDangerous},
+		// tee tests
+		{"tee relative safe", "tee log.txt", SecuritySafe},
+		{"tee absolute dangerous", "tee /var/log/evil", SecurityDangerous},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != tt.expected {
+				t.Errorf("classifyShellCommand(%q) = %v, want %v (reasoning: %s)", tt.command, result.Risk, tt.expected, result.Reasoning)
+			}
+		})
+	}
+}
+
+// TestBenignRedirectionPathTraversal tests path validation in redirection
+func TestBenignRedirectionPathTraversal(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		expected SecurityRisk
+	}{
+		{"redirect to /tmp safe", "echo test > /tmp/output.txt", SecuritySafe},
+		{"append to /tmp safe", "echo test >> /tmp/output.txt", SecuritySafe},
+		{"redirect to /dev/null safe", "echo test > /dev/null", SecuritySafe},
+		{"redirect to /dev/stdout safe", "echo test > /dev/stdout", SecuritySafe},
+		{"redirect to /dev/stderr safe", "echo test > /dev/stderr", SecuritySafe},
+		{"redirect to /tmp with traversal dangerous", "echo test > /tmp/../etc/passwd", SecurityDangerous},
+		{"append to /tmp with traversal dangerous", "echo test >> /tmp/../etc/passwd", SecurityDangerous},
+		{"redirect to /tmp with deep traversal dangerous", "echo test > /tmp/subdir/../../etc/ssh/sshd_config", SecurityDangerous},
+		{"redirect to /etc dangerous", "echo test > /etc/passwd", SecurityDangerous},
+		{"redirect to /usr dangerous", "echo test > /usr/local/bin/test", SecurityDangerous},
+		{"redirect to /var dangerous", "echo test > /var/log/test.log", SecurityDangerous},
+		{"redirect to /root dangerous", "echo test > /root/.ssh/authorized_keys", SecurityDangerous},
+		{"redirect no space /dev/null", "echo test>/dev/null", SecuritySafe},
+		{"append no space /dev/null", "echo test>>/dev/null", SecuritySafe},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != tt.expected {
+				t.Errorf("classifyShellCommand(%q) = %v, want %v (reasoning: %s)", tt.command, result.Risk, tt.expected, result.Reasoning)
+			}
+		})
+	}
+}
+
+// TestSystemPathTargetEdgeCases tests additional edge cases for path validation
+func TestSystemPathTargetEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		expected SecurityRisk
+	}{
+		// strip command with system path
+		{"strip system file", "strip /bin/bash", SecurityDangerous},
+		{"strip workspace file", "strip binary", SecuritySafe},
+		{"strip /usr/bin", "strip /usr/bin/app", SecurityDangerous},
+		// chmod --reference bypass
+		{"chmod reference system file", "chmod --reference=/etc/shadow target.txt", SecurityDangerous},
+		{"chmod reference relative", "chmod --reference=local.txt target.txt", SecuritySafe},
+		// cp with only safe destination but unsafe source
+		{"cp unsafe source safe dest", "cp /etc/shadow /tmp/shadow", SecurityDangerous},
+		{"cp safe source safe dest", "cp src/file.txt dest/", SecuritySafe},
+		// path traversal with absolute target
+		{"chmod traversal", "chmod 755 /tmp/../etc/shadow", SecurityDangerous},
+		{"mv traversal", "mv file.txt /tmp/../etc/evil", SecurityDangerous},
+		{"touch traversal", "touch /tmp/../etc/passwd", SecurityDangerous},
+		// Flags with mixed safe/unsafe paths
+		{"cp -r unsafe source", "cp -r /etc/ssl /tmp/backup", SecurityDangerous},
+		{"cp -r safe source", "cp -r src/ dest/", SecuritySafe},
+		{"chown -R unsafe", "chown -R root /etc/", SecurityDangerous},
+		{"chown -R safe", "chown -R user:group src/", SecuritySafe},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyShellCommand(map[string]interface{}{"command": tt.command})
+			if result.Risk != tt.expected {
+				t.Errorf("classifyShellCommand(%q) = %v, want %v (reasoning: %s)", tt.command, result.Risk, tt.expected, result.Reasoning)
+			}
+		})
+	}
+}

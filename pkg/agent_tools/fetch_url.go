@@ -17,7 +17,7 @@ func FetchURL(url string, cfg *configuration.Manager) (string, error) {
 	fetcher := webcontent.NewWebContentFetcher()
 	content, err := fetcher.FetchWebContent(url, cfg)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch URL %s: %w", url, err)
+		return "", fmt.Errorf("fetch URL %s: %w", url, err)
 	}
 
 	if content == "" {

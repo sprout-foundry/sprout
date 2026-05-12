@@ -30,23 +30,23 @@ const (
 func ProcessPDFWithVision(pdfPath string) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(pdfPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve PDF input path: %w", err)
+		return "", fmt.Errorf("resolve PDF input path: %w", err)
 	}
 	defer cleanup()
 
 	pythonExec, err := GetPDFPythonExecutable()
 	if err != nil {
-		return "", fmt.Errorf("failed PDF precheck: %w", err)
+		return "", fmt.Errorf("PDF precheck: %w", err)
 	}
 
 	client, err := CreateVisionClient()
 	if err != nil {
-		return "", fmt.Errorf("failed to create vision client for PDF OCR: %w", err)
+		return "", fmt.Errorf("create vision client for PDF OCR: %w", err)
 	}
 
 	text, err := processPDFWithProvider(resolvedPath, pythonExec, client)
 	if err != nil {
-		return "", fmt.Errorf("PDF OCR failed: %w", err)
+		return "", fmt.Errorf("PDF OCR: %w", err)
 	}
 
 	return text, nil
@@ -58,7 +58,7 @@ func ProcessPDFWithVision(pdfPath string) (string, error) {
 func ProcessPDFForTextOnly(pdfPath string) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(pdfPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve PDF input path: %w", err)
+		return "", fmt.Errorf("resolve PDF input path: %w", err)
 	}
 	defer cleanup()
 
@@ -86,7 +86,7 @@ func ProcessPDFForTextOnly(pdfPath string) (string, error) {
 func processPDFForOCROnly(pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat PDF file: %w", err)
+		return "", fmt.Errorf("stat PDF file: %w", err)
 	}
 
 	maxSize := int64(50 * 1024 * 1024)
@@ -104,7 +104,7 @@ func processPDFForOCROnly(pdfPath, pythonExec string, client api.ClientInterface
 		return ocrText, nil
 	}
 
-	return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %v; page OCR error: %w",
+	return "", fmt.Errorf("PDF no extractable text: direct OCR error: %v; page OCR error: %w",
 		directOCRErr, ocrErr)
 }
 
@@ -120,17 +120,17 @@ func downloadRemotePDFToTemp(url string) (string, func(), error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		return "", func() {}, fmt.Errorf("failed to download PDF: %w", err)
+		return "", func() {}, fmt.Errorf("download PDF: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", func() {}, fmt.Errorf("failed to download PDF: status %d", resp.StatusCode)
+		return "", func() {}, fmt.Errorf("download PDF: status %d", resp.StatusCode)
 	}
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
 	if err != nil {
-		return "", func() {}, fmt.Errorf("failed reading downloaded PDF bytes: %w", err)
+		return "", func() {}, fmt.Errorf("read downloaded PDF bytes: %w", err)
 	}
 	if len(data) == 0 {
 		return "", func() {}, fmt.Errorf("downloaded PDF is empty")
@@ -141,7 +141,7 @@ func downloadRemotePDFToTemp(url string) (string, func(), error) {
 
 	tmp, err := os.CreateTemp("", "sprout_pdf_*.pdf")
 	if err != nil {
-		return "", func() {}, fmt.Errorf("failed to create temp PDF file: %w", err)
+		return "", func() {}, fmt.Errorf("create temp PDF file: %w", err)
 	}
 
 	cleanup := func() {
@@ -151,11 +151,11 @@ func downloadRemotePDFToTemp(url string) (string, func(), error) {
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
 		cleanup()
-		return "", func() {}, fmt.Errorf("failed to write temp PDF file: %w", err)
+		return "", func() {}, fmt.Errorf("write temp PDF file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
 		cleanup()
-		return "", func() {}, fmt.Errorf("failed to finalize temp PDF file: %w", err)
+		return "", func() {}, fmt.Errorf("finalize temp PDF file: %w", err)
 	}
 
 	return tmp.Name(), cleanup, nil
@@ -167,7 +167,7 @@ func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterfa
 	// Check file size
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to stat PDF file: %w", err)
+		return "", fmt.Errorf("stat PDF file: %w", err)
 	}
 
 	maxSize := int64(50 * 1024 * 1024) // 50MB for PDF OCR
@@ -193,7 +193,7 @@ func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterfa
 		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 			return ocrText, nil
 		}
-		return "", fmt.Errorf("PDF has no extractable text. direct OCR error: %v; image OCR error: %w",
+		return "", fmt.Errorf("PDF no extractable text: direct OCR error: %v; image OCR error: %w",
 			directOCRErr, ocrErr)
 	}
 
@@ -226,9 +226,9 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	if err != nil {
 		if pageErr != nil {
 			// Note: pageErr is included with %v for context but not wrapped - only err is the primary error
-			return "", fmt.Errorf("failed page rasterization and image extraction: %w (rasterization error: %v)", err, pageErr)
+			return "", fmt.Errorf("page rasterization and image extraction: %w (rasterization error: %v)", err, pageErr)
 		}
-		return "", fmt.Errorf("failed to extract images from PDF: %w", err)
+		return "", fmt.Errorf("extract images from PDF: %w", err)
 	}
 
 	if len(images) == 0 {
@@ -243,9 +243,9 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	if ocrErr != nil {
 		if pageErr != nil {
 			// Note: pageErr is included with %v for context but not wrapped - only ocrErr is the primary error
-			return "", fmt.Errorf("both OCR paths failed: page=%v, image=%w", pageErr, ocrErr)
+			return "", fmt.Errorf("both OCR paths: page=%v, image=%w", pageErr, ocrErr)
 		}
-		return "", fmt.Errorf("OCR image processing failed: %w", ocrErr)
+		return "", fmt.Errorf("OCR image processing: %w", ocrErr)
 	}
 
 	return text, nil
@@ -349,7 +349,7 @@ except Exception as e:
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pypdfium2 page render failed: %w: %s", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("pypdfium2 page render: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
 	return decodeBase64ImagePayload(output), nil
@@ -410,7 +410,7 @@ except Exception as e:
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pypdf image extraction failed: %w: %s", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("pypdf image extraction: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
 	return decodeBase64ImagePayload(output), nil
@@ -422,7 +422,7 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	// Read PDF file
 	data, err := os.ReadFile(pdfPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read PDF: %w", err)
+		return "", fmt.Errorf("read PDF: %w", err)
 	}
 	if !looksLikePDF(data) {
 		return "", fmt.Errorf("input is not a valid PDF file (missing %%PDF header)")
@@ -446,7 +446,7 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 	// Send request to Ollama
 	response, err := client.SendVisionRequest(messages, nil, "", false)
 	if err != nil {
-		return "", fmt.Errorf("OCR request failed: %w", err)
+		return "", fmt.Errorf("OCR request: %w", err)
 	}
 
 	if len(response.Choices) == 0 {
@@ -548,7 +548,7 @@ func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
 	// Check file size before processing (limit to 20MB for safety)
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat PDF file: %w", err)
+		return nil, fmt.Errorf("stat PDF file: %w", err)
 	}
 
 	maxSize := int64(20 * 1024 * 1024) // 20MB
@@ -561,7 +561,7 @@ func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
 		_ = f.Close()
 	}()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open PDF: %w", err)
+		return nil, fmt.Errorf("open PDF: %w", err)
 	}
 
 	info := make(map[string]interface{})

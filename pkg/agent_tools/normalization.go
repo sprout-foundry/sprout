@@ -80,7 +80,7 @@ func validateMapping(input string, mapping []int, normalized string) error {
 func findAndReplaceWithNormalization(content, oldString, newString, normalizedContent, normalizedOld string, contentMap []int) (string, error) {
 	// Validate the mapping before using it
 	if err := validateMapping(content, contentMap, normalizedContent); err != nil {
-		return "", fmt.Errorf("position mapping invalid: %w", err)
+		return "", fmt.Errorf("validate position mapping: %w", err)
 	}
 
 	// Find position in normalized content
@@ -204,7 +204,7 @@ func performNormalizedReplacement(content, oldString, newString string) (string,
 
 	newContent, err := findAndReplaceWithNormalization(content, oldString, newString, normalizedContent, normalizedOld, contentMap)
 	if err != nil {
-		return "", fmt.Errorf("failed to perform normalized replacement: %w", err)
+		return "", fmt.Errorf("perform normalized replacement: %w", err)
 	}
 
 	return newContent, nil

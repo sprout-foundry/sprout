@@ -456,16 +456,6 @@ func (c *ScriptedClient) buildChatResponse(
 	toolCalls []api.ToolCall,
 	usage ScriptedTokenUsage,
 ) *api.ChatResponse {
-	// Map PromptTokensDetails from usage when present
-	promptTokenDetails := struct {
-		CachedTokens     int  `json:"cached_tokens"`
-		CacheWriteTokens *int `json:"cache_write_tokens"`
-	}{}
-	if usage.PromptTokensDetails.CachedTokens > 0 || usage.PromptTokensDetails.CacheWriteTokens != nil {
-		promptTokenDetails.CachedTokens = usage.PromptTokensDetails.CachedTokens
-		promptTokenDetails.CacheWriteTokens = usage.PromptTokensDetails.CacheWriteTokens
-	}
-
 	return &api.ChatResponse{
 		ID:      idPrefix + fmt.Sprintf("%d", c.GetIndex()),
 		Object:  "chat.completion",
@@ -473,13 +463,7 @@ func (c *ScriptedClient) buildChatResponse(
 		Model:   model,
 		Choices: []api.Choice{{
 			Index: 0,
-			Message: struct {
-				Role             string          `json:"role"`
-				Content          string          `json:"content"`
-				ReasoningContent string          `json:"reasoning_content,omitempty"`
-				Images           []api.ImageData `json:"images,omitempty"`
-				ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: api.Message{
 				Role:             "assistant",
 				Content:          content,
 				ReasoningContent: reasoningContent,
@@ -488,23 +472,14 @@ func (c *ScriptedClient) buildChatResponse(
 			},
 			FinishReason: finishReason,
 		}},
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
-			PromptTokens:        usage.PromptTokens,
-			CompletionTokens:    usage.CompletionTokens,
-			TotalTokens:         usage.TotalTokens,
-			EstimatedCost:       usage.EstimatedCost,
-			Cost:                usage.Cost,
-			PromptTokensDetails: promptTokenDetails,
+		Usage: api.ChatUsage{
+			PromptTokens:     usage.PromptTokens,
+			CompletionTokens: usage.CompletionTokens,
+			TotalTokens:      usage.TotalTokens,
+			EstimatedCost:    usage.EstimatedCost,
+			Cost:             usage.Cost,
+			CachedTokens:     usage.PromptTokensDetails.CachedTokens,
+			CacheWriteTokens: usage.PromptTokensDetails.CacheWriteTokens,
 		},
 	}
 }

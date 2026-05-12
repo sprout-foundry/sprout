@@ -184,7 +184,7 @@ func convertToHistoryMessages(messages []api.Message) []history.APIMessage {
 			Role:             msg.Role,
 			Content:          msg.Content,
 			ReasoningContent: msg.ReasoningContent,
-			ToolCallId:       msg.ToolCallId,
+			ToolCallID:       msg.ToolCallID,
 		}
 
 		// Convert tool calls if present

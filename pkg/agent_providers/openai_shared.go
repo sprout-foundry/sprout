@@ -78,8 +78,8 @@ func BuildOpenAIChatMessages(messages []api.Message, opts MessageConversionOptio
 			messageMap["content"] = content
 		}
 
-		if opts.IncludeToolCallID && msg.ToolCallId != "" {
-			messageMap["tool_call_id"] = msg.ToolCallId
+		if opts.IncludeToolCallID && msg.ToolCallID != "" {
+			messageMap["tool_call_id"] = msg.ToolCallID
 		}
 
 		// Include tool_calls for assistant messages (critical for tool conversation flow)

@@ -50,11 +50,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 	for i, tool := range tools {
 		typeTools[i] = Tool{
 			Type: tool.Type,
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
+			Function: ToolFunction{
 				Name:        tool.Function.Name,
 				Description: tool.Function.Description,
 				Parameters:  tool.Function.Parameters,
@@ -84,29 +80,14 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 		Object:  response.Object,
 		Created: response.Created,
 		Model:   response.Model,
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: ChatUsage{
 			PromptTokens:     response.Usage.PromptTokens,
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
 			Cost:             response.Usage.Cost,
-			PromptTokensDetails: struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			}{
-				CachedTokens:     response.Usage.PromptTokensDetails.CachedTokens,
-				CacheWriteTokens: response.Usage.PromptTokensDetails.CacheWriteTokens,
-			},
+			CachedTokens:     response.Usage.CachedTokens,
+			CacheWriteTokens: response.Usage.CacheWriteTokens,
 		},
 	}
 
@@ -125,13 +106,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 
 		apiResponse.Choices[i] = Choice{
 			Index: choice.Index,
-			Message: struct {
-				Role             string      `json:"role"`
-				Content          string      `json:"content"`
-				ReasoningContent string      `json:"reasoning_content,omitempty"`
-				Images           []ImageData `json:"images,omitempty"`
-				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: Message{
 				Role:             choice.Message.Role,
 				Content:          choice.Message.Content,
 				ReasoningContent: choice.Message.ReasoningContent,
@@ -147,10 +122,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(messages []Message, tools []Too
 				apiResponse.Choices[i].Message.ToolCalls[j] = ToolCall{
 					ID:   toolCall.ID,
 					Type: toolCall.Type,
-					Function: struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					}{
+					Function: ToolCallFunction{
 						Name:      toolCall.Function.Name,
 						Arguments: toolCall.Function.Arguments,
 					},
@@ -229,11 +201,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 	for i, tool := range tools {
 		typeTools[i] = Tool{
 			Type: tool.Type,
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
+			Function: ToolFunction{
 				Name:        tool.Function.Name,
 				Description: tool.Function.Description,
 				Parameters:  tool.Function.Parameters,
@@ -253,29 +221,14 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 		Object:  response.Object,
 		Created: response.Created,
 		Model:   response.Model,
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: ChatUsage{
 			PromptTokens:     response.Usage.PromptTokens,
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
 			Cost:             response.Usage.Cost,
-			PromptTokensDetails: struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			}{
-				CachedTokens:     response.Usage.PromptTokensDetails.CachedTokens,
-				CacheWriteTokens: response.Usage.PromptTokensDetails.CacheWriteTokens,
-			},
+			CachedTokens:     response.Usage.CachedTokens,
+			CacheWriteTokens: response.Usage.CacheWriteTokens,
 		},
 	}
 
@@ -294,13 +247,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 
 		apiResponse.Choices[i] = Choice{
 			Index: choice.Index,
-			Message: struct {
-				Role             string      `json:"role"`
-				Content          string      `json:"content"`
-				ReasoningContent string      `json:"reasoning_content,omitempty"`
-				Images           []ImageData `json:"images,omitempty"`
-				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: Message{
 				Role:             choice.Message.Role,
 				Content:          choice.Message.Content,
 				ReasoningContent: choice.Message.ReasoningContent,
@@ -316,10 +263,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(messages []Message, tools []T
 				apiResponse.Choices[i].Message.ToolCalls[j] = ToolCall{
 					ID:   toolCall.ID,
 					Type: toolCall.Type,
-					Function: struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					}{
+					Function: ToolCallFunction{
 						Name:      toolCall.Function.Name,
 						Arguments: toolCall.Function.Arguments,
 					},
@@ -358,11 +302,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 	for i, tool := range tools {
 		providerTools[i] = Tool{
 			Type: tool.Type,
-			Function: struct {
-				Name        string      `json:"name"`
-				Description string      `json:"description"`
-				Parameters  interface{} `json:"parameters"`
-			}{
+			Function: ToolFunction{
 				Name:        tool.Function.Name,
 				Description: tool.Function.Description,
 				Parameters:  tool.Function.Parameters,
@@ -390,22 +330,14 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 		Created: response.Created,
 		Model:   response.Model,
 		Choices: make([]Choice, len(response.Choices)),
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: ChatUsage{
 			PromptTokens:     response.Usage.PromptTokens,
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
 			Cost:             response.Usage.Cost,
+			CachedTokens:     response.Usage.CachedTokens,
+			CacheWriteTokens: response.Usage.CacheWriteTokens,
 		},
 	}
 
@@ -417,10 +349,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 			toolCalls = append(toolCalls, ToolCall{
 				ID:   tc.ID,
 				Type: tc.Type,
-				Function: struct {
-					Name      string `json:"name"`
-					Arguments string `json:"arguments"`
-				}{
+				Function: ToolCallFunction{
 					Name:      tc.Function.Name,
 					Arguments: tc.Function.Arguments,
 				},
@@ -439,13 +368,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(messages []Message, tools
 
 		apiResponse.Choices[i] = Choice{
 			Index: choice.Index,
-			Message: struct {
-				Role             string      `json:"role"`
-				Content          string      `json:"content"`
-				ReasoningContent string      `json:"reasoning_content,omitempty"`
-				Images           []ImageData `json:"images,omitempty"`
-				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: Message{
 				Role:             choice.Message.Role,
 				Content:          choice.Message.Content,
 				ReasoningContent: choice.Message.ReasoningContent,

@@ -364,13 +364,7 @@ func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, re
 		Model:   c.model,
 		Choices: []Choice{{
 			Index: 0,
-			Message: struct {
-				Role             string      `json:"role"`
-				Content          string      `json:"content"`
-				ReasoningContent string      `json:"reasoning_content,omitempty"`
-				Images           []ImageData `json:"images,omitempty"`
-				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: Message{
 				Role:    "assistant",
 				Content: responseContent.String(),
 			},

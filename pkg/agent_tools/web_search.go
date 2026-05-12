@@ -18,7 +18,7 @@ func WebSearch(query string, cfg *configuration.Manager) (string, error) {
 	// Get raw search results without LLM processing
 	searchResults, err := webcontent.GetSearchResults(query, cfg)
 	if err != nil {
-		return "", fmt.Errorf("web search failed: %w", err)
+		return "", fmt.Errorf("web search: %w", err)
 	}
 
 	if len(searchResults) == 0 {

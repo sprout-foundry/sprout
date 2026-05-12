@@ -315,7 +315,7 @@ func TestExecutePypdfTextExtraction_Failure(t *testing.T) {
 	if text != "" {
 		t.Errorf("expected empty text, got %q", text)
 	}
-	if !strings.Contains(err.Error(), "pypdf extraction failed") {
+	if !strings.Contains(err.Error(), "pypdf extraction") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }

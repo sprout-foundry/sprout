@@ -38,7 +38,7 @@ func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
 	}
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download URL: %w", err)
+		return nil, fmt.Errorf("download URL: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -48,7 +48,7 @@ func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, binaryDownloadMaxSize))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("read response body: %w", err)
 	}
 
 	// Detect and report truncation for large responses
@@ -121,7 +121,7 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 	// Write to a temp file (ProcessPDFForMultimodal takes a file path)
 	tmpFile, err := os.CreateTemp("", "sprout_pdf_*.pdf")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp file for PDF: %w", err)
+		return nil, fmt.Errorf("create temp file for PDF: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 	cleanup := func() { os.Remove(tmpPath) }
@@ -130,19 +130,19 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 	// Restrict permissions to owner-only
 	if chmodErr := tmpFile.Chmod(0600); chmodErr != nil {
 		tmpFile.Close()
-		return nil, fmt.Errorf("failed to set temp file permissions: %w", chmodErr)
+		return nil, fmt.Errorf("set temp file permissions: %w", chmodErr)
 	}
 
 	if _, writeErr := tmpFile.Write(data); writeErr != nil {
 		tmpFile.Close()
-		return nil, fmt.Errorf("failed to write PDF to temp file: %w", writeErr)
+		return nil, fmt.Errorf("write PDF to temp file: %w", writeErr)
 	}
 	tmpFile.Close()
 
 	result, err := ProcessPDFForMultimodal(tmpPath)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed PDF multimodal processing: %w", err)
+		return nil, fmt.Errorf("PDF multimodal processing: %w", err)
 	}
 
 	// Map PDFPipelineResult to BinaryFetchResult

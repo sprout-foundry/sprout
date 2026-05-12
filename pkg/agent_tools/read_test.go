@@ -257,7 +257,7 @@ func TestReadFileNonExistent(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error when reading non-existent file, got nil")
 	}
-	if err != nil && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "failed to resolve") {
+	if err != nil && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "does not exist") && !strings.Contains(err.Error(), "resolve file path") {
 		t.Errorf("Expected error message about file not existing, got: %v", err)
 	}
 }

@@ -86,7 +86,7 @@ func TestToolCallAwarePruningDoesNotDuplicateFirstMessage(t *testing.T) {
 				{ID: "call-1"},
 			},
 		},
-		{Role: "tool", Content: "Tool call result for read_file: a.go\nx", ToolCallId: "call-1"},
+		{Role: "tool", Content: "Tool call result for read_file: a.go\nx", ToolCallID: "call-1"},
 		{Role: "assistant", Content: "answer"},
 	}
 
@@ -146,7 +146,7 @@ func TestToolRoleDetectors(t *testing.T) {
 				{ID: "call-1"},
 			},
 		},
-		{Role: "tool", Content: "Tool call result for read_file: x.go\n" + strings.Repeat("a", 6001), ToolCallId: "call-1"},
+		{Role: "tool", Content: "Tool call result for read_file: x.go\n" + strings.Repeat("a", 6001), ToolCallID: "call-1"},
 	}
 
 	if pruner.countToolCalls(messages) < 2 {
@@ -231,7 +231,7 @@ func TestAggressivePruningUsesStructuralCompaction(t *testing.T) {
 			})
 			messages = append(messages, api.Message{
 				Role:       "tool",
-				ToolCallId: toolCallID,
+				ToolCallID: toolCallID,
 				Content:    "Tool call result for read_file: pkg/agent/thing.go\n" + strings.Repeat("x", 400),
 			})
 			continue

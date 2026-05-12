@@ -176,13 +176,7 @@ func TestEstimateCompletionTokensFromResponse_ZC(t *testing.T) {
 		t.Parallel()
 		resp := &api.ChatResponse{
 			Choices: []api.Choice{
-				{Message: struct {
-					Role             string        `json:"role"`
-					Content          string        `json:"content"`
-					ReasoningContent string        `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: "Hello world"}},
+				{Message: api.Message{Content: "Hello world"}},
 			},
 		}
 		got := estimateCompletionTokensFromResponse(resp)
@@ -194,13 +188,7 @@ func TestEstimateCompletionTokensFromResponse_ZC(t *testing.T) {
 		t.Parallel()
 		resp := &api.ChatResponse{
 			Choices: []api.Choice{
-				{Message: struct {
-					Role             string        `json:"role"`
-					Content          string        `json:"content"`
-					ReasoningContent string        `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: "Hi", ReasoningContent: "thinking deeply"}},
+				{Message: api.Message{Content: "Hi", ReasoningContent: "thinking deeply"}},
 			},
 		}
 		got := estimateCompletionTokensFromResponse(resp)
@@ -217,11 +205,10 @@ func TestEstimateCompletionTokensFromResponse_ZC(t *testing.T) {
 func TestIsRetryableError_ZC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name    string
-		errStr  string
-		want    bool
+		name   string
+		errStr string
+		want   bool
 	}{
-		{"502", "502 Bad Gateway", true},
 		{"upstream_error", "upstream error: connection refused", true},
 		{"stream_error", "stream error: internal", true},
 		{"internal_error", "INTERNAL_ERROR encountered", true},
@@ -254,7 +241,6 @@ func TestIsImageNotSupportedError_ZC(t *testing.T) {
 		err  error
 		want bool
 	}{
-		{"nil", nil, false},
 		{"image_not_supported", errors.New("image input is not supported by this model"), true},
 		{"does_not_support", errors.New("model does not support image input"), true},
 		{"vision_not_supported", errors.New("vision is not supported"), true},

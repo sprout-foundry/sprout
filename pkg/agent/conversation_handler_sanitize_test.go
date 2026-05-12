@@ -12,7 +12,7 @@ func TestSanitizeToolMessagesDropsOrphanToolResult(t *testing.T) {
 	messages := []api.Message{
 		{Role: "system", Content: "system"},
 		{Role: "user", Content: "do something"},
-		{Role: "tool", Content: "Tool call result for read_file: pkg/foo.go", ToolCallId: "call-orphan"},
+		{Role: "tool", Content: "Tool call result for read_file: pkg/foo.go", ToolCallID: "call-orphan"},
 	}
 
 	sanitized := handler.sanitizeToolMessages(messages)
@@ -44,7 +44,7 @@ func TestSanitizeToolMessagesKeepsMatchingToolResult(t *testing.T) {
 	tool := api.Message{
 		Role:       "tool",
 		Content:    "Tool call result for read_file: pkg/foo.go",
-		ToolCallId: "call-keep",
+		ToolCallID: "call-keep",
 	}
 
 	sanitized := handler.sanitizeToolMessages([]api.Message{assistant, tool})
@@ -57,8 +57,8 @@ func TestSanitizeToolMessagesKeepsMatchingToolResult(t *testing.T) {
 	for _, msg := range sanitized {
 		if msg.Role == "tool" {
 			foundTool = true
-			if msg.ToolCallId != "call-keep" {
-				t.Fatalf("unexpected tool_call_id: %s", msg.ToolCallId)
+			if msg.ToolCallID != "call-keep" {
+				t.Fatalf("unexpected tool_call_id: %s", msg.ToolCallID)
 			}
 		}
 	}

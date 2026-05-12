@@ -169,7 +169,7 @@ func TestE2E_ToolCallExecution(t *testing.T) {
 		}
 	}
 	require.NotNil(t, toolResultMsgInSent, "second request should contain a tool result message")
-	assert.Equal(t, assistantToolCallID, toolResultMsgInSent.ToolCallId,
+	assert.Equal(t, assistantToolCallID, toolResultMsgInSent.ToolCallID,
 		"tool result's ToolCallId should match the assistant's tool call ID")
 }
 

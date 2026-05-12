@@ -168,7 +168,7 @@ func TestStripConsecutiveAssistantMessages_WithToolMessages(t *testing.T) {
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"`
 		}{Name: "test", Arguments: ""}}}},
-		{Role: "tool", Content: "tool result", ToolCallId: "call1"},
+		{Role: "tool", Content: "tool result", ToolCallID: "call1"},
 		{Role: "assistant", Content: "Response A"},
 		{Role: "assistant", Content: "Response B"},
 	}
@@ -197,7 +197,7 @@ func TestStripConsecutiveAssistantMessages_ToolBetweenAssistants(t *testing.T) {
 	messages := []api.Message{
 		{Role: "user", Content: "Hello"},
 		{Role: "assistant", Content: "Response A"},
-		{Role: "tool", Content: "tool result", ToolCallId: "call1"},
+		{Role: "tool", Content: "tool result", ToolCallID: "call1"},
 		{Role: "assistant", Content: "Response B"},
 	}
 	

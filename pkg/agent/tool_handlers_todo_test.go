@@ -97,8 +97,8 @@ func TestHandleTodoWrite(t *testing.T) {
 			t.Fatal("expected non-empty result")
 		}
 
-		// Verify the todos were actually written
-		read := tools.TodoRead()
+		// Verify the todos were actually written to the agent's manager
+		read := a.GetTodoManager().Read()
 		if len(read) != 2 {
 			t.Errorf("expected 2 todos after write, got %d", len(read))
 		}
@@ -138,7 +138,10 @@ func TestHandleTodoRead(t *testing.T) {
 	})
 
 	t.Run("with todos", func(t *testing.T) {
-		tools.TodoWrite([]tools.TodoItem{
+		a := &Agent{
+			state: NewAgentStateManager(false),
+		}
+		a.GetTodoManager().Write([]tools.TodoItem{
 			{Content: "First task", Status: "pending"},
 			{Content: "Second task", Status: "in_progress"},
 			{Content: "Third task", Status: "completed"},

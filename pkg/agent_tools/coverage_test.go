@@ -595,7 +595,7 @@ func TestFindAndReplaceWithNormalization(t *testing.T) {
 			contentMap:       []int{0, 1, -1, 3, 4, 5, 6, 7, 8, 9, 10},
 			want:             "",
 			wantErr:          true,
-			errContains:      "position mapping invalid",
+			errContains:      "validate position mapping",
 		},
 		{
 			name:             "position out of bounds",

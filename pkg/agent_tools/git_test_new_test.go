@@ -149,7 +149,7 @@ func TestExecuteGitOperation_ApprovalError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when approval prompt fails, got nil")
 	}
-	expected := "failed to get user approval: context deadline exceeded"
+	expected := "get user approval: context deadline exceeded"
 	if err.Error() != expected {
 		t.Errorf("error = %q; want %q", err.Error(), expected)
 	}

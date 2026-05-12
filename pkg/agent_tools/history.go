@@ -40,7 +40,7 @@ func ViewHistory(limit int, fileFilter string, since *time.Time, showContent boo
 		changes, err = history.GetAllChanges()
 	}
 	if err != nil {
-		return ViewHistoryResult{}, fmt.Errorf("failed to retrieve change history: %w", err)
+		return ViewHistoryResult{}, fmt.Errorf("retrieve change history: %w", err)
 	}
 
 	fileFilter = strings.TrimSpace(fileFilter)
@@ -106,7 +106,7 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 
 		changes, err := history.GetAllChanges()
 		if err != nil {
-			return RollbackResult{}, fmt.Errorf("failed to retrieve changes: %w", err)
+			return RollbackResult{}, fmt.Errorf("retrieve changes: %w", err)
 		}
 
 		var targetChange *history.ChangeLog
@@ -123,7 +123,7 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 		}
 
 		if err := filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode); err != nil {
-			return RollbackResult{}, fmt.Errorf("failed to restore file content: %w", err)
+			return RollbackResult{}, fmt.Errorf("restore file content: %w", err)
 		}
 
 		return RollbackResult{
@@ -153,7 +153,7 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 	revisionFiles, _ := history.GetFilesForRevision(revisionID)
 
 	if err := history.RevertChangeByRevisionID(revisionID); err != nil {
-		return RollbackResult{}, fmt.Errorf("failed to rollback revision: %w", err)
+		return RollbackResult{}, fmt.Errorf("rollback revision: %w", err)
 	}
 
 	metadata := map[string]interface{}{
@@ -258,7 +258,7 @@ func formatRevision(group revisionGroup, opts formatRevisionOpts) string {
 func listAvailableRevisions() (RollbackResult, error) {
 	changes, err := history.GetAllChanges()
 	if err != nil {
-		return RollbackResult{}, fmt.Errorf("failed to retrieve changes: %w", err)
+		return RollbackResult{}, fmt.Errorf("retrieve changes: %w", err)
 	}
 
 	if len(changes) == 0 {

@@ -162,8 +162,8 @@ func TestClassifyPDFProcessingErrorCode_ZC(t *testing.T) {
 			want: ErrCodePDFProcessingFailed,
 		},
 		{
-			name: "failed to download pdf",
-			err:  errors.New("failed to download pdf: connection refused"),
+			name: "download pdf",
+			err:  errors.New("download PDF: connection refused"),
 			want: ErrCodeRemoteFetchFailed,
 		},
 		{
@@ -182,8 +182,8 @@ func TestClassifyPDFProcessingErrorCode_ZC(t *testing.T) {
 			want: ErrCodeRemoteFetchFailed,
 		},
 		{
-			name: "failed to stat pdf file",
-			err:  errors.New("failed to stat pdf file: not found"),
+			name: "stat pdf file",
+			err:  errors.New("stat PDF file: not found"),
 			want: ErrCodeLocalFileNotFound,
 		},
 		{
@@ -192,8 +192,8 @@ func TestClassifyPDFProcessingErrorCode_ZC(t *testing.T) {
 			want: ErrCodeLocalFileNotFound,
 		},
 		{
-			name: "ocr request failed",
-			err:  errors.New("OCR request failed: server error"),
+			name: "ocr request",
+			err:  errors.New("OCR request: server error"),
 			want: ErrCodeVisionRequestFailed,
 		},
 		{
@@ -217,8 +217,8 @@ func TestClassifyPDFProcessingErrorCode_ZC(t *testing.T) {
 			want: ErrCodeVisionRequestFailed,
 		},
 		{
-			name: "failed to create vision client",
-			err:  errors.New("failed to create vision client: no providers"),
+			name: "create vision client",
+			err:  errors.New("create vision client: no providers"),
 			want: ErrCodeVisionRequestFailed,
 		},
 		{

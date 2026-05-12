@@ -258,7 +258,7 @@ func CreateOllamaClient(model string) (api.ClientInterface, error) {
 	model = EnsureOllamaModelTag(model)
 	client, err := factory.CreateProviderClient(api.OllamaClientType, model)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Ollama client: %w", err)
+		return nil, fmt.Errorf("create Ollama client: %w", err)
 	}
 	return client, nil
 }
@@ -273,7 +273,7 @@ func CreateOllamaClient(model string) (api.ClientInterface, error) {
 func NewVisionProcessorWithMode(debug bool, _ string) (*VisionProcessor, error) {
 	client, err := CreateVisionClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create vision client: %w", err)
+		return nil, fmt.Errorf("create vision client: %w", err)
 	}
 
 	return &VisionProcessor{
@@ -287,7 +287,7 @@ func NewVisionProcessorWithMode(debug bool, _ string) (*VisionProcessor, error) 
 func NewVisionProcessorWithProvider(debug bool, providerType api.ClientType) (*VisionProcessor, error) {
 	client, err := CreateVisionClientWithProvider(providerType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create vision client for provider %s: %w", providerType, err)
+		return nil, fmt.Errorf("create vision client for provider %s: %w", providerType, err)
 	}
 
 	return &VisionProcessor{
@@ -459,7 +459,7 @@ func CreateVisionClientWithModel(modelName string) (api.ClientInterface, error) 
 		if configuration.HasProviderAuth("deepinfra") {
 			provider, err := factory.CreateGenericProvider("deepinfra", modelName)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create DeepInfra client: %w", err)
+				return nil, fmt.Errorf("create DeepInfra client: %w", err)
 			}
 			return provider, nil
 		}
@@ -589,12 +589,12 @@ func (vp *VisionProcessor) DownloadImage(url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download image: %w", err)
+		return nil, fmt.Errorf("download image: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download image: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("download image: status %d", resp.StatusCode)
 	}
 
 	return io.ReadAll(resp.Body)
@@ -815,7 +815,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 			response.InputResolved = true
 			response.OCRAttempted = true
 			response.ErrorCode = classifyPDFProcessingErrorCode(err)
-			response.ErrorMessage = fmt.Sprintf("PDF processing failed: %v", err)
+			response.ErrorMessage = fmt.Sprintf("PDF processing: %v", err)
 			respJSON, _ := json.Marshal(response)
 			return string(respJSON), nil
 		}
@@ -866,7 +866,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 		response.Success = false
 		response.InputResolved = false
 		response.ErrorCode = ErrCodeVisionRequestFailed
-		response.ErrorMessage = fmt.Sprintf("failed to create vision processor: %v", err)
+		response.ErrorMessage = fmt.Sprintf("create vision processor: %v", err)
 		respJSON, _ := json.Marshal(response)
 		return string(respJSON), nil
 	}
@@ -885,20 +885,20 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	if err != nil {
 		errMsg := err.Error()
 
-		if strings.Contains(errMsg, "failed to get image data") || strings.Contains(errMsg, "failed to download image") {
+		if strings.Contains(errMsg, "get image data") || strings.Contains(errMsg, "download image") {
 			if inputType == "remote_url" {
 				response.ErrorCode = ErrCodeRemoteFetchFailed
-				response.ErrorMessage = fmt.Sprintf("failed to fetch image from remote URL: %v", err)
+				response.ErrorMessage = fmt.Sprintf("fetch image from remote URL: %v", err)
 			} else {
 				response.ErrorCode = ErrCodeLocalFileNotFound
-				response.ErrorMessage = fmt.Sprintf("failed to read local file: %v", err)
+				response.ErrorMessage = fmt.Sprintf("read local file: %v", err)
 			}
 		} else if strings.Contains(errMsg, "no response from vision model") {
 			response.ErrorCode = ErrCodeInvalidResponse
 			response.ErrorMessage = "vision model returned empty response"
 		} else {
 			response.ErrorCode = ErrCodeVisionRequestFailed
-			response.ErrorMessage = fmt.Sprintf("vision analysis failed: %v", err)
+			response.ErrorMessage = fmt.Sprintf("vision analysis: %v", err)
 		}
 
 		respJSON, _ := json.Marshal(response)
@@ -934,7 +934,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	if err != nil {
 		response.Success = false
 		response.ErrorCode = ErrCodeInvalidResponse
-		response.ErrorMessage = fmt.Sprintf("failed to marshal response: %v", err)
+		response.ErrorMessage = fmt.Sprintf("marshal response: %v", err)
 		respJSON, _ := json.Marshal(response)
 		return string(respJSON), nil
 	}
@@ -978,7 +978,7 @@ func persistVisionFullTextWithRoot(sourcePath, fullText, workspaceRoot string) (
 		return "", fmt.Errorf("vision output directory unavailable")
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create vision output directory: %w", err)
+		return "", fmt.Errorf("create vision output directory: %w", err)
 	}
 
 	base := sanitizeVisionFileComponent(strings.TrimSuffix(filepath.Base(sourcePath), filepath.Ext(sourcePath)))
@@ -991,7 +991,7 @@ func persistVisionFullTextWithRoot(sourcePath, fullText, workspaceRoot string) (
 	fullPath := filepath.Join(dir, fileName)
 
 	if err := os.WriteFile(fullPath, []byte(fullText), 0o644); err != nil {
-		return "", fmt.Errorf("failed to write full vision output: %w", err)
+		return "", fmt.Errorf("write full vision output: %w", err)
 	}
 
 	wd := workspaceRoot
@@ -1080,24 +1080,24 @@ func classifyPDFProcessingErrorCode(err error) string {
 	msg := strings.ToLower(err.Error())
 
 	// Input path / retrieval failures.
-	if strings.Contains(msg, "failed to download pdf") ||
+	if strings.Contains(msg, "download pdf") ||
 		strings.Contains(msg, "status 404") ||
 		strings.Contains(msg, "status 403") ||
 		strings.Contains(msg, "status 401") {
 		return ErrCodeRemoteFetchFailed
 	}
-	if strings.Contains(msg, "failed to stat pdf file") ||
+	if strings.Contains(msg, "stat pdf file") ||
 		strings.Contains(msg, "no such file or directory") {
 		return ErrCodeLocalFileNotFound
 	}
 
 	// Provider/inference transport failures: model call failed, not PDF support.
-	if strings.Contains(msg, "ocr request failed") ||
+	if strings.Contains(msg, "ocr request") ||
 		strings.Contains(msg, "http 5") ||
 		strings.Contains(msg, "http 4") ||
 		strings.Contains(msg, "timeout") ||
 		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "failed to create vision client") ||
+		strings.Contains(msg, "create vision client") ||
 		strings.Contains(msg, "no response from ocr model") {
 		return ErrCodeVisionRequestFailed
 	}

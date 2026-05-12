@@ -876,8 +876,11 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 ### Structural
 
+[x] - STRUCTURAL: Replace global singleton managers with dependency injection — `NewReactWebServer` sets global `ApprovalManager` and `AskUserManager` via package-level setters; prevents parallel testing and creates hidden coupling. `pkg/webui/server.go:117-124`
 [] - STRUCTURAL: Replace global singleton managers with dependency injection — `NewReactWebServer` sets global `ApprovalManager` and `AskUserManager` via package-level setters; prevents parallel testing and creates hidden coupling. `pkg/webui/server.go:117-124`
+[x] - STRUCTURAL: Use `defer cleanup()` instead of manual cleanup calls in `binary_fetch.go` — cleanup called at 3 error points but not deferred; new error paths would leak temp files. `pkg/agent_tools/binary_fetch.go:120-135`
 [] - STRUCTURAL: Use `defer cleanup()` instead of manual cleanup calls in `binary_fetch.go` — cleanup called at 3 error points but not deferred; new error paths would leak temp files. `pkg/agent_tools/binary_fetch.go:120-135`
+[x] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
 [] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
-[] - STRUCTURAL: Add `initSubManagers` safety net as explicit `NewTestAgent()` factory — lazy initialization is a safety net for tests creating bare `&Agent{}`; formalize as dedicated test factory. `pkg/agent/agent.go`
+[x] - STRUCTURAL: Add `initSubManagers` safety net as explicit `NewTestAgent()` factory — lazy initialization is a safety net for tests creating bare `&Agent{}`; formalize as dedicated test factory. `pkg/agent/agent.go`
 [] - STRUCTURAL: Add `make build-all` to CI/automation to catch frontend build failures early — per AGENTS.md, `make build-all` is required after code changes but may not be in CI.

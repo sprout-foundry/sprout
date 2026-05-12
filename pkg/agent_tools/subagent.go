@@ -162,7 +162,7 @@ func spawnSubagentProcess(config subagentSpawnConfig) subagentSpawnResult {
 		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=get_executable_failed details=%v",
 			config.CallerMethod, taskID, err)
 		return subagentSpawnResult{
-			Err: fmt.Errorf("failed to get current executable path: %w", err),
+			Err: fmt.Errorf("get current executable path: %w", err),
 		}
 	}
 
@@ -172,7 +172,7 @@ func spawnSubagentProcess(config subagentSpawnConfig) subagentSpawnResult {
 		log.Printf("[SUBAGENT_ERROR] method=%s task_id=%s error=stdin_pipe_failed details=%v",
 			config.CallerMethod, taskID, err)
 		return subagentSpawnResult{
-			Err: fmt.Errorf("failed to create stdin pipe for prompt: %w", err),
+			Err: fmt.Errorf("create stdin pipe for prompt: %w", err),
 		}
 	}
 
@@ -184,7 +184,7 @@ func spawnSubagentProcess(config subagentSpawnConfig) subagentSpawnResult {
 		promptReader.Close()
 		promptWriter.Close()
 		return subagentSpawnResult{
-			Err: fmt.Errorf("failed to create stdout pipe: %w", err),
+			Err: fmt.Errorf("create stdout pipe: %w", err),
 		}
 	}
 	stderrReader, stderrWriter, err := os.Pipe()
@@ -196,7 +196,7 @@ func spawnSubagentProcess(config subagentSpawnConfig) subagentSpawnResult {
 		stdoutReader.Close()
 		stdoutWriter.Close()
 		return subagentSpawnResult{
-			Err: fmt.Errorf("failed to create stderr pipe: %w", err),
+			Err: fmt.Errorf("create stderr pipe: %w", err),
 		}
 	}
 
@@ -254,7 +254,7 @@ func spawnSubagentProcess(config subagentSpawnConfig) subagentSpawnResult {
 		stderrReader.Close()
 		stderrWriter.Close()
 		return subagentSpawnResult{
-			Err: fmt.Errorf("failed to start subagent: %w", err),
+			Err: fmt.Errorf("start subagent: %w", err),
 		}
 	}
 
@@ -665,7 +665,7 @@ func readSubagentMetrics(metricsFile string) (tokens int, cost float64, err erro
 
 	_, err = fmt.Sscanf(content, "tokens:%s,cost:%s", &tokensStr, &costStr)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to parse metrics: %w", err)
+		return 0, 0, fmt.Errorf("parse metrics: %w", err)
 	}
 
 	// Parse and validate token count

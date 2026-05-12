@@ -110,7 +110,7 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string, optionalPrompt ...stri
 	// Download or read the image
 	imageData, imageType, err := vp.GetImageData(imagePath)
 	if err != nil {
-		return VisionAnalysis{}, fmt.Errorf("failed to get image data: %w", err)
+		return VisionAnalysis{}, fmt.Errorf("get image data: %w", err)
 	}
 
 	// Use optional prompt if provided and non-empty, otherwise create default
@@ -133,7 +133,7 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string, optionalPrompt ...stri
 	// Get vision analysis using the vision-enabled method
 	response, err := vp.visionClient.SendVisionRequest(messages, nil, "", false)
 	if err != nil {
-		return VisionAnalysis{}, fmt.Errorf("vision request failed: %w", err)
+		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}
 
 	// Store usage information for cost tracking
@@ -293,7 +293,7 @@ func (vp *VisionProcessor) EnhanceTextWithAnalysis(text, imagePath string, analy
 func (vp *VisionProcessor) ProcessPDFForVision(pdfPath string) (VisionAnalysis, error) {
 	text, err := ProcessPDFWithVision(pdfPath)
 	if err != nil {
-		return VisionAnalysis{}, fmt.Errorf("PDF OCR failed: %w", err)
+		return VisionAnalysis{}, fmt.Errorf("PDF OCR: %w", err)
 	}
 
 	return VisionAnalysis{

@@ -39,13 +39,13 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 	// Fast validation: check PDF header and file size without reading entire file.
 	f, openErr := os.Open(pdfPath)
 	if openErr != nil {
-		return nil, fmt.Errorf("failed to open PDF: %w", openErr)
+		return nil, fmt.Errorf("open PDF: %w", openErr)
 	}
 	defer f.Close()
 
 	var header [5]byte
 	if _, hdrErr := io.ReadFull(f, header[:]); hdrErr != nil {
-		return nil, fmt.Errorf("failed to read PDF header: %w", hdrErr)
+		return nil, fmt.Errorf("read PDF header: %w", hdrErr)
 	}
 	if !looksLikePDF(header[:]) {
 		return nil, fmt.Errorf("not a valid PDF file")
@@ -53,7 +53,7 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 
 	stat, statErr := f.Stat()
 	if statErr != nil {
-		return nil, fmt.Errorf("failed to stat PDF: %w", statErr)
+		return nil, fmt.Errorf("stat PDF: %w", statErr)
 	}
 	if stat.Size() > pdfMaxSizeForProcessing {
 		return nil, fmt.Errorf("PDF file too large (%d MB, max %d MB)", stat.Size()/1024/1024, pdfMaxSizeForProcessing/1024/1024)
@@ -97,7 +97,7 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 	}
 
 	if pageErr != nil {
-		return nil, fmt.Errorf("PDF has no extractable text and failed page rendering: %w", pageErr)
+		return nil, fmt.Errorf("PDF no extractable text and page rendering: %w", pageErr)
 	}
 	return nil, fmt.Errorf("PDF has no extractable text and failed page rendering")
 }
@@ -145,5 +145,5 @@ func executePypdfTextExtraction(cmd *exec.Cmd) (string, bool, error) {
 	if err == nil {
 		return string(output), true, nil
 	}
-	return "", false, fmt.Errorf("pypdf extraction failed: %w", err)
+	return "", false, fmt.Errorf("pypdf extraction: %w", err)
 }

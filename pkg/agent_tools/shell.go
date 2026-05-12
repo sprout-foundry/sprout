@@ -105,16 +105,16 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 		// Get pipes for stdout and stderr
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+			return "", fmt.Errorf("get stdout pipe: %w", err)
 		}
 		stderr, err := cmd.StderrPipe()
 		if err != nil {
-			return "", fmt.Errorf("failed to get stderr pipe: %w", err)
+			return "", fmt.Errorf("get stderr pipe: %w", err)
 		}
 
 		// Start the command
 		if err := cmd.Start(); err != nil {
-			return "", fmt.Errorf("failed to start command: %w", err)
+			return "", fmt.Errorf("start command: %w", err)
 		}
 
 		// Buffer to capture output for return value
@@ -274,7 +274,7 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 	// Execute in background
 	bgSessionID, err := tm.ExecuteCommandInBackground(ctx, chatID, command)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute background command: %w", err)
+		return "", fmt.Errorf("execute background command: %w", err)
 	}
 
 	// Return JSON result with session ID
@@ -283,7 +283,7 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 		"status":     "running",
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal background result: %w", err)
+		return "", fmt.Errorf("marshal background result: %w", err)
 	}
 	return string(resultBytes), nil
 }
@@ -319,7 +319,7 @@ func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error
 		"output":     output,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal check result: %w", err)
+		return "", fmt.Errorf("marshal check result: %w", err)
 	}
 	return string(resultBytes), nil
 }

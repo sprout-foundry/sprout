@@ -14,13 +14,13 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// SECURITY: Validate parent directory is safe to access (handles new files)
 	cleanPath, err := filesystem.SafeResolvePathForWriteWithBypass(ctx, filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve file path for write: %w", err)
+		return "", fmt.Errorf("resolve file path for write: %w", err)
 	}
 
 	// Security check passed - now create directory if it doesn't exist
 	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
+		return "", fmt.Errorf("create directory %s: %w", dir, err)
 	}
 
 	// Preserve existing file permissions before writing
@@ -32,7 +32,7 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// Write the file
 	err = os.WriteFile(cleanPath, []byte(content), filePerm)
 	if err != nil {
-		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
+		return "", fmt.Errorf("write file %s: %w", cleanPath, err)
 	}
 
 	// Log when permissions differ from default
@@ -43,7 +43,7 @@ func WriteFile(ctx context.Context, filePath, content string) (string, error) {
 	// Read back the file to confirm successful write
 	readContent, readErr := os.ReadFile(cleanPath)
 	if readErr != nil {
-		return "", fmt.Errorf("file written but failed to read back for verification: %w", readErr)
+		return "", fmt.Errorf("read back written file for verification: %w", readErr)
 	}
 
 	// Get file info for confirmation

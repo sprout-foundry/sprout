@@ -420,7 +420,7 @@ func TestExecuteGitOperation_approvalError2(t *testing.T) {
 	}
 
 	// The error should wrap the original error
-	if !errors.Is(err, expectedErr) && err.Error() != "failed to get user approval: user prompt failed: context canceled" {
+	if !errors.Is(err, expectedErr) && err.Error() != "get user approval: user prompt failed: context canceled" {
 		t.Errorf("error = %v; want wrapped error containing %v", err, expectedErr)
 	}
 

@@ -155,7 +155,7 @@ func AskUser(question string) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	answer, err := reader.ReadString('\n')
 	if err != nil {
-		return "", fmt.Errorf("failed to read user input: %w", err)
+		return "", fmt.Errorf("read user input: %w", err)
 	}
 	// Trim whitespace and newline characters
 	answer = strings.TrimSpace(answer)

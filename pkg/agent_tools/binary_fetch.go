@@ -125,23 +125,21 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 	}
 	tmpPath := tmpFile.Name()
 	cleanup := func() { os.Remove(tmpPath) }
+	defer cleanup()
 
 	// Restrict permissions to owner-only
 	if chmodErr := tmpFile.Chmod(0600); chmodErr != nil {
 		tmpFile.Close()
-		cleanup()
 		return nil, fmt.Errorf("failed to set temp file permissions: %w", chmodErr)
 	}
 
 	if _, writeErr := tmpFile.Write(data); writeErr != nil {
 		tmpFile.Close()
-		cleanup()
 		return nil, fmt.Errorf("failed to write PDF to temp file: %w", writeErr)
 	}
 	tmpFile.Close()
 
 	result, err := ProcessPDFForMultimodal(tmpPath)
-	cleanup()
 
 	if err != nil {
 		return nil, fmt.Errorf("failed PDF multimodal processing: %w", err)

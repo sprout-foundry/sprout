@@ -47,7 +47,7 @@ func sampleConversationState(id string) agent.ConversationState {
 					makeToolCall("call_1", "write_file", `{"path":"main.go","content":"package main\nimport \"fmt\"\nfunc main(){fmt.Println(\"Hello\")}"}`),
 				},
 			},
-			{Role: "tool", Content: "File written successfully.", ToolCallId: "call_1"},
+			{Role: "tool", Content: "File written successfully.", ToolCallID: "call_1"},
 			{
 				Role:    "assistant",
 				Content: "The file has been created. Let me verify it compiles.",
@@ -55,7 +55,7 @@ func sampleConversationState(id string) agent.ConversationState {
 					makeToolCall("call_2", "shell_command", `{"command":"go build main.go"}`),
 				},
 			},
-			{Role: "tool", Content: "# Output\nBuild successful.", ToolCallId: "call_2"},
+			{Role: "tool", Content: "# Output\nBuild successful.", ToolCallID: "call_2"},
 			{Role: "assistant", Content: "The program compiles successfully! Here's what was created:\n\n```go\npackage main\n\nimport \"fmt\"\n\nfunc main() {\n    fmt.Println(\"Hello\")\n}\n```\n\nYou can run it with `go run main.go`."},
 		},
 	}
@@ -246,7 +246,7 @@ func TestFlattenStandardMessages_NoToolResults(t *testing.T) {
 		{Role: "assistant", Content: "hi", ToolCalls: []api.ToolCall{
 			makeToolCall("c1", "read_file", `{"path":"f.go"}`),
 		}},
-		{Role: "tool", Content: "very long file content here", ToolCallId: "c1"},
+		{Role: "tool", Content: "very long file content here", ToolCallID: "c1"},
 		{Role: "assistant", Content: "Here is what I found."},
 	}
 
@@ -287,7 +287,7 @@ func TestFlattenStandardMessages_KeepToolResults(t *testing.T) {
 	messages := []api.Message{
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "hi"},
-		{Role: "tool", Content: "raw tool output data", ToolCallId: "c1"},
+		{Role: "tool", Content: "raw tool output data", ToolCallID: "c1"},
 	}
 
 	result := flattenStandardMessages(messages, opts)

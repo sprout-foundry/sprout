@@ -326,12 +326,12 @@ func (cp *ConversationPruner) pruneByImportanceToolCallAware(messages []api.Mess
 			}
 		} else if msg.Role == "tool" {
 			// Check if this tool result belongs to current group
-			if currentGroup != nil && msg.ToolCallId != "" && slices.Contains(currentGroup.ToolCallIDs, msg.ToolCallId) {
+			if currentGroup != nil && msg.ToolCallID != "" && slices.Contains(currentGroup.ToolCallIDs, msg.ToolCallID) {
 				currentGroup.ToolIndices = append(currentGroup.ToolIndices, i)
 			} else {
 				// Orphaned tool result - shouldn't happen but handle gracefully
 				if cp.debug {
-					fmt.Printf("\n[WARN] Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallId)
+					fmt.Printf("\n[WARN] Found orphaned tool result at index %d with tool_call_id=%s\n", i, msg.ToolCallID)
 				}
 				// Add current group first if it's a tool group
 				if currentGroup != nil {

@@ -56,7 +56,7 @@ func TestSanitizeToolMessages_ValidPair2(t *testing.T) {
 		{Role: "assistant", Content: "I'll check", ToolCalls: []api.ToolCall{
 			createToolCall2("call_1", "get_time", "{}"),
 		}},
-		{Role: "tool", ToolCallId: "call_1", Content: "12:00 PM"},
+		{Role: "tool", ToolCallID: "call_1", Content: "12:00 PM"},
 	}
 
 	result := ch.sanitizeToolMessages(messages)
@@ -86,7 +86,7 @@ func TestSanitizeToolMessages_OrphanedToolResult2(t *testing.T) {
 	messages := []api.Message{
 		{Role: "system", Content: "You are helpful"},
 		{Role: "user", Content: "Hello"},
-		{Role: "tool", ToolCallId: "orphan_123", Content: "some result"},
+		{Role: "tool", ToolCallID: "orphan_123", Content: "some result"},
 	}
 
 	result := ch.sanitizeToolMessages(messages)
@@ -115,8 +115,8 @@ func TestSanitizeToolMessages_DuplicateToolCallIds2(t *testing.T) {
 		{Role: "assistant", Content: "I'll check", ToolCalls: []api.ToolCall{
 			createToolCall2("call_1", "get_time", "{}"),
 		}},
-		{Role: "tool", ToolCallId: "call_1", Content: "result 1"},
-		{Role: "tool", ToolCallId: "call_1", Content: "result 2"},
+		{Role: "tool", ToolCallID: "call_1", Content: "result 1"},
+		{Role: "tool", ToolCallID: "call_1", Content: "result 2"},
 	}
 
 	result := ch.sanitizeToolMessages(messages)
@@ -144,7 +144,7 @@ func TestSanitizeToolMessages_OrderPreservation2(t *testing.T) {
 		{Role: "assistant", Content: "asst2", ToolCalls: []api.ToolCall{
 			createToolCall2("call_1", "tool1", "{}"),
 		}},
-		{Role: "tool", ToolCallId: "call_1", Content: "res1"},
+		{Role: "tool", ToolCallID: "call_1", Content: "res1"},
 		{Role: "user", Content: "user3"},
 	}
 
@@ -194,8 +194,8 @@ func TestSanitizeToolMessages_MultipleToolCalls2(t *testing.T) {
 			createToolCall2("call_1", "tool1", "{}"),
 			createToolCall2("call_2", "tool2", "{}"),
 		}},
-		{Role: "tool", ToolCallId: "call_1", Content: "res1"},
-		{Role: "tool", ToolCallId: "call_2", Content: "res2"},
+		{Role: "tool", ToolCallID: "call_1", Content: "res1"},
+		{Role: "tool", ToolCallID: "call_2", Content: "res2"},
 	}
 
 	result := ch.sanitizeToolMessages(messages)

@@ -52,7 +52,7 @@ func TestMessage_JSONFields(t *testing.T) {
 		Images: []ImageData{
 			{URL: "http://example.com/img.png", Type: "image/png"},
 		},
-		ToolCallId: "tc-123",
+		ToolCallID: "tc-123",
 		ToolCalls: []ToolCall{
 			{ID: "call-1", Type: "function"},
 		},

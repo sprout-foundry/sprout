@@ -942,11 +942,11 @@ func TestScriptedClient_PromptTokensDetails(t *testing.T) {
 	if resp.Usage.PromptTokens != 100 {
 		t.Errorf("expected 100 prompt tokens, got %d", resp.Usage.PromptTokens)
 	}
-	if resp.Usage.PromptTokensDetails.CachedTokens != 30 {
-		t.Errorf("expected 30 cached tokens, got %d", resp.Usage.PromptTokensDetails.CachedTokens)
+	if resp.Usage.CachedTokens != 30 {
+		t.Errorf("expected 30 cached tokens, got %d", resp.Usage.CachedTokens)
 	}
-	if resp.Usage.PromptTokensDetails.CacheWriteTokens == nil || *resp.Usage.PromptTokensDetails.CacheWriteTokens != 42 {
-		t.Errorf("expected cache write tokens 42, got %v", resp.Usage.PromptTokensDetails.CacheWriteTokens)
+	if resp.Usage.CacheWriteTokens == nil || *resp.Usage.CacheWriteTokens != 42 {
+		t.Errorf("expected cache write tokens 42, got %v", resp.Usage.CacheWriteTokens)
 	}
 }
 
@@ -980,10 +980,10 @@ func TestScriptedClient_SendChatRequestStream_PromptTokensDetails(t *testing.T) 
 	if resp.Usage.PromptTokens != 200 {
 		t.Errorf("expected 200 prompt tokens, got %d", resp.Usage.PromptTokens)
 	}
-	if resp.Usage.PromptTokensDetails.CachedTokens != 80 {
-		t.Errorf("expected 80 cached tokens, got %d", resp.Usage.PromptTokensDetails.CachedTokens)
+	if resp.Usage.CachedTokens != 80 {
+		t.Errorf("expected 80 cached tokens, got %d", resp.Usage.CachedTokens)
 	}
-	if resp.Usage.PromptTokensDetails.CacheWriteTokens == nil || *resp.Usage.PromptTokensDetails.CacheWriteTokens != 99 {
-		t.Errorf("expected cache write tokens 99, got %v", resp.Usage.PromptTokensDetails.CacheWriteTokens)
+	if resp.Usage.CacheWriteTokens == nil || *resp.Usage.CacheWriteTokens != 99 {
+		t.Errorf("expected cache write tokens 99, got %v", resp.Usage.CacheWriteTokens)
 	}
 }

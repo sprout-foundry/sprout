@@ -87,7 +87,7 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 		},
 		{
 			Role:       "tool",
-			ToolCallId: "fetch_menu_1",
+			ToolCallID: "fetch_menu_1",
 			Content:    "Menu page includes image 1: https://cdn.example.com/menu.jpg",
 		},
 	})
@@ -131,7 +131,7 @@ func TestE2E_OCRCompletionGateFlow(t *testing.T) {
 	// Verify tool result for analyze_image_content exists
 	var foundOCRToolResult bool
 	for _, msg := range agent.state.GetMessages() {
-		if msg.Role == "tool" && msg.ToolCallId == "call_ocr_001" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_ocr_001" {
 			foundOCRToolResult = true
 			break
 		}

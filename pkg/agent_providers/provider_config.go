@@ -41,7 +41,7 @@ type RequestDefaults struct {
 
 // MessageConversion defines how messages should be converted
 type MessageConversion struct {
-	IncludeToolCallId        bool   `json:"include_tool_call_id"`
+	IncludeToolCallID        bool   `json:"include_tool_call_id"`
 	ConvertToolRoleToUser    bool   `json:"convert_tool_role_to_user"`
 	ReasoningContentField    string `json:"reasoning_content_field"`
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`

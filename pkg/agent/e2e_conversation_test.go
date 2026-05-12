@@ -94,13 +94,7 @@ func scriptedResponseToChatResponse(resp *ScriptedResponse) *api.ChatResponse {
 	return &api.ChatResponse{
 		Choices: []api.Choice{{
 			FinishReason: resp.FinishReason,
-			Message: struct {
-				Role             string          `json:"role"`
-				Content          string          `json:"content"`
-				ReasoningContent string          `json:"reasoning_content,omitempty"`
-				Images           []api.ImageData `json:"images,omitempty"`
-				ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: api.Message{
 				Role:             "assistant",
 				Content:          resp.Content,
 				ReasoningContent: resp.ReasoningContent,
@@ -108,17 +102,7 @@ func scriptedResponseToChatResponse(resp *ScriptedResponse) *api.ChatResponse {
 				ToolCalls:        resp.ToolCalls,
 			},
 		}},
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: api.ChatUsage{
 			PromptTokens:     usage.PromptTokens,
 			CompletionTokens: usage.CompletionTokens,
 			TotalTokens:      usage.TotalTokens,
@@ -552,7 +536,7 @@ func TestE2E_StructuralCompaction(t *testing.T) {
 		})
 		messages = append(messages, api.Message{
 			Role:      "tool",
-			ToolCallId: fmt.Sprintf("call_%d", i),
+			ToolCallID: fmt.Sprintf("call_%d", i),
 			Content:   fmt.Sprintf("Tool call result for read_file: /src/file_%d.go\nLine 1: package main", i),
 		})
 	}
@@ -690,7 +674,7 @@ func TestE2E_OptimizerRedundancyFileReads(t *testing.T) {
 	// Older read at index 1
 	messages = append(messages, api.Message{
 		Role:      "tool",
-		ToolCallId: "call_old_1",
+		ToolCallID: "call_old_1",
 		Content:   fmt.Sprintf("Tool call result for read_file: %s\n%s", filePath, fileContent),
 	})
 
@@ -709,7 +693,7 @@ func TestE2E_OptimizerRedundancyFileReads(t *testing.T) {
 	// Newer (most recent) read at index ~17
 	messages = append(messages, api.Message{
 		Role:      "tool",
-		ToolCallId: "call_new_1",
+		ToolCallID: "call_new_1",
 		Content:   fmt.Sprintf("Tool call result for read_file: %s\n%s", filePath, fileContent),
 	})
 

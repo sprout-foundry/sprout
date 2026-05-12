@@ -78,7 +78,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 			results = append(results, api.Message{
 				Role:       "tool",
 				Content:    "Execution interrupted by user",
-				ToolCallId: toolCallID,
+				ToolCallID: toolCallID,
 			})
 		}
 		return results

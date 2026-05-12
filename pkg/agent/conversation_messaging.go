@@ -385,7 +385,7 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 			if msg.Role == "tool" {
 				removedCount++
 				if ch.agent.debug {
-					ch.agent.debugLog("[clean] Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+					ch.agent.debugLog("[clean] Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallID)
 				}
 			} else {
 				filtered = append(filtered, msg)
@@ -402,12 +402,12 @@ func (ch *ConversationHandler) removeOrphanedToolResults(messages []api.Message)
 	removedCount := 0
 	for _, msg := range messages {
 		if msg.Role == "tool" {
-			if _, ok := validToolCallIDs[msg.ToolCallId]; ok {
+			if _, ok := validToolCallIDs[msg.ToolCallID]; ok {
 				filtered = append(filtered, msg)
 			} else {
 				removedCount++
 				if ch.agent.debug {
-					ch.agent.debugLog("[clean] Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+					ch.agent.debugLog("[clean] Removed orphaned tool result with tool_call_id=%s\n", msg.ToolCallID)
 				}
 			}
 		} else {
@@ -658,19 +658,19 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 					// Verify this tool_call_id is in our expected list
 					found := false
 					for _, expectedID := range expectedToolCallIDs {
-						if messages[j].ToolCallId == expectedID {
+						if messages[j].ToolCallID == expectedID {
 							found = true
 							break
 						}
 					}
 					if !found {
 						ch.agent.debugLog("[!!] Minimax: ERROR - Tool result at index %d has tool_call_id=%s which doesn't match any tool call from assistant at index %d\n",
-							j, messages[j].ToolCallId, i)
+							j, messages[j].ToolCallID, i)
 						ch.agent.debugLog("   Expected IDs: %v\n", expectedToolCallIDs)
 						// THIS IS THE BUG - we have orphaned tool results
 						ch.agent.debugLog("[!!!] MINIMAX BUG: Orphaned tool result detected! This will cause error 2013!\n")
 					} else {
-						ch.agent.debugLog("  Minimax: Tool[%d] result for tool_call_id=%s\n", j, messages[j].ToolCallId)
+						ch.agent.debugLog("  Minimax: Tool[%d] result for tool_call_id=%s\n", j, messages[j].ToolCallID)
 					}
 
 					// Check if we've found all expected tool results
@@ -703,7 +703,7 @@ func (ch *ConversationHandler) validateMinimaxToolCalls(messages []api.Message) 
 	for i, msg := range messages {
 		if msg.Role == "tool" && (firstAssistantWithTools == -1 || i < firstAssistantWithTools) {
 			ch.agent.debugLog("[!!] Minimax: CRITICAL - Tool result at index %d appears before any assistant message with tool calls!\n", i)
-			ch.agent.debugLog("   tool_call_id=%s\n", msg.ToolCallId)
+			ch.agent.debugLog("   tool_call_id=%s\n", msg.ToolCallID)
 			ch.agent.debugLog("[!!!] MINIMAX BUG: Orphaned tool result at beginning! This will cause error 2013!\n")
 		}
 	}

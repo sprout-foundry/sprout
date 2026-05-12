@@ -63,7 +63,7 @@ func TestSanitizeToolMessagesHappyPath(t *testing.T) {
 			Content: "running tool",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_1", Content: "file content"},
+		{Role: "tool", ToolCallID: "call_1", Content: "file content"},
 		{Role: "assistant", Content: "done"},
 	}
 
@@ -88,7 +88,7 @@ func TestSanitizeToolMessagesOrphanedToolResult(t *testing.T) {
 
 	messages := []api.Message{
 		{Role: "user", Content: "hello"},
-		{Role: "tool", ToolCallId: "call_orphan", Content: "no matching assistant"},
+		{Role: "tool", ToolCallID: "call_orphan", Content: "no matching assistant"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -111,7 +111,7 @@ func TestSanitizeToolMessagesMissingToolCallId(t *testing.T) {
 			Content: "doing thing",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "", Content: "missing id"},
+		{Role: "tool", ToolCallID: "", Content: "missing id"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -131,7 +131,7 @@ func TestSanitizeToolMessagesInterleavedUserMessages(t *testing.T) {
 			Content: "ok",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_a", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_a", Content: "content"},
+		{Role: "tool", ToolCallID: "call_a", Content: "content"},
 		{Role: "user", Content: "interjected user message"},
 		{Role: "assistant", Content: "received"},
 	}
@@ -160,7 +160,7 @@ func TestSanitizeToolMessagesMultipleToolCallsOneMissingResult(t *testing.T) {
 			},
 		},
 		// Only call_1 has a result; call_2 result is missing
-		{Role: "tool", ToolCallId: "call_1", Content: "file content"},
+		{Role: "tool", ToolCallID: "call_1", Content: "file content"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -184,16 +184,16 @@ func TestSanitizeToolMessagesMinimaxSecondPass(t *testing.T) {
 		{Role: "user", Content: "start"},
 		// Tool result before any assistant — orphan that first pass would also drop,
 		// but second pass double-checks the final list.
-		{Role: "tool", ToolCallId: "call_orphan", Content: "orphan result 1"},
+		{Role: "tool", ToolCallID: "call_orphan", Content: "orphan result 1"},
 		{
 			Role:    "assistant",
 			Content: "doing work",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_real", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_real", Content: "valid result"},
+		{Role: "tool", ToolCallID: "call_real", Content: "valid result"},
 		// Another orphan after the assistant — first pass catches this since
 		// it wasn't in seenToolCalls. Second pass verifies the final list is clean.
-		{Role: "tool", ToolCallId: "call_orphan2", Content: "orphan result 2"},
+		{Role: "tool", ToolCallID: "call_orphan2", Content: "orphan result 2"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -206,8 +206,8 @@ func TestSanitizeToolMessagesMinimaxSecondPass(t *testing.T) {
 	if out[1].Role != "assistant" {
 		t.Errorf("second message should be assistant, got %s", out[1].Role)
 	}
-	if out[2].Role != "tool" || out[2].ToolCallId != "call_real" {
-		t.Errorf("third message should be valid tool result for call_real, got role=%s id=%s", out[2].Role, out[2].ToolCallId)
+	if out[2].Role != "tool" || out[2].ToolCallID != "call_real" {
+		t.Errorf("third message should be valid tool result for call_real, got role=%s id=%s", out[2].Role, out[2].ToolCallID)
 	}
 }
 
@@ -223,7 +223,7 @@ func TestSanitizeToolMessagesMinimaxDoubleOrphanSecondPass(t *testing.T) {
 		{Role: "user", Content: "go"},
 		// This tool result has ID "call_a" which is emitted by the assistant below.
 		// First pass: call_a is NOT in seenToolCalls yet, so it's dropped.
-		{Role: "tool", ToolCallId: "call_a", Content: "premature result"},
+		{Role: "tool", ToolCallID: "call_a", Content: "premature result"},
 		{
 			Role:    "assistant",
 			Content: "running",
@@ -251,7 +251,7 @@ func TestSanitizeToolMessagesNonMinimaxNoSecondPass(t *testing.T) {
 			Content: "running",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_1", Content: "ok"},
+		{Role: "tool", ToolCallID: "call_1", Content: "ok"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -272,7 +272,7 @@ func TestSanitizeToolMessagesAgentNil(t *testing.T) {
 			Content: "doing",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_1", Content: "result"},
+		{Role: "tool", ToolCallID: "call_1", Content: "result"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -295,7 +295,7 @@ func TestSanitizeToolMessagesToolCallIdEmptyInAssistant(t *testing.T) {
 			ToolCalls: []api.ToolCall{tc},
 		},
 		// This tool result references an ID that was never tracked (empty).
-		{Role: "tool", ToolCallId: "call_ghost", Content: "ghost result"},
+		{Role: "tool", ToolCallID: "call_ghost", Content: "ghost result"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -318,8 +318,8 @@ func TestSanitizeToolMessagesMultipleToolResultsPerCall(t *testing.T) {
 			Content: "running",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_1", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_1", Content: "first result"},
-		{Role: "tool", ToolCallId: "call_1", Content: "duplicate result"},
+		{Role: "tool", ToolCallID: "call_1", Content: "first result"},
+		{Role: "tool", ToolCallID: "call_1", Content: "duplicate result"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)
@@ -340,13 +340,13 @@ func TestSanitizeToolMessagesComplexConversation(t *testing.T) {
 			Content: "I'll write the file",
 			ToolCalls: []api.ToolCall{makeTestToolCall("tc1", "write_file", "")},
 		},
-		{Role: "tool", ToolCallId: "tc1", Content: "file written"},
+		{Role: "tool", ToolCallID: "tc1", Content: "file written"},
 		{
 			Role:    "assistant",
 			Content: "now read it back",
 			ToolCalls: []api.ToolCall{makeTestToolCall("tc2", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "tc2", Content: "file content read"},
+		{Role: "tool", ToolCallID: "tc2", Content: "file content read"},
 		{Role: "assistant", Content: "all done"},
 	}
 
@@ -370,13 +370,13 @@ func TestSanitizeToolMessagesDeepseekProvider(t *testing.T) {
 	// DeepSeek does not get the second pass — only first pass sanitization.
 	messages := []api.Message{
 		{Role: "user", Content: "go"},
-		{Role: "tool", ToolCallId: "no_assistant", Content: "orphan"},
+		{Role: "tool", ToolCallID: "no_assistant", Content: "orphan"},
 		{
 			Role:    "assistant",
 			Content: "ok",
 			ToolCalls: []api.ToolCall{makeTestToolCall("call_ok", "read_file", "")},
 		},
-		{Role: "tool", ToolCallId: "call_ok", Content: "result"},
+		{Role: "tool", ToolCallID: "call_ok", Content: "result"},
 	}
 
 	out := ch.sanitizeToolMessages(messages)

@@ -1,82 +1,37 @@
+// Package api provides API types used across all providers.
+//
+// Seed canonical types (github.com/sprout-foundry/seed/core) are imported
+// via type aliases. Sprout consumes these types — it does not define them.
 package api
 
-import "context"
+import (
+	"context"
 
-// Common types used across all providers
+	core "github.com/sprout-foundry/seed/core"
+)
 
-type ImageData struct {
-	URL    string `json:"url,omitempty"`    // URL to image
-	Base64 string `json:"base64,omitempty"` // Base64 encoded image data
-	Type   string `json:"type,omitempty"`   // MIME type (image/jpeg, image/png, etc.)
-}
+// ---------------------------------------------------------------------------
+// Canonical types — type aliases to seed/core.
+// Seed owns the type definitions; sprout consumes them.
+// ---------------------------------------------------------------------------
 
-type Message struct {
-	Role             string      `json:"role"`
-	Content          string      `json:"content"`
-	ReasoningContent string      `json:"reasoning_content,omitempty"`
-	Images           []ImageData `json:"images,omitempty"`       // Support for multiple images
-	ToolCallId       string      `json:"tool_call_id,omitempty"` // Required for tool role messages
-	ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`   // Required for assistant messages with tool calls
-}
+type ImageData  = core.ImageData
+type Message    = core.Message
+type ToolCall   = core.ToolCall
+type ToolCallFunction = core.ToolCallFunction
+type Tool       = core.Tool
+type ToolFunction   = core.ToolFunction
+type ToolParameters = core.ToolParameters
+type ToolParameter  = core.ToolParameter
+type ChatRequest  = core.ChatRequest
+type ChatResponse = core.ChatResponse
+type ChatChoice   = core.ChatChoice
+type ChatUsage    = core.ChatUsage
+type Choice       = ChatChoice
 
-type ToolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
-}
-
-type Choice struct {
-	Index   int `json:"index"`
-	Message struct {
-		Role             string      `json:"role"`
-		Content          string      `json:"content"`
-		ReasoningContent string      `json:"reasoning_content,omitempty"`
-		Images           []ImageData `json:"images,omitempty"`
-		ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-	} `json:"message"`
-	FinishReason string `json:"finish_reason"`
-}
-
-type ChatResponse struct {
-	ID      string   `json:"id"`
-	Object  string   `json:"object"`
-	Created int64    `json:"created"`
-	Model   string   `json:"model"`
-	Choices []Choice `json:"choices"`
-	Usage   struct {
-		PromptTokens        int     `json:"prompt_tokens"`
-		CompletionTokens    int     `json:"completion_tokens"`
-		TotalTokens         int     `json:"total_tokens"`
-		EstimatedCost       float64 `json:"estimated_cost"`
-		Cost                float64 `json:"cost,omitempty"` // OpenRouter returns cost directly
-		PromptTokensDetails struct {
-			CachedTokens     int  `json:"cached_tokens"`
-			CacheWriteTokens *int `json:"cache_write_tokens"`
-		} `json:"prompt_tokens_details,omitempty"`
-	} `json:"usage"`
-}
-
-type Tool struct {
-	Type     string `json:"type"`
-	Function struct {
-		Name        string      `json:"name"`
-		Description string      `json:"description"`
-		Parameters  interface{} `json:"parameters"`
-	} `json:"function"`
-}
-
-type ChatRequest struct {
-	Model      string    `json:"model"`
-	Messages   []Message `json:"messages"`
-	Tools      []Tool    `json:"tools,omitempty"`
-	ToolChoice string    `json:"tool_choice,omitempty"`
-	MaxTokens  int       `json:"max_tokens,omitempty"`
-	Reasoning  string    `json:"reasoning,omitempty"`
-	Stream     bool      `json:"stream,omitempty"`
-}
+// ---------------------------------------------------------------------------
+// Provider and client interfaces — sprout-specific, not part of seed.
+// ---------------------------------------------------------------------------
 
 // ProviderInterface defines the interface that all providers must implement
 type ProviderInterface interface {
@@ -92,3 +47,6 @@ type ProviderInterface interface {
 	SupportsVision() bool
 	SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 }
+
+// Note: StreamCallback and ModelInfo are defined in streaming.go and models.go
+// respectively to avoid circular import issues.

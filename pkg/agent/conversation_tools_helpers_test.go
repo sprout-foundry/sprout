@@ -22,7 +22,7 @@ func TestSanitizeToolMessages_DropsOrphanedToolMessages(t *testing.T) {
 	ch := &ConversationHandler{agent: &Agent{debug: false}}
 	messages := []api.Message{
 		{Role: "user", Content: "hello"},
-		{Role: "tool", Content: "orphaned", ToolCallId: "missing_id"},
+		{Role: "tool", Content: "orphaned", ToolCallID: "missing_id"},
 		{Role: "assistant", Content: "response"},
 	}
 
@@ -41,7 +41,7 @@ func TestSanitizeToolMessages_KeepsMatchingToolResult(t *testing.T) {
 	messages := []api.Message{
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{tc}},
-		{Role: "tool", Content: "result", ToolCallId: "call_1"},
+		{Role: "tool", Content: "result", ToolCallID: "call_1"},
 	}
 
 	result := ch.sanitizeToolMessages(messages)
@@ -59,7 +59,7 @@ func TestSanitizeToolMessages_DropsToolResultWithoutID(t *testing.T) {
 	messages := []api.Message{
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{tc}},
-		{Role: "tool", Content: "no-id", ToolCallId: ""},
+		{Role: "tool", Content: "no-id", ToolCallID: ""},
 	}
 
 	result := ch.sanitizeToolMessages(messages)

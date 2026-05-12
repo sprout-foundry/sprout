@@ -397,8 +397,8 @@ func (ac *APIClient) printContextBreakdown(messages []api.Message, tools []api.T
 			tokens += api.EstimateTokens(tc.Function.Arguments)
 			tokens += api.ToolCallOverheadTokens
 		}
-		if m.ToolCallId != "" {
-			tokens += api.EstimateTokens(m.ToolCallId)
+		if m.ToolCallID != "" {
+			tokens += api.EstimateTokens(m.ToolCallID)
 			tokens += api.ToolCallIDOverheadTokens
 		}
 		for _, img := range m.Images {
@@ -904,7 +904,7 @@ func (ac *APIClient) deriveUsageMetrics(resp *api.ChatResponse, messages []api.M
 	promptTokens = resp.Usage.PromptTokens
 	completionTokens = resp.Usage.CompletionTokens
 	totalTokens = resp.Usage.TotalTokens
-	cachedTokens = resp.Usage.PromptTokensDetails.CachedTokens
+	cachedTokens = resp.Usage.CachedTokens
 
 	// OpenRouter returns cost directly in the "cost" field
 	// Other providers may return "estimated_cost" or nothing

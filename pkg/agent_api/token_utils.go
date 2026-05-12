@@ -139,8 +139,8 @@ func EstimateInputTokens(messages []Message, tools []Tool) int {
 			inputTokens += EstimateTokens(toolCall.Function.Arguments)
 			inputTokens += ToolCallOverheadTokens
 		}
-		if msg.ToolCallId != "" {
-			inputTokens += EstimateTokens(msg.ToolCallId)
+		if msg.ToolCallID != "" {
+			inputTokens += EstimateTokens(msg.ToolCallID)
 			inputTokens += ToolCallIDOverheadTokens
 		}
 		// Account for message role and formatting overhead

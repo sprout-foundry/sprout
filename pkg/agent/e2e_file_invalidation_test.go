@@ -46,7 +46,7 @@ func addReadFileTurn(messages []api.Message, callID, userMsg, filePath, fileCont
 	messages = append(messages, api.Message{
 		Role:       "tool",
 		Content:    fileReadContent(filePath, fileContent),
-		ToolCallId: callID,
+		ToolCallID: callID,
 	})
 	return messages
 }
@@ -251,7 +251,7 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	// (d) The old read still contains "old content v1".
 	var foundOldContent bool
 	for _, msg := range prepared2 {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_old" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_old" {
 			assert.Contains(t, msg.Content, oldContent,
 				"old read should preserve original content (v1)")
 			foundOldContent = true
@@ -262,7 +262,7 @@ func TestE2E_FileInvalidationPreventsStaleRedundancy(t *testing.T) {
 	// (e) The new read still contains "new content v2".
 	var foundNewContent bool
 	for _, msg := range prepared2 {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_new" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_new" {
 			assert.Contains(t, msg.Content, newContent,
 				"new read should preserve original content (v2)")
 			foundNewContent = true
@@ -388,7 +388,7 @@ func TestE2E_FileReadRedundancyWithSameContentControl(t *testing.T) {
 	//     the file path.
 	var foundOptimizedMsg bool
 	for _, msg := range prepared {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_old" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_old" {
 			assert.Contains(t, msg.Content, "[OPTIMIZED]",
 				"older read should be marked [OPTIMIZED]")
 			assert.Contains(t, msg.Content, filePath,
@@ -404,7 +404,7 @@ func TestE2E_FileReadRedundancyWithSameContentControl(t *testing.T) {
 	// (e) The most recent read preserves its original content.
 	var foundPreservedMsg bool
 	for _, msg := range prepared {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_new" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_new" {
 			assert.Contains(t, msg.Content, sameContent,
 				"newer read should preserve original content")
 			assert.NotContains(t, msg.Content, "[OPTIMIZED]",
@@ -576,7 +576,7 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	//     contain the original file content.
 	var foundOptimizedMsg bool
 	for _, msg := range prepared2 {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_old" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_old" {
 			assert.Contains(t, msg.Content, "[OPTIMIZED]",
 				"older read should be marked [OPTIMIZED]")
 			assert.Contains(t, msg.Content, filePath,
@@ -593,7 +593,7 @@ func TestE2E_FileInvalidationSameContentStillOptimizes(t *testing.T) {
 	//     marked [OPTIMIZED].
 	var foundPreservedMsg bool
 	for _, msg := range prepared2 {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_new" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_new" {
 			assert.Contains(t, msg.Content, sameContent,
 				"newer read should preserve original content")
 			assert.NotContains(t, msg.Content, "[OPTIMIZED]",
@@ -705,7 +705,7 @@ func TestE2E_FileReadRedundancyGapBelowThreshold(t *testing.T) {
 	//     is NOT marked [OPTIMIZED].
 	var foundOldRead bool
 	for _, msg := range prepared {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_old" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_old" {
 			assert.Contains(t, msg.Content, stdContent,
 				"older read should preserve original content (gap < 15)")
 			assert.NotContains(t, msg.Content, "[OPTIMIZED]",
@@ -719,7 +719,7 @@ func TestE2E_FileReadRedundancyGapBelowThreshold(t *testing.T) {
 	// (e) The newer read (call_read_new) also preserves its original content.
 	var foundNewRead bool
 	for _, msg := range prepared {
-		if msg.Role == "tool" && msg.ToolCallId == "call_read_new" {
+		if msg.Role == "tool" && msg.ToolCallID == "call_read_new" {
 			assert.Contains(t, msg.Content, stdContent,
 				"newer read should preserve original content")
 			assert.NotContains(t, msg.Content, "[OPTIMIZED]",

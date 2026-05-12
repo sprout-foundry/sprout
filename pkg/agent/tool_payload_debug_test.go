@@ -18,13 +18,7 @@ func (c *captureToolsClient) SendChatRequest(messages []api.Message, tools []api
 		Choices: []api.Choice{
 			{
 				FinishReason: "stop",
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{
+				Message: api.Message{
 					Role:    "assistant",
 					Content: "ok",
 				},

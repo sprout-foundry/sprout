@@ -115,8 +115,8 @@ func TestHandleTodoWriteValidV2(t *testing.T) {
 		t.Errorf("expected result to mention 2 items, got: %s", result)
 	}
 
-	// Verify the todo manager actually has the items
-	todos := tools.TodoRead()
+	// Verify the agent's todo manager actually has the items
+	todos := a.GetTodoManager().Read()
 	if len(todos) != 2 {
 		t.Fatalf("expected 2 todos in manager, got %d", len(todos))
 	}
@@ -189,10 +189,10 @@ func TestHandleTodoReadEmptyV2(t *testing.T) {
 
 func TestHandleTodoReadWithItemsV2(t *testing.T) {
 	a := newTestAgent(t)
-	defer tools.TodoWrite(nil) // cleanup global state
+	defer a.GetTodoManager().Write(nil) // cleanup
 
-	// Set up some todos
-	tools.TodoWrite([]tools.TodoItem{
+	// Set up some todos in the agent's manager
+	a.GetTodoManager().Write([]tools.TodoItem{
 		{Content: "Task A", Status: "pending"},
 		{Content: "Task B", Status: "in_progress"},
 		{Content: "Task C", Status: "completed"},
@@ -218,10 +218,10 @@ func TestHandleTodoReadWithItemsV2(t *testing.T) {
 
 func TestHandleTodoReadStatusMappingV2(t *testing.T) {
 	a := newTestAgent(t)
-	defer tools.TodoWrite(nil) // cleanup global state
+	defer a.GetTodoManager().Write(nil) // cleanup
 
 	// in_progress should display as "active" in TodoRead
-	tools.TodoWrite([]tools.TodoItem{
+	a.GetTodoManager().Write([]tools.TodoItem{
 		{Content: "In progress task", Status: "in_progress"},
 	})
 

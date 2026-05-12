@@ -119,7 +119,7 @@ func TestFollowsRecentToolResults(t *testing.T) {
 			messages: []api.Message{
 				{Role: "user", Content: "query"},
 				{Role: "assistant", Content: "checking", ToolCalls: []api.ToolCall{{ID: "c1"}}},
-				{Role: "tool", ToolCallId: "c1", Content: "result"},
+				{Role: "tool", ToolCallID: "c1", Content: "result"},
 				{Role: "assistant", Content: "now I have the result"},
 			},
 			expected: true,
@@ -129,8 +129,8 @@ func TestFollowsRecentToolResults(t *testing.T) {
 			messages: []api.Message{
 				{Role: "user", Content: "query"},
 				{Role: "assistant", Content: "checking", ToolCalls: []api.ToolCall{{ID: "c1"}, {ID: "c2"}}},
-				{Role: "tool", ToolCallId: "c1", Content: "result1"},
-				{Role: "tool", ToolCallId: "c2", Content: "result2"},
+				{Role: "tool", ToolCallID: "c1", Content: "result1"},
+				{Role: "tool", ToolCallID: "c2", Content: "result2"},
 				{Role: "assistant", Content: "now I have results"},
 			},
 			expected: true,

@@ -10,7 +10,7 @@ func TestBuildOpenAIChatMessages_ToolConversion(t *testing.T) {
 	messages := []api.Message{
 		{Role: "system", Content: "You are helpful"},
 		{Role: "tool", Content: "Generated output"},
-		{Role: "assistant", Content: "Done", ToolCallId: "call_123"},
+		{Role: "assistant", Content: "Done", ToolCallID: "call_123"},
 	}
 
 	opts := MessageConversionOptions{ConvertToolRoleToUser: true, IncludeToolCallID: true}

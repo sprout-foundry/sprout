@@ -102,8 +102,8 @@ func TestProcessResponsePreservesToolOutputForLLM(t *testing.T) {
 	for _, msg := range prepared {
 		if msg.Role == "tool" {
 			foundTool = true
-			if msg.ToolCallId != assistantMsg.ToolCalls[0].ID {
-				t.Fatalf("tool message tool_call_id mismatch: got %s want %s", msg.ToolCallId, assistantMsg.ToolCalls[0].ID)
+			if msg.ToolCallID != assistantMsg.ToolCalls[0].ID {
+				t.Fatalf("tool message tool_call_id mismatch: got %s want %s", msg.ToolCallID, assistantMsg.ToolCalls[0].ID)
 			}
 			break
 		}

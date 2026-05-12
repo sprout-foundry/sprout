@@ -208,12 +208,12 @@ func TestConversationPruner_pruneByImportanceToolCallAware(t *testing.T) {
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"`
 		}{Name: "read_file", Arguments: ""}}}},
-		{Role: "tool", Content: "file content", ToolCallId: "call-1"},
+		{Role: "tool", Content: "file content", ToolCallID: "call-1"},
 		{Role: "assistant", Content: "calling another tool", ToolCalls: []api.ToolCall{{ID: "call-2", Type: "function", Function: struct {
 			Name      string `json:"name"`
 			Arguments string `json:"arguments"`
 		}{Name: "shell_command", Arguments: ""}}}},
-		{Role: "tool", Content: "command output", ToolCallId: "call-2"},
+		{Role: "tool", Content: "command output", ToolCallID: "call-2"},
 		{Role: "assistant", Content: "here is the result"},
 	}
 

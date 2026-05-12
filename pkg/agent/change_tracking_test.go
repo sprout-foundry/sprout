@@ -455,13 +455,13 @@ func TestConvertToHistoryMessages_ToolCallId(t *testing.T) {
 		{
 			Role:       "tool",
 			Content:    "result",
-			ToolCallId: "call_xyz",
+			ToolCallID: "call_xyz",
 		},
 	}
 
 	result := convertToHistoryMessages(input)
-	if result[0].ToolCallId != "call_xyz" {
-		t.Errorf("expected tool_call_id 'call_xyz', got '%s'", result[0].ToolCallId)
+	if result[0].ToolCallID != "call_xyz" {
+		t.Errorf("expected tool_call_id 'call_xyz', got '%s'", result[0].ToolCallID)
 	}
 }
 

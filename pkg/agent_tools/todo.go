@@ -48,3 +48,16 @@ func (tm *TodoManager) Read() []TodoItem {
 	copy(result, tm.items)
 	return result
 }
+
+// defaultManager is the default TodoManager instance for package-level convenience functions.
+var defaultManager = NewTodoManager()
+
+// TodoWrite is a convenience wrapper that writes todos to the default TodoManager.
+func TodoWrite(todos []TodoItem) string {
+	return defaultManager.Write(todos)
+}
+
+// TodoRead is a convenience wrapper that reads todos from the default TodoManager.
+func TodoRead() []TodoItem {
+	return defaultManager.Read()
+}

@@ -28,30 +28,14 @@ func (t *TestClient) SendChatRequest(messages []api.Message, tools []api.Tool, r
 		Choices: []api.Choice{
 			{
 				Index: 0,
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{
+				Message: api.Message{
 					Role:    "assistant",
 					Content: "Test response from mock provider",
 				},
 				FinishReason: "stop",
 			},
 		},
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: api.ChatUsage{
 			PromptTokens:     10,
 			CompletionTokens: 5,
 			TotalTokens:      15,

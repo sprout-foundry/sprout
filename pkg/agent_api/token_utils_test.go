@@ -167,7 +167,7 @@ func TestEstimateInputTokensIncludesToolMetadata(t *testing.T) {
 			{Role: "tool", Content: "42"},
 		}
 		withToolCallID := []Message{
-			{Role: "tool", Content: "42", ToolCallId: "call_1"},
+			{Role: "tool", Content: "42", ToolCallID: "call_1"},
 		}
 
 		baseTokens := EstimateInputTokens(base, nil)

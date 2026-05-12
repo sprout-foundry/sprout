@@ -31,7 +31,7 @@ func TestShouldRequireOCRBeforeCompletion(t *testing.T) {
 				},
 			},
 		},
-		{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
+		{Role: "tool", ToolCallID: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
 	})
 	ch := NewConversationHandler(agent)
 
@@ -96,7 +96,7 @@ func TestHandleOCRCompletionGate_RemindsThenStops(t *testing.T) {
 				},
 			},
 		},
-		{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 3 and PDF download menu.pdf"},
+		{Role: "tool", ToolCallID: "fetch_1", Content: "Menu page includes Image 3 and PDF download menu.pdf"},
 	})
 	ch := NewConversationHandler(agent)
 	turn := &TurnEvaluation{}

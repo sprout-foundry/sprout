@@ -84,16 +84,16 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 				}
 			}
 		case "tool":
-			if msg.ToolCallId == "" {
+			if msg.ToolCallID == "" {
 				ch.logDroppedToolMessage("missing tool_call_id", msg)
 				continue
 			}
 
-			if _, ok := seenToolCalls[msg.ToolCallId]; ok {
+			if _, ok := seenToolCalls[msg.ToolCallID]; ok {
 				sanitized = append(sanitized, msg)
-				delete(seenToolCalls, msg.ToolCallId)
+				delete(seenToolCalls, msg.ToolCallID)
 			} else {
-				ch.logDroppedToolMessage(fmt.Sprintf("no matching assistant for %s", msg.ToolCallId), msg)
+				ch.logDroppedToolMessage(fmt.Sprintf("no matching assistant for %s", msg.ToolCallID), msg)
 			}
 		default:
 			sanitized = append(sanitized, msg)
@@ -116,11 +116,11 @@ func (ch *ConversationHandler) sanitizeToolMessages(messages []api.Message) []ap
 				finalSanitized = append(finalSanitized, msg)
 			} else if msg.Role == "tool" {
 				// Only keep tool result if we've seen a matching tool call ID
-				if _, ok := validToolCallIds[msg.ToolCallId]; ok {
+				if _, ok := validToolCallIds[msg.ToolCallID]; ok {
 					finalSanitized = append(finalSanitized, msg)
-					delete(validToolCallIds, msg.ToolCallId)
+					delete(validToolCallIds, msg.ToolCallID)
 				} else {
-					ch.agent.debugLog("[!!] Minimax: DROPPING orphaned tool result with tool_call_id=%s\n", msg.ToolCallId)
+					ch.agent.debugLog("[!!] Minimax: DROPPING orphaned tool result with tool_call_id=%s\n", msg.ToolCallID)
 				}
 			} else {
 				finalSanitized = append(finalSanitized, msg)
@@ -151,10 +151,10 @@ func (ch *ConversationHandler) logDroppedToolMessage(reason string, msg api.Mess
 	// Enhanced logging for DeepSeek and Minimax
 	provider := ch.agent.GetProvider()
 	if strings.EqualFold(provider, "deepseek") {
-		ch.agent.debugLog("[!!] DeepSeek: [WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+		ch.agent.debugLog("[!!] DeepSeek: [WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallID, snippet)
 	} else if strings.EqualFold(provider, "minimax") {
-		ch.agent.debugLog("[!!] Minimax: [WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+		ch.agent.debugLog("[!!] Minimax: [WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallID, snippet)
 	} else {
-		ch.agent.debugLog("[WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallId, snippet)
+		ch.agent.debugLog("[WARN] Dropping tool message (%s). tool_call_id=%s snippet=%q\n", reason, msg.ToolCallID, snippet)
 	}
 }

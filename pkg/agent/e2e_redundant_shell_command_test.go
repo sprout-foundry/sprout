@@ -75,7 +75,7 @@ func TestE2E_RedundantShellCommandOptimization(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_old_1",
+		ToolCallID: "call_old_1",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\n%s", cmd, output),
 	})
 
@@ -100,7 +100,7 @@ func TestE2E_RedundantShellCommandOptimization(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_new_1",
+		ToolCallID: "call_new_1",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\n%s", cmd, output),
 	})
 
@@ -119,7 +119,7 @@ func TestE2E_RedundantShellCommandOptimization(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_other",
+		ToolCallID: "call_other",
 		Content:    "Tool call result for shell_command: git status\nOn branch main\nnothing to commit",
 	})
 
@@ -225,7 +225,7 @@ func TestE2E_RedundantShellCommandWithDifferentOutputs(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_build_old",
+		ToolCallID: "call_build_old",
 		Content: fmt.Sprintf("Tool call result for shell_command: %s\n%s",
 			cmd, "build error: undefined: MyFunc"),
 	})
@@ -249,7 +249,7 @@ func TestE2E_RedundantShellCommandWithDifferentOutputs(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_build_new",
+		ToolCallID: "call_build_new",
 		Content: fmt.Sprintf("Tool call result for shell_command: %s\n%s",
 			cmd, "Build succeeded."),
 	})
@@ -321,7 +321,7 @@ func TestE2E_RedundantShellCommandBackToBack(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_vet_1",
+		ToolCallID: "call_vet_1",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\nno issues found", cmd),
 	})
 
@@ -340,7 +340,7 @@ func TestE2E_RedundantShellCommandBackToBack(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_vet_2",
+		ToolCallID: "call_vet_2",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\nno issues found", cmd),
 	})
 
@@ -410,7 +410,7 @@ func TestE2E_RedundantShellCommandThreeOccurrences(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_b1",
+		ToolCallID: "call_b1",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\nundefined: Foo", cmd),
 	})
 
@@ -431,7 +431,7 @@ func TestE2E_RedundantShellCommandThreeOccurrences(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_b2",
+		ToolCallID: "call_b2",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\ncannot find package", cmd),
 	})
 
@@ -452,7 +452,7 @@ func TestE2E_RedundantShellCommandThreeOccurrences(t *testing.T) {
 	})
 	messages = append(messages, api.Message{
 		Role:       "tool",
-		ToolCallId: "call_b3",
+		ToolCallID: "call_b3",
 		Content:    fmt.Sprintf("Tool call result for shell_command: %s\nBuild succeeded.", cmd),
 	})
 

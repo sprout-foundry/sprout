@@ -24,13 +24,7 @@ func (m *mockClient) SendChatRequest(messages []Message, tools []Tool, reasoning
 	}
 	return &ChatResponse{
 		Choices: []Choice{{
-			Message: struct {
-				Role             string      `json:"role"`
-				Content          string      `json:"content"`
-				ReasoningContent string      `json:"reasoning_content,omitempty"`
-				Images           []ImageData `json:"images,omitempty"`
-				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: Message{
 				Content: "test response",
 			},
 		}},
@@ -53,13 +47,7 @@ func (m *mockClient) GetVisionModel() string                                    
 func (m *mockClient) SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	return &ChatResponse{
 		Choices: []Choice{{
-			Message: struct {
-				Role             string      `json:"role"`
-				Content          string      `json:"content"`
-				ReasoningContent string      `json:"reasoning_content,omitempty"`
-				Images           []ImageData `json:"images,omitempty"`
-				ToolCalls        []ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: Message{
 				Content: "vision",
 			},
 		}},

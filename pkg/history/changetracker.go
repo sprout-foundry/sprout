@@ -31,7 +31,7 @@ type APIMessage struct {
 	Role             string        `json:"role"`
 	Content          string        `json:"content"`
 	ReasoningContent string        `json:"reasoning_content,omitempty"`
-	ToolCallId       string        `json:"tool_call_id,omitempty"`
+	ToolCallID       string        `json:"tool_call_id,omitempty"`
 	ToolCalls        []APIToolCall `json:"tool_calls,omitempty"`
 }
 

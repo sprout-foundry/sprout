@@ -203,7 +203,7 @@ func (ch *ConversationHandler) handleToolCalls(ctx *responseContext) responseDec
 			if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
 				ch.agent.debugLog("  [%d] Assistant with %d tool_calls\n", i, len(msg.ToolCalls))
 			} else if msg.Role == "tool" {
-				ch.agent.debugLog("  [%d] Tool response for tool_call_id: %s\n", i, msg.ToolCallId)
+				ch.agent.debugLog("  [%d] Tool response for tool_call_id: %s\n", i, msg.ToolCallID)
 			}
 		}
 	}

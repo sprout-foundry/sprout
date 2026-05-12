@@ -104,7 +104,7 @@ func (ch *ConversationHandler) fetchResultsSuggestImageOrPDFMenu() bool {
 		if msg.Role != "tool" {
 			continue
 		}
-		if _, ok := fetchIDs[msg.ToolCallId]; !ok {
+		if _, ok := fetchIDs[msg.ToolCallID]; !ok {
 			continue
 		}
 		content := strings.ToLower(msg.Content)

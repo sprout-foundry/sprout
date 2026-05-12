@@ -1047,8 +1047,8 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 		}
 
 		// Handle tool call ID inclusion
-		if msg.ToolCallId != "" && p.config.Conversion.IncludeToolCallId {
-			convertedMsg["tool_call_id"] = msg.ToolCallId
+		if msg.ToolCallID != "" && p.config.Conversion.IncludeToolCallID {
+			convertedMsg["tool_call_id"] = msg.ToolCallID
 		}
 
 		// Handle tool role conversion

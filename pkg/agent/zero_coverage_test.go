@@ -760,7 +760,7 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 				return []api.Message{
 					{Role: "user", Content: "search for something"},
 					{Role: "assistant", ToolCalls: []api.ToolCall{tc}},
-					{Role: "tool", ToolCallId: "call_1", Content: "search results"},
+					{Role: "tool", ToolCallID: "call_1", Content: "search results"},
 					{Role: "assistant", Content: "response"},
 				}
 			},
@@ -773,8 +773,8 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 				return []api.Message{
 					{Role: "user", Content: "do two things"},
 					{Role: "assistant", ToolCalls: []api.ToolCall{tc1, tc2}},
-					{Role: "tool", ToolCallId: "call_1", Content: "results 1"},
-					{Role: "tool", ToolCallId: "call_2", Content: "results 2"},
+					{Role: "tool", ToolCallID: "call_1", Content: "results 1"},
+					{Role: "tool", ToolCallID: "call_2", Content: "results 2"},
 				}
 			},
 		},
@@ -786,7 +786,7 @@ func TestValidateDeepSeekToolCalls(t *testing.T) {
 				return []api.Message{
 					{Role: "user", Content: "search"},
 					{Role: "assistant", ToolCalls: []api.ToolCall{tc1, tc2}},
-					{Role: "tool", ToolCallId: "call_1", Content: "results 1"},
+					{Role: "tool", ToolCallID: "call_1", Content: "results 1"},
 				}
 			},
 		},
@@ -832,7 +832,7 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 				return []api.Message{
 					{Role: "user", Content: "search"},
 					{Role: "assistant", ToolCalls: []api.ToolCall{tc}},
-					{Role: "tool", ToolCallId: "call_123", Content: "results"},
+					{Role: "tool", ToolCallID: "call_123", Content: "results"},
 				}
 			},
 		},
@@ -844,8 +844,8 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 				return []api.Message{
 					{Role: "user", Content: "do things"},
 					{Role: "assistant", ToolCalls: []api.ToolCall{tc1, tc2}},
-					{Role: "tool", ToolCallId: "call_a", Content: "results A"},
-					{Role: "tool", ToolCallId: "call_b", Content: "results B"},
+					{Role: "tool", ToolCallID: "call_a", Content: "results A"},
+					{Role: "tool", ToolCallID: "call_b", Content: "results B"},
 				}
 			},
 		},
@@ -853,7 +853,7 @@ func TestValidateMinimaxToolCalls(t *testing.T) {
 			name: "orphaned tool result before any assistant",
 			setupMessages: func() []api.Message {
 				return []api.Message{
-					{Role: "tool", ToolCallId: "orphan_call", Content: "orphan result"},
+					{Role: "tool", ToolCallID: "orphan_call", Content: "orphan result"},
 					{Role: "user", Content: "search"},
 				}
 			},

@@ -13,7 +13,7 @@ func TestDeriveUsageMetricsUsesProviderUsageWhenPresent(t *testing.T) {
 	resp.Usage.CompletionTokens = 30
 	resp.Usage.TotalTokens = 150
 	resp.Usage.EstimatedCost = 0.001
-	resp.Usage.PromptTokensDetails.CachedTokens = 40
+	resp.Usage.CachedTokens = 40
 
 	prompt, completion, total, cost, cached, estimated := ac.deriveUsageMetrics(resp, nil, nil)
 	if estimated {

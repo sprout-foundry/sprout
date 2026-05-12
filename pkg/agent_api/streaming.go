@@ -174,7 +174,15 @@ func (b *StreamingResponseBuilder) ProcessChunk(chunk *StreamingChatResponse) er
 
 	// Process usage data (usually comes in final chunk)
 	if chunk.Usage != nil {
-		b.response.Usage = *chunk.Usage
+		b.response.Usage = ChatUsage{
+			PromptTokens:     chunk.Usage.PromptTokens,
+			CompletionTokens: chunk.Usage.CompletionTokens,
+			TotalTokens:      chunk.Usage.TotalTokens,
+			EstimatedCost:    chunk.Usage.EstimatedCost,
+			Cost:             chunk.Usage.Cost,
+			CachedTokens:     chunk.Usage.PromptTokensDetails.CachedTokens,
+			CacheWriteTokens: chunk.Usage.PromptTokensDetails.CacheWriteTokens,
+		}
 	}
 
 	return nil

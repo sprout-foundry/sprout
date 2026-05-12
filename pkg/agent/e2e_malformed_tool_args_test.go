@@ -236,7 +236,7 @@ func TestE2E_MalformedToolArgsRejectionAndRecovery(t *testing.T) {
 	foundLinkedResult := false
 	for i := validAssistantIdx + 1; i < len(agent.state.GetMessages()); i++ {
 		if agent.state.GetMessages()[i].Role == "tool" {
-			assert.Equal(t, validToolCallID, agent.state.GetMessages()[i].ToolCallId,
+			assert.Equal(t, validToolCallID, agent.state.GetMessages()[i].ToolCallID,
 				"tool result's ToolCallId should match the valid assistant's tool call ID")
 			foundLinkedResult = true
 			break

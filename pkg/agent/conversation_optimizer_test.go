@@ -42,7 +42,7 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	// The FIRST read should be optimized, the LAST read should be preserved
 	messages := []api.Message{
 		{Role: "system", Content: "System prompt"}, // index 0
-		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-1"}, // index 1 - FIRST read (should be optimized)
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallID: "call-1"}, // index 1 - FIRST read (should be optimized)
 		{Role: "assistant", Content: "Message 2"},  // index 2
 		{Role: "user", Content: "Message 3"},       // index 3
 		{Role: "assistant", Content: "Message 4"},  // index 4
@@ -58,7 +58,7 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 		{Role: "assistant", Content: "Message 14"}, // index 14
 		{Role: "user", Content: "Message 15"},      // index 15
 		{Role: "assistant", Content: "Message 16"}, // index 16
-		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallId: "call-2"}, // index 17 - LAST read (should be preserved)
+		{Role: "tool", Content: "Tool call result for read_file: agent/agent.go\npackage agent\n\nimport (\n\t\"fmt\"\n)\n\nfunc main() {\n\tfmt.Println(\"Hello\")\n}", ToolCallID: "call-2"}, // index 17 - LAST read (should be preserved)
 	}
 
 	optimized := optimizer.OptimizeConversation(messages)
@@ -73,8 +73,8 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	if !containsString(firstReadMsg.Content, "[OPTIMIZED]") {
 		t.Errorf("Expected first read (index 1) to contain [OPTIMIZED], got: %s", firstReadMsg.Content)
 	}
-	if firstReadMsg.ToolCallId != "call-1" {
-		t.Errorf("Expected first read (index 1) to preserve ToolCallId, got: %s", firstReadMsg.ToolCallId)
+	if firstReadMsg.ToolCallID != "call-1" {
+		t.Errorf("Expected first read (index 1) to preserve ToolCallId, got: %s", firstReadMsg.ToolCallID)
 	}
 
 	// Check that the LAST file read was preserved (index 17)
@@ -82,8 +82,8 @@ func TestConversationOptimizerWithOldReads(t *testing.T) {
 	if containsString(lastReadMsg.Content, "[OPTIMIZED]") {
 		t.Errorf("Expected last read (index 17) to NOT contain [OPTIMIZED], got: %s", lastReadMsg.Content)
 	}
-	if lastReadMsg.ToolCallId != "call-2" {
-		t.Errorf("Expected last read (index 17) to preserve ToolCallId, got: %s", lastReadMsg.ToolCallId)
+	if lastReadMsg.ToolCallID != "call-2" {
+		t.Errorf("Expected last read (index 17) to preserve ToolCallId, got: %s", lastReadMsg.ToolCallID)
 	}
 
 }
@@ -109,7 +109,7 @@ func TestCompactConversationRewritesOldMiddleHistory(t *testing.T) {
 		})
 		messages = append(messages, api.Message{
 			Role:       "tool",
-			ToolCallId: toolCallID,
+			ToolCallID: toolCallID,
 			Content:    "Tool call result for read_file: pkg/foo.go\npackage foo\n\nfunc Example() {}\n",
 		})
 	}
@@ -315,12 +315,12 @@ func TestCompactConversationWithLLMSummary(t *testing.T) {
 		api.Message{Role: "user", Content: "Check the remaining issues"},
 		api.Message{Role: "assistant", Content: "Looking at the remaining issues now."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-1"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-1", Content: "Tool call result for read_file: auth/token.go\npackage auth\n\nfunc Token() {}"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-1", Content: "Tool call result for read_file: auth/token.go\npackage auth\n\nfunc Token() {}"},
 		api.Message{Role: "assistant", Content: "Found the issue in token handling."},
 		api.Message{Role: "user", Content: "Fix it please"},
 		api.Message{Role: "assistant", Content: "Applying the fix now."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-2"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-2", Content: "Tool call result for edit_file: auth/token.go\nok"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-2", Content: "Tool call result for edit_file: auth/token.go\nok"},
 		api.Message{Role: "assistant", Content: "Fix applied successfully."},
 		api.Message{Role: "user", Content: "Run the tests"},
 		api.Message{Role: "assistant", Content: "Running the test suite now."},
@@ -330,12 +330,12 @@ func TestCompactConversationWithLLMSummary(t *testing.T) {
 		api.Message{Role: "user", Content: "Good, let me check the build"},
 		api.Message{Role: "assistant", Content: "Building the project now."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-3"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-3", Content: "Tool call result for shell_command: go build ./...\nok"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-3", Content: "Tool call result for shell_command: go build ./...\nok"},
 		api.Message{Role: "assistant", Content: "Build succeeded."},
 		api.Message{Role: "user", Content: "Check the linting"},
 		api.Message{Role: "assistant", Content: "Running linter now."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-4"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-4", Content: "Tool call result for shell_command: golangci-lint run\nno issues found"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-4", Content: "Tool call result for shell_command: golangci-lint run\nno issues found"},
 		api.Message{Role: "assistant", Content: "No linting issues found."},
 		api.Message{Role: "user", Content: "Great, what's next?"},
 		api.Message{Role: "assistant", Content: "The refactoring is complete."},
@@ -396,7 +396,7 @@ func TestCompactConversationWithLLMSummary(t *testing.T) {
 	// The recent tool chain should remain intact
 	foundRecentTool := false
 	for _, msg := range compacted {
-		if msg.Role == "tool" && msg.ToolCallId == "recent-call-2" {
+		if msg.Role == "tool" && msg.ToolCallID == "recent-call-2" {
 			foundRecentTool = true
 			break
 		}
@@ -438,12 +438,12 @@ func TestCompactConversationLLMErrorFallsBackToGoSummary(t *testing.T) {
 		api.Message{Role: "user", Content: "Check the remaining issues"},
 		api.Message{Role: "assistant", Content: "Looking at the remaining issues now."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-fb"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-fb", Content: "Tool call result for shell_command: go test ./...\nok"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-fb", Content: "Tool call result for shell_command: go test ./...\nok"},
 		api.Message{Role: "assistant", Content: "Tests are passing."},
 		api.Message{Role: "user", Content: "Great, wrap up."},
 		api.Message{Role: "assistant", Content: "Wrapping up the session."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-fb2"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-fb2", Content: "Tool call result for shell_command: go build ./...\nok"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-fb2", Content: "Tool call result for shell_command: go build ./...\nok"},
 		api.Message{Role: "assistant", Content: "Build succeeded."},
 		api.Message{Role: "user", Content: "Done"},
 		api.Message{Role: "assistant", Content: "All done."},
@@ -455,7 +455,7 @@ func TestCompactConversationLLMErrorFallsBackToGoSummary(t *testing.T) {
 		api.Message{Role: "user", Content: "Run integration tests"},
 		api.Message{Role: "assistant", Content: "Running integration tests."},
 		api.Message{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "recent-call-fb3"}}},
-		api.Message{Role: "tool", ToolCallId: "recent-call-fb3", Content: "Tool call result for shell_command: go test -race ./... ok"},
+		api.Message{Role: "tool", ToolCallID: "recent-call-fb3", Content: "Tool call result for shell_command: go test -race ./... ok"},
 		api.Message{Role: "assistant", Content: "Integration tests passed."},
 		api.Message{Role: "user", Content: "Final review"},
 		api.Message{Role: "assistant", Content: "Final review complete."},
@@ -499,7 +499,7 @@ func TestCompactConversationLLMErrorFallsBackToGoSummary(t *testing.T) {
 
 	foundRecentTool := false
 	for _, msg := range compacted {
-		if msg.Role == "tool" && msg.ToolCallId == "recent-call-fb2" {
+		if msg.Role == "tool" && msg.ToolCallID == "recent-call-fb2" {
 			foundRecentTool = true
 			break
 		}

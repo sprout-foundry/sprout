@@ -218,7 +218,7 @@ func TestHandleFinishReason_StopWithTentativePostToolContentContinues(t *testing
 	agent.state.SetMessages([]api.Message{
 		{Role: "user", Content: "Investigate the issue"},
 		{Role: "assistant", Content: "Let me inspect the logs first.", ToolCalls: []api.ToolCall{{ID: "call_1"}}},
-		{Role: "tool", ToolCallId: "call_1", Content: "log output"},
+		{Role: "tool", ToolCallID: "call_1", Content: "log output"},
 		{Role: "assistant", Content: "Let me investigate the issue by checking the backend logs and testing directly:"},
 	})
 	ch := &ConversationHandler{
@@ -248,7 +248,7 @@ func TestHandleFinishReason_StopWithAcknowledgedNextStepPostToolContentContinues
 	agent.state.SetMessages([]api.Message{
 		{Role: "user", Content: "Add validation events"},
 		{Role: "assistant", Content: "I will inspect the events package.", ToolCalls: []api.ToolCall{{ID: "call_1"}}},
-		{Role: "tool", ToolCallId: "call_1", Content: "events constants already exist"},
+		{Role: "tool", ToolCallID: "call_1", Content: "events constants already exist"},
 		{Role: "assistant", Content: "Good, the constant already exists. Now I need to add the ValidationEvent struct type and helper functions to the events package:"},
 	})
 	ch := &ConversationHandler{
@@ -275,7 +275,7 @@ func TestHandleFinishReason_StopWithConcretePostToolAnswerCompletes(t *testing.T
 	agent.state.SetMessages([]api.Message{
 		{Role: "user", Content: "Investigate the issue"},
 		{Role: "assistant", Content: "Checking logs.", ToolCalls: []api.ToolCall{{ID: "call_1"}}},
-		{Role: "tool", ToolCallId: "call_1", Content: "panic on startup"},
+		{Role: "tool", ToolCallID: "call_1", Content: "panic on startup"},
 		{Role: "assistant", Content: "I found the root cause and updated the startup guard to handle nil config safely."},
 	})
 	ch := &ConversationHandler{

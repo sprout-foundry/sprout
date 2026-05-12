@@ -29,7 +29,7 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 			toolResults = append(toolResults, api.Message{
 				Role:       "tool",
 				Content:    "Execution interrupted by user",
-				ToolCallId: toolCallID,
+				ToolCallID: toolCallID,
 			})
 			return toolResults
 		default:
@@ -100,7 +100,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		return api.Message{
 			Role:       "tool",
 			Content:    fmt.Sprintf("Error parsing arguments: %v", parseErr),
-			ToolCallId: toolCallID,
+			ToolCallID: toolCallID,
 		}
 	}
 	if repairedArgs {
@@ -115,7 +115,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		return api.Message{
 			Role:       "tool",
 			Content:    "Circuit breaker: This action has been attempted too many times with the same parameters.",
-			ToolCallId: toolCallID,
+			ToolCallID: toolCallID,
 		}
 	}
 
@@ -212,7 +212,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 			return api.Message{
 				Role:       "tool",
 				Content:    fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeErr),
-				ToolCallId: toolCallID,
+				ToolCallID: toolCallID,
 			}
 		}
 		
@@ -258,7 +258,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		return api.Message{
 			Role:       "tool",
 			Content:    modelResult,
-			ToolCallId: toolCallID,
+			ToolCallID: toolCallID,
 		}
 	}
 
@@ -284,7 +284,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	return api.Message{
 		Role:       "tool",
 		Content:    modelResult,
-		ToolCallId: toolCallID,
+		ToolCallID: toolCallID,
 		Images:     images,
 	}
 }

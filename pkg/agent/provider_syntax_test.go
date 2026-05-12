@@ -27,7 +27,7 @@ func sampleMessagesWithTools() []api.Message {
 				{ID: "call-1"},
 			},
 		},
-		{Role: "tool", Content: "Tool call result for read_file: a.go\nx", ToolCallId: "call-1"},
+		{Role: "tool", Content: "Tool call result for read_file: a.go\nx", ToolCallID: "call-1"},
 		{Role: "assistant", Content: "final answer"},
 	}
 }

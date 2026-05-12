@@ -120,8 +120,8 @@ func TestExecuteShellCommandBackground_SessionCreationFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when background session creation fails")
 	}
-	if !strings.Contains(err.Error(), "failed to execute background command") {
-		t.Errorf("expected error message to contain 'failed to execute background command', got %q", err.Error())
+	if !strings.Contains(err.Error(), "execute background command") {
+		t.Errorf("expected error message to contain 'execute background command', got %q", err.Error())
 	}
 	if !strings.Contains(err.Error(), "failed to create PTY session") {
 		t.Errorf("expected error message to contain underlying cause 'failed to create PTY session', got %q", err.Error())

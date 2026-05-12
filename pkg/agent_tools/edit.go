@@ -12,35 +12,35 @@ import (
 func EditFile(ctx context.Context, filePath, oldString, newString string) (string, error) {
 	// Step 1: Validate inputs
 	if err := validateEditInputs(filePath, oldString, newString); err != nil {
-		return "", fmt.Errorf("failed to validate edit inputs: %w", err)
+		return "", fmt.Errorf("validate edit inputs: %w", err)
 	}
 
 	// Step 2: Resolve and validate file
 	cleanPath, originalMode, err := resolveAndValidateFile(ctx, filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve and validate file %s: %w", filePath, err)
+		return "", fmt.Errorf("resolve and validate file %s: %w", filePath, err)
 	}
 
 	// Step 3: Read file content
 	contentStr, err := readFileContent(cleanPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 	}
 
 	// Step 4: Determine and perform replacement
 	newContent, err := determineAndPerformReplacement(contentStr, oldString, newString, cleanPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to perform replacement: %w", err)
+		return "", fmt.Errorf("perform replacement: %w", err)
 	}
 
 	// Step 5: Write file with preserved permissions
 	if err := writeFileWithPermissions(cleanPath, []byte(newContent), originalMode.Perm()); err != nil {
-		return "", fmt.Errorf("failed to write file %s: %w", cleanPath, err)
+		return "", fmt.Errorf("write file %s: %w", cleanPath, err)
 	}
 
 	// Step 6: Verify edit was successful
 	if err := verifyEdit(cleanPath, newString); err != nil {
-		return "", fmt.Errorf("failed to verify edit: %w", err)
+		return "", fmt.Errorf("verify edit: %w", err)
 	}
 
 	// Return concise confirmation with character counts
@@ -75,11 +75,11 @@ func validateEditInputs(filePath, oldString, newString string) error {
 	}
 
 	if err := checkString(oldString, "old string"); err != nil {
-		return fmt.Errorf("validateEditInputs: old string: %w", err)
+		return fmt.Errorf("validate old string: %w", err)
 	}
 
 	if err := checkString(newString, "new string"); err != nil {
-		return fmt.Errorf("validateEditInputs: new string: %w", err)
+		return fmt.Errorf("validate new string: %w", err)
 	}
 
 	return nil
@@ -101,7 +101,7 @@ func resolveAndValidateFile(ctx context.Context, filePath string) (string, os.Fi
 		return "", 0, fmt.Errorf("file does not exist: %s", cleanPath)
 	}
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to stat file %s: %w", cleanPath, err)
+		return "", 0, fmt.Errorf("stat file %s: %w", cleanPath, err)
 	}
 
 	// Preserve original file permissions
@@ -114,7 +114,7 @@ func resolveAndValidateFile(ctx context.Context, filePath string) (string, os.Fi
 func readFileContent(cleanPath string) (string, error) {
 	content, err := os.ReadFile(cleanPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 	}
 
 	return string(content), nil
@@ -177,13 +177,13 @@ func determineAndPerformReplacement(content, oldString, newString, cleanPath str
 		// Use smart replacement with normalization
 		newContent, err = performNormalizedReplacement(content, oldString, newString)
 		if err != nil {
-			return "", fmt.Errorf("failed to perform normalized replacement: %w", err)
+			return "", fmt.Errorf("perform normalized replacement: %w", err)
 		}
 	} else {
 		// Use standard exact replacement
 		newContent, err = performExactReplacement(content, oldString, newString, cleanPath)
 		if err != nil {
-			return "", fmt.Errorf("failed to perform exact replacement: %w", err)
+			return "", fmt.Errorf("perform exact replacement: %w", err)
 		}
 	}
 
@@ -194,7 +194,7 @@ func determineAndPerformReplacement(content, oldString, newString, cleanPath str
 func writeFileWithPermissions(cleanPath string, content []byte, perm os.FileMode) error {
 	err := os.WriteFile(cleanPath, content, perm)
 	if err != nil {
-		return fmt.Errorf("failed to write file %s: %w", cleanPath, err)
+		return fmt.Errorf("write file %s: %w", cleanPath, err)
 	}
 	return nil
 }
@@ -204,7 +204,7 @@ func verifyEdit(cleanPath string, newString string) error {
 	// Verify the edit was successful
 	updatedContent, err := os.ReadFile(cleanPath)
 	if err != nil {
-		return fmt.Errorf("failed to verify file edit by reading back %s: %w", cleanPath, err)
+		return fmt.Errorf("verify file edit by reading back %s: %w", cleanPath, err)
 	}
 
 	// Check that the replacement actually happened

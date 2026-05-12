@@ -42,7 +42,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	// SECURITY: Validate path is within working directory (handles symlinks properly)
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve file path: %w", err)
+		return "", fmt.Errorf("resolve file path: %w", err)
 	}
 
 	// Security check passed - now check if file exists
@@ -51,7 +51,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		return "", fmt.Errorf("file does not exist: %s", cleanPath)
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to access file %s: %w", cleanPath, err)
+		return "", fmt.Errorf("access file %s: %w", cleanPath, err)
 	}
 
 	// Check if it's a directory
@@ -76,7 +76,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	// Open and read the file
 	file, err := os.Open(cleanPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to open file %s: %w", cleanPath, err)
+		return "", fmt.Errorf("open file %s: %w", cleanPath, err)
 	}
 	defer file.Close()
 
@@ -88,7 +88,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		// For line-range reads, just read up to maxFileSize (could be lineRangeMaxSize)
 		content, err = io.ReadAll(file)
 		if err != nil {
-			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
 		if int64(len(content)) > int64(maxFileSize) {
 			content = content[:maxFileSize]
@@ -102,7 +102,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		head := make([]byte, headSize)
 		n, err := file.Read(head)
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
 		head = head[:n]
 		headLines = strings.Count(string(head), "\n")
@@ -113,13 +113,13 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 			tailOffset = 0
 		}
 		if _, err := file.Seek(tailOffset, io.SeekStart); err != nil {
-			return "", fmt.Errorf("failed to seek in file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("seek in file %s: %w", cleanPath, err)
 		}
 
 		tail := make([]byte, tailSize)
 		n, err = file.Read(tail)
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
 		tail = tail[:n]
 		tailLines = strings.Count(string(tail), "\n")
@@ -135,7 +135,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		// For smaller files, read all content
 		content, err = io.ReadAll(file)
 		if err != nil {
-			return "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
 	}
 

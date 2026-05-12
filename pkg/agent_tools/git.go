@@ -64,7 +64,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 
 	// Validate git arguments for dangerous patterns before proceeding
 	if err := ValidateGitArgs(op.Args); err != nil {
-		return "", fmt.Errorf("git argument validation failed: %w", err)
+		return "", fmt.Errorf("git argument validation: %w", err)
 	}
 
 	// All git operations require user approval - build the full git command for display
@@ -74,7 +74,7 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 	if approvalPrompter != nil {
 		approved, err := approvalPrompter.PromptForApproval(cmd)
 		if err != nil {
-			return "", fmt.Errorf("failed to get user approval: %w", err)
+			return "", fmt.Errorf("get user approval: %w", err)
 		}
 		if !approved {
 			return "", fmt.Errorf("git operation cancelled by user")
@@ -146,7 +146,7 @@ func executeGitCommand(ctx context.Context, op GitOperationType, args string) (s
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("git command failed: %w\nOutput: %s", err, string(output))
+		return "", fmt.Errorf("git command: %w\nOutput: %s", err, string(output))
 	}
 
 	return string(output), nil

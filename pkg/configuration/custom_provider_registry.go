@@ -275,14 +275,14 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 	}
 
 	conversion := normalized.Conversion
-	if !conversion.IncludeToolCallId &&
+	if !conversion.IncludeToolCallID &&
 		!conversion.ConvertToolRoleToUser &&
 		conversion.ReasoningContentField == "" &&
 		!conversion.ArgumentsAsJSON &&
 		!conversion.SkipToolExecutionSummary &&
 		conversion.ForceToolCallType == "" {
 		conversion = providers.MessageConversion{
-			IncludeToolCallId:        true,
+			IncludeToolCallID:        true,
 			SkipToolExecutionSummary: true,
 		}
 	}

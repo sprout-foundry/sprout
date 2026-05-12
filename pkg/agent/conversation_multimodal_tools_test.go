@@ -105,7 +105,7 @@ func TestShouldRequireOCRBeforeCompletion_FalseForDirectMultimodalImages(t *test
 				},
 			},
 		},
-		{Role: "tool", ToolCallId: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
+		{Role: "tool", ToolCallID: "fetch_1", Content: "Menu page includes Image 4: https://cdn.example.com/menu.jpg"},
 	})
 	ch := NewConversationHandler(agent)
 

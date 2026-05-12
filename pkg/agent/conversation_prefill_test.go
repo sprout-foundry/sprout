@@ -132,7 +132,7 @@ func TestStripLeadingAssistantPrefill(t *testing.T) {
 						Arguments string `json:"arguments"`
 					}{Name: "shell", Arguments: `{}`}}},
 				},
-				{Role: "tool", Content: "output", ToolCallId: "call_abc"},
+				{Role: "tool", Content: "output", ToolCallID: "call_abc"},
 				{Role: "assistant", Content: "The tool completed"},
 			},
 			expectedLen:   4,

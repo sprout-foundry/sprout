@@ -30,6 +30,8 @@ type OutputManager interface {
 	SetEventMetadata(meta map[string]interface{})
 	SetEventMetadataUnlocked(meta map[string]interface{})
 	GetEventMetadataMutex() *sync.RWMutex
+	SetTerminalWriter(fn func(string))
+	GetTerminalWriter() func(string)
 }
 
 // AgentOutputManager implements OutputManager.
@@ -47,6 +49,7 @@ type AgentOutputManager struct {
 	outputRouter      *OutputRouter
 	eventMetadataMu   sync.RWMutex
 	eventMetadata     map[string]interface{}
+	terminalWriter    func(string)
 }
 
 // NewAgentOutputManager creates a new AgentOutputManager with default values.
@@ -152,4 +155,12 @@ func (m *AgentOutputManager) SetEventMetadataUnlocked(meta map[string]interface{
 
 func (m *AgentOutputManager) GetEventMetadataMutex() *sync.RWMutex {
 	return &m.eventMetadataMu
+}
+
+func (m *AgentOutputManager) SetTerminalWriter(fn func(string)) {
+	m.terminalWriter = fn
+}
+
+func (m *AgentOutputManager) GetTerminalWriter() func(string) {
+	return m.terminalWriter
 }

@@ -17,15 +17,7 @@ import (
 
 // ProcessQuery handles the main conversation loop with the LLM
 func (a *Agent) ProcessQuery(userQuery string) (string, error) {
-	a.initSubManagers()
-
-	// Opt-in: use seed's conversation loop when SEED_LOOP=1
-	if UseSeedLoop() {
-		return a.processQueryWithSeed(userQuery)
-	}
-
-	handler := NewConversationHandler(a)
-	return handler.ProcessQuery(userQuery)
+	return a.processQueryWithSeed(userQuery)
 }
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions

@@ -15,11 +15,28 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/spec"
+	"github.com/sprout-foundry/sprout/pkg/utils"
+)
+
+// ---------------------------------------------------------------------------
+// Default retry configuration (mimics old APIClient defaults)
+// ---------------------------------------------------------------------------
+
+const (
+	defaultMaxRetries   = 3
+	defaultBaseRetryDelay = 1 * time.Second
 )
 
 // ---------------------------------------------------------------------------
@@ -28,28 +45,209 @@ import (
 
 // sproutProvider adapts sprout's ClientInterface to seed's Provider interface.
 type sproutProvider struct {
-	client api.ClientInterface
+	agent      *Agent
+	client     api.ClientInterface
+	pastedImages map[string][]api.ImageData // path → image data (for multimodal attachment)
 }
 
 // NewSproutProvider creates a Provider that wraps a sprout ClientInterface.
-func NewSproutProvider(client api.ClientInterface) (core.Provider, error) {
+func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider, error) {
 	if client == nil {
 		return nil, fmt.Errorf("sprout provider requires a non-nil client")
 	}
-	return &sproutProvider{client: client}, nil
+	return &sproutProvider{
+		agent:        agent,
+		client:       client,
+		pastedImages: make(map[string][]api.ImageData),
+	}, nil
 }
 
-func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+// RegisterPastedImages associates extracted image data with file paths so
+// they can be attached to the first user message in each Chat request.
+func (sp *sproutProvider) RegisterPastedImages(images map[string][]api.ImageData) {
+	if images == nil {
+		return
+	}
+	for k, v := range images {
+		sp.pastedImages[k] = v
+	}
+}
+
+// isRetryableError checks whether an error is transient and should be retried.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	retryKeywords := []string{
+		"stream error",
+		"INTERNAL_ERROR",
+		"connection reset",
+		"EOF",
+		"timeout",
+		"502",
+		"upstream error",
+	}
+	for _, kw := range retryKeywords {
+		if strings.Contains(strings.ToLower(msg), strings.ToLower(kw)) {
+			return true
+		}
+	}
+	return false
+}
+
+// doChatWithRetry executes a chat request with exponential backoff retry.
+func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	var lastErr error
+	for attempt := 0; attempt <= defaultMaxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff with jitter
+			delay := defaultBaseRetryDelay * time.Duration(1<<(attempt-1))
+			// Add jitter (0 to 500ms)
+			jitter := time.Duration(time.Now().UnixNano()%500000000)
+			if delay+jitter > 0 {
+				select {
+				case <-time.After(delay + jitter):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+		}
+
+		resp, err := sp.doChatOnce(ctx, req)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+
+		if !isRetryableError(err) {
+			// Non-retryable error — return immediately
+			return nil, err
+		}
+	}
+
+	// Max retries exhausted
+	return nil, fmt.Errorf("transient error during chat (%s): %w", sp.GetModel(), lastErr)
+}
+
+// doChatOnce performs a single chat request, attaching pasted images to the
+// first user message if the client supports vision.
+func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	if sp.agent != nil && sp.agent.output.IsStreamingEnabled() {
+		return sp.doChatStream(ctx, req)
+	}
+	return sp.doChatNonStream(ctx, req)
+}
+
+// doChatNonStream performs a non-streaming chat request.
+func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	// Attach pasted images to the first user message
+	messages := sp.attachPastedImages(req.Messages)
+
 	sproutReq := seedRequestToSprout(req)
-	resp, err := sp.client.SendChatRequest(sproutReq.Messages, sproutReq.Tools, sproutReq.Reasoning, false)
+	resp, err := sp.client.SendChatRequest(messages, sproutReq.Tools, sproutReq.Reasoning, false)
 	if err != nil {
 		return nil, err
 	}
 	return sproutResponseToSeed(resp), nil
 }
 
+// doChatStream performs a streaming chat request.
+func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	// Attach pasted images to the first user message
+	messages := sp.attachPastedImages(req.Messages)
+
+	// Create a stream handler that writes to the agent's output manager
+	handler := &streamHandler{}
+
+	sproutReq := seedRequestToSprout(req)
+	callback := func(content string, contentType string) {
+		switch contentType {
+		case "reasoning":
+			handler.reasoning = true
+			if sp.agent != nil && sp.agent.output.GetReasoningCallback() != nil {
+				sp.agent.output.GetReasoningCallback()(content)
+			}
+			sp.agent.output.GetReasoningBuffer().WriteString(content)
+		default:
+			handler.reasoning = false
+			if sp.agent != nil && sp.agent.output.GetStreamingCallback() != nil {
+				sp.agent.output.GetStreamingCallback()(content)
+			}
+			sp.agent.output.GetStreamingBuffer().WriteString(content)
+		}
+	}
+
+	resp, err := sp.client.SendChatRequestStream(messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
+	if err != nil {
+		return nil, err
+	}
+	return sproutResponseToSeed(resp), nil
+}
+
+// streamHandler implements core.StreamHandler
+type streamHandler struct {
+	reasoning bool
+}
+
+func (h *streamHandler) OnContent(content string) {
+	// Already handled in the callback
+}
+
+func (h *streamHandler) OnReasoning(content string) {
+	// Already handled in the callback
+}
+
+func (h *streamHandler) OnDone(resp *core.ChatResponse) {
+	// Already handled in the callback
+}
+
+func (h *streamHandler) OnError(err error) {
+	// Already handled in the callback
+}
+
+// attachPastedImages attaches previously registered image data to the first
+// user message in the request. This makes pasted images available to the
+// vision model through the seed request pipeline.
+func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Message {
+	if len(sp.pastedImages) == 0 {
+		return messages
+	}
+
+	if !sp.client.SupportsVision() {
+		return messages
+	}
+
+	out := make([]core.Message, len(messages))
+	copy(out, messages)
+
+	for i := range out {
+		if out[i].Role == "user" {
+			// Collect all registered image data
+			var allImages []api.ImageData
+			for _, imgs := range sp.pastedImages {
+				allImages = append(allImages, imgs...)
+			}
+			if len(allImages) > 0 {
+				// Append to any existing images
+				out[i].Images = append(out[i].Images, allImages...)
+			}
+			break // Only attach to the first user message
+		}
+	}
+
+	return out
+}
+
+func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	return sp.doChatWithRetry(ctx, req)
+}
+
 func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest, handler core.StreamHandler) error {
 	sproutReq := seedRequestToSprout(req)
+
+	// Attach pasted images to the first user message
+	messages := sp.attachPastedImages(req.Messages)
 
 	callback := func(content string, contentType string) {
 		switch contentType {
@@ -60,18 +258,44 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 		}
 	}
 
-	resp, err := sp.client.SendChatRequestStream(
-		sproutReq.Messages, sproutReq.Tools,
-		sproutReq.Reasoning, false,
-		callback,
-	)
+	// Use doChatWithRetry for streaming too, but wrap it to deliver through the handler
+	resp, err := sp.doChatWithRetryStreaming(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, callback)
 	if err != nil {
 		handler.OnError(err)
 		return err
 	}
-	// Seed expects OnDone to be called after streaming finishes.
 	handler.OnDone(sproutResponseToSeed(resp))
 	return nil
+}
+
+// doChatWithRetryStreaming performs a streaming chat request with retry.
+func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
+	var lastErr error
+	for attempt := 0; attempt <= defaultMaxRetries; attempt++ {
+		if attempt > 0 {
+			delay := defaultBaseRetryDelay * time.Duration(1<<(attempt-1))
+			jitter := time.Duration(time.Now().UnixNano()%500000000)
+			if delay+jitter > 0 {
+				select {
+				case <-time.After(delay + jitter):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+		}
+
+		resp, err := sp.client.SendChatRequestStream(messages, tools, reasoning, false, callback)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+
+		if !isRetryableError(err) {
+			return nil, err
+		}
+	}
+
+	return nil, fmt.Errorf("transient error during chat (%s): %w", sp.GetModel(), lastErr)
 }
 
 func (sp *sproutProvider) Info() core.ProviderInfo {
@@ -81,6 +305,13 @@ func (sp *sproutProvider) Info() core.ProviderInfo {
 		ContextSize: ctxLimit,
 		HasVision:   sp.client.SupportsVision(),
 	}
+}
+
+func (sp *sproutProvider) GetModel() string {
+	if sp.client != nil {
+		return sp.client.GetModel()
+	}
+	return "unknown"
 }
 
 func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
@@ -101,20 +332,27 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 
 // sproutToolExecutor adapts an agent.ToolExecutor to seed's ToolExecutor interface.
 type sproutToolExecutor struct {
-	executor *ToolExecutor
+	agent *Agent
+	exec  *ToolExecutor
 }
 
 // NewSproutToolExecutor creates a ToolExecutor that wraps a sprout agent ToolExecutor.
-func NewSproutToolExecutor(executor *ToolExecutor) core.ToolExecutor {
-	return &sproutToolExecutor{executor: executor}
+func NewSproutToolExecutor(agent *Agent, exec *ToolExecutor) core.ToolExecutor {
+	return &sproutToolExecutor{agent: agent, exec: exec}
 }
 
 func (ste *sproutToolExecutor) GetTools() []core.Tool {
+	// Call agent's getOptimizedToolDefinitions to get dynamic tool set
+	// including MCP tools, persona filtering, and custom provider filtering
+	if ste.agent != nil {
+		tools := ste.agent.getOptimizedToolDefinitions(nil)
+		return tools
+	}
 	return api.GetToolDefinitions()
 }
 
 func (ste *sproutToolExecutor) Execute(ctx context.Context, calls []core.ToolCall) []core.Message {
-	sproutResults := ste.executor.ExecuteTools(calls)
+	sproutResults := ste.exec.ExecuteTools(calls)
 	return sproutResults
 }
 
@@ -180,6 +418,41 @@ func sproutResponseToSeed(resp *api.ChatResponse) *core.ChatResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Error wrapping (mimics old ErrorHandler.HandleAPIFailure)
+// ---------------------------------------------------------------------------
+
+// wrapError converts a non-retryable error into a user-friendly string.
+// This is called when seed.Run() returns an error that should be shown
+// to the user rather than propagated as a Go error.
+func wrapError(err error) string {
+	msg := err.Error()
+
+	// If the error is already wrapped with "chat failed:" prefix, strip it
+	// to avoid double-wrapping
+	chatFailedRe := regexp.MustCompile(`^chat failed: (.+)$`)
+	if matches := chatFailedRe.FindStringSubmatch(msg); len(matches) > 1 {
+		msg = matches[1]
+	}
+
+	// Check for various error types and generate user-friendly messages
+	if strings.Contains(msg, "authentication") || strings.Contains(msg, "invalid API key") || strings.Contains(msg, "unauthorized") {
+		return fmt.Sprintf("Authentication failed: %s. Please check your API key and configuration.", msg)
+	}
+	if strings.Contains(msg, "rate limit") || strings.Contains(msg, "rate_limit") || strings.Contains(msg, "429") {
+		return fmt.Sprintf("Rate limit exceeded: %s. Please wait before making more requests.", msg)
+	}
+	if strings.Contains(msg, "transient error") || strings.Contains(msg, "max retries exhausted") {
+		return fmt.Sprintf("The AI service encountered a temporary error and could not recover after several attempts: %s", msg)
+	}
+	if strings.Contains(msg, "context deadline") || strings.Contains(msg, "timeout") {
+		return fmt.Sprintf("The request timed out: %s. Please try again.", msg)
+	}
+
+	// Default: return the error message as-is
+	return fmt.Sprintf("An error occurred: %s", msg)
+}
+
+// ---------------------------------------------------------------------------
 // Integration entry point
 // ---------------------------------------------------------------------------
 
@@ -188,65 +461,430 @@ func sproutResponseToSeed(resp *api.ChatResponse) *core.ChatResponse {
 func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	a.initSubManagers()
 
-	// 1. Create seed provider adapter wrapping sprout's ClientInterface
-	provider, err := NewSproutProvider(a.client)
+	// ---- Pre-loop hooks (moved from old ConversationHandler.ProcessQuery) ----
+
+	// Reset termination reason for fresh query
+	a.state.SetLastRunTerminationReason("")
+
+	// Publish query started event
+	a.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, a.GetProvider(), a.GetModel()))
+
+	// Reset streaming buffers for new query
+	a.output.GetStreamingBuffer().Reset()
+	a.output.GetReasoningBuffer().Reset()
+
+	// Enable change tracking
+	a.EnableChangeTracking(userQuery)
+
+	// Reset circuit breaker history for a fresh query
+	if a.state.GetCircuitBreaker() != nil {
+		a.state.GetCircuitBreaker().mu.Lock()
+		for key := range a.state.GetCircuitBreaker().Actions {
+			delete(a.state.GetCircuitBreaker().Actions, key)
+		}
+		a.state.GetCircuitBreaker().mu.Unlock()
+		if a.debug {
+			a.debugLog("DEBUG: Reset circuit breaker for new query\n")
+		}
+	}
+
+	// Process images if present — multimodal support
+	images, processedQuery, err := a.processImagesInQuery(userQuery)
+	if err != nil {
+		a.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
+		return "", fmt.Errorf("failed to process images in query: %w", err)
+	}
+
+	// Set conversation start time for duration calculation
+	a.conversationStartTime = time.Now()
+
+	// Build the user message with processed (cleaned) query and images
+	userMessage := api.Message{
+		Role:    "user",
+		Content: processedQuery,
+		Images:  images,
+	}
+
+	// Register pasted images with the provider for attachment during Chat requests
+	// The map key is the file path so the provider can match them up.
+	pastedImageMap := make(map[string][]api.ImageData)
+	if len(images) > 0 {
+		// All images are from the same query — group them under a single key
+		pastedImageMap["_current"] = images
+	}
+
+	// Save pre-seed message count and user message for later merge
+	preSeedMsgCount := len(a.state.GetMessages())
+	preSeedUserMsg := userMessage
+
+	// Create seed provider adapter wrapping sprout's ClientInterface
+	prov, err := NewSproutProvider(a, a.client)
 	if err != nil {
 		return "", fmt.Errorf("failed to create seed provider adapter: %w", err)
 	}
 
-	// 2. Create seed tool executor adapter wrapping sprout's ToolExecutor
-	toolExec := NewSproutToolExecutor(NewToolExecutor(a))
+	_ = prov // provider ready for seed agent construction
 
-	// 3. Build seed Agent options
+	// Create seed tool executor adapter wrapping sprout's ToolExecutor
+	executor := NewToolExecutor(a)
+	toolExec := NewSproutToolExecutor(a, executor)
+
+	// Build seed Agent options
 	opts := core.Options{
-		Provider:       provider,
+		Provider:       prov,
 		Executor:       toolExec,
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
-		EventPublisher: a.eventBus, // sprout's EventBus implements Publish(string, any)
+		EventPublisher: a.eventBusOrNil(), // nil-safe: returns no-op publisher if eventBus not set
 	}
 
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}
 
-	// 4. Create seed Agent
+	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to create seed agent: %w", err)
 	}
 
-	// 5. Run the query through seed's conversation loop
-	result, err := seedAgent.Run(context.Background(), userQuery)
+	// Run the query through seed's conversation loop
+	// Use the processed (cleaned) query so image placeholders are replaced
+	result, err := seedAgent.Run(context.Background(), processedQuery)
 	if err != nil {
-		return "", err
+		// Wrap the error into a user-friendly message (mimics old HandleAPIFailure)
+		wrapped := wrapError(err)
+		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
+
+		// Sync whatever state we can before returning
+		a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+
+		// Finalize
+		a.finalizeConversationPostHooks(wrapped, processedQuery, preSeedMsgCount)
+		return wrapped, nil
 	}
 
-	// 6. Sync state back to sprout's agent state manager
-	a.syncSeedStateToSprout(seedAgent)
+	// Sync state back to sprout's agent manager
+	a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+
+	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
+
+	// Commit tracked changes
+	if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
+		if commitErr := a.CommitChanges("Task completed"); commitErr != nil {
+			a.debugLog("Warning: Failed to commit changes: %v\n", commitErr)
+		}
+	}
+
+	// Run self-review gate if changes were tracked
+	if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
+		if err := a.runSelfReviewGate(); err != nil {
+			a.publishEvent(events.EventTypeError, events.ErrorEvent("Self-review gate failed", err))
+			return "", fmt.Errorf("failed self-review gate: %w", err)
+		}
+	}
+
+	// Finalize post-loop tasks
+	a.finalizeConversationPostHooks(result, processedQuery, preSeedMsgCount)
+
+	// If streaming was enabled and content was streamed, return empty string
+	// to avoid duplicate display in the console
+	if a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
+		return "", nil
+	}
 
 	return result, nil
 }
 
-// syncSeedStateToSprout copies conversation state from the seed agent back to
-// sprout's state manager so that subsequent queries have up-to-date history.
-func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
+// finalizeConversationPostHooks runs post-loop hooks shared by success and error paths.
+func (a *Agent) finalizeConversationPostHooks(result string, processedQuery string, preSeedMsgCount int) {
+	// Maybe checkpoint completed turn
+	a.maybeCheckpointCompletedTurn(processedQuery, preSeedMsgCount, len(a.state.GetMessages()))
+
+	// Publish query completed event
+	var finalContent string
+	messages := a.state.GetMessages()
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" {
+			finalContent = messages[i].Content
+			break
+		}
+	}
+	// Fallback to the result string
+	if finalContent == "" {
+		finalContent = result
+	}
+
+	duration := time.Since(a.conversationStartTime)
+	completedEvent := events.QueryCompletedEvent(
+		processedQuery,
+		finalContent,
+		a.GetTotalTokens(),
+		a.GetTotalCost(),
+		duration,
+	)
+	if reason := a.GetLastRunTerminationReason(); reason != "" {
+		completedEvent["status"] = reason
+	}
+	a.publishEvent(events.EventTypeQueryCompleted, completedEvent)
+}
+
+// maybeCheckpointCompletedTurn checks if a turn checkpoint should be recorded
+// for a completed or max-iterations conversation turn.
+func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIndex, numMessages int) {
+	if a.state == nil {
+		return
+	}
+	messages := a.state.GetMessages()
+	if queryStartIndex < 0 || queryStartIndex >= numMessages {
+		return
+	}
+
+	reason := a.GetLastRunTerminationReason()
+	if reason != RunTerminationCompleted && reason != RunTerminationMaxIterations {
+		return
+	}
+
+	endIndex := numMessages - 1
+	hasAssistant := false
+	for i := queryStartIndex; i <= endIndex; i++ {
+		if messages[i].Role == "assistant" {
+			hasAssistant = true
+			break
+		}
+	}
+	if !hasAssistant {
+		return
+	}
+
+	a.RecordTurnCheckpointAsync(queryStartIndex, endIndex)
+}
+
+// syncSeedStateToSprout merges seed's state back into sprout's state manager,
+// preserving pre-existing messages (historical context) and the user message
+// that was constructed before seed.Run() (with images and cleaned content).
+func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message, preSeedMsgCount int) {
 	if a.state == nil {
 		return
 	}
 
 	seedState := seedAgent.State()
+	if seedState == nil {
+		return
+	}
 
-	// Convert seed messages to sprout types (identity — types are aliases)
-	sproutMsgs := seedState.Messages()
-	a.state.SetMessages(sproutMsgs)
+	// Get seed's messages
+	seedMsgs := seedState.Messages()
+	if len(seedMsgs) == 0 {
+		return
+	}
+
+	// Get existing messages from sprout state (pre-seed historical messages)
+	existingMsgs := append([]api.Message(nil), a.state.GetMessages()...)
+
+	// Filter seed's messages: remove the first user message (seed creates one
+	// from the query string, but we already have the correct user message with
+	// cleaned content and images).
+	seedNonUserMsgs := make([]api.Message, 0, len(seedMsgs))
+	skipFirstUser := true
+	for _, msg := range seedMsgs {
+		if skipFirstUser && msg.Role == "user" {
+			skipFirstUser = false
+			continue
+		}
+		seedNonUserMsgs = append(seedNonUserMsgs, msg)
+	}
+
+	// Determine where to insert the user message:
+	// - If there are existing messages (historical), append userMsg after them.
+	// - If no existing messages, the user message goes first.
+	insertIdx := len(existingMsgs)
+
+	// Insert the user message with images and cleaned content
+	if insertIdx == 0 {
+		// No existing messages — user message goes first
+		existingMsgs = append(existingMsgs, userMsg)
+	} else {
+		// Insert between existing and seed messages
+		newMsgs := make([]api.Message, 0, len(existingMsgs)+1+len(seedNonUserMsgs))
+		newMsgs = append(newMsgs, existingMsgs...)
+		newMsgs = append(newMsgs, userMsg)
+		newMsgs = append(newMsgs, seedNonUserMsgs...)
+		existingMsgs = newMsgs
+	}
+
+	// Set the merged messages
+	a.state.SetMessages(existingMsgs)
 
 	// Sync token counts
 	a.state.SetTotalTokens(seedState.TotalTokens())
+
+	// Sync cost
+	a.state.SetTotalCost(seedState.TotalCost())
+
+	// Calculate iteration count from messages — each assistant message represents one turn
+	assistantCount := 0
+	for _, msg := range existingMsgs {
+		if msg.Role == "assistant" {
+			assistantCount++
+		}
+	}
+
+	// Determine termination reason from conversation state:
+	// - If the max iterations limit was set and the assistant count matches it, we hit max iterations.
+	// - Otherwise we completed normally.
+	terminationReason := ""
+	if a.maxIterations > 0 && assistantCount >= a.maxIterations {
+		terminationReason = RunTerminationMaxIterations
+	} else if assistantCount > 0 {
+		terminationReason = RunTerminationCompleted
+	}
+	a.state.SetLastRunTerminationReason(terminationReason)
+
+	// Set iteration count (0-indexed from count)
+	if assistantCount > 0 {
+		a.state.SetCurrentIteration(assistantCount - 1)
+	} else {
+		a.state.SetCurrentIteration(0)
+	}
+
+	if a.debug {
+		a.debugLog("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
+			len(existingMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
+	}
 }
+
+// eventBusOrNil returns the agent's event bus if available, or a no-op
+// EventPublisher to prevent nil pointer dereferences in seed's loop.
+func (a *Agent) eventBusOrNil() core.EventPublisher {
+	if a.eventBus != nil {
+		return a.eventBus
+	}
+	return noopEventPublisher{}
+}
+
+// noopEventPublisher is a no-op EventPublisher used when no event bus is set.
+type noopEventPublisher struct{}
+
+func (noopEventPublisher) Publish(string, any) {}
 
 // UseSeedLoop returns true if the agent should use seed's conversation loop
 // instead of the native sprout ConversationHandler.
+// DEPRECATED: Always returns true now that seed is the only path.
+// Kept for backward compatibility with code that checks this value.
 func UseSeedLoop() bool {
-	return configuration.GetEnvSimple("SEED_LOOP") == "1"
+	return true
+}
+
+// ---------------------------------------------------------------------------
+// Self-review gate (moved from conversation_handler_review.go)
+// ---------------------------------------------------------------------------
+
+// runSelfReviewGate runs self-review validation after conversation completion.
+func (a *Agent) runSelfReviewGate() error {
+	if configuration.GetEnvSimple("SKIP_SELF_REVIEW_GATE") == "1" {
+		a.PrintLineAsync("[WARN] Self-review gate skipped (SPROUT_SKIP_SELF_REVIEW_GATE=1)")
+		return nil
+	}
+	activePersona := a.GetActivePersona()
+	if !isSelfReviewGatePersonaEnabled(activePersona) {
+		if strings.TrimSpace(activePersona) == "" {
+			a.PrintLineAsync("[info] Self-review gate skipped (persona=<none>)")
+		} else {
+			a.PrintLineAsync(fmt.Sprintf("[info] Self-review gate skipped (persona=%s)", activePersona))
+		}
+		return nil
+	}
+
+	revisionID := strings.TrimSpace(a.GetRevisionID())
+	if revisionID == "" {
+		return agenterrors.NewPermanentError("self-review gate blocked completion: no revision ID available for changed task", nil)
+	}
+
+	var cfgErr error
+	cfg := a.GetConfigManager().GetConfig()
+	if cfg == nil {
+		cfg, cfgErr = configuration.Load()
+		if cfgErr != nil {
+			return fmt.Errorf("self-review gate blocked completion: failed to load config: %w", cfgErr)
+		}
+	}
+	mode := cfg.GetSelfReviewGateMode()
+	if mode == configuration.SelfReviewGateModeOff {
+		a.PrintLineAsync("[info] Self-review gate skipped (mode=off)")
+		return nil
+	}
+	if mode == configuration.SelfReviewGateModeCode && !hasCodeLikeTrackedFiles(a.GetTrackedFiles()) {
+		a.PrintLineAsync("[info] Self-review gate skipped (mode=code, no code files changed)")
+		return nil
+	}
+
+	logger := utils.GetLogger(true)
+	result, err := spec.ReviewTrackedChanges(revisionID, cfg, logger)
+	if err != nil {
+		return fmt.Errorf("self-review gate blocked completion: %w", err)
+	}
+	if result.ScopeResult != nil && !result.ScopeResult.InScope {
+		summary := strings.TrimSpace(result.ScopeResult.Summary)
+		if summary == "" {
+			summary = "scope violations detected"
+		}
+		return fmt.Errorf("self-review gate blocked completion: %s", summary)
+	}
+
+	a.PrintLineAsync(fmt.Sprintf("[OK] Self-review gate passed: revision %s is within scope", revisionID))
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Utility functions moved from deleted files
+// ---------------------------------------------------------------------------
+
+func hasCodeLikeTrackedFiles(files []string) bool {
+	if len(files) == 0 {
+		return false
+	}
+
+	codeExtensions := map[string]struct{}{
+		".go": {}, ".py": {}, ".js": {}, ".ts": {}, ".tsx": {}, ".jsx": {}, ".java": {},
+		".rs": {}, ".c": {}, ".cc": {}, ".cpp": {}, ".h": {}, ".hh": {}, ".hpp": {}, ".cs": {},
+		".rb": {}, ".php": {}, ".swift": {}, ".kt": {}, ".kts": {}, ".scala": {}, ".sh": {},
+		".bash": {}, ".zsh": {}, ".fish": {}, ".sql": {}, ".html": {}, ".css": {}, ".scss": {},
+		".vue": {}, ".svelte": {}, ".yaml": {}, ".yml": {}, ".toml": {}, ".ini": {}, ".json": {},
+		".xml": {}, ".proto": {}, ".tf": {},
+	}
+	codeBasenames := map[string]struct{}{
+		"dockerfile":       {},
+		"makefile":         {},
+		"justfile":         {},
+		"cmakelists.txt":   {},
+		"build.gradle":     {},
+		"build.gradle.kts": {},
+	}
+
+	for _, f := range files {
+		path := strings.TrimSpace(f)
+		if path == "" {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if _, ok := codeExtensions[ext]; ok {
+			return true
+		}
+		base := strings.ToLower(filepath.Base(path))
+		if _, ok := codeBasenames[base]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isSelfReviewGatePersonaEnabled(persona string) bool {
+	switch strings.ToLower(strings.TrimSpace(persona)) {
+	case "orchestrator", "repo_orchestrator", "coder":
+		return true
+	default:
+		return false
+	}
 }

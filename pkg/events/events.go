@@ -44,6 +44,10 @@ type EventBus struct {
 	subscribers map[string]chan UIEvent
 	mutex       sync.RWMutex
 	nextID      int64
+
+	// drainMu serializes critical event delivery so that concurrent
+	// critical events don't race on the drain-then-send sequence.
+	drainMu sync.Mutex
 }
 
 // NewEventBus creates a new event bus
@@ -99,16 +103,23 @@ func (eb *EventBus) Publish(eventType string, data any) {
 	// Publish to all subscribers without holding the lock
 	for _, ch := range subscribers {
 		if isCritical {
-			// For critical events, drain one stale event to make room
-			// so the security dialog is always delivered to the client.
+			// For critical events, serialize the drain-then-send to
+			// prevent concurrent critical events from racing on the
+			// same subscriber channel (which could lose events).
+			eb.drainMu.Lock()
+			// Drain one stale event to make room so the security dialog
+			// is always delivered to the client.
 			select {
 			case ch <- event:
+				eb.drainMu.Unlock()
 			default:
 				select {
 				case <-ch:
 					ch <- event
+					eb.drainMu.Unlock()
 				default:
 					// Channel is empty but concurrently closed; give up.
+					eb.drainMu.Unlock()
 				}
 			}
 		} else {

@@ -65,6 +65,9 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	// Use the tool registry for data-driven tool execution
 	_, result, err := registry.ExecuteTool(context.Background(), toolName, args, a)
 
+	// Track tool call count
+	a.state.IncrementTotalToolCalls()
+
 	// If tool not found in registry, check for special cases
 	if err != nil && strings.Contains(err.Error(), "unknown tool") {
 		// Handle mcp_tools meta-tool

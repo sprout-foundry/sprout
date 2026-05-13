@@ -542,6 +542,12 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		opts.SystemPrompt = a.systemPrompt
 	}
 
+	// Seed the agent with the existing conversation history so that
+	// multi-turn continuity is preserved across queries.
+	if msgs := a.state.GetMessages(); len(msgs) > 0 {
+		opts.InitialMessages = msgs
+	}
+
 	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {
@@ -660,9 +666,11 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 	a.RecordTurnCheckpointAsync(queryStartIndex, endIndex)
 }
 
-// syncSeedStateToSprout merges seed's state back into sprout's state manager,
-// preserving pre-existing messages (historical context) and the user message
-// that was constructed before seed.Run() (with images and cleaned content).
+// syncSeedStateToSprout merges seed's state back into sprout's state manager.
+// Since the seed agent is now created with InitialMessages (the existing
+// conversation history), seed's final state contains the complete message
+// sequence: [historical msgs, new user msg, assistant msg, tool msgs, ...].
+// We simply replace sprout's messages with seed's messages and sync counters.
 func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message, preSeedMsgCount int) {
 	if a.state == nil {
 		return
@@ -673,48 +681,11 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 		return
 	}
 
-	// Get seed's messages
 	seedMsgs := seedState.Messages()
-	if len(seedMsgs) == 0 {
-		return
-	}
 
-	// Get existing messages from sprout state (pre-seed historical messages)
-	existingMsgs := append([]api.Message(nil), a.state.GetMessages()...)
-
-	// Filter seed's messages: remove the first user message (seed creates one
-	// from the query string, but we already have the correct user message with
-	// cleaned content and images).
-	seedNonUserMsgs := make([]api.Message, 0, len(seedMsgs))
-	skipFirstUser := true
-	for _, msg := range seedMsgs {
-		if skipFirstUser && msg.Role == "user" {
-			skipFirstUser = false
-			continue
-		}
-		seedNonUserMsgs = append(seedNonUserMsgs, msg)
-	}
-
-	// Determine where to insert the user message:
-	// - If there are existing messages (historical), append userMsg after them.
-	// - If no existing messages, the user message goes first.
-	insertIdx := len(existingMsgs)
-
-	// Insert the user message with images and cleaned content
-	if insertIdx == 0 {
-		// No existing messages — user message goes first
-		existingMsgs = append(existingMsgs, userMsg)
-	} else {
-		// Insert between existing and seed messages
-		newMsgs := make([]api.Message, 0, len(existingMsgs)+1+len(seedNonUserMsgs))
-		newMsgs = append(newMsgs, existingMsgs...)
-		newMsgs = append(newMsgs, userMsg)
-		newMsgs = append(newMsgs, seedNonUserMsgs...)
-		existingMsgs = newMsgs
-	}
-
-	// Set the merged messages
-	a.state.SetMessages(existingMsgs)
+	// Seed now has the full history (via InitialMessages) plus new messages
+	// from this query. Replace sprout's messages entirely.
+	a.state.SetMessages(seedMsgs)
 
 	// Sync token counts
 	a.state.SetTotalTokens(seedState.TotalTokens())
@@ -722,17 +693,15 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 	// Sync cost
 	a.state.SetTotalCost(seedState.TotalCost())
 
-	// Calculate iteration count from messages — each assistant message represents one turn
+	// Calculate iteration count from seed's messages
 	assistantCount := 0
-	for _, msg := range existingMsgs {
+	for _, msg := range seedMsgs {
 		if msg.Role == "assistant" {
 			assistantCount++
 		}
 	}
 
-	// Determine termination reason from conversation state:
-	// - If the max iterations limit was set and the assistant count matches it, we hit max iterations.
-	// - Otherwise we completed normally.
+	// Determine termination reason
 	terminationReason := ""
 	if a.maxIterations > 0 && assistantCount >= a.maxIterations {
 		terminationReason = RunTerminationMaxIterations
@@ -741,7 +710,6 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 	}
 	a.state.SetLastRunTerminationReason(terminationReason)
 
-	// Set iteration count (0-indexed from count)
 	if assistantCount > 0 {
 		a.state.SetCurrentIteration(assistantCount - 1)
 	} else {
@@ -750,7 +718,7 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 
 	if a.debug {
 		a.debugLog("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
-			len(existingMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
+			len(seedMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
 	}
 }
 

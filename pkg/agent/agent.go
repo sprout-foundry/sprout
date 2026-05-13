@@ -108,4 +108,11 @@ type Agent struct {
 
 	// Embedding index manager for duplicate detection on file writes.
 	embeddingMgr *embedding.EmbeddingManager
+
+	// SubagentRunner manages in-process subagent execution.
+	subagentRunner *SubagentRunner
+
+	// isSubagent is true when this agent instance was spawned as a subagent.
+	// Used to prevent nested subagent spawning and to skip interactive prompts.
+	isSubagent bool
 }

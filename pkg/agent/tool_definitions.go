@@ -13,7 +13,6 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -453,11 +452,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
-	// CRITICAL: Prevent subagents from creating nested subagents
-	// This check ensures that subagents (identified by SPROUT_SUBAGENT env var)
-		// cannot spawn further subagents, preventing runaway agent chains
-	if configuration.GetEnvSimple("SUBAGENT") == "1" {
-		if toolName == "run_subagent" || toolName == "run_parallel_subagents" || toolName == "ask_user" {
+		// CRITICAL: Prevent subagents from creating nested subagents
+	// This check ensures that subagents cannot spawn further subagents, preventing runaway agent chains
+	if agent != nil && agent.IsSubagent() {if toolName == "run_subagent" || toolName == "run_parallel_subagents" || toolName == "ask_user" {
 			var errMsg string
 			switch toolName {
 			case "ask_user":
@@ -485,7 +482,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			}
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
-			isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
+			isSubagent := agent.IsSubagent()
 
 			// Prefer webui approval path when a browser tab is connected.
 			// When the process has an active webui client, the query likely
@@ -669,8 +666,7 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	}
 
 	// Subagents cannot prompt — return unapproved so the error propagates
-	isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1" || configuration.GetEnvSimple("SUBAGENT") == "1"
-	if isSubagent {
+	if agent.IsSubagent() {
 		agent.debugLog("Subagent encountered filesystem security error for %s, delegating to primary agent\n", filePath)
 		return ctx, false
 	}

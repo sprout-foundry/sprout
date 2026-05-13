@@ -147,8 +147,12 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 	// Terminal: write via streamingCallback if set (real-time character output)
 	callback, mu := r.getStreamingCallback()
 	if callback != nil {
+		// TryLock prevents self-deadlock if callback re-enters the output router
+		locked := false
 		if mu != nil {
-			mu.Lock()
+			locked = mu.TryLock()
+		}
+		if locked {
 			defer mu.Unlock()
 		}
 		callback(chunk)
@@ -183,6 +187,8 @@ func (r *OutputRouter) RouteTerminalOnly(message string) {
 // writeTerminalMessage writes a message to the terminal with appropriate formatting.
 // It acquires the outputMutex for thread safety, then routes through the
 // streamingCallback (if set) or prints directly.
+// Uses TryLock to prevent self-deadlock when the streaming callback re-enters
+// the output router (e.g., callback → PrintLine → writeTerminalMessage).
 func (r *OutputRouter) writeTerminalMessage(message string) {
 	if message == "" {
 		return
@@ -193,18 +199,23 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 		message += "\n"
 	}
 
-	// Acquire output mutex for thread-safe terminal output
+	// Acquire output mutex for thread-safe terminal output.
+	// TryLock prevents self-deadlock if the streaming callback re-enters
+	// this method (reentrant call from same goroutine).
 	agent := r.agent
 	var mu *sync.Mutex
 	if agent != nil {
 		mu = agent.output.GetOutputMutex()
 	}
+	locked := false
 	if mu != nil {
-		mu.Lock()
+		locked = mu.TryLock()
+	}
+	if locked {
 		defer mu.Unlock()
 	}
 
-	// Route through streamingCallback if available (still under mutex for ordering)
+	// Route through streamingCallback if available
 	if agent != nil && agent.output.IsStreamingEnabled() && agent.output.GetStreamingCallback() != nil {
 		agent.output.GetStreamingCallback()(message)
 		return

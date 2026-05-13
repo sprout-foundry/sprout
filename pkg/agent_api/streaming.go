@@ -301,7 +301,17 @@ func (r *SSEReader) Read() error {
 	return r.ReadWithTimeout(0) // Default: no timeout
 }
 
-// ReadWithTimeout processes the SSE stream with a timeout
+// sseLine is a single line read result from the background reader goroutine.
+type sseLine struct {
+	line string
+	err  error
+}
+
+// ReadWithTimeout processes the SSE stream with a timeout.
+// Each line read is performed in a short-lived goroutine so that the
+// select can respond to the timeout without blocking the main loop.
+// The background goroutine will exit when the underlying HTTP response
+// body is closed (which triggers ReadString to return an error).
 func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 	var event string
 	var dataBuilder strings.Builder
@@ -320,18 +330,16 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 	}
 
 	for {
-		// Use a goroutine to read with timeout
-		readChan := make(chan struct {
-			line string
-			err  error
-		}, 1)
+		// Use a goroutine to read with timeout.
+		// Note: if a timeout fires, the goroutine may block on ReadString
+		// until the underlying connection is closed. This is acceptable
+		// because SSE readers are always backed by HTTP response bodies
+		// that will be closed by the HTTP client or server.
+		readChan := make(chan sseLine, 1)
 
 		go func() {
 			line, err := r.reader.ReadString('\n')
-			readChan <- struct {
-				line string
-				err  error
-			}{line, err}
+			readChan <- sseLine{line: line, err: err}
 		}()
 
 		select {

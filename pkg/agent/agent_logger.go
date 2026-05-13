@@ -85,7 +85,9 @@ func (l *AgentLogger) contextFields() map[string]string {
 	return fields
 }
 
-// writeEntry formats and writes the log entry
+// writeEntry formats and writes the log entry.
+// Uses TryLock to prevent self-deadlock if any internal call re-enters
+// the logger (e.g., state access triggering another debugLog call).
 func (l *AgentLogger) writeEntry(level, message string, extraFields map[string]string) {
 	if l == nil {
 		return
@@ -96,7 +98,18 @@ func (l *AgentLogger) writeEntry(level, message string, extraFields map[string]s
 		return
 	}
 
-	l.mu.Lock()
+	// TryLock prevents self-deadlock on reentrant calls from state access.
+	if !l.mu.TryLock() {
+		// Reentrant call — write directly to file/stderr without formatting
+		// to avoid losing the message while preventing deadlock.
+		if l.file != nil {
+			timestamp := time.Now().Format("15:04:05.000")
+			_, _ = l.file.WriteString(fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, message))
+		} else {
+			fmt.Fprintf(os.Stderr, "[%s] [%s] %s\n", time.Now().Format("15:04:05.000"), level, message)
+		}
+		return
+	}
 	defer l.mu.Unlock()
 
 	timestamp := time.Now().Format("15:04:05.000")

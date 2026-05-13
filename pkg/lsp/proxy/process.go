@@ -71,17 +71,13 @@ func (p *LSPProcess) readLoop() {
 	for {
 		msg, err := reader.Read()
 		if err != nil {
-			// Process exited or error - close all subscriber channels
+			// Process exited or error — drain and close all subscriber
+			// channels under subMu to prevent double-close with Close().
 			p.closeMu.Lock()
 			p.err = err
 			p.closeMu.Unlock()
 
-			p.subMu.Lock()
-			for ch := range p.subscribers {
-				close(ch)
-			}
-			p.subscribers = make(map[chan string]struct{})
-			p.subMu.Unlock()
+			p.closeAllSubscribers()
 			return
 		}
 
@@ -96,6 +92,18 @@ func (p *LSPProcess) readLoop() {
 		}
 		p.subMu.RUnlock()
 	}
+}
+
+// closeAllSubscribers safely closes and removes all subscriber channels.
+// Both readLoop (on process exit) and Close() call this — subMu ensures
+// each channel is closed exactly once.
+func (p *LSPProcess) closeAllSubscribers() {
+	p.subMu.Lock()
+	defer p.subMu.Unlock()
+	for ch := range p.subscribers {
+		close(ch)
+	}
+	p.subscribers = make(map[chan string]struct{})
 }
 
 // Send sends a raw JSON-RPC string to the LSP process (with Content-Length framing).
@@ -135,7 +143,7 @@ func (p *LSPProcess) Subscribe() (<-chan string, func(), error) {
 		p.subMu.Lock()
 		defer p.subMu.Unlock()
 		if _, ok := p.subscribers[ch]; !ok {
-			return // already unsubscribed by readLoop error path
+			return // already unsubscribed by readLoop error path or Close()
 		}
 		delete(p.subscribers, ch)
 		close(ch)
@@ -178,13 +186,9 @@ func (p *LSPProcess) Close() error {
 
 	p.closed = true
 
-	// Close all subscribers first
-	p.subMu.Lock()
-	for ch := range p.subscribers {
-		close(ch)
-	}
-	p.subscribers = make(map[chan string]struct{})
-	p.subMu.Unlock()
+	// Close all subscribers via the shared helper to prevent
+	// double-close races with readLoop.
+	p.closeAllSubscribers()
 
 	// Close stdin first (this signals the LSP to shut down gracefully)
 	if p.stdinPipe != nil {

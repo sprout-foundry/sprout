@@ -155,8 +155,9 @@ func (a *Agent) loadHistoryFromConfig() {
 	}
 }
 
-// saveHistoryToConfig saves command history to the configuration
-// Caller must hold state.GetHistoryMutex() lock.
+// saveHistoryToConfig saves command history to the configuration.
+// Thread-safe: reads state via getter methods and persists through
+// configManager.UpdateConfig. No external lock required.
 func (a *Agent) saveHistoryToConfig() {
 	if a.configManager == nil {
 		return

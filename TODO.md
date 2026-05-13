@@ -809,9 +809,13 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `SearchView.tsx` (1,168 lines → 416 lines). Extracted `search/types.ts`, `search/useSearchState.ts`, `search/highlightMatch.tsx`, `search/SearchResults.tsx`, `search/SemanticSearchResults.tsx`, `search/SemanticPreviewTooltip.tsx`, `search/SearchContextMenu.tsx`. `webui/src/components/SearchView.tsx`
 [x] - REFACTOR: Split `CommandPalette.tsx` (896 → 371 lines). Extracted `CommandPalette/types.ts`, `CommandPalette/constants.ts`, `CommandPalette/utils.ts`, `CommandPalette/useFileIndex.ts`, `CommandPalette/usePaletteResults.ts`, `CommandPalette/useCommandExecutor.ts`, `CommandPalette/index.ts`. `webui/src/components/CommandPalette/CommandPalette.tsx`
 [x] - REFACTOR: Split `cloudAdapter.ts` (919 → 233 lines) by routing layer. Extracted `cloudProxyRoutes.ts` (227 lines, backend proxy handlers), `cloudWasmHandlers.ts` (501 lines, WASM-local file ops), `cloudEndpointRegistry.ts` (817 lines, endpoint definitions and synthetic responses). `webui/src/services/cloudAdapter.ts`
+[x] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
 [] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
+[x] - REFACTOR: Split `api.ts` (2,007 lines) by domain — partial split exists (`gitApi.ts`, `terminalApi.ts`, etc.) but main file remains monolithic. `webui/src/services/api.ts`
 [] - REFACTOR: Split `api.ts` (2,007 lines) by domain — partial split exists (`gitApi.ts`, `terminalApi.ts`, etc.) but main file remains monolithic. `webui/src/services/api.ts`
+[x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
 [] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
+[x] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [x] - REFACTOR: Deduplicate `populateAgentStats` copied inline in `gatherStatsForClientIDLocked` (~30 lines duplicated). `pkg/webui/api_files.go`
 [x] - REFACTOR: Deduplicate agent creation paths — test client and production client paths duplicate ~40 lines (sub-manager creation, agent struct, output router, debug logger, history load, embedding restore) — extract common init helper. `pkg/agent/agent.go`
@@ -845,6 +849,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 ### TypeScript Quality
 
+[x] - TYPESCRIPT: Replace `handleEvent(event: any)` with typed `WsEvent` — entire 800-line event handler is untyped; `WsEvent` type should exist in events. `webui/src/hooks/useWebSocketEventHandler.ts:649`
 [] - TYPESCRIPT: Replace `handleEvent(event: any)` with typed `WsEvent` — entire 800-line event handler is untyped; `WsEvent` type should exist in events. `webui/src/hooks/useWebSocketEventHandler.ts:649`
 [x] - TYPESCRIPT: Replace `(message: any)` and `(edit: any)` casts in localStorage deserialization with proper partial types — typed `Message` and `FileEdit` interfaces exist but aren't used. `webui/src/services/appStatePersistence.ts`
 [x] - TYPESCRIPT: Replace `(stats: any)` casts where typed `StatsResponse` exists — 3 locations in App.tsx. `webui/src/hooks/useWebSocketEventHandler.ts:492,693`
@@ -868,10 +873,15 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [] - TESTING: Add tests for `pkg/lsp/semantic` (6.2% coverage) — nearly untested. `pkg/lsp/semantic/`
 [x] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
 [] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
+[x] - TESTING: Add tests for `pkg/lsp/proxy` (15.6% coverage). `pkg/lsp/proxy/`
 [] - TESTING: Add tests for `pkg/lsp/proxy` (15.6% coverage). `pkg/lsp/proxy/`
+[x] - TESTING: Add tests for `pkg/spec`, `pkg/types`, `pkg/ui` — packages with no tests. `pkg/spec/`, `pkg/types/`, `pkg/ui/`
 [] - TESTING: Add tests for `pkg/spec`, `pkg/types`, `pkg/ui` — packages with no tests. `pkg/spec/`, `pkg/types/`, `pkg/ui/`
+[x] - TESTING: Migrate 26 test files from `os.Setenv` + `defer` to `t.Setenv()` — `t.Setenv` auto-cleans on test completion; manual defer can leak on panic. Affects: `cmd/coverage_utils_test.go`, `pkg/credentials/encrypt_test.go`, `pkg/credentials/keyring_test.go`, and 23 others.
 [] - TESTING: Migrate 26 test files from `os.Setenv` + `defer` to `t.Setenv()` — `t.Setenv` auto-cleans on test completion; manual defer can leak on panic. Affects: `cmd/coverage_utils_test.go`, `pkg/credentials/encrypt_test.go`, `pkg/credentials/keyring_test.go`, and 23 others.
+[x] - TESTING: Fix ~30 test files setting `LEDIT_CONFIG` without also setting `SPROUT_CONFIG` — `envutil.GetEnvSimple("CONFIG")` checks `SPROUT_CONFIG` first; if only `LEDIT_CONFIG` is set, the `SPROUT_CONFIG` value from a previous test leaks. Set both to same temp dir. `pkg/configuration/*_test.go`, `pkg/credentials/*_test.go`, `pkg/mcp/*_test.go`
 [] - TESTING: Fix ~30 test files setting `LEDIT_CONFIG` without also setting `SPROUT_CONFIG` — `envutil.GetEnvSimple("CONFIG")` checks `SPROUT_CONFIG` first; if only `LEDIT_CONFIG` is set, the `SPROUT_CONFIG` value from a previous test leaks. Set both to same temp dir. `pkg/configuration/*_test.go`, `pkg/credentials/*_test.go`, `pkg/mcp/*_test.go`
+[x] - TESTING: Improve coverage for `pkg/webui` (46.8%), `pkg/configuration` (48.0%), `pkg/agent_tools` (51.0%), `pkg/security` (51.2%), `pkg/agent_api` (44.8%) — all in the 40-52% range.
 [] - TESTING: Improve coverage for `pkg/webui` (46.8%), `pkg/configuration` (48.0%), `pkg/agent_tools` (51.0%), `pkg/security` (51.2%), `pkg/agent_api` (44.8%) — all in the 40-52% range.
 
 ### Structural
@@ -883,4 +893,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
 [] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
 [x] - STRUCTURAL: Add `initSubManagers` safety net as explicit `NewTestAgent()` factory — lazy initialization is a safety net for tests creating bare `&Agent{}`; formalize as dedicated test factory. `pkg/agent/agent.go`
-[] - STRUCTURAL: Add `make build-all` to CI/automation to catch frontend build failures early — per AGENTS.md, `make build-all` is required after code changes but may not be in CI.
+[x] - STRUCTURAL: Add `make build-all` to CI/automation to catch frontend build failures early — per AGENTS.md, `make build-all` is required after code changes but may not be in CI.
+[] - STRUCTURAL: Replace process-based subagent execution with in-process SubagentRunner — current approach spawns `os/exec` subprocesses with stdin/stdout pipes; in-process enables shared state (event bus, todos, embeddings), structured events, precise token budgeting, and graceful cancellation. `pkg/agent/subagent_runner.go`, `pkg/agent/tool_handlers_subagent.go`, `pkg/agent_tools/subagent.go`
+[] - STRUCTURAL: Wire SubagentRunner into tool handlers — replace `tools.RunSubagent()` and `tools.RunParallelSubagents()` calls with `SubagentRunner.Run()` and `SubagentRunner.RunParallel()`. `pkg/agent/tool_handlers_subagent.go`
+[] - STRUCTURAL: Remove process-based `pkg/agent_tools/subagent.go` — replace with in-process implementation; no fallback needed. `pkg/agent_tools/subagent.go`

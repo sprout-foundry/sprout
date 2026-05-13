@@ -55,6 +55,9 @@ type Agent struct {
 	baseSystemPrompt string // Base prompt restored when persona is cleared
 	maxIterations    int
 
+	// Conversation timing
+	conversationStartTime time.Time
+
 	// Configuration
 	configManager *configuration.Manager
 	workspaceRoot string

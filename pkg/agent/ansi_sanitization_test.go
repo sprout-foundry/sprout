@@ -3,19 +3,9 @@ package agent
 import (
 	"strings"
 	"testing"
-
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
 func TestSanitizeContent(t *testing.T) {
-	// Create a minimal agent to avoid complex initialization
-	agent := &Agent{
-		debug: false,
-	}
-	ch := &ConversationHandler{
-		agent: agent,
-	}
-
 	tests := []struct {
 		name     string
 		input    string
@@ -55,7 +45,7 @@ func TestSanitizeContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ch.sanitizeContent(tt.input)
+			result := sanitizeContent(tt.input)
 			if result != tt.expected {
 				t.Errorf("sanitizeContent() = %q, expected %q", result, tt.expected)
 			}
@@ -93,23 +83,12 @@ func TestStreamingContentSanitization(t *testing.T) {
 
 func TestZAIConversationHistory(t *testing.T) {
 	// Simulate a scenario where ANSI codes leak into conversation history
-	agent := &Agent{
-		debug: false,
-		state: NewAgentStateManager(false),
-	}
-	agent.state.SetMessages([]api.Message{
-		{Role: "user", Content: "Help me debug this issue"},
-	})
-
-	ch := &ConversationHandler{
-		agent: agent,
-	}
 
 	// Simulate streaming content with ANSI contamination
 	ansiContent := "\x1b[36m[*]\x1b[0m \x1b[1mHere's the solution:\x1b[0m\n\x1b[33m1.\x1b[0m Check the logs\n\x1b[33m2.\x1b[0m Fix the bug"
 
 	// Test that sanitization removes ANSI codes
-	cleanContent := ch.sanitizeContent(ansiContent)
+	cleanContent := sanitizeContent(ansiContent)
 
 	// Verify no ANSI codes remain
 	if strings.Contains(cleanContent, "\x1b") {

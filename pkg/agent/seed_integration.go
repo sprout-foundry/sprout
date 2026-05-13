@@ -544,6 +544,14 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		opts.SystemPrompt = a.systemPrompt
 	}
 
+	// OnIteration callback: sync per-iteration context token estimates
+	// back to sprout's state so the UI can show real-time token usage.
+	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
+		a.state.SetCurrentIteration(iteration)
+		a.state.SetCurrentContextTokens(tokenEstimate)
+		a.state.SetMaxContextTokens(contextSize)
+	}
+
 	// Seed the agent with the existing conversation history so that
 	// multi-turn continuity is preserved across queries.
 	if msgs := a.state.GetMessages(); len(msgs) > 0 {

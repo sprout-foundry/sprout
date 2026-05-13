@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -72,6 +74,16 @@ type runningSubagent struct {
 	Ctx       context.Context
 	Cancel    context.CancelFunc
 	Completed atomic.Bool
+}
+
+// buildSubagentPrefix returns the terminal prefix for a subagent based on persona and taskID.
+// For single subagents (taskID starting with "subagent-"), returns "[{persona}]".
+// For parallel subagents (other taskIDs), returns "[{persona}:{taskID}]".
+func buildSubagentPrefix(persona, taskID string) string {
+	if taskID != "" && !strings.HasPrefix(taskID, "subagent-") {
+		return fmt.Sprintf("[%s:%s]", persona, taskID)
+	}
+	return fmt.Sprintf("[%s]", persona)
 }
 
 // NewSubagentRunner creates a new SubagentRunner
@@ -179,6 +191,40 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 			Elapsed: time.Since(startTime),
 		}
 	}
+
+	// Set up terminal output prefixing for subagent
+	prefix := buildSubagentPrefix(opts.Persona, taskID)
+	const dimGray = "\033[90m"
+	const reset = "\033[0m"
+
+	// Create OutputRouter with the shared eventBus so subagent events
+	// (stream_chunk, agent_message, tool_log, etc.) are published to the
+	// event bus when in WebUI mode.
+	eventBus := r.shared.EventBus
+	router := NewOutputRouter(subAgent, eventBus)
+	subAgent.output.SetOutputRouter(router)
+
+	// Determine a mutex for thread-safe output across parallel subagents.
+	// Use the parent agent's output mutex if available; otherwise create
+	// one so parallel subagents don't interleave terminal output.
+	var outputMu *sync.Mutex
+	if r.parentAgent != nil && r.parentAgent.output != nil {
+		outputMu = r.parentAgent.output.GetOutputMutex()
+	}
+	if outputMu == nil {
+		outputMu = &sync.Mutex{}
+		subAgent.output.SetOutputMutex(outputMu)
+	}
+	subAgent.EnableStreaming(func(chunk string) {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		lines := strings.Split(chunk, "\n")
+		for i, line := range lines {
+			if line != "" || i < len(lines)-1 {
+				fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+line+"\n")
+			}
+		}
+	})
 
 	// Track the running subagent
 	running := &runningSubagent{

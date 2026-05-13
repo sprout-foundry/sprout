@@ -186,7 +186,7 @@ func (r *OutputRouter) RouteTerminalOnly(message string) {
 
 // writeTerminalMessage writes a message to the terminal with appropriate formatting.
 // It acquires the outputMutex for thread safety, then routes through the
-// streamingCallback (if set) or prints directly.
+// terminalWriter (if set for subagents), streamingCallback (if set), or prints directly.
 // Uses TryLock to prevent self-deadlock when the streaming callback re-enters
 // the output router (e.g., callback → PrintLine → writeTerminalMessage).
 func (r *OutputRouter) writeTerminalMessage(message string) {
@@ -199,10 +199,20 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 		message += "\n"
 	}
 
+	agent := r.agent
+
+	// Route through terminalWriter if set (for subagent output).
+	// This MUST happen before acquiring outputMutex because the
+	// terminalWriter acquires the same mutex internally. Holding
+	// outputMutex while calling terminalWriter would deadlock.
+	if agent != nil && agent.output.GetTerminalWriter() != nil {
+		agent.output.GetTerminalWriter()(message)
+		return
+	}
+
 	// Acquire output mutex for thread-safe terminal output.
 	// TryLock prevents self-deadlock if the streaming callback re-enters
 	// this method (reentrant call from same goroutine).
-	agent := r.agent
 	var mu *sync.Mutex
 	if agent != nil {
 		mu = agent.output.GetOutputMutex()
@@ -267,9 +277,9 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 
 	var message string
 	if target != "" {
-		message = fmt.Sprintf("%s%s %s%s %s%s%s", darkGray, iterInfo, action, reset, slightlyLighterGray, target, reset)
+		message = fmt.Sprintf("%s%s %s%s%s", darkGray, iterInfo, slightlyLighterGray, target, reset)
 	} else {
-		message = fmt.Sprintf("%s%s %s%s", darkGray, iterInfo, action, reset)
+		message = fmt.Sprintf("%s%s%s", darkGray, iterInfo, reset)
 	}
 	r.writeTerminalMessage(message)
 }

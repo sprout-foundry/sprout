@@ -100,7 +100,9 @@ func (r *SubagentRunner) Run(ctx context.Context, prompt string, opts SubagentOp
 	return r.runTask(ctx, taskID, prompt, opts)
 }
 
-// RunParallel spawns multiple subagents concurrently
+// RunParallel spawns multiple subagents concurrently.
+// If the parent context is cancelled, remaining subagents are cancelled
+// and their results are set to cancellation errors.
 func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, opts SubagentOptions) []*SubagentResult {
 	if len(tasks) == 0 {
 		return nil
@@ -108,6 +110,12 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 
 	results := make([]*SubagentResult, len(tasks))
 	var wg sync.WaitGroup
+
+	// Create a derived context so we can cancel remaining subagents
+	// when the parent context is cancelled or when we detect early
+	// termination is needed.
+	parallelCtx, parallelCancel := context.WithCancel(ctx)
+	defer parallelCancel()
 
 	for i, task := range tasks {
 		wg.Add(1)
@@ -123,7 +131,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.Persona != "" {
 				taskOpts.Persona = t.Persona
 			}
-			results[idx] = r.runTask(ctx, t.ID, t.Prompt, taskOpts)
+			results[idx] = r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts)
 		}(i, task)
 	}
 
@@ -215,13 +223,28 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 		outputMu = &sync.Mutex{}
 		subAgent.output.SetOutputMutex(outputMu)
 	}
+
+	// Line buffer for accumulating stream chunks
+	var lineBuf strings.Builder
 	subAgent.EnableStreaming(func(chunk string) {
 		outputMu.Lock()
 		defer outputMu.Unlock()
-		lines := strings.Split(chunk, "\n")
-		for i, line := range lines {
-			if line != "" || i < len(lines)-1 {
+		lineBuf.WriteString(chunk)
+		for {
+			content := lineBuf.String()
+			idx := strings.IndexByte(content, '\n')
+			if idx == -1 {
+				break
+			}
+			line := content[:idx]
+			// Print non-empty lines with prefix
+			if strings.TrimSpace(line) != "" {
 				fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+line+"\n")
+			}
+			// Reset and write remaining content after the newline
+			lineBuf.Reset()
+			if idx+1 < len(content) {
+				lineBuf.WriteString(content[idx+1:])
 			}
 		}
 	})
@@ -284,6 +307,17 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 			}
 		}
 	}
+
+	// Flush any remaining buffered output
+	outputMu.Lock()
+	if lineBuf.Len() > 0 {
+		remaining := strings.TrimSpace(lineBuf.String())
+		if remaining != "" {
+			fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+remaining+"\n")
+		}
+		lineBuf.Reset()
+	}
+	outputMu.Unlock()
 
 	// Mark as completed
 	running.Completed.Store(true)

@@ -525,14 +525,16 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 
 	_ = prov // provider ready for seed agent construction
 
-	// Create seed tool executor adapter wrapping sprout's ToolExecutor
-	executor := NewToolExecutor(a)
-	toolExec := NewSproutToolExecutor(a, executor)
+	// Use seed's ToolRegistry — registers all 30 sprout tools with
+	// PreExecuteHook (security classification + subagent nesting prevention)
+	// and handles channel stripping, alias resolution, arg parsing/repair,
+	// type coercion, timeouts, truncation, circuit breakers, parallel exec.
+	seedRegistry := NewSeedToolRegistry(a)
 
 	// Build seed Agent options
 	opts := core.Options{
 		Provider:       prov,
-		Executor:       toolExec,
+		Executor:       seedRegistry,
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
 		EventPublisher: a.eventBus,

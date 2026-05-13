@@ -731,6 +731,210 @@ func TestSubagentRunner_PrefixFormat_ParallelTask(t *testing.T) {
 	}
 }
 
+func TestSubagentStreamingCallback_LineBuffering(t *testing.T) {
+	// Simulates the production line-buffering pattern where stream chunks
+	// are accumulated until a newline is received. Each complete line gets
+	// the subagent prefix; partial lines remain buffered until flushed.
+
+	prefix := buildSubagentPrefix("debugger", "subagent-42")
+	const dimGray = "\033[90m"
+	const reset = "\033[0m"
+
+	mu := &sync.Mutex{}
+	var lineBuf strings.Builder
+	var buf bytes.Buffer
+
+	callback := func(chunk string) {
+		mu.Lock()
+		defer mu.Unlock()
+		lineBuf.WriteString(chunk)
+		for {
+			content := lineBuf.String()
+			idx := strings.IndexByte(content, '\n')
+			if idx == -1 {
+				break
+			}
+			line := content[:idx]
+			// Print non-empty lines with prefix (matches production)
+			if strings.TrimSpace(line) != "" {
+				fmt.Fprint(&buf, dimGray+prefix+reset+" "+line+"\n")
+			}
+			// Reset and write remaining content after the newline
+			lineBuf.Reset()
+			if idx+1 < len(content) {
+				lineBuf.WriteString(content[idx+1:])
+			}
+		}
+	}
+
+	flush := func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if lineBuf.Len() > 0 {
+			remaining := strings.TrimSpace(lineBuf.String())
+			if remaining != "" {
+				fmt.Fprint(&buf, dimGray+prefix+reset+" "+remaining+"\n")
+			}
+			lineBuf.Reset()
+		}
+	}
+
+	t.Run("no_output_before_newline", func(t *testing.T) {
+		buf.Reset()
+		lineBuf.Reset()
+
+		// Simulate fragmented chunks like LLM streaming produces
+		callback("I")
+		callback("'ll ")
+		callback("investigate")
+		// Nothing should be output yet — no newlines received
+		if buf.Len() > 0 {
+			t.Fatalf("expected no output before newline, got: %q", buf.String())
+		}
+	})
+
+	t.Run("newline_delivers_complete_line", func(t *testing.T) {
+		buf.Reset()
+		lineBuf.Reset()
+
+		callback("I")
+		callback("'ll ")
+		callback("investigate")
+		callback(" the issue.\n")
+
+		// Should have one complete line
+		output := stripANSI(buf.String())
+		expected := prefix + " I'll investigate the issue.\n"
+		if output != expected {
+			t.Errorf("after newline:\ngot:  %q\nwant: %q", output, expected)
+		}
+		// lineBuf should be empty after flush
+		if lineBuf.Len() != 0 {
+			t.Errorf("expected empty lineBuf after newline, got %q", lineBuf.String())
+		}
+	})
+
+	t.Run("multiple_lines_in_single_chunk", func(t *testing.T) {
+		buf.Reset()
+		lineBuf.Reset()
+
+		// Two complete lines in one chunk
+		callback("Line 1\nLine 2\n")
+
+		output := stripANSI(buf.String())
+		splitLines := strings.Split(strings.TrimSpace(output), "\n")
+		if len(splitLines) != 2 {
+			t.Fatalf("expected 2 lines, got %d: %v", len(splitLines), splitLines)
+		}
+		if splitLines[0] != prefix+" Line 1" {
+			t.Errorf("line 0 mismatch:\ngot:  %q\nwant: %q", splitLines[0], prefix+" Line 1")
+		}
+		if splitLines[1] != prefix+" Line 2" {
+			t.Errorf("line 1 mismatch:\ngot:  %q\nwant: %q", splitLines[1], prefix+" Line 2")
+		}
+	})
+
+	t.Run("partial_line_buffered_across_chunks", func(t *testing.T) {
+		buf.Reset()
+		lineBuf.Reset()
+
+		// A partial line is split across multiple chunks
+		callback("partial ")
+		callback("line")
+		// No output yet
+		if buf.Len() > 0 {
+			t.Fatalf("expected no output, got: %q", buf.String())
+		}
+
+		// Now complete the line with a newline
+		callback("\n")
+
+		output := stripANSI(buf.String())
+		expected := prefix + " partial line\n"
+		if output != expected {
+			t.Errorf("partial line:\ngot:  %q\nwant: %q", output, expected)
+		}
+	})
+
+	t.Run("empty_lines_omitted", func(t *testing.T) {
+		buf.Reset()
+		lineBuf.Reset()
+
+		// Empty lines should be skipped (TrimSpace check)
+		callback("\n\nLine three\n")
+
+		output := stripANSI(buf.String())
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		if len(lines) != 1 {
+			t.Fatalf("expected 1 line (empty lines omitted), got %d: %v", len(lines), lines)
+		}
+		if lines[0] != prefix+" Line three" {
+			t.Errorf("expected %q, got %q", prefix+" Line three", lines[0])
+		}
+	})
+
+	t.Run("flush_partial_buffer", func(t *testing.T) {
+		buf.Reset()
+		lineBuf.Reset()
+
+		callback("Remaining text")
+		buf.Reset()
+		flush()
+
+		output := stripANSI(buf.String())
+		if output != prefix+" Remaining text\n" {
+			t.Errorf("flush:\ngot:  %q\nwant: %q", output, prefix+" Remaining text\n")
+		}
+	})
+
+	t.Run("consecutive_complete_scenarios", func(t *testing.T) {
+		// Run through a full sequence to verify state persists correctly
+		buf.Reset()
+		lineBuf.Reset()
+
+		// Fragmented single line
+		callback("I")
+		callback("'ll ")
+		callback("investigate")
+		callback(" the issue.\n")
+
+		// Multiple lines
+		callback("Line 1\nLine 2\n")
+
+		// Partial line (should be buffered)
+		callback("incomplete")
+
+		// Another line
+		callback(" next line\n")
+
+		output := stripANSI(buf.String())
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		if len(lines) != 4 {
+			t.Fatalf("expected 4 lines, got %d:\n%v", len(lines), lines)
+		}
+		if lines[0] != prefix+" I'll investigate the issue." {
+			t.Errorf("line 0 mismatch: %q", lines[0])
+		}
+		if lines[1] != prefix+" Line 1" {
+			t.Errorf("line 1 mismatch: %q", lines[1])
+		}
+		if lines[2] != prefix+" Line 2" {
+			t.Errorf("line 2 mismatch: %q", lines[2])
+		}
+		if lines[3] != prefix+" incomplete next line" {
+			t.Errorf("line 3 mismatch (buffered partial merged with new content):\ngot: %q\nwant: %q", lines[3], prefix+" incomplete next line")
+		}
+
+		// Flush any remaining buffered content
+		buf.Reset()
+		flush()
+		// lineBuf should be empty after flush (nothing was buffered)
+		if lineBuf.Len() > 0 {
+			t.Errorf("expected empty lineBuf after flush, got: %q", lineBuf.String())
+		}
+	})
+}
+
 func TestSubagentRunner_OutputRouterSet(t *testing.T) {
 	// Verify that the OutputRouter is set up with the shared eventBus
 	agent := newIsolatedTestAgent(t)

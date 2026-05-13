@@ -53,8 +53,8 @@ jobs:
       run: |
         make lint || echo "::warning::make lint reported issues. See lint step above for details."
 
-    - name: Build and deploy React UI
-      run: make deploy-ui
+    - name: Run full build pipeline (make build-all)
+      run: make build-all
 
     - name: Commit updated UI assets
       run: |
@@ -62,9 +62,6 @@ jobs:
         git config --global user.email "github-actions@github.com"
         git add pkg/webui/static/
         git diff --cached --quiet || git commit -m "chore: update embedded UI assets [skip ci]"
-
-    - name: Verify embedded React UI assets are current
-      run: make verify-ui-embedded
 
     - name: Install goimports
       run: go install golang.org/x/tools/cmd/goimports@latest
@@ -77,30 +74,30 @@ jobs:
     - name: Display coverage summary
       if: always()
       run: |
-        if [ -f /tmp/ledit-coverage.out ]; then
+        if [ -f /tmp/sprout-coverage.out ]; then
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=/tmp/ledit-coverage.out | grep "^total:" >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=/tmp/sprout-coverage.out | grep "^total:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Packages with Lowest Coverage" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          go tool cover -func=/tmp/ledit-coverage.out | grep -v "^total:" | awk -F" " '{print $NF, $0}' | sort -n | head -15 | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
+          go tool cover -func=/tmp/sprout-coverage.out | grep -v "^total:" | awk -F" " '{print $NF, $0}' | sort -n | head -15 | awk '{$1=""; print substr($0,2)}' >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
         else
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ Coverage file not found at /tmp/ledit-coverage.out" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ Coverage file not found at /tmp/sprout-coverage.out" >> $GITHUB_STEP_SUMMARY
           echo "Test run may have failed before generating coverage data." >> $GITHUB_STEP_SUMMARY
         fi
 
     - name: Generate coverage function details
       if: always()
       run: |
-        if [ -f /tmp/ledit-coverage.out ]; then
-          go tool cover -func=/tmp/ledit-coverage.out > /tmp/ledit-coverage-func.txt
+        if [ -f /tmp/sprout-coverage.out ]; then
+          go tool cover -func=/tmp/sprout-coverage.out > /tmp/sprout-coverage-func.txt
           echo "Generated coverage function details"
         else
           echo "Coverage file not found, skipping coverage function details generation"
@@ -112,7 +109,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
-        path: /tmp/ledit-coverage.out
+        path: /tmp/sprout-coverage.out
         retention-days: 30
 
     - name: Upload coverage function details
@@ -121,7 +118,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-function-details
-        path: /tmp/ledit-coverage-func.txt
+        path: /tmp/sprout-coverage-func.txt
         retention-days: 30
 
     - name: Upload test logs
@@ -130,7 +127,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test-logs
-        path: /tmp/ledit-test-coverage.log
+        path: /tmp/sprout-test-coverage.log
         retention-days: 30
 
     - name: Run integration tests
@@ -169,21 +166,9 @@ jobs:
       run: |
         cd webui && npm ci
 
-    - name: Build and deploy React UI
+    - name: Build UI and WASM assets (make deploy-ui build-wasm)
       shell: bash
-      run: make deploy-ui
-
-    - name: Commit updated UI assets
-      shell: bash
-      run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "github-actions@github.com"
-        git add pkg/webui/static/
-        git diff --cached --quiet || git commit -m "chore: update embedded UI assets [skip ci]"
-
-    - name: Verify embedded React UI assets are current
-      shell: bash
-      run: make verify-ui-embedded
+      run: make deploy-ui build-wasm
 
     - name: Set build variables
       id: set_vars
@@ -207,7 +192,7 @@ jobs:
       env:
         GOOS: ${{ steps.set_vars.outputs.os_name }}
         GOARCH: ${{ matrix.arch }}
-      run: go build -tags ollama_test -o ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }} .
+      run: go build -tags "browser" -o ${{ steps.set_vars.outputs.binary_name }}${{ steps.set_vars.outputs.ext }} .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4

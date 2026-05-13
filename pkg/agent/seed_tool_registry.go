@@ -716,11 +716,26 @@ func (r *richEventPublisher) enrichEventData(data any, eventType string) any {
 		payload["subagent_type"] = subagentType
 	}
 
-	// Emit CLI tool_log for tool_end when not streaming
-	if eventType == core.EventTypeToolEnd && r.agent != nil && !r.agent.IsStreamingEnabled() {
-		r.agent.ToolLog("executed", displayName)
+	// Emit CLI tool_log for tool execution progress.
+	// tool_start: "executing tool [ToolName args...]" (always, so the user sees it immediately)
+	// tool_end: "executed [ToolName args...]" (only when not streaming, since streaming shows live progress)
+	// Subagents: also emit — the subagent's streaming callback prefixes with [persona],
+	// giving full visibility for CLI auditing. Parallel subagents include a task index.
+	if r.agent != nil {
+		if eventType == core.EventTypeToolStart {
+			// Build a ToolCall from the event payload so we can use the rich formatToolCall formatter.
+			arguments, _ := payload["arguments"].(string)
+			tc := api.ToolCall{
+				Function: api.ToolCallFunction{
+					Name:      toolName,
+					Arguments: arguments,
+				},
+			}
+			r.agent.ToolLog("executing tool", formatToolCall(tc))
+		} else if eventType == core.EventTypeToolEnd && !r.agent.IsStreamingEnabled() {
+			r.agent.ToolLog("executed", displayName)
+		}
 	}
-
 	return payload
 }
 
@@ -879,21 +894,19 @@ func formatTodoItemsForEvent(todos []tools.TodoItem) []map[string]interface{} {
 	return result
 }
 
-// logToolExecution prints a brief tool execution message to the CLI
-// (skipped in streaming mode where the UI shows progress).
-func logToolExecution(agent *Agent, toolName string) {
-	if agent == nil || agent.IsStreamingEnabled() {
-		return
-	}
-	agent.PrintLine(fmt.Sprintf("[tool] Executing %s", toolName))
+// logToolExecution is a legacy helper that was used to print tool execution
+// messages in non-streaming mode. Now that richEventPublisher emits
+// ToolLog("executing tool", ...) on tool_start for all modes, this is a
+// no-op to avoid duplicate output.
+func logToolExecution(_ *Agent, _ string) {
 }
 
 // handleToolError wraps a handler error into a sanitized result string and
 // returns it along with the original error. Returning a non-nil error ensures
 // seed's circuit breaker failure tracking and success/error classification
 // work correctly, while the result string is sanitized for secret safety
-// and model context. In CLI (non-streaming) mode it also prints [FAIL] or
-// [⚠️ SECURITY CAUTION] lines to the terminal.
+// and model context. It also prints [FAIL] or [⚠️ SECURITY CAUTION] lines
+// to the terminal (routed through the streaming callback for subagents).
 func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	if err == nil {
 		return "", nil
@@ -902,7 +915,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 
 	// Security caution requires a special LLM verification signal.
 	if strings.Contains(err.Error(), "security caution:") {
-		if agent != nil && !agent.IsStreamingEnabled() {
+		if agent != nil {
 			agent.PrintLine("")
 			agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
 			agent.PrintLine("")
@@ -910,7 +923,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		return fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeMsg), err
 	}
 
-	if agent != nil && !agent.IsStreamingEnabled() {
+	if agent != nil {
 		agent.PrintLine("")
 		agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", toolName, safeMsg))
 		agent.PrintLine("")

@@ -249,6 +249,27 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 		}
 	})
 
+	// Terminal writer for complete messages (tool logs, agent messages).
+	// These bypass the line buffer and print immediately with prefix.
+	subAgent.output.SetTerminalWriter(func(message string) {
+		outputMu.Lock()
+		defer outputMu.Unlock()
+		// Flush any pending line buffer content first
+		if lineBuf.Len() > 0 {
+			remaining := strings.TrimSpace(lineBuf.String())
+			if remaining != "" {
+				fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+remaining+"\n")
+			}
+			lineBuf.Reset()
+		}
+		// Strip trailing newline since we add our own, then print with prefix
+		msg := strings.TrimRight(message, "\n")
+		msg = strings.TrimSpace(msg)
+		if msg != "" {
+			fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+msg+"\n")
+		}
+	})
+
 	// Track the running subagent
 	running := &runningSubagent{
 		ID:        taskID,

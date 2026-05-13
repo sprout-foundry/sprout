@@ -336,8 +336,10 @@ func TestRouteToolLog_FormatsTerminalOutput(t *testing.T) {
 
 	// Should contain ANSI codes
 	assert.Contains(t, output, "\033[90m", "should contain dark gray ANSI code")
+	assert.Contains(t, output, "\033[38;5;246m", "should contain slightly lighter gray ANSI code")
 	assert.Contains(t, output, "\033[0m", "should contain reset ANSI code")
-	assert.Contains(t, output, "read_file", "should contain tool name")
+	// Terminal output now only shows target, not action
+	assert.NotContains(t, output, "read_file", "should not contain tool name in terminal output")
 	assert.Contains(t, output, "/path/to/file.go", "should contain target")
 }
 

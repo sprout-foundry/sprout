@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 )
 
@@ -21,9 +22,11 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 	if err := checkCmd.Run(); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"message":  "not_git_repo",
-			"current":  "",
-			"branches": []string{},
+			"message":         "not_git_repo",
+			"current":         "",
+			"branches":        []string{},
+			"local_branches":  []string{},
+			"remote_branches": []string{},
 		})
 		return
 	}
@@ -34,26 +37,71 @@ func (ws *ReactWebServer) handleAPIGitBranches(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	branchesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	// Query local branches from refs/heads
+	localBranchesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "for-each-ref", "--format=%(refname:short)", "refs/heads")
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to list branches: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to list local branches: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	branches := []string{}
-	for _, line := range strings.Split(branchesOutput, "\n") {
+	// Query remote branches from refs/remotes
+	remoteBranchesOutput, err := gitOutputStringForWorkspace(ws, workspaceRoot, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to list remote branches: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Parse local branches
+	localBranches := []string{}
+	for _, line := range strings.Split(localBranchesOutput, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		branches = append(branches, line)
+		localBranches = append(localBranches, line)
+	}
+
+	// Parse remote branches, skipping HEAD symrefs
+	remoteBranches := []string{}
+	for _, line := range strings.Split(remoteBranchesOutput, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// Skip HEAD symrefs like origin/HEAD
+		if strings.HasSuffix(line, "/HEAD") {
+			continue
+		}
+		remoteBranches = append(remoteBranches, line)
+	}
+
+	// Combine branches: local first, then remote
+	allBranches := append([]string{}, localBranches...)
+	allBranches = append(allBranches, remoteBranches...)
+
+	// Sort alphabetically
+	sort.Strings(allBranches)
+
+	// Move current branch to the top if it exists
+	currentBranch = strings.TrimSpace(currentBranch)
+	if currentBranch != "" {
+		for i, branch := range allBranches {
+			if branch == currentBranch {
+				// Remove from current position and insert at beginning
+				allBranches = append(allBranches[:i], allBranches[i+1:]...)
+				allBranches = append([]string{currentBranch}, allBranches...)
+				break
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":  "success",
-		"current":  currentBranch,
-		"branches": branches,
+		"message":         "success",
+		"current":         currentBranch,
+		"branches":        allBranches,
+		"local_branches":  localBranches,
+		"remote_branches": remoteBranches,
 	})
 }
 

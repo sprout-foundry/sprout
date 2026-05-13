@@ -13,10 +13,13 @@ func (a *Agent) Shutdown() {
 	}
 
 	// Save command history to configuration before shutdown.
+	// saveHistoryToConfig reads state via getters (which are individually
+	// thread-safe) and calls configManager.UpdateConfig for persistence.
+	// No HistoryMutex is needed here — the lock ordering risk
+	// (HistoryMutex → configLock) is avoided by not holding the lock
+	// during the I/O call, matching the pattern in AddToHistory.
 	if a.state != nil {
-		a.state.GetHistoryMutex().Lock()
 		a.saveHistoryToConfig()
-		a.state.GetHistoryMutex().Unlock()
 	}
 
 	// Stop MCP servers (best-effort)

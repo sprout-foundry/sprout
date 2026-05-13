@@ -132,6 +132,8 @@ func (m *mockOutputManager) SetEventMetadataUnlocked(map[string]interface{}) { }
 func (m *mockOutputManager) GetEventMetadataMutex() *sync.RWMutex {
 	return &sync.RWMutex{}
 }
+func (m *mockOutputManager) SetTerminalWriter(func(string))    {}
+func (m *mockOutputManager) GetTerminalWriter() func(string)   { return nil }
 
 // ---------------------------------------------------------------------------
 // minimalAgent creates a bare Agent with initialized sub-managers for testing.

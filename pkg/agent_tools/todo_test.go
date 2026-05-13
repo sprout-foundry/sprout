@@ -74,20 +74,19 @@ func TestTodoWrite_OverwriteList(t *testing.T) {
 	})
 
 	// Replace with new list
-	tm.Write([]TodoItem{
+	msg := tm.Write([]TodoItem{
 		{Content: "New task 1", Status: "pending"},
 		{Content: "New task 2", Status: "in_progress"},
 	})
 
+	assert.Contains(t, msg, "Todo list updated with 2 items")
+	assert.Contains(t, msg, "(1 in_progress, 1 pending)")
+	assert.Contains(t, msg, "Remaining:")
+	assert.Contains(t, msg, "[pending] New task 1")
+	assert.Contains(t, msg, "[in_progress] New task 2")
+
 	todos := tm.Read()
-
-	if len(todos) != 2 {
-		t.Fatalf("expected 2 todos after overwrite, got: %d", len(todos))
-	}
-
-	if todos[0].Content != "New task 1" {
-		t.Fatalf("expected first task to be 'New task 1', got: %s", todos[0].Content)
-	}
+	assert.Equal(t, 2, len(todos))
 }
 
 func TestTodoWrite_WithPriority(t *testing.T) {
@@ -139,7 +138,11 @@ func TestTodoWrite_ReturnsCount(t *testing.T) {
 		{Content: "Task 2", Status: "in_progress"},
 		{Content: "Task 3", Status: "completed"},
 	})
-	assert.Equal(t, "Todo list updated with 3 items", msg)
+	assert.Contains(t, msg, "Todo list updated with 3 items")
+	assert.Contains(t, msg, "(1 completed, 1 in_progress, 1 pending)")
+	assert.Contains(t, msg, "Remaining:")
+	assert.Contains(t, msg, "[in_progress] Task 2")
+	assert.Contains(t, msg, "[pending] Task 1")
 }
 
 func TestTodoRead_ReturnsCopy(t *testing.T) {
@@ -188,3 +191,90 @@ func TestTodoManager_ConcurrentReadWrite(t *testing.T) {
 		}
 	}
 }
+
+func TestTodoWrite_AllCompleted(t *testing.T) {
+	tm := NewTodoManager()
+
+	msg := tm.Write([]TodoItem{
+		{Content: "Task 1", Status: "completed"},
+		{Content: "Task 2", Status: "completed"},
+		{Content: "Task 3", Status: "completed"},
+	})
+
+	assert.Contains(t, msg, "Todo list updated with 3 items")
+	assert.Contains(t, msg, "ALL COMPLETED ✅")
+	assert.Contains(t, msg, "Completed:")
+	assert.Contains(t, msg, "[completed] Task 1")
+	assert.Contains(t, msg, "[completed] Task 2")
+	assert.Contains(t, msg, "[completed] Task 3")
+	assert.NotContains(t, msg, "Remaining:")
+}
+
+func TestTodoWrite_MixedState(t *testing.T) {
+	tm := NewTodoManager()
+
+	msg := tm.Write([]TodoItem{
+		{Content: "Fix bug in parser", Status: "in_progress"},
+		{Content: "Write tests for parser", Status: "pending"},
+		{Content: "Update documentation", Status: "pending"},
+		{Content: "Fix bug in UI", Status: "completed"},
+		{Content: "Fix bug in API", Status: "completed"},
+	})
+
+	assert.Contains(t, msg, "Todo list updated with 5 items")
+	assert.Contains(t, msg, "(2 completed, 1 in_progress, 2 pending)")
+	assert.Contains(t, msg, "Remaining:")
+	assert.Contains(t, msg, "[in_progress] Fix bug in parser")
+	assert.Contains(t, msg, "[pending] Write tests for parser")
+	assert.Contains(t, msg, "[pending] Update documentation")
+	// Completed items should NOT be in the Remaining list
+	assert.NotContains(t, msg, "[completed] Fix bug in UI")
+	assert.NotContains(t, msg, "[completed] Fix bug in API")
+}
+
+func TestTodoWrite_AllPending(t *testing.T) {
+	tm := NewTodoManager()
+
+	msg := tm.Write([]TodoItem{
+		{Content: "Fix bug in parser", Status: "pending"},
+		{Content: "Write tests for parser", Status: "pending"},
+		{Content: "Update documentation", Status: "pending"},
+	})
+
+	assert.Contains(t, msg, "Todo list updated with 3 items")
+	assert.Contains(t, msg, "(3 pending)")
+	assert.Contains(t, msg, "Remaining:")
+	assert.Contains(t, msg, "[pending] Fix bug in parser")
+	assert.Contains(t, msg, "[pending] Write tests for parser")
+	assert.Contains(t, msg, "[pending] Update documentation")
+}
+
+func TestTodoWrite_SingleItemCompleted(t *testing.T) {
+	tm := NewTodoManager()
+
+	msg := tm.Write([]TodoItem{
+		{Content: "Single task", Status: "completed"},
+	})
+
+	assert.Contains(t, msg, "Todo list updated with 1 items")
+	assert.Contains(t, msg, "ALL COMPLETED ✅")
+	assert.Contains(t, msg, "Completed:")
+	assert.Contains(t, msg, "[completed] Single task")
+}
+
+func TestTodoWrite_LongContentTruncation(t *testing.T) {
+	tm := NewTodoManager()
+
+	// Create a task with very long content (> 80 chars)
+	longContent := strings.Repeat("This is a very long task description that should be truncated ", 3)
+	msg := tm.Write([]TodoItem{
+		{Content: longContent, Status: "pending"},
+	})
+
+	assert.Contains(t, msg, "Remaining:")
+	// Should be truncated with "..."
+	assert.Contains(t, msg, "...")
+	// Should not contain the full original string in the output (it's > 80 chars)
+	assert.NotContains(t, msg, longContent)
+}
+

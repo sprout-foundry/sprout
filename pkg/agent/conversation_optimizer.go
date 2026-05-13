@@ -71,16 +71,20 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 	if !co.enabled {
 		return messages
 	}
-	co.mu.Lock()
-	defer co.mu.Unlock()
 
-	// First pass: find the most recent read of each file
+	// Phase 1: Track reads and commands (modifies maps, needs write lock)
+	co.mu.Lock()
 	for i, msg := range messages {
 		co.trackFileRead(msg, i)
 		co.trackShellCommand(msg, i)
 	}
+	co.mu.Unlock()
 
-	// Second pass: optimize based on tracked data
+	// Phase 2: Optimize based on tracked data (read-only access to maps).
+	// Use RLock so concurrent readers aren't blocked during the optimization pass.
+	co.mu.RLock()
+	defer co.mu.RUnlock()
+
 	optimized := make([]api.Message, 0, len(messages))
 
 	for i, msg := range messages {

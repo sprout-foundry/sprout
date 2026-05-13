@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -285,7 +286,7 @@ func TestResolveSessionStateFileNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for nonexistent session")
 	}
-	if !containsStr(t, err.Error(), "not found") {
+	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("wrong error message: %v", err)
 	}
 }
@@ -311,7 +312,7 @@ func TestResolveSessionStateFileAmbiguous(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected ambiguous error for multiple scoped matches")
 	}
-	if !containsStr(t, err.Error(), "ambiguous") {
+	if !strings.Contains(err.Error(), "ambiguous") {
 		t.Errorf("wrong error message: %v", err)
 	}
 }
@@ -334,13 +335,13 @@ func TestExportStateToJSON(t *testing.T) {
 	}
 
 	// Should produce valid JSON containing our fields
-	if !containsStr(t, string(data), `"session_id"`) {
+	if !strings.Contains(string(data), `"session_id"`) {
 		t.Error("JSON should contain session_id")
 	}
-	if !containsStr(t, string(data), `"name"`) {
+	if !strings.Contains(string(data), `"name"`) {
 		t.Error("JSON should contain name")
 	}
-	if !containsStr(t, string(data), "test-session") {
+	if !strings.Contains(string(data), "test-session") {
 		t.Error("JSON should contain session value")
 	}
 }

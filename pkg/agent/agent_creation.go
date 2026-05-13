@@ -44,6 +44,8 @@ type agentInitParams struct {
 	debug           bool
 	interruptCtx    context.Context
 	interruptCancel context.CancelFunc
+	// isSubagent indicates this agent was spawned as a subagent.
+	isSubagent bool
 	// isProduction indicates this is a production agent, not a test agent.
 	// Production agents have additional initialization steps (context limits,
 	// todo clearing, session cleanup, tool registry initialization).

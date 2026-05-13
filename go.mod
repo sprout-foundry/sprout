@@ -23,7 +23,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v0.1.6
+require github.com/sprout-foundry/seed v0.1.7
 
 require (
 	filippo.io/hpke v0.4.0 // indirect

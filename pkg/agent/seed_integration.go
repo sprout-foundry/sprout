@@ -535,7 +535,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		Executor:       toolExec,
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
-		EventPublisher: a.eventBusOrNil(), // nil-safe: returns no-op publisher if eventBus not set
+		EventPublisher: a.eventBus,
 	}
 
 	if a.systemPrompt != "" {
@@ -753,20 +753,6 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 			len(existingMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
 	}
 }
-
-// eventBusOrNil returns the agent's event bus if available, or a no-op
-// EventPublisher to prevent nil pointer dereferences in seed's loop.
-func (a *Agent) eventBusOrNil() core.EventPublisher {
-	if a.eventBus != nil {
-		return a.eventBus
-	}
-	return noopEventPublisher{}
-}
-
-// noopEventPublisher is a no-op EventPublisher used when no event bus is set.
-type noopEventPublisher struct{}
-
-func (noopEventPublisher) Publish(string, any) {}
 
 // UseSeedLoop returns true if the agent should use seed's conversation loop
 // instead of the native sprout ConversationHandler.

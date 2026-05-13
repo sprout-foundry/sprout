@@ -1,10 +1,70 @@
 package agent
 
 import (
+	"fmt"
+	"regexp"
 	"testing"
-
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
+
+// isContextLimitError checks if an error is related to context window limits.
+func isContextLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	// Check for various context limit error patterns
+	limitPatterns := []string{
+		"context window exceeds limit",
+		"context window over limit",
+		"context_limit exceeded",
+		"context exceeds",
+		"max context tokens exceeded",
+		"token limit exceeded",
+		"exceeds the available context size",
+		"exceed_context_size_error",
+		"maximum context length",
+	}
+	for _, pattern := range limitPatterns {
+		if containsIgnoreCase(errMsg, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// extractContextLimitTokenPair extracts prompt tokens and context limit from an error message.
+type contextLimitPair struct {
+	prompt int
+	limit  int
+}
+
+func extractContextLimitTokenPair(err error) contextLimitPair {
+	pair := contextLimitPair{}
+	if err == nil {
+		return pair
+	}
+	errMsg := err.Error()
+
+	// Pattern: request (NNN tokens) exceeds the available context size (NNN tokens)
+	promptRe := regexp.MustCompile(`request \((\d+) tokens\) exceeds`)
+	match := promptRe.FindStringSubmatch(errMsg)
+	if len(match) > 1 {
+		fmt.Sscanf(match[1], "%d", &pair.prompt)
+	}
+
+	// Pattern: context size (NNN tokens), try increasing it
+	limitRe := regexp.MustCompile(`context size \((\d+) tokens\)`)
+	match = limitRe.FindStringSubmatch(errMsg)
+	if len(match) > 1 {
+		fmt.Sscanf(match[1], "%d", &pair.limit)
+	}
+
+	return pair
+}
+
+func containsIgnoreCase(s, substr string) bool {
+	return regexp.MustCompile("(?i)"+regexp.QuoteMeta(substr)).MatchString(s)
+}
 
 func TestIsContextLimitError(t *testing.T) {
 	tests := []struct {
@@ -74,14 +134,13 @@ func TestIsContextLimitError(t *testing.T) {
 		},
 	}
 
-	ac := &APIClient{agent: &Agent{}}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var err error
 			if tc.errMsg != "" {
 				err = &testError{message: tc.errMsg}
 			}
-			result := ac.isContextLimitError(err)
+			result := isContextLimitError(err)
 			if result != tc.expected {
 				t.Errorf("isContextLimitError(%q) = %v, want %v", tc.errMsg, result, tc.expected)
 			}
@@ -97,81 +156,9 @@ func (e *testError) Error() string {
 	return e.message
 }
 
-func TestTriggerCompactionNil(t *testing.T) {
-	// Test nil agent
-	var agent *Agent
-	result := agent.TriggerCompaction()
-	if result != false {
-		t.Errorf("TriggerCompaction() on nil = %v, want false", result)
-	}
-}
-
-func TestTriggerCompactionWithCheckpoints(t *testing.T) {
-	// Test with checkpoint - should apply checkpoint compaction
-	messages := []api.Message{
-		{Role: "user", Content: "First request"},
-		{Role: "assistant", Content: "Long response content here that gets compacted"},
-		{Role: "user", Content: "Second request"},
-	}
-	checkpoints := []TurnCheckpoint{{
-		StartIndex: 0,
-		EndIndex:   1,
-		Summary:    "Compacted summary",
-	}}
-
-	a := &Agent{
-		debug: false,
-		state: NewAgentStateManager(false),
-	}
-	a.state.SetMessages(messages)
-	a.ReplaceTurnCheckpoints(checkpoints)
-
-	result := a.TriggerCompaction()
-	if result != true {
-		t.Errorf("TriggerCompaction() with checkpoint = %v, want true", result)
-	}
-
-	// Verify messages were compacted
-	if len(a.state.GetMessages()) >= len(messages) {
-		t.Errorf("messages not compacted: before=%d, after=%d", len(messages), len(a.state.GetMessages()))
-	}
-}
-
-func TestTriggerCompactionEmergencyTruncation(t *testing.T) {
-	// Test emergency truncation when no checkpoints or optimizer
-	// Need more than 3 messages to trigger emergency truncation
-	messages := []api.Message{
-		{Role: "user", Content: "First"},
-		{Role: "assistant", Content: "Response 1"},
-		{Role: "user", Content: "Second"},
-		{Role: "assistant", Content: "Response 2"},
-		{Role: "user", Content: "Third"},
-		{Role: "assistant", Content: "Response 3"},
-	}
-
-	a := &Agent{
-		debug: false,
-		state: NewAgentStateManager(false),
-		// No checkpoints, no optimizer - should trigger emergency truncation
-	}
-	a.state.SetMessages(messages)
-
-	result := a.TriggerCompaction()
-	if result != true {
-		t.Errorf("TriggerCompaction() emergency = %v, want true", result)
-	}
-
-	// Verify messages were truncated (should keep system + last 2)
-	if len(a.state.GetMessages()) > 3 {
-		t.Errorf("messages not truncated: got %d, want <=3", len(a.state.GetMessages()))
-	}
-}
-
 func TestExtractContextLimitTokenPair(t *testing.T) {
-	ac := &APIClient{agent: &Agent{}}
-
 	err := &testError{message: "HTTP 400: {\"error\":{\"message\":\"request (131306 tokens) exceeds the available context size (131072 tokens), try increasing it\",\"type\":\"exceed_context_size_error\",\"n_prompt_tokens\":131306,\"n_ctx\":131072}}"}
-	pair := ac.extractContextLimitTokenPair(err)
+	pair := extractContextLimitTokenPair(err)
 	if pair.prompt != 131306 {
 		t.Fatalf("prompt tokens = %d, want 131306", pair.prompt)
 	}

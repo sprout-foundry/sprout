@@ -70,6 +70,11 @@ type StateManager interface {
 	SetLLMCallCount(int)
 	IncrementLLMCallCount()
 
+	// Tool call tracking
+	GetTotalToolCalls() int
+	SetTotalToolCalls(int)
+	IncrementTotalToolCalls()
+
 	// Estimated token responses
 	GetEstimatedTokenResponses() int
 	SetEstimatedTokenResponses(int)
@@ -166,6 +171,7 @@ type AgentStateManager struct {
 	promptTokens                int
 	completionTokens            int
 	llmCallCount                int
+	totalToolCalls              int
 	estimatedTokenResponses     int
 	cachedTokens                int
 	cachedCostSavings           float64
@@ -414,6 +420,26 @@ func (s *AgentStateManager) IncrementLLMCallCount() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.llmCallCount++
+}
+
+// --- Tool call tracking ---
+
+func (s *AgentStateManager) GetTotalToolCalls() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.totalToolCalls
+}
+
+func (s *AgentStateManager) SetTotalToolCalls(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.totalToolCalls = n
+}
+
+func (s *AgentStateManager) IncrementTotalToolCalls() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.totalToolCalls++
 }
 
 // --- Estimated token responses ---

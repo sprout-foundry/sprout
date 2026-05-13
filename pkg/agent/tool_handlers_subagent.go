@@ -12,15 +12,15 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 const (
-	MAX_SUBAGENT_OUTPUT_SIZE  = 10 * 1024 * 1024 // 10MB
-	MAX_SUBAGENT_CONTEXT_SIZE = 1024 * 1024      // 1MB
-	BATCH_SIZE                = 50               // Number of lines to batch before publishing
+	MAX_SUBAGENT_OUTPUT_SIZE    = 10 * 1024 * 1024 // 10MB
+	MAX_SUBAGENT_CONTEXT_SIZE   = 1024 * 1024      // 1MB
+	BATCH_SIZE                  = 50               // Number of lines to batch before publishing
+	DefaultSubagentTokenBudget  = 2_000_000        // Default token budget for subagents
 )
 
 // MILESTONE_PHASES defines phases that trigger immediate publish without batching
@@ -398,7 +398,9 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
 
-	// Resolve workspace root once for all file validations
+	// Resolve workspace root once for all file validations.
+	// In daemon mode the process cwd may differ from the workspace, so we use
+	// the agent's workspace root (set via SetWorkspaceRoot) rather than os.Getwd().
 	absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
@@ -454,8 +456,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		if !alreadyApproved {
 			// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
 			// because stdin is /dev/null. Instead, we must reject the request.
-			isSubagent := configuration.GetEnvSimple("FROM_AGENT") == "1"
-			if isSubagent {
+			if a.IsSubagent() {
 				a.debugLog("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
 				return "", fmt.Errorf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths)
 			}
@@ -467,9 +468,9 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			// Prefer webui approval path when a browser tab is connected
 			agentConfig := a.GetConfig()
 			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-			canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+			canPrompt := logger != nil && logger.IsInteractive() && !a.isSubagent
 
-			if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !isSubagent && a.HasActiveWebUIClients() {
+			if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.isSubagent && a.HasActiveWebUIClients() {
 				// WEBUI: request approval via event bus for the browser dialog
 				extras := map[string]string{
 					"risk_type": "Subagent External Workspace",
@@ -559,7 +560,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
 				systemPromptPath = subagentType.SystemPrompt
-				systemPromptText = subagentType.SystemPromptText
+				// Inline text takes precedence over file path
+				if subagentType.SystemPromptText != "" {
+					systemPromptText = subagentType.SystemPromptText
+				}
 				// Track if persona had explicit provider/model (not from global fallback)
 				if subagentType.Provider != "" || subagentType.Model != "" {
 					explicitSubagentConfig = true
@@ -602,36 +606,21 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.warnSubagentFallback("missing config manager", "", "", provider, model)
 	}
 
-	// Create a streaming callback for real-time output
-	streamCallback := func(line string, taskID string) {
-		// Format the output line for display
-		// Don't show context percentage since this is subagent output, not parent agent
-		const subagentGray = "\033[38;5;244m" // Even lighter gray for subagent output
-		const reset = "\033[0m"
-
-		// Clean ANSI codes from the line to avoid display issues
-		cleanLine := stripAnsiCodes(line)
-
-		// Skip empty lines
-		if strings.TrimSpace(cleanLine) == "" {
-			return
+	// Resolve system prompt: inline text takes precedence over file path.
+	// If systemPromptPath is set but systemPromptText is empty, load from file.
+	// Resolve relative to workspace root (not process cwd) for daemon mode safety.
+	if systemPromptText == "" && systemPromptPath != "" {
+		absPromptPath := systemPromptPath
+		if !filepath.IsAbs(absPromptPath) {
+			absPromptPath = filepath.Join(subagentWorkspaceRoot, systemPromptPath)
 		}
-
-		publishSubagentActivity(ctx, a, "output", cleanLine, map[string]interface{}{
-			"task_id":     taskID,
-			"persona":     persona,
-			"is_parallel": false,
-		})
-
-		// Format: → Subagent: <output>
-		// For parallel subagents: → [task-id] Subagent: <output>
-		var prefix string
-		if taskID != "" && taskID != "task-0" {
-			prefix = fmt.Sprintf("[%s] ", taskID)
+		promptBytes, err := os.ReadFile(absPromptPath)
+		if err == nil {
+			systemPromptText = string(promptBytes)
+			a.debugLog("Loaded system prompt from %s\n", absPromptPath)
+		} else {
+			a.debugLog("Failed to load system prompt from %s: %v\n", absPromptPath, err)
 		}
-
-		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
-		a.printLineInternal(message)
 	}
 
 	// Print the provider/model being used for this subagent
@@ -651,10 +640,31 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)
 
-	resultMap, err := tools.RunSubagent(subagentWorkspaceRoot, enhancedPrompt.String(), model, provider, streamCallback, systemPromptPath, systemPromptText, persona)
-	if err != nil {
-		a.debugLog("Subagent spawn error: %v\n", err)
-		return "", fmt.Errorf("failed to spawn subagent: %w", err)
+	runner := a.GetSubagentRunner()
+	result := runner.Run(ctx, enhancedPrompt.String(), SubagentOptions{
+		Persona:      persona,
+		Model:        model,
+		Provider:     provider,
+		SystemPrompt: systemPromptText,
+	})
+
+	// Convert SubagentResult to resultMap format for backward compatibility
+	resultMap := map[string]string{
+		"stdout":          result.Output,
+		"stderr":          "",
+		"exit_code":       "0",
+		"completed":       "true",
+		"timed_out":       "false",
+		"budget_exceeded": fmt.Sprintf("%t", result.BudgetExceeded),
+		"elapsed_seconds": fmt.Sprintf("%.1f", result.Elapsed.Seconds()),
+		"tokens_used":     fmt.Sprintf("%d", result.TokensUsed),
+		"cost":            fmt.Sprintf("%.6f", result.Cost),
+		"tool_calls":      fmt.Sprintf("%d", result.ToolCalls),
+	}
+	if result.Error != nil {
+		resultMap["exit_code"] = "1"
+		resultMap["stderr"] = result.Error.Error()
+		a.debugLog("Subagent error: %v\n", result.Error)
 	}
 
 	// Truncate output if it exceeds size limit
@@ -720,9 +730,9 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	}
 
 	// Check if subagent failed with security-related errors
-	// When running as a subagent (SPROUT_FROM_AGENT=1), we can't prompt the user
+	// When running as a subagent, we can't prompt the user
 	// So we need to delegate the security decision back to the primary agent
-	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
+	if a.IsSubagent() {
 		stderr := resultMap["stderr"]
 		exitCode := resultMap["exit_code"]
 
@@ -805,7 +815,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			"2. Can you complete the remaining work yourself?\n"+
 			"3. Should you ask the user for guidance on how to proceed?\n\n"+
 			"Partial subagent output:\n%s",
-			tokensUsed, tools.GetSubagentMaxTokens(), stdout)
+			tokensUsed, DefaultSubagentTokenBudget, stdout)
 
 		a.debugLog("Subagent exceeded token budget, returning partial output to primary agent\n")
 		return errorMsg, nil
@@ -873,9 +883,9 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
 
-	var parallelTasks []tools.ParallelSubagentTask
+	var parallelTasks []SubagentTask
 	for i, taskRaw := range tasksSlice {
-		task := tools.ParallelSubagentTask{}
+		task := SubagentTask{}
 
 		// Support two formats:
 		// 1. Simple string: "task description"
@@ -955,35 +965,6 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	a.debugLog("Spawning %d parallel subagents\n", len(parallelTasks))
 
-	// Create a streaming callback for real-time output (same as single subagent)
-	streamCallback := func(line string, taskID string) {
-		// Format the output line for display
-		const subagentGray = "\033[38;5;244m" // Even lighter gray for subagent output
-		const reset = "\033[0m"
-
-		// Clean ANSI codes from the line to avoid display issues
-		cleanLine := stripAnsiCodes(line)
-
-		// Skip empty lines
-		if strings.TrimSpace(cleanLine) == "" {
-			return
-		}
-
-		publishSubagentActivity(ctx, a, "output", cleanLine, map[string]interface{}{
-			"task_id":     taskID,
-			"is_parallel": true,
-		})
-
-		// Format: → [task-id] Subagent: <output>
-		var prefix string
-		if taskID != "" && taskID != "task-0" {
-			prefix = fmt.Sprintf("[%s] ", taskID)
-		}
-
-		message := fmt.Sprintf("%s→ %sSubagent: %s%s\n", subagentGray, prefix, cleanLine, reset)
-		a.printLineInternal(message)
-	}
-
 	// Print the provider/model being used for these parallel subagents
 	displayProvider := subagentProvider
 	if displayProvider == "" {
@@ -1001,10 +982,37 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	})
 	fmt.Fprintf(os.Stderr, "[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)
 
-	resultMap, err := tools.RunParallelSubagents(a.currentWorkspaceRoot(), parallelTasks, false, streamCallback)
-	if err != nil {
-		a.debugLog("Parallel subagents spawn error: %v\n", err)
-		return "", fmt.Errorf("failed to spawn parallel subagents: %w", err)
+	runner := a.GetSubagentRunner()
+	var tasks []SubagentTask
+	for _, pt := range parallelTasks {
+		tasks = append(tasks, SubagentTask{
+			ID:       pt.ID,
+			Prompt:   pt.Prompt,
+			Model:    pt.Model,
+			Provider: pt.Provider,
+		})
+	}
+	results := runner.RunParallel(ctx, tasks, SubagentOptions{})
+
+	// Convert to resultMap format for backward compatibility
+	resultMap := make(map[string]map[string]string)
+	for _, r := range results {
+		resultMap[r.ID] = map[string]string{
+			"stdout":          r.Output,
+			"stderr":          "",
+			"exit_code":       "0",
+			"completed":       "true",
+			"timed_out":       "false",
+			"budget_exceeded": fmt.Sprintf("%t", r.BudgetExceeded),
+			"elapsed_seconds": fmt.Sprintf("%.1f", r.Elapsed.Seconds()),
+			"tokens_used":     fmt.Sprintf("%d", r.TokensUsed),
+			"cost":            fmt.Sprintf("%.6f", r.Cost),
+			"tool_calls":      fmt.Sprintf("%d", r.ToolCalls),
+		}
+		if r.Error != nil {
+			resultMap[r.ID]["exit_code"] = "1"
+			resultMap[r.ID]["stderr"] = r.Error.Error()
+		}
 	}
 	failedCount := 0
 	for _, result := range resultMap {
@@ -1058,7 +1066,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 	// Check for security errors in any of the parallel subagents
 	// When running as a subagent, we need to delegate security decisions to the primary agent
-	if configuration.GetEnvSimple("FROM_AGENT") == "1" {
+	if a.IsSubagent() {
 		for taskID, result := range resultMap {
 			exitCode := result["exit_code"]
 			stderr := result["stderr"]

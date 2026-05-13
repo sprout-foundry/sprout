@@ -133,7 +133,7 @@ func (a *Agent) GetTaskActions() []TaskAction {
 // IsInteractiveMode returns true if running in interactive mode
 func (a *Agent) IsInteractiveMode() bool {
 	return configuration.GetEnvSimple("INTERACTIVE") == "1" ||
-		configuration.GetEnvSimple("FROM_AGENT") != "1"
+		(a != nil && !a.IsSubagent())
 }
 
 // SetStatsUpdateCallback sets a callback for token/cost updates
@@ -314,6 +314,26 @@ func (a *Agent) GetTodoManager() *tools.TodoManager {
 		a.todoMgr = tools.NewTodoManager()
 	}
 	return a.todoMgr
+}
+
+// GetSubagentRunner returns the per-agent subagent runner, creating it lazily.
+func (a *Agent) GetSubagentRunner() *SubagentRunner {
+	if a.subagentRunner == nil {
+		a.subagentRunner = NewSubagentRunner(a, &SharedState{
+			EventBus:      a.eventBus,
+			TodoManager:   a.todoMgr,
+			EmbeddingMgr:  a.embeddingMgr,
+			ConfigManager: a.configManager,
+			WorkspaceRoot: a.workspaceRoot,
+		})
+	}
+	return a.subagentRunner
+}
+
+// IsSubagent returns true if this agent was spawned as a subagent.
+// Used to prevent nested subagent spawning and skip interactive prompts.
+func (a *Agent) IsSubagent() bool {
+	return a.isSubagent
 }
 
 // GenerateResponse generates a simple response using the current model without tool calls

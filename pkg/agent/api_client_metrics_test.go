@@ -7,7 +7,6 @@ import (
 )
 
 func TestDeriveUsageMetricsUsesProviderUsageWhenPresent(t *testing.T) {
-	ac := &APIClient{agent: &Agent{}}
 	resp := &api.ChatResponse{}
 	resp.Usage.PromptTokens = 120
 	resp.Usage.CompletionTokens = 30
@@ -15,7 +14,7 @@ func TestDeriveUsageMetricsUsesProviderUsageWhenPresent(t *testing.T) {
 	resp.Usage.EstimatedCost = 0.001
 	resp.Usage.CachedTokens = 40
 
-	prompt, completion, total, cost, cached, estimated := ac.deriveUsageMetrics(resp, nil, nil)
+	prompt, completion, total, cost, cached, estimated := deriveUsageMetrics(resp, nil, nil)
 	if estimated {
 		t.Fatalf("expected non-estimated usage when provider metrics are present")
 	}
@@ -28,7 +27,6 @@ func TestDeriveUsageMetricsUsesProviderUsageWhenPresent(t *testing.T) {
 }
 
 func TestDeriveUsageMetricsEstimatesWhenProviderUsageMissing(t *testing.T) {
-	ac := &APIClient{agent: &Agent{}}
 	choice := api.Choice{}
 	choice.Message.Role = "assistant"
 	choice.Message.Content = "This is a generated completion."
@@ -40,7 +38,7 @@ func TestDeriveUsageMetricsEstimatesWhenProviderUsageMissing(t *testing.T) {
 		{Role: "user", Content: "Write a short response."},
 	}
 
-	prompt, completion, total, _, _, estimated := ac.deriveUsageMetrics(resp, messages, nil)
+	prompt, completion, total, _, _, estimated := deriveUsageMetrics(resp, messages, nil)
 	if !estimated {
 		t.Fatalf("expected estimated usage when provider metrics are missing")
 	}
@@ -56,7 +54,6 @@ func TestDeriveUsageMetricsEstimatesWhenProviderUsageMissing(t *testing.T) {
 }
 
 func TestDeriveUsageMetricsUsesCentralizedEstimatorForToolCalls(t *testing.T) {
-	ac := &APIClient{agent: &Agent{}}
 	choice := api.Choice{}
 	choice.Message.Role = "assistant"
 	choice.Message.Content = "I can help with that."
@@ -79,7 +76,7 @@ func TestDeriveUsageMetricsUsesCentralizedEstimatorForToolCalls(t *testing.T) {
 	messages[0].ToolCalls[0].Function.Name = "calculator"
 	messages[0].ToolCalls[0].Function.Arguments = `{"value":1}`
 
-	prompt, _, _, _, _, estimated := ac.deriveUsageMetrics(resp, messages, nil)
+	prompt, _, _, _, _, estimated := deriveUsageMetrics(resp, messages, nil)
 	if !estimated {
 		t.Fatalf("expected estimated usage when provider metrics are missing")
 	}

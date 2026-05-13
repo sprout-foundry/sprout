@@ -15,20 +15,33 @@ func newTestAgent(t *testing.T) *Agent {
 	return newIsolatedTestAgent(t)
 }
 
-// newTestConversationHandler creates a ConversationHandler wrapping the given agent,
-// suitable for low-level messaging tests.
-func newTestConversationHandler(t *testing.T, agent *Agent) *testConversationHandler {
+// prepareMessagesForAgent prepares messages for the given agent, suitable for
+// low-level messaging tests.
+func prepareMessagesForAgent(t *testing.T, agent *Agent, tools []api.Tool) []api.Message {
 	t.Helper()
-	return &testConversationHandler{ch: NewConversationHandler(agent)}
-}
+	agent.initSubManagers()
+	if agent.state == nil {
+		agent.state = NewAgentStateManager(false)
+	}
+	// Use the system prompt from the agent and strip any system messages from history
+	optimizedMessages := agent.state.GetMessages()
 
-// testConversationHandler is a thin wrapper for invoking prepareMessages in tests.
-type testConversationHandler struct {
-	ch *ConversationHandler
-}
+	// Strip all system messages from conversation history
+	filtered := make([]api.Message, 0, len(optimizedMessages))
+	for _, m := range optimizedMessages {
+		if m.Role == "system" {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	optimizedMessages = filtered
 
-func (h *testConversationHandler) prepareMessagesForTest() ([]api.Message, error) {
-	return h.ch.prepareMessages(nil), nil
+	// Build the system message
+	allMessages := []api.Message{{Role: "system", Content: agent.systemPrompt}}
+	allMessages = append(allMessages, optimizedMessages...)
+	allMessages = collapseSystemMessagesToFront(allMessages)
+
+	return allMessages
 }
 
 // newIsolatedTestAgent creates a minimal agent backed by a temp config

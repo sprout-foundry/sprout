@@ -5,7 +5,7 @@
  * talks to the Foundry Go API server for chat, git, credentials, etc.
  * File operations are handled client-side by the WASM shell.
  *
- * This adapter is installed at app startup when REACT_APP_SPROUT_MODE=cloud.
+ * This adapter is installed at app startup when VITE_SPROUT_MODE=cloud.
  *
  * Route handlers are split into focused modules:
  *   cloudProxyRoutes.ts  — Backend proxy handlers (chat, git, stats, settings)

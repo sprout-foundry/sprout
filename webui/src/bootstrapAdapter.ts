@@ -16,7 +16,7 @@ const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
 ];
 
 // Use Vite's import.meta.env instead of process.env for browser compatibility
-const mode = import.meta.env.REACT_APP_SPROUT_MODE;
+const mode = import.meta.env.VITE_SPROUT_MODE;
 const apiBase = import.meta.env.REACT_APP_FOUNDRY_API_URL;
 const wsUrl = import.meta.env.REACT_APP_FOUNDRY_WS_URL;
 

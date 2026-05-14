@@ -568,16 +568,24 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Use the processed (cleaned) query so image placeholders are replaced
 	result, err := seedAgent.Run(context.Background(), processedQuery)
 	if err != nil {
-		// Wrap the error into a user-friendly message (mimics old HandleAPIFailure)
-		wrapped := wrapError(err)
+		// Classify the error to provide a user-friendly message.
+		// For permanent errors (auth, client error, context overflow), return
+		// the error directly so both CLI and webui display it properly.
+		classifiedErr := core.ClassifyError(err, a.GetModel())
+
+		// Build a user-friendly message for the event and response
+		wrapped := wrapError(classifiedErr)
 		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
 
 		// Sync whatever state we can before returning
 		a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
 
-		// Finalize
+		// Finalize — publish the user-friendly message as the response
 		a.finalizeConversationPostHooks(wrapped, processedQuery, preSeedMsgCount)
-		return wrapped, nil
+
+		// Return the classified error so CLI/webui display it properly.
+		// The wrapped message is published via events above for display.
+		return wrapped, classifiedErr
 	}
 
 	// Sync state back to sprout's agent manager

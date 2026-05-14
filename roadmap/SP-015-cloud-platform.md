@@ -111,9 +111,9 @@ Foundry reverse-proxies to the container's port 56000, including WebSocket upgra
 
 ### R2: Cloud Build Flag Consistency
 
-**Problem:** `build-webui-dist.mjs` sets `VITE_SPROUT_MODE=cloud` but `mode.ts` reads `process.env.REACT_APP_SPROUT_MODE`. These may not match depending on build tooling.
+**Problem:** `build-webui-dist.mjs` sets `VITE_SPROUT_MODE=cloud` and `mode.ts` reads `import.meta.env.VITE_SPROUT_MODE`. These are consistent.
 
-**Action:** Audit env var names across build scripts and source files. Ensure consistency.
+**Action:** ~~Audit env var names across build scripts and source files. Ensure consistency.~~ — Audit complete.
 
 ### R3: Component-Level Feature Flag Adoption
 

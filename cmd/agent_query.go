@@ -329,6 +329,10 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		duration := time.Since(startTime)
 
 		if res.err != nil {
+			// Print the response (user-friendly error message) if available
+			if res.response != "" {
+				fmt.Fprintf(os.Stderr, "[FAIL] %s\n", res.response)
+			}
 			errorEvent := events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
 			)

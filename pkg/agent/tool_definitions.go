@@ -445,6 +445,22 @@ func (r *ToolRegistry) GetAvailableTools() []string {
 	return tools
 }
 
+// GetToolConfig returns the ToolConfig for the given tool name.
+// Returns the config and true if found, or zero-value and false if not.
+func (r *ToolRegistry) GetToolConfig(name string) (ToolConfig, bool) {
+	config, ok := r.tools[name]
+	return config, ok
+}
+
+// GetAllToolConfigs returns a copy of all registered tool configs keyed by name.
+func (r *ToolRegistry) GetAllToolConfigs() map[string]ToolConfig {
+	result := make(map[string]ToolConfig, len(r.tools))
+	for name, config := range r.tools {
+		result[name] = config
+	}
+	return result
+}
+
 // ExecuteTool executes a tool with standardized parameter validation and error handling
 func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
 	tool, exists := r.tools[toolName]

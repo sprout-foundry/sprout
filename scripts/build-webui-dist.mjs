@@ -314,7 +314,7 @@ function main() {
 
   // Install dependencies (always run npm ci for reproducible dist builds)
   console.log('📦 Installing dependencies...');
-  run('npm', ['ci'], webuiDir);
+  run('npm', ['ci', '--legacy-peer-deps'], webuiDir);
   console.log('');
 
   // Set build environment variables
@@ -364,7 +364,7 @@ function main() {
   console.log('');
   console.log('Contents:');
   console.log('  index.html      - Application entry point');
-  console.log('  static/         - Static assets (css/, js/)');
+  console.log('  assets/         - Built assets (css/, js/)');
   console.log('  wasm/           - WASM binary and runtime (if available)');
   console.log('  version.json    - Version and build metadata');
   console.log('');

@@ -23,7 +23,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v0.1.9
+require github.com/sprout-foundry/seed v0.2.1
 
 require (
 	filippo.io/hpke v0.4.0 // indirect
@@ -42,5 +42,3 @@ require (
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 )
-
-replace github.com/sprout-foundry/seed => ../seed

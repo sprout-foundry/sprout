@@ -1,31 +1,31 @@
 /**
  * Tests for Sprout Mode Configuration
  *
- * The mode module reads process.env.REACT_APP_SPROUT_MODE at module load time,
+ * The mode module reads process.env.VITE_SPROUT_MODE at module load time,
  * so testing cloud mode requires resetting the module registry and re-importing
  * with the env var set before import.
  */
 
 describe('mode config (default / local mode)', () => {
   let modeModule: typeof import('./mode');
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   beforeAll(async () => {
-    delete process.env.REACT_APP_SPROUT_MODE;
+    delete process.env.VITE_SPROUT_MODE;
     vi.resetModules();
     modeModule = await import('./mode');
   });
 
   afterAll(() => {
     if (originalEnv === undefined) {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
     } else {
-      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+      process.env.VITE_SPROUT_MODE = originalEnv;
     }
     vi.resetModules();
   });
 
-  it('exports mode as "local" when REACT_APP_SPROUT_MODE is not set', () => {
+  it('exports mode as "local" when VITE_SPROUT_MODE is not set', () => {
     expect(modeModule.mode).toBe('local');
   });
 
@@ -60,11 +60,11 @@ describe('mode config (default / local mode)', () => {
 
 describe('mode config (cloud mode)', () => {
   let modeModule: typeof import('./mode');
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   beforeAll(async () => {
     // Set the env var before importing the module
-    process.env.REACT_APP_SPROUT_MODE = 'cloud';
+    process.env.VITE_SPROUT_MODE = 'cloud';
     vi.resetModules();
 
     modeModule = await import('./mode');
@@ -73,14 +73,14 @@ describe('mode config (cloud mode)', () => {
   afterAll(() => {
     // Restore the original env var
     if (originalEnv === undefined) {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
     } else {
-      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+      process.env.VITE_SPROUT_MODE = originalEnv;
     }
     vi.resetModules();
   });
 
-  it('exports mode as "cloud" when REACT_APP_SPROUT_MODE is "cloud"', () => {
+  it('exports mode as "cloud" when VITE_SPROUT_MODE is "cloud"', () => {
     expect(modeModule.mode).toBe('cloud');
   });
 
@@ -117,11 +117,11 @@ describe('mode config (cloud mode)', () => {
 
 describe('mode config (invalid env var value)', () => {
   let modeModule: typeof import('./mode');
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   beforeAll(async () => {
     // Any value other than 'cloud' should default to 'local'
-    process.env.REACT_APP_SPROUT_MODE = 'staging';
+    process.env.VITE_SPROUT_MODE = 'staging';
     vi.resetModules();
 
     modeModule = await import('./mode');
@@ -129,9 +129,9 @@ describe('mode config (invalid env var value)', () => {
 
   afterAll(() => {
     if (originalEnv === undefined) {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
     } else {
-      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+      process.env.VITE_SPROUT_MODE = originalEnv;
     }
     vi.resetModules();
   });
@@ -154,10 +154,10 @@ describe('mode config (invalid env var value)', () => {
 
 describe('mode config (empty string env var)', () => {
   let modeModule: typeof import('./mode');
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   beforeAll(async () => {
-    process.env.REACT_APP_SPROUT_MODE = '';
+    process.env.VITE_SPROUT_MODE = '';
     vi.resetModules();
 
     modeModule = await import('./mode');
@@ -165,9 +165,9 @@ describe('mode config (empty string env var)', () => {
 
   afterAll(() => {
     if (originalEnv === undefined) {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
     } else {
-      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+      process.env.VITE_SPROUT_MODE = originalEnv;
     }
     vi.resetModules();
   });
@@ -181,18 +181,18 @@ describe('mode config (empty string env var)', () => {
 describe('mode config flag invariants', () => {
   // Re-import to ensure clean state regardless of test ordering
   let modeModule: typeof import('./mode');
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   describe('in local mode', () => {
     beforeAll(async () => {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
       vi.resetModules();
       modeModule = await import('./mode');
     });
 
     afterAll(() => {
       if (originalEnv !== undefined) {
-        process.env.REACT_APP_SPROUT_MODE = originalEnv;
+        process.env.VITE_SPROUT_MODE = originalEnv;
       }
       vi.resetModules();
     });
@@ -216,16 +216,16 @@ describe('mode config flag invariants', () => {
 
   describe('in cloud mode', () => {
     beforeAll(async () => {
-      process.env.REACT_APP_SPROUT_MODE = 'cloud';
+      process.env.VITE_SPROUT_MODE = 'cloud';
       vi.resetModules();
       modeModule = await import('./mode');
     });
 
     afterAll(() => {
       if (originalEnv === undefined) {
-        delete process.env.REACT_APP_SPROUT_MODE;
+        delete process.env.VITE_SPROUT_MODE;
       } else {
-        process.env.REACT_APP_SPROUT_MODE = originalEnv;
+        process.env.VITE_SPROUT_MODE = originalEnv;
       }
       vi.resetModules();
     });
@@ -252,18 +252,18 @@ describe('mode config flag invariants', () => {
 });
 
 describe('with CloudAdapter installed', () => {
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   beforeEach(() => {
     vi.resetModules();
-    process.env.REACT_APP_SPROUT_MODE = 'local';
+    process.env.VITE_SPROUT_MODE = 'local';
   });
 
   afterEach(() => {
     if (originalEnv === undefined) {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
     } else {
-      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+      process.env.VITE_SPROUT_MODE = originalEnv;
     }
     vi.resetModules();
   });
@@ -306,18 +306,18 @@ describe('with CloudAdapter installed', () => {
 });
 
 describe('with custom adapter installed', () => {
-  const originalEnv = process.env.REACT_APP_SPROUT_MODE;
+  const originalEnv = process.env.VITE_SPROUT_MODE;
 
   beforeEach(() => {
     vi.resetModules();
-    process.env.REACT_APP_SPROUT_MODE = 'local';
+    process.env.VITE_SPROUT_MODE = 'local';
   });
 
   afterEach(() => {
     if (originalEnv === undefined) {
-      delete process.env.REACT_APP_SPROUT_MODE;
+      delete process.env.VITE_SPROUT_MODE;
     } else {
-      process.env.REACT_APP_SPROUT_MODE = originalEnv;
+      process.env.VITE_SPROUT_MODE = originalEnv;
     }
     vi.resetModules();
   });

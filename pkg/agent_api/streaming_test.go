@@ -583,3 +583,367 @@ func TestStreamingResponseBuilder_EmptyContentHandling(t *testing.T) {
 		t.Errorf("Expected reasoning_content to be preserved, got: %s", choice.Message.ReasoningContent)
 	}
 }
+
+// TestStreamingResponseBuilder_ZAIReasoningAndContent tests the Z.AI GLM-5 streaming pattern where
+// reasoning and content arrive in separate chunks (reasoning first, then content).
+func TestStreamingResponseBuilder_ZAIReasoningAndContent(t *testing.T) {
+	var capturedReasoning strings.Builder
+	var capturedContent strings.Builder
+
+	callback := func(content string, contentType string) {
+		switch contentType {
+		case "reasoning":
+			capturedReasoning.WriteString(content)
+		case "assistant_text":
+			capturedContent.WriteString(content)
+		}
+	}
+
+	builder := NewStreamingResponseBuilder(callback)
+
+	// Phase 1: Reasoning-only chunks (simulating Z.AI GLM-5 streaming pattern)
+	reasoningChunks := []StreamingChatResponse{
+		{
+			ID:      "zai-test-123",
+			Model:   "glm-5",
+			Created: 1234567890,
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						Role:             "assistant",
+						ReasoningContent: "The user is asking a simple math question. ",
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ReasoningContent: "I need to calculate 1 + 1 and provide the result. ",
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ReasoningContent: "The answer is 2.",
+					},
+				},
+			},
+		},
+	}
+
+	for _, chunk := range reasoningChunks {
+		if err := builder.ProcessChunk(&chunk); err != nil {
+			t.Fatalf("ProcessChunk() error = %v", err)
+		}
+	}
+
+	// Phase 2: Content-only chunks (Z.AI sends content separately from reasoning)
+	contentChunks := []StreamingChatResponse{
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						Content: "1 + 1 = ",
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						Content: "2",
+					},
+				},
+			},
+		},
+	}
+
+	for _, chunk := range contentChunks {
+		if err := builder.ProcessChunk(&chunk); err != nil {
+			t.Fatalf("ProcessChunk() error = %v", err)
+		}
+	}
+
+	// Phase 3: Final chunk with finish_reason
+	finalChunk := StreamingChatResponse{
+		Choices: []StreamingChoice{
+			{
+				Index:        0,
+				FinishReason: stringPtr("stop"),
+			},
+		},
+		Usage: &struct {
+			PromptTokens        int     `json:"prompt_tokens"`
+			CompletionTokens    int     `json:"completion_tokens"`
+			TotalTokens         int     `json:"total_tokens"`
+			EstimatedCost       float64 `json:"estimated_cost"`
+			Cost                float64 `json:"cost,omitempty"`
+			PromptTokensDetails struct {
+				CachedTokens     int  `json:"cached_tokens"`
+				CacheWriteTokens *int `json:"cache_write_tokens"`
+			} `json:"prompt_tokens_details,omitempty"`
+		}{
+			PromptTokens:     10,
+			CompletionTokens: 15,
+			TotalTokens:      25,
+			EstimatedCost:    0.001,
+		},
+	}
+
+	if err := builder.ProcessChunk(&finalChunk); err != nil {
+		t.Fatalf("ProcessChunk() error = %v", err)
+	}
+
+	// Get final response
+	response := builder.GetResponse()
+
+	// Verify basic response structure
+	if response.ID != "zai-test-123" {
+		t.Errorf("Expected ID 'zai-test-123', got '%s'", response.ID)
+	}
+
+	if response.Model != "glm-5" {
+		t.Errorf("Expected model 'glm-5', got '%s'", response.Model)
+	}
+
+	// Verify content field contains accumulated content (not reasoning)
+	expectedContent := "1 + 1 = 2"
+	if len(response.Choices) == 0 {
+		t.Fatal("Expected at least one choice in response")
+	}
+
+	choice := response.Choices[0]
+	if choice.Message.Content != expectedContent {
+		t.Errorf("Expected content '%s', got '%s'", expectedContent, choice.Message.Content)
+	}
+
+	// Verify reasoning_content field contains accumulated reasoning
+	expectedReasoning := "The user is asking a simple math question. I need to calculate 1 + 1 and provide the result. The answer is 2."
+	if choice.Message.ReasoningContent != expectedReasoning {
+		t.Errorf("Expected reasoning_content '%s', got '%s'", expectedReasoning, choice.Message.ReasoningContent)
+	}
+
+	// Verify finish reason
+	if choice.FinishReason != "stop" {
+		t.Errorf("Expected finish reason 'stop', got '%s'", choice.FinishReason)
+	}
+
+	// Verify usage
+	if response.Usage.PromptTokens != 10 {
+		t.Errorf("Expected 10 prompt tokens, got %d", response.Usage.PromptTokens)
+	}
+
+	// Verify callbacks captured the correct content
+	expectedCapturedContent := expectedContent
+	if capturedContent.String() != expectedCapturedContent {
+		t.Errorf("Expected callback content '%s', got '%s'", expectedCapturedContent, capturedContent.String())
+	}
+
+	expectedCapturedReasoning := expectedReasoning
+	if capturedReasoning.String() != expectedCapturedReasoning {
+		t.Errorf("Expected callback reasoning '%s', got '%s'", expectedCapturedReasoning, capturedReasoning.String())
+	}
+}
+
+// TestStreamingResponseBuilder_ReasoningOnlyContent tests the scenario where only reasoning
+// content is provided (no separate content chunks), which is common with reasoning models.
+// This validates the fallback behavior where reasoning is copied to the content field.
+func TestStreamingResponseBuilder_ReasoningOnlyContent(t *testing.T) {
+	builder := NewStreamingResponseBuilder(nil)
+
+	// Simulate a pure reasoning response (no content field ever populated)
+	chunks := []StreamingChatResponse{
+		{
+			ID:      "reasoning-only-123",
+			Model:   "glm-5",
+			Created: 1234567890,
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						Role:             "assistant",
+						ReasoningContent: "First reasoning step: ",
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ReasoningContent: "Second reasoning step: the answer is ",
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index: 0,
+					Delta: StreamingDelta{
+						ReasoningContent: "42.",
+					},
+				},
+			},
+		},
+		{
+			Choices: []StreamingChoice{
+				{
+					Index:        0,
+					FinishReason: stringPtr("stop"),
+				},
+			},
+		},
+	}
+
+	for _, chunk := range chunks {
+		if err := builder.ProcessChunk(&chunk); err != nil {
+			t.Fatalf("ProcessChunk() error = %v", err)
+		}
+	}
+
+	response := builder.GetResponse()
+
+	if len(response.Choices) == 0 {
+		t.Fatal("Expected at least one choice in response")
+	}
+
+	choice := response.Choices[0]
+
+	// When only reasoning is provided, content should be populated from reasoning
+	// to avoid empty content field (which causes 502 errors)
+	expectedContent := "First reasoning step: Second reasoning step: the answer is 42."
+	if choice.Message.Content == "" {
+		t.Error("Expected content to be populated from reasoning_content, but it was empty")
+	}
+
+	if choice.Message.Content != expectedContent {
+		t.Errorf("Expected content '%s', got '%s'", expectedContent, choice.Message.Content)
+	}
+
+	// Reasoning content should also be preserved
+	if choice.Message.ReasoningContent != expectedContent {
+		t.Errorf("Expected reasoning_content '%s', got '%s'", expectedContent, choice.Message.ReasoningContent)
+	}
+}
+
+// TestStreamingResponseBuilder_DataPrefixVariants tests SSE parsing edge cases with
+// different data: prefix variants that providers might use.
+func TestStreamingResponseBuilder_DataPrefixVariants(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []StreamingChatResponse
+		wantErr  bool
+	}{
+		{
+			name: "Standard data: prefix",
+			input: "data: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
+			expected: []StreamingChatResponse{
+				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
+			},
+		},
+		{
+			name: "Data: without space (some providers use this)",
+			input: "data:{\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
+			expected: []StreamingChatResponse{
+				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
+			},
+		},
+		{
+			name: "Multiple SSE events",
+			input: "data: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" World\"}}]}\n\n",
+			expected: []StreamingChatResponse{
+				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
+				{Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: " World"}}}},
+			},
+		},
+		{
+			name: "Done message",
+			input: "data: [DONE]\n\n",
+			expected: nil, // [DONE] returns io.EOF, not a response
+			wantErr: true,
+		},
+		{
+			name: "Empty line skipped",
+			input: "\ndata: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
+			expected: []StreamingChatResponse{
+				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
+			},
+		},
+		{
+			name:    "Invalid JSON",
+			input:   "data: {invalid json}\n\n",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var results []StreamingChatResponse
+			reader := strings.NewReader(tt.input)
+			sseReader := NewSSEReader(reader, func(event, data string) error {
+				chunk, err := ParseSSEData(data)
+				if err != nil {
+					// For [DONE], just return the io.EOF
+					if err == io.EOF {
+						return io.EOF
+					}
+					return err
+				}
+				if chunk != nil {
+					results = append(results, *chunk)
+				}
+				return nil
+			})
+
+			err := sseReader.Read()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("SSEReader.Read() error = %v", err)
+			}
+
+			if len(results) != len(tt.expected) {
+				t.Errorf("Expected %d responses, got %d", len(tt.expected), len(results))
+				for i, r := range results {
+					t.Logf("Result %d: ID=%s, Content=%s", i, r.ID, r.Choices[0].Delta.Content)
+				}
+				return
+			}
+
+			for i, exp := range tt.expected {
+				if results[i].ID != exp.ID {
+					t.Errorf("Result %d: expected ID '%s', got '%s'", i, exp.ID, results[i].ID)
+				}
+				if len(results[i].Choices) != len(exp.Choices) {
+					t.Errorf("Result %d: expected %d choices, got %d", i, len(exp.Choices), len(results[i].Choices))
+					continue
+				}
+				if len(exp.Choices) > 0 && len(results[i].Choices) > 0 {
+					if results[i].Choices[0].Delta.Content != exp.Choices[0].Delta.Content {
+						t.Errorf("Result %d: expected content '%s', got '%s'", i, exp.Choices[0].Delta.Content, results[i].Choices[0].Delta.Content)
+					}
+				}
+			}
+		})
+	}
+}

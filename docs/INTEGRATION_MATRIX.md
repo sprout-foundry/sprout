@@ -89,7 +89,7 @@ services/apiAdapter.ts          — Interface definition (APIAdapter)
 services/cloudAdapter.ts        — Cloud implementation (CloudAdapter)
 services/cloudEndpointRegistry.ts — Maps every /api/* endpoint to a category
 config/mode.ts                  — Feature flags derived from adapter capabilities
-bootstrapAdapter.ts             — Installs CloudAdapter when REACT_APP_SPROUT_MODE=cloud
+bootstrapAdapter.ts             — Installs CloudAdapter when VITE_SPROUT_MODE=cloud
 ```
 
 **Path 2: Service Worker** (foundry repo) — intercepts browser fetch requests:
@@ -151,8 +151,8 @@ classification between the two.
 
 ### Cross-cutting concerns
 
-1. **Build flag consistency.** `VITE_SPROUT_MODE` vs `REACT_APP_SPROUT_MODE`
-   may not match. Need audit.
+1. **Build flag consistency.** `VITE_SPROUT_MODE` is now the standard env var name.
+   Audit complete — all references updated.
 
 2. **Feature flag adoption.** Components must consistently use `supports*`
    flags from `mode.ts` to avoid rendering local-only UI in cloud mode.

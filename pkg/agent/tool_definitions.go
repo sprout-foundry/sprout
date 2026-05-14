@@ -20,7 +20,7 @@ import (
 // ParameterConfig defines parameter validation rules for a tool
 type ParameterConfig struct {
 	Name         string   `json:"name"`
-	Type         string   `json:"type"` // "string", "int", "float64", "bool"
+	Type         string   `json:"type"` // "string", "integer", "number", "boolean"
 	Required     bool     `json:"required"`
 	Alternatives []string `json:"alternatives"` // Alternative parameter names for backward compatibility
 	Description  string   `json:"description"`
@@ -79,7 +79,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id)",
 		Parameters: []ParameterConfig{
 			{"command", "string", false, []string{"cmd"}, "The shell command to execute (required unless check_background or stop_background is provided)"},
-			{"background", "bool", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},
+			{"background", "boolean", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},
 			{"check_background", "string", false, []string{}, "Session ID of a background session to check (returns accumulated output)"},
 			{"stop_background", "string", false, []string{}, "Session ID of a background session to stop/terminate"},
 		},
@@ -230,9 +230,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"search_pattern", "string", true, []string{"pattern"}, "Text pattern or regex to search for"},
 			{"directory", "string", false, []string{"root"}, "Directory to search (default: .)"},
 			{"file_glob", "string", false, []string{"file_pattern", "glob"}, "Glob to limit files (e.g., *.go)"},
-			{"case_sensitive", "bool", false, []string{}, "Case sensitive search (default: false)"},
-			{"max_results", "int", false, []string{}, "Maximum results to return (default: 50)"},
-			{"max_bytes", "int", false, []string{}, "Maximum total bytes of matches to return (default: 102400)"},
+			{"case_sensitive", "boolean", false, []string{}, "Case sensitive search (default: false)"},
+			{"max_results", "integer", false, []string{}, "Maximum results to return (default: 50)"},
+			{"max_bytes", "integer", false, []string{}, "Maximum total bytes of matches to return (default: 102400)"},
 		},
 		Handler: handleSearchFiles,
 	})
@@ -269,11 +269,11 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"session_id", "string", false, []string{}, "Reuse a persistent built-in browser session across multiple browse_url calls for iterative debugging"},
 			{"persist_session", "boolean", false, []string{}, "Keep the browser page alive after this call and return a session_id in inspect output"},
 			{"close_session", "boolean", false, []string{}, "Close the referenced persistent session after this call completes"},
-			{"viewport_width", "int", false, []string{}, "Browser viewport width in pixels (default: 1280)"},
-			{"viewport_height", "int", false, []string{}, "Browser viewport height in pixels (default: 720)"},
+			{"viewport_width", "integer", false, []string{}, "Browser viewport width in pixels (default: 1280)"},
+			{"viewport_height", "integer", false, []string{}, "Browser viewport height in pixels (default: 720)"},
 			{"user_agent", "string", false, []string{}, "Override the browser User-Agent string"},
 			{"wait_for_selector", "string", false, []string{}, "Optional CSS selector to wait for before capturing output or running steps"},
-			{"wait_timeout_ms", "int", false, []string{}, "Optional selector wait timeout in milliseconds (default: 10000)"},
+			{"wait_timeout_ms", "integer", false, []string{}, "Optional selector wait timeout in milliseconds (default: 10000)"},
 			{"steps", "array", false, []string{}, "Optional interaction steps. Each step object supports action=wait_for|wait_for_text|assert_selector|assert_text|assert_title|assert_url|click|hover|type|fill|press|sleep|scroll_to|navigate|reload|back|forward|eval plus selector/value/key/millis/script/expect fields as needed"},
 			{"capture_selectors", "array", false, []string{}, "Optional list of CSS selectors to capture after interactions (text/html/value/basic attrs)"},
 			{"capture_dom", "boolean", false, []string{}, "Include rendered DOM in inspect output"},
@@ -282,7 +282,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"capture_network", "boolean", false, []string{}, "Include fetch/XHR network request summaries in inspect output"},
 			{"capture_storage", "boolean", false, []string{}, "Include localStorage and sessionStorage snapshots in inspect output"},
 			{"capture_cookies", "boolean", false, []string{}, "Include document.cookie-visible cookies in inspect output"},
-			{"response_max_chars", "int", false, []string{}, "Optional per-field truncation limit for inspect output"},
+			{"response_max_chars", "integer", false, []string{}, "Optional per-field truncation limit for inspect output"},
 		},
 		Handler: handleBrowseURL,
 	})
@@ -294,8 +294,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"image_path", "string", true, []string{}, "Path or URL to the UI screenshot or HTML file"},
 			{"analysis_prompt", "string", false, []string{}, "Optional custom vision prompt for analysis"},
-			{"viewport_width", "int", false, []string{}, "Browser viewport width in pixels for HTML files (default: 1280)"},
-			{"viewport_height", "int", false, []string{}, "Browser viewport height in pixels for HTML files (default: 720)"},
+			{"viewport_width", "integer", false, []string{}, "Browser viewport width in pixels for HTML files (default: 1280)"},
+			{"viewport_height", "integer", false, []string{}, "Browser viewport height in pixels for HTML files (default: 720)"},
 		},
 		Handler: handleAnalyzeUIScreenshot,
 	})
@@ -317,10 +317,10 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "view_history",
 		Description: "View recent change history tracked by the agent",
 		Parameters: []ParameterConfig{
-			{"limit", "int", false, []string{}, "Maximum number of entries to return (default 10)"},
+			{"limit", "integer", false, []string{}, "Maximum number of entries to return (default 10)"},
 			{"file_filter", "string", false, []string{"filename"}, "Filter by filename (partial match)"},
 			{"since", "string", false, []string{}, "Only include changes after this ISO 8601 timestamp"},
-			{"show_content", "bool", false, []string{}, "Include content summaries for each change"},
+			{"show_content", "boolean", false, []string{}, "Include content summaries for each change"},
 		},
 		Handler: handleViewHistory,
 	})
@@ -331,7 +331,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"revision_id", "string", false, []string{}, "Revision ID to rollback (leave blank to list revisions)"},
 			{"file_path", "string", false, []string{"filename"}, "Rollback only this file from the revision"},
-			{"confirm", "bool", false, []string{}, "Set to true to execute the rollback"},
+			{"confirm", "boolean", false, []string{}, "Set to true to execute the rollback"},
 		},
 		Handler: handleRollbackChanges,
 	})
@@ -422,8 +422,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
 		Parameters: []ParameterConfig{
 			{"query", "string", true, []string{}, "Natural language description of what you're looking for"},
-			{"top_k", "int", false, []string{}, "Maximum results to return (default: 5)"},
-			{"threshold", "float64", false, []string{}, "Minimum similarity score 0.0-1.0 (default: 0.75)"},
+			{"top_k", "integer", false, []string{}, "Maximum results to return (default: 5)"},
+			{"threshold", "number", false, []string{}, "Minimum similarity score 0.0-1.0 (default: 0.75)"},
 		},
 		Handler: handleSemanticSearch,
 	})
@@ -804,7 +804,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 
 		return "", fmt.Errorf("expected string, got %T", value)
 
-	case "int":
+	case "int", "integer":
 		if i, ok := value.(int); ok {
 			return i, nil
 		}
@@ -813,7 +813,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 		}
 		return 0, fmt.Errorf("expected int, got %T", value)
 
-	case "float64":
+	case "float64", "number":
 		if f, ok := value.(float64); ok {
 			return f, nil
 		}
@@ -822,7 +822,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 		}
 		return 0.0, fmt.Errorf("expected float64, got %T", value)
 
-	case "bool":
+	case "bool", "boolean":
 		if b, ok := value.(bool); ok {
 			return b, nil
 		}

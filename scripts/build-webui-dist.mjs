@@ -13,6 +13,8 @@ const buildDir = join(webuiDir, 'dist'); // Vite output directory
 const args = process.argv.slice(2);
 let mode = 'cloud'; // default
 let outputDir = '';
+let foundryApiUrl = undefined;
+let foundryWsUrl = undefined;
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
@@ -22,12 +24,20 @@ for (let i = 0; i < args.length; i++) {
   } else if (arg === '--output' && i + 1 < args.length) {
     outputDir = args[i + 1];
     i++;
+  } else if (arg === '--api-url' && i + 1 < args.length) {
+    foundryApiUrl = args[i + 1];
+    i++;
+  } else if (arg === '--ws-url' && i + 1 < args.length) {
+    foundryWsUrl = args[i + 1];
+    i++;
   } else if (arg === '--help' || arg === '-h') {
     console.log('Usage: node build-webui-dist.mjs [options]');
     console.log('');
     console.log('Options:');
     console.log('  --mode <cloud|local>  Build mode (default: cloud)');
     console.log('  --output <dir>         Output directory (default: dist/<mode>/)');
+    console.log('  --api-url <url>        Foundry API base URL (runtime-configurable)');
+    console.log('  --ws-url <url>         Foundry WebSocket URL (runtime-configurable)');
     console.log('  --help, -h             Show this help message');
     console.log('');
     console.log('Modes:');
@@ -36,10 +46,16 @@ for (let i = 0; i < args.length; i++) {
     console.log('  local   - Sets VITE_SPROUT_MODE=local during build');
     console.log('            Produces local-mode bundle (local terminal enabled)');
     console.log('');
+    console.log('Runtime configuration:');
+    console.log('  If --api-url and --ws-url are NOT provided, the built application');
+    console.log('  will derive these URLs from window.location at runtime.');
+    console.log('  Provide them only if you need to pin a specific backend.');
+    console.log('');
     console.log('Examples:');
     console.log('  node build-webui-dist.mjs                 # Build cloud-mode to dist/cloud/');
     console.log('  node build-webui-dist.mjs --mode local    # Build local-mode to dist/local/');
     console.log('  node build-webui-dist.mjs --mode cloud --output ./release');
+    console.log('  node build-webui-dist.mjs --api-url https://api.example.com/api --ws-url wss://api.example.com/ws');
     process.exit(0);
   }
 }
@@ -327,6 +343,17 @@ function main() {
     // Explicitly override to prevent env var leak from the shell
     buildEnv.VITE_SPROUT_MODE = 'local';
     console.log('🔨 Building React app with Vite in local mode (VITE_SPROUT_MODE=local)...');
+  }
+
+  // Runtime-configurable Foundry URLs — only bake them in if explicitly provided.
+  // When omitted, bootstrapAdapter.ts falls back to window.location at runtime.
+  if (foundryApiUrl !== undefined) {
+    buildEnv.VITE_FOUNDRY_API_URL = foundryApiUrl;
+    console.log(`    VITE_FOUNDRY_API_URL=${foundryApiUrl}`);
+  }
+  if (foundryWsUrl !== undefined) {
+    buildEnv.VITE_FOUNDRY_WS_URL = foundryWsUrl;
+    console.log(`    VITE_FOUNDRY_WS_URL=${foundryWsUrl}`);
   }
 
   // Build React app with Vite

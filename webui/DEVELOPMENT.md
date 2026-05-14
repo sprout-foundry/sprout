@@ -88,9 +88,9 @@ npm start
 
 ### `.env` (Web UI)
 ```
-REACT_APP_WS_URL=ws://localhost:56000
-REACT_APP_TERMINAL_WS_URL=ws://localhost:56000
-REACT_APP_API_URL=http://localhost:56000
+# VITE_WS_URL=ws://localhost:54321
+# VITE_TERMINAL_WS_URL=ws://localhost:54321
+# VITE_API_URL=http://localhost:54321
 ```
 
 ### `package.json` proxy

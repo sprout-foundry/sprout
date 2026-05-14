@@ -530,7 +530,7 @@ Three Python test runner scripts at the project root with overlapping purposes:
 > **Matrix ref:** This section delivers Environment B (Cloud Web App) for Interface 1 (File System) and Interface 2 (Shell). The WASM shell replaces the Go HTTP server for file ops and terminal — see the "B. Cloud Web App" column in [`docs/INTEGRATION_MATRIX.md`](docs/INTEGRATION_MATRIX.md).
 
 [x] - CLOUD: Add `--dist` flag to `scripts/build-wasm.sh` that produces a self-contained distributable directory (webui build + WASM binary + version.json)
-[x] - CLOUD: Create `webui/src/config/mode.ts` feature flag module — read `REACT_APP_SPROUT_MODE` and export `isCloud`, `supportsSSH`, `supportsInstances`, `supportsLocalTerminal`, `supportsSettings` flags
+[x] - CLOUD: Create `webui/src/config/mode.ts` feature flag module — read `VITE_SPROUT_MODE` and export `isCloud`, `supportsSSH`, `supportsInstances`, `supportsLocalTerminal`, `supportsSettings` flags
 [x] - CLOUD: Conditionally render SSH panels, instance management panels, local terminal PTY, and local settings in WebUI components based on cloud mode feature flags
 [x] - CLOUD: Ensure the webui renders gracefully when no Go backend is reachable (shows a connection error message, but editor/file tree/terminal still load via WASM)
 [x] - CLOUD: Make `wasmShell.ts` paths configurable — accept optional `wasmUrl` and `wasmExecUrl` in `initWasmShell()` config parameter
@@ -553,7 +553,7 @@ The webui now uses an `APIAdapter` interface to decouple API communication from 
 [x] - CLOUD-ADAPTER: Create `services/cloudAdapter.ts` with `CloudAdapter` class — routes `/api/*` calls to Foundry backend with `credentials: include`, returns Foundry WS URL
 [x] - CLOUD-ADAPTER: Modify `services/clientSession.ts` — `clientFetch()` checks for installed adapter first, delegates if present, falls back to existing local behavior unchanged
 [x] - CLOUD-ADAPTER: Modify `services/websocket.ts` — WS URL resolution checks adapter before falling back to localhost
-[x] - CLOUD-ADAPTER: Wire cloud adapter installation in `index.tsx` — installs `CloudAdapter` when `REACT_APP_SPROUT_MODE=cloud`
+[x] - CLOUD-ADAPTER: Wire cloud adapter installation in `index.tsx` — installs `CloudAdapter` when `VITE_SPROUT_MODE=cloud`
 [x] - CLOUD-ADAPTER: Verify both local and cloud builds compile clean with adapter pattern in place
 [x] - CLOUD-ADAPTER: Verify zero impact on local mode — adapter is only active when `installAdapter()` is called
 

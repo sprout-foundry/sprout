@@ -200,6 +200,36 @@ function copyWasmFiles(targetDir) {
   if (existsSync(staleVersionJson)) {
     rmSync(staleVersionJson);
   }
+
+  // Verify WASM files were successfully copied to the output directory
+  verifyWasmFiles(targetWasmDir);
+}
+
+function verifyWasmFiles(targetWasmDir) {
+  console.log('🔍 Verifying WASM files in output...');
+
+  const expectedFiles = ['sprout.wasm', 'wasm_exec.js'];
+  let allPresent = true;
+
+  for (const file of expectedFiles) {
+    const filePath = join(targetWasmDir, file);
+    if (existsSync(filePath)) {
+      console.log(`  ✓ ${file} present in ${targetWasmDir}`);
+    } else {
+      console.error(`  ✗ ${file} MISSING from ${targetWasmDir}`);
+      allPresent = false;
+    }
+  }
+
+  if (!allPresent) {
+    console.error('');
+    console.error('Error: WASM files were not successfully copied to the output directory.');
+    console.error(`Expected files in ${targetWasmDir}:`);
+    for (const file of expectedFiles) {
+      console.error(`  - ${file}`);
+    }
+    process.exit(1);
+  }
 }
 
 function getGitTag() {

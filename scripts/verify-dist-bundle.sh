@@ -126,10 +126,26 @@ else
     echo "  ⚠ asset-manifest.json not found (may not be generated in this build)"
 fi
 
-# 4. Check version.json
+# 4. Check version.json and validate mode
 echo ""
 echo "Checking version.json..."
 check_url "${BASE_URL}/version.json" "version.json"
+
+# Validate that version.json contains the correct mode for this dist bundle
+EXPECTED_MODE=$(basename "$DIST_DIR")
+ACTUAL_MODE=$(curl -sf "${BASE_URL}/version.json" | jq -r '.mode // empty' 2>/dev/null || echo "")
+if [ -z "$ACTUAL_MODE" ]; then
+    echo "  ❌ version.json has no 'mode' field"
+    FAILED_ASSETS+=("version.json (missing mode field)")
+    TOTAL_ASSETS=$((TOTAL_ASSETS + 1))
+elif [ "$ACTUAL_MODE" != "$EXPECTED_MODE" ]; then
+    echo "  ❌ version.json mode mismatch: expected '${EXPECTED_MODE}', got '${ACTUAL_MODE}'"
+    FAILED_ASSETS+=("version.json (mode mismatch: expected ${EXPECTED_MODE}, got ${ACTUAL_MODE})")
+    TOTAL_ASSETS=$((TOTAL_ASSETS + 1))
+else
+    echo "  ✅ version.json mode is '${ACTUAL_MODE}' (matches expected '${EXPECTED_MODE}')"
+    TOTAL_ASSETS=$((TOTAL_ASSETS + 1))
+fi
 
 # 5. Check WASM files
 echo ""

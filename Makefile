@@ -34,6 +34,7 @@ help:
 	@echo "Distribution Bundles:"
 	@echo "  make build-webui-dist       - Build cloud-mode distributable WebUI bundle"
 	@echo "  make build-webui-dist-local - Build local-mode distributable WebUI bundle"
+	@echo "  make build-cloud            - Build cloud-mode binary (sprout-cloud)"
 	@echo "  make verify-dist            - Verify cloud-mode dist bundle serves correctly"
 	@echo "  make verify-dist-local      - Verify local-mode dist bundle serves correctly"
 	@echo ""
@@ -270,6 +271,16 @@ export-endpoint-manifest:
 # Optimized: skips React rebuild if source files haven't changed
 build-all: deploy-ui build-wasm build
 	@echo "Full build completed: React UI + WASM shell + Go binary"
+
+# Build cloud-mode binary (sprout-cloud) — embeds cloud-mode WebUI
+# Produces a separate binary so it doesn't overwrite the local-mode 'sprout'
+build-cloud: build-wasm
+	@echo "Building cloud-mode WebUI..."
+	@cd webui && npm run build:cloud || exit 1
+	@cd "$(CURDIR)" && node scripts/build-webui-embed.mjs
+	@echo "Building sprout-cloud..."
+	GO111MODULE=on go build -tags "browser" -o sprout-cloud .
+	@echo "Cloud build completed: sprout-cloud"
 
 # Fast incremental build (only builds what changed)
 build-fast:

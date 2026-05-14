@@ -16,7 +16,7 @@
 ```typescript
 // webui/src/config/mode.ts
 export const mode: SproutMode =
-  process.env.REACT_APP_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';
+  process.env.VITE_SPROUT_MODE === 'cloud' ? 'cloud' : 'local';
 
 // Feature flags — adapter overrides build-time defaults
 export const isCloud: boolean           // mode === 'cloud'

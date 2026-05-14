@@ -82,13 +82,7 @@ func TestZAIParsingReasoningContent(t *testing.T) {
 		Model:   openaiResp.Model,
 		Choices: []api.Choice{{
 			Index: choice.Index,
-			Message: struct {
-				Role             string          `json:"role"`
-				Content          string          `json:"content"`
-				ReasoningContent string          `json:"reasoning_content,omitempty"`
-				Images           []api.ImageData `json:"images,omitempty"`
-				ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-			}{
+			Message: api.Message{
 				Role:             choice.Message.Role,
 				Content:          choice.Message.Content,
 				ReasoningContent: choice.Message.ReasoningContent,
@@ -96,17 +90,7 @@ func TestZAIParsingReasoningContent(t *testing.T) {
 			},
 			FinishReason: choice.FinishReason,
 		}},
-		Usage: struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: api.ChatUsage{
 			PromptTokens:     openaiResp.Usage.PromptTokens,
 			CompletionTokens: openaiResp.Usage.CompletionTokens,
 			TotalTokens:      openaiResp.Usage.TotalTokens,

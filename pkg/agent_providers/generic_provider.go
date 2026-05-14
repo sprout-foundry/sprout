@@ -1229,10 +1229,18 @@ func (p *GenericProvider) handleStreamingResponse(resp *http.Response, callback 
 		}
 
 		line = strings.TrimSpace(line)
-		if line == "" || !strings.HasPrefix(line, "data: ") {
+		if line == "" {
 			continue
 		}
-		data := strings.TrimPrefix(line, "data: ")
+		var data string
+		if strings.HasPrefix(line, "data: ") {
+			data = strings.TrimPrefix(line, "data: ")
+		} else if strings.HasPrefix(line, "data:") {
+			data = strings.TrimPrefix(line, "data:")
+			data = strings.TrimSpace(data)
+		} else {
+			continue
+		}
 		if data == "[DONE]" {
 			break
 		}

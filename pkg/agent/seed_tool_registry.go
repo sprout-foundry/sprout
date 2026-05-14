@@ -52,7 +52,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id)",
 		Parameters: []core.ParameterConfig{
 			{Name: "command", Type: "string", Alternatives: []string{"cmd"}, Description: "The shell command to execute (required unless check_background or stop_background is provided)"},
-			{Name: "background", Type: "bool", Description: "Run command in background and return immediately with session_id (default: false)"},
+			{Name: "background", Type: "boolean", Description: "Run command in background and return immediately with session_id (default: false)"},
 			{Name: "check_background", Type: "string", Description: "Session ID of a background session to check (returns accumulated output)"},
 			{Name: "stop_background", Type: "string", Description: "Session ID of a background session to stop/terminate"},
 		},
@@ -304,9 +304,9 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 			{Name: "search_pattern", Type: "string", Required: true, Alternatives: []string{"pattern"}, Description: "Text pattern or regex to search for"},
 			{Name: "directory", Type: "string", Alternatives: []string{"root"}, Description: "Directory to search (default: .)"},
 			{Name: "file_glob", Type: "string", Alternatives: []string{"file_pattern", "glob"}, Description: "Glob to limit files (e.g., *.go)"},
-			{Name: "case_sensitive", Type: "bool", Description: "Case sensitive search (default: false)"},
-			{Name: "max_results", Type: "int", Description: "Maximum results to return (default: 50)"},
-			{Name: "max_bytes", Type: "int", Description: "Maximum total bytes of matches to return (default: 102400)"},
+			{Name: "case_sensitive", Type: "boolean", Description: "Case sensitive search (default: false)"},
+			{Name: "max_results", Type: "integer", Description: "Maximum results to return (default: 50)"},
+			{Name: "max_bytes", Type: "integer", Description: "Maximum total bytes of matches to return (default: 102400)"},
 		},
 		SafeForParallel: true,
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
@@ -374,11 +374,11 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 			{Name: "session_id", Type: "string", Description: "Reuse a persistent built-in browser session across multiple browse_url calls for iterative debugging"},
 			{Name: "persist_session", Type: "boolean", Description: "Keep the browser page alive after this call and return a session_id in inspect output"},
 			{Name: "close_session", Type: "boolean", Description: "Close the referenced persistent session after this call completes"},
-			{Name: "viewport_width", Type: "int", Description: "Browser viewport width in pixels (default: 1280)"},
-			{Name: "viewport_height", Type: "int", Description: "Browser viewport height in pixels (default: 720)"},
+			{Name: "viewport_width", Type: "integer", Description: "Browser viewport width in pixels (default: 1280)"},
+			{Name: "viewport_height", Type: "integer", Description: "Browser viewport height in pixels (default: 720)"},
 			{Name: "user_agent", Type: "string", Description: "Override the browser User-Agent string"},
 			{Name: "wait_for_selector", Type: "string", Description: "Optional CSS selector to wait for before capturing output or running steps"},
-			{Name: "wait_timeout_ms", Type: "int", Description: "Optional selector wait timeout in milliseconds (default: 10000)"},
+			{Name: "wait_timeout_ms", Type: "integer", Description: "Optional selector wait timeout in milliseconds (default: 10000)"},
 			{Name: "steps", Type: "array", Description: "Optional interaction steps. Each step object supports action=wait_for|wait_for_text|assert_selector|assert_text|assert_title|assert_url|click|hover|type|fill|press|sleep|scroll_to|navigate|reload|back|forward|eval plus selector/value/key/millis/script/expect fields as needed"},
 			{Name: "capture_selectors", Type: "array", Description: "Optional list of CSS selectors to capture after interactions (text/html/value/basic attrs)"},
 			{Name: "capture_dom", Type: "boolean", Description: "Include rendered DOM in inspect output"},
@@ -387,7 +387,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 			{Name: "capture_network", Type: "boolean", Description: "Include fetch/XHR network request summaries in inspect output"},
 			{Name: "capture_storage", Type: "boolean", Description: "Include localStorage and sessionStorage snapshots in inspect output"},
 			{Name: "capture_cookies", Type: "boolean", Description: "Include document.cookie-visible cookies in inspect output"},
-			{Name: "response_max_chars", Type: "int", Description: "Optional per-field truncation limit for inspect output"},
+			{Name: "response_max_chars", Type: "integer", Description: "Optional per-field truncation limit for inspect output"},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "browse_url")
@@ -406,8 +406,8 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		Parameters: []core.ParameterConfig{
 			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to the UI screenshot or HTML file"},
 			{Name: "analysis_prompt", Type: "string", Description: "Optional custom vision prompt for analysis"},
-			{Name: "viewport_width", Type: "int", Description: "Browser viewport width in pixels for HTML files (default: 1280)"},
-			{Name: "viewport_height", Type: "int", Description: "Browser viewport height in pixels for HTML files (default: 720)"},
+			{Name: "viewport_width", Type: "integer", Description: "Browser viewport width in pixels for HTML files (default: 1280)"},
+			{Name: "viewport_height", Type: "integer", Description: "Browser viewport height in pixels for HTML files (default: 720)"},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "analyze_ui_screenshot")
@@ -452,10 +452,10 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		Name:        "view_history",
 		Description: "View recent change history tracked by the agent",
 		Parameters: []core.ParameterConfig{
-			{Name: "limit", Type: "int", Description: "Maximum number of entries to return (default 10)"},
+			{Name: "limit", Type: "integer", Description: "Maximum number of entries to return (default 10)"},
 			{Name: "file_filter", Type: "string", Alternatives: []string{"filename"}, Description: "Filter by filename (partial match)"},
 			{Name: "since", Type: "string", Description: "Only include changes after this ISO 8601 timestamp"},
-			{Name: "show_content", Type: "bool", Description: "Include content summaries for each change"},
+			{Name: "show_content", Type: "boolean", Description: "Include content summaries for each change"},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "view_history")
@@ -474,7 +474,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		Parameters: []core.ParameterConfig{
 			{Name: "revision_id", Type: "string", Description: "Revision ID to rollback (leave blank to list revisions)"},
 			{Name: "file_path", Type: "string", Alternatives: []string{"filename"}, Description: "Rollback only this file from the revision"},
-			{Name: "confirm", Type: "bool", Description: "Set to true to execute the rollback"},
+			{Name: "confirm", Type: "boolean", Description: "Set to true to execute the rollback"},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "rollback_changes")
@@ -623,8 +623,8 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
 		Parameters: []core.ParameterConfig{
 			{Name: "query", Type: "string", Required: true, Description: "Natural language description of what you're looking for"},
-			{Name: "top_k", Type: "int", Description: "Maximum results to return (default: 5)"},
-			{Name: "threshold", Type: "float64", Description: "Minimum similarity score 0.0-1.0 (default: 0.75)"},
+			{Name: "top_k", Type: "integer", Description: "Maximum results to return (default: 5)"},
+			{Name: "threshold", Type: "number", Description: "Minimum similarity score 0.0-1.0 (default: 0.75)"},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "semantic_search")

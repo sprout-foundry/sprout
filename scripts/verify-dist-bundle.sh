@@ -91,14 +91,14 @@ echo "Checking assets from index.html..."
 # Fetch index.html content
 INDEX_HTML=$(curl -s "${BASE_URL}/index.html" || echo "")
 
-# Extract CSS files
-CSS_FILES=$(echo "$INDEX_HTML" | grep -o 'href="/static/css/[^"]*\.css"' | sed 's/href="//;s/"//' || true)
+# Extract CSS files (Vite outputs to /assets/, CRA used /static/css/)
+CSS_FILES=$(echo "$INDEX_HTML" | grep -oE 'href="(/assets/|/static/css/)[^"]*\.css"' | sed 's/href="//;s/"//' || true)
 for css in $CSS_FILES; do
     check_url "${BASE_URL}${css}" "CSS: ${css}"
 done
 
-# Extract JS files
-JS_FILES=$(echo "$INDEX_HTML" | grep -o 'src="/static/js/[^"]*\.js"' | sed 's/src="//;s/"//' || true)
+# Extract JS files (Vite outputs to /assets/, CRA used /static/js/)
+JS_FILES=$(echo "$INDEX_HTML" | grep -oE '(src|href)="(/assets/|/static/js/)[^"]*\.js"' | sed 's/^[^"]*"//;s/"//' || true)
 for js in $JS_FILES; do
     check_url "${BASE_URL}${js}" "JS: ${js}"
 done
@@ -116,8 +116,8 @@ if curl -sf "${BASE_URL}/asset-manifest.json" > /tmp/asset-manifest.json 2>/dev/
     check_url "${BASE_URL}/asset-manifest.json" "asset-manifest.json"
 
     # Extract all file paths from asset-manifest.json
-    # This JSON has keys like "main.js" -> "/static/js/main.js"
-    MANIFEST_ASSETS=$(cat /tmp/asset-manifest.json | grep -o '"/static/[^"]*"' | sed 's/"//g' || true)
+    # This JSON has keys like "main.js" -> "/static/js/main.js" or "/assets/main.js"
+    MANIFEST_ASSETS=$(cat /tmp/asset-manifest.json | grep -oE '"/(static|assets)/[^"]*"' | sed 's/"//g' || true)
     for asset in $MANIFEST_ASSETS; do
         check_url "${BASE_URL}${asset}" "Manifest: ${asset}"
     done

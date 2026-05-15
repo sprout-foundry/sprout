@@ -156,5 +156,5 @@ export async function clientFetch(input: RequestInfo | URL, init?: RequestInit):
   if (proxyBase && typeof url === 'string' && url.startsWith('/')) {
     url = proxyBase + url;
   }
-  return fetch(url, { ...init, headers });
+  return fetch(url, { ...init, headers, credentials: 'include' });
 }

@@ -188,34 +188,26 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
     const view = viewRef.current;
     if (!view) return;
 
-    // Font size
+    // Batch all compartment reconfigurations into a single dispatch to avoid
+    // multiple unnecessary editor re-renders.
     view.dispatch({
-      effects: compartments.fontSize.reconfigure([CMEditorView.theme({ '&': { fontSize: `${editorFontSize}px` } })]),
-    });
-
-    // Tab size
-    view.dispatch({
-      effects: compartments.tabSize.reconfigure([
-        EditorState.tabSize.of(editorTabSize === 0 ? 4 : editorTabSize),
-        indentUnit.of(editorUsesTabs ? '\t' : ' '.repeat(editorTabSize === 0 ? 4 : editorTabSize)),
-      ]),
-    });
-
-    // Word wrap
-    view.dispatch({
-      effects: compartments.lineWrapping.reconfigure(wordWrapEnabled ? CMEditorView.lineWrapping : []),
-    });
-
-    // Minimap
-    view.dispatch({
-      effects: compartments.minimap.reconfigure(minimapEnabled ? minimapExtension() : []),
-    });
-
-    // Relative line numbers
-    view.dispatch({
-      effects: compartments.relativeLineNumbers.reconfigure(
-        relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers(),
-      ),
+      effects: [
+        // Font size
+        compartments.fontSize.reconfigure([CMEditorView.theme({ '&': { fontSize: `${editorFontSize}px` } })]),
+        // Tab size
+        compartments.tabSize.reconfigure([
+          EditorState.tabSize.of(editorTabSize === 0 ? 4 : editorTabSize),
+          indentUnit.of(editorUsesTabs ? '\t' : ' '.repeat(editorTabSize === 0 ? 4 : editorTabSize)),
+        ]),
+        // Word wrap
+        compartments.lineWrapping.reconfigure(wordWrapEnabled ? CMEditorView.lineWrapping : []),
+        // Minimap
+        compartments.minimap.reconfigure(minimapEnabled ? minimapExtension() : []),
+        // Relative line numbers
+        compartments.relativeLineNumbers.reconfigure(
+          relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers(),
+        ),
+      ],
     });
   }, [editorFontSize, editorTabSize, editorUsesTabs, wordWrapEnabled, minimapEnabled, relativeLineNumbersEnabled]);
 

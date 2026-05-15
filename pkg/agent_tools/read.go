@@ -17,12 +17,12 @@ import (
 const (
 	// defaultMaxFileSize is the maximum file size (in bytes) for reading files
 	// Files larger than this will be truncated with head+tail and a warning
-	// ~20,000 tokens at 4 chars/token heuristic (~15% of 128K context window)
-	defaultMaxFileSize = 80 * 1024 // 80KB default
+	// ~8,000 tokens at 4 chars/token heuristic (~6% of 128K context window)
+	defaultMaxFileSize = 32 * 1024 // 32KB default
 
 	// lineRangeMaxSize is the maximum file size (in bytes) when a line range is requested
 	// This is larger to ensure we can read enough content for accurate line counts
-	lineRangeMaxSize = 10 * 1024 * 1024 // 10MB for line range requests
+	lineRangeMaxSize = 2 * 1024 * 1024 // 2MB for line range requests
 )
 
 func getFileReadMaxSize() int {

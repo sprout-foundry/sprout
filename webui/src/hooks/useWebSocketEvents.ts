@@ -9,9 +9,12 @@
 
 import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { Message } from '@sprout/ui';
 import type { AppState } from '../types/app';
 import type { WsEvent } from '../services/websocket';
 import { ApiService } from '../services/api';
+import { switchChatSession, listChatSessions } from '../services/chatSessions';
+import { trimMessages } from '../utils/messageWindow';
 import { debugLog } from '../utils/log';
 import { useEventHandler } from './useEventHandler';
 import type { AppStoreSetState } from '../contexts/AppStore';
@@ -60,6 +63,74 @@ export default function useWebSocketEvents({
     setQueuedMessages,
   });
 
+  // ── Chat message recovery helper ───────────────────────────────────────
+  // Fetches the latest messages from the server for the active chat and
+  // merges them into state if the server has messages the frontend is
+  // missing.  This recovers assistant messages that completed while the
+  // WebSocket was disconnected (e.g. during tab freeze or network drop).
+  const isRecoveringRef = useRef(false);
+
+  const recoverChatMessages = useCallback(() => {
+    if (isRecoveringRef.current) return;
+    const chatId = activeChatIdRef.current;
+    if (!chatId) return;
+
+    isRecoveringRef.current = true;
+
+    switchChatSession(chatId)
+      .then((response) => {
+        // Bail if the user switched to a different chat during the async fetch
+        if (activeChatIdRef.current !== chatId) {
+          debugLog('[reconnect] Chat ID changed during recovery — bailing out');
+          return;
+        }
+
+        const backendMessages: Message[] = (response.chat_session.messages ?? [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m, i) => ({
+            id: `chat-${chatId}-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : '',
+            timestamp: new Date(),
+            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+          }));
+
+        setState((prev) => {
+          // Only update if the server has more messages than the frontend
+          if (backendMessages.length <= prev.messages.length) {
+            return {};
+          }
+          debugLog(
+            '[reconnect] Server has',
+            backendMessages.length,
+            'messages vs frontend',
+            prev.messages.length,
+            '— recovering missed messages',
+          );
+          return {
+            messages: trimMessages(backendMessages),
+          };
+        });
+      })
+      .catch((err) => {
+        debugLog('[reconnect] Failed to recover chat messages:', err);
+      })
+      .finally(() => {
+        isRecoveringRef.current = false;
+      });
+
+    // Also refresh the chat sessions list
+    listChatSessions()
+      .then((response) => {
+        setState((prev) => ({
+          chatSessions: response.chat_sessions,
+        }));
+      })
+      .catch((err) => {
+        debugLog('[reconnect] Failed to refresh chat sessions:', err);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- activeChatIdRef is a stable ref; setState is stable
+
   // ── Reconnect handler — recovers stuck processing state ──────────
   // When the WebSocket reconnects after a period of disconnection (tab
   // freeze, network drop, Chrome throttling, etc.), any query_completed
@@ -106,11 +177,14 @@ export default function useWebSocketEvents({
         } else {
           debugLog('[reconnect] Processing state is consistent — no recovery needed');
         }
+
+        // After syncing processing state, recover any missed chat messages
+        recoverChatMessages();
       })
       .catch((err) => {
         debugLog('[reconnect] Failed to fetch stats for recovery:', err);
       });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- activeRequestsRef is a stable ref; setState is stable
+  }, [recoverChatMessages]); // eslint-disable-line react-hooks/exhaustive-deps -- activeRequestsRef is a stable ref; setState is stable
 
   return {
     handleEvent,

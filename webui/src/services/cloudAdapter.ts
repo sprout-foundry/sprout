@@ -22,7 +22,7 @@ import {
   proxyStatsRequest,
   proxySettingsRequest,
 } from './cloudProxyRoutes';
-import { handleWasmLocal, jsonError } from './cloudWasmHandlers';
+import { handleWasmLocal } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -48,6 +48,7 @@ export class CloudAdapter implements APIAdapter {
   private config: CloudAdapterConfig;
   private wasmShell: WasmShell | null = null;
   private wasmInitPromise: Promise<WasmShell> | null = null;
+  private wasmInitFailed: boolean = false;
 
   constructor(config: CloudAdapterConfig) {
     this.config = config;
@@ -57,14 +58,28 @@ export class CloudAdapter implements APIAdapter {
   /**
    * Lazily initialize the WASM shell on first wasm-local request.
    * Returns a singleton promise so concurrent requests don't race.
+   * On failure, caches the failure so future calls short-circuit (avoiding
+   * infinite retries in browsers that permanently lack WASM support).
    */
   private ensureWasmShell(): Promise<WasmShell> {
     if (this.wasmShell) return Promise.resolve(this.wasmShell);
+    if (this.wasmInitFailed) {
+      return Promise.reject(new Error('WASM shell init previously failed; not retrying'));
+    }
     if (!this.wasmInitPromise) {
-      this.wasmInitPromise = initWasmShell().then((shell) => {
-        this.wasmShell = shell;
-        return shell;
-      });
+      this.wasmInitPromise = initWasmShell()
+        .then((shell) => {
+          this.wasmShell = shell;
+          return shell;
+        })
+        .catch((err) => {
+          // Cache the failure so future calls don't retry indefinitely.
+          // This is important for browsers that permanently lack WASM support
+          // (e.g., Safari on some iOS versions, or users with JS sandboxing).
+          this.wasmInitFailed = true;
+          this.wasmInitPromise = null;
+          throw err;
+        });
     }
     return this.wasmInitPromise;
   }
@@ -144,6 +159,10 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── WASM-local endpoint handling ────────────────────────────────
+    // These endpoints (file CRUD, terminal, search) MUST be handled by the
+    // WASM shell in the browser — NOT proxied to the Foundry backend.
+    // If WASM shell init fails, fall through to the standard proxy below
+    // so the server's safety-net handler returns a compatible response.
     if (isWasmLocalEndpoint(urlPath, method)) {
       const requestBody = await this.extractRequestBody(input);
       const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
@@ -151,8 +170,12 @@ export class CloudAdapter implements APIAdapter {
         const shell = await this.ensureWasmShell();
         return handleWasmLocal(shell, urlPath, method, url, bodyStr);
       } catch (err) {
-        console.error('[CloudAdapter] WASM shell init failed:', err);
-        return jsonError('WASM shell unavailable', 503);
+        console.warn(
+          `[CloudAdapter] WASM shell unavailable for wasm-local endpoint "${urlPath}", falling through to server safety-net:`,
+          err,
+        );
+        // Fall through to standard proxy below so the server's safety-net handler
+        // returns a compatible response. This avoids a hard 503 error.
       }
     }
 

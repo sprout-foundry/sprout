@@ -5,7 +5,7 @@
  * the correct behavior:
  * - foundry-backend: Proxied to correct Foundry proxy URL
  * - synthetic/no-op: Return synthetic responses (no fetch call)
- * - wasm-local: Fall through to standard proxy (apiBase + path)
+ * - wasm-local: Handled client-side by WASM shell (NOT proxied)
  *
  * Tests also verify URL rewriting, body translation, header injection,
  * and that no endpoints result in 404s or broken flows.
@@ -18,6 +18,37 @@ import { CLOUD_ENDPOINTS, getEndpointsByCategory, type CloudEndpoint } from './c
 vi.mock('./clientSession', () => ({
   WEBUI_CLIENT_ID_HEADER: 'x-webui-client-id',
   getWebUIClientId: () => 'test-client-id-123',
+}));
+
+// Mock wasmShell module — WASM cannot run in jsdom, so provide a fake shell.
+const mockWasmShell = {
+  executeCommand: vi.fn((input: string) => ({
+    stdout: '',
+    stderr: '',
+    exitCode: 0,
+  })),
+  getCwd: vi.fn(() => '/home/user'),
+  changeDir: vi.fn(() => ({ cwd: '/home/user', error: '' })),
+  writeFile: vi.fn(() => ''),
+  readFile: vi.fn((path: string) => ({ content: '// file at ' + path, error: '' })),
+  listDir: vi.fn((path: string) => {
+    // Prevent infinite recursion: return empty for nested paths
+    if (path && (path.includes('/src/') || path.endsWith('/src'))) {
+      return { entries: [], error: '' };
+    }
+    return {
+      entries: [
+        { name: 'src', type: 'dir', size: 0, mode: 0o40755 },
+        { name: 'README.md', type: 'file', size: 128, mode: 0o100644 },
+      ],
+      error: '',
+    };
+  }),
+  deleteFile: vi.fn(() => ''),
+};
+vi.mock('./wasmShell', () => ({
+  initWasmShell: vi.fn(() => Promise.resolve(mockWasmShell)),
+  resetWasmShell: vi.fn(),
 }));
 
 // Polyfill Response for jsdom environment
@@ -173,13 +204,8 @@ describe('CloudAdapter Integration Tests', () => {
             break;
 
           case 'wasm-local':
-            // Should have called fetch (falls through to standard proxy)
-            expect(mockFetch).toHaveBeenCalledTimes(1);
-            const wasmCall = mockFetch.mock.calls[0];
-            const wasmUrl = wasmCall[0] as string;
-
-            // Verify URL includes apiBase
-            expect(wasmUrl).toContain(mockConfig.apiBase);
+            // Should NOT have called fetch — these are handled locally by WASM shell
+            expect(mockFetch).not.toHaveBeenCalled();
             break;
         }
 
@@ -288,33 +314,65 @@ describe('CloudAdapter Integration Tests', () => {
     });
   });
 
-  describe('Category: wasm-local - Standard Proxy', () => {
+  describe('Category: wasm-local - Handled by WASM Shell (NOT proxied)', () => {
     const wasmLocalEndpoints = getEndpointsByCategory('wasm-local');
 
     /**
-     * Test that all wasm-local endpoints fall through to standard proxy.
-     * In cloud mode, these are handled client-side by WASM, so the adapter
-     * just proxies them to apiBase + path for potential forwarding.
+     * Test that all wasm-local endpoints are handled client-side by the WASM shell.
+     * They MUST NOT call fetch() — the CloudAdapter intercepts these and delegates
+     * to handleWasmLocal() which uses the WASM shell directly.
      */
     it.each(
       wasmLocalEndpoints.map((e) => ({
         endpoint: e,
         firstMethod: e.methods[0],
       })),
-    )('$endpoint.path - falls through to standard proxy', async ({ endpoint, firstMethod }) => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    )('$endpoint.path - handled by WASM shell (NOT proxied)', async ({ endpoint, firstMethod }) => {
+      // Reset mocks for each test
+      vi.clearAllMocks();
 
-      await adapter.fetch(endpoint.path, { method: firstMethod });
+      // Some wasm-local endpoints require a request body (create, delete, rename, search/replace, file write)
+      let response: Response;
+      if (endpoint.path === '/api/create') {
+        response = await adapter.fetch(endpoint.path, {
+          method: 'POST',
+          body: JSON.stringify({ path: '/test.txt' }),
+        });
+      } else if (endpoint.path === '/api/delete') {
+        response = await adapter.fetch(endpoint.path, {
+          method: 'DELETE',
+          body: JSON.stringify({ path: '/test.txt' }),
+        });
+      } else if (endpoint.path === '/api/rename') {
+        response = await adapter.fetch(endpoint.path, {
+          method: 'POST',
+          body: JSON.stringify({ old_path: '/old.txt', new_path: '/new.txt' }),
+        });
+      } else if (endpoint.path === '/api/search/replace') {
+        response = await adapter.fetch(endpoint.path, {
+          method: 'POST',
+          body: JSON.stringify({ search: 'foo', replace: 'bar', files: ['/src/main.go'] }),
+        });
+      } else if (endpoint.path === '/api/file') {
+        // GET requires ?path= query param, POST requires body with content
+        if (firstMethod === 'GET') {
+          response = await adapter.fetch(`${endpoint.path}?path=/test.txt`, { method: 'GET' });
+        } else {
+          response = await adapter.fetch(`${endpoint.path}?path=/test.txt`, {
+            method: 'POST',
+            body: JSON.stringify({ content: 'hello' }),
+          });
+        }
+      } else {
+        response = await adapter.fetch(endpoint.path, { method: firstMethod });
+      }
 
-      // Should call fetch with apiBase + path
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toBe(`${mockConfig.apiBase}${endpoint.path}`);
+      // MUST NOT call fetch — these are handled locally by the WASM shell
+      expect(mockFetch).not.toHaveBeenCalled();
 
-      // Should include headers
-      const fetchInit = call[1] as RequestInit;
-      expect(fetchInit?.credentials).toBe('include');
-      expect(fetchInit?.headers).toBeTruthy();
+      // Should return a valid response from the WASM handler
+      expect(response).toBeTruthy();
+      expect(response.ok).toBe(true);
     });
   });
 
@@ -692,13 +750,14 @@ describe('CloudAdapter Integration Tests', () => {
 
           const fetchCalled = mockFetch.mock.calls.length > 0;
 
-          if (endpoint.category === 'synthetic' || endpoint.category === 'no-op') {
-            // Should NOT have called fetch
+          if (endpoint.category === 'synthetic' || endpoint.category === 'no-op' || endpoint.category === 'wasm-local') {
+            // Should NOT have called fetch — synthetic/no-op return synthetic responses,
+            // wasm-local is handled by the WASM shell in-browser
             if (fetchCalled) {
               errors.push(`${endpoint.path} (${endpoint.category}): Expected no fetch call, but fetch was called`);
             }
           } else {
-            // Should have called fetch
+            // foundry-backend: Should have called fetch
             if (!fetchCalled) {
               errors.push(`${endpoint.path} (${endpoint.category}): Expected fetch call, but fetch was not called`);
             } else {
@@ -1014,10 +1073,11 @@ describe('CloudAdapter Integration Tests', () => {
       await adapter.fetch('/api/git/status', { method: 'GET' });
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      // WASM-local endpoint
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
-      await adapter.fetch('/api/files', { method: 'GET' });
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // WASM-local endpoint — handled locally by WASM shell, NOT proxied
+      const response3 = await adapter.fetch('/api/files', { method: 'GET' });
+      expect(response3.ok).toBe(true);
+      // fetch count stays at 1 — wasm-local does NOT call fetch
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('handles URL object input for all endpoint types', async () => {
@@ -1031,30 +1091,32 @@ describe('CloudAdapter Integration Tests', () => {
       await adapter.fetch(new URL('/api/git/status', 'https://api.sprout.dev'));
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      // WASM-local endpoint
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
-      await adapter.fetch(new URL('/api/files', 'https://api.sprout.dev'));
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // WASM-local endpoint — handled locally by WASM shell, NOT proxied
+      const response3 = await adapter.fetch(new URL('/api/files', 'https://api.sprout.dev'));
+      expect(response3.ok).toBe(true);
+      // fetch count stays at 1 — wasm-local does NOT call fetch
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('handles Request object input for all endpoint types', async () => {
-      // Synthetic endpoint
-      const request1 = new Request('/api/onboarding/status', { method: 'GET' });
+      // Synthetic endpoint — use absolute URL for Request (jsdom doesn't support relative URLs)
+      const request1 = new Request('https://api.sprout.dev/api/onboarding/status', { method: 'GET' });
       const response1 = await adapter.fetch(request1);
       expect(response1.ok).toBe(true);
       expect(mockFetch).not.toHaveBeenCalled();
 
       // Backend endpoint
-      const request2 = new Request('/api/git/status', { method: 'GET' });
+      const request2 = new Request('https://api.sprout.dev/api/git/status', { method: 'GET' });
       mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
       await adapter.fetch(request2);
       expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      // WASM-local endpoint
-      const request3 = new Request('/api/files', { method: 'GET' });
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
-      await adapter.fetch(request3);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // WASM-local endpoint — handled locally by WASM shell, NOT proxied
+      const request3 = new Request('https://api.sprout.dev/api/files', { method: 'GET' });
+      const response3 = await adapter.fetch(request3);
+      expect(response3.ok).toBe(true);
+      // fetch count stays at 1 — wasm-local does NOT call fetch
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1151,7 +1213,7 @@ describe('CloudAdapter Integration Tests', () => {
       expect(foundryBackend).toBeGreaterThan(0);
       expect(synthetic).toBeGreaterThan(0);
       expect(noOp).toBeGreaterThan(0);
-      expect(CLOUD_ENDPOINTS.length).toBe(103); // Current total
+      expect(CLOUD_ENDPOINTS.length).toBe(111); // Current total
     });
   });
 });

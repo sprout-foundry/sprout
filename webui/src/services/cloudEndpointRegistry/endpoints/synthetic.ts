@@ -2,40 +2,38 @@ import type { CloudEndpoint } from '../types';
 
 /**
  * Category (c) — synthetic: Should return pre-defined synthetic responses.
+ *
+ * These responses MUST match the Go server stub responses in
+ * platform/internal/api/webui_compat.go so that both the client-side
+ * CloudAdapter interception and the server-side handlers return identical data.
  */
 export const syntheticEndpoints: CloudEndpoint[] = [
   {
     path: '/api/onboarding/status',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: { setup_required: false },
+    syntheticResponse: { setup_required: false, onboarding_complete: true, providers: [] },
     description: 'Onboarding status (cloud is pre-configured)',
   },
   {
     path: '/api/onboarding/complete',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { success: true },
+    syntheticResponse: { message: 'ok' },
     description: 'Complete onboarding',
   },
   {
     path: '/api/onboarding/skip',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { success: true },
+    syntheticResponse: { message: 'ok' },
     description: 'Skip onboarding',
   },
   {
     path: '/api/instances',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: {
-      instances: [],
-      current_pid: 0,
-      active_host_pid: 0,
-      active_host_port: 0,
-      desired_host_pid: 0,
-    },
+    syntheticResponse: { instances: [] },
     description: 'List instances (no local instances in cloud mode)',
   },
   {
@@ -49,7 +47,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/instances/ssh-open',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { error: 'Not available in cloud mode' },
+    syntheticResponse: { error: 'SSH not available in cloud mode' },
     description: 'Open SSH workspace (not available in cloud mode)',
   },
   {
@@ -63,35 +61,35 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/instances/ssh-browse',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { error: 'Not available in cloud mode' },
+    syntheticResponse: { error: 'SSH not available in cloud mode' },
     description: 'Browse SSH directory (not available in cloud mode)',
   },
   {
     path: '/api/instances/ssh-close',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { success: true },
+    syntheticResponse: { message: 'ok' },
     description: 'Close SSH session',
   },
   {
     path: '/api/instances/select',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { success: true },
-    description: 'Select instance',
+    syntheticResponse: { error: 'Instance management not available in cloud mode' },
+    description: 'Select instance (not available in cloud mode)',
   },
   {
     path: '/api/instances/ssh-launch-status',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: { ready: false, status: 'not_available' },
+    syntheticResponse: { in_progress: false },
     description: 'SSH launch status',
   },
   {
     path: '/api/support-bundle',
     methods: ['GET'],
     category: 'synthetic',
-    syntheticResponse: { message: 'Not available in cloud mode' },
+    syntheticResponse: { error: 'Support bundles not available in cloud mode' },
     description: 'Support bundle (not available in cloud mode)',
   },
   {
@@ -105,7 +103,12 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/workspace',
     methods: ['GET', 'POST'],
     category: 'synthetic',
-    syntheticResponse: { workspace_root: '', daemon_root: '', is_project: false, project_markers: [], needs_workspace_selection: true, suggested_projects: [], recent_workspaces: [] },
+    // NOTE: This response intentionally omits is_project, needs_workspace_selection,
+    // suggested_projects, and recent_workspaces. The consuming code (workspaceApi.ts
+    // toWorkspaceResponse) defaults these to false/[] via nullish coalescing.
+    // In cloud mode, workspace selection is not needed — the WASM shell owns the
+    // virtual filesystem root, so needs_workspace_selection is effectively false.
+    syntheticResponse: { message: 'ok', workspace_root: '/home/user', daemon_root: '/home/user' },
     description: 'Workspace info (cloud mode: WASM shell owns workspace, virtual FS root)',
   },
 ];

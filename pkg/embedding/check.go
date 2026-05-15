@@ -43,11 +43,11 @@ func FormatDuplicateWarning(matches []QueryResult) string {
 //
 // It works by extracting code units from the content, embedding each one,
 // and querying the existing index for similar records. Self-matches (same
-// ID or same file path) are filtered out.
+// ID or same file path) are filtered out using workspace-relative path comparison.
 //
 // The top-K overall matches above the threshold are returned, sorted by
 // similarity descending.
-func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath string, content string, threshold float32, topK int) (*CheckDuplicatesResult, error) {
+func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath string, content string, workspaceRoot string, threshold float32, topK int) (*CheckDuplicatesResult, error) {
 	if mgr == nil {
 		return &CheckDuplicatesResult{}, nil
 	}
@@ -97,8 +97,9 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 		}
 
 		// Filter out self-matches: same ID or same file path.
+		// Use workspace-relative path normalization for reliable comparison.
 		for _, m := range matches {
-			if m.Record.ID == u.ID || m.Record.File == filePath {
+			if m.Record.ID == u.ID || NormalizePathToWorkspace(workspaceRoot, m.Record.File) == NormalizePathToWorkspace(workspaceRoot, filePath) {
 				continue
 			}
 			allMatches = append(allMatches, m)
@@ -122,6 +123,30 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 	}
 
 	return result, nil
+}
+
+// NormalizePathToWorkspace normalizes a file path to a relative path
+// from the workspace root for consistent comparison. If workspaceRoot is
+// empty or the path cannot be resolved relative to it, returns the cleaned
+// path as-is.
+func NormalizePathToWorkspace(workspaceRoot, path string) string {
+	path = filepath.Clean(path)
+	if workspaceRoot == "" {
+		return path
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	absRoot, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(absRoot, abs)
+	if err != nil {
+		return path
+	}
+	return rel
 }
 
 // extractFromContent writes content to a temporary file with the appropriate

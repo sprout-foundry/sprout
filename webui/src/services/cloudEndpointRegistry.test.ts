@@ -49,8 +49,8 @@ if (typeof Response === 'undefined') {
 describe('cloudEndpointRegistry', () => {
   describe('CLOUD_ENDPOINTS', () => {
     it('should have all required endpoints defined', () => {
-      // Verify we have approximately 103 endpoints
-      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(103);
+      // Verify we have approximately 111 endpoints (15 wasm-local + 81 foundry-backend + 14 synthetic + 1 no-op)
+      expect(CLOUD_ENDPOINTS.length).toBeGreaterThanOrEqual(111);
     });
 
     it('should have unique path+method combinations', () => {
@@ -108,6 +108,7 @@ describe('cloudEndpointRegistry', () => {
         { path: '/api/files', method: 'GET' },
         { path: '/api/create', method: 'POST' },
         { path: '/api/delete', method: 'DELETE' },
+        { path: '/api/delete', method: 'POST' },
         { path: '/api/rename', method: 'POST' },
         { path: '/api/browse', method: 'GET' },
         { path: '/api/terminal/history', method: 'GET' },
@@ -236,7 +237,7 @@ describe('cloudEndpointRegistry', () => {
       expect(response).not.toBeNull();
 
       const data = await response?.json();
-      expect(data).toEqual({ setup_required: false });
+      expect(data).toEqual({ setup_required: false, onboarding_complete: true, providers: [] });
     });
 
     it('should return 200 status for successful synthetic responses', async () => {
@@ -288,10 +289,6 @@ describe('cloudEndpointRegistry', () => {
 
       expect(data).toEqual({
         instances: [],
-        current_pid: 0,
-        active_host_pid: 0,
-        active_host_port: 0,
-        desired_host_pid: 0,
       });
     });
 
@@ -310,20 +307,23 @@ describe('cloudEndpointRegistry', () => {
         expect(response?.status).toBe(400);
 
         const data = await response?.json();
-        expect(data).toEqual({ error: 'Not available in cloud mode' });
+        expect(data).toEqual({ error: 'SSH not available in cloud mode' });
       }
     });
 
     it('should return correct synthetic response for SSH success endpoints', async () => {
-      const sshSuccessEndpoints = ['/api/instances/ssh-close', '/api/instances/select'];
+      // ssh-close returns { message: 'ok' } with status 200
+      const closeResponse = getSyntheticResponse('/api/instances/ssh-close', 'POST');
+      expect(closeResponse?.status).toBe(200);
+      const closeData = await closeResponse?.json();
+      expect(closeData).toEqual({ message: 'ok' });
+    });
 
-      for (const path of sshSuccessEndpoints) {
-        const response = getSyntheticResponse(path, 'POST');
-        expect(response?.status).toBe(200);
-
-        const data = await response?.json();
-        expect(data).toEqual({ success: true });
-      }
+    it('should return correct synthetic response for /api/instances/select (error)', async () => {
+      const response = getSyntheticResponse('/api/instances/select', 'POST');
+      expect(response?.status).toBe(400);
+      const data = await response?.json();
+      expect(data).toEqual({ error: 'Instance management not available in cloud mode' });
     });
   });
 
@@ -356,6 +356,7 @@ describe('cloudEndpointRegistry', () => {
     it('should return true for WASM-local endpoints', () => {
       expect(isWasmLocalEndpoint('/api/files', 'GET')).toBe(true);
       expect(isWasmLocalEndpoint('/api/terminal/history', 'POST')).toBe(true);
+      expect(isWasmLocalEndpoint('/api/delete', 'POST')).toBe(true);
     });
 
     it('should return false for foundry-backend endpoints', () => {
@@ -387,6 +388,7 @@ describe('cloudEndpointRegistry', () => {
     it('should return false for WASM-local endpoints', () => {
       expect(isFoundryBackendEndpoint('/api/files', 'GET')).toBe(false);
       expect(isFoundryBackendEndpoint('/api/terminal/history', 'POST')).toBe(false);
+      expect(isFoundryBackendEndpoint('/api/delete', 'POST')).toBe(false);
     });
 
     it('should return false for synthetic endpoints', () => {
@@ -432,7 +434,7 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of foundry-backend endpoints', () => {
       const foundryBackend = getEndpointsByCategory('foundry-backend');
-      expect(foundryBackend.length).toBe(73);
+      expect(foundryBackend.length).toBe(81);
     });
   });
 
@@ -560,26 +562,18 @@ describe('cloudEndpointRegistry', () => {
       expect(getResult).not.toBeNull();
       expect(getResult?.category).toBe('synthetic');
       expect(getResult?.syntheticResponse).toEqual({
-        workspace_root: '/',
-        daemon_root: '/',
-        is_project: false,
-        project_markers: [],
-        needs_workspace_selection: false,
-        suggested_projects: [],
-        recent_workspaces: [],
+        message: 'ok',
+        workspace_root: '/home/user',
+        daemon_root: '/home/user',
       });
 
       const postResult = classifyEndpoint('/api/workspace', 'POST');
       expect(postResult).not.toBeNull();
       expect(postResult?.category).toBe('synthetic');
       expect(postResult?.syntheticResponse).toEqual({
-        workspace_root: '/',
-        daemon_root: '/',
-        is_project: false,
-        project_markers: [],
-        needs_workspace_selection: false,
-        suggested_projects: [],
-        recent_workspaces: [],
+        message: 'ok',
+        workspace_root: '/home/user',
+        daemon_root: '/home/user',
       });
     });
 

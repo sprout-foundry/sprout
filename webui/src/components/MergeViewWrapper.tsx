@@ -199,17 +199,21 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
   }, [mode]);
 
   const handleSbsPrevChunk = useCallback(() => {
-    if (mergeViewRef.current?.b) {
-      goToPreviousChunk(mergeViewRef.current.b);
-      setTimeout(updateSbsHunkInfo, 10);
+    if (!mergeViewRef.current?.b) {
+      console.warn('[MergeViewWrapper] handleSbsPrevChunk: MergeView or pane B not available');
+      return;
     }
+    goToPreviousChunk(mergeViewRef.current.b);
+    setTimeout(updateSbsHunkInfo, 10);
   }, [updateSbsHunkInfo]);
 
   const handleSbsNextChunk = useCallback(() => {
-    if (mergeViewRef.current?.b) {
-      goToNextChunk(mergeViewRef.current.b);
-      setTimeout(updateSbsHunkInfo, 10);
+    if (!mergeViewRef.current?.b) {
+      console.warn('[MergeViewWrapper] handleSbsNextChunk: MergeView or pane B not available');
+      return;
     }
+    goToNextChunk(mergeViewRef.current.b);
+    setTimeout(updateSbsHunkInfo, 10);
   }, [updateSbsHunkInfo]);
 
   const handleSbsUndo = useCallback(() => {
@@ -318,7 +322,6 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     gutter,
     collapseUnchanged,
     sideBySideNavigation,
-    updateSbsHunkInfo,
   ]);
 
   // Update side-by-side content in-place without tearing down the MergeView.

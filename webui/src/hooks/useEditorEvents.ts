@@ -28,6 +28,7 @@ import { openSearchPanel } from '@codemirror/search';
 import type { EditorBuffer } from '../types/editor';
 import { notificationBus } from '../services/notificationBus';
 import { formatCodeWithConfigDiscovery } from '../services/formatter';
+import { debugLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,94 +71,99 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
   // ---------------------------------------------------------------------------
 
   const handler = useCallback((e: Event) => {
-    const {
-      viewRef,
-      bufferRef,
-      handleGoToLine,
-      onToggleWordWrap,
-      onToggleMinimap,
-      onToggleRelativeLineNumbers,
-      onCycleWhitespaceRendering,
-      toggleLinkedScroll,
-      handleFindAllReferences,
-      onGoToWorkspaceSymbol,
-    } = optionsRef.current;
+    try {
+      const {
+        viewRef,
+        bufferRef,
+        handleGoToLine,
+        onToggleWordWrap,
+        onToggleMinimap,
+        onToggleRelativeLineNumbers,
+        onCycleWhitespaceRendering,
+        toggleLinkedScroll,
+        handleFindAllReferences,
+        onGoToWorkspaceSymbol,
+      } = optionsRef.current;
 
-    if (e.type === 'editor-goto-line') {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail?.line) {
-        handleGoToLine(customEvent.detail.line);
+      if (e.type === 'editor-goto-line') {
+        const customEvent = e as CustomEvent;
+        if (customEvent.detail?.line) {
+          handleGoToLine(customEvent.detail.line);
+        }
+      } else if (e.type === 'editor-toggle-word-wrap') {
+        onToggleWordWrap();
+      } else if (e.type === 'editor-toggle-linked-scroll') {
+        toggleLinkedScroll();
+      } else if (e.type === 'editor-toggle-minimap') {
+        onToggleMinimap();
+      } else if (e.type === 'editor-toggle-relative-line-numbers') {
+        onToggleRelativeLineNumbers();
+      } else if (e.type === 'editor-cycle-whitespace-rendering') {
+        onCycleWhitespaceRendering();
+      } else if (e.type === 'editor-undo') {
+        if (viewRef.current) {
+          undo(viewRef.current);
+        }
+      } else if (e.type === 'editor-redo') {
+        if (viewRef.current) {
+          redo(viewRef.current);
+        }
+      } else if (e.type === 'editor-find') {
+        if (viewRef.current) {
+          openSearchPanel(viewRef.current);
+        }
+      } else if (e.type === 'editor-find-replace') {
+        if (viewRef.current) {
+          openSearchPanel(viewRef.current);
+          requestAnimationFrame(() => {
+            const replaceInput = viewRef.current?.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]');
+            if (replaceInput) {
+              replaceInput.focus();
+              replaceInput.select();
+            }
+          });
+        }
+      } else if (e.type === 'editor-select-all') {
+        if (viewRef.current) {
+          viewRef.current.dispatch({
+            selection: { anchor: 0, head: viewRef.current.state.doc.length },
+            annotations: [Transaction.addToHistory.of(false)],
+          });
+        }
+      } else if (e.type === 'editor-format-document') {
+        const currentBuffer = bufferRef.current;
+        if (viewRef.current && currentBuffer) {
+          const content = viewRef.current.state.doc.toString();
+          formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size).then((result) => {
+            if (bufferRef.current?.id !== currentBuffer.id) return;
+            if (result.error) {
+              notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
+              return;
+            }
+            if (result.formatted !== content && viewRef.current) {
+              // Bail out if the user edited while formatting was in progress
+              if (viewRef.current.state.doc.toString() !== content) return;
+              viewRef.current.dispatch({
+                changes: {
+                  from: 0,
+                  to: viewRef.current.state.doc.length,
+                  insert: result.formatted,
+                },
+                annotations: [Transaction.addToHistory.of(false)],
+              });
+            }
+          });
+        }
+      } else if (e.type === 'editor-find-all-references') {
+        handleFindAllReferences();
+      } else if (e.type === 'editor-go-to-workspace-symbol') {
+        onGoToWorkspaceSymbol?.();
+      } else if (e.type === 'editor-go-to-symbol') {
+        window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
       }
-    } else if (e.type === 'editor-toggle-word-wrap') {
-      onToggleWordWrap();
-    } else if (e.type === 'editor-toggle-linked-scroll') {
-      toggleLinkedScroll();
-    } else if (e.type === 'editor-toggle-minimap') {
-      onToggleMinimap();
-    } else if (e.type === 'editor-toggle-relative-line-numbers') {
-      onToggleRelativeLineNumbers();
-    } else if (e.type === 'editor-cycle-whitespace-rendering') {
-      onCycleWhitespaceRendering();
-    } else if (e.type === 'editor-undo') {
-      if (viewRef.current) {
-        undo(viewRef.current);
-      }
-    } else if (e.type === 'editor-redo') {
-      if (viewRef.current) {
-        redo(viewRef.current);
-      }
-    } else if (e.type === 'editor-find') {
-      if (viewRef.current) {
-        openSearchPanel(viewRef.current);
-      }
-    } else if (e.type === 'editor-find-replace') {
-      if (viewRef.current) {
-        openSearchPanel(viewRef.current);
-        requestAnimationFrame(() => {
-          const replaceInput = viewRef.current?.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]');
-          if (replaceInput) {
-            replaceInput.focus();
-            replaceInput.select();
-          }
-        });
-      }
-    } else if (e.type === 'editor-select-all') {
-      if (viewRef.current) {
-        viewRef.current.dispatch({
-          selection: { anchor: 0, head: viewRef.current.state.doc.length },
-          annotations: [Transaction.addToHistory.of(false)],
-        });
-      }
-    } else if (e.type === 'editor-format-document') {
-      const currentBuffer = bufferRef.current;
-      if (viewRef.current && currentBuffer) {
-        const content = viewRef.current.state.doc.toString();
-        formatCodeWithConfigDiscovery(content, currentBuffer.file.path, currentBuffer.file.size).then((result) => {
-          if (bufferRef.current?.id !== currentBuffer.id) return;
-          if (result.error) {
-            notificationBus.notify('warning', 'Format Document', `Format failed: ${result.error}`);
-            return;
-          }
-          if (result.formatted !== content && viewRef.current) {
-            // Bail out if the user edited while formatting was in progress
-            if (viewRef.current.state.doc.toString() !== content) return;
-            viewRef.current.dispatch({
-              changes: {
-                from: 0,
-                to: viewRef.current.state.doc.length,
-                insert: result.formatted,
-              },
-              annotations: [Transaction.addToHistory.of(false)],
-            });
-          }
-        });
-      }
-    } else if (e.type === 'editor-find-all-references') {
-      handleFindAllReferences();
-    } else if (e.type === 'editor-go-to-workspace-symbol') {
-      onGoToWorkspaceSymbol?.();
-    } else if (e.type === 'editor-go-to-symbol') {
-      window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
+    } catch (err) {
+      debugLog('[useEditorEvents] Error handling editor event:', e.type, err);
+      notificationBus.notify('error', 'Editor Command', `An unexpected error occurred: ${(err as Error).message}`);
     }
   }, []); // Empty deps: handler identity never changes, always reads from optionsRef
 

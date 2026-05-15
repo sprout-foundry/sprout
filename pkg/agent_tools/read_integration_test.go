@@ -10,13 +10,13 @@ import (
 )
 
 // TestReadFileTruncationBehavior tests that:
-// 1. Full file reads truncate to 80KB with head+tail strategy
-// 2. Line range reads use 10MB limit
+// 1. Full file reads truncate to 32KB with head+tail strategy
+// 2. Line range reads use 2MB limit
 // 3. Truncation warnings are shown appropriately
 func TestReadFileTruncationBehavior(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file larger than 80KB but smaller than 10MB
+	// Create a file larger than 32KB but smaller than 2MB
 	// 2000 lines, each ~150 bytes = ~300KB
 	largeFile := filepath.Join(tmpDir, "large.txt")
 	var content strings.Builder
@@ -32,8 +32,8 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 	ctx := context.Background()
 
 	// Test 1: Full file read should truncate and warn
-	// With 80KB limit on a ~300KB file: head ~48KB (60%), tail ~32KB (40%)
-	// Yields ~580 lines out of 2000 (first ~349 + last ~231)
+	// With 32KB limit on a ~300KB file: head ~19KB (60%), tail ~13KB (40%)
+	// Yields ~213 lines out of 2000 (first ~128 + last ~85)
 	t.Run("FullFileReadTruncates", func(t *testing.T) {
 		result, err := ReadFile(ctx, largeFile)
 		if err != nil {
@@ -50,13 +50,13 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 			t.Errorf("Expected hint to use view_range parameter, got: %s", result[:min(300, len(result))])
 		}
 
-		// Should not contain all 2000 lines (truncated to ~80KB head+tail)
+		// Should not contain all 2000 lines (truncated to ~32KB head+tail)
 		lineCount := strings.Count(result, "Line ")
-		if lineCount > 750 {
-			t.Errorf("Expected truncation to ~80KB head+tail (~580 lines), got %d lines", lineCount)
+		if lineCount > 350 {
+			t.Errorf("Expected truncation to ~32KB head+tail (~213 lines), got %d lines", lineCount)
 		}
-		if lineCount < 350 {
-			t.Errorf("Expected more lines from 80KB head+tail read, got only %d lines", lineCount)
+		if lineCount < 150 {
+			t.Errorf("Expected more lines from 32KB head+tail read, got only %d lines", lineCount)
 		}
 	})
 
@@ -67,7 +67,7 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 			t.Fatalf("ReadFileWithRange failed: %v", err)
 		}
 
-		// Should NOT contain truncation warning (file is only 300KB)
+		// Should NOT contain truncation warning (file is only 300KB, under 2MB limit)
 		if strings.Contains(result, "[WARN]") {
 			t.Errorf("Should not truncate for 300KB file with line range, got: %s", result)
 		}
@@ -81,17 +81,17 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 		}
 	})
 
-	// Test 3: Line range beyond what fits in 100KB should work
-	t.Run("LineRangeBeyond100KB", func(t *testing.T) {
-		// Lines 800-810 would definitely be beyond 100KB truncation point
+	// Test 3: Line range beyond what fits in 32KB should work
+	t.Run("LineRangeBeyond32KB", func(t *testing.T) {
+		// Lines 800-810 would definitely be beyond 32KB truncation point
 		result, err := ReadFileWithRange(ctx, largeFile, 800, 810)
 		if err != nil {
 			t.Fatalf("ReadFileWithRange failed: %v", err)
 		}
 
-		// Should succeed (no truncation with 10MB limit)
+		// Should succeed (no truncation with 2MB limit)
 		if strings.Contains(result, "[WARN]") {
-			t.Errorf("Should not truncate line ranges for 150KB file, got: %s", result)
+			t.Errorf("Should not truncate line ranges for 300KB file, got: %s", result)
 		}
 
 		if !strings.Contains(result, "Line 800:") {
@@ -107,7 +107,7 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 func TestEditAfterTruncatedRead(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file > 80KB (target function at line 1501 will be in omitted range with 80KB head+tail)
+	// Create a file > 32KB (target function at line 1501 will be in omitted range with 32KB head+tail)
 	testFile := filepath.Join(tmpDir, "test.go")
 	var content strings.Builder
 
@@ -121,7 +121,7 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 	content.WriteString("    // Important code here\n")
 	content.WriteString("}\n")
 
-	// More filler to ensure file > 80KB
+	// More filler to ensure file > 32KB
 	for i := 1504; i <= 2000; i++ {
 		content.WriteString(fmt.Sprintf("// Line %d: %s\n", i, strings.Repeat("x", 140)))
 	}
@@ -144,7 +144,7 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 		t.Error("Expected truncation warning in full read")
 	}
 
-	// Should NOT contain function (line 1501 is in the omitted range with 80KB head+tail)
+	// Should NOT contain function (line 1501 is in the omitted range with 32KB head+tail)
 	if strings.Contains(fullRead, "targetFunction") {
 		t.Fatalf("Full read should NOT contain targetFunction — line 1501 should be in the omitted middle section")
 	}
@@ -160,7 +160,7 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 		t.Errorf("Line range read should contain targetFunction, got: %s", lineRangeRead)
 	}
 
-	// Should NOT have truncation warning (10MB limit is sufficient)
+	// Should NOT have truncation warning (2MB limit is sufficient)
 	if strings.Contains(lineRangeRead, "[WARN]") {
 		t.Error("Line range read should not truncate for this file size")
 	}

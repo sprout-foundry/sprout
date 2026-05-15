@@ -84,7 +84,9 @@ export function translateAndProxyChat(
 
   if (TRANSLATE_BODY_PATHS.has(webuiPath) && method === 'POST') {
     // Parse the webui request body and translate to Foundry format
-    const raw = extractBodyFn ? extractBodyFn(init) : ((init?.body as string | null) ?? requestBodyText ?? null);
+    const raw = extractBodyFn
+      ? (extractBodyFn(init) ?? requestBodyText)
+      : ((init?.body as string | null) ?? requestBodyText ?? null);
     if (raw) {
       try {
         const parsed: Record<string, unknown> = JSON.parse(raw);

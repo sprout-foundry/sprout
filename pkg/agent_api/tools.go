@@ -646,6 +646,28 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "repo_map",
+				Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes). Useful for understanding project structure before reading specific files. Output is limited to ~1024 tokens.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"directory": map[string]interface{}{
+							"type":        "string",
+							"description": "Directory to scan (default: workspace root)",
+						},
+					},
+					"required":             []string{},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "view_history",
 				Description: "View change history of files across sessions",
 				Parameters: map[string]interface{}{

@@ -422,13 +422,18 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// variables (typically exported in ~/.zshrc, ~/.bashrc, etc.) are
 		// available to the daemon.  SSH non-interactive sessions skip these
 		// files, but daemon startup depends on the keys they define.
-		`_src_rc() { if [ -f "$1" ]; then set +e; . "$1" 2>/dev/null; set -e; fi; }`,
+		//
+		// Use "set -i" to force interactive mode so that the common non-
+		// interactive guard ([[ $- != *i* ]] && return) in .bashrc does
+		// not cause an early exit before API keys are exported.
+		`_src_rc() { if [ -f "$1" ]; then set +e; set -i; . "$1" 2>/dev/null; set +i; set -e; fi; }`,
 		`case "$(basename "${SHELL:-sh}")" in`,
 		`  zsh) _src_rc "$HOME/.zshenv"; _src_rc "$HOME/.zprofile"; _src_rc "$HOME/.zshrc" ;;`,
 		`  bash) _src_rc "$HOME/.bash_profile"; _src_rc "$HOME/.bashrc" ;;`,
 		`  fish) ;;`,
 		`  *)   _src_rc "$HOME/.profile" ;;`,
 		`esac`,
+		`set +i`,
 		`unset -f _src_rc`,
 		`DAEMON_PORT=` + fmt.Sprintf("%d", DaemonPort),
 		"",

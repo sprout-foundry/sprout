@@ -49,6 +49,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-019** Multi-Chat Sessions (implemented)
 - **SP-020** Trace/Dataset Mode (implemented)
 - **SP-021** Self-Review Tool (implemented)
+- **SP-024** Context Management — File Read Optimization (proposed)
 
 ## Testing
 

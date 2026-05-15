@@ -11,6 +11,55 @@ vi.mock('./clientSession', () => ({
   getWebUIClientId: () => 'test-client-id-123',
 }));
 
+// Mock wasmShell module — WASM cannot run in jsdom, so provide a fake shell.
+const mockWasmShell = {
+  executeCommand: vi.fn((input: string) => ({
+    stdout: '',
+    stderr: '',
+    exitCode: 0,
+  })),
+  getCwd: vi.fn(() => '/home/user'),
+  changeDir: vi.fn(() => ({ cwd: '/home/user', error: '' })),
+  writeFile: vi.fn(() => ''),
+  readFile: vi.fn((path: string) => ({ content: '// file at ' + path, error: '' })),
+  listDir: vi.fn((path: string) => {
+    // Prevent infinite recursion: return empty for nested paths
+    if (path && (path.includes('/src/') || path.endsWith('/src'))) {
+      return { entries: [], error: '' };
+    }
+    return {
+      entries: [
+        { name: 'src', type: 'dir', size: 0, mode: 0o40755 },
+        { name: 'README.md', type: 'file', size: 128, mode: 0o100644 },
+      ],
+      error: '',
+    };
+  }),
+  deleteFile: vi.fn(() => ''),
+};
+vi.mock('./wasmShell', () => ({
+  initWasmShell: vi.fn(() => Promise.resolve(mockWasmShell)),
+  resetWasmShell: vi.fn(),
+}));
+
+// Mock cloudWasmHandlers — we test handleWasmLocal directly via the adapter,
+// but the adapter imports jsonError from this module.
+vi.mock(
+  './cloudWasmHandlers',
+  async (importOriginal): Promise<typeof import('./cloudWasmHandlers')> => {
+    const actual = await importOriginal();
+    return {
+      ...actual,
+      jsonError: vi.fn((message: string, status: number) =>
+        new Response(JSON.stringify({ error: message, message }), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    };
+  },
+);
+
 // Polyfill Response for jsdom environment (jsdom lacks Response/fetch)
 if (typeof Response === 'undefined') {
   global.Response = class Response {
@@ -45,8 +94,9 @@ if (typeof Response === 'undefined') {
 }
 
 // Polyfill Request for jsdom environment
-if (typeof Request === 'undefined') {
-  global.Request = class Request {
+// Unconditionally override to support relative URLs (e.g., '/api/stats')
+// since native Node.js Request requires absolute URLs.
+global.Request = class Request {
     url: string;
     method: string;
     headers: Headers | Map<string, string>;
@@ -54,6 +104,7 @@ if (typeof Request === 'undefined') {
 
     constructor(input: string | Request, init?: RequestInit | { method?: string }) {
       if (typeof input === 'string') {
+        // Store relative URLs as-is — the CloudAdapter reads this.url directly
         this.url = input;
         this.method = init?.method ?? 'GET';
         this.headers = new Headers(init?.headers);
@@ -87,7 +138,6 @@ if (typeof Request === 'undefined') {
       return this._body || '';
     }
   } as unknown as typeof Request;
-}
 
 describe('CloudAdapter', () => {
   let adapter: CloudAdapter;
@@ -170,7 +220,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ setup_required: false });
+      expect(data).toEqual({ setup_required: false, onboarding_complete: true, providers: [] });
 
       // Should NOT call the actual fetch
       expect(mockFetch).not.toHaveBeenCalled();
@@ -183,7 +233,7 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ success: true });
+      expect(data).toEqual({ message: 'ok' });
 
       expect(mockFetch).not.toHaveBeenCalled();
     });
@@ -197,10 +247,6 @@ describe('CloudAdapter', () => {
       const data = await response.json();
       expect(data).toEqual({
         instances: [],
-        current_pid: 0,
-        active_host_pid: 0,
-        active_host_port: 0,
-        desired_host_pid: 0,
       });
 
       expect(mockFetch).not.toHaveBeenCalled();
@@ -225,7 +271,7 @@ describe('CloudAdapter', () => {
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toEqual({ error: 'Not available in cloud mode' });
+      expect(data).toEqual({ error: 'SSH not available in cloud mode' });
 
       expect(mockFetch).not.toHaveBeenCalled();
     });
@@ -249,7 +295,7 @@ describe('CloudAdapter', () => {
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toEqual({ error: 'Not available in cloud mode' });
+      expect(data).toEqual({ error: 'SSH not available in cloud mode' });
 
       expect(mockFetch).not.toHaveBeenCalled();
     });
@@ -261,31 +307,31 @@ describe('CloudAdapter', () => {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ success: true });
+      expect(data).toEqual({ message: 'ok' });
 
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return synthetic success response for instance select', async () => {
+    it('should return synthetic error response for instance select', async () => {
       const response = await adapter.fetch('/api/instances/select', {
         method: 'POST',
       });
 
-      expect(response.ok).toBe(true);
+      expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toEqual({ success: true });
+      expect(data).toEqual({ error: 'Instance management not available in cloud mode' });
 
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('should return synthetic response for support bundle', async () => {
+    it('should return synthetic error response for support bundle', async () => {
       const response = await adapter.fetch('/api/support-bundle', {
         method: 'GET',
       });
 
-      expect(response.ok).toBe(true);
+      expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toEqual({ message: 'Not available in cloud mode' });
+      expect(data).toEqual({ error: 'Support bundles not available in cloud mode' });
 
       expect(mockFetch).not.toHaveBeenCalled();
     });
@@ -300,19 +346,9 @@ describe('CloudAdapter', () => {
   });
 
 const workspaceSyntheticResponse = {
-    workspace_root: '/',
-    daemon_root: '/',
-    is_project: false,
-    project_markers: [] as string[],
-    needs_workspace_selection: false,
-    suggested_projects: [] as Array<{ path: string; name: string; markers: string[] }>,
-    recent_workspaces: [] as Array<{
-      path: string;
-      name: string;
-      last_used: string;
-      markers: string[];
-      session_count: number;
-    }>,
+    message: 'ok',
+    workspace_root: '/home/user',
+    daemon_root: '/home/user',
   };
 
   describe('fetch - workspace endpoint synthetic response', () => {
@@ -376,57 +412,303 @@ const workspaceSyntheticResponse = {
     });
   });
 
-  describe('fetch - WASM-local endpoint passthrough', () => {
-    it('should NOT intercept WASM-local file endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
+  describe('fetch - WASM-local endpoint handling (file CRUD, terminal, search)', () => {
+    // These endpoints MUST be handled by the WASM shell in the browser,
+    // NOT proxied to the Foundry backend. The CloudAdapter intercepts them
+    // and delegates to handleWasmLocal() which uses the WASM shell.
 
-      await adapter.fetch('/api/files', { method: 'GET' });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toContain('/api/files');
+    beforeEach(() => {
+      // Reset WASM shell mocks before each test
+      vi.clearAllMocks();
     });
 
-    it('should NOT intercept WASM-local terminal endpoints', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ history: [] }), { status: 200 }));
+    it('should handle GET /api/files locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/files', { method: 'GET' });
 
-      await adapter.fetch('/api/terminal/history', { method: 'GET' });
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      const call = mockFetch.mock.calls[0];
-      expect(call[0]).toContain('/api/terminal/history');
+      // Should return file list from WASM shell
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toHaveProperty('files');
+      expect(data).toHaveProperty('message', 'ok');
     });
 
-    it('should NOT intercept WASM-local create endpoint', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    it('should handle GET /api/browse locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/browse?path=/home/user', { method: 'GET' });
 
-      await adapter.fetch('/api/create', {
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      // Should return directory entries from WASM shell
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toHaveProperty('files');
+    });
+
+    it('should handle POST /api/create locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: '/test.txt' }),
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toHaveProperty('message', 'ok');
     });
 
-    it('should NOT intercept WASM-local browse endpoint', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ files: [] }), { status: 200 }));
-
-      await adapter.fetch('/api/browse', { method: 'GET' });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should NOT intercept WASM-local search/replace endpoint', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }));
-
-      await adapter.fetch('/api/search/replace', {
+    it('should handle POST /api/delete locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pattern: 'foo', replacement: 'bar' }),
+        body: JSON.stringify({ path: '/test.txt' }),
       });
 
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle DELETE /api/delete locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: '/test.txt' }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle POST /api/file (write) locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/file?path=/newfile.txt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'hello world' }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle POST /api/file/check-modified locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/file/check-modified', {
+        method: 'POST',
+        body: JSON.stringify({ files: ['/path/to/file.txt'] }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle GET /api/workspace/browse locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/workspace/browse?path=/home/user', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle POST /api/rename locally via WASM shell (NOT proxied)', async () => {
+      mockWasmShell.executeCommand.mockReturnValueOnce({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+      });
+
+      const response = await adapter.fetch('/api/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_path: '/old.txt', new_path: '/new.txt' }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle GET /api/search locally via WASM shell (NOT proxied)', async () => {
+      mockWasmShell.executeCommand.mockReturnValueOnce({
+        stdout: '/home/user/src/main.go:10:package main',
+        stderr: '',
+        exitCode: 0,
+      });
+
+      const response = await adapter.fetch('/api/search?query=package&case_sensitive=true', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toHaveProperty('results');
+      expect(data).toHaveProperty('total_matches');
+    });
+
+    it('should handle POST /api/search/replace locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/search/replace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ search: 'foo', replace: 'bar', files: ['/src/main.go'] }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle GET /api/terminal/sessions locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/terminal/sessions', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toHaveProperty('active_count', 0);
+    });
+
+    it('should handle GET /api/terminal/shells locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/terminal/shells', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+      const data = await response.json();
+      expect(data).toHaveProperty('shells');
+    });
+
+    it('should handle GET /api/terminal/history locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/terminal/history', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle POST /api/terminal/history locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/terminal/history', {
+        method: 'POST',
+        body: JSON.stringify({ command: 'ls -la' }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle GET /api/file locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/file?path=/README.md', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle GET /api/file/check-modified locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/file/check-modified', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle GET /api/files/prettier-config locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/files/prettier-config', { method: 'GET' });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should handle POST /api/file/consent locally via WASM shell (NOT proxied)', async () => {
+      const response = await adapter.fetch('/api/file/consent', {
+        method: 'POST',
+        body: JSON.stringify({ path: '/test.txt' }),
+      });
+
+      // MUST NOT proxy to backend
+      expect(mockFetch).not.toHaveBeenCalled();
+
+      expect(response.ok).toBe(true);
+    });
+
+    it('should fall through to server proxy when WASM shell init fails (graceful fallback)', async () => {
+      // Simulate WASM shell init failure
+      const { initWasmShell } = await import('./wasmShell');
+      const originalInit = initWasmShell as vi.Mock;
+      originalInit.mockImplementationOnce(() => Promise.reject(new Error('WASM not available')));
+
+      // Force a new adapter so it re-initializes WASM
+      const freshAdapter = new CloudAdapter(mockConfig);
+
+      // Mock the proxy fetch to simulate the server safety-net response
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ files: [], handled_by: 'wasm-shell' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const response = await freshAdapter.fetch('/api/files', { method: 'GET' });
+
+      // Should NOT return 503 — instead falls through to proxy
+      expect(response.ok).toBe(true);
+
+      // Should have proxied to the server safety-net handler
       expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/files');
+
+      // Restore mock
+      originalInit.mockImplementation(() => Promise.resolve(mockWasmShell));
+    });
+
+    it('should fall through to server proxy for wasm-local endpoint when WASM shell is unavailable', async () => {
+      // Simulate WASM shell init failure for a terminal endpoint
+      const { initWasmShell } = await import('./wasmShell');
+      const originalInit = initWasmShell as vi.Mock;
+      originalInit.mockImplementationOnce(() => Promise.reject(new Error('WASM load error')));
+
+      const freshAdapter = new CloudAdapter(mockConfig);
+
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ entries: [], handled_by: 'wasm-shell' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+      const response = await freshAdapter.fetch('/api/terminal/history', { method: 'GET' });
+
+      expect(response.ok).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const call = mockFetch.mock.calls[0];
+      expect(call[0]).toBe('https://api.sprout.dev/api/terminal/history');
+
+      // Restore mock
+      originalInit.mockImplementation(() => Promise.resolve(mockWasmShell));
     });
   });
 
@@ -599,7 +881,7 @@ const workspaceSyntheticResponse = {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ setup_required: false });
+      expect(data).toEqual({ setup_required: false, onboarding_complete: true, providers: [] });
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -608,13 +890,7 @@ const workspaceSyntheticResponse = {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({
-        instances: [],
-        current_pid: 0,
-        active_host_pid: 0,
-        active_host_port: 0,
-        desired_host_pid: 0,
-      });
+      expect(data).toEqual({ instances: [] });
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -624,7 +900,7 @@ const workspaceSyntheticResponse = {
 
       expect(response.ok).toBe(true);
       const data = await response.json();
-      expect(data).toEqual({ setup_required: false });
+      expect(data).toEqual({ setup_required: false, onboarding_complete: true, providers: [] });
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -677,13 +953,14 @@ const workspaceSyntheticResponse = {
     });
 
     it('should preserve query parameters in proxied requests', async () => {
-      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ history: [] }), { status: 200 }));
+      mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ settings: {} }), { status: 200 }));
 
-      await adapter.fetch('/api/terminal/history?session_id=abc123', { method: 'GET' });
+      // Use a Foundry-backend endpoint (not WASM-local) to test query param preservation
+      await adapter.fetch('/api/chat-sessions?limit=10', { method: 'GET' });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const call = mockFetch.mock.calls[0];
-      expect(call[0]).toContain('session_id=abc123');
+      expect(call[0]).toContain('limit=10');
     });
   });
 

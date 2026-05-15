@@ -3,7 +3,7 @@
  * Provides client-side buffering of terminal content for restoration after reconnects.
  */
 
-import { debugLog } from '../utils/log';
+import { debugLog, warn } from '../utils/log';
 
 const DB_NAME = 'sprout-terminal-scrollback';
 const DB_VERSION = 1;
@@ -214,7 +214,7 @@ export async function loadScrollback(sessionId: string): Promise<string | null> 
         const age = Date.now() - entry.timestamp;
         if (age > MAX_AGE_MS) {
           debugLog('[terminalScrollback] Scrollback entry too old, deleting:', sessionId);
-          deleteScrollback(sessionId).catch((err) => { console.warn('[terminalScrollback] Failed to delete expired scrollback:', err); });
+          deleteScrollback(sessionId).catch((err) => { warn('[terminalScrollback] Failed to delete expired scrollback: ' + (err instanceof Error ? err.message : String(err))); });
           resolve(null);
           return;
         }

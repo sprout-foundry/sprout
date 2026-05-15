@@ -437,8 +437,17 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
     setBuffers((prev) => {
       const buffer = prev.get(bufferId);
       if (!buffer || buffer.content === content) return prev;
+      const newIsModified = content !== buffer.originalContent;
+      if (buffer.isModified === newIsModified) {
+        // isModified didn't change — mutate in-place to avoid context cascade.
+        // Safe because EditorPane reads content from CodeMirror state, not React state.
+        // Footer re-renders from selectionInfo changes independently.
+        buffer.content = content;
+        return prev;
+      }
+      // isModified transitioned — create new Map to trigger tab indicator update
       const newBuffers = new Map(prev);
-      newBuffers.set(bufferId, { ...buffer, content, isModified: content !== buffer.originalContent });
+      newBuffers.set(bufferId, { ...buffer, content, isModified: newIsModified });
       return newBuffers;
     });
   }, []);
@@ -450,9 +459,9 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       if (buffer.cursorPosition?.line === position.line && buffer.cursorPosition?.column === position.column) {
         return prev;
       }
-      const newBuffers = new Map(prev);
-      newBuffers.set(bufferId, { ...buffer, cursorPosition: position });
-      return newBuffers;
+      // Mutate in-place — cursor position is persisted for tab switching, not React rendering
+      buffer.cursorPosition = position;
+      return prev;
     });
   }, []);
 
@@ -463,9 +472,9 @@ export const BufferManagerProvider: React.FC<BufferManagerProviderProps> = ({
       if (buffer.scrollPosition?.top === position.top && buffer.scrollPosition?.left === position.left) {
         return prev;
       }
-      const newBuffers = new Map(prev);
-      newBuffers.set(bufferId, { ...buffer, scrollPosition: position });
-      return newBuffers;
+      // Mutate in-place — scroll position is persisted for tab switching, not React rendering
+      buffer.scrollPosition = position;
+      return prev;
     });
   }, []);
 

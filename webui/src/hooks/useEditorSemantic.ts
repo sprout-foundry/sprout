@@ -91,7 +91,6 @@ export function useEditorSemantic(
 
   const apiService = useRef(ApiService.getInstance()).current;
   const bufferStateRef = useRef<EditorBuffer | null>(null);
-  bufferStateRef.current = bufferRef.current ?? null;
   const localContentRef = useRef(localContent);
   localContentRef.current = localContent;
 
@@ -124,7 +123,7 @@ export function useEditorSemantic(
   // ---------------------------------------------------------------------------
 
   const handleGoToDefinition = useCallback(async () => {
-    const buf = bufferStateRef.current;
+    const buf = bufferRef.current;
     if (!viewRef.current || !buf || buf.kind !== 'file' || !buf.file || buf.file.path.startsWith('__workspace/')) {
       return;
     }
@@ -198,7 +197,7 @@ export function useEditorSemantic(
   // ---------------------------------------------------------------------------
 
   const handleFindAllReferences = useCallback(async () => {
-    const buf = bufferStateRef.current;
+    const buf = bufferRef.current;
     if (!viewRef.current || !buf || buf.kind !== 'file' || !buf.file || buf.file.path.startsWith('__workspace/')) {
       return;
     }
@@ -266,7 +265,7 @@ export function useEditorSemantic(
 
   const handleSelectReference = useCallback(
     (filePath: string, line: number) => {
-      const buf = bufferStateRef.current;
+      const buf = bufferRef.current;
       if (!buf) return;
 
       if (filePath === buf.file.path) {

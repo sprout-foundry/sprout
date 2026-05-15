@@ -324,7 +324,7 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 		return nil, err
 	}
 	threshold, topK := m.snapshotQueryParams()
-	return CheckFileForDuplicates(ctx, idx, filePath, content, threshold, topK)
+	return CheckFileForDuplicates(ctx, idx, filePath, content, m.workspaceRoot, threshold, topK)
 }
 
 // QuerySimilar searches for code similar to the given query text.

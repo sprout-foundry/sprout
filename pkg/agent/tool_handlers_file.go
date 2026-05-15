@@ -123,10 +123,9 @@ func injectSemanticContext(a *Agent, filePath string, content string) string {
 
 	// Filter out results from the same file (agent already has that context)
 	var external []embedding.QueryResult
-	absPath, _ := filepath.Abs(filePath)
+	workspaceRoot := a.GetWorkspaceRoot()
 	for _, r := range results {
-		absRecord, _ := filepath.Abs(r.Record.File)
-		if absRecord != absPath {
+		if embedding.NormalizePathToWorkspace(workspaceRoot, r.Record.File) != embedding.NormalizePathToWorkspace(workspaceRoot, filePath) {
 			external = append(external, r)
 		}
 	}

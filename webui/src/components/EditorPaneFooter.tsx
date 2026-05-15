@@ -25,12 +25,12 @@ const FONT_SIZE_DEFAULT = 14;
 export interface EditorPaneFooterProps {
   buffer: EditorBuffer | null | undefined;
   selectionInfo: { selectionCount?: number; charCount?: number } | null;
+  whitespaceRenderingMode: WhitespaceRenderingMode;
   settings: {
     editorFontSize: number;
     editorTabSize: number;
     editorUsesTabs: boolean;
     lineEnding: string;
-    whitespaceRenderingModeRef: { current: WhitespaceRenderingMode };
     onCycleTabSize: () => void;
     onCycleWhitespaceRendering: () => WhitespaceRenderingMode;
     onZoomIn: () => void;
@@ -55,6 +55,7 @@ export interface EditorPaneFooterProps {
 export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
   buffer,
   selectionInfo,
+  whitespaceRenderingMode,
   settings,
   lsp,
   setWhitespaceRenderingMode,
@@ -83,7 +84,7 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
         <span className="line-count">Lines: {(buffer?.content || '').split('\n').length}</span>
         <span className="char-count">Chars: {(buffer?.content || '').length}</span>
         <span className="cursor-position">
-          Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line + 1 : 0}, Col{' '}
+          Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line : 0}, Col{' '}
           {buffer?.cursorPosition?.column !== undefined ? buffer.cursorPosition.column + 1 : 0}
           {selectionInfo &&
             selectionInfo.selectionCount !== undefined &&
@@ -155,7 +156,7 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
         <span className="encoding-indicator" title="File encoding and line endings">
           UTF-8 · {settings.lineEnding}
         </span>
-        {settings.whitespaceRenderingModeRef.current !== 'none' && (
+        {whitespaceRenderingMode !== 'none' && (
           <span
             className="whitespace-mode"
             role="button"
@@ -164,7 +165,7 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
             onKeyDown={(e) => handleKeyDown(e, handleWhitespaceToggle)}
             title="Click to change whitespace rendering (none → boundary → all)"
           >
-            {settings.whitespaceRenderingModeRef.current === 'boundary' ? 'WS: boundary' : 'WS: all'}
+            {whitespaceRenderingMode === 'boundary' ? 'WS: boundary' : 'WS: all'}
           </span>
         )}
         {lsp.lspLanguage && (

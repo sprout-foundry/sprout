@@ -276,8 +276,8 @@ export function useEditorFileIO(
           const { line, column } = buf.cursorPosition;
           const doc = viewRef.current.state.doc;
           if (doc.lines > 0) {
-            const targetLine = Math.max(0, Math.min(line, doc.lines - 1));
-            const lineInfo = doc.line(targetLine + 1);
+            const targetLine = Math.max(1, Math.min(line, doc.lines));
+            const lineInfo = doc.line(targetLine);
             const pos = lineInfo.from + Math.max(0, Math.min(column, lineInfo.length));
             viewRef.current.dispatch({
               selection: { anchor: pos },
@@ -535,7 +535,8 @@ export function useEditorFileIO(
     if (loadFileRef.current) {
       loadFileRef.current(buffer.file.path);
     }
-  }, [buffer?.id, buffer?.file?.path, buffer?.kind, paneId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [buffer?.id, buffer?.file?.path, buffer?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  // paneId is stable per pane instance; the guards above handle edge cases
 
   // ── External file change listener ──────────────────────────────
   // Shows conflict dialog when the buffer has unsaved changes and the
@@ -574,6 +575,9 @@ export function useEditorFileIO(
           .then((action) => {
             // Re-validate: user may have switched files during the dialog.
             if (bufferRef.current?.id !== currentBuffer.id) return;
+            // Re-check modification state after async dialog.
+            const currentBuf = bufferRef.current;
+            if (!currentBuf || !currentBuf.isModified) return;
             if (action === 'keep-mine') {
               setBufferExternallyModified(currentBuffer.id, '');
             }
@@ -605,6 +609,9 @@ export function useEditorFileIO(
           });
           // Re-validate after the async dialog.
           if (bufferRef.current?.id !== currentBuffer.id) return;
+          // Re-check modification state after async dialog.
+          const currentBuf = bufferRef.current;
+          if (!currentBuf || !currentBuf.isModified) return;
 
           if (action === 'reload') {
             if (loadFileRef.current) {
@@ -655,6 +662,9 @@ export function useEditorFileIO(
     openWorkspaceBuffer,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ref to prevent rapid-fire duplicate auto-reload events for the same buffer
+  const lastReloadKeyRef = useRef<string>('');
+
   // ── Auto-reload sync listener ──────────────────────────────────
   // Syncs the CodeMirror view when a clean buffer is auto-reloaded
   // by useAutoReloadCleanBuffers (dispatched via `file:auto-reloaded`).
@@ -665,6 +675,11 @@ export function useEditorFileIO(
     const handleAutoReloaded = async (e: Event) => {
       const detail = (e as CustomEvent).detail as { bufferId: string; content: string };
       if (detail.bufferId !== buffer.id) return;
+
+      // Skip duplicate rapid-fire events for the same content.
+      const reloadKey = `${detail.bufferId}:${detail.content.length}`;
+      if (lastReloadKeyRef.current === reloadKey) return;
+      lastReloadKeyRef.current = reloadKey;
 
       // Skip if content hasn't actually changed to avoid resetting cursor/selection
       // when the file content is the same as what's already in the editor.

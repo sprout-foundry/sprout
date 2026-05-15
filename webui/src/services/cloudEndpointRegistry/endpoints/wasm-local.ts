@@ -19,7 +19,7 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
   },
   {
     path: '/api/delete',
-    methods: ['DELETE'],
+    methods: ['DELETE', 'POST'],
     category: 'wasm-local',
     description: 'File deletion (WASM handles locally)',
   },
@@ -37,7 +37,7 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
   },
   {
     path: '/api/file/check-modified',
-    methods: ['POST'],
+    methods: ['GET', 'POST'],
     category: 'wasm-local',
     description: 'Check if file modified (WASM handles locally)',
   },

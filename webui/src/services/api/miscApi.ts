@@ -141,7 +141,18 @@ export async function getFixFromDeepReviewStatus(
 
 export async function exportSupportBundle(fetchFn: typeof fetch): Promise<void> {
   const response = await fetchFn('/api/support-bundle', { method: 'GET' });
-  if (!response.ok) throw new Error(`Support bundle failed: HTTP ${response.status}`);
+  if (!response.ok) {
+    // Read the error body for a descriptive message (e.g., in cloud mode the
+    // server returns { error: 'Support bundles not available in cloud mode' }).
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(
+      String(
+        errData.error ||
+          errData.message ||
+          `Support bundle failed: HTTP ${response.status}`,
+      ),
+    );
+  }
 
   const disposition = response.headers.get('Content-Disposition') ?? '';
   const match = disposition.match(/filename="([^"]+)"/);

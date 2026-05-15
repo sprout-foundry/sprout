@@ -140,7 +140,7 @@ export function useSidebarModel({
     };
 
     fetchProviders();
-  }, [apiService, isConnected, model, provider, selectedModel, log]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [apiService, isConnected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Always sync with the provider prop from App, even if it's empty or 'unknown'

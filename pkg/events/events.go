@@ -3,6 +3,7 @@ package events
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -126,8 +127,9 @@ func (eb *EventBus) Publish(eventType string, data any) {
 			select {
 			case ch <- event:
 			default:
-				// Channel is full, skip this subscriber
-				// This prevents blocking if a subscriber is slow
+				// Channel is full — subscriber is slow or disconnected.
+				// Log the drop so operators can diagnose missing events.
+				log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=100)", eventType)
 			}
 		}
 	}

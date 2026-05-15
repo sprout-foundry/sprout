@@ -146,26 +146,27 @@ export default function useWebSocketEvents({
         const backendProcessing = stats.is_processing === true;
         if (!backendProcessing && activeRequestsRef.current > 0) {
           debugLog(
-            '[reconnect] Backend idle but frontend has',
-            activeRequestsRef.current,
-            'active request(s) — resetting stuck processing state',
+            '[reconnect] Backend idle but frontend had active request(s) — clearing stale state',
           );
           activeRequestsRef.current = 0;
           setState((prev) => ({
             isProcessing: false,
             queryProgress: null,
             lastError: null,
-            toolExecutions: prev.toolExecutions.map((tool) => {
-              if (tool.status === 'started' || tool.status === 'running') {
-                return {
-                  ...tool,
-                  status: 'error' as const,
-                  endTime: tool.endTime || new Date(),
-                  result: 'Interrupted — connection lost during execution',
-                };
-              }
-              return tool;
-            }),
+            // Clear all tool executions — running tools either completed
+            // while disconnected (results recovered via recoverChatMessages)
+            // or were genuinely interrupted.  Stale "running" rows are
+            // confusing either way.
+            toolExecutions: [],
+            subagentActivities: [],
+            currentTodos: [],
+            // Clear stale security dialogs — if the backend is idle there
+            // are no pending security requests; keeping them open would
+            // result in unactionable dialogs once the backend timed them
+            // out while we were disconnected.
+            securityApprovalRequest: null,
+            securityPromptRequest: null,
+            askUserRequest: null,
           }));
         } else if (backendProcessing) {
           debugLog('[reconnect] Backend still processing but frontend is idle — restoring processing state');

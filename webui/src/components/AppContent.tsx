@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { Menu, PanelRightClose } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
@@ -322,7 +322,12 @@ const AppContent: React.FC<AppContentProps> = ({
     openWorkspaceBuffer,
   });
 
-  const chatProps = {
+  const handleToolPillClick = useCallback(
+    (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+    [],
+  );
+
+  const chatProps = useMemo(() => ({
     messages: state.messages,
     onSendMessage,
     onQueueMessage,
@@ -335,13 +340,19 @@ const AppContent: React.FC<AppContentProps> = ({
     queryProgress: state.queryProgress,
     currentTodos,
     onStopProcessing,
-    onToolPillClick: (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
+    onToolPillClick: handleToolPillClick,
     stats: state.stats,
     isConnected: state.isConnected,
     backendReachable,
     onRetryConnection,
-  };
-  const reviewProps = {
+  }), [
+    state.messages, onSendMessage, onQueueMessage, queuedMessagesCount,
+    inputValue, onInputChange, state.isProcessing, state.lastError,
+    state.toolExecutions, state.queryProgress, currentTodos, onStopProcessing,
+    handleToolPillClick, state.stats, state.isConnected, backendReachable,
+    onRetryConnection,
+  ]);
+  const reviewProps = useMemo(() => ({
     review: deepReview,
     reviewError,
     reviewFixResult,
@@ -350,15 +361,18 @@ const AppContent: React.FC<AppContentProps> = ({
     isReviewLoading,
     isReviewFixing,
     onFixFromReview: handleFixFromReview,
-  };
-  const diffState = {
+  }), [
+    deepReview, reviewError, reviewFixResult, reviewFixLogs,
+    reviewFixSessionID, isReviewLoading, isReviewFixing, handleFixFromReview,
+  ]);
+  const diffState = useMemo(() => ({
     activeDiffPath,
     activeDiff,
     diffMode,
     isDiffLoading,
     diffError,
     onDiffModeChange: handleDiffModeChange,
-  };
+  }), [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange]);
 
   return (
     <div className="app">

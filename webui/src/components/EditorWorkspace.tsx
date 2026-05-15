@@ -20,13 +20,22 @@ export interface EditorWorkspaceProps {
   handleOutlineNavigateToSymbol: (line: number) => void;
 }
 
-const toPaneFlex = (weight: number): CSSProperties => ({
-  flexGrow: weight,
-  flexShrink: 1,
-  flexBasis: 0,
-  minWidth: 0,
-  minHeight: 0,
-});
+// Cache pane flex styles by weight to avoid recreating CSSProperties objects
+const paneFlexCache = new Map<number, CSSProperties>();
+
+const toPaneFlex = (weight: number): CSSProperties => {
+  const cached = paneFlexCache.get(weight);
+  if (cached) return cached;
+  const result: CSSProperties = {
+    flexGrow: weight,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
+    minHeight: 0,
+  };
+  paneFlexCache.set(weight, result);
+  return result;
+};
 
 const PaneWrapper: React.FC<{ children: React.ReactNode; style?: CSSProperties }> = ({ children, style }) => (
   <div className="pane-wrapper" style={style}>
@@ -114,6 +123,70 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 
+  // Refs for values read inside memoized render helpers to keep dependency arrays stable
+  const activePaneIdRef = useRef(activePaneId);
+  activePaneIdRef.current = activePaneId;
+  const panesRef = useRef(panes);
+  panesRef.current = panes;
+  const perChatCacheRef = useRef(perChatCache);
+  perChatCacheRef.current = perChatCache;
+  const activeChatIdRef = useRef(activeChatId);
+  activeChatIdRef.current = activeChatId;
+  const chatPropsRef = useRef(chatProps);
+  chatPropsRef.current = chatProps;
+  const reviewPropsRef = useRef(reviewProps);
+  reviewPropsRef.current = reviewProps;
+  const diffStateRef = useRef(diffState);
+  diffStateRef.current = diffState;
+
+  // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
+  const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);
+  const handleCloseAllSplitsRef = useRef<(() => void) | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Handlers (must be declared before render helpers that reference them via refs)
+  // ---------------------------------------------------------------------------
+
+  const handleSplitRequest = useCallback(
+    (direction: 'vertical' | 'horizontal') => {
+      if (!activePaneId) {
+        return;
+      }
+
+      const previousPaneCount = panes.length;
+      const newPaneId = splitPane(activePaneId, direction);
+      if (!newPaneId) {
+        return;
+      }
+
+      if (previousPaneCount === 2) {
+        setNestedSplit({
+          hostPaneId: activePaneId,
+          nestedPaneId: newPaneId,
+          direction,
+        });
+        updatePaneSize(`group:${activePaneId}`, 50);
+        updatePaneSize(`nested:${activePaneId}`, 50);
+      }
+    },
+    [activePaneId, panes.length, splitPane, updatePaneSize],
+  );
+
+  const handleCloseAllSplits = useCallback(() => {
+    if (nestedSplit) {
+      // When a nested split is active, close just the nested pane (3 → 2 panes)
+      closePane(nestedSplit.nestedPaneId);
+      setNestedSplit(null);
+    } else {
+      // No nested split — close all splits (2 → 1 pane)
+      closeSplit();
+    }
+  }, [closeSplit, closePane, nestedSplit]);
+
+  // Keep function refs up to date for memoized render helpers
+  handleSplitRequestRef.current = handleSplitRequest;
+  handleCloseAllSplitsRef.current = handleCloseAllSplits;
+
   React.useEffect(() => {
     if (panes.length !== 3 && nestedSplit) {
       setNestedSplit(null);
@@ -151,101 +224,116 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     [paneSizes, updatePaneSize],
   );
 
+  // Cache returned functions from handlePaneResizeEnd to avoid recreating them.
+  const resizeEndCacheRef = useRef(new Map<string, () => void>());
+
   const handlePaneResizeEnd = useCallback(
-    (sizeKey: string) => () => {
-      isPaneDraggingRef.current.delete(sizeKey);
-      dragStartSizeRef.current.delete(sizeKey);
+    (sizeKey: string) => {
+      const cached = resizeEndCacheRef.current.get(sizeKey);
+      if (cached) return cached;
+      const fn = () => {
+        isPaneDraggingRef.current.delete(sizeKey);
+        dragStartSizeRef.current.delete(sizeKey);
+      };
+      resizeEndCacheRef.current.set(sizeKey, fn);
+      return fn;
     },
     [],
   );
 
   const showResizeHandles = panes.length > 1;
 
-  const renderSplitControls = (paneId: string) => {
-    return (
-      <div className="split-controls split-controls-embedded">
-        {paneId === activePaneId && onCreateChat && (
-          <button
-            onClick={async () => {
-              const newId = await onCreateChat();
-              if (newId) {
-                openWorkspaceBuffer({
-                  kind: 'chat',
-                  path: `__workspace/chat/${newId}`,
-                  title: 'New Chat',
-                  isPinned: false,
-                  isClosable: true,
-                  metadata: { chatId: newId },
-                });
-              }
-            }}
-            className="pane-control-btn compact"
-            title="New chat"
-            aria-label="New chat"
-          >
-            <MessageSquarePlus size={13} />
-          </button>
-        )}
-        {paneId === activePaneId && canCloseSplit && (
-          <button
-            onClick={handleCloseAllSplits}
-            className="pane-control-btn compact"
-            title="Close split panes"
-            aria-label="Close split panes"
-          >
-            <X size={13} />
-          </button>
-        )}
-        {paneId === activePaneId && canSplit && (
-          <button
-            onClick={() => handleSplitRequest('vertical')}
-            className="pane-control-btn compact"
-            title="Split vertically"
-            aria-label="Split vertically"
-          >
-            <Columns2 size={14} />
-          </button>
-        )}
-        {paneId === activePaneId && canSplit && (
-          <button
-            onClick={() => handleSplitRequest('horizontal')}
-            className="pane-control-btn compact"
-            title="Split horizontally"
-            aria-label="Split horizontally"
-          >
-            <Rows2 size={14} />
-          </button>
-        )}
-      </div>
-    );
-  };
-
-  const renderPaneById = (paneId: string, style?: CSSProperties) => {
-    const pane = panes.find((item) => item.id === paneId);
-    if (!pane) {
-      return null;
-    }
-
-    return (
-      <PaneWrapper key={pane.id} style={style}>
-        <div className="pane-shell">
-          <EditorTabs paneId={pane.id} compact actions={renderSplitControls(pane.id)} />
-          <EditorPaneWrapper isActive={pane.id === activePaneId} onClick={() => switchPane(pane.id)}>
-            <EditorPaneComponent
-              paneId={pane.id}
-              isActive={pane.id === activePaneId}
-              onClick={() => switchPane(pane.id)}
-              perChatCache={perChatCache}
-              activeChatId={activeChatId}
-              chatProps={chatProps}
-              reviewProps={reviewProps}
-              diffState={diffState}
-            />
-          </EditorPaneWrapper>
+  const renderSplitControls = useCallback(
+    (paneId: string) => {
+      return (
+        <div className="split-controls split-controls-embedded">
+          {paneId === activePaneIdRef.current && onCreateChat && (
+            <button
+              onClick={async () => {
+                const newId = await onCreateChat();
+                if (newId) {
+                  openWorkspaceBuffer({
+                    kind: 'chat',
+                    path: `__workspace/chat/${newId}`,
+                    title: 'New Chat',
+                    isPinned: false,
+                    isClosable: true,
+                    metadata: { chatId: newId },
+                  });
+                }
+              }}
+              className="pane-control-btn compact"
+              title="New chat"
+              aria-label="New chat"
+            >
+              <MessageSquarePlus size={13} />
+            </button>
+          )}
+          {paneId === activePaneIdRef.current && canCloseSplit && (
+            <button
+              onClick={handleCloseAllSplitsRef.current || undefined}
+              className="pane-control-btn compact"
+              title="Close split panes"
+              aria-label="Close split panes"
+            >
+              <X size={13} />
+            </button>
+          )}
+          {paneId === activePaneIdRef.current && canSplit && (
+            <button
+              onClick={() => handleSplitRequestRef.current?.('vertical')}
+              className="pane-control-btn compact"
+              title="Split vertically"
+              aria-label="Split vertically"
+            >
+              <Columns2 size={14} />
+            </button>
+          )}
+          {paneId === activePaneIdRef.current && canSplit && (
+            <button
+              onClick={() => handleSplitRequestRef.current?.('horizontal')}
+              className="pane-control-btn compact"
+              title="Split horizontally"
+              aria-label="Split horizontally"
+            >
+              <Rows2 size={14} />
+            </button>
+          )}
         </div>
-      </PaneWrapper>
-    );
-  };
+      );
+    },
+    [onCreateChat, canCloseSplit, canSplit],
+  );
+
+  const renderPaneById = useCallback(
+    (paneId: string, style?: CSSProperties) => {
+      const pane = panesRef.current.find((item) => item.id === paneId);
+      if (!pane) {
+        return null;
+      }
+
+      return (
+        <PaneWrapper key={pane.id} style={style}>
+          <div className="pane-shell">
+            <EditorTabs paneId={pane.id} compact actions={renderSplitControls(pane.id)} />
+            <EditorPaneWrapper isActive={pane.id === activePaneIdRef.current} onClick={() => switchPane(pane.id)}>
+              <EditorPaneComponent
+                paneId={pane.id}
+                isActive={pane.id === activePaneIdRef.current}
+                onClick={() => switchPane(pane.id)}
+                perChatCache={perChatCacheRef.current}
+                activeChatId={activeChatIdRef.current}
+                chatProps={chatPropsRef.current}
+                reviewProps={reviewPropsRef.current}
+                diffState={diffStateRef.current}
+              />
+            </EditorPaneWrapper>
+          </div>
+        </PaneWrapper>
+      );
+    },
+    [renderSplitControls, switchPane],
+  );
 
   const renderPaneLayout = () => {
     if (panes.length === 0) {
@@ -327,8 +415,8 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       panes.findIndex((pane) => pane.id === hostPane.id) < panes.findIndex((pane) => pane.id === siblingPane.id);
     const rootSizeKey = `group:${hostPane.id}`;
     const nestedSizeKey = `nested:${hostPane.id}`;
-    const groupSize = paneSizes[rootSizeKey] || 50;
-    const nestedSize = paneSizes[nestedSizeKey] || 50;
+    const groupSize = normalizePaneSize(paneSizes[rootSizeKey] || 50, 100);
+    const nestedSize = normalizePaneSize(paneSizes[nestedSizeKey] || 50, 100);
     const rootHandleDirection = rootDirection === 'row' ? 'horizontal' : 'vertical';
     const nestedHandleDirection = nestedDirection === 'row' ? 'horizontal' : 'vertical';
 
@@ -356,42 +444,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       </div>
     );
   };
-
-  const handleSplitRequest = useCallback(
-    (direction: 'vertical' | 'horizontal') => {
-      if (!activePaneId) {
-        return;
-      }
-
-      const previousPaneCount = panes.length;
-      const newPaneId = splitPane(activePaneId, direction);
-      if (!newPaneId) {
-        return;
-      }
-
-      if (previousPaneCount === 2) {
-        setNestedSplit({
-          hostPaneId: activePaneId,
-          nestedPaneId: newPaneId,
-          direction,
-        });
-        updatePaneSize(`group:${activePaneId}`, 50);
-        updatePaneSize(`nested:${activePaneId}`, 50);
-      }
-    },
-    [activePaneId, panes.length, splitPane, updatePaneSize],
-  );
-
-  const handleCloseAllSplits = useCallback(() => {
-    if (nestedSplit) {
-      // When a nested split is active, close just the nested pane (3 → 2 panes)
-      closePane(nestedSplit.nestedPaneId);
-      setNestedSplit(null);
-    } else {
-      // No nested split — close all splits (2 → 1 pane)
-      closeSplit();
-    }
-  }, [closeSplit, closePane, nestedSplit]);
 
   // Handle focus_split hotkeys (focus_split_1 through focus_split_6)
   const handleFocusPaneIndex = useCallback(

@@ -83,15 +83,15 @@ export function useEditorDiagnostics(
         resolveLanguageId(buffer?.languageOverride, buffer?.file?.ext?.replace(/^\./, ''), buffer?.file?.name)
           .languageId ?? '';
 
-      // If LSP client is connected, it handles diagnostics via serverDiagnostics() extension
-      // - skip old semantic diagnostics to avoid duplication
-      if (isSemanticLanguage(languageId) && getClientForLanguageSync(languageId)) {
-        debugLog('[fetchDiagnostics] LSP client active, skipping semantic diagnostics');
-        return;
-      }
-
       // Try semantic diagnostics first (TypeScript/Go)
       try {
+        // If LSP client is connected, it handles diagnostics via serverDiagnostics() extension
+        // - skip old semantic diagnostics to avoid duplication
+        if (isSemanticLanguage(languageId) && getClientForLanguageSync(languageId)) {
+          debugLog('[fetchDiagnostics] LSP client active, skipping semantic diagnostics');
+          return;
+        }
+
         if (isSemanticLanguage(languageId)) {
           const semantic = await apiService.getSemanticDiagnostics(filePath, content, languageId, trigger);
           if (!viewRef.current) return; // Guard against unmount during async call

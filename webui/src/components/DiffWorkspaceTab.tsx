@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GitCompareArrows, ChevronUp, ChevronDown } from 'lucide-react';
 import DiffSurface from './DiffSurface';
 import { MergeViewWrapper } from './MergeViewWrapper';
@@ -37,7 +37,7 @@ const getDiffText = (diff: GitDiffResponse | null, diffMode: 'combined' | 'stage
   }
 };
 
-function DiffWorkspaceTab({
+const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
   path,
   diff,
   diffMode,
@@ -151,6 +151,6 @@ function DiffWorkspaceTab({
       )}
     </div>
   );
-}
+});
 
 export default DiffWorkspaceTab;

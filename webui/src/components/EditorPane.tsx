@@ -441,6 +441,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       <EditorPaneFooter
         buffer={buffer}
         selectionInfo={selectionInfo}
+        whitespaceRenderingMode={whitespaceRenderingMode}
         settings={settings}
         lsp={lsp}
         setWhitespaceRenderingMode={setWhitespaceRenderingMode}

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// TestReadLargeFileWithLineRange tests that line ranges work correctly on files larger than the default 100KB limit
+// TestReadLargeFileWithLineRange tests that line ranges work correctly on files larger than the default 32KB limit
 func TestReadLargeFileWithLineRange(t *testing.T) {
 	// Create a temporary file larger than 100KB with many lines
 	tmpDir := t.TempDir()

@@ -9,7 +9,7 @@
 import { useCallback, useEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { saveScrollback, loadScrollback, cleanupOldEntries, deleteScrollback } from '../services/terminalScrollback';
-import { debugLog } from '../utils/log';
+import { debugLog, warn } from '../utils/log';
 
 export interface UseTerminalScrollbackOptions {
   xtermRef: React.RefObject<XTerm | null>;
@@ -58,8 +58,12 @@ export function useTerminalScrollback(options: UseTerminalScrollbackOptions): Us
       try {
         const clientScrollback = await loadScrollback(sessionId);
         if (clientScrollback) {
-          term.write(clientScrollback);
-          await deleteScrollback(sessionId).catch((err) => { console.warn('[TerminalPane] Failed to delete scrollback after load:', err); });
+          // Re-check the ref after the await in case the terminal unmounted.
+          const current = xtermRef.current;
+          if (current) {
+            current.write(clientScrollback);
+          }
+          await deleteScrollback(sessionId).catch((err) => { warn('[TerminalPane] Failed to delete scrollback after load: ' + (err instanceof Error ? err.message : String(err))); });
         }
       } catch (err) {
         debugLog('[TerminalPane] Failed to load client scrollback:', err);

@@ -38,7 +38,6 @@ func TestOSKeyringBackend_SetGetDelete(t *testing.T) {
 // TestOSKeyringBackend_GetNotFound returns empty, no error
 func TestOSKeyringBackend_GetNotFound(t *testing.T) {
 	keyring.MockInit()
-	
 
 	backend := NewOSKeyringBackend()
 
@@ -50,7 +49,6 @@ func TestOSKeyringBackend_GetNotFound(t *testing.T) {
 // TestOSKeyringBackend_DeleteNotFound should not error
 func TestOSKeyringBackend_DeleteNotFound(t *testing.T) {
 	keyring.MockInit()
-	
 
 	backend := NewOSKeyringBackend()
 
@@ -61,7 +59,6 @@ func TestOSKeyringBackend_DeleteNotFound(t *testing.T) {
 // TestOSKeyringBackend_EmptyProvider returns error
 func TestOSKeyringBackend_EmptyProvider(t *testing.T) {
 	keyring.MockInit()
-	
 
 	backend := NewOSKeyringBackend()
 
@@ -82,8 +79,8 @@ func TestOSKeyringBackend_EmptyProvider(t *testing.T) {
 // TestFileBackend_SetGetDelete tests full round-trip using temp dir
 func TestFileBackend_SetGetDelete(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	backend := NewFileBackend()
 
@@ -109,8 +106,8 @@ func TestFileBackend_SetGetDelete(t *testing.T) {
 // TestFileBackend_GetNotFound returns empty, no error
 func TestFileBackend_GetNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	backend := NewFileBackend()
 
@@ -122,8 +119,8 @@ func TestFileBackend_GetNotFound(t *testing.T) {
 // TestFileBackend_EmptyProvider returns error
 func TestFileBackend_EmptyProvider(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	backend := NewFileBackend()
 
@@ -146,15 +143,14 @@ func TestGetStorageBackend_AutoDetect(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear any persisted mode
 	os.Remove(filepath.Join(tmpDir, "backend.mode"))
 
 	// Mock keyring is available
 	keyring.MockInit()
-	
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
@@ -177,8 +173,8 @@ func TestGetStorageBackend_ForceFile(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Force file backend via env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
@@ -195,8 +191,8 @@ func TestGetStorageBackend_ForceKeyring(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Force keyring backend via env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "keyring")
@@ -213,8 +209,8 @@ func TestGetStorageBackend_PersistedMode(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Set persisted mode to file
 	err := SetStorageMode("file")
@@ -233,8 +229,8 @@ func TestGetStorageBackend_PersistedMode(t *testing.T) {
 // TestMigrateFileToKeyring set up file with keys, migrate to keyring, verify keyring has them
 func TestMigrateFileToKeyring(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Set up file backend with some keys
 	fileBackend := NewFileBackend()
@@ -245,7 +241,6 @@ func TestMigrateFileToKeyring(t *testing.T) {
 
 	// Initialize mock keyring
 	keyring.MockInit()
-	
 
 	// Migrate to keyring
 	migrated, err := MigrateFileToKeyring(false) // Don't clear file
@@ -274,8 +269,8 @@ func TestMigrateFileToKeyring(t *testing.T) {
 // TestMigrateKeyringToFile reverse migration
 func TestMigrateKeyringToFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Initialize mock keyring and set some keys
 	keyring.MockInit()
@@ -312,11 +307,10 @@ func TestMigrateKeyringToFile(t *testing.T) {
 // TestKeyringProviderTracking add/remove/list tracked providers
 func TestKeyringProviderTracking(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	keyring.MockInit()
-	
 
 	// Initially empty
 	providers, err := getTrackedKeyringProviders()
@@ -367,14 +361,13 @@ func TestResolve_WithKeyringBackend(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// Set key in keyring
 	keyringBackend := NewOSKeyringBackend()
@@ -398,11 +391,10 @@ func TestResolve_EnvironmentPriorityOverKeyring(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	keyring.MockInit()
-	
 
 	// Set key in keyring
 	keyringBackend := NewOSKeyringBackend()
@@ -425,14 +417,13 @@ func TestResolve_KeyringPriorityOverFile(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// Set different values in keyring and file
 	keyringBackend := NewOSKeyringBackend()
@@ -455,14 +446,13 @@ func TestResolve_NoCredential(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// No credentials anywhere
 	resolved, err := resolve("non-existent-provider", "")
@@ -477,14 +467,13 @@ func TestGetFromActiveBackend(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// Set credential in keyring
 	keyringBackend := NewOSKeyringBackend()
@@ -503,14 +492,13 @@ func TestSetToActiveBackend(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// Set credential using active backend
 	err := SetToActiveBackend("test-provider", "test-value")
@@ -533,14 +521,13 @@ func TestDeleteFromActiveBackend(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// Set credential in keyring
 	keyringBackend := NewOSKeyringBackend()
@@ -565,7 +552,6 @@ func TestDeleteFromActiveBackend(t *testing.T) {
 // TestIsKeyringAvailable with mock returns true
 func TestIsKeyringAvailable(t *testing.T) {
 	keyring.MockInit()
-	
 
 	// Keyring should be available with mock
 	assert.True(t, IsKeyringAvailable())
@@ -574,8 +560,8 @@ func TestIsKeyringAvailable(t *testing.T) {
 // TestMigrateFileToKeyring_ClearFile clears file after migration
 func TestMigrateFileToKeyring_ClearFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Set up file backend with a key
 	fileBackend := NewFileBackend()
@@ -584,7 +570,6 @@ func TestMigrateFileToKeyring_ClearFile(t *testing.T) {
 
 	// Initialize mock keyring
 	keyring.MockInit()
-	
 
 	// Migrate and clear file
 	migrated, err := MigrateFileToKeyring(true) // Clear file
@@ -606,8 +591,8 @@ func TestMigrateFileToKeyring_ClearFile(t *testing.T) {
 // TestMigrateKeyringToFile_ClearKeyring clears keyring after migration
 func TestMigrateKeyringToFile_ClearKeyring(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Initialize mock keyring and set a key
 	keyring.MockInit()
@@ -639,8 +624,8 @@ func TestMigrateKeyringToFile_ClearKeyring(t *testing.T) {
 // TestSetStorageMode_InvalidMode returns error
 func TestSetStorageMode_InvalidMode(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	err := SetStorageMode("invalid")
 	require.Error(t, err)
@@ -650,8 +635,8 @@ func TestSetStorageMode_InvalidMode(t *testing.T) {
 // TestGetStorageMode_NoModeFile returns empty
 func TestGetStorageMode_NoModeFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	mode, err := GetStorageMode()
 	require.NoError(t, err)
@@ -661,11 +646,10 @@ func TestGetStorageMode_NoModeFile(t *testing.T) {
 // TestListKeyringProviders returns tracked providers
 func TestListKeyringProviders(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	keyring.MockInit()
-	
 
 	// Add some providers
 	err := addTrackedProvider("openai")
@@ -684,14 +668,13 @@ func TestResolve_WhitespaceTrimmedProvider(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	// Clear env var
 	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "")
 
 	keyring.MockInit()
-	
 
 	// Set key with trimmed name
 	keyringBackend := NewOSKeyringBackend()
@@ -708,8 +691,8 @@ func TestResolve_WhitespaceTrimmedProvider(t *testing.T) {
 // TestFileBackend_EmptyValue returns error
 func TestFileBackend_EmptyValue(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("LEDIT_CONFIG", t.tmpDir)
-	t.Setenv("SPROUT_CONFIG", t.tmpDir)
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	backend := NewFileBackend()
 

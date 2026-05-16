@@ -42,6 +42,7 @@ type ReactWebServer struct {
 	fileWatcher                     *fileWatcher
 	terminalManager                 *TerminalManager
 	securityPromptMgr               *security.ApprovalManager
+	askUserMgr                      *agenttools.AskUserManager
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
@@ -100,10 +101,8 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	providercatalog.RefreshFromRemoteAsync("")
 
 	securityPromptMgr := security.NewApprovalManager()
-	security.SetGlobalApprovalManager(securityPromptMgr)
 
 	askUserMgr := agenttools.NewAskUserManager()
-	agenttools.SetGlobalAskUserManager(askUserMgr)
 
 	// Run startup permission check
 	if configDir, err := configuration.GetConfigDir(); err == nil {
@@ -173,6 +172,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		fileConsents:      newFileConsentManager(),
 		fileWatcher:       newFileWatcher(eventBus),
 		securityPromptMgr: securityPromptMgr,
+		askUserMgr:        askUserMgr,
 		clientContexts:    make(map[string]*webClientContext),
 		port:              port,
 		bindAddr:          bindAddr,
@@ -255,5 +255,15 @@ func (ws *ReactWebServer) countConnections() int {
 		return true
 	})
 	return count
+}
+
+// GetSecurityPromptMgr returns the security approval manager used by this web server.
+func (ws *ReactWebServer) GetSecurityPromptMgr() *security.ApprovalManager {
+	return ws.securityPromptMgr
+}
+
+// GetAskUserMgr returns the ask user manager used by this web server.
+func (ws *ReactWebServer) GetAskUserMgr() *agenttools.AskUserManager {
+	return ws.askUserMgr
 }
 

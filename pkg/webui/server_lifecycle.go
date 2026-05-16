@@ -94,10 +94,18 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		}
 	}()
 
-	go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
+	// Only start background workers once per ReactWebServer instance.
+	// The supervisor may call Start/Shutdown multiple times during the
+	// process lifetime; these long-lived goroutines use the parent context
+	// and should not be re-spawned on each Start.
+	ws.startOnce.Do(func() {
+		ws.serverCtx.Store(ctx)
 
-	// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes, background timeout 2 hours)
-	ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
+		go ws.startClientContextCleanupWorker(ctx, clientContextCleanupInterval, clientContextMaxIdle)
+
+		// Start terminal session cleanup worker (every 5 minutes, timeout 30 minutes, background timeout 2 hours)
+		ws.terminalManager.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
+	})
 
 	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.
 	startSemanticEviction(ctx)

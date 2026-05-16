@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -65,6 +66,8 @@ type ReactWebServer struct {
 	trustedUserHeader               string   // Header name for user ID extraction in service mode
 	serviceMode                     bool     // true when running as a managed service (SPROUT_SERVICE=1)
 	authToken                       string   // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
+	startOnce                       sync.Once // Ensures background workers are started exactly once
+	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
 }
 
 // NewReactWebServer creates a new React web server

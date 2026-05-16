@@ -12,16 +12,7 @@ import (
 // When LEDIT_CONFIG and XDG_CONFIG_HOME are both empty and HOME is unset,
 // os.UserHomeDir() returns an error.
 func TestGetConfigDir_HomeError(t *testing.T) {
-	// Save and restore HOME
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
-	defer func() {
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-	}()
 
 	// Also clear LEDIT_CONFIG and XDG_CONFIG_HOME to force the home dir path
 	t.Setenv("LEDIT_CONFIG", "")
@@ -37,16 +28,7 @@ func TestGetConfigDir_HomeError(t *testing.T) {
 // TestLoad_GetAPIKeysPathError covers lines 55-57: Load() propagates the error
 // from GetAPIKeysPath() when GetConfigDir() fails.
 func TestLoad_GetAPIKeysPathError(t *testing.T) {
-	// Save and restore HOME
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
-	defer func() {
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-	}()
 	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -60,15 +42,7 @@ func TestLoad_GetAPIKeysPathError(t *testing.T) {
 // TestSave_GetAPIKeysPathError covers the error path where GetAPIKeysPath
 // fails during Save (GetConfigDir → MkdirAll error or HomeDir error).
 func TestSave_GetAPIKeysPathError(t *testing.T) {
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
-	defer func() {
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-	}()
 	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -84,15 +58,7 @@ func TestSave_GetAPIKeysPathError(t *testing.T) {
 func TestResolve_LoadError(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
-	defer func() {
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-	}()
 	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -109,15 +75,7 @@ func TestResolve_LoadError(t *testing.T) {
 func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 	ResetStorageBackend() // Reset backend cache for this test
 
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", "")
-	defer func() {
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		} else {
-			os.Unsetenv("HOME")
-		}
-	}()
 	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")

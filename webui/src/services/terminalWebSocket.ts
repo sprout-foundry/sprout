@@ -1,6 +1,6 @@
 import { debugLog, warn } from '../utils/log';
 import { appendClientIdToUrl, getWebUIClientId } from './clientSession';
-import type { WsEvent } from './websocket';
+import type { WsEvent } from '@sprout/events';
 import { notificationBus } from './notificationBus';
 
 type TerminalEventCallback = (event: WsEvent) => void;

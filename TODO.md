@@ -862,7 +862,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
 [] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
 [x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
-[] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
+[x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
 
 ### Test Quality
 

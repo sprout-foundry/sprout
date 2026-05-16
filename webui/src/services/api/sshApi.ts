@@ -53,12 +53,18 @@ export async function openSSHWorkspace(
   });
 
   if (!startResponse.ok) {
-    const errData = (await startResponse.json().catch(() => ({}))) as Record<string, unknown>;
+    const errData = (await startResponse.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+      step?: string;
+      details?: string;
+      log_path?: string;
+    };
     throw new SSHWorkspaceOpenError({
-      error: (errData.error as string) || (errData.message as string) || 'Failed to start SSH workspace launch',
-      step: errData.step as string | undefined,
-      details: errData.details as string | undefined,
-      log_path: errData.log_path as string | undefined,
+      error: errData.error || errData.message || 'Failed to start SSH workspace launch',
+      step: errData.step,
+      details: errData.details,
+      log_path: errData.log_path,
     });
   }
 

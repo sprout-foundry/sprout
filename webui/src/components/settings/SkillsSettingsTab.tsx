@@ -17,8 +17,8 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
     <div className="section">
       <h4>Skills ({skillEntries.length})</h4>
       <div className="skills-list">
-        {skillEntries.map(([name, cfg]: [string, unknown]) => {
-          const enabled = !!(cfg as Record<string, unknown>).enabled;
+        {skillEntries.map(([name, cfg]) => {
+          const enabled = cfg.enabled;
           return (
             <div key={name} className="skill-item">
               <span className="skill-item-name">{name}</span>

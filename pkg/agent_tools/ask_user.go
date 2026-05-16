@@ -29,6 +29,8 @@ var (
 )
 
 // SetGlobalAskUserManager sets the global singleton (called by webui setup).
+//
+// Deprecated: use dependency injection via Agent.InjectWebUIManagers instead.
 func SetGlobalAskUserManager(mgr *AskUserManager) {
 	globalAskUserManagerMu.Lock()
 	globalAskUserManager = mgr
@@ -36,6 +38,8 @@ func SetGlobalAskUserManager(mgr *AskUserManager) {
 }
 
 // GetGlobalAskUserManager returns the global singleton.
+//
+// Deprecated: use dependency injection via Agent.InjectWebUIManagers instead.
 func GetGlobalAskUserManager() *AskUserManager {
 	globalAskUserManagerMu.RLock()
 	defer globalAskUserManagerMu.RUnlock()
@@ -164,12 +168,10 @@ func AskUser(question string) (string, error) {
 
 // AskUserWithEventBus prompts the user with a question using the event bus
 // for WebUI mode, falling back to stdin for CLI mode.
-func AskUserWithEventBus(question string, eventBus *events.EventBus, clientID, userID string) (string, error) {
+func AskUserWithEventBus(question string, eventBus *events.EventBus, clientID, userID string, mgr *AskUserManager) (string, error) {
 	if question == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
-
-	mgr := GetGlobalAskUserManager()
 
 	// WebUI mode: route through event bus
 	if mgr != nil && eventBus != nil {

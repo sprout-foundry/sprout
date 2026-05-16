@@ -48,7 +48,7 @@ func (a *Agent) SetSecurityBypassApproved() {
 // In CLI mode, it falls back to the interactive logger prompt.
 // Ignored concerns are tracked per-file so they are not re-prompted.
 func (a *Agent) CheckFileContentSecurity(filePath string, content string) {
-	promptManager := security.GetGlobalApprovalManager()
+	promptManager := a.security.GetSecurityApprovalMgr()
 	eventBus := a.GetEventBus()
 
 	if promptManager == nil && eventBus == nil {

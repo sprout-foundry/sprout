@@ -100,8 +100,7 @@ vi.mock('@codemirror/view', () => ({
 vi.mock('@codemirror/state', () => ({}));
 
 // Grab the mock ViewPlugin for helper access.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { ViewPlugin } = require('@codemirror/view');
+import { ViewPlugin } from '@codemirror/view';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 

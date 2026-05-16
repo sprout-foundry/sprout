@@ -2,22 +2,31 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { vi } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Hoisted mock functions — vi.hoisted runs before vi.mock factories execute
+// ---------------------------------------------------------------------------
+
+const mocks = vi.hoisted(() => ({
+  mockFreeze: vi.fn(),
+  mockResume: vi.fn(),
+  mockGetInstance: vi.fn(),
+  mockFreezeAll: vi.fn(),
+  mockResumeAll: vi.fn(),
+}));
+
+const { mockFreeze, mockResume, mockGetInstance, mockFreezeAll, mockResumeAll } = mocks;
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockFreeze = vi.fn();
-const mockResume = vi.fn();
-const mockGetInstance = vi.fn();
-const mockFreezeAll = vi.fn();
-const mockResumeAll = vi.fn();
-
 vi.mock('../services/websocket', () => {
   class MockWebSocketService {
-    static getInstance = mockGetInstance;
-    freeze = mockFreeze;
-    resume = mockResume;
+    static getInstance = mocks.mockGetInstance;
+    freeze = mocks.mockFreeze;
+    resume = mocks.mockResume;
     connect = vi.fn();
     disconnect = vi.fn();
   }
@@ -26,8 +35,8 @@ vi.mock('../services/websocket', () => {
 
 vi.mock('../contexts/EventsContext', () => ({
   useEvents: () => ({
-    freeze: mockFreeze,
-    resume: mockResume,
+    freeze: mocks.mockFreeze,
+    resume: mocks.mockResume,
     connect: vi.fn(),
     disconnect: vi.fn(),
     onEvent: vi.fn(),
@@ -45,8 +54,8 @@ vi.mock('../services/terminalWebSocket', () => {
   class MockTerminalWebSocketService {
     static createInstance = vi.fn();
     static getInstance = vi.fn();
-    static freezeAll = mockFreezeAll;
-    static resumeAll = mockResumeAll;
+    static freezeAll = mocks.mockFreezeAll;
+    static resumeAll = mocks.mockResumeAll;
     static registerInstance = vi.fn();
     static unregisterInstance = vi.fn();
     static instances = new Set();
@@ -57,6 +66,9 @@ vi.mock('../services/terminalWebSocket', () => {
   }
   return { TerminalWebSocketService: MockTerminalWebSocketService };
 });
+
+// Static import — Vitest hoists vi.mock above all imports automatically
+import { usePageVisibility, isPageVisible } from './usePageVisibility';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -107,7 +119,6 @@ function fireVisibilityChange(state: 'visible' | 'hidden'): void {
 
 /** Wrapper component that invokes the usePageVisibility hook. */
 function HookRunner() {
-  const { usePageVisibility } = require('./usePageVisibility');
   usePageVisibility();
   return null;
 }
@@ -117,13 +128,6 @@ function HookRunner() {
 // ---------------------------------------------------------------------------
 
 describe('isPageVisible', () => {
-  let isPageVisible: () => boolean;
-
-  beforeAll(() => {
-    const mod = require('./usePageVisibility');
-    isPageVisible = mod.isPageVisible;
-  });
-
   it('returns true when document is visible', () => {
     Object.defineProperty(document, 'visibilityState', {
       value: 'visible',

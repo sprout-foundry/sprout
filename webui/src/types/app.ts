@@ -25,6 +25,20 @@ export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, To
 
 // ── WebUI-specific Types ─────────────────────────────────────────────
 
+/** Typed shape of websocket query_progress events. */
+export interface QueryProgress {
+  message: string;
+  details?: unknown;
+}
+
+/** Defensively construct a QueryProgress from raw websocket event data. */
+export function toQueryProgress(raw: Record<string, unknown>): QueryProgress {
+  return {
+    message: typeof raw.message === 'string' ? raw.message : 'Processing...',
+    details: 'details' in raw ? raw.details : undefined,
+  };
+}
+
 export interface WorktreeInfo {
   path: string;
   branch: string;
@@ -40,7 +54,7 @@ export interface PerChatState {
   fileEdits: FileEdit[];
   subagentActivities: SubagentActivity[];
   currentTodos: TodoItem[];
-  queryProgress: unknown;
+  queryProgress: QueryProgress | null;
   lastError: string | null;
   isProcessing: boolean;
   provider: string;
@@ -61,7 +75,7 @@ export interface AppState {
   lastError: string | null;
   currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
   toolExecutions: ToolExecution[];
-  queryProgress: unknown;
+  queryProgress: QueryProgress | null;
   stats: Record<string, unknown>; // Enhanced stats from API
   currentTodos: TodoItem[];
   fileEdits: FileEdit[];

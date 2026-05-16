@@ -4,6 +4,22 @@
 
 import type { WorkspaceResponse } from './types';
 
+/** Raw JSON shape for a suggested project entry from the backend. */
+interface RawProjectEntry {
+  path?: unknown;
+  name?: unknown;
+  markers?: unknown;
+}
+
+/** Raw JSON shape for a recent workspace entry from the backend. */
+interface RawWorkspaceEntry {
+  path?: unknown;
+  name?: unknown;
+  last_used?: unknown;
+  markers?: unknown;
+  session_count?: unknown;
+}
+
 function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
   const parseBool = (v: unknown): boolean => v === true || v === 'true';
   const parseStrArray = (v: unknown): string[] => {
@@ -14,11 +30,11 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
   const suggested_projects = ((): Array<{ path: string; name: string; markers: string[] }> => {
     if (!Array.isArray(data.suggested_projects)) return [];
     return data.suggested_projects.filter(
-      (p) => typeof p === 'object' && p != null && 'path' in p,
+      (p): p is RawProjectEntry => typeof p === 'object' && p != null && 'path' in p,
     ).map((p) => ({
-      path: String((p as Record<string, unknown>).path ?? ''),
-      name: String((p as Record<string, unknown>).name ?? ''),
-      markers: parseStrArray((p as Record<string, unknown>).markers),
+      path: String(p.path ?? ''),
+      name: String(p.name ?? ''),
+      markers: parseStrArray(p.markers),
     }));
   })();
 
@@ -31,13 +47,13 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
   }> => {
     if (!Array.isArray(data.recent_workspaces)) return [];
     return data.recent_workspaces.filter(
-      (w) => typeof w === 'object' && w != null && 'path' in w,
+      (w): w is RawWorkspaceEntry => typeof w === 'object' && w != null && 'path' in w,
     ).map((w) => ({
-      path: String((w as Record<string, unknown>).path ?? ''),
-      name: String((w as Record<string, unknown>).name ?? ''),
-      last_used: String((w as Record<string, unknown>).last_used ?? ''),
-      markers: parseStrArray((w as Record<string, unknown>).markers),
-      session_count: Number((w as Record<string, unknown>).session_count ?? 0),
+      path: String(w.path ?? ''),
+      name: String(w.name ?? ''),
+      last_used: String(w.last_used ?? ''),
+      markers: parseStrArray(w.markers),
+      session_count: Number(w.session_count ?? 0),
     }));
   })();
 
@@ -61,7 +77,7 @@ export async function getWorkspace(fetchFn: typeof fetch): Promise<WorkspaceResp
 
   const parseWorkspacePayload = (t: string): Record<string, unknown> => {
     const trimmed = t.trim();
-    if (!trimmed) return {} as Record<string, unknown>;
+    if (!trimmed) return {};
     try {
       return JSON.parse(trimmed);
     } catch {
@@ -110,7 +126,7 @@ export async function setWorkspace(
   const text = await response.text();
   const data = (() => {
     const trimmed = text.trim();
-    if (!trimmed) return {} as Record<string, unknown>;
+    if (!trimmed) return {};
     try {
       return JSON.parse(trimmed);
     } catch {

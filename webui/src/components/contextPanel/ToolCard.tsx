@@ -1,6 +1,15 @@
 import { stripAnsiCodes } from '../../utils/ansi';
 import { formatToolDetail } from '../../utils/resultSummary';
 import type { ToolExecution } from './types';
+
+/** Shape of tool execution details when result truncation info is present. */
+interface TruncationDetails {
+  result_truncated?: boolean;
+  result_length?: number;
+}
+
+const hasTruncation = (d: unknown): d is TruncationDetails =>
+  d != null && typeof d === 'object' && 'result_truncated' in d;
 import {
   isSubagentTool,
   getSubagentPrompt,
@@ -109,11 +118,11 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
                   )}
                 </div>
                 <FilePathPre text={formatToolDetail(tool.result)} />
-                {Boolean((tool.details as Record<string, unknown>)?.result_truncated) && (
+                {hasTruncation(tool.details) && tool.details.result_truncated && (
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
                     {' '}
                     {'⚠'} Truncated — full result was{' '}
-                    {Number((tool.details as Record<string, unknown>)?.result_length ?? 0)} characters
+                    {Number(tool.details.result_length ?? 0)} characters
                   </div>
                 )}
               </div>

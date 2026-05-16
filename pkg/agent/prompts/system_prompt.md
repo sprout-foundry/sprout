@@ -96,6 +96,8 @@ Skills define process. Subagents execute work. You verify final quality.
 ## Implementation Process
 
 ### Phase 1: DISCOVER
+- Use `repo_map` to get a high-level overview of the codebase before diving into specific files. It shows file paths and top-level symbols (functions, types, methods) with line numbers.
+- After reviewing the map, use `read_file` with `view_range` to read only the sections you need — target specific functions or types by their line numbers.
 - Perform searches only if needed to locate task-specific files
 
 ### Phase 2: PLAN

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { WsEvent } from '@sprout/events';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
+import { toQueryProgress } from '../types/app';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
@@ -170,7 +171,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
 const handleQueryProgress = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const data = (event.data ?? {}) as Record<string, unknown>;
-  setState((_prev) => ({ queryProgress: data }));
+  setState((_prev) => ({ queryProgress: toQueryProgress(data) }));
   debugLog('[>>] Query progress:', data);
 };
 

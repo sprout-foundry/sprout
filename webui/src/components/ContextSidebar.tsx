@@ -4,6 +4,7 @@ import ErrorBoundary from './ErrorBoundary';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import { ApiService } from '../services/api';
 import type { ToolExecution, LogEntry, SubagentActivity, TodoItem, FileEdit } from '@sprout/ui';
+import type { QueryProgress } from '../types/app';
 
 const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
@@ -22,7 +23,7 @@ export interface ContextSidebarProps {
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
-  queryProgress: unknown;
+  queryProgress: QueryProgress | null;
   onOpenRevisionDiff: (options: { path: string; diff: string; title: string }) => void;
 }
 

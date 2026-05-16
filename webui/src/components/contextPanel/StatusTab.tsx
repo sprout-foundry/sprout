@@ -28,7 +28,7 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs, revisions 
             <>
               <span className="status-dot-indicator active" />
               <span className="status-label">
-                {chatQueryProgress ? ((chatQueryProgress as Record<string, unknown>).message as string) : 'Working...'}
+                {chatQueryProgress ? chatQueryProgress.message : 'Working...'}
               </span>
             </>
           ) : chatLastError ? (

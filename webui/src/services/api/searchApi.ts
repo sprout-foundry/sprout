@@ -65,7 +65,7 @@ export async function searchSemanticBuild(fetchFn: typeof fetch): Promise<{ stat
   const response = await fetchFn('/api/search/semantic/build', { method: 'POST' });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(((data as Record<string, unknown>).error as string) || 'Failed to start build');
+    throw new Error((data as { error?: string }).error || 'Failed to start build');
   }
   return response.json();
 }

@@ -1,7 +1,6 @@
 package zsh
 
 import (
-	"fmt"
 	"os"
 	"testing"
 )
@@ -36,26 +35,24 @@ func TestExtractFirstWord(t *testing.T) {
 }
 
 func TestIsZshShell(t *testing.T) {
-	// Save original SHELL
-	originalShell := os.Getenv("SHELL")
-	defer os.Setenv("SHELL", originalShell)
-
-	// Test with zsh
-	os.Setenv("SHELL", "/bin/zsh")
-	if !isZshShell() {
-		t.Error("isZshShell() returned false for /bin/zsh")
+	tests := []struct {
+		name     string
+		shell    string
+		expected bool
+	}{
+		{"zsh shell", "/bin/zsh", true},
+		{"bash shell", "/bin/bash", false},
+		{"empty shell", "", false},
 	}
 
-	// Test with bash
-	os.Setenv("SHELL", "/bin/bash")
-	if isZshShell() {
-		t.Error("isZshShell() returned true for /bin/bash")
-	}
-
-	// Test with empty
-	os.Unsetenv("SHELL")
-	if isZshShell() {
-		t.Error("isZshShell() returned true for empty SHELL")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("SHELL", tt.shell)
+			got := isZshShell()
+			if got != tt.expected {
+				t.Errorf("isZshShell() with SHELL=%q = %v, want %v", tt.shell, got, tt.expected)
+			}
+		})
 	}
 }
 
@@ -166,10 +163,5 @@ func TestIsCommand(t *testing.T) {
 
 // Manual test helper
 func TestMain(m *testing.M) {
-	// Print test info
-	fmt.Printf("SHELL=%s\n", os.Getenv("SHELL"))
-	fmt.Printf("isZshShell=%v\n", isZshShell())
-
-	// Run tests
 	os.Exit(m.Run())
 }

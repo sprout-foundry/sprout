@@ -3,6 +3,7 @@ import type { CloudEndpoint } from '../types';
 /**
  * Category (b) — foundry-backend: Must be proxied to the Foundry backend.
  */
+// --- Chat & Query ---
 export const foundryBackendEndpoints: CloudEndpoint[] = [
   {
     path: '/api/query',
@@ -34,6 +35,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Image upload for vision',
   },
+  // --- Embedding & Semantic Search ---
   {
     path: '/api/embedding-index',
     methods: ['GET'],
@@ -70,6 +72,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Semantic/vector search (needs backend AI infrastructure)',
   },
+  // --- Agent Terminal Sessions ---
   {
     path: '/api/terminal/agent-sessions',
     methods: ['GET'],
@@ -83,6 +86,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     isPrefix: true,
     description: 'Agent session actions (output, attach, kill) — needs backend',
   },
+  // --- Git ---
   {
     path: '/api/git/status',
     methods: ['GET'],
@@ -245,6 +249,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Checkout worktree',
   },
+  // --- Diagnostics & LSP ---
   {
     path: '/api/diagnostics',
     methods: ['POST'],
@@ -269,6 +274,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'LSP WebSocket bridge',
   },
+  // --- Chat Sessions ---
   {
     path: '/api/chat-sessions',
     methods: ['GET', 'POST'],
@@ -342,6 +348,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     isPrefix: true,
     description: 'Worktree sub-endpoints',
   },
+  // --- History ---
   {
     path: '/api/history/changelog',
     methods: ['GET'],
@@ -366,6 +373,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Rollback conversation history',
   },
+  // --- Sessions ---
   {
     path: '/api/sessions/restore',
     methods: ['POST'],
@@ -378,6 +386,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'List sessions',
   },
+  // --- Settings & Configuration ---
   {
     path: '/api/settings',
     methods: ['GET', 'PUT'],
@@ -460,6 +469,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Apply hotkey preset',
   },
+  // --- Costs ---
   {
     path: '/api/costs/summary',
     methods: ['GET'],
@@ -478,18 +488,21 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Cost detail',
   },
+  // --- Providers ---
   {
     path: '/api/providers',
     methods: ['GET'],
     category: 'foundry-backend',
     description: 'List available providers',
   },
+  // --- Stats ---
   {
     path: '/api/stats',
     methods: ['GET'],
     category: 'foundry-backend',
     description: 'Execution stats',
   },
+  // --- Workspace ---
   {
     path: '/api/workspace/symbols',
     methods: ['GET'],

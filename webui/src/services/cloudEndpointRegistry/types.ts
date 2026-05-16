@@ -1,12 +1,5 @@
 /**
- * CloudEndpointRegistry — classification and synthetic response registry for cloud mode.
- *
- * In cloud mode, the webui routes API calls through CloudAdapter. This registry
- * defines which endpoints are handled locally by WASM, which need the Foundry
- * backend, and which should return synthetic/empty responses.
- *
- * This is the single source of truth for ALL webui API endpoints and their
- * cloud-mode behavior.
+ * Type definitions for the cloud endpoint registry.
  */
 
 /**

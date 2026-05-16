@@ -10,6 +10,7 @@
 
 // ── Module under test (Jest hoists mocks above imports) ─────────────
 import { computeStickyScopes, findEnclosingScopes, findScopeEnd, stickyScrollPlugin } from './stickyScroll';
+import { getEnclosingSymbols } from '../utils/symbolUtils';
 import type { SymbolInfo } from './stickyScroll';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
@@ -29,8 +30,8 @@ vi.mock('@codemirror/state', () => ({
 // Use requireActual to preserve the real findSymbolScopeEnd implementation
 // (avoids duplicating the brace-counting logic in the mock), while replacing
 // extractSymbols and getEnclosingSymbols with vi.fn() for controlled testing.
-vi.mock('../utils/symbolUtils', () => ({
-  ...vi.importActual('../utils/symbolUtils'),
+vi.mock('../utils/symbolUtils', async () => ({
+  ...(await vi.importActual('../utils/symbolUtils')),
   extractSymbols: vi.fn(),
   getEnclosingSymbols: vi.fn(),
 }));
@@ -313,7 +314,7 @@ describe('findScopeEnd', () => {
 
 describe('computeStickyScopes', () => {
   // Import the mocked functions for use in tests
-  const { getEnclosingSymbols } = require('../utils/symbolUtils');
+  // getEnclosingSymbols imported at top level
 
   beforeEach(() => {
     vi.clearAllMocks();

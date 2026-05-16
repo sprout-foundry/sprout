@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -92,6 +93,10 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		}
 		if int64(len(content)) > int64(maxFileSize) {
 			content = content[:maxFileSize]
+			// Trim to last complete line to avoid mid-line split
+			if idx := bytes.LastIndex(content, []byte("\n")); idx > 0 {
+				content = content[:idx]
+			}
 			truncated = true
 		}
 	} else if info.Size() > int64(maxFileSize) {

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -677,4 +678,910 @@ func TestSessionsCommand_SessionWithName(t *testing.T) {
 	assert.Contains(t, output, "session-001")
 	assert.Contains(t, output, "session-002")
 	assert.Contains(t, output, "session-003")
+}
+
+// --- PTY-based interactive terminal tests ---
+
+// setupPTY creates a PTY pair and replaces os.Stdin with the slave side.
+// Returns a cleanup function that restores stdin and closes both sides.
+func setupPTY(t *testing.T) (master *os.File, cleanup func()) {
+	t.Helper()
+
+	ptmx, pts, err := pty.Open()
+	require.NoError(t, err, "failed to open pty")
+
+	oldStdin := os.Stdin
+	os.Stdin = pts
+
+	cleanup = func() {
+		os.Stdin = oldStdin
+		pts.Close()
+		ptmx.Close()
+	}
+	return ptmx, cleanup
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_Success tests
+// the interactive terminal path where the user selects a valid session.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_Success(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	// Get the actual working directory
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "interactive-session"
+	createSessionFile(t, tempStateDir, sessionID, workingDir, "Interactive Session")
+
+	// Load the session file and add messages
+	scopeHash := hashWorkingDir(workingDir)
+	sessionFile := filepath.Join(tempStateDir, "scoped", scopeHash, fmt.Sprintf("session_%s.json", sessionID))
+	data, err := os.ReadFile(sessionFile)
+	require.NoError(t, err)
+
+	var state agent.ConversationState
+	err = json.Unmarshal(data, &state)
+	require.NoError(t, err)
+
+	state.Messages = []api.Message{
+		{Role: "user", Content: "Hello from interactive"},
+		{Role: "assistant", Content: "Interactive response"},
+	}
+
+	updatedData, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(t, err)
+	err = os.WriteFile(sessionFile, updatedData, 0600)
+	require.NoError(t, err)
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	// Build sessions list (newest first — only one session)
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Interactive Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "1\n" to select the first session
+	_, err = ptmx.Write([]byte("1\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify success
+	assert.NoError(t, err)
+	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, sessionID)
+
+	// Verify messages were loaded
+	messages := testAgent.GetMessages()
+	assert.Len(t, messages, 2)
+	assert.Equal(t, "Hello from interactive", messages[0].Content)
+	assert.Equal(t, "Interactive response", messages[1].Content)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_Cancel tests
+// the interactive terminal path where the user cancels by entering 0.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_Cancel(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "cancel-session"
+	createSessionFile(t, tempStateDir, sessionID, workingDir, "Cancel Session")
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Cancel Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "0\n" to cancel
+	_, err = ptmx.Write([]byte("0\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify no error and cancellation message
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Cancelled.")
+
+	// Verify no messages were loaded
+	messages := testAgent.GetMessages()
+	assert.Empty(t, messages)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_InvalidInput tests
+// the interactive terminal path where the user enters non-numeric input.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_InvalidInput(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "invalid-input-session"
+	createSessionFile(t, tempStateDir, sessionID, workingDir, "Invalid Input Session")
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Invalid Input Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "abc\n" — invalid non-numeric input
+	_, err = ptmx.Write([]byte("abc\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// PromptForSelection returns (0, false) for invalid input,
+	// and selectSessionWithDropdown returns nil in that case
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Invalid input")
+
+	// Verify no messages were loaded
+	messages := testAgent.GetMessages()
+	assert.Empty(t, messages)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_OutOfRange tests
+// the interactive terminal path where the user enters an out-of-range number.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_OutOfRange(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "outofrange-session"
+	createSessionFile(t, tempStateDir, sessionID, workingDir, "Out of Range Session")
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Out of Range Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "99\n" — out of range (only 1 session exists)
+	_, err = ptmx.Write([]byte("99\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// PromptForSelection returns (0, false) for out-of-range,
+	// and selectSessionWithDropdown returns nil in that case
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Invalid selection")
+
+	// Verify no messages were loaded
+	messages := testAgent.GetMessages()
+	assert.Empty(t, messages)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_LoadError tests
+// the interactive terminal path where LoadStateScoped fails.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_LoadError(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	// Pass a session that doesn't have a backing file in the state dir
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        "nonexistent-session",
+			Name:             "Nonexistent Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "1\n" to select the session
+	_, err = ptmx.Write([]byte("1\n"))
+	require.NoError(t, err)
+
+	err = cmd.selectSessionWithDropdown(sessions, testAgent)
+
+	// Should get an error because the session file doesn't exist
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to load session")
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_EmptyNameFallback tests
+// the interactive terminal path where session Name is empty and
+// GetSessionPreviewScoped is used as fallback.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_EmptyNameFallback(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "no-name-session"
+
+	// Create session file with empty name but with a user message (for preview)
+	scopeHash := hashWorkingDir(workingDir)
+	scopeDir := filepath.Join(tempStateDir, "scoped", scopeHash)
+	require.NoError(t, os.MkdirAll(scopeDir, 0700))
+
+	state := &agent.ConversationState{
+		SessionID:        sessionID,
+		Name:             "", // Empty name — should trigger GetSessionPreviewScoped fallback
+		WorkingDirectory: workingDir,
+		Messages: []api.Message{
+			{Role: "user", Content: "This is a preview message for testing the fallback"},
+		},
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(t, err)
+
+	sessionFile := filepath.Join(scopeDir, fmt.Sprintf("session_%s.json", sessionID))
+	require.NoError(t, os.WriteFile(sessionFile, data, 0600))
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "", // Empty name
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "1\n" to select the session
+	_, err = ptmx.Write([]byte("1\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify success
+	assert.NoError(t, err)
+	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, sessionID)
+
+	// Verify the preview was shown (first 50 chars of first user message)
+	// The preview should contain "This is a preview message for testing the fallback"
+	// truncated to 50 chars with "..."
+	assert.Contains(t, output, "This is a preview message for testing the fallback")
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_MultipleSessions_SelectSecond tests
+// selecting the second session from a list of three.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_MultipleSessions_SelectSecond(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	// Create 3 sessions with distinct messages
+	createSessionFile(t, tempStateDir, "session-one", workingDir, "Session One")
+	createSessionFile(t, tempStateDir, "session-two", workingDir, "Session Two")
+	createSessionFile(t, tempStateDir, "session-three", workingDir, "Session Three")
+
+	// Add distinct messages to each session
+	scopeHash := hashWorkingDir(workingDir)
+	scopeDir := filepath.Join(tempStateDir, "scoped", scopeHash)
+
+	for _, sessionData := range []struct {
+		id       string
+		messages []api.Message
+	}{
+		{"session-one", []api.Message{{Role: "user", Content: "Message from session one"}}},
+		{"session-two", []api.Message{{Role: "user", Content: "Message from session two"}}},
+		{"session-three", []api.Message{{Role: "user", Content: "Message from session three"}}},
+	} {
+		sessionFile := filepath.Join(scopeDir, fmt.Sprintf("session_%s.json", sessionData.id))
+		data, err := os.ReadFile(sessionFile)
+		require.NoError(t, err)
+
+		var state agent.ConversationState
+		err = json.Unmarshal(data, &state)
+		require.NoError(t, err)
+
+		state.Messages = sessionData.messages
+
+		updatedData, err := json.MarshalIndent(state, "", "  ")
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(sessionFile, updatedData, 0600))
+	}
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	// Sessions in newest-first order (session-one is first, session-two is second)
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        "session-one",
+			Name:             "Session One",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+		{
+			SessionID:        "session-two",
+			Name:             "Session Two",
+			LastUpdated:      agentTime("2024-01-16T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+		{
+			SessionID:        "session-three",
+			Name:             "Session Three",
+			LastUpdated:      agentTime("2024-01-17T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "2\n" to select the second session
+	_, err = ptmx.Write([]byte("2\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify the second session was loaded
+	assert.NoError(t, err)
+	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, "session-two")
+
+	// Verify the messages match session-two
+	messages := testAgent.GetMessages()
+	assert.Len(t, messages, 1)
+	assert.Equal(t, "Message from session two", messages[0].Content)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_NoInput tests
+// the interactive terminal path where no input is provided (EOF).
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_NoInput(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "no-input-session"
+	createSessionFile(t, tempStateDir, sessionID, workingDir, "No Input Session")
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY manually (not via setupPTY) because we need to close the
+	// master before calling the function to trigger EOF, and we must avoid
+	// a double-close on the master fd in cleanup.
+	ptmx, pts, ptyErr := pty.Open()
+	require.NoError(t, ptyErr, "failed to open pty")
+	oldStdin := os.Stdin
+	os.Stdin = pts
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "No Input Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Close master to send EOF on slave — do this before calling the function
+	// so the bufio.Scanner in PromptForSelection sees EOF immediately.
+	ptmx.Close()
+
+	_ = captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Restore stdin and close slave (master already closed above — no double-close)
+	os.Stdin = oldStdin
+	pts.Close()
+
+	// PromptForSelection returns (0, false) on EOF
+	// selectSessionWithDropdown returns nil
+	assert.NoError(t, err)
+
+	// Verify no messages were loaded
+	messages := testAgent.GetMessages()
+	assert.Empty(t, messages)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay tests
+// that displayConversationPreview is called after successful interactive selection.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "preview-session"
+
+	// Create session with multiple messages
+	scopeHash := hashWorkingDir(workingDir)
+	scopeDir := filepath.Join(tempStateDir, "scoped", scopeHash)
+	require.NoError(t, os.MkdirAll(scopeDir, 0700))
+
+	state := &agent.ConversationState{
+		SessionID:        sessionID,
+		Name:             "Preview Session",
+		WorkingDirectory: workingDir,
+		Messages: []api.Message{
+			{Role: "user", Content: "First user message"},
+			{Role: "assistant", Content: "First assistant response"},
+			{Role: "user", Content: "Second user message"},
+			{Role: "assistant", Content: "Second assistant response"},
+			{Role: "user", Content: "Third user message"},
+		},
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(t, err)
+
+	sessionFile := filepath.Join(scopeDir, fmt.Sprintf("session_%s.json", sessionID))
+	require.NoError(t, os.WriteFile(sessionFile, data, 0600))
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Preview Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "1\n" to select the session
+	_, err = ptmx.Write([]byte("1\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify success
+	assert.NoError(t, err)
+	assert.Contains(t, output, "[OK] Conversation session loaded")
+
+	// Verify preview section is shown
+	assert.Contains(t, output, "Recent conversation preview")
+	assert.Contains(t, output, "[you] You:")
+	assert.Contains(t, output, "[bot] Assistant:")
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay_NoMessages tests
+// that displayConversationPreview is called but shows nothing when there are no messages.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay_NoMessages(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "empty-preview-session"
+
+	// Create session with NO messages
+	scopeHash := hashWorkingDir(workingDir)
+	scopeDir := filepath.Join(tempStateDir, "scoped", scopeHash)
+	require.NoError(t, os.MkdirAll(scopeDir, 0700))
+
+	state := &agent.ConversationState{
+		SessionID:        sessionID,
+		Name:             "Empty Preview Session",
+		WorkingDirectory: workingDir,
+		Messages:         []api.Message{},
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(t, err)
+
+	sessionFile := filepath.Join(scopeDir, fmt.Sprintf("session_%s.json", sessionID))
+	require.NoError(t, os.WriteFile(sessionFile, data, 0600))
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Empty Preview Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "1\n" to select the session
+	_, err = ptmx.Write([]byte("1\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify success
+	assert.NoError(t, err)
+	assert.Contains(t, output, "[OK] Conversation session loaded")
+
+	// Verify no preview section (no messages to show)
+	assert.NotContains(t, output, "Recent conversation preview")
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_AgentConsole_WithPreview tests
+// the agent console mode where session has no name and we should see the SessionID.
+func TestSessionsCommand_selectSessionWithDropdown_AgentConsole_WithPreview(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "console-preview-session"
+
+	// Create session with empty name but with a user message
+	scopeHash := hashWorkingDir(workingDir)
+	scopeDir := filepath.Join(tempStateDir, "scoped", scopeHash)
+	require.NoError(t, os.MkdirAll(scopeDir, 0700))
+
+	state := &agent.ConversationState{
+		SessionID:        sessionID,
+		Name:             "", // Empty name
+		WorkingDirectory: workingDir,
+		Messages: []api.Message{
+			{Role: "user", Content: "Preview text for console mode"},
+		},
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	require.NoError(t, err)
+
+	sessionFile := filepath.Join(scopeDir, fmt.Sprintf("session_%s.json", sessionID))
+	require.NoError(t, os.WriteFile(sessionFile, data, 0600))
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Set AGENT_CONSOLE
+	t.Setenv("SPROUT_AGENT_CONSOLE", "1")
+
+	cmd := &SessionsCommand{}
+
+	// In agent console mode, sessions are listed with SessionID regardless of name
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "", // Empty name
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// Verify output contains the session ID
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Available Sessions:")
+	assert.Contains(t, output, sessionID)
+}
+
+// TestSessionsCommand_Execute_WithArgs_MultipleSessions_SelectSecond tests
+// direct loading of the second session from multiple sessions.
+func TestSessionsCommand_Execute_WithArgs_MultipleSessions_SelectSecond(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	// Create 3 sessions with distinct messages
+	createSessionFile(t, tempStateDir, "session-one", workingDir, "Session One")
+	createSessionFile(t, tempStateDir, "session-two", workingDir, "Session Two")
+	createSessionFile(t, tempStateDir, "session-three", workingDir, "Session Three")
+
+	// Add distinct messages to each session and set explicit timestamps
+	// to ensure deterministic ordering (newest-first)
+	scopeHash := hashWorkingDir(workingDir)
+	scopeDir := filepath.Join(tempStateDir, "scoped", scopeHash)
+
+	sessions := []struct {
+		id       string
+		messages []api.Message
+		modTime  time.Time // explicit mod time to ensure deterministic sort order
+	}{
+		{"session-one", []api.Message{{Role: "user", Content: "One"}}, time.Date(2024, 1, 10, 10, 0, 0, 0, time.UTC)},
+		{"session-two", []api.Message{{Role: "user", Content: "Two"}}, time.Date(2024, 1, 12, 10, 0, 0, 0, time.UTC)},
+		{"session-three", []api.Message{{Role: "user", Content: "Three"}}, time.Date(2024, 1, 14, 10, 0, 0, 0, time.UTC)},
+	}
+
+	for _, sessionData := range sessions {
+		sessionFile := filepath.Join(scopeDir, fmt.Sprintf("session_%s.json", sessionData.id))
+		data, err := os.ReadFile(sessionFile)
+		require.NoError(t, err)
+
+		var state agent.ConversationState
+		err = json.Unmarshal(data, &state)
+		require.NoError(t, err)
+
+		state.Messages = sessionData.messages
+
+		updatedData, err := json.MarshalIndent(state, "", "  ")
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(sessionFile, updatedData, 0600))
+		require.NoError(t, os.Chtimes(sessionFile, sessionData.modTime, sessionData.modTime))
+	}
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	cmd := &SessionsCommand{}
+
+	output := captureOutput(func() {
+		err := cmd.Execute([]string{"2"}, testAgent)
+		assert.NoError(t, err)
+	})
+
+	// Verify the second session was loaded
+	assert.Contains(t, output, "[ok] Conversation session loaded")
+
+	// Sessions are sorted newest-first:
+	// 1 = session-three (Jan 14), 2 = session-two (Jan 12), 3 = session-one (Jan 10)
+	// So selecting "2" should load "session-two" with content "Two"
+	messages := testAgent.GetMessages()
+	assert.Len(t, messages, 1)
+	assert.Equal(t, "Two", messages[0].Content)
+}
+
+// TestSessionsCommand_selectSessionWithDropdown_Interactive_NegativeInput tests
+// the interactive terminal path where the user enters a negative number.
+func TestSessionsCommand_selectSessionWithDropdown_Interactive_NegativeInput(t *testing.T) {
+	// Create a temp state directory
+	tempStateDir := t.TempDir()
+
+	// Override getStateDirFunc to use temp directory
+	originalGetStateDirFunc := agent.SetGetStateDirForTest(tempStateDir)
+	defer agent.SetGetStateDirFunc(originalGetStateDirFunc)
+
+	workingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	sessionID := "negative-session"
+	createSessionFile(t, tempStateDir, sessionID, workingDir, "Negative Session")
+
+	// Create test agent
+	testAgent := newIsolatedTestAgent(t)
+	defer testAgent.Shutdown()
+
+	// Ensure agent console is OFF
+	t.Setenv("SPROUT_AGENT_CONSOLE", "")
+	t.Setenv("LEDIT_AGENT_CONSOLE", "")
+
+	// Setup PTY
+	ptmx, cleanup := setupPTY(t)
+	defer cleanup()
+
+	sessions := []agent.SessionInfo{
+		{
+			SessionID:        sessionID,
+			Name:             "Negative Session",
+			LastUpdated:      agentTime("2024-01-15T10:00:00Z"),
+			WorkingDirectory: workingDir,
+		},
+	}
+
+	cmd := &SessionsCommand{}
+
+	// Write "-1\n" — negative number, out of range
+	_, err = ptmx.Write([]byte("-1\n"))
+	require.NoError(t, err)
+
+	output := captureOutput(func() {
+		err = cmd.selectSessionWithDropdown(sessions, testAgent)
+	})
+
+	// PromptForSelection returns (0, false) for out-of-range negative
+	assert.NoError(t, err)
+	assert.Contains(t, output, "Invalid selection")
+
+	// Verify no messages were loaded
+	messages := testAgent.GetMessages()
+	assert.Empty(t, messages)
 }

@@ -80,7 +80,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
   const renderToggle = (settingKey: string, label: string) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
-    const checked = !!getNestedValue(current as unknown as Record<string, unknown>, settingKey);
+    const checked = !!getNestedValue(current, settingKey);
     return (
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
@@ -96,7 +96,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
   const renderSelect = (settingKey: string, label: string, options: string[]) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
-    const value = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
+    const value = String(getNestedValue(current, settingKey) || '');
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>
@@ -122,7 +122,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
   const renderNumberInput = (settingKey: string, label: string, min?: number, max?: number, step = 1) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
-    const value = getNestedValue(current as unknown as Record<string, unknown>, settingKey);
+    const value = getNestedValue(current, settingKey);
     return (
       <div className="config-item">
         <label htmlFor={`setting-${settingKey}`}>
@@ -149,7 +149,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
   const renderTextInput = (settingKey: string, label: string, placeholder?: string) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
-    const persistedValue = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
+    const persistedValue = String(getNestedValue(current, settingKey) || '');
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">
@@ -201,7 +201,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
   ) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
-    const persistedValue = String(getNestedValue(current as unknown as Record<string, unknown>, settingKey) || '');
+    const persistedValue = String(getNestedValue(current, settingKey) || '');
     const value = textDrafts[settingKey] ?? persistedValue;
     return (
       <div className="config-item">

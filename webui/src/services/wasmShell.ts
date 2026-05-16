@@ -162,6 +162,21 @@ async function idbListFiles(): Promise<string> {
 const DEFAULT_WASM_URL = '/wasm/sprout.wasm';
 const DEFAULT_WASM_EXEC_URL = '/wasm/wasm_exec.js';
 
+/** Interface of the Go→WASM SproutWasm global exposed by the compiled binary. */
+export interface SproutWasmAPI {
+  init(config?: string): string;
+  executeCommand(input: string): string;
+  autoComplete(input: string): string;
+  getCwd(): string;
+  changeDir(dir: string): string;
+  writeFile(path: string, content: string): string;
+  readFile(path: string): string;
+  listDir(path: string): string;
+  deleteFile(path: string): string;
+  getHistory(): string;
+  getEnv(): string;
+}
+
 declare global {
   interface Window {
     __sproutStore: SproutStore;
@@ -169,7 +184,7 @@ declare global {
       run(instance: WebAssembly.Instance): void;
       importObject: WebAssembly.Imports;
     };
-    SproutWasm: unknown;
+    SproutWasm?: SproutWasmAPI;
   }
 }
 
@@ -249,19 +264,7 @@ export async function initWasmShell(config?: {
   go.run(instance);
 
   // At this point window.SproutWasm should be defined by Go's main().
-  const wasm = window.SproutWasm as unknown as {
-    init(config?: string): string;
-    executeCommand(input: string): string;
-    autoComplete(input: string): string;
-    getCwd(): string;
-    changeDir(dir: string): string;
-    writeFile(path: string, content: string): string;
-    readFile(path: string): string;
-    listDir(path: string): string;
-    deleteFile(path: string): string;
-    getHistory(): string;
-    getEnv(): string;
-  };
+  const wasm = window.SproutWasm;
 
   if (!wasm || typeof wasm.init !== 'function') {
     throw new Error('SproutWasm global not found after WASM init');

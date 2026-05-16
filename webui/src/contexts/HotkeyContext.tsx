@@ -297,9 +297,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
   // Respects the global flag: non-global commands are suppressed when
   // an input field or contentEditable element has focus.
   useEffect(() => {
-    const desktop = (
-      window as unknown as Record<string, { onDesktopHotkey?: (cb: (cmd: string) => void) => () => void } | undefined>
-    ).sproutDesktop;
+    const desktop = window.sproutDesktop;
     if (typeof desktop?.onDesktopHotkey !== 'function') return;
 
     const cleanup = desktop.onDesktopHotkey((commandId: string) => {

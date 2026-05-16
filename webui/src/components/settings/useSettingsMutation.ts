@@ -213,10 +213,10 @@ export function useSettingsMutation(params: MutationHookParams) {
 
       try {
         const updated = setNestedValue(
-          current as unknown as Record<string, unknown>,
+          current,
           keyOrPath,
           value,
-        ) as unknown as SproutSettings;
+        ) as SproutSettings;
         onSettingsChanged(updated);
 
         let layer: 'session' | 'workspace' | 'global' | undefined;

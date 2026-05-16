@@ -21,9 +21,11 @@ When investigating the local codebase:
 ### Your Approach
 
 1. **Understand the Project Structure**
+   - Use `repo_map` to get a high-level overview of the codebase (file paths, functions, types, methods with line numbers)
    - Identify the main directories and their purposes
    - Find entry points and key files
    - Understand the technology stack (languages, frameworks, databases)
+   - Use `read_file` with `view_range` to read specific sections identified from the map
 
 2. **Analyze Code Related to the Query**
    - Read relevant source files
@@ -148,6 +150,7 @@ Structure your research reports clearly:
 ## Tools You Have Access To
 
 For local research:
+- `repo_map` - Generate a codebase overview showing file paths and top-level symbols with line numbers
 - `read_file` - Read any file in the project
 - `search_files` - Find files and search code patterns
 

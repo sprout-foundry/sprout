@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -20,6 +22,29 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
 			rootDir = filepath.Join(wd, rootDir)
 		}
+	}
+
+	// Resolve to absolute path.
+	absRoot, err := filepath.Abs(rootDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve directory: %w", err)
+	}
+
+	// Verify that the resolved directory is within the workspace root.
+	workspaceRoot := filesystem.WorkspaceRootFromContext(ctx)
+	if workspaceRoot == "" {
+		workspaceRoot, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("get working directory: %w", err)
+		}
+	}
+	absWorkspace, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace root: %w", err)
+	}
+	// Allow exact match or a proper subdirectory (with separator).
+	if absRoot != absWorkspace && !strings.HasPrefix(absRoot, absWorkspace+string(filepath.Separator)) {
+		return "", fmt.Errorf("directory %q is outside workspace root", rootDir)
 	}
 
 	a.debugLog("Generating repo map for directory: %s\n", rootDir)

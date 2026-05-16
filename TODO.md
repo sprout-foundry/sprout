@@ -815,7 +815,6 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
 [x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
 [x] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
-[] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [x] - REFACTOR: Deduplicate `populateAgentStats` copied inline in `gatherStatsForClientIDLocked` (~30 lines duplicated). `pkg/webui/api_files.go`
 [x] - REFACTOR: Deduplicate agent creation paths — test client and production client paths duplicate ~40 lines (sub-manager creation, agent struct, output router, debug logger, history load, embedding restore) — extract common init helper. `pkg/agent/agent.go`
 [x] - REFACTOR: Deduplicate exit code extraction in `shell.go` (lines 78-88 identical to 124-133) — extract `extractExitCode(err error) int`. `pkg/agent_tools/shell.go`

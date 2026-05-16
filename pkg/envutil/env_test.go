@@ -6,6 +6,7 @@ package envutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -621,5 +622,151 @@ func TestGetConfigDir_ReturnsPath(t *testing.T) {
 
 	if !filepath.IsAbs(configDir) {
 		t.Errorf("expected absolute path, got %s", configDir)
+	}
+}
+
+// TestGetConfigDir_WhitespaceTrimmed verifies that leading/trailing
+// whitespace in SPROUT_CONFIG is trimmed before use.
+func TestGetConfigDir_WhitespaceTrimmed(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	tmpDir := t.TempDir()
+
+	t.Setenv("SPROUT_CONFIG", "  "+tmpDir+"  ")
+	t.Setenv("LEDIT_CONFIG", "")
+
+	configDir, err := GetConfigDir()
+	if err != nil {
+		t.Fatalf("GetConfigDir failed: %v", err)
+	}
+
+	if configDir != tmpDir {
+		t.Errorf("expected %s (trimmed), got %s", tmpDir, configDir)
+	}
+
+	// Verify directory exists
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		t.Errorf("config directory was not created: %s", configDir)
+	}
+}
+
+// TestGetConfigDir_WhitespaceOnlyFallsThrough verifies that a whitespace-only
+// SPROUT_CONFIG is treated as unset and falls through to XDG_CONFIG_HOME.
+func TestGetConfigDir_WhitespaceOnlyFallsThrough(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	xdgDir := t.TempDir()
+
+	unsetEnv(t, "CONFIG")
+	t.Setenv("SPROUT_CONFIG", "   ")
+	t.Setenv("XDG_CONFIG_HOME", xdgDir)
+
+	configDir, err := GetConfigDir()
+	if err != nil {
+		t.Fatalf("GetConfigDir failed: %v", err)
+	}
+
+	expectedDir := filepath.Join(xdgDir, "sprout")
+	if configDir != expectedDir {
+		t.Errorf("expected %s (XDG fallback), got %s", expectedDir, configDir)
+	}
+
+	// Verify directory was created
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		t.Errorf("config directory was not created: %s", configDir)
+	}
+}
+
+// TestGetConfigDir_TabNewlineFallsThrough verifies that SPROUT_CONFIG
+// containing only tabs and newlines is treated as unset and falls
+// through to HOME.
+func TestGetConfigDir_TabNewlineFallsThrough(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	homeDir := t.TempDir()
+
+	unsetEnv(t, "CONFIG")
+	t.Setenv("SPROUT_CONFIG", "\t\n")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", homeDir)
+
+	configDir, err := GetConfigDir()
+	if err != nil {
+		t.Fatalf("GetConfigDir failed: %v", err)
+	}
+
+	expectedDir := filepath.Join(homeDir, ".config", "sprout")
+	if configDir != expectedDir {
+		t.Errorf("expected %s (HOME fallback), got %s", expectedDir, configDir)
+	}
+
+	// Verify directory was created
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		t.Errorf("config directory was not created: %s", configDir)
+	}
+}
+
+// TestGetConfigDir_MkdirAllError verifies that GetConfigDir returns
+// an error when os.MkdirAll fails (e.g., read-only parent directory).
+func TestGetConfigDir_MkdirAllError(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	if os.Geteuid() == 0 {
+		t.Skip("skipping: permission-based test requires non-root user")
+	}
+	if runtime.GOOS == "darwin" {
+		t.Skip("skipping: permission-based test unreliable on macOS")
+	}
+
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+
+	// Create a read-only parent directory.
+	err := os.MkdirAll(readOnlyDir, 0700)
+	if err != nil {
+		t.Fatalf("failed to create temp read-only dir: %v", err)
+	}
+	err = os.Chmod(readOnlyDir, 0o444)
+	if err != nil {
+		t.Fatalf("failed to chmod read-only: %v", err)
+	}
+	t.Cleanup(func() {
+		// Restore write permissions so t.TempDir() cleanup can remove it.
+		_ = os.Chmod(readOnlyDir, 0700)
+	})
+
+	targetDir := filepath.Join(readOnlyDir, "child", "sprout")
+
+	unsetEnv(t, "CONFIG")
+	t.Setenv("SPROUT_CONFIG", targetDir)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("HOME", "")
+
+	configDir, err := GetConfigDir()
+	if err == nil {
+		t.Fatal("expected error from MkdirAll failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to create config directory") {
+		t.Errorf("expected 'failed to create config directory' in error, got: %v", err)
+	}
+	if configDir != "" {
+		t.Errorf("expected empty configDir on error, got %s", configDir)
+	}
+}
+
+// TestSetEnv_InvalidKey verifies that SetEnv returns an error when
+// given an invalid environment variable key (containing NUL byte).
+func TestSetEnv_InvalidKey(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	// Cleanup even if os.Setenv partially succeeds on some platforms.
+	t.Cleanup(func() {
+		os.Unsetenv("SPROUT_IN\x00VALID")
+		os.Unsetenv("LEDIT_IN\x00VALID")
+	})
+
+	err := SetEnv("IN\x00VALID", "value")
+	if err == nil {
+		t.Fatal("expected error from SetEnv with NUL byte in key, got nil")
 	}
 }

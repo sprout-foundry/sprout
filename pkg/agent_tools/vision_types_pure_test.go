@@ -177,26 +177,9 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(originalCwd) })
 
-	// Save original env — GetEnvSimple checks SPROUT_* then LEDIT_*,
-	// so we must isolate both to prevent test interference.
-	originalSproutEnv := os.Getenv("SPROUT_RESOURCE_DIRECTORY")
-	originalLeditEnv := os.Getenv("LEDIT_RESOURCE_DIRECTORY")
-	t.Cleanup(func() {
-		if originalSproutEnv == "" {
-			os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		} else {
-			os.Setenv("SPROUT_RESOURCE_DIRECTORY", originalSproutEnv)
-		}
-		if originalLeditEnv == "" {
-			os.Unsetenv("LEDIT_RESOURCE_DIRECTORY")
-		} else {
-			os.Setenv("LEDIT_RESOURCE_DIRECTORY", originalLeditEnv)
-		}
-	})
-
 	t.Run("default directory", func(t *testing.T) {
-		os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		os.Unsetenv("LEDIT_RESOURCE_DIRECTORY")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
+		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
 
 		got := resolveVisionOutputDirectory()
 		if !strings.HasSuffix(got, ".sprout_ocr_outputs") {
@@ -205,8 +188,8 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 	})
 
 	t.Run("custom directory from env", func(t *testing.T) {
-		os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		os.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
+		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "captures")
 
 		got := resolveVisionOutputDirectory()
 		// The directory should contain "captures" in the path
@@ -216,8 +199,8 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 	})
 
 	t.Run("absolute path in env is cleaned", func(t *testing.T) {
-		os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		os.Setenv("LEDIT_RESOURCE_DIRECTORY", "/absolute/custom/path")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
+		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "/absolute/custom/path")
 
 		got := resolveVisionOutputDirectory()
 		// Should strip the leading / and join with cwd
@@ -232,26 +215,9 @@ func TestResolveVisionOutputDirectory(t *testing.T) {
 // ============================================================================
 
 func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
-	// Save original env — GetEnvSimple checks SPROUT_* then LEDIT_*,
-	// so we must isolate both to prevent test interference.
-	originalSproutEnv := os.Getenv("SPROUT_RESOURCE_DIRECTORY")
-	originalLeditEnv := os.Getenv("LEDIT_RESOURCE_DIRECTORY")
-	t.Cleanup(func() {
-		if originalSproutEnv == "" {
-			os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		} else {
-			os.Setenv("SPROUT_RESOURCE_DIRECTORY", originalSproutEnv)
-		}
-		if originalLeditEnv == "" {
-			os.Unsetenv("LEDIT_RESOURCE_DIRECTORY")
-		} else {
-			os.Setenv("LEDIT_RESOURCE_DIRECTORY", originalLeditEnv)
-		}
-	})
-
 	t.Run("with workspace root", func(t *testing.T) {
-		os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		os.Unsetenv("LEDIT_RESOURCE_DIRECTORY")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
+		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
 
 		dir := t.TempDir()
 		got := resolveVisionOutputDirectoryWithRoot(dir)
@@ -263,8 +229,8 @@ func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 	})
 
 	t.Run("with custom env and workspace root", func(t *testing.T) {
-		os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		os.Setenv("LEDIT_RESOURCE_DIRECTORY", "my_outputs")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
+		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "my_outputs")
 
 		dir := t.TempDir()
 		got := resolveVisionOutputDirectoryWithRoot(dir)
@@ -276,8 +242,8 @@ func TestResolveVisionOutputDirectoryWithRoot(t *testing.T) {
 	})
 
 	t.Run("empty workspace root falls back to cwd", func(t *testing.T) {
-		os.Unsetenv("SPROUT_RESOURCE_DIRECTORY")
-		os.Unsetenv("LEDIT_RESOURCE_DIRECTORY")
+		t.Setenv("SPROUT_RESOURCE_DIRECTORY", "")
+		t.Setenv("LEDIT_RESOURCE_DIRECTORY", "")
 
 		got := resolveVisionOutputDirectoryWithRoot("")
 

@@ -52,11 +52,40 @@ Already partially implemented:
 | ARIA completeness audit | Medium | Medium |
 | Editor 3-pane limit removal | Medium | Low |
 | Sidebar state persistence | Low | Low |
+| Inline tool badges in chat | High | Low |
 | Loading skeletons | Low | Low |
 | Focus indicators | Low | Low |
 | Panel collapse animation | Low | Low |
 
 ## Proposed Solution
+
+### U0: Inline Tool Call Badges
+
+Every tool call rendered in assistant messages appears as a small inline badge that links to the tool execution details in the contextual sidebar.
+
+**Requirements:**
+- Badges render inline (not block-level) so they flow naturally within assistant text
+- 10px horizontal gap between consecutive badges
+- Smaller text than body (11px or less)
+- Tool name truncated to max 2 words (e.g., "read file" not "read_file")
+- Clicking a badge calls `onToolRefClick(toolId)` to open the tool in the context sidebar
+- Badges follow the active theme (CSS variables for bg, border, text)
+- Completed tools show a compact `[tool_name]` footnote; in-progress tools show the pill with icon
+- The ExternalLink icon on hover provides visual feedback that the badge is clickable
+
+**CSS:**
+```css
+.segment-tool-call {
+  display: inline-flex;     /* inline, not block */
+  padding: 2px 8px;
+  font-size: 11px;
+  margin-right: 10px;       /* 10px gap between badges */
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+```
 
 ### Phase 1: Notifications & Accessibility (Week 1-2)
 

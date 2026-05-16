@@ -31,6 +31,9 @@ func TestBuildGitCommand_ZC(t *testing.T) {
 		{"merge", GitOpMerge, "feature", "git merge feature"},
 		{"am", GitOpAm, "< patch", "git am < patch"},
 		{"apply", GitOpApply, "--check patch.diff", "git apply --check patch.diff"},
+		{"pull_rebase", GitOpPull, "--rebase origin main", "git pull --rebase origin main"},
+		{"fetch_all", GitOpFetch, "--all --prune", "git fetch --all --prune"},
+		{"restore_staged", GitOpRestore, "--staged file.go", "git restore --staged file.go"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,6 +73,9 @@ func TestGitOperationTypeConstants_ZC(t *testing.T) {
 		{GitOpCherryPick, "cherry_pick"},
 		{GitOpRevert, "revert"},
 		{GitOpMv, "mv"},
+		{GitOpPull, "pull"},
+		{GitOpFetch, "fetch"},
+		{GitOpRestore, "restore"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {

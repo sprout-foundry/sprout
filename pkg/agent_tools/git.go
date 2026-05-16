@@ -32,6 +32,9 @@ const (
 	GitOpApply        GitOperationType = "apply"
 	GitOpCherryPick   GitOperationType = "cherry_pick"
 	GitOpRevert       GitOperationType = "revert"
+	GitOpPull         GitOperationType = "pull"
+	GitOpFetch        GitOperationType = "fetch"
+	GitOpRestore      GitOperationType = "restore"
 )
 
 // GitOperation defines a git operation request

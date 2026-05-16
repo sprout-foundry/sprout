@@ -86,13 +86,13 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleShellCommand,
 	})
 
-	// Register git tool - handles write operations that require approval
+	// Register git tool - handles operations that modify repository state or require network access
 	registry.RegisterTool(ToolConfig{
 		Name:        "git",
-		Description: "Execute git write operations that modify the repository. All operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, etc.), use the shell_command tool instead.",
+		Description: "Execute git operations that modify repository state or require network access. All destructive operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, branch, show), use shell_command instead.",
 		Parameters: []ParameterConfig{
-			{"operation", "string", true, []string{"op"}, "Git operation type: commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert"},
-			{"args", "string", false, []string{}, "Arguments to pass to the git command (optional)"},
+			{"operation", "string", true, []string{"op"}, "Git operation type: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
+			{"args", "string", false, []string{}, "Arguments to pass to the git command (optional). For pull: --rebase, --ff-only, remote/branch. For fetch: --all, --prune, remote. For restore: --staged, pathspec."},
 		},
 		Handler: handleGitOperation,
 	})

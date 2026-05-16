@@ -78,10 +78,10 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 	// 2. git
 	registry.Register(core.ToolConfig{
 		Name:        "git",
-		Description: "Execute git write operations that modify the repository. All operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, etc.), use the shell_command tool instead.",
+		Description: "Execute git operations that modify repository state or require network access. All destructive operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, branch, show), use shell_command instead.",
 		Parameters: []core.ParameterConfig{
-			{Name: "operation", Type: "string", Required: true, Alternatives: []string{"op"}, Description: "Git operation type: commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert"},
-			{Name: "args", Type: "string", Description: "Arguments to pass to the git command (optional)"},
+			{Name: "operation", Type: "string", Required: true, Alternatives: []string{"op"}, Description: "Git operation type: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
+			{Name: "args", Type: "string", Description: "Arguments to pass to the git command (optional). For pull: --rebase, --ff-only, remote/branch. For fetch: --all, --prune, remote. For restore: --staged, pathspec."},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "git")

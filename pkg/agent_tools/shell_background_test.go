@@ -1,129 +1,79 @@
 package tools
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// --- ExecuteShellCommandBackground tests ---
+// =============================================================================
+// formatBackgroundPromotionMessage
+// =============================================================================
 
-func TestExecuteShellCommandBackground_Success(t *testing.T) {
-	tm := &mockTerminalManager{
-		executeBackgroundFunc: func(ctx context.Context, chatID, command string) (string, error) {
-			if chatID != "test-session-123" {
-				t.Errorf("expected chatID 'test-session-123', got %q", chatID)
-			}
-			if command != "npm run dev" {
-				t.Errorf("expected command 'npm run dev', got %q", command)
-			}
-			return "bg-npm-dev-aabbccdd", nil
-		},
-	}
-	ctx := WithTerminalManager(context.Background(), tm)
+func TestFormatBackgroundPromotionMessage_Basic(t *testing.T) {
+	result := formatBackgroundPromotionMessage("session-123", "make build", "Building...")
 
-	result, err := ExecuteShellCommandBackground(ctx, "npm run dev", "test-session-123")
-	if err != nil {
-		t.Fatalf("ExecuteShellCommandBackground failed: %v", err)
-	}
-
-	// Parse the JSON result.
-	var parsed map[string]string
-	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
-		t.Fatalf("result is not valid JSON: %v (got: %q)", err, result)
-	}
-
-	if parsed["session_id"] != "bg-npm-dev-aabbccdd" {
-		t.Errorf("expected session_id 'bg-npm-dev-aabbccdd', got %q", parsed["session_id"])
-	}
-	if parsed["status"] != "running" {
-		t.Errorf("expected status 'running', got %q", parsed["status"])
-	}
+	assert.Contains(t, result, "Command timed out after 2 minutes")
+	assert.Contains(t, result, "still running in background session session-123")
+	assert.Contains(t, result, "Command: make build")
+	assert.Contains(t, result, "Output so far:")
+	assert.Contains(t, result, "Building...")
+	assert.Contains(t, result, "Check progress: use shell_command with check_background=\"session-123\"")
+	assert.Contains(t, result, "Stop it: use shell_command with stop_background=\"session-123\"")
 }
 
-func TestExecuteShellCommandBackground_Success_DefaultChatID(t *testing.T) {
-	tm := &mockTerminalManager{
-		executeBackgroundFunc: func(ctx context.Context, chatID, command string) (string, error) {
-			// When sessionID is empty, chatID should default to "default".
-			if chatID != "default" {
-				t.Errorf("expected chatID 'default' when sessionID is empty, got %q", chatID)
-			}
-			return "bg-echo-aabbccdd", nil
-		},
-	}
-	ctx := WithTerminalManager(context.Background(), tm)
+func TestFormatBackgroundPromotionMessage_OutputTruncation(t *testing.T) {
+	// Create output that exceeds the 2000 char maxPreview limit
+	longOutput := strings.Repeat("A", 2500)
 
-	result, err := ExecuteShellCommandBackground(ctx, "echo hello", "")
-	if err != nil {
-		t.Fatalf("ExecuteShellCommandBackground failed: %v", err)
-	}
+	result := formatBackgroundPromotionMessage("bg-456", "npm test", longOutput)
 
-	var parsed map[string]string
-	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
-		t.Fatalf("result is not valid JSON: %v", err)
-	}
+	// Should be truncated to 2000 chars + truncation message
+	assert.Contains(t, result, "... (output truncated)")
+	assert.Contains(t, result, "still running in background session bg-456")
 
-	if parsed["status"] != "running" {
-		t.Errorf("expected status 'running', got %q", parsed["status"])
-	}
+	// The truncated preview should be exactly 2000 chars before the truncation marker
+	// Verify the output portion was truncated by checking it doesn't contain the full 2500 chars
+	assert.Less(t, strings.Count(result, "A"), 2500)
 }
 
-func TestExecuteShellCommandBackground_EmptyCommand(t *testing.T) {
-	tm := &mockTerminalManager{}
-	ctx := WithTerminalManager(context.Background(), tm)
+func TestFormatBackgroundPromotionMessage_EmptyOutput(t *testing.T) {
+	result := formatBackgroundPromotionMessage("empty-session", "echo hello", "")
 
-	_, err := ExecuteShellCommandBackground(ctx, "", "session-1")
-	if err == nil {
-		t.Fatal("expected error for empty command")
-	}
-	if !strings.Contains(err.Error(), "empty") {
-		t.Errorf("expected error message to mention 'empty', got %q", err.Error())
-	}
+	assert.Contains(t, result, "still running in background session empty-session")
+	assert.Contains(t, result, "Command: echo hello")
+	assert.Contains(t, result, "Output so far:")
+	assert.Contains(t, result, "Check progress: use shell_command with check_background=\"empty-session\"")
 }
 
-func TestExecuteShellCommandBackground_WhitespaceOnlyCommand(t *testing.T) {
-	tm := &mockTerminalManager{}
-	ctx := WithTerminalManager(context.Background(), tm)
+func TestFormatBackgroundPromotionMessage_ShortOutputNotTruncated(t *testing.T) {
+	// Output under 2000 chars should not be truncated
+	shortOutput := "line1\nline2\nline3"
 
-	_, err := ExecuteShellCommandBackground(ctx, "   \n\t  ", "session-1")
-	if err == nil {
-		t.Fatal("expected error for whitespace-only command")
-	}
-	if !strings.Contains(err.Error(), "empty") {
-		t.Errorf("expected error message to mention 'empty', got %q", err.Error())
-	}
+	result := formatBackgroundPromotionMessage("short-session", "ls -la", shortOutput)
+
+	assert.Contains(t, result, "line1")
+	assert.Contains(t, result, "line2")
+	assert.Contains(t, result, "line3")
+	assert.NotContains(t, result, "output truncated")
 }
 
-func TestExecuteShellCommandBackground_NoTerminalManager(t *testing.T) {
-	ctx := context.Background() // No terminal manager in context
+func TestFormatBackgroundPromotionMessage_SpecialCharactersInCommand(t *testing.T) {
+	command := "curl -X POST 'http://localhost:8080/api/test?foo=bar&baz=qux'"
+	result := formatBackgroundPromotionMessage("curl-session", command, "Response received")
 
-	_, err := ExecuteShellCommandBackground(ctx, "echo hello", "session-1")
-	if err == nil {
-		t.Fatal("expected error when no terminal manager is available")
-	}
-	if !strings.Contains(err.Error(), "WebUI") {
-		t.Errorf("expected error message to mention 'WebUI', got %q", err.Error())
-	}
+	assert.Contains(t, result, command)
+	assert.Contains(t, result, "still running in background session curl-session")
 }
 
-func TestExecuteShellCommandBackground_SessionCreationFails(t *testing.T) {
-	tm := &mockTerminalManager{
-		executeBackgroundFunc: func(ctx context.Context, chatID, command string) (string, error) {
-			return "", fmt.Errorf("failed to create PTY session")
-		},
-	}
-	ctx := WithTerminalManager(context.Background(), tm)
+func TestFormatBackgroundPromotionMessage_SessionIDRepeated(t *testing.T) {
+	// Verify the session ID appears exactly 3 times: in the background session line,
+	// in the check_background instruction, and in the stop_background instruction
+	sessionID := "my-unique-session-abc"
+	result := formatBackgroundPromotionMessage(sessionID, "some cmd", "output")
 
-	_, err := ExecuteShellCommandBackground(ctx, "echo hello", "session-1")
-	if err == nil {
-		t.Fatal("expected error when background session creation fails")
-	}
-	if !strings.Contains(err.Error(), "execute background command") {
-		t.Errorf("expected error message to contain 'execute background command', got %q", err.Error())
-	}
-	if !strings.Contains(err.Error(), "failed to create PTY session") {
-		t.Errorf("expected error message to contain underlying cause 'failed to create PTY session', got %q", err.Error())
-	}
+	// Count occurrences of the session ID
+	count := strings.Count(result, sessionID)
+	assert.Equal(t, 3, count, "session ID should appear 3 times in the message")
 }

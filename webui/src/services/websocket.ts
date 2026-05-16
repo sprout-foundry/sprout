@@ -3,12 +3,8 @@ import { appendClientIdToUrl } from './clientSession';
 import { notificationBus } from './notificationBus';
 import { getAdapter } from './apiAdapter';
 
-/** Shape of a WebSocket event coming from / going to the server. */
-export interface WsEvent {
-  type: string;
-  data?: unknown;
-  [key: string]: unknown;
-}
+import type { WsEvent } from '@sprout/events';
+export type { WsEvent };
 
 type EventCallback = (event: WsEvent) => void;
 

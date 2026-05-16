@@ -33,15 +33,6 @@ export interface UseSSHDataResult {
   handleCloseSshSession: (sessionKey: string) => Promise<void>;
 }
 
-interface SproutDesktopBridge {
-  listSshHosts?: () => Promise<SSHHostEntry[]>;
-  openSshWorkspace?: (opts: {
-    hostAlias: string;
-    remoteWorkspacePath?: string;
-    forceNewWindow?: boolean;
-  }) => Promise<void>;
-}
-
 export function useSSHData({
   isAnyPanelOpen,
   remoteContext,
@@ -64,10 +55,10 @@ export function useSSHData({
   // Load SSH hosts/sessions when panels are open
   useEffect(() => {
     if (!supportsSSH || !isAnyPanelOpen) return;
-    const desktopBridge = (window as unknown as { sproutDesktop?: SproutDesktopBridge }).sproutDesktop;
+    const desktopBridge = window.sproutDesktop;
     let cancelled = false;
     Promise.all([
-      desktopBridge?.listSshHosts ? desktopBridge.listSshHosts() : apiService.current.getSSHHosts(),
+      desktopBridge?.listSshHosts ? (desktopBridge.listSshHosts() as Promise<SSHHostEntry[]>) : apiService.current.getSSHHosts(),
       apiService.current.getSSHSessions().catch(() => []),
     ])
       .then(([hosts, sessions]) => {
@@ -146,7 +137,7 @@ export function useSSHData({
 
   const handleOpenSshHost = useCallback(
     async (hostAlias: string, explicitRemotePath?: string) => {
-      const desktopBridge = (window as unknown as { sproutDesktop?: SproutDesktopBridge }).sproutDesktop;
+      const desktopBridge = window.sproutDesktop;
       if (!hostAlias) return;
       const targetRemotePath = explicitRemotePath?.trim() || undefined;
       setIsOpeningSshHost(hostAlias);

@@ -42,8 +42,8 @@ const MaxRetries = 3
 	result, err := GenerateRepoMap(context.Background(), dir)
 	requireErr(t, err, "generate repo map")
 
-	for _, want := range []string{"## repo_map:", "### main.go", "- func NewUser",
-		"- type User struct", "- type Handler interface", "- var DefaultTimeout", "- const MaxRetries"} {
+	for _, want := range []string{"## repo_map:", "### main.go", "- func NewUser:4",
+		"- type User struct:2", "- type Handler interface:3", "- var DefaultTimeout:5", "- const MaxRetries:6"} {
 		if !strings.Contains(result, want) {
 			t.Errorf("missing %q in output", want)
 		}
@@ -73,9 +73,9 @@ async def fetch_data(url): pass
 	result, err := GenerateRepoMap(context.Background(), dir)
 	requireErr(t, err, "generate repo map")
 
-	for _, want := range []string{"- func StartServer", "- type Config struct",
-		"- class App", "- interface User", "- type Role", "- function fetchData", "- const VERSION",
-		"- def calculate_total", "- class DataProcessor", "- def fetch_data"} {
+	for _, want := range []string{"- func StartServer:2", "- type Config struct:3",
+		"- class App:1", "- interface User:2", "- type Role:3", "- function fetchData:4", "- const VERSION:5",
+		"- def calculate_total:1", "- class DataProcessor:2", "- def fetch_data:3"} {
 		if !strings.Contains(result, want) {
 			t.Errorf("missing %q in output", want)
 		}
@@ -105,8 +105,8 @@ func Hello() {}
 
 	result, err := GenerateRepoMap(context.Background(), dir)
 	requireErr(t, err, "generate repo map")
-	if !strings.Contains(result, "### main.go") {
-		t.Error("missing main.go heading")
+	if !strings.Contains(result, "- func Hello:2") {
+		t.Error("missing main func with line number")
 	}
 	if strings.Contains(result, "### data.go") {
 		t.Error("binary file should not appear")
@@ -150,7 +150,7 @@ func MainFunc() {}
 
 	result, err := GenerateRepoMap(context.Background(), dir)
 	requireErr(t, err, "generate repo map")
-	if !strings.Contains(result, "- func MainFunc") {
+	if !strings.Contains(result, "- func MainFunc:2") {
 		t.Error("missing main func")
 	}
 	if strings.Contains(result, "func HiddenFunc") {
@@ -219,10 +219,82 @@ func World() {}
 	})
 	result, err := GenerateRepoMap(context.Background(), dir)
 	requireErr(t, err, "generate repo map")
-	if strings.Count(result, "- func Hello") != 1 {
-		t.Errorf("expected 1 'func Hello', got %d", strings.Count(result, "- func Hello"))
+	if strings.Count(result, "- func Hello:2") != 1 {
+		t.Errorf("expected 1 'func Hello:2', got %d", strings.Count(result, "- func Hello:2"))
 	}
-	if strings.Count(result, "- func World") != 1 {
-		t.Errorf("expected 1 'func World', got %d", strings.Count(result, "- func World"))
+	if strings.Count(result, "- func World:4") != 1 {
+		t.Errorf("expected 1 'func World:4', got %d", strings.Count(result, "- func World:4"))
+	}
+}
+
+// TestGenerateRepoMapLineNumbers verifies that symbols include correct 1-based line numbers.
+func TestGenerateRepoMapLineNumbers(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"example.go": `package example
+
+// Some comment
+type Config struct {
+	Port int
+}
+
+func NewConfig() *Config { return nil }
+func (c *Config) Start() {}
+`,
+		"app.ts": `// Header comment
+export class App {
+  start() {}
+}
+
+export interface User { name: string; }
+export async function initApp() { return {}; }
+`,
+		"lib.py": `# Library module
+import os
+
+class Parser:
+    def parse(self): pass
+
+def load_data(path):
+    return open(path).read()
+
+async def fetch(url): pass
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir)
+	requireErr(t, err, "generate repo map")
+
+	// Go: Config struct on line 4, NewConfig on line 8, Start on line 9
+	if !strings.Contains(result, "- type Config struct:4") {
+		t.Errorf("missing 'type Config struct:4', got:\n%s", result)
+	}
+	if !strings.Contains(result, "- func NewConfig:8") {
+		t.Errorf("missing 'func NewConfig:8', got:\n%s", result)
+	}
+	if !strings.Contains(result, "- func Start:9") {
+		t.Errorf("missing 'func Start:9', got:\n%s", result)
+	}
+
+	// TS: App on line 2, User on line 6, initApp on line 7
+	if !strings.Contains(result, "- class App:2") {
+		t.Errorf("missing 'class App:2', got:\n%s", result)
+	}
+	if !strings.Contains(result, "- interface User:6") {
+		t.Errorf("missing 'interface User:6', got:\n%s", result)
+	}
+	if !strings.Contains(result, "- function initApp:7") {
+		t.Errorf("missing 'function initApp:7', got:\n%s", result)
+	}
+
+	// Python: Parser on line 4, load_data on line 7, fetch on line 10
+	if !strings.Contains(result, "- class Parser:4") {
+		t.Errorf("missing 'class Parser:4', got:\n%s", result)
+	}
+	if !strings.Contains(result, "- def load_data:7") {
+		t.Errorf("missing 'def load_data:7', got:\n%s", result)
+	}
+	if !strings.Contains(result, "- def fetch:10") {
+		t.Errorf("missing 'def fetch:10', got:\n%s", result)
 	}
 }

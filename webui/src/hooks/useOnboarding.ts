@@ -385,9 +385,17 @@ function useOnboarding(): UseOnboardingReturn {
       }));
       return;
     }
-    const result = (await desktopBridge.installWsl()) as Record<string, unknown> | null;
-    const msg = result?.message != null ? String(result.message) : null;
-    setOnboarding((prev) => ({ ...prev, platformActionMessage: msg || 'Started WSL setup.' }));
+    try {
+      const result = (await desktopBridge.installWsl()) as Record<string, unknown> | null;
+      const msg = result?.message != null ? String(result.message) : null;
+      setOnboarding((prev) => ({ ...prev, platformActionMessage: msg || 'Started WSL setup.' }));
+    } catch (error) {
+      debugLog('[useOnboarding] Failed to install WSL:', error);
+      setOnboarding((prev) => ({
+        ...prev,
+        platformActionMessage: error instanceof Error ? error.message : 'Failed to install WSL',
+      }));
+    }
   }, []);
 
   const onInstallGitBash = useCallback(async () => {
@@ -399,12 +407,20 @@ function useOnboarding(): UseOnboardingReturn {
       }));
       return;
     }
-    const result = (await desktopBridge.installGitForWindows()) as Record<string, unknown> | null;
-    const msg = result?.message != null ? String(result.message) : null;
-    setOnboarding((prev) => ({
-      ...prev,
-      platformActionMessage: msg || 'Started Git for Windows setup.',
-    }));
+    try {
+      const result = (await desktopBridge.installGitForWindows()) as Record<string, unknown> | null;
+      const msg = result?.message != null ? String(result.message) : null;
+      setOnboarding((prev) => ({
+        ...prev,
+        platformActionMessage: msg || 'Started Git for Windows setup.',
+      }));
+    } catch (error) {
+      debugLog('[useOnboarding] Failed to install Git Bash:', error);
+      setOnboarding((prev) => ({
+        ...prev,
+        platformActionMessage: error instanceof Error ? error.message : 'Failed to install Git Bash',
+      }));
+    }
   }, []);
 
   return {

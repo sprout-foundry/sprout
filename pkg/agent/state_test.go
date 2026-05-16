@@ -12,15 +12,7 @@ import (
 // TestExportImportState tests state export and import functionality
 func TestExportImportState(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -94,15 +86,7 @@ func TestExportImportState(t *testing.T) {
 // TestSaveLoadStateToFile tests file-based state persistence
 func TestSaveLoadStateToFile(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -151,15 +135,7 @@ func TestSaveLoadStateToFile(t *testing.T) {
 // TestAddTaskAction tests task action recording
 func TestAddTaskAction(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -200,15 +176,7 @@ func TestAddTaskAction(t *testing.T) {
 
 func TestAddTaskActionConcurrent(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -249,15 +217,7 @@ func TestAddTaskActionConcurrent(t *testing.T) {
 // TestGenerateActionSummary tests action summary generation
 func TestGenerateActionSummary(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -295,15 +255,7 @@ func TestGenerateActionSummary(t *testing.T) {
 // TestSessionIDMethods tests session ID getter and setter
 func TestSessionIDMethods(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -327,15 +279,7 @@ func TestSessionIDMethods(t *testing.T) {
 // TestPreviousSummaryMethods tests previous summary getter and setter
 func TestPreviousSummaryMethods(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {

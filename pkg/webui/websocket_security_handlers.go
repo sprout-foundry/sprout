@@ -5,8 +5,6 @@ import (
 	"log"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/security"
-	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // handleSecurityApprovalResponse processes security approval responses from the webui.
@@ -50,8 +48,7 @@ func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, dat
 // The webui sends a { "type": "security_prompt_response", "data": { "request_id": "...", "response": true/false } }
 // message when the user responds to a file security concern prompt.
 func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, data *SecurityPromptResponseData, clientID string) {
-	mgr := security.GetGlobalApprovalManager()
-	if mgr == nil {
+	if ws.securityPromptMgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Security prompt manager is not available"},
@@ -59,7 +56,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, data 
 		return
 	}
 
-	if mgr.RespondToApproval(data.RequestID, data.Response) {
+	if ws.securityPromptMgr.RespondToApproval(data.RequestID, data.Response) {
 		ws.publishClientEvent(clientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
 			"status":     "responded",
 			"request_id": data.RequestID,
@@ -78,8 +75,7 @@ func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, data 
 // The webui sends a { "type": "ask_user_response", "data": { "request_id": "...", "response": "..." } }
 // message when the user responds to a question prompt.
 func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, data *AskUserResponseData, clientID string) {
-	mgr := agenttools.GetGlobalAskUserManager()
-	if mgr == nil {
+	if ws.askUserMgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
 			"data": map[string]string{"message": "Ask user manager is not available"},
@@ -87,7 +83,7 @@ func (ws *ReactWebServer) handleAskUserResponse(safeConn *SafeConn, data *AskUse
 		return
 	}
 
-	if mgr.RespondToAskUser(data.RequestID, data.Response) {
+	if ws.askUserMgr.RespondToAskUser(data.RequestID, data.Response) {
 		log.Printf("Ask user response received: request_id=%s response_length=%d", data.RequestID, len(data.Response))
 	} else {
 		_ = safeConn.WriteJSON(map[string]interface{}{

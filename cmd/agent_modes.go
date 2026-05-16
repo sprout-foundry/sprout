@@ -146,6 +146,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		if enableWebUI {
 			webServer = webui.NewReactWebServer(chatAgent, eventBus, port, bindAddr)
 
+			// Inject webui-owned managers into the agent so that security
+			// prompts and ask_user requests route through the same instances
+			// the webui handlers resolve responses on — no global singletons.
+			chatAgent.InjectWebUIManagers(webServer.GetSecurityPromptMgr(), webServer.GetAskUserMgr())
+
 			// Wire up the WebUI client check so security prompts route
 			// correctly: use the event bus only when a browser tab is open,
 			// otherwise fall back to CLI prompting (avoids 5-min timeouts).

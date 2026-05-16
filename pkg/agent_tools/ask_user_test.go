@@ -207,11 +207,7 @@ func TestRequestAskUser_Timeout(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAskUserWithEventBus_EmptyQuestion(t *testing.T) {
-	// Save and restore global
-	prev := GetGlobalAskUserManager()
-	t.Cleanup(func() { SetGlobalAskUserManager(prev) })
-
-	_, err := AskUserWithEventBus("", nil, "", "")
+	_, err := AskUserWithEventBus("", nil, "", "", nil)
 	if err == nil {
 		t.Fatal("expected error for empty question")
 	}
@@ -221,13 +217,8 @@ func TestAskUserWithEventBus_EmptyQuestion(t *testing.T) {
 }
 
 func TestAskUserWithEventBus_RoutesThroughEventBus(t *testing.T) {
-	// Save and restore global
-	prev := GetGlobalAskUserManager()
-	t.Cleanup(func() { SetGlobalAskUserManager(prev) })
-
 	mgr := NewAskUserManager()
 	mgr.SetTimeout(5 * time.Second)
-	SetGlobalAskUserManager(mgr)
 	bus := events.NewEventBus()
 
 	sub := bus.Subscribe("test-subscriber")
@@ -246,7 +237,7 @@ func TestAskUserWithEventBus_RoutesThroughEventBus(t *testing.T) {
 		}
 	}()
 
-	result, err := AskUserWithEventBus("Do you agree?", bus, "c1", "")
+	result, err := AskUserWithEventBus("Do you agree?", bus, "c1", "", mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

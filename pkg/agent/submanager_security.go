@@ -3,12 +3,16 @@ package agent
 import (
 	"sync"
 
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
 // SecurityManager provides an interface for managing all security-related state.
 type SecurityManager interface {
 	GetSecurityApprovalMgr() *security.ApprovalManager
+	SetApprovalMgr(mgr *security.ApprovalManager)
+	SetAskUserMgr(mgr *agenttools.AskUserManager)
+	GetAskUserMgr() *agenttools.AskUserManager
 	SetUnsafeMode(unsafe bool)
 	GetUnsafeMode() bool
 	IsSecurityBypassApproved() bool
@@ -26,6 +30,7 @@ type SecurityManager interface {
 // previously managed directly by the Agent struct.
 type AgentSecurityManager struct {
 	securityApprovalMgr     *security.ApprovalManager
+	askUserMgr              *agenttools.AskUserManager
 	unsafeMode              bool
 	securityBypassApproved  bool
 	securityBypassMu        sync.RWMutex
@@ -47,7 +52,27 @@ func NewAgentSecurityManager() *AgentSecurityManager {
 }
 
 func (m *AgentSecurityManager) GetSecurityApprovalMgr() *security.ApprovalManager {
+	m.securityBypassMu.RLock()
+	defer m.securityBypassMu.RUnlock()
 	return m.securityApprovalMgr
+}
+
+func (m *AgentSecurityManager) SetApprovalMgr(mgr *security.ApprovalManager) {
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
+	m.securityApprovalMgr = mgr
+}
+
+func (m *AgentSecurityManager) SetAskUserMgr(mgr *agenttools.AskUserManager) {
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
+	m.askUserMgr = mgr
+}
+
+func (m *AgentSecurityManager) GetAskUserMgr() *agenttools.AskUserManager {
+	m.securityBypassMu.RLock()
+	defer m.securityBypassMu.RUnlock()
+	return m.askUserMgr
 }
 
 func (m *AgentSecurityManager) SetUnsafeMode(unsafe bool) {

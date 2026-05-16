@@ -34,7 +34,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	}
 
 	// Use event bus if available (WebUI mode), otherwise fallback to stdin
-	response, err := tools.AskUserWithEventBus(question, eventBus, clientID, userID)
+	response, err := tools.AskUserWithEventBus(question, eventBus, clientID, userID, a.security.GetAskUserMgr())
 	if err != nil {
 		if a.debug {
 			a.debugLog("[ask_user] Error: %v\n", err)

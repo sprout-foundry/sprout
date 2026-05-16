@@ -1,9 +1,10 @@
 import { LocalEventsProvider } from './localEventsProvider';
+import { WebSocketService } from './websocket';
 
 // ---------------------------------------------------------------------------
 // Mocks — the mock factory must be self-contained (no references to
 // outer-scope variables that haven't been initialised when the factory
-// is hoisted by jest.mock).
+// is hoisted by vi.mock).
 // ---------------------------------------------------------------------------
 
 const mockInstance = {
@@ -35,7 +36,6 @@ beforeEach(() => {
   // Reset all mock call counts but don't reset the getInstance implementation
   vi.clearAllMocks();
   // Restore the getInstance implementation after clearAllMocks nukes it
-  const { WebSocketService } = require('./websocket');
   WebSocketService.getInstance.mockImplementation(() => mockInstance);
   // Restore default return values
   mockInstance.isConnected.mockReturnValue(true);
@@ -126,7 +126,6 @@ describe('LocalEventsProvider', () => {
   });
 
   it('calls WebSocketService.getInstance() for each method call', () => {
-    const { WebSocketService } = require('./websocket');
     const provider = new LocalEventsProvider();
 
     provider.connect();

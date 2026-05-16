@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/ast"
 )
 
 const maxFileSize = 1 << 20 // 1MB — skip larger files during indexing
@@ -56,8 +58,10 @@ func LoadSymbols(root string) (*SymbolIndex, error) {
 	return &idx, nil
 }
 
-// BuildSymbols scans the workspace root for source files and extracts symbols via regex.
-// Results are sorted by file path and then by line number within each file.
+// BuildSymbols scans the workspace root for source files and extracts symbols
+// using tree-sitter AST for supported languages (Go, Python, TypeScript, JavaScript)
+// with regex fallback for others. Results are sorted by file path and then by
+// line number within each file.
 func BuildSymbols(root string) (*SymbolIndex, error) {
 	var files []string
 	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -129,9 +133,136 @@ func BuildSymbols(root string) (*SymbolIndex, error) {
 	return idx, nil
 }
 
-// extractSymbols extracts symbols from a file, tracking line numbers.
+// extractSymbols extracts symbols from a file.
+// For AST-supported languages (Go, TypeScript, JavaScript, Python), it uses
+// tree-sitter via pkg/ast as the primary extraction mechanism. For Python only,
+// it supplements with regex-extracted UPPER_CASE constants (which the AST parser
+// does not distinguish from regular assignments).
+// For unsupported languages (Ruby, PHP, Rust, Java), it falls back entirely to
+// regex-based extraction.
 func extractSymbols(path string, content []byte) []Symbol {
-	ext := strings.ToLower(filepath.Ext(path))
+	ext := filepath.Ext(path)
+	if ast.IsSupported(path) {
+		primary := extractSymbolsViaAST(path, content)
+		if primary != nil {
+			// Supplement Python with UPPER_CASE module-level constants.
+			// The AST parser treats all top-level assignments as "variable", but
+			// Python convention distinguishes UPPER_CASE names as constants.
+			// For Go/TS/JS, the AST is comprehensive — no supplement needed.
+			if strings.ToLower(ext) == ".py" {
+				supplement := extractPythonConstants(content)
+				return deduplicateSymbols(append(primary, supplement...))
+			}
+			return primary
+		}
+		// AST parsing failed; fall through to regex.
+	}
+	return deduplicateSymbols(extractSymbolsByRegex(ext, content))
+}
+
+// extractSymbolsViaAST uses the tree-sitter-based AST parser to extract symbols.
+// It filters out non-indexable kinds and maps AST kind names to index kind names.
+func extractSymbolsViaAST(path string, content []byte) []Symbol {
+	result, err := ast.ParseFile(path, content)
+	if err != nil {
+		log.Printf("[debug] AST parse failed for %s: %v (falling back to regex)", path, err)
+		return nil
+	}
+	defer result.Release()
+
+	scopedSymbols := ast.ExtractSymbols(result.Root, result.Bound, result.Language)
+	if scopedSymbols == nil {
+		return nil
+	}
+
+	isGo := result.Language == "go"
+	var out []Symbol
+	for _, ss := range scopedSymbols {
+		// Depth 0: always include (top-level symbols)
+		// Depth 1: include only Go methods (receiver-scoped methods that are
+		// top-level in Go convention). Skip struct fields, interface methods,
+		// class properties, etc.
+		if ss.Depth > 1 {
+			continue
+		}
+		if ss.Depth == 1 && !(ss.Kind == "method" && isGo) {
+			continue
+		}
+
+		// Filter out kinds not useful for the index.
+		if !isIndexableKind(ss.Kind) {
+			continue
+		}
+
+		// Map AST kind to index kind.
+		kind := mapKind(ss.Kind)
+		if kind == "" {
+			continue
+		}
+
+		out = append(out, Symbol{
+			Name: ss.Name,
+			Kind: kind,
+			Line: ss.StartLine,
+		})
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// isIndexableKind returns true for AST kinds that are useful for the index.
+// Note: "property" is intentionally excluded — struct fields and class
+// properties are depth-1 symbols that are filtered out before this check
+// (only Go methods at depth 1 pass through).
+func isIndexableKind(kind string) bool {
+	switch kind {
+	case "function", "method", "class", "interface", "type", "variable", "constant", "enum":
+		return true
+	default:
+		return false
+	}
+}
+
+// mapKind converts an AST kind string to the index kind string.
+// Returns "" if the kind should not be mapped.
+func mapKind(kind string) string {
+	switch kind {
+	case "function":
+		return "func"
+	case "method", "class", "interface", "type", "variable", "constant", "enum":
+		return kind
+	default:
+		return ""
+	}
+}
+
+// extractPythonConstants extracts UPPER_SNAKE_CASE module-level constant
+// assignments from Python source content. The AST parser treats all top-level
+// assignments as "variable", but Python convention distinguishes UPPER_CASE
+// names as constants. This function supplements the AST results.
+func extractPythonConstants(content []byte) []Symbol {
+	re := regexp.MustCompile(`(?m)^([A-Z][A-Z0-9_]*)\s*=`)
+	var out []Symbol
+	matches := re.FindAllSubmatchIndex(content, -1)
+	for _, m := range matches {
+		if len(m) >= 4 {
+			name := string(content[m[2]:m[3]])
+			if name != "" {
+				lineNum := bytes.Count(content[:m[0]+1], []byte{'\n'}) + 1
+				out = append(out, Symbol{Name: name, Kind: "constant", Line: lineNum})
+			}
+		}
+	}
+	return out
+}
+
+// extractSymbolsByRegex extracts symbols from a file using regex patterns.
+// This is used as a fallback for languages not supported by the AST parser.
+func extractSymbolsByRegex(ext string, content []byte) []Symbol {
+	ext = strings.ToLower(ext)
 	var out []Symbol
 
 	addSymbol := func(kind, name string, line int) {
@@ -246,7 +377,11 @@ func extractSymbols(path string, content []byte) []Symbol {
 		addPatternMatch(`(?m)^\s*(?:public|private|protected|static|\s)*\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*\)\s*(?:throws\s+[A-Za-z_,\s]+)?\{`, "method", func(b []byte) string { return string(b) })
 	}
 
-	// Deduplicate by name+kind+line
+	return out
+}
+
+// deduplicateSymbols removes duplicate symbols by name+kind+line.
+func deduplicateSymbols(out []Symbol) []Symbol {
 	seen := make(map[string]bool)
 	deduped := out[:0]
 	for _, s := range out {

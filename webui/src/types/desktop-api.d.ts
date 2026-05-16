@@ -4,6 +4,12 @@
  * the desktop-specific IPC methods exposed via preload.js.
  */
 
+export interface DesktopApiResponse<T = unknown> {
+  ok: boolean;
+  result?: T;
+  error?: string;
+}
+
 export interface SproutDesktopAPI {
   // Platform detection
   platform: NodeJS.Platform;
@@ -28,11 +34,18 @@ export interface SproutDesktopAPI {
   onDesktopHotkey: (callback: (commandId: string) => void) => () => void;
 
   // Auto-update API
-  checkForUpdates: () => Promise<{ ok: boolean; result?: { hasUpdate: boolean; version?: string }; error?: string }>;
-  installUpdate: () => Promise<{ ok: boolean }>;
-  deferUpdate: () => Promise<{ ok: boolean; willInstallOnQuit?: boolean }>;
+  checkForUpdates: () => Promise<DesktopApiResponse<{ hasUpdate: boolean; version?: string }>>;
+  installUpdate: () => Promise<DesktopApiResponse<{ pending?: boolean; willInstallOnQuit?: boolean }>>;
+  deferUpdate: () => Promise<DesktopApiResponse<{ pending?: boolean; willInstallOnQuit?: boolean }>>;
   isUpdatePending: () => Promise<{ pending: boolean }>;
-  cancelPendingInstall: () => Promise<{ ok: boolean }>;
+  cancelPendingInstall: () => Promise<DesktopApiResponse<{ pending?: boolean; willInstallOnQuit?: boolean }>>;
+
+  // Auto-update event listeners
+  onUpdateError: (callback: (data: { title: string; message: string; version?: string; duration?: number }) => void) => () => void;
+  onUpdateAvailable: (callback: (data: { title: string; message: string; version?: string; duration?: number }) => void) => () => void;
+  onUpdateDownloadProgress: (callback: (progress: { percent?: number }) => void) => () => void;
+  onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void;
+  onTriggerUpdateCheck: (callback: () => void) => () => void;
 }
 
 declare global {

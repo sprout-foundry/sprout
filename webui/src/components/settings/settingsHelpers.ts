@@ -1,5 +1,5 @@
 /** Get a nested value from an object using dot-notation key */
-export function getNestedValue(obj: Record<string, unknown>, key: string): unknown {
+export function getNestedValue(obj: object, key: string): unknown {
   return key
     .split('.')
     .reduce(
@@ -10,9 +10,9 @@ export function getNestedValue(obj: Record<string, unknown>, key: string): unkno
 }
 
 /** Set a nested value in an object using dot-notation key (immutable) */
-export function setNestedValue(obj: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
+export function setNestedValue(obj: object, key: string, value: unknown): object {
   const parts = key.split('.');
-  const result = { ...obj };
+  const result = { ...obj } as Record<string, unknown>;
   let current: Record<string, unknown> = result;
   for (let i = 0; i < parts.length - 1; i++) {
     if (current[parts[i]] === undefined || typeof current[parts[i]] !== 'object') {

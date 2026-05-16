@@ -20,6 +20,20 @@ const (
 	webClientIDHeader     = "X-Sprout-Client-ID"
 	webClientIDQueryParam = "client_id"
 	defaultWebClientID    = "default"
+
+	// clientIDCookieName is the name of the HTTP cookie used for cross-origin
+	// session persistence. When the WebUI (Cloudflare Pages) and API (tunnel)
+	// live on different domains, the header-based client ID is lost on page
+	// reload because the browser does not persist custom headers. The cookie
+	// survives reloads and is sent automatically by the browser on every
+	// cross-origin request (credentials: 'include'), allowing the server to
+	// resume the same client context without re-initialization.
+	clientIDCookieName = "sprout_client_id"
+
+	// clientIDCookieMaxAge is the maximum age of the client ID cookie (30 days).
+	// This is intentionally long-lived so that users who leave a tab open or
+	// return after a break can resume their session.
+	clientIDCookieMaxAge = 30 * 24 * time.Hour
 )
 
 type webClientContext struct {
@@ -90,6 +104,15 @@ func (ws *ReactWebServer) resolveClientID(r *http.Request) string {
 	clientID := strings.TrimSpace(r.Header.Get(webClientIDHeader))
 	if clientID == "" {
 		clientID = strings.TrimSpace(r.URL.Query().Get(webClientIDQueryParam))
+	}
+	if clientID == "" {
+		// Fall back to the cross-origin cookie. This is the primary
+		// identification mechanism when the WebUI and API live on
+		// different domains (Cloudflare Pages + tunnel).
+		cookie, err := r.Cookie(clientIDCookieName)
+		if err == nil && cookie.Value != "" {
+			clientID = cookie.Value
+		}
 	}
 	if clientID == "" {
 		clientID = defaultWebClientID

@@ -1,9 +1,6 @@
 import { WebSocketService } from './websocket';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
+// Mock the modules that websocket.ts depends on
 vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
@@ -16,10 +13,14 @@ vi.mock('./notificationBus', () => ({
   notificationBus: { notify: vi.fn() },
 }));
 
-// Get the mocked functions for assertions
-const debugLog = require('../utils/log').debugLog;
-const appendClientIdToUrl = require('./clientSession').appendClientIdToUrl;
-const notificationBus = require('./notificationBus').notificationBus;
+vi.mock('./apiAdapter', () => ({
+  getAdapter: vi.fn(() => null),
+}));
+
+// ESM imports — vitest resolves these from the mocked modules
+import { debugLog } from '../utils/log';
+import { appendClientIdToUrl } from './clientSession';
+import { notificationBus } from './notificationBus';
 
 // Mock WebSocket
 const mockSend = vi.fn();

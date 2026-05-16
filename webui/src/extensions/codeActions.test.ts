@@ -128,16 +128,15 @@ import {
   CodeActionState,
 } from './codeActions';
 
-// ── Import mocks ─────────────────────────────────────────────────────
+// ── Import mocks (vi.mock is hoisted above imports by Vitest) ────────
 
-const MockViewPlugin = require('@codemirror/view').ViewPlugin;
-const MockStateField = require('@codemirror/state').StateField;
-const MockFacet = require('@codemirror/state').Facet;
-const MockApiService = require('../services/api').ApiService;
-const MockLSPPlugin = require('@codemirror/lsp-client').LSPPlugin;
-const mockGetClientForLanguageSync = require('./lspExtensions').getClientForLanguageSync;
-const mockResolveLanguageId = require('./languageRegistry').resolveLanguageId;
-const mockDebugLog = require('../utils/log').debugLog;
+import { ViewPlugin as MockViewPlugin } from '@codemirror/view';
+import { StateField as MockStateField, Facet as MockFacet } from '@codemirror/state';
+import { ApiService as MockApiService } from '../services/api';
+import { LSPPlugin as MockLSPPlugin } from '@codemirror/lsp-client';
+import { getClientForLanguageSync as mockGetClientForLanguageSync } from './lspExtensions';
+import { resolveLanguageId as mockResolveLanguageId } from './languageRegistry';
+import { debugLog as mockDebugLog } from '../utils/log';
 
 // ── Test setup ───────────────────────────────────────────────────────
 
@@ -157,17 +156,17 @@ describe('Type exports', () => {
   it('creates CodeActionEdit type', () => {
     // Verify the interface is exported by checking it's a valid type in the code
     // In TypeScript interfaces, they disappear at runtime, so we verify the module loads
-    const { createCodeActionsExtension } = require('./codeActions');
+    
     expect(createCodeActionsExtension).toBeDefined();
   });
 
   it('creates CodeAction type', () => {
-    const { codeActionsKeybinding } = require('./codeActions');
+    
     expect(codeActionsKeybinding).toBeDefined();
   });
 
   it('creates CodeActionState type', () => {
-    const { codeActionsConfig } = require('./codeActions');
+    
     expect(codeActionsConfig).toBeDefined();
   });
 });

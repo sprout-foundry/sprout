@@ -14,32 +14,10 @@ import (
 func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// Set CI environment and test API key to ensure agent creation succeeds
 	// We use OPENAI_API_KEY to force use of OpenAI provider which doesn't have tool restrictions
-	originalCI := os.Getenv("CI")
-	originalOpenAIKey := os.Getenv("OPENAI_API_KEY")
-	originalSubagent := os.Getenv("LEDIT_SUBAGENT")
-	originalNoSubagents := os.Getenv("LEDIT_NO_SUBAGENTS")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENAI_API_KEY", "test-key-for-tools-long-enough-to-openai")
-	os.Unsetenv("LEDIT_SUBAGENT")
-	os.Unsetenv("LEDIT_NO_SUBAGENTS")
-	defer func() {
-		if originalOpenAIKey != "" {
-			os.Setenv("OPENAI_API_KEY", originalOpenAIKey)
-		} else {
-			os.Unsetenv("OPENAI_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-		if originalSubagent != "" {
-			os.Setenv("LEDIT_SUBAGENT", originalSubagent)
-		}
-		if originalNoSubagents != "" {
-			os.Setenv("LEDIT_NO_SUBAGENTS", originalNoSubagents)
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENAI_API_KEY", "test-key-for-tools-long-enough-to-openai")
+	t.Setenv("LEDIT_SUBAGENT", "")
+	t.Setenv("LEDIT_NO_SUBAGENTS", "")
 
 	// Create a test agent
 	agent, err := NewAgent()
@@ -123,22 +101,8 @@ func TestStaticToolDefinitionsIncludeBrowseURL(t *testing.T) {
 // TestOllamaAPIKeyDetection verifies that OLLAMA_API_KEY is properly detected
 func TestOllamaAPIKeyDetection(t *testing.T) {
 	// Set up test environment with API keys and CI flag
-	originalCI := os.Getenv("CI")
-	originalOpenRouterKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-openrouter-long-enough")
-	defer func() {
-		if originalOpenRouterKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalOpenRouterKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-openrouter-long-enough")
 
 	// This test is more about configuration, which is tested elsewhere
 	// Just verify that the agent can be created when OLLAMA_API_KEY is set
@@ -193,22 +157,8 @@ func TestMakeAllowedToolSetTrimsAndDeduplicates(t *testing.T) {
 }
 
 func TestExecuteToolAppliesOpenFileAlias(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -238,22 +188,8 @@ func TestExecuteToolAppliesOpenFileAlias(t *testing.T) {
 }
 
 func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -327,22 +263,8 @@ func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testi
 }
 
 func TestGetOptimizedToolDefinitions_DeepInfraIncludesAnalyzeUIScreenshot(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -366,22 +288,8 @@ func TestGetOptimizedToolDefinitions_DeepInfraIncludesAnalyzeUIScreenshot(t *tes
 }
 
 func TestGetOptimizedToolDefinitions_CustomProviderAllowlistCanExcludeAnalyzeUIScreenshot(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -413,22 +321,8 @@ func TestGetOptimizedToolDefinitions_CustomProviderAllowlistCanExcludeAnalyzeUIS
 }
 
 func TestPatchStructuredFileAcceptsOperationsAlias(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -460,22 +354,8 @@ func TestPatchStructuredFileAcceptsOperationsAlias(t *testing.T) {
 }
 
 func TestPatchStructuredFileAcceptsDataFallbackToWrite(t *testing.T) {
-	originalCI := os.Getenv("CI")
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("CI", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-		if originalCI != "" {
-			os.Setenv("CI", originalCI)
-		} else {
-			os.Unsetenv("CI")
-		}
-	}()
+	t.Setenv("CI", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-tools-long-enough")
 
 	agent, err := NewAgent()
 	if err != nil {

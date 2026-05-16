@@ -2,7 +2,6 @@ package console
 
 import (
 	"bytes"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,8 +38,7 @@ func TestCIOutputHandler_EnvironmentDetection(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
-				defer os.Unsetenv(k)
+				t.Setenv(k, v)
 			}
 
 			buf := &bytes.Buffer{}
@@ -101,8 +99,7 @@ func TestCIOutputHandler_ANSIStripping(t *testing.T) {
 
 func TestCIOutputHandler_ProgressOutput(t *testing.T) {
 	// Set CI environment
-	os.Setenv("CI", "1")
-	defer os.Unsetenv("CI")
+	t.Setenv("CI", "1")
 
 	buf := &bytes.Buffer{}
 	handler := NewCIOutputHandler(buf)
@@ -132,8 +129,7 @@ func TestCIOutputHandler_ProgressOutput(t *testing.T) {
 }
 
 func TestCIOutputHandler_ProgressInterval(t *testing.T) {
-	os.Setenv("CI", "1")
-	defer os.Unsetenv("CI")
+	t.Setenv("CI", "1")
 
 	buf := &bytes.Buffer{}
 	handler := NewCIOutputHandler(buf)
@@ -235,8 +231,7 @@ func TestCIOutputHandler_Summary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.isCI {
-				os.Setenv("CI", "1")
-				defer os.Unsetenv("CI")
+				t.Setenv("CI", "1")
 			}
 
 			buf := &bytes.Buffer{}

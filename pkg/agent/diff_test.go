@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -11,15 +10,7 @@ import (
 // TestShowColoredDiff tests the main diff functionality
 func TestShowColoredDiff(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -50,15 +41,7 @@ func TestIsPythonAvailable(t *testing.T) {
 // TestShowGoDiff tests the Go fallback implementation
 func TestShowGoDiff(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -76,15 +59,7 @@ func TestShowGoDiff(t *testing.T) {
 // TestShowPythonDiff tests the Python implementation when available
 func TestShowPythonDiff(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -114,15 +89,7 @@ func TestShowPythonDiff(t *testing.T) {
 // TestFindChanges tests the change detection algorithm
 func TestFindChanges(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -209,15 +176,7 @@ func TestDiffChangeStruct(t *testing.T) {
 // TestShowColoredDiffWithEmptyContent tests edge cases
 func TestShowColoredDiffWithEmptyContent(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -241,15 +200,7 @@ func TestShowColoredDiffWithEmptyContent(t *testing.T) {
 // TestFallbackBehavior tests that fallback works when Python fails
 func TestFallbackBehavior(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -257,9 +208,7 @@ func TestFallbackBehavior(t *testing.T) {
 	}
 
 	// Temporarily modify PATH to simulate Python not being available
-	originalPath := os.Getenv("PATH")
-	os.Setenv("PATH", "/nonexistent")
-	defer os.Setenv("PATH", originalPath)
+	t.Setenv("PATH", "/nonexistent")
 
 	// This should fall back to Go implementation and not panic
 	oldContent := "line 1\nline 2\nline 3"

@@ -45,6 +45,10 @@ vi.mock('../services/lspClientService', () => ({
 // ── Module under test ─────────────────────────────────────────────────
 
 import { escapeHtml, formatMarkdown, createHoverTooltipExtension } from './hoverTooltip';
+import { hoverTooltip as mockHoverTooltip } from '@codemirror/view';
+import { ApiService as MockApiService } from '../services/api';
+import { resolveLanguageId as mockResolveLanguageId } from './languageRegistry';
+import { debugLog as mockDebugLog } from '../utils/log';
 
 // ── escapeHtml tests ────────────────────────────────────────────────────
 
@@ -188,11 +192,7 @@ describe('formatMarkdown', () => {
 // ── createHoverTooltipExtension tests ──────────────────────────────────────
 
 describe('createHoverTooltipExtension', () => {
-  // Import mocks
-  const mockHoverTooltip = require('@codemirror/view').hoverTooltip;
-  const MockApiService = require('../services/api').ApiService;
-  const mockResolveLanguageId = require('./languageRegistry').resolveLanguageId;
-  const mockDebugLog = require('../utils/log').debugLog;
+  // Mocks imported at top level (vi.mock is hoisted)
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -209,7 +209,7 @@ describe('createHoverTooltipExtension', () => {
     );
     // Note: With mocked keymap.of returning [], this may be an empty array or undefined.
     // The important thing is that it doesn't throw.
-    expect(extension === undefined || Array.isArray(extension)).toBe(true);
+    expect(extension).toBeDefined();
   });
 
   it('returns an extension with hoverTooltip called', () => {

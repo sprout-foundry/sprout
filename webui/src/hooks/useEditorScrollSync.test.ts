@@ -64,11 +64,25 @@ function createMockView(scrollTop = 0, scrollLeft = 0, docLines = 100) {
 let container: HTMLDivElement;
 let root: Root;
 
+/**
+ * Shared performance.now mock value.
+ * Tests can advance it via `advancePerfTime(ms)`.
+ */
+let perfNowValue = 0;
+
+function advancePerfTime(ms: number) {
+  perfNowValue += ms;
+}
+
 beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   vi.clearAllMocks();
+
+  // Reset performance.now mock time
+  perfNowValue = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => perfNowValue);
 });
 
 afterEach(() => {
@@ -76,6 +90,7 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
+  vi.restoreAllMocks();
 });
 
 /**
@@ -132,6 +147,9 @@ describe('handleScrollUpdate — scroll position persistence', () => {
   it('calls updateBufferScroll when viewport changes with a valid buffer', () => {
     const { getReturn, updateBufferScroll, mockView } = renderTestHook();
 
+    // Set perf time to 600ms so the throttle gate passes (600 - 0 >= 500)
+    advancePerfTime(600);
+
     act(() => {
       getReturn().handleScrollUpdate({
         viewportChanged: true,
@@ -144,6 +162,7 @@ describe('handleScrollUpdate — scroll position persistence', () => {
 
   it('does NOT call updateBufferScroll when viewportChanged is false', () => {
     const { getReturn, updateBufferScroll, mockView } = renderTestHook();
+    advancePerfTime(600);
 
     act(() => {
       getReturn().handleScrollUpdate({
@@ -158,6 +177,7 @@ describe('handleScrollUpdate — scroll position persistence', () => {
   it('does NOT call updateBufferScroll when bufferRef.current is null', () => {
     const { getReturn, updateBufferScroll, mockView, bufferRef } = renderTestHook();
     bufferRef.current = null;
+    advancePerfTime(600);
 
     act(() => {
       getReturn().handleScrollUpdate({
@@ -172,6 +192,7 @@ describe('handleScrollUpdate — scroll position persistence', () => {
   it('does NOT call updateBufferScroll when scrollDOM is null', () => {
     const { getReturn, updateBufferScroll } = renderTestHook();
     const viewNoScrollDOM = { scrollDOM: null };
+    advancePerfTime(600);
 
     act(() => {
       getReturn().handleScrollUpdate({
@@ -186,7 +207,9 @@ describe('handleScrollUpdate — scroll position persistence', () => {
   it('throttles updateBufferScroll calls (100ms window)', () => {
     const { getReturn, updateBufferScroll, mockView } = renderTestHook();
 
-    // First call — should go through immediately
+    // First call at t=600 — should go through (600 - 0 >= 500)
+    advancePerfTime(600);
+
     act(() => {
       getReturn().handleScrollUpdate({
         viewportChanged: true,
@@ -199,7 +222,9 @@ describe('handleScrollUpdate — scroll position persistence', () => {
 
     updateBufferScroll.mockClear();
 
-    // Rapid second call within the throttle window — immediate call is suppressed
+    // Rapid second call at t=700 — within 100ms of last (600), blocked by throttle
+    advancePerfTime(100);
+
     act(() => {
       getReturn().handleScrollUpdate({
         viewportChanged: true,
@@ -217,6 +242,7 @@ describe('handleScrollUpdate — scroll position persistence', () => {
   it('captures scroll position from view.scrollDOM properties', () => {
     const { getReturn, updateBufferScroll } = renderTestHook();
     const view = createMockView(250, 30);
+    advancePerfTime(600);
 
     act(() => {
       getReturn().handleScrollUpdate({

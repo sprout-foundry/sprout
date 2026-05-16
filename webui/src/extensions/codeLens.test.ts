@@ -7,6 +7,7 @@
 
 // ── Module under test (Jest hoists mocks above imports) ─────────────
 import { countReferences, formatRefText, computeCodeLenses } from './codeLens';
+import { extractSymbols as mockExtractSymbols } from '../utils/symbolUtils';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 
@@ -29,8 +30,8 @@ vi.mock('@codemirror/state', () => ({
 // Mock the symbolUtils module.
 // Use requireActual to preserve the real CONTAINER_KINDS for the mock setup,
 // while replacing extractSymbols with vi.fn() for controlled testing.
-vi.mock('../utils/symbolUtils', () => ({
-  ...vi.importActual('../utils/symbolUtils'),
+vi.mock('../utils/symbolUtils', async () => ({
+  ...(await vi.importActual('../utils/symbolUtils')),
   extractSymbols: vi.fn(),
 }));
 
@@ -186,8 +187,7 @@ foo(); foo(); foo();`;
 // ── computeCodeLenses tests ───────────────────────────────────────
 
 describe('computeCodeLenses', () => {
-  // Import the mocked extractSymbols
-  const mockExtractSymbols = require('../utils/symbolUtils').extractSymbols;
+  // Import the mocked extractSymbols (vi.mock is hoisted above imports)
 
   beforeEach(() => {
     vi.clearAllMocks();

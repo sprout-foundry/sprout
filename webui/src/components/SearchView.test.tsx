@@ -25,17 +25,10 @@ vi.mock('../services/api', () => ({
 // SearchView uses useLog() transitively, which requires NotificationContext.
 // We provide a minimal mock with plain arrow functions to avoid heavy module
 // resolution cascade that causes OOM under Node 22 + Jest 27.
-vi.mock('../contexts/NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
+}));
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -8,9 +8,9 @@ import Terminal from './Terminal';
 // Mock TerminalPane — forwardRef component with imperative handle { clear, focus }
 // ---------------------------------------------------------------------------
 
-vi.mock('./TerminalPane', () => {
-  const { forwardRef, useImperativeHandle } = vi.importActual('react');
-  return forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
+vi.mock('./TerminalPane', async () => {
+  const { forwardRef, useImperativeHandle } = await vi.importActual('react');
+  return { default: forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
     // NOTE: vi.fn() inside useImperativeHandle creates fresh mock instances on
     // every re-render. This is acceptable because no test asserts on imperative
     // handle call counts — all assertions check DOM state. If future tests need
@@ -35,7 +35,7 @@ vi.mock('./TerminalPane', () => {
         )}
       </div>
     );
-  });
+  })};
 });
 
 // ---------------------------------------------------------------------------

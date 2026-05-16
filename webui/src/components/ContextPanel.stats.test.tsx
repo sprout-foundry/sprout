@@ -7,23 +7,19 @@ import { createRoot } from 'react-dom/client';
 // Mock heavy child components that ContextPanel imports
 // ---------------------------------------------------------------------------
 
-vi.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
-vi.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
+vi.mock('./TodoPanel', () => ({ default: (props) => props.children }))
+;
+vi.mock('./RevisionListPanel', () => ({ default: (props) => props.children }));
 vi.mock('../services/api', () => ({
   // No longer used by ContextPanel — kept for any transitive imports
 }));
 // ContextPanel uses useLog() which requires NotificationContext.
-vi.mock('../contexts/NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
+}));
+
+import ContextPanel from './ContextPanel';
 
 // ---------------------------------------------------------------------------
 // Replicate formatTokens and formatCost (mirrors the inline implementations
@@ -158,8 +154,6 @@ const flushPromises = async () => {
  * hoisting issues with jest.mock.
  */
 async function renderPanel(props: Record<string, unknown>) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const ContextPanel = require('./ContextPanel').default;
   // eslint-disable-next-line testing-library/no-unnecessary-act
   await act(async () => {
     root.render(createElement(ContextPanel, props));

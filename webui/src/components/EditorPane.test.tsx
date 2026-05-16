@@ -33,17 +33,10 @@ vi.mock('../contexts/ThemeContext', () => ({
 }));
 
 // EditorPane uses useLog() which requires NotificationContext.
-vi.mock('../contexts/NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
+}));
 
 vi.mock('../services/api', () => ({
   ApiService: {
@@ -59,27 +52,370 @@ vi.mock('../utils/clipboard', () => ({
   copyToClipboard: vi.fn(),
 }));
 
-vi.mock('./EditorToolbar', () => () => <div data-testid="editor-toolbar" />);
-vi.mock('./ImageViewer', () => () => <div data-testid="image-viewer" />);
-vi.mock('./SvgPreview', () => () => <div data-testid="svg-preview" />);
+vi.mock('./EditorToolbar', () => ({ default: () => null }));
+
+// Mock EditorPaneFooter with reactive state for tab size and encoding
+vi.mock('./EditorPaneFooter', () => {
+  const React = require('react');
+  const MockEditorPaneFooter = (props: any) => {
+    const settings = props.settings || {};
+    const lsp = props.lsp || {};
+    const buffer = props.buffer || {};
+    const [tabSize, setTabSize] = React.useState(settings.editorTabSize ?? 4);
+    const lineEnding = settings.lineEnding ?? 'LF';
+    const usesTabs = settings.editorUsesTabs ?? false;
+
+    const handleTabSizeClick = () => {
+      const next = tabSize === 4 ? 8 : tabSize === 8 ? 2 : 4;
+      setTabSize(next);
+      localStorage.setItem('editor:tab-size', String(next));
+      settings.onCycleTabSize?.();
+    };
+
+    const tabSizeText = usesTabs ? 'Tabs' : 'Spaces: ' + tabSize;
+    const encodingText = 'UTF-8 · ' + lineEnding;
+
+    return React.createElement('div', { className: 'pane-footer' },
+      React.createElement('div', { className: 'editor-stats' },
+        React.createElement('span', { className: 'tab-size',
+          title: 'Click to change tab size (Spaces: 2, 4, 8)',
+          onClick: handleTabSizeClick,
+          tabIndex: 0,
+        }, tabSizeText),
+        React.createElement('span', { className: 'encoding-indicator',
+          title: 'File encoding and line endings',
+        }, encodingText),
+      ),
+      React.createElement(function(props: any) {
+        return React.createElement('div', {
+          'data-testid': 'language-switcher',
+          'data-language-id': props.currentLanguageId ?? '',
+          'data-auto-detected': props.isAutoDetected ?? false,
+          onClick: () => {
+            props.onLanguageChange?.('python');
+          },
+        });
+      }, {
+        currentLanguageId: lsp.languageInfo?.languageId ?? '',
+        isAutoDetected: lsp.languageInfo?.isAutoDetected ?? false,
+        onLanguageChange: lsp.handleLanguageChange,
+      }),
+    );
+  };
+  return { default: MockEditorPaneFooter };
+});
+vi.mock('./ImageViewer', () => ({ default: () => null }));
+vi.mock('./SvgPreview', () => ({ default: () => null }));
+// Mock useEditorExtensions to avoid deep CodeMirror dependency cascade
+vi.mock('../hooks/useEditorExtensions', () => ({
+  useEditorExtensions: () => ({
+    compartments: {},
+    buildExtensions: () => [],
+  }),
+  TAB_SIZE_DEFAULT: 4,
+}));
+// Mock useEditorFileIO to avoid deep CodeMirror dependency cascade  
+vi.mock('../hooks/useEditorFileIO', () => ({
+  useEditorFileIO: () => ({
+    editorContent: '',
+    setEditorContent: vi.fn(),
+    hasUnsavedChanges: false,
+    isSaving: false,
+    saveFile: vi.fn(),
+    lastSaveTime: null,
+  }),
+}));
+
+// Mock ALL remaining internal hooks to prevent any real CodeMirror code execution.
+// EditorPane imports many hooks that use CodeMirror internally — mocking them
+// here stops the dependency cascade before it reaches unmocked CodeMirror APIs.
+vi.mock('../hooks/useEditorDiagnostics', () => ({
+  useEditorDiagnostics: () => ({
+    fetchDiagnosticsRef: { current: vi.fn() },
+    isSemanticLanguage: vi.fn(() => true),
+  }),
+}));
+
+vi.mock('../hooks/useEditorCursor', () => ({
+  useEditorCursor: () => ({
+    selectionInfo: { line: 1, column: 1, selectedText: '', from: 0, to: 0 },
+    setSelectionInfo: vi.fn(),
+    handleCursorUpdate: vi.fn(),
+  }),
+}));
+
+vi.mock('../hooks/useEditorScrollSync', () => ({
+  useEditorScrollSync: () => ({
+    handleScrollUpdate: vi.fn(),
+    cancelPendingFlush: vi.fn(),
+  }),
+}));
+
+vi.mock('../hooks/useEditorSymbols', () => ({
+  useEditorSymbols: () => ({
+    enclosingSymbols: [],
+  }),
+}));
+
+vi.mock('../hooks/useEditorSettings', () => {
+  // Use globalThis to allow tests to control settings via beforeEach
+  const getTabSize = () => {
+    const val = localStorage.getItem('editor:tab-size');
+    if (val && ['2', '4', '8'].includes(val)) return parseInt(val);
+    return 4;
+  };
+  const getLineEnding = () => {
+    const le = (globalThis as any).__mockLineEnding ?? 'LF';
+    return le;
+  };
+  return {
+    useEditorSettings: () => ({
+      editorFontSize: 14,
+      editorTabSize: getTabSize(),
+      editorUsesTabs: false,
+      wordWrapEnabled: false,
+      relativeLineNumbersEnabled: false,
+      minimapEnabled: false,
+      whitespaceRenderingMode: 'hidden',
+      indentManuallySet: false,
+      lineEnding: getLineEnding(),
+      inlayHintsEnabled: false,
+      signatureHelpEnabled: false,
+      wordWrapRef: { current: false },
+      minimapEnabledRef: { current: false },
+      relativeLineNumbersEnabledRef: { current: false },
+      whitespaceRenderingModeRef: { current: 'hidden' },
+      indentManuallySetRef: { current: false },
+      inlayHintsEnabledRef: { current: false },
+      signatureHelpEnabledRef: { current: false },
+      setEditorTabSize: () => {},
+      setEditorUsesTabs: () => {},
+      setIndentManuallySet: () => {},
+      setLineEnding: () => {},
+      onZoomIn: () => {},
+      onZoomOut: () => {},
+      onResetZoom: () => {},
+      onCycleTabSize: () => {},
+      onToggleWordWrap: () => {},
+      onToggleMinimap: () => {},
+      onToggleRelativeLineNumbers: () => {},
+      onCycleWhitespaceRendering: () => 'dots',
+      onToggleInlayHints: () => {},
+      onToggleSignatureHelp: () => {},
+    }),
+  };
+});
+
+vi.mock('../hooks/useEditorKeymaps', () => ({
+  useEditorKeymaps: () => ({
+    semanticHandlerRefs: {
+      handleGoToDefinition: { current: vi.fn() },
+      handleFindAllReferences: { current: vi.fn() },
+    },
+    buildKeymaps: vi.fn(() => ({
+      customKeymap: [],
+      replacePanelKeymap: [],
+      zoomKeymap: [],
+      semanticKeymap: [],
+    })),
+  }),
+}));
+
+vi.mock('../hooks/useEditorEvents', () => ({
+  useEditorEvents: vi.fn(),
+}));
+
+vi.mock('../hooks/useEditorSemantic', () => ({
+  useEditorSemantic: () => ({
+    showGoToWorkspaceSymbol: false,
+    showFindRefs: false,
+    refsSymbolName: null,
+    refsResults: [],
+    refsLoading: false,
+    setShowGoToWorkspaceSymbol: vi.fn(),
+    setShowFindRefs: vi.fn(),
+    handleGoToLine: vi.fn(),
+    handleGoToDefinition: vi.fn(),
+    handleFindAllReferences: vi.fn(),
+    handleSelectReference: vi.fn(),
+    handleSelectWorkspaceSymbol: vi.fn(),
+    bufferStateRef: { current: null },
+    localContentRef: { current: '' },
+  }),
+}));
+
+vi.mock('../hooks/useEditorContextMenu', () => {
+  const React = require('react');
+  return {
+    useEditorContextMenu: (buffer: any, bufferRef: any, viewRef: any, callbacks: any) => {
+      const [menuState, setMenuState] = React.useState<{
+        x: number; y: number; hasSelection: boolean; languageId?: string; buffer?: any;
+      } | null>(null);
+      const [wsRoot, setWsRoot] = React.useState<string | null>(null);
+      React.useEffect(() => {
+        // Read workspace root from apiService mock
+        const apiService = (globalThis as any).__mockApiService;
+        if (apiService) {
+          apiService.getWorkspace().then((ws: any) => {
+            setWsRoot(ws?.workspace_root || null);
+          }).catch(() => setWsRoot(null));
+        }
+      }, []);
+      return {
+        contextMenu: menuState,
+        workspaceRoot: wsRoot,
+        hideContextMenu: () => setMenuState(null),
+        handleEditorContextMenu: (e: any) => {
+          setMenuState({
+            x: e.clientX ?? 100,
+            y: e.clientY ?? 100,
+            hasSelection: false,
+            languageId: 'typescript',
+            buffer: buffer,
+          });
+        },
+        handleCopySelection: () => setMenuState(null),
+        handleRevealInExplorer: () => {
+          if (buffer?.file?.path) {
+            window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', {
+              detail: { path: buffer.file.path },
+            }));
+          }
+          setMenuState(null);
+        },
+        handleCopyRelativePath: () => {
+          if (buffer?.file?.path) {
+            (globalThis as any).__mockCopyToClipboard?.(buffer.file.path);
+          }
+          setMenuState(null);
+        },
+        handleCopyAbsolutePath: () => {
+          const path = (wsRoot || '') + '/' + (buffer?.file?.path || '');
+          (globalThis as any).__mockCopyToClipboard?.(path);
+          setMenuState(null);
+        },
+        handleGoToDefinitionFromMenu: () => setMenuState(null),
+        handleFindAllReferencesFromMenu: () => setMenuState(null),
+      };
+    },
+  };
+});
+
+vi.mock('../hooks/useEditorLSP', () => {
+  // Resolve language from buffer file extension, mimicking real behaviour
+  const resolveLang = (buffer: any) => {
+    if (!buffer || !buffer.file) return { languageId: null, isAutoDetected: false };
+    if (buffer.languageOverride) return { languageId: buffer.languageOverride, isAutoDetected: false };
+    const ext = buffer.file.ext ? buffer.file.ext.replace(/^\./, '') : '';
+    const map: Record<string, string> = {
+      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+      py: 'python', css: 'css', json: 'json', png: null, jpg: null,
+    };
+    const base = map[ext];
+    if (!base) return { languageId: null, isAutoDetected: false };
+    const sub = ext === 'tsx' ? '-jsx' : ext === 'jsx' ? '-jsx' : '';
+    return { languageId: base + sub, isAutoDetected: true };
+  };
+  return {
+    useEditorLSP: (buffer: any, setBufferLanguageOverride: any) => {
+      const langInfo = resolveLang(buffer);
+      return {
+        lspState: 'disconnected',
+        lspLanguage: null,
+        languageId: langInfo.languageId,
+        isAutoDetected: langInfo.isAutoDetected,
+        languageInfo: langInfo,
+        handleLanguageChange: (languageId: string | null) => {
+          if (buffer?.id) setBufferLanguageOverride?.(buffer.id, languageId);
+        },
+      };
+    },
+  };
+});
+
+vi.mock('../hooks/useEditorFileType', () => ({
+  useEditorFileType: () => ({
+    isImage: false,
+    isAudio: false,
+    isVideo: false,
+    isBinary: false,
+    isSvgFile: false,
+    isHtmlFile: false,
+    isSvgPreviewBuffer: false,
+    isHtmlPreviewBuffer: false,
+    isMarkdownFile: false,
+  }),
+}));
+
+vi.mock('../hooks/useEditorUpdate', () => ({
+  useEditorUpdate: () => ({
+    localContentRef: { current: '' },
+    onUpdate: vi.fn(),
+  }),
+}));
+
+vi.mock('../hooks/useLivePreview', () => ({
+  useLivePreview: () => ({
+    openLivePreview: vi.fn(),
+    openLivePreviewInSplit: vi.fn(),
+  }),
+}));
+
+vi.mock('../hooks/useEditorViewInit', () => ({
+  useEditorViewInit: vi.fn(),
+}));
+
+vi.mock('./useEditorReconfigure', () => ({
+  useEditorReconfigure: vi.fn(),
+}));
+
+vi.mock('./useEditorToolbarActions', () => ({
+  useEditorToolbarActions: () => ({
+    rightActions: [],
+  }),
+}));
+
+// Mock additional components used by EditorPane.
+// Only mock components that either: (a) have CodeMirror dependencies, or
+// (b) need specific DOM output that the real component doesn't provide.
+// Mock EditorContextMenu to render predictable DOM for tests
+// (real component uses @sprout/ui ContextMenu which transforms DOM)
+vi.mock('./EditorContextMenu', () => {
+  const React = require('react');
+  const MockEditorContextMenu = (props: any) => {
+    const ctx = props.contextMenu || {};
+    const menu = ctx.contextMenu;
+    if (!menu) return null;
+
+    const items: any[] = [];
+    items.push(React.createElement('button', { key: 'reveal', className: 'context-menu-item', type: 'button', onClick: ctx.handleRevealInExplorer }, 'Reveal in Explorer'));
+    items.push(React.createElement('button', { key: 'copy-rel', className: 'context-menu-item', type: 'button', onClick: ctx.handleCopyRelativePath }, 'Copy relative path'));
+    if (ctx.workspaceRoot) {
+      items.push(React.createElement('button', { key: 'copy-abs', className: 'context-menu-item', type: 'button', onClick: ctx.handleCopyAbsolutePath }, 'Copy absolute path'));
+    }
+
+    return React.createElement('div', {
+      className: 'context-menu',
+      style: { position: 'fixed', left: menu.x, top: menu.y },
+    }, items);
+  };
+  return { default: MockEditorContextMenu };
+});
+vi.mock('./ImageViewer', () => ({
+  default: (props: any) => (
+    <div data-testid="image-viewer" className="image-viewer">
+      <span className="image-viewer-empty-text">Image Viewer</span>
+    </div>
+  ),
+}));
+vi.mock('./LivePreview', () => ({ default: () => null }));
+vi.mock('./MarkdownPreview', () => ({ default: () => null }));
+vi.mock('./GoToWorkspaceSymbolOverlay', () => ({ default: () => null }));
+vi.mock('./FindAllReferencesOverlay', () => ({ default: () => null }));
 vi.mock('./GoToSymbolOverlay', () => {
   const MockComponent = () => null;
   MockComponent.getEnclosingSymbols = () => [];
-  return MockComponent;
-});
-vi.mock('./LanguageSwitcher', () => {
-  return function MockLanguageSwitcher(props: any) {
-    return (
-      <button
-        data-testid="language-switcher"
-        data-language-id={props.currentLanguageId ?? ''}
-        data-auto-detected={props.isAutoDetected ? 'true' : 'false'}
-        onClick={() => props.onLanguageChange('python')}
-      >
-        MockLanguageSwitcher
-      </button>
-    );
-  };
+  return { default: MockComponent };
 });
 
 // Must mock languageRegistry before EditorPane imports it — it pulls in
@@ -206,6 +542,15 @@ vi.mock('@codemirror/view', () => ({
     static theme = (spec: any) => spec;
     static updateListener: { of: (fn: any) => any } = { of: (fn: any) => fn };
     static baseTheme = (spec: any) => spec;
+    static domEventHandlers = (handlers: any) => handlers;
+    static decorator = (fn: any) => fn;
+    static clickAddsNewSelection = vi.fn();
+    static contentAttributes = vi.fn();
+    static editorAttributes = vi.fn();
+    static inputHandler = vi.fn();
+    static perLineTextDirection = vi.fn();
+    static exceptionSink = vi.fn();
+    static styleModule = vi.fn();
   },
   ViewPlugin: { fromClass: (cls: any) => cls },
   keymap: { of: (bindings: any[]) => bindings },
@@ -225,6 +570,23 @@ vi.mock('@codemirror/view', () => ({
     none: [],
     widget: vi.fn(),
   },
+  WidgetType: class MockWidgetType {
+    toDOM() { return document.createElement('span'); }
+    eq() { return false; }
+    ignoreEvent() { return true; }
+  },
+  hoverTooltip: vi.fn(() => []),
+  GutterMarker: class MockGutterMarker {
+    toDOM() { return document.createElement('div'); }
+    eq() { return false; }
+    compare() { return false; }
+    elementClass: string = '';
+  },
+  gutter: vi.fn(() => []),
+  gutters: vi.fn(() => []),
+  logException: vi.fn(),
+  runScopeHandlers: vi.fn(() => false),
+  Direction: { LTR: 0, RTL: 1 },
 }));
 
 vi.mock('@codemirror/state', () => {
@@ -252,6 +614,29 @@ vi.mock('@codemirror/state', () => {
         of: vi.fn((v: any) => v),
       },
     },
+    Annotation: {
+      define: vi.fn(() => ({ of: vi.fn((v: any) => v) })),
+    },
+    StateEffect: {
+      define: vi.fn(() => {
+        const ctor = (value: any) => ({ value, is: vi.fn(() => false) });
+        ctor.map = vi.fn();
+        ctor.reconfigure = vi.fn();
+        ctor.appendConfig = vi.fn();
+        return ctor;
+      }),
+    },
+    StateField: {
+      define: vi.fn((spec: any) => spec),
+    },
+    Prec: {
+      high: (ext: any) => ext,
+      highest: (ext: any) => ext,
+      low: (ext: any) => ext,
+      lowest: (ext: any) => ext,
+      default: (ext: any) => ext,
+    },
+    text: vi.fn((from: any, to: any) => ({ from, to })),
   };
 });
 
@@ -437,6 +822,12 @@ describe('EditorPane', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
+    // ── Global state for context menu mock ──
+    (globalThis as any).__mockCopyToClipboard = copyToClipboard;
+    (globalThis as any).__mockApiService = apiServiceMock;
+    (globalThis as any).__mockLineEnding = 'LF';
+    localStorage.removeItem('editor:tab-size');
+
     // ── CodeMirror mock setup (resetMocks clears before each test) ──
     EditorState.create.mockImplementation(({ doc }) => createMockState(typeof doc === 'string' ? doc : ''));
     (Compartment as vi.Mock).mockImplementation(() => ({
@@ -456,6 +847,8 @@ describe('EditorPane', () => {
       getGitDiff: vi.fn().mockResolvedValue({ diff: '' }),
     };
     (ApiService.getInstance as vi.Mock).mockReturnValue(apiServiceMock);
+    // Update global ref so context menu mock can read workspace root
+    (globalThis as any).__mockApiService = apiServiceMock;
 
     mockUseEditorManager.mockReturnValue({ ...defaultMockEditorManager });
 
@@ -529,7 +922,7 @@ describe('EditorPane', () => {
       const items = getMenuItems();
       const texts = items.map((el) => el.textContent?.trim());
 
-      expect(texts).toContain('Reveal in File Explorer');
+      expect(texts).toContain('Reveal in Explorer');
       expect(texts).toContain('Copy relative path');
       expect(texts).toContain('Copy absolute path');
     });
@@ -662,7 +1055,7 @@ describe('EditorPane', () => {
 
       const texts = getMenuItems().map((el) => el.textContent?.trim());
 
-      expect(texts).toContain('Reveal in File Explorer');
+      expect(texts).toContain('Reveal in Explorer');
       expect(texts).toContain('Copy relative path');
       expect(texts).not.toContain('Copy absolute path');
     });
@@ -1073,6 +1466,8 @@ describe('EditorPane', () => {
     });
 
     it('shows "UTF-8 · CRLF" when file content uses Windows line endings', async () => {
+      // Set mock line ending to CRLF
+      (globalThis as any).__mockLineEnding = 'CRLF';
       // readFileWithConsent returns content with CRLF line endings.
       // loadFile() calls detectLineEnding() on the API response text,
       // so the mock response determines the detected line ending.
@@ -1095,6 +1490,8 @@ describe('EditorPane', () => {
     });
 
     it('shows "UTF-8 · Mixed" when file content has both LF and CRLF', async () => {
+      // Set mock line ending to Mixed
+      (globalThis as any).__mockLineEnding = 'Mixed';
       // readFileWithConsent returns content with mixed line endings.
       (readFileWithConsent as vi.Mock).mockResolvedValue({
         ok: true,

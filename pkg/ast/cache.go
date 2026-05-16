@@ -19,8 +19,8 @@ import (
 // GrammarBlob wraps a compiled Language with cache metadata.
 //
 // A GrammarBlob is immutable after creation (except for internal lazily-built
-// maps inside the Language itself).  Create one with LoadGrammar or manually
-// after calling EstimateLanguageSize.
+// maps inside the Language itself).  Create one manually after calling
+// EstimateLanguageSize, or use PreloadCache to populate the default cache.
 type GrammarBlob struct {
 	Language *gotreesitter.Language
 	Name     string
@@ -116,8 +116,8 @@ func (c *MemoryCache) Invalidate(name string) {
 // InvalidateAll implements GrammarCache.InvalidateAll for MemoryCache.
 func (c *MemoryCache) InvalidateAll() {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	clear(c.data)
-	c.mu.Unlock()
 }
 
 // Stats implements GrammarCache.Stats for MemoryCache.
@@ -266,13 +266,15 @@ func SetDefaultCache(c GrammarCache) {
 }
 
 // PreloadCache loads all SupportedLanguages grammars into the default cache.
-// Returns the first error encountered, or nil on success.
-func PreloadCache() error {
+// Unavailable grammars are silently skipped. Returns the number of grammars
+// successfully loaded.
+func PreloadCache() int {
 	cache := DefaultCache()
+	loaded := 0
 	for lang := range SupportedLanguages {
 		entry := grammars.DetectLanguageByName(lang)
 		if entry == nil || entry.Language == nil {
-			continue // silently skip unavailable grammars
+			continue
 		}
 		l := entry.Language()
 		if l == nil {
@@ -284,7 +286,8 @@ func PreloadCache() error {
 			LoadedAt: time.Now(),
 			Size:     EstimateLanguageSize(l),
 		})
+		loaded++
 	}
-	return nil // no error to report; missing grammars are skipped silently
+	return loaded
 }
 

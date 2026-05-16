@@ -21,13 +21,11 @@ func TestChangeTrackingE2E(t *testing.T) {
 	oldDir, _ := os.Getwd()
 
 	// Set environment variables for testing
-	os.Setenv("LEDIT_TEST_ENV", "1")
-	os.Setenv("OPENROUTER_API_KEY", "test-key-for-testing")
+	t.Setenv("LEDIT_TEST_ENV", "1")
+	t.Setenv("OPENROUTER_API_KEY", "test-key-for-testing")
 
-	// Restore environment and directory in all cases
+	// Restore directory in all cases
 	defer func() {
-		os.Unsetenv("LEDIT_TEST_ENV")
-		os.Unsetenv("OPENROUTER_API_KEY")
 		if err := os.Chdir(oldDir); err != nil {
 			t.Logf("Warning: Failed to restore original directory: %v", err)
 		}

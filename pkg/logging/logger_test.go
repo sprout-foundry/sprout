@@ -37,11 +37,7 @@ func captureOutput(f func()) (stdout, stderr string) {
 func setupTestLogger(t *testing.T) (*Logger, string) {
 	t.Helper()
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	t.Cleanup(func() {
-		os.Setenv("HOME", originalHome)
-	})
-	os.Setenv("HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
 
 	logger, err := NewLogger()
 	if err != nil {
@@ -70,11 +66,7 @@ func TestNewLogger(t *testing.T) {
 
 func TestLoggerInit(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	t.Cleanup(func() {
-		os.Setenv("HOME", originalHome)
-	})
-	os.Setenv("HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
 
 	logger := &Logger{}
 	err := logger.init()
@@ -160,11 +152,7 @@ func TestLoggerLevels(t *testing.T) {
 
 func TestLoggerClose(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	t.Cleanup(func() {
-		os.Setenv("HOME", originalHome)
-	})
-	os.Setenv("HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
 
 	logger, err := NewLogger()
 	if err != nil {
@@ -199,11 +187,7 @@ func TestLoggerWithNilFile(t *testing.T) {
 
 func TestWriteLocalCopy(t *testing.T) {
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	t.Cleanup(func() {
-		os.Setenv("HOME", originalHome)
-	})
-	os.Setenv("HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
 
 	// Create the .sprout directory first (WriteLocalCopy doesn't create it)
 	if err := os.MkdirAll(filepath.Join(tmpDir, ".sprout"), 0755); err != nil {
@@ -225,11 +209,7 @@ func TestWriteLocalCopy(t *testing.T) {
 }
 
 func TestGetLogPath(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	t.Cleanup(func() {
-		os.Setenv("HOME", originalHome)
-	})
-	os.Setenv("HOME", "/home/testuser")
+	t.Setenv("HOME", "/home/testuser")
 
 	path := GetLogPath()
 	expected := filepath.Join("/home/testuser", ".sprout", "sprout.log")
@@ -289,11 +269,7 @@ func TestLoggerFormatSpecifiers(t *testing.T) {
 func setupTestHome(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	t.Cleanup(func() {
-		os.Setenv("HOME", originalHome)
-	})
-	os.Setenv("HOME", tmpDir)
+	t.Setenv("HOME", tmpDir)
 	return tmpDir
 }
 
@@ -428,12 +404,6 @@ func TestLogRequestPayloadOnError(t *testing.T) {
 func TestWriteLocalCopyRequest(t *testing.T) {
 	_ = setupTestHome(t)
 
-	// LEDIT_COPY_LOGS_TO_CWD should not be set by default
-	originalEnv := os.Getenv("LEDIT_COPY_LOGS_TO_CWD")
-	t.Cleanup(func() {
-		os.Setenv("LEDIT_COPY_LOGS_TO_CWD", originalEnv)
-	})
-
 	// Create a test CWD
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -443,7 +413,7 @@ func TestWriteLocalCopyRequest(t *testing.T) {
 	data := []byte("test request data")
 
 	// Without env var, should not write
-	os.Unsetenv("LEDIT_COPY_LOGS_TO_CWD")
+	t.Setenv("LEDIT_COPY_LOGS_TO_CWD", "")
 	WriteLocalCopyRequest("test_req.json", data)
 
 	testPath := filepath.Join(cwd, "test_req.json")
@@ -453,7 +423,7 @@ func TestWriteLocalCopyRequest(t *testing.T) {
 	}
 
 	// With env var set to 1, should write to CWD
-	os.Setenv("LEDIT_COPY_LOGS_TO_CWD", "1")
+	t.Setenv("LEDIT_COPY_LOGS_TO_CWD", "1")
 	WriteLocalCopyRequest("test_req2.json", data)
 
 	testPath2 := filepath.Join(cwd, "test_req2.json")

@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"os"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -10,15 +9,7 @@ import (
 // TestNewAgent tests agent creation
 func TestNewAgent(t *testing.T) {
 	// Set a test API key to avoid provider issues
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -55,15 +46,7 @@ func TestNewAgent(t *testing.T) {
 // TestNewAgentWithModel tests agent creation with specific model
 func TestNewAgentWithModel(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgentWithModel("deepseek/deepseek-chat-v3.1:free")
 	if err != nil {
@@ -83,15 +66,7 @@ func TestNewAgentWithModel(t *testing.T) {
 // TestBasicGetters tests all the basic getter methods
 func TestBasicGetters(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -152,15 +127,7 @@ func TestResolveConfiguredSystemPrompt(t *testing.T) {
 // TestAgentStructFields tests that all expected struct fields are present
 func TestAgentStructFields(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {

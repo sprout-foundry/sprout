@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -308,25 +307,10 @@ func TestGetSearchMaxBytes(t *testing.T) {
 			sproutKey := "SPROUT_SEARCH_MAX_BYTES"
 			leditKey := "LEDIT_SEARCH_MAX_BYTES"
 
-			oldSprout := os.Getenv(sproutKey)
-			oldLedit := os.Getenv(leditKey)
-			defer func() {
-				if oldSprout == "" {
-					os.Unsetenv(sproutKey)
-				} else {
-					os.Setenv(sproutKey, oldSprout)
-				}
-				if oldLedit == "" {
-					os.Unsetenv(leditKey)
-				} else {
-					os.Setenv(leditKey, oldLedit)
-				}
-			}()
-
-			os.Unsetenv(sproutKey)
-			os.Unsetenv(leditKey)
+			t.Setenv(sproutKey, "")
+			t.Setenv(leditKey, "")
 			if tt.envValue != "" {
-				os.Setenv(leditKey, tt.envValue)
+				t.Setenv(leditKey, tt.envValue)
 			}
 
 			if got := getSearchMaxBytes(); got != tt.want {

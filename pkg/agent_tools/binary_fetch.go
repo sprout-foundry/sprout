@@ -124,19 +124,23 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 		return nil, fmt.Errorf("create temp file for PDF: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	cleanup := func() { os.Remove(tmpPath) }
+	cleanup := func() {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+	}
 	defer cleanup()
 
 	// Restrict permissions to owner-only
 	if chmodErr := tmpFile.Chmod(0600); chmodErr != nil {
-		tmpFile.Close()
 		return nil, fmt.Errorf("set temp file permissions: %w", chmodErr)
 	}
 
 	if _, writeErr := tmpFile.Write(data); writeErr != nil {
-		tmpFile.Close()
 		return nil, fmt.Errorf("write PDF to temp file: %w", writeErr)
 	}
+
+	// Close explicitly before processing to flush data to disk for the subprocess.
+	// The deferred cleanup will call Close() again (harmless) and remove the file.
 	tmpFile.Close()
 
 	result, err := ProcessPDFForMultimodal(tmpPath)

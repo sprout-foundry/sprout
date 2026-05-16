@@ -166,6 +166,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		ctx.LastSeenAt = time.Now()
 		if ctx.Terminal == nil {
 			ctx.Terminal = NewTerminalManager(ctx.WorkspaceRoot)
+			ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 		}
 		if ctx.FileConsents == nil {
 			ctx.FileConsents = newFileConsentManager()
@@ -198,6 +199,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		if ctx.Terminal == nil {
 			ctx.Terminal = NewTerminalManager(ctx.WorkspaceRoot)
 			ws.terminalManager = ctx.Terminal
+			ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 		}
 		if ctx.FileConsents == nil {
 			ctx.FileConsents = newFileConsentManager()
@@ -206,6 +208,7 @@ func (ws *ReactWebServer) getOrCreateClientContextLocked(clientID string) *webCl
 		ctx.ensureDefaultChatSession()
 	} else {
 		ctx = newWebClientContext(ws.workspaceRoot, ws.sshHostAlias, ws.sshSessionKey, ws.sshLauncherURL, ws.sshHomePath)
+		ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 	}
 
 	ws.clientContexts[clientID] = ctx
@@ -221,6 +224,29 @@ func (ws *ReactWebServer) getClientContextForRequest(r *http.Request) *webClient
 		}
 	}
 	return ctx
+}
+
+// startTerminalCleanupIfNeeded starts the idle-session cleanup worker for a
+// per-client TerminalManager. The server-level TM gets its worker during
+// Start(); per-client TMs created later (e.g. via setClientWorkspaceRoot or
+// new non-default client contexts) need their own worker to prevent PTY
+// process leaks from idle hidden sessions.
+//
+// Safe to call while holding ws.mutex — reads ws.serverCtx via atomic.Value.
+func (ws *ReactWebServer) startTerminalCleanupIfNeeded(tm *TerminalManager) {
+	if tm == nil {
+		return
+	}
+	val := ws.serverCtx.Load()
+	if val == nil {
+		return
+	}
+	ctx, ok := val.(context.Context)
+	if !ok || ctx == nil {
+		return
+	}
+	// Same intervals as the server-level worker: every 5 min, 30-min timeout, 2-hr for background.
+	tm.StartCleanupWorker(ctx, 5*time.Minute, 30*time.Minute, 2*time.Hour)
 }
 
 func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) {
@@ -338,6 +364,7 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ctx.SSHLauncherURL = ""
 	ctx.SSHHomePath = ""
 	ctx.Terminal = NewTerminalManager(workspaceRoot)
+	ws.startTerminalCleanupIfNeeded(ctx.Terminal)
 	ctx.Agent = nil
 	ctx.AgentState = emptyAgentStateSnapshot()
 	ctx.CurrentSessionID = ""

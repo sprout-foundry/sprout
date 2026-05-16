@@ -3,22 +3,18 @@
 import { act, createElement, createRef } from 'react';
 import { createRoot } from 'react-dom/client';
 
-vi.mock('./TodoPanel', () => () => <div data-testid="todo-panel" />);
-vi.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
+vi.mock('./TodoPanel', () => ({ default: (props) => props.children }))
+;
+vi.mock('./RevisionListPanel', () => ({ default: (props) => props.children }));
 vi.mock('../services/api', () => ({
   // No longer used by ContextPanel — kept for any transitive imports
 }));
-vi.mock('../contexts/NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
+}));
+
+import ContextPanel from './ContextPanel';
 
 const MINIMAL_CHAT_PROPS = {
   context: 'chat',
@@ -72,7 +68,6 @@ async function flushPromises() {
 }
 
 async function renderPanel(props: Record<string, unknown>, ref?: React.RefObject<unknown>) {
-  const ContextPanel = require('./ContextPanel').default;
   await act(async () => {
     root.render(createElement(ContextPanel, { ...props, ref }));
   });

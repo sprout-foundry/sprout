@@ -377,9 +377,7 @@ function useOnboarding(): UseOnboardingReturn {
   }, [apiService]);
 
   const onInstallWsl = useCallback(async () => {
-    const desktopBridge = (
-      window as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<Record<string, unknown>>>>
-    ).sproutDesktop;
+    const desktopBridge = window.sproutDesktop;
     if (!desktopBridge?.installWsl) {
       setOnboarding((prev) => ({
         ...prev,
@@ -387,15 +385,13 @@ function useOnboarding(): UseOnboardingReturn {
       }));
       return;
     }
-    const result = await desktopBridge.installWsl();
+    const result = (await desktopBridge.installWsl()) as Record<string, unknown> | null;
     const msg = result?.message != null ? String(result.message) : null;
     setOnboarding((prev) => ({ ...prev, platformActionMessage: msg || 'Started WSL setup.' }));
   }, []);
 
   const onInstallGitBash = useCallback(async () => {
-    const desktopBridge = (
-      window as unknown as Record<string, Record<string, (...args: unknown[]) => Promise<Record<string, unknown>>>>
-    ).sproutDesktop;
+    const desktopBridge = window.sproutDesktop;
     if (!desktopBridge?.installGitForWindows) {
       setOnboarding((prev) => ({
         ...prev,
@@ -403,7 +399,7 @@ function useOnboarding(): UseOnboardingReturn {
       }));
       return;
     }
-    const result = await desktopBridge.installGitForWindows();
+    const result = (await desktopBridge.installGitForWindows()) as Record<string, unknown> | null;
     const msg = result?.message != null ? String(result.message) : null;
     setOnboarding((prev) => ({
       ...prev,

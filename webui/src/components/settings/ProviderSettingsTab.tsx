@@ -116,11 +116,10 @@ export default function ProviderSettingsTab({
 
       <div className="crud-list">
         {providerEntries.map(([name, cfg]) => {
-          const p = cfg as unknown as Record<string, unknown>;
           return (
             <div key={name} className="crud-item">
               <span className="crud-item-name">{name}</span>
-              <span className="crud-item-detail">{(p.endpoint as string) || (p.api_base as string) || ''}</span>
+              <span className="crud-item-detail">{cfg.endpoint || ''}</span>
               <button
                 type="button"
                 className="crud-btn"
@@ -128,20 +127,15 @@ export default function ProviderSettingsTab({
                 onClick={() => {
                   setEditingProvider({ mode: 'edit', originalName: name });
                   setProviderName(name);
-                  setProviderApiBase((p.endpoint as string) || (p.api_base as string) || '');
-                  setProviderModelName(
-                    (p.model_name as string) ||
-                      (Array.isArray(p.models) && (p.models as unknown[]).length > 0
-                        ? String((p.models as unknown[])[0])
-                        : ''),
-                  );
-                  setProviderContextSize((p.context_size as number) || 32768);
-                  setProviderEnvVar((p.env_var as string) || '');
-                  setProviderSupportsVision(!!p.supports_vision);
-                  setProviderVisionModel((p.vision_model as string) || '');
-                  const mcs = p.model_context_sizes;
+                  setProviderApiBase(cfg.endpoint || '');
+                  setProviderModelName(cfg.model_name || '');
+                  setProviderContextSize(cfg.context_size || 32768);
+                  setProviderEnvVar(cfg.env_var || '');
+                  setProviderSupportsVision(!!cfg.supports_vision);
+                  setProviderVisionModel(cfg.vision_model || '');
+                  const mcs = cfg.model_context_sizes;
                   if (mcs && typeof mcs === 'object') {
-                    const pairs = Object.entries(mcs as Record<string, unknown>)
+                    const pairs = Object.entries(mcs)
                       .map(([model, size]) => `${model}:${size}`)
                       .join(',');
                     setProviderModelContextSizes(pairs);

@@ -37,10 +37,10 @@ export default function SubagentSettingsTab({
   api,
 }: SubagentSettingsTabProps) {
   const currentSubProvider = String(
-    getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_provider') || '',
+    getNestedValue(settings, 'subagent_provider') || '',
   );
   const currentSubModel = String(
-    getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_model') || '',
+    getNestedValue(settings, 'subagent_model') || '',
   );
 
   const selectedProvider = subagentProviders.find((p) => p.id === currentSubProvider);
@@ -93,7 +93,7 @@ export default function SubagentSettingsTab({
         <>
           {renderToggle('subagent_parallel_enabled', 'Enable parallel subagent execution')}
 
-          {getNestedValue(settings as unknown as Record<string, unknown>, 'subagent_parallel_enabled') && (
+          {getNestedValue(settings, 'subagent_parallel_enabled') && (
             <div style={{ marginTop: 'var(--space-3)' }}>
               {renderNumberInput('subagent_max_parallel', 'Maximum parallel subagents', 1, 10)}
               <div className="config-help" style={{ marginTop: 'var(--space-2)' }}>

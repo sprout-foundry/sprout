@@ -183,7 +183,7 @@ export function useSettingsState(
       let changed = false;
 
       Object.entries(prev).forEach(([key, draftValue]) => {
-        const persistedValue = String(getNestedValue(settings as unknown as Record<string, unknown>, key) || '');
+        const persistedValue = String(getNestedValue(settings, key) || '');
         if (draftValue === persistedValue) {
           if (next === prev) next = { ...prev };
           delete next[key];

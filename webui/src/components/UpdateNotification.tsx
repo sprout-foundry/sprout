@@ -19,35 +19,11 @@ interface NotificationEvent {
   duration?: number;
 }
 
-interface DesktopApiResponse<T = unknown> {
-  ok: boolean;
-  result?: T;
-  error?: string;
-}
+// Update-specific types are declared in types/desktop-api.d.ts alongside SproutDesktopAPI.
 
 interface UpdateApiResponse {
   pending?: boolean;
   willInstallOnQuit?: boolean;
-}
-
-// Extend Window interface to include desktop API
-declare global {
-  interface Window {
-    sproutDesktop?: {
-      // Auto-update API
-      checkForUpdates: () => Promise<DesktopApiResponse<CheckResult>>;
-      installUpdate: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
-      deferUpdate: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
-      isUpdatePending: () => Promise<UpdateApiResponse>;
-      cancelPendingInstall: () => Promise<DesktopApiResponse<UpdateApiResponse>>;
-      // Auto-update event listeners
-      onUpdateError: (callback: (data: NotificationEvent) => void) => () => void;
-      onUpdateAvailable: (callback: (data: NotificationEvent) => void) => () => void;
-      onUpdateDownloadProgress: (callback: (progress: { percent?: number }) => void) => () => void;
-      onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void;
-      onTriggerUpdateCheck: (callback: () => void) => () => void;
-    };
-  }
 }
 
 /**

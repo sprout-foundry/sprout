@@ -85,7 +85,7 @@ export function useMessageSending({
 
         // Detect no-provider errors and trigger onboarding reopen.
         const errorCode =
-          error instanceof Error ? ((error as unknown as Record<string, unknown>).code as string) : undefined;
+          error instanceof Error && 'code' in error ? String((error as Error & { code: string }).code) : undefined;
         if (errorCode === 'no_provider' && onRequestProviderSetup) {
           onRequestProviderSetup();
           setState((prev) => ({

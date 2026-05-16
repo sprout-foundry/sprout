@@ -25,6 +25,8 @@ require (
 
 require github.com/sprout-foundry/seed v0.2.1
 
+require github.com/odvcencio/gotreesitter v0.16.0
+
 require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect

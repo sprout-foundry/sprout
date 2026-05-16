@@ -750,3 +750,293 @@ func TestIsCheckpointSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestMaskConsumedToolResults_Basic(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Build messages with enough tool results to exceed observationMaskKeepLast (5).
+	// We need 6+ tool results so at least 1 gets masked.
+	messages := []api.Message{}
+	for i := 0; i < 6; i++ {
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: fmt.Sprintf("call-%d", i)}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: fmt.Sprintf("call-%d", i),
+			Content:    "Tool call result for read_file: big.go\n" + largeContent,
+		})
+	}
+	// Final assistant message that consumes all tool results
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "I've read the files and will proceed.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// The first tool result (index 1) should be masked (consumed, large, not in last N)
+	if len(optimized) != len(messages) {
+		t.Fatalf("expected same message count, got %d -> %d", len(messages), len(optimized))
+	}
+
+	if !strings.Contains(optimized[1].Content, "[PREVIOUS RESULT:") {
+		t.Errorf("expected first tool result to be masked, got: %s", optimized[1].Content)
+	}
+
+	// Verify placeholder contains tool name
+	if !strings.Contains(optimized[1].Content, "read_file") {
+		t.Errorf("expected placeholder to contain tool name 'read_file', got: %s", optimized[1].Content)
+	}
+
+	// Verify the assistant response at end is unchanged
+	if optimized[len(optimized)-1].Content != "I've read the files and will proceed." {
+		t.Errorf("expected assistant message unchanged, got: %s", optimized[len(optimized)-1].Content)
+	}
+}
+
+func TestMaskConsumedToolResults_SmallResultNotMasked(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	smallContent := "short result"
+
+	messages := []api.Message{
+		{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "call-1"}}},
+		{Role: "tool", ToolCallID: "call-1", Content: "Tool call result for read_file: small.go\n" + smallContent},
+		{Role: "assistant", Content: "I've read the file."},
+	}
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// The tool result should NOT be masked (too small)
+	if len(optimized) != len(messages) {
+		t.Fatalf("expected same message count, got %d -> %d", len(messages), len(optimized))
+	}
+
+	if strings.Contains(optimized[1].Content, "[PREVIOUS RESULT:") {
+		t.Errorf("expected small tool result NOT to be masked, got: %s", optimized[1].Content)
+	}
+
+	// Content should be preserved
+	if !strings.Contains(optimized[1].Content, smallContent) {
+		t.Errorf("expected small content to be preserved, got: %s", optimized[1].Content)
+	}
+}
+
+func TestMaskConsumedToolResults_LastNKept(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Build messages with many tool results followed by an assistant message.
+	// Layout: assistant(tool_call) + tool_result x 10, then assistant(response)
+	messages := []api.Message{}
+	for i := 0; i < 10; i++ {
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: fmt.Sprintf("call-%d", i)}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: fmt.Sprintf("call-%d", i),
+			Content:    "Tool call result for read_file: file" + fmt.Sprintf("%d", i) + ".go\n" + largeContent,
+		})
+	}
+	// Final assistant message that consumes all tool results
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "I've processed all the files.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// Count how many tool results are masked vs unmasked
+	maskedCount := 0
+	unmaskedCount := 0
+	for i, msg := range optimized {
+		if msg.Role == "tool" {
+			if strings.Contains(msg.Content, "[PREVIOUS RESULT:") {
+				maskedCount++
+			} else {
+				unmaskedCount++
+			}
+			// Verify that unmasked tool results preserve original content
+			if unmaskedCount > 0 && !strings.Contains(msg.Content, largeContent) {
+				t.Errorf("unmasked tool result at index %d should preserve original content", i)
+			}
+		}
+	}
+
+	// We have 10 tool results, keep last 5 unmasked → at most 5 should be masked
+	// (some may not be masked if they're small, but all are 4000+ chars so all eligible)
+	if unmaskedCount < observationMaskKeepLast {
+		t.Errorf("expected at least %d unmasked tool results, got %d", observationMaskKeepLast, unmaskedCount)
+	}
+
+	if maskedCount == 0 {
+		t.Error("expected some tool results to be masked, got 0")
+	}
+
+	t.Logf("masked: %d, unmasked: %d", maskedCount, unmaskedCount)
+}
+
+func TestMaskConsumedToolResults_NoAssistantAfter(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Tool result with no assistant message after it (model hasn't seen it yet)
+	messages := []api.Message{
+		{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "call-1"}}},
+		{Role: "tool", ToolCallID: "call-1", Content: "Tool call result for read_file: big.go\n" + largeContent},
+	}
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// The tool result should NOT be masked (no assistant after it = not consumed)
+	if len(optimized) != len(messages) {
+		t.Fatalf("expected same message count, got %d -> %d", len(messages), len(optimized))
+	}
+
+	if strings.Contains(optimized[1].Content, "[PREVIOUS RESULT:") {
+		t.Errorf("expected tool result without assistant after NOT to be masked, got: %s", optimized[1].Content)
+	}
+
+	// Content should be preserved
+	if !strings.Contains(optimized[1].Content, largeContent) {
+		t.Errorf("expected content to be preserved, got: %s", optimized[1].Content)
+	}
+}
+
+func TestMaskConsumedToolResults_PlaceholderFormat(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Build 6 tool results so the first one gets masked (exceeds keep-last-5)
+	messages := []api.Message{}
+	for i := 0; i < 6; i++ {
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: fmt.Sprintf("call-%d", i)}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: fmt.Sprintf("call-%d", i),
+			Content:    "Tool call result for read_file: big.go\n" + largeContent,
+		})
+	}
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "I've read the files and will proceed.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	placeholder := optimized[1].Content
+
+	// Verify format: [PREVIOUS RESULT: <tool_name>, <N> chars, <N> lines]
+	if !strings.HasPrefix(placeholder, "[PREVIOUS RESULT:") {
+		t.Errorf("expected placeholder to start with '[PREVIOUS RESULT:', got: %s", placeholder)
+	}
+	if !strings.HasSuffix(placeholder, " lines]") {
+		t.Errorf("expected placeholder to end with ' lines]', got: %s", placeholder)
+	}
+	if !strings.Contains(placeholder, "read_file") {
+		t.Errorf("expected placeholder to contain tool name 'read_file', got: %s", placeholder)
+	}
+	if !strings.Contains(placeholder, " chars,") {
+		t.Errorf("expected placeholder to contain char count, got: %s", placeholder)
+	}
+
+	// Verify the placeholder is much shorter than the original
+	originalLen := len(messages[1].Content)
+	placeholderLen := len(placeholder)
+	if placeholderLen >= originalLen {
+		t.Errorf("placeholder (%d chars) should be shorter than original (%d chars)", placeholderLen, originalLen)
+	}
+
+	t.Logf("original: %d chars, placeholder: %d chars — '%s'", originalLen, placeholderLen, placeholder)
+}
+
+func TestMaskConsumedToolResults_ToolCallIDFallback(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Build 6 tool results without "Tool call result for" prefix so first one gets masked
+	messages := []api.Message{}
+	for i := 0; i < 6; i++ {
+		callID := fmt.Sprintf("call-custom-%d", i)
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: callID}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: callID,
+			Content:    largeContent,
+		})
+	}
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "I've processed the results.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// The first tool result should be masked with ToolCallID as the name
+	if !strings.Contains(optimized[1].Content, "[PREVIOUS RESULT:") {
+		t.Errorf("expected tool result to be masked, got: %s", optimized[1].Content)
+	}
+
+	// Should fall back to ToolCallID since no "Tool call result for" prefix
+	if !strings.Contains(optimized[1].Content, "call-custom-0") {
+		t.Errorf("expected placeholder to contain ToolCallID, got: %s", optimized[1].Content)
+	}
+}
+
+func TestMaskConsumedToolResults_PreservesToolCallID(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Build 6 tool results so the first one gets masked
+	messages := []api.Message{}
+	for i := 0; i < 6; i++ {
+		callID := fmt.Sprintf("call-preserve-%d", i)
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: callID}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: callID,
+			Content:    "Tool call result for read_file: big.go\n" + largeContent,
+		})
+	}
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "I've read the files.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// Verify ToolCallID is preserved after masking
+	if optimized[1].ToolCallID != "call-preserve-0" {
+		t.Errorf("expected ToolCallID to be preserved, got: %s", optimized[1].ToolCallID)
+	}
+
+	// Verify role is preserved
+	if optimized[1].Role != "tool" {
+		t.Errorf("expected role to be preserved as 'tool', got: %s", optimized[1].Role)
+	}
+}

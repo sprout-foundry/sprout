@@ -1040,3 +1040,128 @@ func TestMaskConsumedToolResults_PreservesToolCallID(t *testing.T) {
 		t.Errorf("expected role to be preserved as 'tool', got: %s", optimized[1].Role)
 	}
 }
+
+func TestMaskConsumedToolResults_DedupThenMasking(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Message layout:
+	// 0: assistant (tool_call for read_file)
+	// 1: tool (read_file big.go, 4000 chars) — first read
+	// 2: assistant response
+	// 3: assistant (tool_call for read_file)
+	// 4: tool (read_file big.go, 4000 chars) — second read (same file, same content)
+	// ... 4 more tool results to exceed observationMaskKeepLast ...
+	// then final assistant
+	messages := []api.Message{
+		{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{{ID: "call-0"}}},
+		{Role: "tool", ToolCallID: "call-0", Content: "Tool call result for read_file: big.go\n" + largeContent},
+		{Role: "assistant", Content: "I read the file."},
+	}
+	// Add more tool results to exceed keep-last threshold
+	for i := 1; i <= 6; i++ {
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: fmt.Sprintf("call-%d", i)}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: fmt.Sprintf("call-%d", i),
+			Content:    "Tool call result for shell_command: echo " + fmt.Sprintf("%d", i) + "\n" + largeContent,
+		})
+	}
+	// Final assistant
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "Done.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// The first file read (index 1) should be deduped to a short summary
+	// (it's redundant because the same file was read earlier with same content).
+	// But since message gap is only 3 messages (not >= 15), it won't be deduped.
+	// However, it should still be masked because it's consumed and large.
+	masked := 0
+	for _, msg := range optimized {
+		if msg.Role == "tool" && strings.Contains(msg.Content, "[PREVIOUS RESULT:") {
+			masked++
+		}
+	}
+	if masked == 0 {
+		t.Error("expected some tool results to be masked")
+	}
+
+	// Verify no tool result has both [OPTIMIZED]/[STALE] AND [PREVIOUS RESULT:]
+	for i, msg := range optimized {
+		if msg.Role == "tool" {
+			hasDedup := strings.Contains(msg.Content, "[OPTIMIZED]") || strings.Contains(msg.Content, "[STALE]")
+			hasMask := strings.Contains(msg.Content, "[PREVIOUS RESULT:")
+			if hasDedup && hasMask {
+				t.Errorf("message at index %d has both dedup and masking markers — should only have one", i)
+			}
+		}
+	}
+}
+
+func TestMaskConsumedToolResults_InterspersedUserMessages(t *testing.T) {
+	optimizer := NewConversationOptimizer(true, false)
+
+	largeContent := strings.Repeat("x", 4000)
+
+	// Layout: tool results with user messages interspersed
+	// user messages should not affect masking of tool results
+	messages := []api.Message{}
+	for i := 0; i < 8; i++ {
+		messages = append(messages, api.Message{
+			Role:      "assistant",
+			Content:   "",
+			ToolCalls: []api.ToolCall{{ID: fmt.Sprintf("call-%d", i)}},
+		})
+		messages = append(messages, api.Message{
+			Role:       "tool",
+			ToolCallID: fmt.Sprintf("call-%d", i),
+			Content:    "Tool call result for read_file: file" + fmt.Sprintf("%d", i) + ".go\n" + largeContent,
+		})
+		// Insert a user message after every other tool result
+		if i%2 == 1 {
+			messages = append(messages, api.Message{
+				Role:    "user",
+				Content: fmt.Sprintf("Follow-up question %d", i),
+			})
+		}
+	}
+	// Final assistant message
+	messages = append(messages, api.Message{
+		Role:    "assistant",
+		Content: "I've processed everything.",
+	})
+
+	optimized := optimizer.OptimizeConversation(messages)
+
+	// Verify: user messages should be preserved unchanged
+	for _, msg := range optimized {
+		if msg.Role == "user" {
+			if !strings.HasPrefix(msg.Content, "Follow-up question") {
+				t.Errorf("user message was modified: %s", msg.Content)
+			}
+			if strings.Contains(msg.Content, "[PREVIOUS RESULT:") {
+				t.Errorf("user message should never be masked: %s", msg.Content)
+			}
+		}
+	}
+
+	// Verify: only tool-role messages are masked
+	maskedCount := 0
+	for _, msg := range optimized {
+		if msg.Role == "tool" && strings.Contains(msg.Content, "[PREVIOUS RESULT:") {
+			maskedCount++
+		}
+	}
+	if maskedCount == 0 {
+		t.Error("expected some tool results to be masked even with interspersed user messages")
+	}
+	t.Logf("masked %d tool results with interspersed user messages", maskedCount)
+}

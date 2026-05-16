@@ -1,6 +1,6 @@
 # SP-024: Context Management — File Read Optimization
 
-**Status:** ✅ Phase 1-3 complete (Phase 2 deferred, Phase 4 future; tree-sitter in SP-025)  
+**Status:** ✅ Phase 1-3, Phase 4 complete (Phase 2 deferred; tree-sitter in SP-025)  
 **Date:** 2026-05-15
 
 ## Problem
@@ -61,10 +61,10 @@ Add a lightweight `repo_map` tool that generates an AST-based overview of the co
 - Enables agents to understand codebase structure before reading files
 - Uses graph ranking to select most relevant portions
 
-### Phase 4: Observation Masking (Future)
+### Phase 4: Observation Masking ✅
 
 Replace old tool outputs with placeholders after they've been processed:
-- `[read_file: pkg/agent/agent.go (truncated)]`
+- `[PREVIOUS RESULT: read_file, 12345 chars, 450 lines]`
 - More effective than summarization per JetBrains research
 - Prevents quadratic context accumulation
 
@@ -75,7 +75,7 @@ Replace old tool outputs with placeholders after they've been processed:
 3. [x] Update truncation warning message to reflect new limits
 4. [x] Add `repo_map` tool with line numbers (see SP-025 for tree-sitter upgrade)
 5. [ ] (Future) Error on large files instead of auto-truncating
-6. [ ] (Future) Add observation masking
+6. [x] Add observation masking
 
 ## Risks
 

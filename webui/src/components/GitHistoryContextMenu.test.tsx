@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
 import { copyToClipboard } from '../utils/clipboard';
+import { showThemedConfirm } from './ThemedDialog';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -349,7 +350,7 @@ describe('GitHistoryContextMenu', () => {
   // 13. Checkout calls apiService.checkoutGitCommit with full hash
   test('checkout calls apiService.checkoutGitCommit and shows Checked out feedback', async () => {
     mountContextMenu();
-    const { showThemedConfirm } = require('./ThemedDialog');
+    
     showThemedConfirm.mockResolvedValueOnce(true);
 
     fireContextMenu(commitRow!);
@@ -371,7 +372,7 @@ describe('GitHistoryContextMenu', () => {
   // 14. Revert calls apiService.revertGitCommit with full hash
   test('revert calls apiService.revertGitCommit and shows Reverted feedback', async () => {
     mountContextMenu();
-    const { showThemedConfirm } = require('./ThemedDialog');
+    
     showThemedConfirm.mockResolvedValueOnce(true);
 
     fireContextMenu(commitRow!);
@@ -427,7 +428,7 @@ describe('GitHistoryContextMenu', () => {
   // 17. Checkout error shows error message in actionStatus
   test('checkout error shows error message in actionStatus', async () => {
     mountContextMenu();
-    const { showThemedConfirm } = require('./ThemedDialog');
+    
     showThemedConfirm.mockResolvedValueOnce(true);
     mockApiService.checkoutGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 
@@ -449,7 +450,7 @@ describe('GitHistoryContextMenu', () => {
   // 18. Revert error shows error message in actionStatus
   test('revert error shows error message in actionStatus', async () => {
     mountContextMenu();
-    const { showThemedConfirm } = require('./ThemedDialog');
+    
     showThemedConfirm.mockResolvedValueOnce(true);
     mockApiService.revertGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 

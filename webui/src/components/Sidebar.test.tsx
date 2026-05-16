@@ -5,14 +5,14 @@ import { act, createElement } from 'react';
 import Sidebar from './Sidebar';
 import { ApiService } from '../services/api';
 
-vi.mock('./SettingsPanel', () => () => <div data-testid="settings-panel" />);
-vi.mock('./FileTree', () => () => <div data-testid="file-tree" />);
-vi.mock('./SearchView', () => () => <div data-testid="search-view" />);
-vi.mock('./GitSidebarPanel', () => () => <div data-testid="git-panel" />);
-vi.mock('./RevisionListPanel', () => () => <div data-testid="revision-panel" />);
-vi.mock('./SproutLogo', () => () => <div data-testid="sprout-logo" />);
-vi.mock('./LocationSwitcher', () => () => <div data-testid="location-switcher" />);
-vi.mock('./ResizeHandle', () => () => null);
+vi.mock('./SettingsPanel', () => ({ default: () => null }));
+vi.mock('./FileTree', () => ({ default: () => null }));
+vi.mock('./SearchView', () => ({ default: () => null }));
+vi.mock('./GitSidebarPanel', () => ({ default: () => null }));
+vi.mock('./RevisionListPanel', () => ({ default: () => null }));
+vi.mock('./SproutLogo', () => ({ default: () => null }));
+vi.mock('./LocationSwitcher', () => ({ default: () => null }));
+vi.mock('./ResizeHandle', () => ({ default: () => null }));
 vi.mock('../contexts/ThemeContext', () => ({
   useTheme: () => ({
     themePack: { id: 'default' },
@@ -41,17 +41,10 @@ vi.mock('../services/api', () => {
 // We provide a minimal mock with plain arrow functions (no vi.fn()) so Jest
 // doesn't need to transform NotificationContext.tsx, avoiding a heavy module
 // resolution cascade that causes OOM under Node 22 + Jest 27.
-vi.mock('../contexts/NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
+}));
 
 const flushPromises = async () => {
   await act(async () => {

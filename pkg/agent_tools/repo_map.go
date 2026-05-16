@@ -139,7 +139,7 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 
 		section := "\n### " + f.relPath + "\n"
 		for _, sym := range symbols {
-			section += "- " + sym + "\n"
+			section += fmt.Sprintf("- %s:%d\n", sym.Name, sym.Line)
 		}
 		if charCount+len(section) > repoMapCharBudget && fileCount > 0 {
 			truncated = true
@@ -159,88 +159,96 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	return sb.String(), nil
 }
 
-func extractSymbols(ext string, content string) []string {
-	var symbols []string
-	for _, line := range strings.Split(content, "\n") {
+// symbolEntry pairs a symbol name with its 1-based line number.
+type symbolEntry struct {
+	Name string
+	Line int
+}
+
+func extractSymbols(ext string, content string) []symbolEntry {
+	var symbols []symbolEntry
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lineNum := i + 1 // 1-based
 		switch ext {
 		case ".go":
-			symbols = appendSymbols(symbols, extractGoSymbols(line))
+			symbols = appendSymbolEntries(symbols, extractGoSymbols(line, lineNum))
 		case ".ts", ".tsx", ".js", ".jsx":
-			symbols = appendSymbols(symbols, extractTSSymbols(line))
+			symbols = appendSymbolEntries(symbols, extractTSSymbols(line, lineNum))
 		case ".py":
-			symbols = appendSymbols(symbols, extractPySymbols(line))
+			symbols = appendSymbolEntries(symbols, extractPySymbols(line, lineNum))
 		}
 	}
 	return symbols
 }
 
-func extractGoSymbols(line string) []string {
+func extractGoSymbols(line string, lineNum int) []symbolEntry {
 	if m := goFuncRe.FindStringSubmatch(line); m != nil {
-		return []string{"func " + m[1]}
+		return []symbolEntry{{"func " + m[1], lineNum}}
 	}
 	if m := goTypeRe.FindStringSubmatch(line); m != nil {
-		return []string{"type " + m[1] + " " + m[2]}
+		return []symbolEntry{{"type " + m[1] + " " + m[2], lineNum}}
 	}
 	if m := goVarRe.FindStringSubmatch(line); m != nil {
 		t := strings.TrimSpace(line)
 		if strings.HasPrefix(t, "var ") {
-			return []string{"var " + m[1]}
+			return []symbolEntry{{"var " + m[1], lineNum}}
 		}
 	}
 	if m := goConstRe.FindStringSubmatch(line); m != nil {
 		t := strings.TrimSpace(line)
 		if strings.HasPrefix(t, "const ") {
-			return []string{"const " + m[1]}
+			return []symbolEntry{{"const " + m[1], lineNum}}
 		}
 	}
 	return nil
 }
 
-func extractTSSymbols(line string) []string {
+func extractTSSymbols(line string, lineNum int) []symbolEntry {
 	t := strings.TrimSpace(line)
 	if strings.HasPrefix(t, "//") || strings.HasPrefix(t, "/*") || strings.HasPrefix(t, "*") {
 		return nil
 	}
 	if m := tsFuncRe.FindStringSubmatch(line); m != nil {
-		return []string{"function " + m[1]}
+		return []symbolEntry{{"function " + m[1], lineNum}}
 	}
 	if m := tsClassRe.FindStringSubmatch(line); m != nil {
-		return []string{"class " + m[1]}
+		return []symbolEntry{{"class " + m[1], lineNum}}
 	}
 	if m := tsIfRe.FindStringSubmatch(line); m != nil {
-		return []string{"interface " + m[1]}
+		return []symbolEntry{{"interface " + m[1], lineNum}}
 	}
 	if m := tsTypeRe.FindStringSubmatch(line); m != nil {
-		return []string{"type " + m[1]}
+		return []symbolEntry{{"type " + m[1], lineNum}}
 	}
 	if m := tsConstRe.FindStringSubmatch(line); m != nil {
 		if strings.HasPrefix(t, "export") || strings.HasPrefix(t, "const ") ||
 			strings.HasPrefix(t, "let ") || strings.HasPrefix(t, "var ") {
-			return []string{"const " + m[1]}
+			return []symbolEntry{{"const " + m[1], lineNum}}
 		}
 	}
 	return nil
 }
 
-func extractPySymbols(line string) []string {
+func extractPySymbols(line string, lineNum int) []symbolEntry {
 	t := strings.TrimSpace(line)
 	if strings.HasPrefix(t, "#") {
 		return nil
 	}
 	if m := pyFuncRe.FindStringSubmatch(line); m != nil {
-		return []string{"def " + m[1]}
+		return []symbolEntry{{"def " + m[1], lineNum}}
 	}
 	if m := pyClassRe.FindStringSubmatch(line); m != nil {
-		return []string{"class " + m[1]}
+		return []symbolEntry{{"class " + m[1], lineNum}}
 	}
 	return nil
 }
 
-func appendSymbols(base []string, newSyms []string) []string {
+func appendSymbolEntries(base []symbolEntry, newSyms []symbolEntry) []symbolEntry {
 	for _, s := range newSyms {
 		found := false
 		for _, e := range base {
-			if e == s {
+			if e.Name == s.Name {
 				found = true
 				break
 			}

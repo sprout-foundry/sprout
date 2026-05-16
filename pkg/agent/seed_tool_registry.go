@@ -322,7 +322,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 	// 14b. repo_map (SafeForParallel)
 	registry.Register(core.ToolConfig{
 		Name:        "repo_map",
-		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes). Useful for understanding project structure before reading specific files. Output is limited to ~1024 tokens.",
+		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes) with line numbers. Use this before reading files to identify which files and functions are relevant to your task, then use read_file with view_range to read only the sections you need. Output is limited to ~1024 tokens.",
 		Parameters: []core.ParameterConfig{
 			{Name: "directory", Type: "string", Description: "Directory to scan (default: workspace root)"},
 		},

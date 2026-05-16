@@ -240,7 +240,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register repo_map tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "repo_map",
-		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes). Useful for understanding project structure before reading specific files. Output is limited to ~1024 tokens. Supports Go, TypeScript, JavaScript, Python, Rust, Java, and C files.",
+		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes) with line numbers. Use this before reading files to identify which files and functions are relevant to your task, then use read_file with view_range to read only the sections you need. Output is limited to ~1024 tokens. Supports Go, TypeScript, JavaScript, Python, Rust, Java, and C files.",
 		Parameters: []ParameterConfig{
 			{"directory", "string", false, []string{}, "Directory to scan (default: workspace root)"},
 		},

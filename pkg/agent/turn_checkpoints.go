@@ -264,7 +264,11 @@ func (a *Agent) TriggerCompaction() bool {
 	// Try structural compaction (LLM-based)
 	optimizer := a.state.GetOptimizer()
 	if optimizer != nil && optimizer.IsEnabled() {
-		llmCompacted := optimizer.CompactConversation(msgs)
+		// Run observation masking first (dedup + consumed-tool-result masking),
+		// then structural compaction on the optimized messages. This matches the
+		// normal pruning pipeline in conversation_pruner.go.
+		optimized := optimizer.OptimizeConversation(msgs)
+		llmCompacted := optimizer.CompactConversation(optimized)
 		if len(llmCompacted) < len(msgs) {
 			a.state.SetMessages(llmCompacted)
 			a.clearTurnCheckpoints()

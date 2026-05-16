@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"os"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -11,15 +10,7 @@ import (
 // TestDebugLog tests the debug logging functionality
 func TestDebugLog(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -42,15 +33,7 @@ func TestDebugLog(t *testing.T) {
 // TestFormatTokenCount tests token count formatting
 func TestFormatTokenCount(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -86,15 +69,7 @@ func TestFormatTokenCount(t *testing.T) {
 // TestEstimateContextTokens tests context token estimation
 func TestEstimateContextTokens(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -122,15 +97,7 @@ func TestEstimateContextTokens(t *testing.T) {
 // TestSuggestCorrectToolName tests tool name suggestion functionality
 func TestSuggestCorrectToolName(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {
@@ -188,15 +155,7 @@ func TestSuggestCorrectToolNameResolvesLegacyMCPName(t *testing.T) {
 // TestGetModelContextLimit tests context limit retrieval
 func TestGetModelContextLimit(t *testing.T) {
 	// Set test API key
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	defer func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	}()
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	agent, err := NewAgent()
 	if err != nil {

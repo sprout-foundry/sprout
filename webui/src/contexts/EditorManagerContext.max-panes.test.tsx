@@ -8,38 +8,15 @@ import { EditorManagerProvider, useEditorManager, MAX_PANES, MIN_PANE_WIDTH_PERC
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../services/fileAccess', () => ({
-  writeFileWithConsent: vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ message: 'File saved successfully' }),
-  }),
+vi.mock('./NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
 }));
-
 vi.mock('./SproutAdapterContext', () => ({
-  ...vi.importActual('./SproutAdapterContext'),
-  useSproutFetch: () =>
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ message: 'File saved successfully' }),
-    }),
+  SproutAdapterProvider: ({ children }) => children,
+  useSproutAdapter: () => ({ clientFetch: vi.fn() }),
+  useSproutFetch: () => vi.fn(),
 }));
-
-vi.mock('../services/formatter', () => ({
-  formatWithPrettier: vi.fn().mockResolvedValue(undefined),
-  getPrettierParser: vi.fn().mockReturnValue(null),
-}));
-
-vi.mock('./NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
 
 // ---------------------------------------------------------------------------
 // Test helpers

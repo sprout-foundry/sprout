@@ -1,12 +1,19 @@
 /// <reference types="vitest/globals" />
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
 import path from 'path';
+
+// On Android/Termux, @swc/core native bindings are unavailable (no linux-arm64-gnu
+// binary for the android kernel). Fall back to the Babel-based React plugin.
+const useSwc = process.platform !== 'android' && !process.env.TERMUX_VERSION;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const reactPlugin = useSwc
+  ? require('@vitejs/plugin-react-swc').default
+  : require('@vitejs/plugin-react').default;
 
 // https://vite.dev/config/
 export default defineConfig(({ mode: _mode }) => {
   return {
-    plugins: [react()],
+    plugins: [reactPlugin()],
     
     // Base URL for production builds
     base: '/',

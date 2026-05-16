@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
-	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
 // handleAPIConfirm handles user responses to security prompts (both approval requests and file security prompts)
@@ -56,7 +55,7 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Try security prompt response
-	if mgr := security.GetGlobalApprovalManager(); mgr != nil && mgr.RespondToApproval(payload.RequestID, payload.Response) {
+	if ws.securityPromptMgr != nil && ws.securityPromptMgr.RespondToApproval(payload.RequestID, payload.Response) {
 		ws.publishClientEvent(defaultWebClientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
 			"status":    "responded",
 			"request_id": payload.RequestID,

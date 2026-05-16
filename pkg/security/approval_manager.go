@@ -73,6 +73,8 @@ var (
 )
 
 // SetGlobalApprovalManager sets the global singleton (called by webui setup).
+//
+// Deprecated: use dependency injection via Agent.InjectWebUIManagers instead.
 func SetGlobalApprovalManager(mgr *ApprovalManager) {
 	globalApprovalManagerMu.Lock()
 	globalApprovalManager = mgr
@@ -80,6 +82,8 @@ func SetGlobalApprovalManager(mgr *ApprovalManager) {
 }
 
 // GetGlobalApprovalManager returns the global singleton.
+//
+// Deprecated: use dependency injection via Agent.InjectWebUIManagers instead.
 func GetGlobalApprovalManager() *ApprovalManager {
 	globalApprovalManagerMu.RLock()
 	defer globalApprovalManagerMu.RUnlock()

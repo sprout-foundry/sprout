@@ -14,18 +14,19 @@
   ],
   "overrides": [
     {
-      "files": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.spec.ts",
-        "**/*.spec.tsx"
-      ],
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
       "rules": {
         "@typescript-eslint/no-explicit-any": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
         "no-console": "off",
         "react-hooks/exhaustive-deps": "off"
       }
+    },
+    {
+      "env": {
+        "node": true
+      },
+      "files": ["vite.config.ts"]
     }
   ],
   "parser": "@typescript-eslint/parser",
@@ -37,12 +38,7 @@
     "project": "./tsconfig.json",
     "sourceType": "module"
   },
-  "plugins": [
-    "@typescript-eslint",
-    "react",
-    "react-hooks",
-    "testing-library"
-  ],
+  "plugins": ["@typescript-eslint", "react", "react-hooks", "import", "testing-library"],
   "root": true,
   "rules": {
     "@typescript-eslint/consistent-type-imports": [
@@ -57,10 +53,7 @@
     "@typescript-eslint/no-empty-function": [
       "warn",
       {
-        "allow": [
-          "constructors",
-          "methods"
-        ]
+        "allow": ["constructors", "methods"]
       }
     ],
     "@typescript-eslint/no-explicit-any": "error",
@@ -70,6 +63,7 @@
       "warn",
       {
         "argsIgnorePattern": "^_",
+        "destructuredArrayIgnorePattern": "^_",
         "ignoreRestSiblings": true,
         "varsIgnorePattern": "^_"
       }
@@ -82,22 +76,29 @@
         "variables": true
       }
     ],
-    "curly": [
-      "error",
-      "multi-line"
-    ],
-    "eqeqeq": [
-      "error",
-      "smart"
+    "curly": ["error", "multi-line"],
+    "eqeqeq": ["error", "smart"],
+    "import/group-exports": "off",
+    "import/no-cycle": "off",
+    "import/no-duplicates": "warn",
+    "import/no-self-import": "error",
+    "import/no-useless-path-segments": "warn",
+    "import/order": [
+      "warn",
+      {
+        "alphabetize": {
+          "caseInsensitive": true,
+          "order": "asc"
+        },
+        "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
+        "newlines-between": "never"
+      }
     ],
     "no-case-declarations": "off",
     "no-console": [
       "error",
       {
-        "allow": [
-          "warn",
-          "error"
-        ]
+        "allow": ["warn", "error"]
       }
     ],
     "no-control-regex": "warn",
@@ -119,11 +120,18 @@
     "testing-library/render-result-naming-convention": "warn"
   },
   "settings": {
+    "import/parsers": {
+      "@typescript-eslint/parser": [".ts", ".tsx", ".d.ts"]
+    },
+    "import/resolver": {
+      "node": true,
+      "typescript": true
+    },
     "react": {
       "version": "detect"
     },
     "testing-library": {
-      "module": "react"
+      "module": "@testing-library/react"
     }
   }
 }

@@ -29,3 +29,5 @@ architectural area, its current state, and open work.
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 📋 Spec (partially implemented) |
 | SP-016 | [Embedding Index — Duplicate Detection & Semantic Search](./SP-016-embedding-duplicate-detection.md) | 📋 Spec |
 | SP-017 | [Settings Panel Rework — Scoped Collapsible Sections](./SP-017-settings-panel-rework.md) | 📋 Spec |
+| SP-024 | [Context Management — File Read Optimization](./SP-024-context-management.md) | ✅ Phase 1-3 complete |
+| SP-025 | [Tree-Sitter Integration — Real AST](./SP-025-tree-sitter-integration.md) | 📋 Spec |

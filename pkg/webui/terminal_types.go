@@ -192,6 +192,7 @@ type TerminalManager struct {
 	sessions      map[string]*TerminalSession
 	mutex         sync.RWMutex
 	workspaceRoot string
+	cleanupOnce   sync.Once // ensures StartCleanupWorker only launches one goroutine
 }
 
 // NewTerminalManager creates a new terminal manager.

@@ -139,18 +139,21 @@ func (tm *TerminalManager) CleanupInactiveSessions(timeout time.Duration, backgr
 
 // StartCleanupWorker starts a background worker to clean up inactive sessions.
 // Background sessions get a separate timeout (default 2 hours) vs regular sessions (timeout).
+// Safe to call multiple times — only one worker goroutine is started per TerminalManager.
 func (tm *TerminalManager) StartCleanupWorker(ctx context.Context, interval time.Duration, timeout time.Duration, backgroundTimeout ...time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+	tm.cleanupOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
 
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				tm.CleanupInactiveSessions(timeout, backgroundTimeout...)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					tm.CleanupInactiveSessions(timeout, backgroundTimeout...)
+				}
 			}
-		}
-	}()
+		}()
+	})
 }

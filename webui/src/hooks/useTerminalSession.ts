@@ -9,7 +9,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
-import type { WsEvent } from '../services/websocket';
+import type { WsEvent } from '@sprout/events';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 
 export interface UseTerminalSessionOptions {

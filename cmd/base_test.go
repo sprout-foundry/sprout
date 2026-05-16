@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"os"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -12,10 +11,7 @@ import (
 // =============================================================================
 
 func TestGetTraceDatasetDir_EmptyFlag(t *testing.T) {
-	// Clear env var and test with empty flag
-	orig := os.Getenv("LEDIT_TRACE_DATASET_DIR")
-	os.Unsetenv("LEDIT_TRACE_DATASET_DIR")
-	defer os.Setenv("LEDIT_TRACE_DATASET_DIR", orig)
+	t.Setenv("LEDIT_TRACE_DATASET_DIR", "")
 
 	got := getTraceDatasetDir("")
 	if got != "" {
@@ -24,9 +20,7 @@ func TestGetTraceDatasetDir_EmptyFlag(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_NonEmptyFlag(t *testing.T) {
-	orig := os.Getenv("LEDIT_TRACE_DATASET_DIR")
-	os.Unsetenv("LEDIT_TRACE_DATASET_DIR")
-	defer os.Setenv("LEDIT_TRACE_DATASET_DIR", orig)
+	t.Setenv("LEDIT_TRACE_DATASET_DIR", "")
 
 	got := getTraceDatasetDir("/tmp/traces")
 	if got != "/tmp/traces" {
@@ -35,9 +29,7 @@ func TestGetTraceDatasetDir_NonEmptyFlag(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_EnvVar(t *testing.T) {
-	orig := os.Getenv("LEDIT_TRACE_DATASET_DIR")
-	os.Setenv("LEDIT_TRACE_DATASET_DIR", "/env/traces")
-	defer os.Setenv("LEDIT_TRACE_DATASET_DIR", orig)
+	t.Setenv("LEDIT_TRACE_DATASET_DIR", "/env/traces")
 
 	got := getTraceDatasetDir("")
 	if got != "/env/traces" {
@@ -46,9 +38,7 @@ func TestGetTraceDatasetDir_EnvVar(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_EnvVarEmpty(t *testing.T) {
-	orig := os.Getenv("LEDIT_TRACE_DATASET_DIR")
-	os.Setenv("LEDIT_TRACE_DATASET_DIR", "")
-	defer os.Setenv("LEDIT_TRACE_DATASET_DIR", orig)
+	t.Setenv("LEDIT_TRACE_DATASET_DIR", "")
 
 	got := getTraceDatasetDir("")
 	if got != "" {
@@ -57,9 +47,7 @@ func TestGetTraceDatasetDir_EnvVarEmpty(t *testing.T) {
 }
 
 func TestGetTraceDatasetDir_FlagTakesPriority(t *testing.T) {
-	orig := os.Getenv("LEDIT_TRACE_DATASET_DIR")
-	os.Setenv("LEDIT_TRACE_DATASET_DIR", "/env/traces")
-	defer os.Setenv("LEDIT_TRACE_DATASET_DIR", orig)
+	t.Setenv("LEDIT_TRACE_DATASET_DIR", "/env/traces")
 
 	got := getTraceDatasetDir("/flag/traces")
 	if got != "/flag/traces" {
@@ -331,8 +319,6 @@ func TestSetRunFunc_SetsRunField(t *testing.T) {
 		t.Fatal("SetRunFunc should set cmd.Run")
 	}
 }
-
-
 
 // =============================================================================
 // Initialize

@@ -34,8 +34,8 @@ func TestCookieSyncMiddleware_SetsCookieFromHeader(t *testing.T) {
 	if c.Path != "/" {
 		t.Errorf("cookie path = %q; want /", c.Path)
 	}
-	if !c.HttpOnly {
-		t.Error("cookie should be HttpOnly")
+	if c.HttpOnly {
+		t.Error("cookie must NOT be HttpOnly — JS must be able to read it for cross-origin recovery")
 	}
 	if c.SameSite != http.SameSiteLaxMode {
 		t.Errorf("cookie SameSite = %v (same-origin, no Origin header); want %v", c.SameSite, http.SameSiteLaxMode)

@@ -439,12 +439,13 @@ func TestPreloadCache(t *testing.T) {
 	SetDefaultCache(newCache)
 	defer SetDefaultCache(orig)
 
-	err := PreloadCache()
-	if err != nil {
-		t.Fatalf("PreloadCache: %v", err)
-	}
+	loaded := PreloadCache()
 
 	stats := newCache.Stats()
+	if loaded != len(SupportedLanguages) {
+		t.Errorf("PreloadCache loaded = %d, want %d (SupportedLanguages count)",
+			loaded, len(SupportedLanguages))
+	}
 	if stats.Size != len(SupportedLanguages) {
 		t.Errorf("PreloadCache size = %d, want %d (SupportedLanguages count)",
 			stats.Size, len(SupportedLanguages))

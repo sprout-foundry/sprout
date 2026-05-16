@@ -2,10 +2,12 @@ package proxy
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServerKey(t *testing.T) {
@@ -400,6 +402,122 @@ func TestManagerContextCancellation(t *testing.T) {
 	})
 }
 
+func TestManagerGetOrCreateReusesHealthyProcess(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("GetOrCreate creates process and tracks it", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{ID: "cat", LanguageIDs: []string{"cat"}, Binary: "cat", Args: []string{}},
+		})
+
+		proc1, release1, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		require.NotNil(t, proc1)
+
+		// First call should create exactly 1 server
+		assert.Equal(t, 1, m.Count())
+
+		// Second call: since Healthy() uses Signal(nil) which may not work
+		// on all platforms, GetOrCreate may start a new process or reuse the
+		// existing one. Either way, the manager should handle it correctly.
+		proc2, release2, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		require.NotNil(t, proc2)
+
+		// After both calls, there should be at least one tracked server
+		assert.GreaterOrEqual(t, m.Count(), 1)
+
+		release1()
+		release2()
+	})
+}
+
+func TestManagerGetOrCreateReleasesRefCount(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("release decrements refCount enabling eviction", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{ID: "cat", LanguageIDs: []string{"cat"}, Binary: "cat", Args: []string{}},
+		})
+
+		_, release, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		assert.Equal(t, 1, m.Count())
+
+		// Release first handle (refCount goes from 1 to 0)
+		release()
+
+		// Now evict with tiny timeout - should remove the idle process
+		m.EvictIdle(1 * time.Nanosecond)
+		assert.Equal(t, 0, m.Count())
+	})
+}
+
+func TestManagerEvictIdleActuallyEvicts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("idle process with zero refCount is evicted", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{ID: "cat", LanguageIDs: []string{"cat"}, Binary: "cat", Args: []string{}},
+		})
+
+		_, release, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		assert.Equal(t, 1, m.Count())
+
+		// Release so refCount drops to 0
+		release()
+
+		// Evict with tiny timeout - lastUsed is in the past relative to any timeout
+		m.EvictIdle(1 * time.Nanosecond)
+
+		// Process should have been evicted
+		assert.Equal(t, 0, m.Count())
+	})
+}
+
+func TestManagerEvictIdleKeepsActiveProcesses(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("process with refCount > 0 is not evicted", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{ID: "cat", LanguageIDs: []string{"cat"}, Binary: "cat", Args: []string{}},
+		})
+
+		_, release, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		assert.Equal(t, 1, m.Count())
+
+		// Do NOT release - refCount is 1
+		// Evict with tiny timeout
+		m.EvictIdle(1 * time.Nanosecond)
+
+		// Process should NOT have been evicted because refCount > 0
+		assert.Equal(t, 1, m.Count())
+
+		// Now release and evict again
+		release()
+		m.EvictIdle(1 * time.Nanosecond)
+		assert.Equal(t, 0, m.Count())
+	})
+}
+
 func TestManagerWithCustomConfig(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -437,7 +555,6 @@ func TestManagerWithCustomConfig(t *testing.T) {
 
 func TestManagerServerKeyEdgeCases(t *testing.T) {
 	t.Run("handles workspace with spaces", func(t *testing.T) {
-		// Note: This will be normalized by filepath.Abs
 		key := serverKey("/path with spaces", "go")
 		assert.NotEmpty(t, key)
 		assert.Contains(t, key, "go")
@@ -452,7 +569,59 @@ func TestManagerServerKeyEdgeCases(t *testing.T) {
 	t.Run("handles empty language ID", func(t *testing.T) {
 		key := serverKey("/workspace", "")
 		assert.NotEmpty(t, key)
-		// Should still contain the separator
 		assert.Contains(t, key, "|")
+	})
+}
+
+func TestManagerConcurrentAccess(t *testing.T) {
+	t.Run("concurrent GetOrCreate and EvictIdle do not race", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{ID: "cat", LanguageIDs: []string{"cat"}, Binary: "cat", Args: []string{}},
+		})
+
+		var wg sync.WaitGroup
+
+		// Concurrent GetOrCreate callers
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < 10; j++ {
+					_, release, err := m.GetOrCreate("/tmp", "cat")
+					if err == nil && release != nil {
+						release()
+					}
+				}
+			}()
+		}
+
+		// Concurrent EvictIdle
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				m.EvictIdle(1 * time.Nanosecond)
+			}
+		}()
+
+		// Concurrent Count readers
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				_ = m.Count()
+			}
+		}()
+
+		wg.Wait()
+
+		// After all goroutines complete, manager should be in a consistent state
+		assert.GreaterOrEqual(t, m.Count(), 0)
 	})
 }

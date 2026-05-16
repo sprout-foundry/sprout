@@ -120,7 +120,10 @@ function setupHandler(overrides?: Partial<UseEventHandlerOptions>) {
   const stateHolder = { current: createDefaultState() };
   const setStateMock = vi.fn((updater: unknown) => {
     if (typeof updater === 'function') {
-      stateHolder.current = updater(stateHolder.current);
+      const prev = stateHolder.current;
+      const next = updater(prev);
+      // Merge partial state like React does — preserve fields not in the updater result
+      stateHolder.current = { ...prev, ...next };
     } else {
       stateHolder.current = updater;
     }
@@ -283,6 +286,7 @@ describe('per-chat filtering', () => {
 
 describe('connection_status', () => {
   it('schedules setState with isConnected=true and sessionId on connection', async () => {
+    vi.useFakeTimers();
     const { setStateMock, stateHolder, lastConnectionStateRef, connectionTimeoutRef } = setupHandler();
     const wrapper = setupHandler({ setState: setStateMock, lastConnectionStateRef, connectionTimeoutRef });
 
@@ -307,6 +311,7 @@ describe('connection_status', () => {
     // The debounced setState should have been called
     // We verify the ref was updated
     expect(lastConnectionStateRef.current).toBe(true);
+    vi.useRealTimers();
   });
 
   it('does not schedule setState when connection state has not changed', () => {
@@ -2192,11 +2197,14 @@ describe('query_progress', () => {
     act(() => {
       handleEvent({
         type: 'query_progress',
-        data: { step: 'writing_code', progress: 0.75 },
+        data: { message: 'Writing code...', details: { step: 'writing_code', progress: 0.75 } },
       });
     });
 
-    expect(stateHolder.current.queryProgress).toEqual({ step: 'writing_code', progress: 0.75 });
+    expect(stateHolder.current.queryProgress).toEqual({
+      message: 'Writing code...',
+      details: { step: 'writing_code', progress: 0.75 },
+    });
   });
 });
 

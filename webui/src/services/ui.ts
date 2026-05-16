@@ -58,7 +58,7 @@ export interface UIProgressUpdate {
 }
 
 class UIService {
-  private static instance: UIService;
+  private static instance: UIService | null = null;
   private eventsProvider: EventsProvider;
   private pendingPrompts: Map<
     string,
@@ -85,7 +85,7 @@ class UIService {
   }
 
   static resetInstance(): void {
-    UIService.instance = null as unknown as UIService;
+    UIService.instance = null;
   }
 
   private setupEventHandlers() {

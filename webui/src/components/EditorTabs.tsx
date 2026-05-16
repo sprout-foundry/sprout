@@ -58,6 +58,13 @@ interface EditorTabsProps {
 
 // ── File icon helpers (defined before component to avoid use-before-define) ──
 
+/** Duck-type check for thenable values (handles sync/async prop mismatch). */
+function catchIfAsync(value: void | Promise<void>, handler: (err: unknown) => void): void {
+  if (value != null && typeof (value as { then?: unknown }).then === 'function') {
+    Promise.resolve(value).catch(handler);
+  }
+}
+
 const FILE_ICON_SIZE = 16;
 
 const getFileIconComponent = (ext?: string): LucideIcon => {
@@ -507,11 +514,7 @@ function EditorTabs({
         const result = onCreateChat();
         // The prop is typed as () => void but the actual implementation may
         // return a Promise (handleCreateChat is async). Duck-type check.
-        if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
-          (result as unknown as Promise<unknown>).catch((err: unknown) =>
-            console.warn('[EditorTabs] Failed to create chat:', err),
-          );
-        }
+        catchIfAsync(result, (err) => console.warn('[EditorTabs] Failed to create chat:', err));
       } catch (err) {
         console.warn('[EditorTabs] Failed to create chat:', err);
       }
@@ -522,11 +525,7 @@ function EditorTabs({
     if (onCreateChatInWorktree) {
       try {
         const result = onCreateChatInWorktree();
-        if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
-          (result as unknown as Promise<unknown>).catch((err: unknown) =>
-            console.warn('[EditorTabs] Failed to create worktree chat:', err),
-          );
-        }
+        catchIfAsync(result, (err) => console.warn('[EditorTabs] Failed to create worktree chat:', err));
       } catch (err) {
         console.warn('[EditorTabs] Failed to create worktree chat:', err);
       }

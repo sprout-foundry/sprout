@@ -76,7 +76,7 @@ function UIManager({ children }: UIManagerProps): JSX.Element {
     initialPath?: string;
     allowDirectories?: boolean;
     allowedExtensions?: string[];
-    resolve?: (file: Record<string, unknown>) => void;
+    resolve?: (file: FileNode) => void;
   }>({
     isOpen: false,
     allowDirectories: false,
@@ -250,7 +250,7 @@ function UIManager({ children }: UIManagerProps): JSX.Element {
 
   const handleFileBrowserSelect = (file: FileNode) => {
     if (fileBrowserState.resolve) {
-      fileBrowserState.resolve(file as unknown as Record<string, unknown>);
+      fileBrowserState.resolve(file);
     }
     setFileBrowserState((prev) => ({ ...prev, isOpen: false }));
   };

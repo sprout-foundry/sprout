@@ -585,7 +585,7 @@ const codeActionGutter = gutter({
 function pluginForView(view: EditorView): CodeActionsPlugin | null {
   try {
     const plugin = view.plugin(codeActionsPlugin);
-    return plugin as unknown as CodeActionsPlugin | null;
+    return plugin as CodeActionsPlugin | null;
   } catch {
     return null;
   }

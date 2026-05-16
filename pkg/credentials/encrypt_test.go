@@ -692,7 +692,6 @@ func TestSave_AutoSetsMachineKeyMode(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 	// Ensure SPROUT_KEY_PASSPHRASE is not set
-	originalPassphrase := os.Getenv("LEDIT_KEY_PASSPHRASE")
 	t.Setenv("LEDIT_KEY_PASSPHRASE", "")
 
 	// Ensure no mode file exists

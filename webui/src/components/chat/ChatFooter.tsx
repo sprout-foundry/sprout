@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react';
 import { Zap, AlertTriangle } from 'lucide-react';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
 import { SkeletonText } from '@sprout/ui';
 import type { ToolExecution, SubagentActivity } from './types';
+import type { QueryProgress } from '../../types/app';
 
 interface ChatFooterProps {
   hasSubagentActivity: boolean;
   subagentActivities: SubagentActivity[];
-  queryProgress: unknown;
+  queryProgress: QueryProgress | null;
   isProcessing: boolean;
   filteredToolExecutions: ToolExecution[];
   lastError: string | null;
@@ -39,11 +39,15 @@ export function ChatFooter({
             <Zap size={14} />
           </span>
           <span className="progress-text">
-            {((queryProgress as Record<string, unknown>).message as string) || 'Processing...'}
+            {queryProgress.message || 'Processing...'}
           </span>
         </div>
-        {(queryProgress as Record<string, unknown>).details != null && (
-          <div className="progress-details">{(queryProgress as Record<string, unknown>).details as ReactNode}</div>
+        {queryProgress.details != null && (
+          <div className="progress-details">
+            {typeof queryProgress.details === 'string' || typeof queryProgress.details === 'number'
+              ? String(queryProgress.details)
+              : null}
+          </div>
         )}
       </div>,
     );

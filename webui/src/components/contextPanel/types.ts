@@ -11,6 +11,7 @@ import type {
   RevisionDetailFile,
 } from '@sprout/ui';
 import type { SessionEntry } from '../../services/api/types';
+import type { QueryProgress } from '../../types/app';
 
 // Re-export shared types from @sprout/ui for convenience
 export type {
@@ -99,7 +100,7 @@ export interface ChatContextPanelProps extends ContextPanelBaseProps {
   messages: Array<{ type: string; timestamp: Date }>;
   isProcessing: boolean;
   lastError: string | null;
-  queryProgress: unknown;
+  queryProgress: QueryProgress | null;
   stats?: {
     provider?: string;
     model?: string;

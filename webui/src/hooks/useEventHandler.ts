@@ -9,7 +9,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
-import type { WsEvent } from '../services/websocket';
+import type { WsEvent } from '@sprout/events';
 import { getWebUIClientId } from '../services/clientSession';
 import { debugLog, error as logError } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';

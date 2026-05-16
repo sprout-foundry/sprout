@@ -12,6 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/validation"
 )
 
@@ -115,4 +116,14 @@ type Agent struct {
 	// isSubagent is true when this agent instance was spawned as a subagent.
 	// Used to prevent nested subagent spawning and to skip interactive prompts.
 	isSubagent bool
+}
+
+// InjectWebUIManagers replaces the agent's internal approval and ask-user
+// managers with the webui-owned instances.  This is called after the web
+// server is constructed so that security prompts and ask_user requests
+// created by the agent are routed through the same manager that the webui
+// handlers resolve responses on — eliminating the need for global singletons.
+func (a *Agent) InjectWebUIManagers(approvalMgr *security.ApprovalManager, askUserMgr *tools.AskUserManager) {
+	a.security.SetApprovalMgr(approvalMgr)
+	a.security.SetAskUserMgr(askUserMgr)
 }

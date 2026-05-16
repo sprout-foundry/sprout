@@ -277,3 +277,37 @@ func TestReadFileDirectory(t *testing.T) {
 		t.Errorf("Expected error message about directory, got: %v", err)
 	}
 }
+
+// TestReadFileEnvOverride tests that the READ_FILE_MAX_BYTES env var controls truncation behavior
+func TestReadFileEnvOverride(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+
+	// Create a 50KB file (~25K lines of "x\n")
+	content := strings.Repeat("x\n", 25*1024)
+	err := os.WriteFile(testFile, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Without env var: should truncate to 32KB default
+	result, err := ReadFile(ctx, testFile)
+	if err != nil {
+		t.Fatalf("ReadFile failed without env var: %v", err)
+	}
+	if !strings.Contains(result, "[WARN]") {
+		t.Errorf("Expected truncation warning without env var override, got: %s", result)
+	}
+
+	// With env var set to 100KB: should NOT truncate
+	t.Setenv("SPROUT_READ_FILE_MAX_BYTES", "102400")
+	result, err = ReadFile(ctx, testFile)
+	if err != nil {
+		t.Fatalf("ReadFile failed with env var override: %v", err)
+	}
+	if strings.Contains(result, "[WARN]") {
+		t.Errorf("Should not truncate with READ_FILE_MAX_BYTES=102400, got warning: %s", result)
+	}
+}

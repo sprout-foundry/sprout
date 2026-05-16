@@ -312,7 +312,7 @@ func TestToolSync_NilToolRegistry(t *testing.T) {
 	}
 }
 
-// TestToolSync_CountConsistency verifies that both registries have exactly 30 tools.
+// TestToolSync_CountConsistency verifies that both registries have exactly 31 tools.
 func TestToolSync_CountConsistency(t *testing.T) {
 	sprout := GetToolRegistry()
 	seed := NewSeedToolRegistry(nil)
@@ -320,11 +320,11 @@ func TestToolSync_CountConsistency(t *testing.T) {
 	sproutCount := len(sprout.GetAvailableTools())
 	seedCount := len(seed.GetTools())
 
-	if sproutCount != 30 {
-		t.Errorf("sprout registry has %d tools, expected 30", sproutCount)
+	if sproutCount != 31 {
+		t.Errorf("sprout registry has %d tools, expected 31", sproutCount)
 	}
-	if seedCount != 30 {
-		t.Errorf("seed registry has %d tools, expected 30", seedCount)
+	if seedCount != 31 {
+		t.Errorf("seed registry has %d tools, expected 31", seedCount)
 	}
 
 	if sproutCount != seedCount {

@@ -74,16 +74,9 @@ func setupMemoryDirForTest(t *testing.T) func() {
 	os.MkdirAll(memoryDir, 0755)
 
 	// Override config dir by setting the env var that GetConfigDir reads.
-	orig := os.Getenv("SPROUT_CONFIG")
-	os.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("SPROUT_CONFIG", tempDir)
 
-	return func() {
-		if orig != "" {
-			os.Setenv("SPROUT_CONFIG", orig)
-		} else {
-			os.Unsetenv("SPROUT_CONFIG")
-		}
-	}
+	return func() {}
 }
 
 // ------------------------------------------------------------------------
@@ -541,25 +534,9 @@ func TestMemoryLifecycle(t *testing.T) {
 func TestLoadMemoryContent_ConfigDirUnavailable(t *testing.T) {
 
 	// Temporarily clear HOME and unset config env var so GetConfigDir fails.
-	origHome := os.Getenv("HOME")
-	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	origConfig := os.Getenv("SPROUT_CONFIG")
-
-	os.Unsetenv("HOME")
-	os.Unsetenv("XDG_CONFIG_HOME")
-	os.Unsetenv("SPROUT_CONFIG")
-
-	defer func() {
-		if origHome != "" {
-			os.Setenv("HOME", origHome)
-		}
-		if origXDG != "" {
-			os.Setenv("XDG_CONFIG_HOME", origXDG)
-		}
-		if origConfig != "" {
-			os.Setenv("SPROUT_CONFIG", origConfig)
-		}
-	}()
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("SPROUT_CONFIG", "")
 
 	// This may or may not fail depending on the environment.
 	// If it succeeds (because UserHomeDir still works), skip.

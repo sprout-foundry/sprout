@@ -20,10 +20,8 @@ func TestLogger_JSONModeWritesJSONWithCID(t *testing.T) {
 	defer os.Chdir(orig)
 	_ = os.Chdir(dir)
 
-	_ = os.Setenv("LEDIT_JSON_LOGS", "1")
-	_ = os.Setenv("LEDIT_CORRELATION_ID", "abc123")
-	defer os.Unsetenv("LEDIT_JSON_LOGS")
-	defer os.Unsetenv("LEDIT_CORRELATION_ID")
+	t.Setenv("LEDIT_JSON_LOGS", "1")
+	t.Setenv("LEDIT_CORRELATION_ID", "abc123")
 
 	l := GetLogger(true)
 	l.Log("hello world")

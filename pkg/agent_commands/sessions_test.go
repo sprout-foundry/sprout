@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"os"
 	"strings"
 	"testing"
 
@@ -11,15 +10,7 @@ import (
 // Helper function to create a test agent with proper environment setup
 func createTestAgent(t *testing.T) *agent.Agent {
 	// Set test environment to avoid API calls
-	originalKey := os.Getenv("OPENROUTER_API_KEY")
-	os.Setenv("OPENROUTER_API_KEY", "test-key")
-	t.Cleanup(func() {
-		if originalKey != "" {
-			os.Setenv("OPENROUTER_API_KEY", originalKey)
-		} else {
-			os.Unsetenv("OPENROUTER_API_KEY")
-		}
-	})
+	t.Setenv("OPENROUTER_API_KEY", "test-key")
 
 	testAgent, err := agent.NewAgent()
 	if err != nil {

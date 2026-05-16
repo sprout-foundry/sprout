@@ -3,6 +3,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,25 +14,24 @@ import (
 )
 
 const (
-	repoMapMaxFileSize = 32 * 1024 // 32KB per file
+	repoMapMaxFileSize = 32 * 1024 // 32KB per file (non-Go files only)
 	repoMapTokenBudget = 1024       // target ~1024 tokens
 	repoMapMaxFiles    = 200        // max files to include
 	repoMapCharBudget  = repoMapTokenBudget * 4
 )
 
 // Regex patterns for symbol extraction (top-level declarations).
+// Used for non-Go languages and as a fallback for Go files that fail AST parsing.
 var (
-	goFuncRe    = regexp.MustCompile(`^\s*func\s+(?:\([^)]*\)\s+)?(\w+)`)
-	goTypeRe    = regexp.MustCompile(`^\s*type\s+(\w+)\s+(struct|interface)\b`)
-	goVarRe     = regexp.MustCompile(`^\s*var\s+(\w+)`)
-	goConstRe   = regexp.MustCompile(`^\s*const\s+(\w+)`)
-	tsFuncRe    = regexp.MustCompile(`^\s*(?:export\s+)?(?:async\s+)?function\s*(?:<[^>]*>\s*)?(\w+)`)
-	tsClassRe   = regexp.MustCompile(`^\s*(?:export\s+)?class\s+(\w+)`)
-	tsIfRe      = regexp.MustCompile(`^\s*(?:export\s+)?interface\s+(\w+)`)
-	tsTypeRe    = regexp.MustCompile(`^\s*(?:export\s+)?type\s+(\w+)`)
-	tsConstRe   = regexp.MustCompile(`^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)`)
-	pyFuncRe    = regexp.MustCompile(`^\s*(?:async\s+)?def\s+(\w+)`)
-	pyClassRe   = regexp.MustCompile(`^\s*class\s+(\w+)`)
+	goFuncRe      = regexp.MustCompile(`^\s*func\s+(?:\([^)]*\)\s+)?(\w+)`)
+	goTypeRe      = regexp.MustCompile(`^\s*type\s+(\w+)\s+(struct|interface)\b`)
+	tsFuncRe      = regexp.MustCompile(`^\s*(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+(\w+)`)
+	tsClassRe     = regexp.MustCompile(`^\s*(?:export\s+(?:default\s+)?)?class\s+(\w+)`)
+	tsInterfaceRe = regexp.MustCompile(`^\s*(?:export\s+)?interface\s+(\w+)`)
+	tsTypeRe      = regexp.MustCompile(`^\s*(?:export\s+)?type\s+(\w+)`)
+	tsConstRe     = regexp.MustCompile(`^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)`)
+	pyFuncRe      = regexp.MustCompile(`^\s*(?:async\s+)?def\s+(\w+)`)
+	pyClassRe     = regexp.MustCompile(`^\s*class\s+(\w+)`)
 )
 
 var sourceExtensions = map[string]bool{
@@ -44,9 +46,9 @@ var ignoredDirs = map[string]bool{
 }
 
 // GenerateRepoMap walks the directory tree rooted at rootDir and produces a
-// lightweight, AST-like overview of the codebase.  For each supported source
-// file it extracts top-level symbols (functions, types, interfaces, classes)
-// using simple regex patterns. Output is truncated to ~1024 tokens.
+// lightweight, AST-like overview of the codebase.  For Go files it uses the
+// go/ast parser for accurate symbol extraction.  For other languages it falls
+// back to simple regex patterns.  Output is truncated to ~1024 tokens.
 func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	if rootDir == "" || rootDir == "." {
 		var err error
@@ -121,18 +123,30 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 		default:
 		}
 
-		content, err := os.ReadFile(f.absPath)
-		if err != nil {
-			continue
+		// Go files: read full content (AST parser needs complete file).
+		// Other files: truncate to 32KB (regex only needs a sample).
+		var content []byte
+		var readErr error
+		if f.ext == ".go" {
+			content, readErr = os.ReadFile(f.absPath)
+		} else {
+			content, readErr = os.ReadFile(f.absPath)
+			if readErr == nil && len(content) > repoMapMaxFileSize {
+				content = content[:repoMapMaxFileSize]
+			}
 		}
-		if len(content) > repoMapMaxFileSize {
-			content = content[:repoMapMaxFileSize]
+		if readErr != nil {
+			continue
 		}
 		if isBinaryContent(content) {
 			continue
 		}
 
-		symbols := extractSymbols(f.ext, string(content))
+		symbols, err := extractSymbolsForFile(f.absPath, f.ext, content)
+		if err != nil {
+			// If extraction fails (e.g., AST parse error), skip the file.
+			continue
+		}
 		if len(symbols) == 0 {
 			continue
 		}
@@ -165,14 +179,116 @@ type symbolEntry struct {
 	Line int
 }
 
-func extractSymbols(ext string, content string) []symbolEntry {
+// extractSymbolsForFile extracts symbols from a file using the appropriate
+// method: AST for Go, regex for other languages.
+func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEntry, error) {
+	if ext == ".go" {
+		symbols, err := extractGoSymbolsAST(path)
+		if err != nil {
+			// Fall back to regex if AST fails (e.g., syntax errors, build tags).
+			return extractSymbolsByRegex(ext, string(content)), nil
+		}
+		return symbols, nil
+	}
+	return extractSymbolsByRegex(ext, string(content)), nil
+}
+
+// extractGoSymbolsAST parses a Go source file using go/ast and extracts
+// top-level functions, methods, and type declarations as symbolEntry values.
+// Test functions (Test*, Benchmark*, Fuzz*) and _test.go files are excluded.
+func extractGoSymbolsAST(path string) ([]symbolEntry, error) {
+	// Skip _test.go files entirely.
+	if strings.HasSuffix(filepath.Base(path), "_test.go") {
+		return nil, nil
+	}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	var symbols []symbolEntry
+
+	for _, decl := range node.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			if shouldSkipGoFunc(d) {
+				continue
+			}
+			name := goFuncName(d)
+			line := fset.Position(d.Pos()).Line
+			symbols = append(symbols, symbolEntry{Name: name, Line: line})
+
+		case *ast.GenDecl:
+			if d.Tok == token.TYPE {
+				for _, spec := range d.Specs {
+					if ts, ok := spec.(*ast.TypeSpec); ok {
+						line := fset.Position(ts.Pos()).Line
+						symbols = append(symbols, symbolEntry{
+							Name: "type " + ts.Name.Name,
+							Line: line,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return symbols, nil
+}
+
+// shouldSkipGoFunc returns true if the function should be excluded from the
+// repo map (test functions, benchmark functions, fuzz tests, blank identifiers).
+func shouldSkipGoFunc(d *ast.FuncDecl) bool {
+	if d.Name == nil || d.Name.Name == "_" {
+		return true
+	}
+	name := d.Name.Name
+	return strings.HasPrefix(name, "Test") ||
+		strings.HasPrefix(name, "Benchmark") ||
+		strings.HasPrefix(name, "Fuzz")
+}
+
+// goFuncName returns a display name for a Go function declaration.
+// For methods: "(*Receiver).Method" or "(Receiver).Method"
+// For functions: "func funcName"
+func goFuncName(d *ast.FuncDecl) string {
+	if d.Recv != nil && len(d.Recv.List) > 0 {
+		recv := d.Recv.List[0]
+		recvName := goRecvType(recv.Type)
+		ptr := ""
+		if se, ok := recv.Type.(*ast.StarExpr); ok {
+			ptr = "*"
+			recvName = goRecvType(se.X)
+		}
+		return fmt.Sprintf("func (%s%s).%s", ptr, recvName, d.Name.Name)
+	}
+	return "func " + d.Name.Name
+}
+
+// goRecvType extracts the type name from an expression node.
+func goRecvType(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return e.Name
+	case *ast.SelectorExpr:
+		return goRecvType(e.X) + "." + e.Sel.Name
+	default:
+		return "?"
+	}
+}
+
+// extractSymbolsByRegex extracts symbols using regex patterns.
+// This is used for non-Go languages and as a fallback for Go files.
+func extractSymbolsByRegex(ext string, content string) []symbolEntry {
 	var symbols []symbolEntry
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		lineNum := i + 1 // 1-based
 		switch ext {
 		case ".go":
-			symbols = appendSymbolEntries(symbols, extractGoSymbols(line, lineNum))
+			symbols = appendSymbolEntries(symbols, extractGoSymbolsByRegex(line, lineNum))
 		case ".ts", ".tsx", ".js", ".jsx":
 			symbols = appendSymbolEntries(symbols, extractTSSymbols(line, lineNum))
 		case ".py":
@@ -182,24 +298,13 @@ func extractSymbols(ext string, content string) []symbolEntry {
 	return symbols
 }
 
-func extractGoSymbols(line string, lineNum int) []symbolEntry {
+// extractGoSymbolsByRegex is the regex-based fallback for Go files when AST parsing fails.
+func extractGoSymbolsByRegex(line string, lineNum int) []symbolEntry {
 	if m := goFuncRe.FindStringSubmatch(line); m != nil {
 		return []symbolEntry{{"func " + m[1], lineNum}}
 	}
 	if m := goTypeRe.FindStringSubmatch(line); m != nil {
 		return []symbolEntry{{"type " + m[1] + " " + m[2], lineNum}}
-	}
-	if m := goVarRe.FindStringSubmatch(line); m != nil {
-		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, "var ") {
-			return []symbolEntry{{"var " + m[1], lineNum}}
-		}
-	}
-	if m := goConstRe.FindStringSubmatch(line); m != nil {
-		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, "const ") {
-			return []symbolEntry{{"const " + m[1], lineNum}}
-		}
 	}
 	return nil
 }
@@ -215,7 +320,7 @@ func extractTSSymbols(line string, lineNum int) []symbolEntry {
 	if m := tsClassRe.FindStringSubmatch(line); m != nil {
 		return []symbolEntry{{"class " + m[1], lineNum}}
 	}
-	if m := tsIfRe.FindStringSubmatch(line); m != nil {
+	if m := tsInterfaceRe.FindStringSubmatch(line); m != nil {
 		return []symbolEntry{{"interface " + m[1], lineNum}}
 	}
 	if m := tsTypeRe.FindStringSubmatch(line); m != nil {

@@ -38,7 +38,7 @@ var (
 var sourceExtensions = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true, ".js": true, ".jsx": true,
 	".py": true, ".rs": true, ".java": true, ".c": true, ".cpp": true,
-	".h": true, ".css": true, ".html": true,
+	".h": true,
 }
 
 var ignoredDirs = map[string]bool{
@@ -86,6 +86,13 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 			return nil
 		}
 		name := d.Name()
+		// Skip symlinks to prevent following links outside the target tree.
+		if d.Type()&os.ModeSymlink != 0 {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if d.IsDir() {
 			if ignoredDirs[name] {
 				return filepath.SkipDir

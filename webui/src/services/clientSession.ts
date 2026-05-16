@@ -37,6 +37,13 @@ function workspacePathStorageKey(): string {
  * sessionStorage survives normal page reloads (F5) within the same tab but
  * is isolated across tabs — fixing the bug where all tabs shared one context.
  *
+ * Cross-origin cookie persistence:
+ * When the WebUI (Cloudflare Pages) and API (tunnel) are on different domains,
+ * the server sets a `sprout_client_id` cookie. On page reload, this function
+ * reads the cookie as a fallback so the client resumes the same server-side
+ * session instead of generating a new client_id and losing all state.
+ * Without this, every reload would create a fresh session.
+ *
  * For Chrome tab-discard recovery:
  * - The workspace path is persisted separately in localStorage so the tab
  *   can restore the correct workspace after discard (chat history is lost but
@@ -54,6 +61,15 @@ export function getWebUIClientId(): string {
     return existing;
   }
 
+  // Cross-origin fallback: read client ID from the server-set cookie.
+  // This preserves the session across page reloads when the WebUI and API
+  // are on different origins (Cloudflare Pages + tunnel).
+  const cookieValue = readCookie(clientIDCookieName);
+  if (cookieValue && cookieValue !== 'default') {
+    window.sessionStorage.setItem(WEBUI_CLIENT_ID_STORAGE_KEY, cookieValue);
+    return cookieValue;
+  }
+
   // Generate a new ID — each tab gets its own unique client_id.
   const generated =
     typeof window.crypto?.randomUUID === 'function'
@@ -65,6 +81,32 @@ export function getWebUIClientId(): string {
   window.localStorage.removeItem(WEBUI_CLIENT_ID_STORAGE_KEY);
 
   return generated;
+}
+
+// Cookie name used by the server for cross-origin session persistence.
+// Must match the server's clientIDCookieName constant.
+const clientIDCookieName = 'sprout_client_id';
+
+/**
+ * Read a cookie value by name from document.cookie.
+ * Returns the decoded value or null if not found.
+ */
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [key, ...rest] = cookie.trim().split('=');
+    if (key.trim() === name) {
+      const value = rest.join('=').trim();
+      if (!value) return null;
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    }
+  }
+  return null;
 }
 
 /**

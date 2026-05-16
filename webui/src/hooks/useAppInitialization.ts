@@ -68,7 +68,6 @@ export function useAppInitialization({
       apiService
         .getStats()
         .then((stats: StatsResponse) => {
-          const statsRecord = stats as unknown as Record<string, unknown>;
           setState((prev) => ({
             // Only update provider/model from stats when the backend
             // has a real value.  An empty string means the agent hasn't
@@ -76,7 +75,7 @@ export function useAppInitialization({
             // frontend already knows (persisted state, WS event…).
             provider: stats.provider || prev.provider,
             model: stats.model || prev.model,
-            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : statsRecord,
+            stats: JSON.stringify(prev.stats) === JSON.stringify(stats) ? prev.stats : { ...stats },
           }));
         })
         .catch((err) =>

@@ -199,7 +199,7 @@ export function useWorkspaceData({ isConnected }: UseWorkspaceDataProps): UseWor
     if (!hostAlias) return;
     window.sessionStorage.removeItem('sprout:ssh-just-connected');
     setSshPickerHostAlias(hostAlias);
-    const initialWorkspace = (window as unknown as Record<string, string>).SPROUT_INITIAL_WORKSPACE;
+    const initialWorkspace = window.SPROUT_INITIAL_WORKSPACE;
     const isSpecificPath =
       initialWorkspace &&
       initialWorkspace !== '$HOME' &&

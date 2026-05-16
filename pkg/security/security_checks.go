@@ -201,6 +201,9 @@ func DetectSecurityConcernsWithContext(content, filePath string) ([]string, map[
 // prompts the user for confirmation on new detections, and returns
 // the updated lists of security concerns and ignored concerns,
 // along with a boolean indicating if local summarization should be skipped.
+//
+// Deprecated: This function has no callers. Use Agent.CheckFileContentSecurity
+// instead, which uses the injected ApprovalManager.
 func CheckFileSecurity(
 	relativePath string,
 	fileContent string,
@@ -211,15 +214,13 @@ func CheckFileSecurity(
 	cfg *configuration.Config,
 	eventBus *events.EventBus,
 	userID string,
+	promptManager *ApprovalManager,
 ) (
 	updatedSecurityConcerns []string,
 	updatedIgnoredSecurityConcerns []string,
 	skipLLMSummarization bool,
 ) {
 	logger := utils.GetLogger(false)
-
-	// Get global prompt manager (set by webui in WebUI mode) or nil otherwise
-	promptManager := GetGlobalApprovalManager()
 
 	concernsForThisFile := make([]string, 0)
 	ignoredConcernsForThisFile := make([]string, 0)

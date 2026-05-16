@@ -127,12 +127,15 @@ function renderTestHook(
     },
   };
 
+  const isExternalUpdateRef = { current: false };
+
   let hookReturn: any = null;
 
   function HookWrapper() {
     hookReturn = useEditorCursor({
       bufferRef,
       updateBufferCursor,
+      isExternalUpdateRef,
     });
     return null;
   }

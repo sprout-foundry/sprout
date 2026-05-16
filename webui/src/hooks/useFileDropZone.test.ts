@@ -155,6 +155,9 @@ function fireDragEvent(type: string, dataTransfer?: MockDataTransfer | null, rel
   });
 }
 
+// Static import — Vitest hoists vi.mock above all imports automatically
+import { useFileDropZone } from './useFileDropZone';
+
 // ---------------------------------------------------------------------------
 // Hook Runner — minimal wrapper to invoke useFileDropZone
 // ---------------------------------------------------------------------------
@@ -165,7 +168,6 @@ interface HookRunnerProps {
 }
 
 function HookRunner({ containerRef, onFilesDropped }: HookRunnerProps): JSX.Element {
-  const { useFileDropZone } = require('./useFileDropZone');
   useFileDropZone({ containerRef, onFilesDropped });
   return createElement('div');
 }

@@ -1,5 +1,11 @@
 package tools
 
+// File: normalization.go
+// Whitespace normalization utilities for file edit operations.
+// Provides position-aware normalization so that edits can match code
+// even when indentation/whitespace differs between the requested edit
+// and the actual file content.
+
 import (
 	"fmt"
 	"strings"
@@ -168,32 +174,6 @@ func findMatchEndPosition(content string, startPos int, normalizedOld string) in
 
 	// If no exact normal match found, use the search window end
 	return startPos + searchWindow
-}
-
-// findLineNumber attempts to find the line number containing a string
-// Returns 0 if not found
-func findLineNumber(content, search string) int {
-	lines := strings.Split(content, "\n")
-	searchLower := strings.ToLower(search)
-	searchNormalized := normalizeWhitespace(search)
-
-	for i, line := range lines {
-		lineLower := strings.ToLower(line)
-		lineNormalized := normalizeWhitespace(line)
-
-		// Try exact match (case-insensitive)
-		if strings.Contains(lineLower, searchLower) {
-			return i + 1
-		}
-
-		// Try normalized match
-		if strings.Contains(lineNormalized, searchNormalized) && len(searchNormalized) > 10 {
-			// Only return normalized match for longer strings to avoid false positives
-			return i + 1
-		}
-	}
-
-	return 0
 }
 
 // performNormalizedReplacement performs whitespace-normalized replacement

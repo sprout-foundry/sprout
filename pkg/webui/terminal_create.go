@@ -110,14 +110,15 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 	}
 
 	session := &TerminalSession{
-		ID:       sessionID,
-		Command:  cmd,
-		Pty:      ptyFile,
-		Cancel:   cancel,
-		Active:   true,
-		LastUsed: time.Now(),
-		Size:     defaultSize,
-		ring:     newSessRing(),
+		ID:        sessionID,
+		Command:   cmd,
+		Pty:       ptyFile,
+		Cancel:    cancel,
+		Active:    true,
+		LastUsed:  time.Now(),
+		StartedAt: time.Now(),
+		Size:      defaultSize,
+		ring:      newSessRing(),
 	}
 
 	go tm.runPTYReader(session)
@@ -227,13 +228,14 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 	}
 
 	session := &TerminalSession{
-		ID:       sessionID,
-		Command:  cmd,
-		Cancel:   cancel,
-		Active:   true,
-		LastUsed: time.Now(),
-		Size:     &pty.Winsize{Rows: 24, Cols: 80},
-		ring:     newSessRing(),
+		ID:        sessionID,
+		Command:   cmd,
+		Cancel:    cancel,
+		Active:    true,
+		LastUsed:  time.Now(),
+		StartedAt: time.Now(),
+		Size:      &pty.Winsize{Rows: 24, Cols: 80},
+		ring:      newSessRing(),
 	}
 
 	// Store stdin in the Pty field for WriteRawInput compatibility.

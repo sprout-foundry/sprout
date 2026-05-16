@@ -117,7 +117,7 @@ class WebSocketService {
       import.meta.env.VITE_WS_URL ||
       adapterWsUrl ||
       (() => {
-        const proxyBase = (window as unknown as Record<string, string>).SPROUT_PROXY_BASE || '';
+        const proxyBase = window.SPROUT_PROXY_BASE || '';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/ws`;
       })();

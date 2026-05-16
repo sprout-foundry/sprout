@@ -13,16 +13,16 @@ export default function CommitReviewSettingsTab({
   updateSetting,
 }: CommitReviewSettingsTabProps) {
   const currentCommitProvider = String(
-    getNestedValue(settings as unknown as Record<string, unknown>, 'commit_provider') || '',
+    getNestedValue(settings, 'commit_provider') || '',
   );
   const currentCommitModel = String(
-    getNestedValue(settings as unknown as Record<string, unknown>, 'commit_model') || '',
+    getNestedValue(settings, 'commit_model') || '',
   );
   const currentReviewProvider = String(
-    getNestedValue(settings as unknown as Record<string, unknown>, 'review_provider') || '',
+    getNestedValue(settings, 'review_provider') || '',
   );
   const currentReviewModel = String(
-    getNestedValue(settings as unknown as Record<string, unknown>, 'review_model') || '',
+    getNestedValue(settings, 'review_model') || '',
   );
 
   const selectedCommitProvider = commitReviewProviders.find((p) => p.id === currentCommitProvider);

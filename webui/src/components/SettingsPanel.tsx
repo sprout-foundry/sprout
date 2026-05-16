@@ -165,7 +165,7 @@ function SettingsPanel({
   // Merge with session settings as fallback for missing fields.
   const activeSettings: SproutSettings | null =
     effectiveLayer !== 'session' && state.layerData
-      ? ({ ...settings, ...state.layerData } as unknown as SproutSettings)
+      ? { ...settings, ...state.layerData } as SproutSettings
       : settings;
 
   // Sync display ref with active settings (in useEffect to avoid render-time mutation)

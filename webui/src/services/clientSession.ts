@@ -13,7 +13,7 @@ const WEBUI_WORKSPACE_PATH_STORAGE_KEY = 'sprout.workspaceTabPath';
  */
 export function getProxyBase(): string {
   if (typeof window === 'undefined') return '';
-  return (window as unknown as Record<string, string>).SPROUT_PROXY_BASE || '';
+  return window.SPROUT_PROXY_BASE || '';
 }
 
 /**

@@ -6,7 +6,7 @@ import WorkspacePane from './WorkspacePane';
 import ResizeHandle from './ResizeHandle';
 import { MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import type { EditorPane, EditorBuffer, PaneLayout } from '../types/editor';
-import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity } from '../types/app';
+import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity, QueryProgress } from '../types/app';
 import type { OpenWorkspaceBufferFn } from '../hooks/useChatSessionSync';
 import type { GitDiffResponse, DeepReviewResult } from '../hooks/useGitWorkspace';
 
@@ -54,7 +54,7 @@ export interface PaneLayoutManagerProps {
   isProcessing: boolean;
   lastError: string | null;
   toolExecutions: ToolExecution[];
-  queryProgress: unknown;
+  queryProgress: QueryProgress | null;
   currentTodos: TodoItem[];
   subagentActivities: SubagentActivity[];
   isConnected: boolean;

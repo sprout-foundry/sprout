@@ -21,17 +21,10 @@ import UpdateNotification from './UpdateNotification';
 
 // Mock NotificationContext
 const mockAddNotification = vi.fn();
-vi.mock('../contexts/NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }: { children: React.ReactNode }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: mockAddNotification }),
-    },
-  );
-});
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: mockAddNotification }),
+}));
 
 // ---------------------------------------------------------------------------
 // Types for Desktop API

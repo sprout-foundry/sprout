@@ -8,39 +8,15 @@ import { EditorManagerProvider, useEditorManager } from './EditorManagerContext'
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../services/fileAccess', () => ({
-  writeFileWithConsent: vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ message: 'File saved successfully' }),
-  }),
+vi.mock('./NotificationContext', () => ({
+  NotificationProvider: ({ children }) => children,
+  useNotifications: () => ({ addNotification: () => {} }),
 }));
-
-// Mock SproutAdapterContext to provide useSproutFetch
 vi.mock('./SproutAdapterContext', () => ({
-  ...vi.importActual('./SproutAdapterContext'),
-  useSproutFetch: () =>
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ message: 'File saved successfully' }),
-    }),
+  SproutAdapterProvider: ({ children }) => children,
+  useSproutAdapter: () => ({ clientFetch: vi.fn() }),
+  useSproutFetch: () => vi.fn(),
 }));
-
-// EditorManagerProvider's hooks use useLog() which requires NotificationContext.
-vi.mock('../services/formatter', () => ({
-  formatWithPrettier: vi.fn().mockResolvedValue(undefined),
-  getPrettierParser: vi.fn().mockReturnValue(null),
-}));
-vi.mock('./NotificationContext', () => {
-  const noop = () => {};
-  return Object.assign(
-    function NotificationProviderMock({ children }) {
-      return children;
-    },
-    {
-      useNotifications: () => ({ addNotification: noop }),
-    },
-  );
-});
 
 // ---------------------------------------------------------------------------
 // Helpers

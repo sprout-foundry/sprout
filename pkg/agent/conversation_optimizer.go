@@ -20,6 +20,13 @@ const (
 	DetailedWordLimit   = 350 // Word limit for newest (detailed) layer
 )
 
+// Observation masking constants for SP-024: replace consumed tool results
+// with compact placeholders to prevent context bloat.
+const (
+	observationMaskMaxChars = 3000 // Only mask tool results larger than this
+	observationMaskKeepLast = 5    // Keep the last N tool results unmasked
+)
+
 // FileReadRecord tracks file reads to detect redundancy
 type FileReadRecord struct {
 	FilePath     string
@@ -110,6 +117,9 @@ func (co *ConversationOptimizer) OptimizeConversation(messages []api.Message) []
 			optimized = append(optimized, msg)
 		}
 	}
+
+	// Phase 3: Mask consumed tool results to prevent context bloat.
+	optimized = co.maskConsumedToolResults(optimized)
 
 	return optimized
 }
@@ -1216,6 +1226,94 @@ func (co *ConversationOptimizer) SetEnabled(enabled bool) {
 // IsEnabled returns whether optimization is enabled
 func (co *ConversationOptimizer) IsEnabled() bool {
 	return co.enabled
+}
+
+// maskConsumedToolResults replaces large consumed tool results with compact
+// placeholders. A tool result is "consumed" when the model has produced a
+// subsequent assistant message after seeing it. We keep the last N tool
+// results unmasked so the model still has recent context.
+func (co *ConversationOptimizer) maskConsumedToolResults(messages []api.Message) []api.Message {
+	if len(messages) < 3 {
+		return messages
+	}
+
+	// Find the index of the last assistant message (the model's most recent response).
+	// Everything before that point is "consumed".
+	var lastAssistantIndex int
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" {
+			lastAssistantIndex = i
+			break
+		}
+	}
+
+	if lastAssistantIndex == 0 {
+		return messages
+	}
+
+	// Count tool messages before the last assistant message.
+	// We'll keep the last `observationMaskKeepLast` unmasked.
+	var consumedToolIndices []int
+	for i := 0; i < lastAssistantIndex; i++ {
+		if messages[i].Role == "tool" {
+			consumedToolIndices = append(consumedToolIndices, i)
+		}
+	}
+
+	// How many to mask (all except the last N).
+	maskCount := len(consumedToolIndices) - observationMaskKeepLast
+	if maskCount <= 0 {
+		return messages
+	}
+
+	// Build result — replace content for the first maskCount consumed tools.
+	result := make([]api.Message, len(messages))
+	copy(result, messages)
+
+	for _, idx := range consumedToolIndices[:maskCount] {
+		msg := messages[idx]
+		content := msg.Content
+
+		// Only mask if content is large enough.
+		if len(content) <= observationMaskMaxChars {
+			continue
+		}
+
+		// Extract tool name.
+		toolName := co.extractToolName(msg)
+		lineCount := strings.Count(content, "\n") + 1
+
+		placeholder := fmt.Sprintf("[PREVIOUS RESULT: %s, %d chars, %d lines]",
+			toolName, len(content), lineCount)
+
+		rewritten := msg
+		rewritten.Content = placeholder
+		result[idx] = rewritten
+
+		if co.debug && co.printLine != nil {
+			co.printLine(fmt.Sprintf("[~] Masked consumed tool result: %s (%d chars → %s)",
+				toolName, len(content), placeholder))
+		}
+	}
+
+	return result
+}
+
+// extractToolName extracts the tool name from a tool result message.
+func (co *ConversationOptimizer) extractToolName(msg api.Message) string {
+	content := msg.Content
+	// Check for "Tool call result for <name>:" prefix (used by optimizer dedup)
+	if idx := strings.Index(content, "Tool call result for "); idx >= 0 {
+		rest := content[idx+len("Tool call result for "):]
+		if colon := strings.Index(rest, ":"); colon >= 0 {
+			return strings.TrimSpace(rest[:colon])
+		}
+	}
+	// Fallback: use ToolCallID
+	if msg.ToolCallID != "" {
+		return msg.ToolCallID
+	}
+	return "unknown"
 }
 
 

@@ -22,7 +22,16 @@ const (
 func (ws *ReactWebServer) Start(ctx context.Context) error {
 	mux := ws.setupRoutes(ctx)
 
-	// Wrap mux with security headers middleware (applies to all responses)
+	// Build the middleware chain from inside out:
+	//   mux ← securityHeaders ← userID ← authToken ← cookieSync ← CORS
+	//
+	// CORS must be the outermost wrapper so that Access-Control-* headers
+	// appear on every response, including auth errors and preflight OPTIONS.
+	//
+	// cookieSync sits just inside CORS so it can read the resolved client ID
+	// and write the cookie on every response. The cookie is essential for
+	// cross-origin session persistence (Cloudflare Pages + tunnel) where
+	// custom headers are not preserved across page reloads.
 	var handler http.Handler = securityHeadersMiddleware(mux)
 
 	// Wrap with user ID extraction middleware for service mode
@@ -37,6 +46,16 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Wrap with auth token middleware for write endpoints
 	handler = authTokenMiddleware(ws.authToken)(handler)
+
+	// cookieSync must wrap authToken so that the cookie is set on every
+	// response (including auth error responses). It must also be inside
+	// CORS so the Set-Cookie header appears alongside CORS headers.
+	handler = cookieSyncMiddleware()(handler)
+
+	// CORS must be the LAST (outermost) wrapper. It handles cross-origin
+	// requests from Cloudflare Pages / other origins and must apply to all
+	// responses including auth errors, security headers, and preflight OPTIONS.
+	handler = corsMiddleware(ws.bindAddr, ws.normalizedAllowedOrigins)(handler)
 
 	ws.server = &http.Server{
 		Addr:    formatListenAddr(ws.bindAddr, ws.port),

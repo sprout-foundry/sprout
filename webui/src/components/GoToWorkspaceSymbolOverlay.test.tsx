@@ -100,6 +100,13 @@ async function waitForAsync() {
 // ── Tests ────────────────────────────────────────────────────────────────
 
 describe('GoToWorkspaceSymbolOverlay', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   // 1. Renders nothing when visible=false
   it('renders nothing when visible=false', () => {
     const view = renderOverlay({ visible: false });

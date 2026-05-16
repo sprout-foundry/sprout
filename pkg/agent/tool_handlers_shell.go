@@ -155,7 +155,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 
 	// Validate that the operation type is known
 	if !isValidGitOperation(operation) {
-		validOpNames := []string{"commit", "push", "add", "rm", "mv", "reset", "rebase", "merge", "checkout", "branch_delete", "tag", "clean", "stash", "am", "apply", "cherry_pick", "revert"}
+		validOpNames := []string{"commit", "push", "add", "rm", "mv", "reset", "rebase", "merge", "checkout", "branch_delete", "tag", "clean", "stash", "am", "apply", "cherry_pick", "revert", "pull", "fetch", "restore"}
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid git operation type '%s'. Valid operations: %s. For read-only operations like status, log, diff, etc., use shell_command instead.", operationParam, strings.Join(validOpNames, ", ")), nil)
 	}
 
@@ -178,7 +178,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
 	// user approval regardless of persona.
 	isRepoOrchestrator := a.GetActivePersona() == "repo_orchestrator"
-	allowWithoutApproval := isRepoOrchestrator && (operation == tools.GitOpAdd || operation == tools.GitOpPush)
+	allowWithoutApproval := isRepoOrchestrator && (operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch)
 
 	var approvalPrompter tools.GitApprovalPrompter
 	if !allowWithoutApproval {
@@ -207,6 +207,7 @@ func isValidGitOperation(op tools.GitOperationType) bool {
 		tools.GitOpMerge, tools.GitOpCheckout, tools.GitOpBranchDelete,
 		tools.GitOpTag, tools.GitOpClean, tools.GitOpStash,
 		tools.GitOpAm, tools.GitOpApply, tools.GitOpCherryPick, tools.GitOpRevert,
+		tools.GitOpPull, tools.GitOpFetch, tools.GitOpRestore,
 	}
 
 	for _, validOp := range validOps {

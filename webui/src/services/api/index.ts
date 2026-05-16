@@ -38,6 +38,9 @@ export type {
 
 export { SSHWorkspaceOpenError } from './types';
 
+// ApiService — singleton facade
+export { ApiService } from './apiService';
+
 // Domain modules
 export * as filesApi from './filesApi';
 export * as gitApi from './gitApi';

@@ -11,7 +11,7 @@
       "ES2020"
     ],
     "module": "ESNext",
-    "moduleResolution": "node16",
+    "moduleResolution": "bundler",
     "outDir": "dist",
     "rootDir": "./src",
     "skipLibCheck": true,

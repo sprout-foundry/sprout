@@ -1,6 +1,6 @@
 # SP-024: Context Management — File Read Optimization
 
-**Status:** 📋 Spec  
+**Status:** ✅ Phase 1-3 complete (Phase 2 deferred, Phase 4 future; tree-sitter in SP-025)  
 **Date:** 2026-05-15
 
 ## Problem
@@ -70,13 +70,12 @@ Replace old tool outputs with placeholders after they've been processed:
 
 ## Implementation Plan
 
-1. [ ] Lower `defaultMaxFileSize` to 32KB
-2. [ ] Lower `lineRangeMaxSize` to 2MB
-3. [ ] Update truncation warning message to reflect new limits
-4. [ ] Update TODO.md entry (currently references 80KB/10MB)
+1. [x] Lower `defaultMaxFileSize` to 32KB
+2. [x] Lower `lineRangeMaxSize` to 2MB
+3. [x] Update truncation warning message to reflect new limits
+4. [x] Add `repo_map` tool with line numbers (see SP-025 for tree-sitter upgrade)
 5. [ ] (Future) Error on large files instead of auto-truncating
-6. [ ] (Future) Add `repo_map` tool
-7. [ ] (Future) Add observation masking
+6. [ ] (Future) Add observation masking
 
 ## Risks
 

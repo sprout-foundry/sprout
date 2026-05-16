@@ -43,7 +43,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 	})
 
 	// ---------------------------------------------------------------
-	// Register all 30 tools
+	// Register all 31 tools
 	// ---------------------------------------------------------------
 
 	// 1. shell_command
@@ -316,6 +316,24 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 				return handleToolError(agent, err, "search_files")
 			}
 			return postProcessResult(ctx, agent, "search_files", args, result), nil
+		},
+	})
+
+	// 14b. repo_map (SafeForParallel)
+	registry.Register(core.ToolConfig{
+		Name:        "repo_map",
+		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes). Useful for understanding project structure before reading specific files. Output is limited to ~1024 tokens.",
+		Parameters: []core.ParameterConfig{
+			{Name: "directory", Type: "string", Description: "Directory to scan (default: workspace root)"},
+		},
+		SafeForParallel: true,
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "repo_map")
+			result, err := handleRepoMap(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "repo_map")
+			}
+			return postProcessResult(ctx, agent, "repo_map", args, result), nil
 		},
 	})
 

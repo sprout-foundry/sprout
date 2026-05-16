@@ -9,6 +9,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
+import { toQueryProgress } from '../types/app';
 import type { WsEvent } from '@sprout/events';
 import { getWebUIClientId } from '../services/clientSession';
 import { debugLog, error as logError } from '../utils/log';
@@ -161,7 +162,7 @@ export function useEventHandler({
 
       case 'query_progress':
         setState((prev) => ({
-          queryProgress: eventData,
+          queryProgress: toQueryProgress(eventData),
         }));
         debugLog('[>>] Query progress:', eventData);
         break;

@@ -9,6 +9,7 @@ import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, ToolExecution } from './chat/types';
+import type { QueryProgress } from '../types/app';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -57,7 +58,7 @@ function Chat(props: ChatProps): JSX.Element {
   const hasSubagentActivity = subagentActivities.length > 0;
   const needsHealthCheck = requiresBackendHealthCheck();
 
-  const currentQueryCount = stats?.queryCount as number | undefined;
+  const currentQueryCount = typeof stats?.queryCount === 'number' ? stats.queryCount : undefined;
   const filteredToolExecutions = useMemo(() => {
     if (!currentQueryCount) {
       return toolExecutions;
@@ -175,7 +176,7 @@ function Chat(props: ChatProps): JSX.Element {
                   <ChatFooter
                     hasSubagentActivity={hasSubagentActivity}
                     subagentActivities={subagentActivities}
-                    queryProgress={queryProgress}
+                    queryProgress={queryProgress as QueryProgress | null /* ChatProps.queryProgress is `unknown` in shared pkg */}
                     isProcessing={isProcessing}
                     filteredToolExecutions={filteredToolExecutions}
                     lastError={lastError}
@@ -226,8 +227,8 @@ function Chat(props: ChatProps): JSX.Element {
           onQueueMessageEdit={onQueueMessageEdit}
           onQueueReorder={onQueueReorder}
           onClearQueuedMessages={onClearQueuedMessages}
-          isIndexEnabled={!!(stats as Record<string, unknown>)?.embedding_index_enabled}
-          isIndexBuilding={!!(stats as Record<string, unknown>)?.embedding_index_building}
+          isIndexEnabled={!!stats?.embedding_index_enabled}
+          isIndexBuilding={!!stats?.embedding_index_building}
           onToggleIndex={handleToggleIndex}
         />
       </div>

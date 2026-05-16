@@ -111,11 +111,10 @@ export default function MCPSettingsTab({
 
         <div className="crud-list">
           {serverEntries.map(([name, cfg]) => {
-            const server = cfg as unknown as Record<string, unknown>;
             return (
               <div key={name} className="crud-item">
                 <span className="crud-item-name">{name}</span>
-                <span className="crud-item-detail">{(server.command as string) || ''}</span>
+                <span className="crud-item-detail">{cfg.command || ''}</span>
                 <button
                   type="button"
                   className="crud-btn"
@@ -131,9 +130,9 @@ export default function MCPSettingsTab({
                   onClick={() => {
                     setEditingServer({ mode: 'edit', originalName: name });
                     setServerName(name);
-                    setServerCommand((server.command as string) || '');
-                    setServerArgs(Array.isArray(server.args) ? (server.args as unknown[]).map(String).join(' ') : '');
-                    const existingEnv = (server.env as Record<string, string>) || {};
+                    setServerCommand(cfg.command || '');
+                    setServerArgs(cfg.args ? cfg.args.join(' ') : '');
+                    const existingEnv = cfg.env || {};
                     setServerEnvVars(Object.entries(existingEnv).map(([key, value]) => ({ key, value })));
                     setNewEnvKey('');
                     setNewEnvValue('');

@@ -27,6 +27,24 @@ interface ProviderMutationParams {
   setProviderModelContextSizes: (v: string) => void;
 }
 
+/** Parse a comma-separated "model:size" string into a Record
+ * (e.g. "gpt-4o:128000,claude:200000" → { gpt-4o: 128000, claude: 200000 }). */
+function parseModelContextSizes(raw: string): Record<string, number> | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const entries = trimmed.split(',').map((pair) => {
+    const sep = pair.lastIndexOf(':');
+    if (sep === -1) return null;
+    const model = pair.slice(0, sep).trim();
+    const size = Number(pair.slice(sep + 1).trim());
+    return model && Number.isFinite(size) ? ([model, size] as const) : null;
+  });
+  const valid = entries.filter(
+    (e): e is readonly [string, number] => e !== null,
+  );
+  return valid.length > 0 ? Object.fromEntries(valid) : undefined;
+}
+
 export function useProviderMutations(params: ProviderMutationParams) {
   const {
     ctx,
@@ -79,7 +97,8 @@ export function useProviderMutations(params: ProviderMutationParams) {
     }
     ctx.setSavingKey('provider-add');
     try {
-      const provider: Record<string, unknown> = {
+      const modelContextSizes = parseModelContextSizes(providerModelContextSizes);
+      const provider: CustomProviderConfig = {
         name: providerName.trim(),
         endpoint: providerApiBase.trim(),
         model_name: providerModelName.trim(),
@@ -88,9 +107,9 @@ export function useProviderMutations(params: ProviderMutationParams) {
         env_var: providerEnvVar.trim() || undefined,
         supports_vision: providerSupportsVision || undefined,
         vision_model: providerVisionModel.trim() || undefined,
-        model_context_sizes: providerModelContextSizes.trim() || undefined,
+        ...(modelContextSizes ? { model_context_sizes: modelContextSizes } : {}),
       };
-      await ctx.api.addCustomProvider(provider as unknown as CustomProviderConfig);
+      await ctx.api.addCustomProvider(provider);
       ctx.addNotification('success', 'Providers', `Provider "${providerName}" added`, 3000);
       resetProviderForm();
     } catch (err) {
@@ -116,7 +135,8 @@ export function useProviderMutations(params: ProviderMutationParams) {
     if (!editingProvider?.originalName) return;
     ctx.setSavingKey(`provider-${editingProvider.originalName}`);
     try {
-      const provider: Record<string, unknown> = {
+      const modelContextSizes = parseModelContextSizes(providerModelContextSizes);
+      const provider: CustomProviderConfig = {
         name: providerName.trim(),
         endpoint: providerApiBase.trim(),
         model_name: providerModelName.trim(),
@@ -125,9 +145,9 @@ export function useProviderMutations(params: ProviderMutationParams) {
         env_var: providerEnvVar.trim() || undefined,
         supports_vision: providerSupportsVision || undefined,
         vision_model: providerVisionModel.trim() || undefined,
-        model_context_sizes: providerModelContextSizes.trim() || undefined,
+        ...(modelContextSizes ? { model_context_sizes: modelContextSizes } : {}),
       };
-      await ctx.api.updateCustomProvider(editingProvider.originalName, provider as unknown as CustomProviderConfig);
+      await ctx.api.updateCustomProvider(editingProvider.originalName, provider);
       ctx.addNotification('success', 'Providers', `Provider "${editingProvider.originalName}" updated`, 3000);
       resetProviderForm();
     } catch (err) {

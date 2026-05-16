@@ -15,6 +15,15 @@ interface EyeDropper {
   open(): Promise<EyeDropperResult>;
 }
 
+// Augment Window to include the EyeDropper constructor (Chrome-only, not in standard TS DOM lib).
+// eslint-disable-next-line no-redeclare
+declare global {
+  interface Window {
+    // eslint-disable-next-line no-redeclare
+    EyeDropper?: new () => EyeDropper;
+  }
+}
+
 interface ImageViewerProps {
   filePath: string;
   fileName: string;
@@ -292,13 +301,12 @@ function ImageViewer({ filePath, fileName, fileSize }: ImageViewerProps): JSX.El
   const [pickedColor, setPickedColor] = useState<string | null>(null);
   const handlePickColor = useCallback(async () => {
     // EyeDropper API is Chrome-only; check availability
-    if (!('EyeDropper' in window)) {
+    if (!window.EyeDropper) {
       log.warn('[ImageViewer] EyeDropper API not available in this browser', { title: 'Color Picker' });
       return;
     }
     try {
-      const EyeDropperConstructor = window.EyeDropper as unknown as new () => EyeDropper;
-      const dropper = new EyeDropperConstructor();
+      const dropper = new window.EyeDropper();
       const result = await dropper.open();
       setPickedColor(result.sRGBHex);
       await navigator.clipboard.writeText(result.sRGBHex);

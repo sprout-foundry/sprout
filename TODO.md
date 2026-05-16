@@ -812,9 +812,8 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
 [] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
 [x] - REFACTOR: Split `api.ts` (2,007 lines) by domain — partial split exists (`gitApi.ts`, `terminalApi.ts`, etc.) but main file remains monolithic. `webui/src/services/api.ts`
-[] - REFACTOR: Split `api.ts` (2,007 lines) by domain — partial split exists (`gitApi.ts`, `terminalApi.ts`, etc.) but main file remains monolithic. `webui/src/services/api.ts`
 [x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
-[] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
+[x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
 [x] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [x] - REFACTOR: Deduplicate `populateAgentStats` copied inline in `gatherStatsForClientIDLocked` (~30 lines duplicated). `pkg/webui/api_files.go`

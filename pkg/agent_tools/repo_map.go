@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	astp "github.com/sprout-foundry/sprout/pkg/ast"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -43,6 +44,13 @@ var sourceExtensions = map[string]bool{
 var ignoredDirs = map[string]bool{
 	".git": true, "node_modules": true, "vendor": true, "dist": true,
 	"build": true, ".next": true, "coverage": true, ".cache": true, ".sprout": true,
+}
+
+// treeSitterExtensions is the set of file extensions for which the tree-sitter
+// based pkg/ast parser should be used instead of regex.  Go files continue to
+// use go/ast (more mature); other languages fall through to regex.
+var treeSitterExtensions = map[string]bool{
+	".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".py": true,
 }
 
 // GenerateRepoMap walks the directory tree rooted at rootDir and produces a
@@ -123,17 +131,12 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 		default:
 		}
 
-		// Go files: read full content (AST parser needs complete file).
-		// Other files: truncate to 32KB (regex only needs a sample).
-		var content []byte
-		var readErr error
-		if f.ext == ".go" {
-			content, readErr = os.ReadFile(f.absPath)
-		} else {
-			content, readErr = os.ReadFile(f.absPath)
-			if readErr == nil && len(content) > repoMapMaxFileSize {
-				content = content[:repoMapMaxFileSize]
-			}
+		// Read full file content. Go files and tree-sitter-supported files
+		// need complete content for accurate parsing; other files are truncated
+		// to 32KB since regex only needs a sample.
+		content, readErr := os.ReadFile(f.absPath)
+		if readErr == nil && len(content) > repoMapMaxFileSize && f.ext != ".go" && !treeSitterExtensions[f.ext] {
+			content = content[:repoMapMaxFileSize]
 		}
 		if readErr != nil {
 			continue
@@ -173,6 +176,48 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	return sb.String(), nil
 }
 
+// extractSymbolsViaTreeSitter uses the pkg/ast tree-sitter parser to extract
+// symbols from TS/JS/Python files.  Returns nil error on success; the caller
+// falls back to regex on any error.
+func extractSymbolsViaTreeSitter(path string, ext string, content []byte) ([]symbolEntry, error) {
+	result, err := astp.ParseFile(path, content)
+	if err != nil {
+		return nil, err
+	}
+	defer result.Release()
+
+	var entries []symbolEntry
+	for _, sym := range result.Symbols {
+		prefix := symbolDisplayPrefix(sym.Kind, ext)
+		entries = append(entries, symbolEntry{
+			Name: prefix + " " + sym.Name,
+			Line: sym.StartLine,
+		})
+	}
+	return entries, nil
+}
+
+// symbolDisplayPrefix maps an AST symbol kind to the display prefix used in
+// the repo map output.  This preserves backward compatibility with the
+// previous regex-based output format (e.g. "def" for Python functions,
+// "const" for TS/JS variables).
+func symbolDisplayPrefix(kind string, ext string) string {
+	switch ext {
+	case ".py":
+		if kind == "function" {
+			return "def"
+		}
+		return kind
+	case ".ts", ".tsx", ".js", ".jsx":
+		if kind == "variable" {
+			return "const"
+		}
+		return kind
+	default:
+		return kind
+	}
+}
+
 // symbolEntry pairs a symbol name with its 1-based line number.
 type symbolEntry struct {
 	Name string
@@ -180,7 +225,8 @@ type symbolEntry struct {
 }
 
 // extractSymbolsForFile extracts symbols from a file using the appropriate
-// method: AST for Go, regex for other languages.
+// method: go/ast for Go, tree-sitter via pkg/ast for TS/JS/Python (with regex
+// fallback), and regex for all other languages.
 func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEntry, error) {
 	if ext == ".go" {
 		symbols, err := extractGoSymbolsAST(path)
@@ -189,6 +235,13 @@ func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEnt
 			return extractSymbolsByRegex(ext, string(content)), nil
 		}
 		return symbols, nil
+	}
+	// TS/JS/Python: try tree-sitter first; fall back to regex on error.
+	if treeSitterExtensions[ext] {
+		if symbols, err := extractSymbolsViaTreeSitter(path, ext, content); err == nil {
+			return symbols, nil
+		}
+		return extractSymbolsByRegex(ext, string(content)), nil
 	}
 	return extractSymbolsByRegex(ext, string(content)), nil
 }

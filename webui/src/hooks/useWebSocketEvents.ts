@@ -11,7 +11,7 @@ import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Message } from '@sprout/ui';
 import type { AppState } from '../types/app';
-import type { WsEvent } from '../services/websocket';
+import type { WsEvent } from '@sprout/events';
 import { ApiService } from '../services/api';
 import { switchChatSession, listChatSessions } from '../services/chatSessions';
 import { trimMessages } from '../utils/messageWindow';

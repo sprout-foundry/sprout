@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestNormalizeWhitespace tests the normalizeWhitespace function from edit.go
+// TestNormalizeWhitespace tests the normalizeWhitespace function from normalization.go
 func TestNormalizeWhitespace(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -89,7 +89,7 @@ func TestNormalizeWhitespace(t *testing.T) {
 	}
 }
 
-// TestNormalizeWhitespaceWithMapping tests the normalizeWhitespaceWithMapping function from edit.go
+// TestNormalizeWhitespaceWithMapping tests the normalizeWhitespaceWithMapping function from normalization.go
 func TestNormalizeWhitespaceWithMapping(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -210,7 +210,7 @@ func TestNormalizeWhitespaceWithMapping(t *testing.T) {
 	}
 }
 
-// TestValidateMapping tests the validateMapping function from edit.go
+// TestValidateMapping tests the validateMapping function from normalization.go
 func TestValidateMapping(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -293,7 +293,7 @@ func TestValidateMapping(t *testing.T) {
 	}
 }
 
-// TestFindMatchEndPosition tests the findMatchEndPosition function from edit.go
+// TestFindMatchEndPosition tests the findMatchEndPosition function from normalization.go
 func TestFindMatchEndPosition(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -450,7 +450,7 @@ func TestFindLineNumber(t *testing.T) {
 	}
 }
 
-// TestPerformNormalizedReplacement tests the performNormalizedReplacement function from edit.go
+// TestPerformNormalizedReplacement tests the performNormalizedReplacement function from normalization.go
 func TestPerformNormalizedReplacement(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -526,7 +526,7 @@ func TestPerformNormalizedReplacement(t *testing.T) {
 	}
 }
 
-// TestFindAndReplaceWithNormalization tests the findAndReplaceWithNormalization function from edit.go
+// TestFindAndReplaceWithNormalization tests the findAndReplaceWithNormalization function from normalization.go
 func TestFindAndReplaceWithNormalization(t *testing.T) {
 	tests := []struct {
 		name            string

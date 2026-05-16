@@ -98,7 +98,7 @@ async def fetch_data(url): pass
 		}
 	}
 
-	// TypeScript: regex extraction (unchanged)
+	// TypeScript: tree-sitter extraction (with regex fallback)
 	for _, want := range []string{
 		"- class App:1",
 		"- interface User:2",
@@ -111,7 +111,7 @@ async def fetch_data(url): pass
 		}
 	}
 
-	// Python: regex extraction (unchanged)
+	// Python: tree-sitter extraction (with regex fallback)
 	for _, want := range []string{
 		"- def calculate_total:1",
 		"- class DataProcessor:2",
@@ -323,7 +323,7 @@ async def fetch(url): pass
 		t.Errorf("missing 'func (*Config).Start:9', got:\n%s", result)
 	}
 
-	// TS: regex extraction (unchanged) — App on line 2, User on line 6, initApp on line 7
+	// TS: tree-sitter extraction (with regex fallback) — App on line 2, User on line 6, initApp on line 7
 	if !strings.Contains(result, "- class App:2") {
 		t.Errorf("missing 'class App:2', got:\n%s", result)
 	}
@@ -334,7 +334,7 @@ async def fetch(url): pass
 		t.Errorf("missing 'function initApp:7', got:\n%s", result)
 	}
 
-	// Python: regex extraction (unchanged) — Parser on line 4, load_data on line 7, fetch on line 10
+	// Python: tree-sitter extraction (with regex fallback) — Parser on line 4, load_data on line 7, fetch on line 10
 	if !strings.Contains(result, "- class Parser:4") {
 		t.Errorf("missing 'class Parser:4', got:\n%s", result)
 	}

@@ -443,7 +443,7 @@ func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeTy
 
 func extractPythonSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType string) (Symbol, bool) {
 	switch nodeType {
-	case "function_definition":
+	case "function_definition", "async_function_definition":
 		name := childText(node, bt, "name")
 		return makeSymbol(name, "function", node), name != ""
 

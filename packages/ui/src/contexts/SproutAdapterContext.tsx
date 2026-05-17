@@ -9,14 +9,15 @@ const SproutAdapterContext = createContext<SproutAdapterContextValue | null>(nul
 
 /**
  * Hook to access the installed Sprout adapter.
- * Throws an error if used outside of SproutProvider.
+ *
+ * Returns the adapter instance, or null when no SproutProvider is in the
+ * component tree (e.g. running outside the Sprout IDE).  Callers should
+ * check for null and degrade gracefully rather than assuming the adapter
+ * is always present.
  */
 export function useSproutAdapter(): APIAdapter | null {
   const context = useContext(SproutAdapterContext);
-  if (!context) {
-    throw new Error('useSproutAdapter must be used within SproutProvider');
-  }
-  return context.adapter;
+  return context?.adapter ?? null;
 }
 
 /**

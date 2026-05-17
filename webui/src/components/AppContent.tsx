@@ -1,33 +1,33 @@
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import type { TodoItem, LogEntry } from '@sprout/ui';
 import { Menu, PanelRightClose } from 'lucide-react';
-import ErrorBoundary from './ErrorBoundary';
-import Sidebar from './Sidebar';
-import Terminal from './Terminal';
-import Status from './Status';
-import StatusBar from './StatusBar';
-import NotificationCenter from './NotificationCenter';
-import CommandPalette, { type PaletteMode } from './CommandPalette';
-import HeaderBar from './HeaderBar';
-import EditorWorkspace from './EditorWorkspace';
-import ContextSidebar from './ContextSidebar';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import { supportsLocalTerminal } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { ApiService } from '../services/api';
-import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import { useNotifications } from '../contexts/NotificationContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
-import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
-import { useInstances } from '../hooks/useInstances';
-import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
-import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
-import type { ContextPanelHandle } from './contextPanel/types';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
-import { useFileHandler } from '../hooks/useFileHandler';
+import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
+import { useChatSessionsSync } from '../hooks/useChatSessionsSync';
 import { useCurrentTodos } from '../hooks/useCurrentTodos';
+import { useFileHandler } from '../hooks/useFileHandler';
+import { useGitWorkspace } from '../hooks/useGitWorkspace';
+import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
+import { useInstances } from '../hooks/useInstances';
+import { type SectionTab } from '../hooks/useSidebarState';
+import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
-import type { TodoItem, LogEntry } from '@sprout/ui';
-import { supportsLocalTerminal } from '../config/mode';
-import { useNotifications } from '../contexts/NotificationContext';
-import { type SectionTab } from '../hooks/useSidebarState';
+import CommandPalette, { type PaletteMode } from './CommandPalette';
+import type { ContextPanelHandle } from './contextPanel/types';
+import ContextSidebar from './ContextSidebar';
+import EditorWorkspace from './EditorWorkspace';
+import ErrorBoundary from './ErrorBoundary';
+import HeaderBar from './HeaderBar';
+import NotificationCenter from './NotificationCenter';
+import Sidebar from './Sidebar';
+import Status from './Status';
+import StatusBar from './StatusBar';
+import Terminal from './Terminal';
 
 interface AppContentProps {
   state: AppState;
@@ -322,57 +322,81 @@ const AppContent: React.FC<AppContentProps> = ({
     openWorkspaceBuffer,
   });
 
-  const handleToolPillClick = useCallback(
-    (toolId: string) => contextPanelRef.current?.highlightTool(toolId),
-    [],
-  );
+  const handleToolPillClick = useCallback((toolId: string) => contextPanelRef.current?.highlightTool(toolId), []);
 
-  const chatProps = useMemo(() => ({
-    messages: state.messages,
-    onSendMessage,
-    onQueueMessage,
-    queuedMessagesCount,
-    inputValue,
-    onInputChange,
-    isProcessing: state.isProcessing,
-    lastError: state.lastError,
-    toolExecutions: state.toolExecutions,
-    queryProgress: state.queryProgress,
-    currentTodos,
-    onStopProcessing,
-    onToolPillClick: handleToolPillClick,
-    stats: state.stats,
-    isConnected: state.isConnected,
-    backendReachable,
-    onRetryConnection,
-  }), [
-    state.messages, onSendMessage, onQueueMessage, queuedMessagesCount,
-    inputValue, onInputChange, state.isProcessing, state.lastError,
-    state.toolExecutions, state.queryProgress, currentTodos, onStopProcessing,
-    handleToolPillClick, state.stats, state.isConnected, backendReachable,
-    onRetryConnection,
-  ]);
-  const reviewProps = useMemo(() => ({
-    review: deepReview,
-    reviewError,
-    reviewFixResult,
-    reviewFixLogs,
-    reviewFixSessionID,
-    isReviewLoading,
-    isReviewFixing,
-    onFixFromReview: handleFixFromReview,
-  }), [
-    deepReview, reviewError, reviewFixResult, reviewFixLogs,
-    reviewFixSessionID, isReviewLoading, isReviewFixing, handleFixFromReview,
-  ]);
-  const diffState = useMemo(() => ({
-    activeDiffPath,
-    activeDiff,
-    diffMode,
-    isDiffLoading,
-    diffError,
-    onDiffModeChange: handleDiffModeChange,
-  }), [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange]);
+  const chatProps = useMemo(
+    () => ({
+      messages: state.messages,
+      onSendMessage,
+      onQueueMessage,
+      queuedMessagesCount,
+      inputValue,
+      onInputChange,
+      isProcessing: state.isProcessing,
+      lastError: state.lastError,
+      toolExecutions: state.toolExecutions,
+      queryProgress: state.queryProgress,
+      currentTodos,
+      onStopProcessing,
+      onToolPillClick: handleToolPillClick,
+      stats: state.stats,
+      isConnected: state.isConnected,
+      backendReachable,
+      onRetryConnection,
+    }),
+    [
+      state.messages,
+      onSendMessage,
+      onQueueMessage,
+      queuedMessagesCount,
+      inputValue,
+      onInputChange,
+      state.isProcessing,
+      state.lastError,
+      state.toolExecutions,
+      state.queryProgress,
+      currentTodos,
+      onStopProcessing,
+      handleToolPillClick,
+      state.stats,
+      state.isConnected,
+      backendReachable,
+      onRetryConnection,
+    ],
+  );
+  const reviewProps = useMemo(
+    () => ({
+      review: deepReview,
+      reviewError,
+      reviewFixResult,
+      reviewFixLogs,
+      reviewFixSessionID,
+      isReviewLoading,
+      isReviewFixing,
+      onFixFromReview: handleFixFromReview,
+    }),
+    [
+      deepReview,
+      reviewError,
+      reviewFixResult,
+      reviewFixLogs,
+      reviewFixSessionID,
+      isReviewLoading,
+      isReviewFixing,
+      handleFixFromReview,
+    ],
+  );
+  const diffState = useMemo(
+    () => ({
+      activeDiffPath,
+      activeDiff,
+      diffMode,
+      isDiffLoading,
+      diffError,
+      onDiffModeChange: handleDiffModeChange,
+    }),
+    [activeDiffPath, activeDiff, diffMode, isDiffLoading, diffError, handleDiffModeChange],
+  );
 
   return (
     <div className="app">

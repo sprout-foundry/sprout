@@ -2,14 +2,14 @@ import '../CommandPalette.css';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ChangeEvent, KeyboardEvent, MouseEvent } from 'react';
 import { useHotkeys } from '../../contexts/HotkeyContext';
+import { ApiService } from '../../services/api';
 import { useLog } from '../../utils/log';
 import { extractSymbols, buildScopePaths, KIND_ICONS } from '../../utils/symbolUtils';
-import { ApiService } from '../../services/api';
-import useFileIndex from './useFileIndex';
-import usePaletteResults from './usePaletteResults';
-import useCommandExecutor from './useCommandExecutor';
 import { MODE_TABS } from './constants';
 import type { CommandPaletteProps, PaletteMode, PaletteResult } from './types';
+import useCommandExecutor from './useCommandExecutor';
+import useFileIndex from './useFileIndex';
+import usePaletteResults from './usePaletteResults';
 
 function CommandPalette({
   isOpen,

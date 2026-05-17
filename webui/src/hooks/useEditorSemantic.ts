@@ -13,14 +13,14 @@
  * Target: ~300 lines
  */
 
-import { useState, useRef, useCallback } from 'react';
 import type { EditorView } from '@codemirror/view';
+import { useState, useRef, useCallback } from 'react';
 import type { ReferenceInfo } from '../components/FindAllReferencesOverlay';
+import { resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
-import { resolveLanguageId } from '../extensions/languageRegistry';
-import { debugLog } from '../utils/log';
 import type { EditorBuffer } from '../types/editor';
+import { debugLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
 // Types

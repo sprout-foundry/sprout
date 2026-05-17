@@ -131,19 +131,18 @@ describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registr
     // this is correct behavior — no-op endpoints are handled by getSyntheticResponse
     // in the CloudAdapter, not by the WASM shell. The key requirement is that
     // these endpoints are NOT proxied to the Foundry backend.
-    it.each(wasmLocalEndpointSpecs.filter((spec) => {
-      // open-in-file-browser is 'no-op', not 'wasm-local', so isWasmLocalEndpoint returns false
-      if (spec.path === '/api/open-in-file-browser') return false;
-      return true;
-    }))(
-      '$method $path (handler: $handler) must return true for isWasmLocalEndpoint',
-      ({ path, method, handler }) => {
-        expect(
-          isWasmLocalEndpoint(path, method),
-          `$method $path (handler: $handler) should be recognized as wasm-local`,
-        ).toBe(true);
-      },
-    );
+    it.each(
+      wasmLocalEndpointSpecs.filter((spec) => {
+        // open-in-file-browser is 'no-op', not 'wasm-local', so isWasmLocalEndpoint returns false
+        if (spec.path === '/api/open-in-file-browser') return false;
+        return true;
+      }),
+    )('$method $path (handler: $handler) must return true for isWasmLocalEndpoint', ({ path, method, handler }) => {
+      expect(
+        isWasmLocalEndpoint(path, method),
+        `$method $path (handler: $handler) should be recognized as wasm-local`,
+      ).toBe(true);
+    });
 
     it('open-in-file-browser (no-op) is NOT wasm-local but IS registered', () => {
       // open-in-file-browser is classified as 'no-op' — not wasm-local — but must
@@ -185,8 +184,7 @@ describe('WASM-local endpoint cross-validation (Go server ↔ TypeScript registr
 
       if (errors.length > 0) {
         throw new Error(
-          `${errors.length} wasm-local endpoint validation error(s):\n` +
-            errors.map((e) => `  ✗ ${e}`).join('\n'),
+          `${errors.length} wasm-local endpoint validation error(s):\n` + errors.map((e) => `  ✗ ${e}`).join('\n'),
         );
       }
     });

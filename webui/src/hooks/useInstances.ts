@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { ApiService, SproutInstance } from '../services/api';
 import { supportsInstances } from '../config/mode';
+import type { ApiService, SproutInstance } from '../services/api';
 
 const INSTANCE_PID_STORAGE_KEY = 'sprout:webui:instancePid';
 

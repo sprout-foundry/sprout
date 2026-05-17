@@ -1,6 +1,6 @@
+import type { NotificationType } from '../contexts/NotificationContext';
 import { notificationBus } from './notificationBus';
 import type { NotificationEvent } from './notificationBus';
-import type { NotificationType } from '../contexts/NotificationContext';
 
 // ---------------------------------------------------------------------------
 // Setup / Teardown

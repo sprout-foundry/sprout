@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import { MIN_PANE_WIDTH_PERCENT } from '../contexts/EditorManagerContext';
+import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 
 interface UsePaneManagementParams {
   panes: EditorPane[];

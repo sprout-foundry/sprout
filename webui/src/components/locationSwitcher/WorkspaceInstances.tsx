@@ -1,5 +1,5 @@
-import React from 'react';
 import { Monitor } from 'lucide-react';
+import React from 'react';
 import type { SproutInstance } from '../../services/api';
 
 export interface WorkspaceInstancesProps {

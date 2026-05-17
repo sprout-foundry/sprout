@@ -11,11 +11,10 @@
  */
 
 import { useEffect, useMemo, useCallback, useState } from 'react';
-
-import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
 import { resolveLanguageId } from '../extensions/languageRegistry';
-import type { EditorBuffer } from '../types/editor';
+import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
 import type { LSPConnectionState } from '../services/lspClientService';
+import type { EditorBuffer } from '../types/editor';
 
 // ---------------------------------------------------------------------------
 // Types

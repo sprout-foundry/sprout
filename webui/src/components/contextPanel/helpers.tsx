@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ToolExecution } from '@sprout/ui';
 import {
   Wrench,
   Terminal,
@@ -19,8 +19,8 @@ import {
   XCircle,
   Hourglass,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { debugLog } from '../../utils/log';
-import type { ToolExecution } from '@sprout/ui';
 
 // ── Tool helpers ────────────────────────────────────────────────────
 

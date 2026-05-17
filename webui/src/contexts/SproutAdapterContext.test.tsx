@@ -228,7 +228,7 @@ describe('useSproutFetch', () => {
   });
 
   it('falls back to clientFetch when no adapter is installed', async () => {
-    const clientFetchSpy = vi.spyOn({ clientFetch }, 'clientFetch');
+    (clientFetch as vi.Mock).mockResolvedValue({ ok: true } as Response);
     renderProvider();
 
     const fn = fetchFn();
@@ -237,9 +237,7 @@ describe('useSproutFetch', () => {
     // Call the fetch function
     await fn('/api/test');
 
-    expect(clientFetchSpy).toHaveBeenCalledWith('/api/test', expect.anything());
-
-    clientFetchSpy.mockRestore();
+    expect(clientFetch).toHaveBeenCalledWith('/api/test', expect.anything());
   });
 
   it('delegates to adapter.fetch when adapter is installed', async () => {
@@ -286,7 +284,7 @@ describe('useSproutFetch', () => {
   });
 
   it('merges custom headers with client ID header when no adapter', async () => {
-    const clientFetchSpy = vi.spyOn({ clientFetch }, 'clientFetch').mockResolvedValue({ ok: true } as Response);
+    (clientFetch as vi.Mock).mockResolvedValue({ ok: true } as Response);
 
     renderProvider();
 
@@ -298,21 +296,19 @@ describe('useSproutFetch', () => {
       },
     });
 
-    expect(clientFetchSpy).toHaveBeenCalledWith(
+    expect(clientFetch).toHaveBeenCalledWith(
       '/api/test',
       expect.objectContaining({
         headers: expect.any(Headers),
       }),
     );
 
-    const capturedHeaders = clientFetchSpy.mock.calls[0]![1]!.headers as Headers;
+    const capturedHeaders = (clientFetch as vi.Mock).mock.calls[0]![1]!.headers as Headers;
     expect(capturedHeaders.get('Content-Type')).toBe('application/json');
     expect(capturedHeaders.get('X-Custom-Header')).toBe('custom-value');
     // Just verify client ID header is set
     expect(capturedHeaders.get(WEBUI_CLIENT_ID_HEADER)).toBeDefined();
     expect(capturedHeaders.get(WEBUI_CLIENT_ID_HEADER)).not.toBeNull();
-
-    clientFetchSpy.mockRestore();
   });
 
   it('merges custom headers with client ID header when adapter is installed', async () => {

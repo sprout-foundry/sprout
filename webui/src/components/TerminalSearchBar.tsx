@@ -1,6 +1,6 @@
+import { ChevronUp, ChevronDown, X, Type, Hash } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { ChevronUp, ChevronDown, X, Type, Hash } from 'lucide-react';
 
 export interface TerminalSearchOptions {
   query: string;

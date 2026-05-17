@@ -6,8 +6,8 @@
  */
 
 import { installAdapter } from './services/apiAdapter';
-import { CloudAdapter } from './services/cloudAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
+import { CloudAdapter } from './services/cloudAdapter';
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },

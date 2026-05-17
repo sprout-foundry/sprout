@@ -13,9 +13,9 @@
  *   when multiple editor panes exist (each with their own EditorView).
  */
 
-import { EditorView, type DOMEventHandlers } from '@codemirror/view';
 import type { ChangeSpec } from '@codemirror/state';
 import { Prec } from '@codemirror/state';
+import { EditorView, type DOMEventHandlers } from '@codemirror/view';
 
 // ── Types ───────────────────────────────────────────────────────────
 

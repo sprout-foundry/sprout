@@ -1,5 +1,6 @@
 /* MergeViewWrapper - diff viewer React component */
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import {
   MergeView,
   goToNextChunk,
@@ -8,14 +9,13 @@ import {
   rejectChunk,
   unifiedMergeView,
 } from '@codemirror/merge';
-import { EditorView, keymap, lineNumbers } from '@codemirror/view';
-import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
-import { defaultKeymap, history, historyKeymap, undo, redo } from '@codemirror/commands';
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import type { Extension } from '@codemirror/state';
 import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
-import { getLanguageExtensions, detectLanguage } from '../extensions/languageRegistry';
+import { EditorView, keymap, lineNumbers } from '@codemirror/view';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { getLanguageExtensions, detectLanguage } from '../extensions/languageRegistry';
 import './MergeViewWrapper.css';
 
 // Re-export utilities for consumers

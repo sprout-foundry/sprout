@@ -1,7 +1,7 @@
 // @ts-nocheck
 
-import { act, createElement } from 'react';
-import type { Dispatch, KeyboardEvent } from 'react';
+import { act, createElement, KeyboardEvent } from 'react';
+import type { Dispatch } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { buildKeyString, HotkeyProvider } from './HotkeyContext';
 

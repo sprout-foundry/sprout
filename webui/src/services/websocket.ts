@@ -1,9 +1,9 @@
+import type { WsEvent } from '@sprout/events';
 import { debugLog } from '../utils/log';
+import { getAdapter } from './apiAdapter';
 import { appendClientIdToUrl } from './clientSession';
 import { notificationBus } from './notificationBus';
-import { getAdapter } from './apiAdapter';
 
-import type { WsEvent } from '@sprout/events';
 export type { WsEvent };
 
 type EventCallback = (event: WsEvent) => void;

@@ -1,7 +1,6 @@
-import type { ChatContextPanelProps, StatusMetrics } from './types';
-import type { Revision } from './types';
 import { Activity, Bot, Wrench, FileCode, BarChart3 } from 'lucide-react';
 import { formatDurationMs, formatTokens, formatCost } from './helpers';
+import type { ChatContextPanelProps, StatusMetrics, Revision } from './types';
 
 interface StatusTabProps {
   chatProps: ChatContextPanelProps | null;
@@ -27,9 +26,7 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs, revisions 
           {chatIsProcessing ? (
             <>
               <span className="status-dot-indicator active" />
-              <span className="status-label">
-                {chatQueryProgress ? chatQueryProgress.message : 'Working...'}
-              </span>
+              <span className="status-label">{chatQueryProgress ? chatQueryProgress.message : 'Working...'}</span>
             </>
           ) : chatLastError ? (
             <>

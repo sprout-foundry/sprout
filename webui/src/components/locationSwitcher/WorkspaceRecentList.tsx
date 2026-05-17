@@ -1,6 +1,6 @@
 import React from 'react';
-import type { RemoteWorkspaceContext } from './types';
 import { collapseHomePath, getPathDisplayName } from './pathUtils';
+import type { RemoteWorkspaceContext } from './types';
 
 export interface WorkspaceRecentListProps {
   remoteContext: RemoteWorkspaceContext | null;

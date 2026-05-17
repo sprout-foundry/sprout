@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { EditorBuffer } from '../types/editor';
 import { checkFilesModified } from '../services/apiFileCheck';
+import type { EditorBuffer } from '../types/editor';
 import { debugLog } from '../utils/log';
 
 const POLL_INTERVAL_MS = 3000;

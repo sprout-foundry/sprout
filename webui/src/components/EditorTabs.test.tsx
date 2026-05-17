@@ -1,9 +1,9 @@
 // @ts-nocheck
 
-import { createRoot } from 'react-dom/client';
 import { act } from 'react';
-import EditorTabs from './EditorTabs';
+import { createRoot } from 'react-dom/client';
 import { useEditorManager } from '../contexts/EditorManagerContext';
+import EditorTabs from './EditorTabs';
 
 // ---------------------------------------------------------------------------
 // Mocks

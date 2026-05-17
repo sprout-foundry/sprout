@@ -19,15 +19,14 @@
  * Target: ~250 lines
  */
 
-import { useEffect, useCallback, useRef } from 'react';
-import type { EditorView } from '@codemirror/view';
-import { Transaction } from '@codemirror/state';
 import { undo, redo } from '@codemirror/commands';
 import { openSearchPanel } from '@codemirror/search';
-
-import type { EditorBuffer } from '../types/editor';
-import { notificationBus } from '../services/notificationBus';
+import { Transaction } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
+import { useEffect, useCallback, useRef } from 'react';
 import { formatCodeWithConfigDiscovery } from '../services/formatter';
+import { notificationBus } from '../services/notificationBus';
+import type { EditorBuffer } from '../types/editor';
 import { debugLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
@@ -116,7 +115,9 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         if (viewRef.current) {
           openSearchPanel(viewRef.current);
           requestAnimationFrame(() => {
-            const replaceInput = viewRef.current?.dom.querySelector<HTMLInputElement>('.cm-search input[name="replace"]');
+            const replaceInput = viewRef.current?.dom.querySelector<HTMLInputElement>(
+              '.cm-search input[name="replace"]',
+            );
             if (replaceInput) {
               replaceInput.focus();
               replaceInput.select();

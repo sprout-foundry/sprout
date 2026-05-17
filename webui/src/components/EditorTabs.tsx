@@ -1,5 +1,3 @@
-import { useEffect, useMemo, useRef, useState, useCallback, memo, type ReactNode } from 'react';
-import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   X,
   AlertTriangle,
@@ -31,6 +29,8 @@ import {
   FileWarning,
   type LucideIcon,
 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
+import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { type EditorBuffer } from '../types/editor';

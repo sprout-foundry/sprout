@@ -1,21 +1,19 @@
+import { Search, Replace, ChevronDown, ChevronUp, X, AlertCircle, Loader2, ChevronRight, Brain } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { Search, Replace, ChevronDown, ChevronUp, X, AlertCircle, Loader2, ChevronRight, Brain } from 'lucide-react';
 import './SearchView.css';
-import type { SearchViewProps, SearchContextMenuState } from './search/types';
-import { useSearchState } from './search/useSearchState';
+import { ApiService } from '../services/api';
 import { highlightMatch } from './search/highlightMatch';
-import SearchResults from './search/SearchResults';
-import SemanticSearchResults from './search/SemanticSearchResults';
-import SemanticPreviewTooltip from './search/SemanticPreviewTooltip';
-import type { PreviewData, PreviewPosition } from './search/SemanticPreviewTooltip';
 import SearchContextMenu, {
   createRowContextMenuHandler,
   createFileHeaderContextMenuHandler,
 } from './search/SearchContextMenu';
-import { getRelativePath } from './search/useSearchState';
-import type { SemanticSearchResult } from './search/types';
-import { ApiService } from '../services/api';
+import SearchResults from './search/SearchResults';
+import SemanticPreviewTooltip from './search/SemanticPreviewTooltip';
+import type { PreviewData, PreviewPosition } from './search/SemanticPreviewTooltip';
+import SemanticSearchResults from './search/SemanticSearchResults';
+import type { SearchViewProps, SearchContextMenuState, SemanticSearchResult } from './search/types';
+import { useSearchState, getRelativePath } from './search/useSearchState';
 
 /**
  * Search panel — text search with find/replace and semantic code search.

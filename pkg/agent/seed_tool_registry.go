@@ -35,6 +35,14 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		ep = newRichEventPublisher(agent.GetEventBus(), agent)
 	}
 
+	return newSeedToolRegistryWithPublisher(agent, ep)
+}
+
+// newSeedToolRegistryWithPublisher creates a seed ToolRegistry using the
+// provided EventPublisher. This is used by processQueryWithSeed which creates
+// one shared publisher for both the registry and the seed core agent so that
+// all events carry the same client_id/chat_id/user_id metadata.
+func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *core.ToolRegistry {
 	registry := core.NewToolRegistry(core.ToolRegistryOptions{
 		DefaultTimeout:  5 * time.Minute,
 		MaxResultSize:   50 * 1024,
@@ -70,10 +78,10 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 	// 2. git
 	registry.Register(core.ToolConfig{
 		Name:        "git",
-		Description: "Execute git write operations that modify the repository. All operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, etc.), use the shell_command tool instead.",
+		Description: "Execute git operations that modify repository state or require network access. All destructive operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, branch, show), use shell_command instead.",
 		Parameters: []core.ParameterConfig{
-			{Name: "operation", Type: "string", Required: true, Alternatives: []string{"op"}, Description: "Git operation type: commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert"},
-			{Name: "args", Type: "string", Description: "Arguments to pass to the git command (optional)"},
+			{Name: "operation", Type: "string", Required: true, Alternatives: []string{"op"}, Description: "Git operation type: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
+			{Name: "args", Type: "string", Description: "Arguments to pass to the git command (optional). For pull: --rebase, --ff-only, remote/branch. For fetch: --all, --prune, remote. For restore: --staged, pathspec."},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "git")
@@ -247,6 +255,7 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 		Parameters: []core.ParameterConfig{
 			{Name: "question", Type: "string", Required: true, Description: "The question to ask the user (required)"},
 		},
+		Timeout: 10 * time.Minute, // Match AskUserManager.DefaultAskUserTimeout
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "ask_user")
 			result, err := handleAskUser(ctx, agent, args)
@@ -663,12 +672,13 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 // and emits CLI tool_log output for tool execution.
 // ---------------------------------------------------------------------------
 
-// richEventPublisher wraps an *events.EventBus and intercepts tool_start and
-// tool_end events to enrich them with display_name, persona, is_subagent,
-// and subagent_type fields that the webui expects. All other events pass
-// through unchanged.
+// richEventPublisher wraps an *events.EventBus and enriches ALL events with
+// agent event metadata (client_id, chat_id, user_id) so that the WebSocket
+// event router can deliver them to the correct browser tab.  For tool_start
+// and tool_end events it also adds display_name, persona, is_subagent, and
+// subagent_type fields that the webui expects, and emits CLI tool_log output.
 type richEventPublisher struct {
-	bus  *events.EventBus
+	bus   *events.EventBus
 	agent *Agent
 }
 
@@ -676,10 +686,15 @@ func newRichEventPublisher(bus *events.EventBus, agent *Agent) *richEventPublish
 	return &richEventPublisher{bus: bus, agent: agent}
 }
 
-// Publish implements core.EventPublisher. It intercepts tool_start and tool_end
-// events to enrich them with display_name, persona, is_subagent, and
-// subagent_type fields. All other events pass through unchanged.
+// Publish implements core.EventPublisher. All events are decorated with the
+// agent's event metadata (client_id, chat_id, user_id) so that the WebSocket
+// handler's shouldForwardEventToConnection can route them to the correct
+// browser connection.  Tool events receive additional enrichment (display_name,
+// persona, is_subagent, subagent_type) and emit CLI tool_log output.
 func (r *richEventPublisher) Publish(eventType string, data any) {
+	// Decorate with agent event metadata for WebSocket routing.
+	data = r.decorateWithMetadata(data)
+
 	switch eventType {
 	case core.EventTypeToolStart, core.EventTypeToolEnd:
 		enriched := r.enrichEventData(data, eventType)
@@ -687,6 +702,19 @@ func (r *richEventPublisher) Publish(eventType string, data any) {
 	default:
 		r.bus.Publish(eventType, data)
 	}
+}
+
+// decorateWithMetadata merges the agent's event metadata (client_id, chat_id,
+// user_id) into the event payload. This ensures that events published by seed's
+// core agent through the EventPublisher are properly routed to the originating
+// browser tab via shouldForwardEventToConnection. Without this decoration,
+// events without client_id/chat_id are silently dropped by the WebSocket
+// forwarding logic.
+func (r *richEventPublisher) decorateWithMetadata(data any) any {
+	if r.agent == nil {
+		return data
+	}
+	return r.agent.decorateEventPayload(data)
 }
 
 // enrichEventData adds rich metadata fields to a tool event payload.
@@ -1046,20 +1074,17 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 	}
 	return func(name string, args map[string]interface{}) error {
 		// 1. Subagent nesting prevention
+		// Only block run_subagent and run_parallel_subagents — nested agent chains
+		// cause runaway resource consumption. ask_user is allowed for subagents
+		// because they share the event bus with the primary agent and questions
+		// are routed through the same WebUI/CLI prompt mechanism.
 		if agent.IsSubagent() {
-			if name == "run_subagent" || name == "run_parallel_subagents" || name == "ask_user" {
-				switch name {
-				case "ask_user":
-					return agenterrors.NewSecurityError(
-						"SUBAGENT_RESTRICTION: Subagents cannot ask the user questions directly. "+
-							"Complete your current task and return results to the primary agent for further delegation.", nil)
-				default:
-					return agenterrors.NewSecurityError(
-						"SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. "+
-							"This restriction prevents runaway agent chains and ensures proper task delegation. "+
-							"If you need additional work done, please complete your current task and return "+
-							"your results to the primary agent for further delegation.", nil)
-				}
+			if name == "run_subagent" || name == "run_parallel_subagents" {
+				return agenterrors.NewSecurityError(
+					"SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. "+
+						"This restriction prevents runaway agent chains and ensures proper task delegation. "+
+						"If you need additional work done, please complete your current task and return "+
+						"your results to the primary agent for further delegation.", nil)
 			}
 		}
 

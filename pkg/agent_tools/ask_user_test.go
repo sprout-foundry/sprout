@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"context"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -130,7 +132,7 @@ func TestGlobalAskUserManager_NilByDefault(t *testing.T) {
 func TestRequestAskUser_NilEventBus(t *testing.T) {
 	t.Parallel()
 	mgr := NewAskUserManager()
-	_, err := mgr.RequestAskUser(nil, "question", "client", "")
+	_, err := mgr.RequestAskUser(context.Background(), nil, "question", "client", "", "")
 	if err == nil {
 		t.Fatal("expected error for nil event bus")
 	}
@@ -143,7 +145,7 @@ func TestRequestAskUser_EmptyQuestion(t *testing.T) {
 	t.Parallel()
 	mgr := NewAskUserManager()
 	bus := events.NewEventBus()
-	_, err := mgr.RequestAskUser(bus, "", "client", "")
+	_, err := mgr.RequestAskUser(context.Background(), bus, "", "client", "", "")
 	if err == nil {
 		t.Fatal("expected error for empty question")
 	}
@@ -176,7 +178,7 @@ func TestRequestAskUser_SuccessfulResponse(t *testing.T) {
 		}
 	}()
 
-	result, err := mgr.RequestAskUser(bus, "What is your name?", "client1", "")
+	result, err := mgr.RequestAskUser(context.Background(), bus, "What is your name?", "client1", "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,7 +195,7 @@ func TestRequestAskUser_Timeout(t *testing.T) {
 	bus := events.NewEventBus()
 
 	// Do not respond — let it timeout
-	_, err := mgr.RequestAskUser(bus, "Will you wait forever?", "client1", "")
+	_, err := mgr.RequestAskUser(context.Background(), bus, "Will you wait forever?", "client1", "", "")
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -207,7 +209,11 @@ func TestRequestAskUser_Timeout(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAskUserWithEventBus_EmptyQuestion(t *testing.T) {
-	_, err := AskUserWithEventBus("", nil, "", "", nil)
+	// Save and restore global
+	prev := GetGlobalAskUserManager()
+	t.Cleanup(func() { SetGlobalAskUserManager(prev) })
+
+	_, err := AskUserWithEventBus(context.Background(), "", nil, "", "", "", nil)
 	if err == nil {
 		t.Fatal("expected error for empty question")
 	}
@@ -237,11 +243,65 @@ func TestAskUserWithEventBus_RoutesThroughEventBus(t *testing.T) {
 		}
 	}()
 
-	result, err := AskUserWithEventBus("Do you agree?", bus, "c1", "", mgr)
+	result, err := AskUserWithEventBus(context.Background(), "Do you agree?", bus, "c1", "", "", mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if result != "yes" {
 		t.Errorf("expected 'yes', got %q", result)
+	}
+}
+
+func TestRequestAskUser_ChatIDInPayload(t *testing.T) {
+	mgr := NewAskUserManager()
+	mgr.SetTimeout(5 * time.Second)
+	bus := events.NewEventBus()
+
+	sub := bus.Subscribe("test-chatid")
+	go func() {
+		select {
+		case ev := <-sub:
+			data, ok := ev.Data.(map[string]interface{})
+			if !ok {
+				return
+			}
+			// Verify chat_id is present in the event payload
+			if chatID, _ := data["chat_id"].(string); chatID != "chat_42" {
+				log.Printf("TestRequestAskUser_ChatIDInPayload: expected chat_id=chat_42, got %q", chatID)
+			}
+			requestID, _ := data["request_id"].(string)
+			mgr.RespondToAskUser(requestID, "ok")
+		case <-time.After(3 * time.Second):
+			return
+		}
+	}()
+
+	result, err := mgr.RequestAskUser(context.Background(), bus, "Question?", "c1", "u1", "chat_42")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "ok" {
+		t.Errorf("expected 'ok', got %q", result)
+	}
+}
+
+func TestRequestAskUser_ContextCancelled(t *testing.T) {
+	mgr := NewAskUserManager()
+	mgr.SetTimeout(5 * time.Second) // long timeout — context should cancel first
+	bus := events.NewEventBus()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after a short delay
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := mgr.RequestAskUser(ctx, bus, "Will context cancel?", "c1", "", "")
+	if err == nil {
+		t.Fatal("expected error for cancelled context")
+	}
+	if !strings.Contains(err.Error(), "cancelled") {
+		t.Errorf("expected cancellation error, got: %v", err)
 	}
 }

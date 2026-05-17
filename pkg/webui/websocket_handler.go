@@ -196,6 +196,12 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 						connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
 				}
 			}
+			if event.Type == events.EventTypeAskUserRequest {
+				if data, ok := event.Data.(map[string]interface{}); ok {
+					log.Printf("[ASK_USER] Forwarding ask_user_request to client %s: request_id=%v question=%q",
+						connInfo.ClientID, data["request_id"], data["question"])
+				}
+			}
 			if err := safeConn.WriteJSON(event); err != nil {
 				log.Printf("WebSocket %s write error: %v", sessionID, err)
 				return

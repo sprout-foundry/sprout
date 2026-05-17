@@ -169,20 +169,31 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   const startedQuery = String(data.query || '');
   const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
 
-  setState((prev) => ({
-    isProcessing: true,
-    lastError: null,
-    queryCount: prev.queryCount + 1,
-    messages: isClearCommand
-      ? prev.messages
-      : [...prev.messages, { id: generateMessageId(), type: 'user', content: startedQuery, timestamp: new Date() }],
-    toolExecutions: [],
-    fileEdits: [],
-    subagentActivities: [],
-    queryProgress: null,
-    currentTodos: [],
-    logs: appendCappedLog(prev.logs, logEntry),
-  }));
+  setState((prev) => {
+    // Avoid duplicating the user message: handleSendMessage may have already
+    // added it optimistically (e.g. for concurrent queries). Only add if the
+    // last message is not already a user message with the same content.
+    const lastMsg = prev.messages[prev.messages.length - 1];
+    const alreadyPresent =
+      lastMsg != null && lastMsg.type === 'user' && lastMsg.content === startedQuery;
+
+    return {
+      isProcessing: true,
+      lastError: null,
+      queryCount: prev.queryCount + 1,
+      messages: isClearCommand
+        ? prev.messages
+        : alreadyPresent
+          ? prev.messages
+          : [...prev.messages, { id: generateMessageId(), type: 'user', content: startedQuery, timestamp: new Date() }],
+      toolExecutions: [],
+      fileEdits: [],
+      subagentActivities: [],
+      queryProgress: null,
+      currentTodos: [],
+      logs: appendCappedLog(prev.logs, logEntry),
+    };
+  });
   debugLog('[>>] Query started:', startedQuery);
 };
 

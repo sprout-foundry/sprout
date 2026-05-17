@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -67,9 +68,9 @@ func generateAskUserRequestID() string {
 }
 
 // RequestAskUser publishes an ask_user_request event and blocks until the
-// webui responds, a timeout elapses, or the event bus is nil.
+// webui responds, a timeout elapses, the context is cancelled, or the event bus is nil.
 // Returns the user's text response.
-func (m *AskUserManager) RequestAskUser(eventBus *events.EventBus, question, clientID, userID string) (string, error) {
+func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.EventBus, question, clientID, userID, chatID string) (string, error) {
 	if eventBus == nil {
 		return "", fmt.Errorf("no event bus available")
 	}
@@ -95,6 +96,9 @@ func (m *AskUserManager) RequestAskUser(eventBus *events.EventBus, question, cli
 	if trimmed := strings.TrimSpace(userID); trimmed != "" {
 		payload["user_id"] = trimmed
 	}
+	if trimmed := strings.TrimSpace(chatID); trimmed != "" {
+		payload["chat_id"] = trimmed
+	}
 	eventBus.Publish(events.EventTypeAskUserRequest, payload)
 
 	timeout := m.timeout
@@ -113,6 +117,9 @@ func (m *AskUserManager) RequestAskUser(eventBus *events.EventBus, question, cli
 	case <-timer.C:
 		log.Printf("Ask user request %s timed out after %v", requestID, timeout)
 		return "", fmt.Errorf("user did not respond within %v", timeout)
+	case <-ctx.Done():
+		log.Printf("Ask user request %s cancelled: %v", requestID, ctx.Err())
+		return "", fmt.Errorf("ask_user cancelled: %w", ctx.Err())
 	}
 }
 
@@ -168,14 +175,22 @@ func AskUser(question string) (string, error) {
 
 // AskUserWithEventBus prompts the user with a question using the event bus
 // for WebUI mode, falling back to stdin for CLI mode.
-func AskUserWithEventBus(question string, eventBus *events.EventBus, clientID, userID string, mgr *AskUserManager) (string, error) {
+func AskUserWithEventBus(ctx context.Context, question string, eventBus *events.EventBus, clientID, userID, chatID string, mgr *AskUserManager) (string, error) {
 	if question == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
 
 	// WebUI mode: route through event bus
 	if mgr != nil && eventBus != nil {
-		return mgr.RequestAskUser(eventBus, question, clientID, userID)
+		log.Printf("[ask_user] Routing through event bus: clientID=%q chatID=%q", clientID, chatID)
+		return mgr.RequestAskUser(ctx, eventBus, question, clientID, userID, chatID)
+	}
+
+	if mgr == nil {
+		log.Printf("[ask_user] Global AskUserManager is nil — falling back to stdin (WebUI not initialized?)")
+	}
+	if eventBus == nil {
+		log.Printf("[ask_user] Event bus is nil — falling back to stdin")
 	}
 
 	// CLI mode: read from stdin

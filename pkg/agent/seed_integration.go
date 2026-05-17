@@ -529,7 +529,19 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// PreExecuteHook (security classification + subagent nesting prevention)
 	// and handles channel stripping, alias resolution, arg parsing/repair,
 	// type coercion, timeouts, truncation, circuit breakers, parallel exec.
-	seedRegistry := NewSeedToolRegistry(a)
+	//
+	// Create a single richEventPublisher for both the ToolRegistry and the
+	// seed core agent, so ALL events (tool_start, tool_end, errors, metrics,
+	// compaction, agent_message) carry the agent's event metadata (client_id,
+	// chat_id, user_id). Without this, events from the seed core conversation
+	// loop are published directly to the raw EventBus and lack the metadata
+	// needed by the WebSocket forwarding logic (shouldForwardEventToConnection)
+	// to route them to the correct browser tab.
+	var seedPublisher core.EventPublisher
+	if a.eventBus != nil {
+		seedPublisher = newRichEventPublisher(a.eventBus, a)
+	}
+	seedRegistry := newSeedToolRegistryWithPublisher(a, seedPublisher)
 
 	// Build seed Agent options
 	opts := core.Options{
@@ -537,7 +549,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		Executor:       seedRegistry,
 		MaxIterations:  a.maxIterations,
 		Debug:          a.debug,
-		EventPublisher: a.eventBus,
+		EventPublisher: seedPublisher,
 	}
 
 	if a.systemPrompt != "" {

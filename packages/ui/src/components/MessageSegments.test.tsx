@@ -411,14 +411,14 @@ describe('MessageSegments', () => {
     expect(name?.textContent).toBe('subagent');
   });
 
-  it('renders "todo" as short name for TodoWrite', () => {
+  it('renders "todo write" as short name for TodoWrite', () => {
     act(() => {
       root.render(createElement(MessageSegments, {
         content: '[executing tool [TodoWrite(todos=[])]]',
       }));
     });
     const name = container.querySelector('.tool-pill-name');
-    expect(name?.textContent).toBe('todo');
+    expect(name?.textContent).toBe('todo write');
   });
 
   it('uses fallback Wrench icon for unknown tools', () => {

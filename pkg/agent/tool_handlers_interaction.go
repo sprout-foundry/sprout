@@ -28,13 +28,15 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	eventBus := a.GetEventBus()
 	clientID := a.GetEventClientID()
 	userID := a.GetEventUserID()
+	chatID := a.GetEventChatID()
 
 	if a.debug {
 		a.debugLog("[ask_user] Prompting user: %s\n", question)
+		a.debugLog("[ask_user] eventBus=%v clientID=%q userID=%q chatID=%q\n", eventBus != nil, clientID, userID, chatID)
 	}
 
 	// Use event bus if available (WebUI mode), otherwise fallback to stdin
-	response, err := tools.AskUserWithEventBus(question, eventBus, clientID, userID, a.security.GetAskUserMgr())
+	response, err := tools.AskUserWithEventBus(ctx, question, eventBus, clientID, userID, chatID, a.security.GetAskUserMgr())
 	if err != nil {
 		if a.debug {
 			a.debugLog("[ask_user] Error: %v\n", err)

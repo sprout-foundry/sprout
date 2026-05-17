@@ -86,7 +86,7 @@ func createChatAgent() (*agent.Agent, error) {
 			// The agent startup failed specifically because no provider is
 			// configured and stdin is not a terminal. Print the guidance
 			// prominently and exit with a non-zero status.
-			fmt.Fprintf(os.Stderr, "\n%s\n\n", err)
+			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("\n%s\n\n", err)))
 			return nil, err
 		}
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
@@ -277,7 +277,7 @@ Examples:
 				return fmt.Errorf("failed to initialize trace session: %w", err)
 			}
 			chatAgent.SetTraceSession(traceSession)
-			fmt.Printf("Dataset tracing enabled: %s\n", traceSession.GetRunID())
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("Dataset tracing enabled: %s\n", traceSession.GetRunID())))
 		}
 
 		// Set unsafe mode if flag is provided
@@ -304,7 +304,7 @@ Examples:
 					return fmt.Errorf("failed to save subagent config: %w", err)
 				}
 			} else {
-				fmt.Fprintln(os.Stderr, "Warning: could not persist subagent config: config manager unavailable")
+				_, _ = os.Stderr.Write([]byte("Warning: could not persist subagent config: config manager unavailable\n"))
 			}
 		}
 

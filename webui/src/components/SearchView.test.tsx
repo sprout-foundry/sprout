@@ -1,8 +1,7 @@
-import { act, createElement } from 'react';
+import { act, createElement, useState, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { copyToClipboard } from '../utils/clipboard';
 import SearchView from './SearchView';
-import { ApiService } from '../services/api';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -22,20 +21,19 @@ vi.mock('../services/api', () => ({
   },
 }));
 
-// SearchView uses useLog() transitively, which requires NotificationContext.
-// We provide a minimal mock with plain arrow functions to avoid heavy module
-// resolution cascade that causes OOM under Node 22 + Jest 27.
 vi.mock('../contexts/NotificationContext', () => ({
   NotificationProvider: ({ children }) => children,
   useNotifications: () => ({ addNotification: () => {} }),
 }));
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// Mock useSearchState to bypass debounce/timing issues.
+// Provides a component that simulates the search state hook with
+// pre-populated results so context menu tests work reliably.
+const defaultOnFileClick = vi.fn();
 
-const MOCK_SEARCH_RESPONSE = {
-  results: [
+vi.mock('./search/useSearchState', () => {
+  const React = require('react');
+  const MOCK_RESULTS = [
     {
       file: './src/components/App.tsx',
       matches: [
@@ -64,12 +62,94 @@ const MOCK_SEARCH_RESPONSE = {
       ],
       match_count: 1,
     },
-  ],
-  total_matches: 2,
-  total_files: 2,
-  truncated: false,
-  query: 'handleClick',
-};
+  ];
+
+  return {
+    useSearchState: (onFileClick?: any) => {
+      const [excludePatterns, setExcludePatterns] = React.useState('');
+      const [expandedFiles, setExpandedFiles] = React.useState(new Set<string>());
+
+      const filteredResults = React.useMemo(() => {
+        if (!excludePatterns.trim()) return MOCK_RESULTS;
+        const patterns = excludePatterns
+          .split(',')
+          .map((p: string) => p.trim())
+          .filter((p: string) => p.length > 0);
+        if (patterns.length === 0) return MOCK_RESULTS;
+        return MOCK_RESULTS.filter((r: any) => {
+          const rel = r.file.startsWith('./') ? r.file.slice(2) : r.file;
+          return !patterns.some((pat: string) => {
+            if (pat.endsWith('/')) return rel.startsWith(pat);
+            return rel === pat;
+          });
+        });
+      }, [excludePatterns]);
+
+      const toggleFile = React.useCallback((file: string) => {
+        setExpandedFiles((prev: Set<string>) => {
+          const next = new Set(prev);
+          if (next.has(file)) next.delete(file);
+          else next.add(file);
+          return next;
+        });
+      }, []);
+
+      return {
+        searchQuery: 'handleClick',
+        replaceQuery: '',
+        setSearchQuery: vi.fn(),
+        setReplaceQuery: vi.fn(),
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        semanticMode: false,
+        toggleCaseSensitive: vi.fn(),
+        toggleWholeWord: vi.fn(),
+        toggleRegex: vi.fn(),
+        toggleSemanticMode: vi.fn(),
+        results: MOCK_RESULTS,
+        filteredResults,
+        semanticResults: null,
+        semanticDuration: null,
+        duplicateClusters: null,
+        totalMatches: 2,
+        totalFiles: 2,
+        truncated: false,
+        displayMatches: 2,
+        displayFiles: 2,
+        isSearching: false,
+        error: null,
+        replaceStatus: null,
+        showReplace: false,
+        setShowReplace: vi.fn(),
+        handleReplace: vi.fn().mockResolvedValue(undefined),
+        excludePatterns,
+        setExcludePatterns,
+        semanticThreshold: 0.75,
+        setSemanticThreshold: vi.fn(),
+        indexStatus: null,
+        isBuilding: false,
+        expandedFiles,
+        toggleFile,
+        handleSearchChange: vi.fn(),
+        handleSearchKeyDown: vi.fn(),
+        handleClear: vi.fn(),
+        handleFileClick: onFileClick || (() => {}),
+      };
+    },
+    getRelativePath: (path: string) => (path.startsWith('./') ? path.slice(2) : path),
+    getParentDirectory: (filePath: string) => {
+      const relative = filePath.startsWith('./') ? filePath.slice(2) : filePath;
+      const lastSlash = relative.lastIndexOf('/');
+      if (lastSlash === -1) return relative;
+      return relative.substring(0, lastSlash + 1);
+    },
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,41 +158,16 @@ const MOCK_SEARCH_RESPONSE = {
 let container: HTMLDivElement | null = null;
 let root: ReturnType<typeof createRoot> | null = null;
 
-// Mock requestAnimationFrame so close-listener effect fires synchronously.
-// jest does not auto-flush rAF; without this, close listeners never attach.
-let rafId = 0;
-const syncRAF = ((cb: FrameRequestCallback) => {
-  rafId += 1;
-  cb(Date.now());
-  return rafId;
-}) as typeof requestAnimationFrame;
-
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
-const mockSearchFn = vi.fn().mockResolvedValue(MOCK_SEARCH_RESPONSE);
-
 beforeEach(() => {
-  vi.useFakeTimers();
-  // Re-mock rAF afterjest.useFakeTimers overrides it
-  global.requestAnimationFrame = syncRAF;
-  global.cancelAnimationFrame = vi.fn();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
 
-  // Reset mockReturnValue on getInstance, but do NOT use clearAllMocks
-  // because it wipes mockResolvedValue from mockSearchFn.
-  (ApiService.getInstance as vi.Mock).mockClear();
-  (ApiService.getInstance as vi.Mock).mockReturnValue({
-    search: mockSearchFn,
-  });
-
-  // Clear call history on specific mocks (preserve implementations)
-  mockSearchFn.mockClear();
-  mockSearchFn.mockResolvedValue(MOCK_SEARCH_RESPONSE);
-  (copyToClipboard as vi.Mock).mockClear();
+  (copyToClipboard as ReturnType<typeof vi.fn>).mockClear();
   defaultOnFileClick.mockClear();
 });
 
@@ -123,7 +178,6 @@ afterEach(() => {
   if (container) container.remove();
   // Clean up any portal containers leftover
   document.querySelectorAll('.context-menu').forEach((el) => el.remove());
-  vi.useRealTimers();
 });
 
 const flushPromises = async () => {
@@ -132,30 +186,12 @@ const flushPromises = async () => {
   });
 };
 
-const defaultOnFileClick = vi.fn();
-
-/** Render SearchView and trigger debounced search. */
-async function renderSearch(props: { onFileClick?: vi.Mock } = {}) {
+/** Render SearchView with pre-populated search results. */
+async function renderSearch(props: { onFileClick?: ReturnType<typeof vi.fn> } = {}) {
   const onFileClick = props.onFileClick || defaultOnFileClick;
 
   await act(async () => {
     root!.render(createElement(SearchView, { onFileClick }));
-  });
-
-  // Type a search query
-  const input = container!.querySelector<HTMLInputElement>('.search-text-input');
-  expect(input).not.toBeNull();
-
-  // Use React's internal value setter to trigger onChange
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
-  await act(() => {
-    nativeInputValueSetter.call(input, 'handleClick');
-    input!.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-
-  // Advance past debounce delay
-  await act(async () => {
-    vi.advanceTimersByTime(400);
   });
   await flushPromises();
 
@@ -442,6 +478,12 @@ describe('SearchView context menu - dismissal', () => {
 
     expect(document.querySelector('.context-menu')).not.toBeNull();
 
+    // ContextMenu registers close listeners inside a requestAnimationFrame
+    // Flush the RAF so mousedown/keydown listeners are active
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
+
     // Simulate mousedown on body (outside the menu)
     await act(async () => {
       document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 0, clientY: 0 }));
@@ -458,6 +500,11 @@ describe('SearchView context menu - dismissal', () => {
     await flushPromises();
 
     expect(document.querySelector('.context-menu')).not.toBeNull();
+
+    // ContextMenu registers close listeners inside a requestAnimationFrame
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    });
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));

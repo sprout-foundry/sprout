@@ -1,5 +1,5 @@
-import type { MouseEvent } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import type { MouseEvent } from 'react';
 import type { SearchResult, ResultRowCallbacks } from './types';
 import { getRelativePath } from './useSearchState';
 

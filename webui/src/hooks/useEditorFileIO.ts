@@ -22,28 +22,27 @@
  * Target: ~650 lines (SP-010 Phase 1).
  */
 
-import { useEffect, useRef, useCallback } from 'react';
-import type { EditorView } from '@codemirror/view';
-import type { Compartment } from '@codemirror/state';
-import { EditorState, Transaction } from '@codemirror/state';
 import { indentUnit } from '@codemirror/language';
-
-import type { EditorBuffer } from '../types/editor';
-import { useEditorManager } from '../contexts/EditorManagerContext';
-import { readFileWithConsent } from '../services/fileAccess';
+import { EditorState, Transaction } from '@codemirror/state';
+import type { Compartment } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
+import { useEffect, useRef, useCallback } from 'react';
 import { showFileChangeDialog } from '../components/FileChangeDialog';
+import { useEditorManager } from '../contexts/EditorManagerContext';
 import { updateDiffGutter, clearDiffGutter } from '../extensions/diffGutter';
-import { clearDiagnostics } from '../extensions/lintDiagnostics';
-import { setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { detectIndentation } from '../extensions/indentDetect';
 import { detectLineEnding, type LineEnding } from '../extensions/lineEndingDetect';
-import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
-import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from './useAutoReloadCleanBuffers';
+import { clearDiagnostics } from '../extensions/lintDiagnostics';
+import { setOriginalContent } from '../extensions/unsavedLineHighlight';
 import { ApiService } from '../services/api';
+import { readFileWithConsent } from '../services/fileAccess';
 import { notificationBus } from '../services/notificationBus';
-import { generateUnifiedDiff } from '../utils/simpleDiff';
+import type { EditorBuffer } from '../types/editor';
 import { useLog, debugLog, warn } from '../utils/log';
 import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from '../utils/mediaPatterns';
+import { generateUnifiedDiff } from '../utils/simpleDiff';
+import { JUST_SAVED_THRESHOLD_MS, justSavedRef } from './useAutoReloadCleanBuffers';
+import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
 
 // ---------------------------------------------------------------------------
 // Constants

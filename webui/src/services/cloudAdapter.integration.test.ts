@@ -750,7 +750,11 @@ describe('CloudAdapter Integration Tests', () => {
 
           const fetchCalled = mockFetch.mock.calls.length > 0;
 
-          if (endpoint.category === 'synthetic' || endpoint.category === 'no-op' || endpoint.category === 'wasm-local') {
+          if (
+            endpoint.category === 'synthetic' ||
+            endpoint.category === 'no-op' ||
+            endpoint.category === 'wasm-local'
+          ) {
             // Should NOT have called fetch — synthetic/no-op return synthetic responses,
             // wasm-local is handled by the WASM shell in-browser
             if (fetchCalled) {

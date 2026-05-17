@@ -1,5 +1,5 @@
-import type { PaletteMode } from './types';
 import { COMMAND_PREFIX, SYMBOL_PREFIXES } from './constants';
+import type { PaletteMode } from './types';
 
 // ── Prefix-based auto-detection ──────────────────────────────────────────
 

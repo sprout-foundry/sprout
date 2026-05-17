@@ -1,8 +1,8 @@
 import { Pencil, Trash2, Lock } from 'lucide-react';
 import type { SproutSettings } from '../../services/api';
-import type { FieldRenderers } from './useSettingsFieldRenderers';
-import MCPServerForm from './MCPServerForm';
 import MCPCredentialPanel from './MCPCredentialPanel';
+import MCPServerForm from './MCPServerForm';
+import type { FieldRenderers } from './useSettingsFieldRenderers';
 
 interface MCPSettingsTabProps {
   settings: SproutSettings;

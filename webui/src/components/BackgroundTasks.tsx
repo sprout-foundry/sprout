@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
 import { Play, Square, Terminal, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import './BackgroundTasks.css';

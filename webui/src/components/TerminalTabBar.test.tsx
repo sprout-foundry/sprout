@@ -1,8 +1,8 @@
 // @ts-nocheck
 
-import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 import { TerminalTabBar } from '@sprout/ui';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 
 // ---------------------------------------------------------------------------
 // Mock ContextMenu: renders children into a simple div when isOpen

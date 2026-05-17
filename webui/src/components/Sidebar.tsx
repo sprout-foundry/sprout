@@ -1,11 +1,24 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
-import type { SproutInstance } from '../services/api';
+import { supportsSettings } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import type { ProviderLogEntry } from '../providers/types';
-import { useTheme } from '../contexts/ThemeContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
+import { usePlatformNav } from '../contexts/PlatformNavContext';
+import { useTheme } from '../contexts/ThemeContext';
+import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
+import { useSidebarModel } from '../hooks/useSidebarModel';
+import {
+  type SectionTab,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_COLLAPSED_WIDTH,
+  clampSidebarWidth,
+} from '../hooks/useSidebarState';
+import type { ProviderLogEntry } from '../providers/types';
+import type { SproutInstance } from '../services/api';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
+import type { GitSidebarPanelProps } from './GitSidebarPanel';
+import LocationSwitcher from './LocationSwitcher';
 import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
@@ -22,24 +35,11 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import SearchView from './SearchView';
-import type { GitSidebarPanelProps } from './GitSidebarPanel';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
-import SproutLogo from './SproutLogo';
-import LocationSwitcher from './LocationSwitcher';
-import { supportsSettings } from '../config/mode';
-import { usePlatformNav } from '../contexts/PlatformNavContext';
-import {
-  type SectionTab,
-  SIDEBAR_DEFAULT_WIDTH,
-  SIDEBAR_COLLAPSED_WIDTH,
-  clampSidebarWidth,
-} from '../hooks/useSidebarState';
-import { useSidebarModel } from '../hooks/useSidebarModel';
-import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
+import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
+import SidebarGitSection from './SidebarGitSection';
 import SidebarLogsPane from './SidebarLogsPane';
 import SidebarSettingsSection from './SidebarSettingsSection';
-import SidebarGitSection from './SidebarGitSection';
-import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
+import SproutLogo from './SproutLogo';
 
 interface SidebarProps {
   isConnected: boolean;

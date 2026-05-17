@@ -1,14 +1,14 @@
+import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus, GitBranch } from 'lucide-react';
 import { useCallback, useMemo, useRef, Fragment } from 'react';
 import type { CSSProperties, RefObject, Dispatch, SetStateAction, ReactNode, ComponentProps } from 'react';
-import { X, Columns2, Rows2, LayoutGrid, MessageSquarePlus, GitBranch } from 'lucide-react';
-import EditorTabs from './EditorTabs';
-import WorkspacePane from './WorkspacePane';
-import ResizeHandle from './ResizeHandle';
 import { MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
-import type { EditorPane, EditorBuffer, PaneLayout } from '../types/editor';
-import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity, QueryProgress } from '../types/app';
 import type { OpenWorkspaceBufferFn } from '../hooks/useChatSessionSync';
 import type { GitDiffResponse, DeepReviewResult } from '../hooks/useGitWorkspace';
+import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity, QueryProgress } from '../types/app';
+import type { EditorPane, EditorBuffer, PaneLayout } from '../types/editor';
+import EditorTabs from './EditorTabs';
+import ResizeHandle from './ResizeHandle';
+import WorkspacePane from './WorkspacePane';
 
 const toPaneFlex = (weight: number): CSSProperties => ({
   flexGrow: weight,

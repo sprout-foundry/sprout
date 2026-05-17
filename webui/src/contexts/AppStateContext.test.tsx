@@ -2,10 +2,10 @@
  * Unit tests for AppStateContext
  */
 
-import React from 'react';
 import { render, renderHook } from '@testing-library/react';
-import { AppStateProvider, useAppStateContext } from './AppStateContext';
+import React from 'react';
 import type { AppState } from '../types/app';
+import { AppStateProvider, useAppStateContext } from './AppStateContext';
 
 // Mock the persistence service
 vi.mock('../services/appStatePersistence', () => ({
@@ -46,20 +46,25 @@ describe('AppStateContext', () => {
   });
 
   it('should allow state updates using functional updater', () => {
+    const { act: tlsAct } = require('@testing-library/react');
     const wrapper = ({ children }: { children: React.ReactNode }) => <AppStateProvider>{children}</AppStateProvider>;
 
     const { result } = renderHook(() => useAppStateContext(), { wrapper });
 
     // Update provider
-    result.current.setState((prev: AppState) => ({ ...prev, provider: 'anthropic' }));
+    tlsAct(() => {
+      result.current.setState((prev: AppState) => ({ ...prev, provider: 'anthropic' }));
+    });
     expect(result.current.state.provider).toBe('anthropic');
 
     // Multiple updates
-    result.current.setState((prev: AppState) => ({
-      ...prev,
-      model: 'claude-3-opus',
-      queryCount: prev.queryCount + 1,
-    }));
+    tlsAct(() => {
+      result.current.setState((prev: AppState) => ({
+        ...prev,
+        model: 'claude-3-opus',
+        queryCount: prev.queryCount + 1,
+      }));
+    });
     expect(result.current.state.model).toBe('claude-3-opus');
     expect(result.current.state.queryCount).toBe(6);
   });

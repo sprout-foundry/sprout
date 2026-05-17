@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
-import FileTree from './FileTree';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
+import FileTree from './FileTree';
 
 export interface FileTreeHandle {
   refresh: () => void;

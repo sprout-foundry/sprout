@@ -5,10 +5,6 @@
  * throughout the application.
  */
 
-import type { ChatSession } from '../services/chatSessions';
-import type { OnboardingEnvironment, OnboardingProviderOption } from '../services/api';
-
-// Import canonical types from @sprout/ui
 import type {
   Message,
   ToolExecution,
@@ -19,6 +15,10 @@ import type {
   FileEdit,
   ToolRef,
 } from '@sprout/ui';
+import type { OnboardingEnvironment, OnboardingProviderOption } from '../services/api';
+import type { ChatSession } from '../services/chatSessions';
+
+// Import canonical types from @sprout/ui
 
 // Re-export for downstream consumers
 export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, FileEdit, ToolRef };

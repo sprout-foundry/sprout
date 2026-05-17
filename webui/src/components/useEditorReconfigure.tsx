@@ -11,26 +11,22 @@
  * Target: ~250 lines
  */
 
-import { useEffect } from 'react';
-import { EditorView as CMEditorView } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
-import { lineNumbers } from '@codemirror/view';
-import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
 import { indentUnit } from '@codemirror/language';
-
-import { resolveLanguageId } from '../extensions/languageRegistry';
+import { EditorState } from '@codemirror/state';
+import type { Compartment, Extension } from '@codemirror/state';
+import { EditorView as CMEditorView, lineNumbers } from '@codemirror/view';
+import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
+import { useEffect } from 'react';
+import { inlayHintsExtension } from '../extensions/inlayHints';
+import { resolveLanguageId, getLanguageExtensions } from '../extensions/languageRegistry';
+import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspExtensions';
+import { minimapExtension } from '../extensions/minimap';
+import { signatureHelpExtension } from '../extensions/signatureHelp';
 import { setSnippetLanguage } from '../extensions/snippets';
 import { whitespaceRenderingPlugin, type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspExtensions';
 import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
-import { getLanguageExtensions } from '../extensions/languageRegistry';
-import { minimapExtension } from '../extensions/minimap';
-import { inlayHintsExtension } from '../extensions/inlayHints';
-import { signatureHelpExtension } from '../extensions/signatureHelp';
-import { debugLog } from '../utils/log';
-import type { Compartment } from '@codemirror/state';
-import type { Extension } from '@codemirror/state';
 import type { EditorBuffer } from '../types/editor';
+import { debugLog } from '../utils/log';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -204,9 +200,7 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
         // Minimap
         compartments.minimap.reconfigure(minimapEnabled ? minimapExtension() : []),
         // Relative line numbers
-        compartments.relativeLineNumbers.reconfigure(
-          relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers(),
-        ),
+        compartments.relativeLineNumbers.reconfigure(relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       ],
     });
   }, [editorFontSize, editorTabSize, editorUsesTabs, wordWrapEnabled, minimapEnabled, relativeLineNumbersEnabled]);

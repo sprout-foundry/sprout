@@ -1,7 +1,7 @@
-import { RotateCcw } from 'lucide-react';
-import type { SessionEntry } from './types';
-import { formatRelativeTime } from './helpers';
 import { Skeleton } from '@sprout/ui';
+import { RotateCcw } from 'lucide-react';
+import { formatRelativeTime } from './helpers';
+import type { SessionEntry } from './types';
 
 interface SessionsTabProps {
   sessions: SessionEntry[];

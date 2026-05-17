@@ -1,13 +1,13 @@
-import React, { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
-import ErrorBoundary from './ErrorBoundary';
-import EditorTabs from './EditorTabs';
-import WorkspacePane from './WorkspacePane';
-import ResizeHandle from './ResizeHandle';
-import EditorWithOutline from './EditorWithOutline';
-import { TasksPage, BillingPage, TeamPage } from './platform';
+import React, { useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
+import EditorTabs from './EditorTabs';
+import EditorWithOutline from './EditorWithOutline';
+import ErrorBoundary from './ErrorBoundary';
+import { TasksPage, BillingPage, TeamPage } from './platform';
+import ResizeHandle from './ResizeHandle';
+import WorkspacePane from './WorkspacePane';
 
 export interface EditorWorkspaceProps {
   currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
@@ -227,19 +227,16 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // Cache returned functions from handlePaneResizeEnd to avoid recreating them.
   const resizeEndCacheRef = useRef(new Map<string, () => void>());
 
-  const handlePaneResizeEnd = useCallback(
-    (sizeKey: string) => {
-      const cached = resizeEndCacheRef.current.get(sizeKey);
-      if (cached) return cached;
-      const fn = () => {
-        isPaneDraggingRef.current.delete(sizeKey);
-        dragStartSizeRef.current.delete(sizeKey);
-      };
-      resizeEndCacheRef.current.set(sizeKey, fn);
-      return fn;
-    },
-    [],
-  );
+  const handlePaneResizeEnd = useCallback((sizeKey: string) => {
+    const cached = resizeEndCacheRef.current.get(sizeKey);
+    if (cached) return cached;
+    const fn = () => {
+      isPaneDraggingRef.current.delete(sizeKey);
+      dragStartSizeRef.current.delete(sizeKey);
+    };
+    resizeEndCacheRef.current.set(sizeKey, fn);
+    return fn;
+  }, []);
 
   const showResizeHandles = panes.length > 1;
 

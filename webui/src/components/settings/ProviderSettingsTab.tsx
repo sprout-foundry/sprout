@@ -1,5 +1,5 @@
-import { Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import { SkeletonText } from '@sprout/ui';
+import { Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import type { SproutSettings } from '../../services/api';
 
 interface ProviderSettingsTabProps {

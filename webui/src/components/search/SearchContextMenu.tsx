@@ -1,8 +1,8 @@
+import { Copy, FileText, Ban, FolderOpen } from 'lucide-react';
 import { useCallback } from 'react';
 import type { MouseEvent } from 'react';
-import { Copy, FileText, Ban, FolderOpen } from 'lucide-react';
-import ContextMenu from '../ContextMenu';
 import { copyToClipboard } from '../../utils/clipboard';
+import ContextMenu from '../ContextMenu';
 import type { SearchContextMenuState } from './types';
 import { getRelativePath, getParentDirectory } from './useSearchState';
 

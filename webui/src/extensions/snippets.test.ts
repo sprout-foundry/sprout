@@ -18,8 +18,8 @@ vi.mock('./emmet', () => ({
 }));
 
 // ── Module under test (Jest hoists mocks above imports) ─────────────
-import { getSnippetsForLanguage, setSnippetLanguage, getSnippetLanguage, tabExpandSnippets } from './snippets';
 import { keymap } from '@codemirror/view';
+import { getSnippetsForLanguage, setSnippetLanguage, getSnippetLanguage, tabExpandSnippets } from './snippets';
 
 vi.mock('@codemirror/view', () => ({
   EditorView: { baseTheme: vi.fn(() => 'mockBaseTheme') },

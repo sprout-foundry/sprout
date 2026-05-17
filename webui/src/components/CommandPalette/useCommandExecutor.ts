@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
-import { showThemedConfirm } from '../ThemedDialog';
 import { clearLayoutSnapshot } from '../../services/layoutPersistence';
 import { debugLog } from '../../utils/log';
+import { showThemedConfirm } from '../ThemedDialog';
 import type { PaletteMode, PaletteResult } from './types';
 
 interface UseCommandExecutorOptions {

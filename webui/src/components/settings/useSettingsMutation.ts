@@ -1,11 +1,10 @@
 import { useState, useCallback } from 'react';
-import type { SproutSettings } from '../../services/api';
+import type { SproutSettings, ApiService } from '../../services/api';
 import { debugLog } from '../../utils/log';
 import { setNestedValue } from './settingsHelpers';
+import type { MutationContext } from './types';
 import { useMCPServerMutations } from './useMCPServerMutations';
 import { useProviderMutations } from './useProviderMutations';
-import type { MutationContext } from './types';
-import type { ApiService } from '../../services/api';
 
 type AddNotificationFn = (
   type: 'success' | 'error' | 'info',
@@ -212,11 +211,7 @@ export function useSettingsMutation(params: MutationHookParams) {
       setSavingKey(keyOrPath);
 
       try {
-        const updated = setNestedValue(
-          current,
-          keyOrPath,
-          value,
-        ) as SproutSettings;
+        const updated = setNestedValue(current, keyOrPath, value) as SproutSettings;
         onSettingsChanged(updated);
 
         let layer: 'session' | 'workspace' | 'global' | undefined;

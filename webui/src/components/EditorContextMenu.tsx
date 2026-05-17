@@ -6,9 +6,8 @@
  * Target: ~80 lines
  */
 
-import type { FC } from 'react';
 import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
-
+import type { FC } from 'react';
 import ContextMenu from './ContextMenu';
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback } from 'react';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
+import { useRef, useState, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { SproutSettings } from '../services/api';

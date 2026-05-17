@@ -1,7 +1,7 @@
-import React from 'react';
 import { Loader2 } from 'lucide-react';
-import type { WorkspaceDirectory, RemoteWorkspaceContext } from './types';
+import React from 'react';
 import { collapseHomePath } from './pathUtils';
+import type { WorkspaceDirectory, RemoteWorkspaceContext } from './types';
 
 export interface WorkspaceSuggestionListProps {
   workspaceRoot: string;

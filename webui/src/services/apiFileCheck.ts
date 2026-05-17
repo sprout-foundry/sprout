@@ -1,5 +1,5 @@
-import { clientFetch } from './clientSession';
 import { debugLog } from '../utils/log';
+import { clientFetch } from './clientSession';
 
 export interface FileCheckEntry {
   path: string;

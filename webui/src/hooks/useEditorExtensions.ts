@@ -13,8 +13,20 @@
  * accommodate compartment management, detailed type definitions, and inline docs).
  */
 
-import { useRef, useCallback } from 'react';
+import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
+import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
+import {
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  codeFolding,
+  foldGutter,
+  indentOnInput,
+  bracketMatching,
+  indentUnit,
+} from '@codemirror/language';
+import type { HighlightStyle } from '@codemirror/language';
 import { EditorState, Compartment, type Extension } from '@codemirror/state';
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import {
   EditorView,
   keymap,
@@ -28,50 +40,37 @@ import {
   drawSelection,
   scrollPastEnd,
 } from '@codemirror/view';
-import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
-import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
 import { color } from '@uiw/codemirror-extensions-color';
-import {
-  syntaxHighlighting,
-  defaultHighlightStyle,
-  codeFolding,
-  foldGutter,
-  indentOnInput,
-  bracketMatching,
-  indentUnit,
-} from '@codemirror/language';
-import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
-import { wordHighlightsExtension } from '../extensions/wordHighlights';
-import { autocompletion, closeBrackets } from '@codemirror/autocomplete';
-import { defaultKeymap, indentWithTab, history } from '@codemirror/commands';
-import type { HighlightStyle } from '@codemirror/language';
-
-import type { ThemePack } from '../themes/themePacks';
-import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { customSearchExtension } from '../extensions/searchPanel';
-import { tabExpandSnippets } from '../extensions/snippets';
-import { diffGutter } from '../extensions/diffGutter';
-import { lintDiagnostics } from '../extensions/lintDiagnostics';
-import { errorLensPlugin } from '../extensions/errorLens';
-import { createCodeActionsExtension } from '../extensions/codeActions';
-import { cursorHistoryPlugin } from '../extensions/cursorHistory';
-import { dragDropMovePlugin } from '../extensions/dragDropMove';
-import { indentGuidesPlugin } from '../extensions/indentGuides';
-import { stickyScrollPlugin } from '../extensions/stickyScroll';
-import { codeLensPlugin } from '../extensions/codeLens';
+import { hyperLink } from '@uiw/codemirror-extensions-hyper-link';
+import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
+import { useRef, useCallback } from 'react';
+import { createAutoCloseTagCompartment, getInitialAutoCloseTagExtensions } from '../extensions/autoCloseTag';
 import { bracketColorizationPlugin } from '../extensions/bracketColorization';
-import { linkedScrollExtension } from '../extensions/linkedScroll';
+import { createCodeActionsExtension } from '../extensions/codeActions';
+import { codeLensPlugin } from '../extensions/codeLens';
+import { cursorHistoryPlugin } from '../extensions/cursorHistory';
+import { diffGutter } from '../extensions/diffGutter';
+import { dragDropMovePlugin } from '../extensions/dragDropMove';
+import { createEmmetCompartment, getInitialEmmetExtensions } from '../extensions/emmet';
+import { errorLensPlugin } from '../extensions/errorLens';
 import { createHoverTooltipExtension } from '../extensions/hoverTooltip';
+import { indentGuidesPlugin } from '../extensions/indentGuides';
+import { inlayHintsExtension } from '../extensions/inlayHints';
+import { getLanguageExtensions } from '../extensions/languageRegistry';
+import { linkedScrollExtension } from '../extensions/linkedScroll';
+import { lintDiagnostics } from '../extensions/lintDiagnostics';
+import { minimapExtension } from '../extensions/minimap';
 import { renameHighlightField } from '../extensions/renameOverlay';
+import { customSearchExtension } from '../extensions/searchPanel';
+import { signatureHelpExtension } from '../extensions/signatureHelp';
+import { tabExpandSnippets } from '../extensions/snippets';
+import { stickyScrollPlugin } from '../extensions/stickyScroll';
 import { trailingWhitespacePlugin } from '../extensions/trailingWhitespace';
 import { unsavedLineHighlight } from '../extensions/unsavedLineHighlight';
 import { whitespaceRenderingPlugin } from '../extensions/whitespaceRendering';
-import { minimapExtension } from '../extensions/minimap';
-import { inlayHintsExtension } from '../extensions/inlayHints';
-import { signatureHelpExtension } from '../extensions/signatureHelp';
-import { getLanguageExtensions } from '../extensions/languageRegistry';
-import { createEmmetCompartment, getInitialEmmetExtensions } from '../extensions/emmet';
-import { createAutoCloseTagCompartment, getInitialAutoCloseTagExtensions } from '../extensions/autoCloseTag';
+import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { wordHighlightsExtension } from '../extensions/wordHighlights';
+import type { ThemePack } from '../themes/themePacks';
 
 // ── Settings constants (shared with EditorPane) ─────────────────────────
 

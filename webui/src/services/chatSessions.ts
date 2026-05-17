@@ -1,5 +1,5 @@
-import { clientFetch } from './clientSession';
 import type { WorktreeInfo } from '../types/app';
+import { clientFetch } from './clientSession';
 
 export type { WorktreeInfo };
 

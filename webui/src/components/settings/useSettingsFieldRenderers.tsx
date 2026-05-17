@@ -1,5 +1,5 @@
-import { getNestedValue } from './settingsHelpers';
 import type { SproutSettings } from '../../services/api';
+import { getNestedValue } from './settingsHelpers';
 
 interface FieldRenderersParams {
   displaySettingsRef: React.MutableRefObject<SproutSettings | null>;

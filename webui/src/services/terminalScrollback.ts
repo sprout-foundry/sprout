@@ -214,7 +214,12 @@ export async function loadScrollback(sessionId: string): Promise<string | null> 
         const age = Date.now() - entry.timestamp;
         if (age > MAX_AGE_MS) {
           debugLog('[terminalScrollback] Scrollback entry too old, deleting:', sessionId);
-          deleteScrollback(sessionId).catch((err) => { warn('[terminalScrollback] Failed to delete expired scrollback: ' + (err instanceof Error ? err.message : String(err))); });
+          deleteScrollback(sessionId).catch((err) => {
+            warn(
+              '[terminalScrollback] Failed to delete expired scrollback: ' +
+                (err instanceof Error ? err.message : String(err)),
+            );
+          });
           resolve(null);
           return;
         }

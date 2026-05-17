@@ -5,8 +5,6 @@
  * whole-word matching, and regex mode, styled similarly to VS Code's search toggles.
  */
 
-import type { EditorView } from '@codemirror/view';
-import { type Panel, type ViewUpdate } from '@codemirror/view';
 import {
   search,
   SearchQuery,
@@ -19,6 +17,7 @@ import {
   replaceAll,
   closeSearchPanel,
 } from '@codemirror/search';
+import type { EditorView, Panel, ViewUpdate } from '@codemirror/view';
 
 import './searchPanel.css';
 

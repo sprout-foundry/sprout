@@ -2,15 +2,15 @@ import { useRef, useEffect, memo } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLog } from '../utils/log';
 import './CommandInput.css';
-import { useImageUpload } from './useImageUpload';
-import { useCommandHistory } from './useCommandHistory';
-import { useInputHandling } from './useInputHandling';
-import { useCommandSubmit } from './useCommandSubmit';
-import { useIndexToggle } from './useIndexToggle';
-import { usePopovers } from './usePopovers';
+import { CommandInputActions } from './CommandInputActions';
 import { CommandInputHeader } from './CommandInputHeader';
 import { ImagePreviewPanel } from './ImagePreviewPanel';
-import { CommandInputActions } from './CommandInputActions';
+import { useCommandHistory } from './useCommandHistory';
+import { useCommandSubmit } from './useCommandSubmit';
+import { useImageUpload } from './useImageUpload';
+import { useIndexToggle } from './useIndexToggle';
+import { useInputHandling } from './useInputHandling';
+import { usePopovers } from './usePopovers';
 
 interface CommandInputProps {
   value?: string;

@@ -1,7 +1,7 @@
-import type { EditorBuffer } from '../types/editor';
-import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
-import type { MutableRefObject } from 'react';
+import { useCallback, useEffect } from 'react';
+import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
+import type { EditorBuffer } from '../types/editor';
 
 export interface UseAppContentHotkeysParams {
   activeBufferId: string | null;

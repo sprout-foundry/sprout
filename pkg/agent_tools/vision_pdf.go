@@ -104,8 +104,7 @@ func processPDFForOCROnly(pdfPath, pythonExec string, client api.ClientInterface
 		return ocrText, nil
 	}
 
-	return "", fmt.Errorf("PDF no extractable text: direct OCR error: %v; page OCR error: %w",
-		directOCRErr, ocrErr)
+	return "", fmt.Errorf("PDF no extractable text: page OCR: %w", ocrErr)
 }
 
 // The caller must invoke the returned cleanup function when done with the resolved path.
@@ -193,8 +192,7 @@ func processPDFWithProvider(pdfPath, pythonExec string, client api.ClientInterfa
 		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 			return ocrText, nil
 		}
-		return "", fmt.Errorf("PDF no extractable text: direct OCR error: %v; image OCR error: %w",
-			directOCRErr, ocrErr)
+		return "", fmt.Errorf("PDF no extractable text: image OCR: %w", ocrErr)
 	}
 
 	return text, nil
@@ -225,8 +223,7 @@ func processPDFWithOCR(pdfPath, pythonExec string, client api.ClientInterface) (
 	images, err := extractImagesFromPDF(pdfPath, pythonExec)
 	if err != nil {
 		if pageErr != nil {
-			// Note: pageErr is included with %v for context but not wrapped - only err is the primary error
-			return "", fmt.Errorf("page rasterization and image extraction: %w (rasterization error: %v)", err, pageErr)
+			return "", fmt.Errorf("page rasterization and image extraction: %w", err)
 		}
 		return "", fmt.Errorf("extract images from PDF: %w", err)
 	}
@@ -349,7 +346,7 @@ except Exception as e:
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pypdfium2 page render: %w: %s", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("pypdfium2 page render: %w", err)
 	}
 
 	return decodeBase64ImagePayload(output), nil
@@ -410,7 +407,7 @@ except Exception as e:
 
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("pypdf image extraction: %w: %s", err, strings.TrimSpace(string(output)))
+		return nil, fmt.Errorf("pypdf image extraction: %w", err)
 	}
 
 	return decodeBase64ImagePayload(output), nil

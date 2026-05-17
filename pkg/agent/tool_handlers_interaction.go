@@ -32,6 +32,7 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 
 	if a.debug {
 		a.debugLog("[ask_user] Prompting user: %s\n", question)
+		a.debugLog("[ask_user] eventBus=%v clientID=%q userID=%q chatID=%q\n", eventBus != nil, clientID, userID, chatID)
 	}
 
 	// Use event bus if available (WebUI mode), otherwise fallback to stdin

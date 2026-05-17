@@ -1,6 +1,6 @@
 // Note: Tests in this file must not call t.Parallel() because
-// resetDeprecatedVars() replaces the package-level deprecatedVars
-// sync.Map, which is not safe for concurrent access.
+// tests set environment variables, which are a process-global
+// resource, so parallel execution would cause cross-test interference.
 package envutil
 
 import (
@@ -8,14 +8,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 )
 
 // resetDeprecatedVars clears the package-level deprecation tracking state.
 func resetDeprecatedVars(t *testing.T) {
 	t.Helper()
-	deprecatedVars = sync.Map{}
+	deprecatedVars.Range(func(key, value interface{}) bool {
+		deprecatedVars.Delete(key)
+		return true
+	})
 }
 
 // unsetEnv cleans up both SPROUT_ and LEDIT_ prefixed env vars for a suffix,
@@ -751,6 +753,77 @@ func TestGetConfigDir_MkdirAllError(t *testing.T) {
 	}
 	if configDir != "" {
 		t.Errorf("expected empty configDir on error, got %s", configDir)
+	}
+}
+
+// TestGetEnv_PrimaryKeyEmptyFallsThrough verifies that when SPROUT_FOO=""
+// (empty string), GetEnv falls through to LEDIT_FOO. This documents the
+// intentional behavior that GetEnv treats empty string as "not set"
+// (consistent with how config resolution works — empty string means "not configured").
+func TestGetEnv_PrimaryKeyEmptyFallsThrough(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	// Set primary to empty, legacy to a value
+	t.Setenv("SPROUT_EMPTY_TEST", "")
+	t.Setenv("LEDIT_EMPTY_TEST", "/legacy/value")
+
+	result := GetEnv("SPROUT_EMPTY_TEST", "LEDIT_EMPTY_TEST")
+
+	// GetEnv uses os.Getenv which returns "" for both unset and empty,
+	// so empty primary falls through to legacy. This is intentional.
+	if result != "/legacy/value" {
+		t.Errorf("expected /legacy/value (empty primary falls through), got %s", result)
+	}
+}
+
+// TestLookupEnv_EmptyValueReturnsFound verifies that LookupEnv correctly
+// distinguishes empty string from unset.
+func TestLookupEnv_EmptyValueReturnsFound(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	t.Setenv("SPROUT_EMPTY_LOOKUP", "")
+
+	result, found := LookupEnv("EMPTY_LOOKUP")
+
+	if !found {
+		t.Error("expected found=true for empty string value (LookupEnv distinguishes empty from unset)")
+	}
+	if result != "" {
+		t.Errorf("expected empty string, got %s", result)
+	}
+}
+
+// TestSetEnv_EmptyValue verifies SetEnv works with empty values.
+func TestSetEnv_EmptyValue(t *testing.T) {
+	resetDeprecatedVars(t)
+
+	unsetEnv(t, "EMPTY_SET")
+
+	// First set to something
+	t.Setenv("SPROUT_EMPTY_SET", "initial")
+	t.Setenv("LEDIT_EMPTY_SET", "initial")
+
+	// Now set to empty
+	err := SetEnv("EMPTY_SET", "")
+	if err != nil {
+		t.Fatalf("SetEnv with empty value failed: %v", err)
+	}
+
+	// Both should be empty string
+	if os.Getenv("SPROUT_EMPTY_SET") != "" {
+		t.Errorf("expected SPROUT_EMPTY_SET to be empty, got %s", os.Getenv("SPROUT_EMPTY_SET"))
+	}
+	if os.Getenv("LEDIT_EMPTY_SET") != "" {
+		t.Errorf("expected LEDIT_EMPTY_SET to be empty, got %s", os.Getenv("LEDIT_EMPTY_SET"))
+	}
+}
+
+// TestSproutKey_MultipleLeditOccurrences verifies that SproutKey only
+// replaces the first occurrence of LEDIT_.
+func TestSproutKey_MultipleLeditOccurrences(t *testing.T) {
+	result := SproutKey("LEDIT_LEDIT_FOO")
+	if result != "SPROUT_LEDIT_FOO" {
+		t.Errorf("expected SPROUT_LEDIT_FOO (only first occurrence replaced), got %s", result)
 	}
 }
 

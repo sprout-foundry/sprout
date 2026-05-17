@@ -485,8 +485,14 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.debugLog("%s\n", warning)
 	}
 
-	// Read original for diff
+	// Read original for diff, handling filesystem security errors
 	originalContent, err := tools.ReadFile(ctx, path)
+	if err != nil {
+		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, err); approved {
+			ctx = ctx2 // reuse bypassed context for subsequent operations
+			originalContent, err = tools.ReadFile(ctx, path)
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
@@ -503,11 +509,12 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	if err != nil {
 		if ctx2, approved := handleFileSecurityError(ctx, a, "edit_file", path, err); approved {
-			originalContent, err = tools.ReadFile(ctx2, path)
+			ctx = ctx2
+			originalContent, err = tools.ReadFile(ctx, path)
 			if err != nil {
 				return "", fmt.Errorf("failed to read original file for diff: %w", err)
 			}
-			result, err = tools.EditFile(ctx2, path, oldStr, newStr)
+			result, err = tools.EditFile(ctx, path, oldStr, newStr)
 		}
 	}
 

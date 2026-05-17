@@ -244,6 +244,22 @@ const sessionEndpoints: CloudEndpoint[] = [
   },
 ];
 
+// --- Tasks ---
+const taskEndpoints: CloudEndpoint[] = [
+  {
+    path: '/api/tasks',
+    methods: ['GET'],
+    category: 'foundry-backend',
+    description: 'List user tasks (webui compatibility)',
+  },
+  {
+    path: '/api/tasks',
+    methods: ['POST'],
+    category: 'foundry-backend',
+    description: 'Create a new agent task (webui compatibility)',
+  },
+];
+
 // --- Settings & Configuration ---
 const settingsEndpoints: CloudEndpoint[] = [
   {
@@ -394,6 +410,7 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
   ...chatSessionEndpoints,
   ...historyEndpoints,
   ...sessionEndpoints,
+  ...taskEndpoints,
   ...settingsEndpoints,
   ...costEndpoints,
   ...providerEndpoints,

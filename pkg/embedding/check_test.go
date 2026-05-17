@@ -119,7 +119,7 @@ func TestFormatDuplicateWarning_SingleMatch(t *testing.T) {
 // ─── CheckFileForDuplicates tests ───
 
 func TestCheckFileForDuplicates_NilManager(t *testing.T) {
-	result, err := CheckFileForDuplicates(context.Background(), nil, "test.go", "func Foo() {}", 0.9, 3)
+	result, err := CheckFileForDuplicates(context.Background(), nil, "test.go", "func Foo() {}", "/workspace", 0.9, 3)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,7 +177,7 @@ func BrandNewFunction(x int) string {
 
 	// Query with threshold 0.9 — the new function's embedding (based on text
 	// length) will be very different from [1,0,0], so no matches above threshold.
-	result, err := CheckFileForDuplicates(context.Background(), idx, "newfile.go", goSrc, 0.9, 3)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "newfile.go", goSrc, dir, 0.9, 3)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -206,7 +206,7 @@ func MyFunc() {
 }
 `
 	// threshold=0 means "use default 0.90".
-	result, err := CheckFileForDuplicates(context.Background(), idx, "test.go", goSrc, 0, 0)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "test.go", goSrc, "", 0, 0)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -258,7 +258,7 @@ func ReadConfig(path string) string {
 	}
 
 	// Now check the SAME content — self-matches should be filtered out.
-	result, err := CheckFileForDuplicates(ctx, idx, filePath, goSrc, 0.0, 10)
+	result, err := CheckFileForDuplicates(ctx, idx, filePath, goSrc, dir, 0.0, 10)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -322,7 +322,7 @@ func LoadConfig(path string) string {
 }
 `
 
-	result, err := CheckFileForDuplicates(ctx, idx, "new_config.go", fileB, 0.0, 5)
+	result, err := CheckFileForDuplicates(ctx, idx, "new_config.go", fileB, dir, 0.0, 5)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -391,7 +391,7 @@ func FuncB() int {
 }
 `
 
-	result, err := CheckFileForDuplicates(context.Background(), idx, "other.go", content, 0.0, 10)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "other.go", content, "", 0.0, 10)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -452,7 +452,7 @@ func NewFunc() {
 }
 `
 
-	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, 0.0, 10)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, "", 0.0, 10)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -505,7 +505,7 @@ func NewFunc() {
 }
 `
 
-	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, 0.0, 2)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, "", 0.0, 2)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -531,7 +531,7 @@ func TestCheckFileForDuplicates_EmptyContent(t *testing.T) {
 	// Content with only a package declaration and no functions —
 	// extractFromContent will parse it but find no units.
 	content := "package empty\n"
-	result, err := CheckFileForDuplicates(context.Background(), idx, "empty.go", content, 0.9, 3)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "empty.go", content, "", 0.9, 3)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -881,7 +881,7 @@ func TestCheckFileForDuplicates_ParseError(t *testing.T) {
 	idx := NewIndexManager(provider, store, IndexOptions{})
 
 	// Invalid Go code should produce a parse error.
-	result, err := CheckFileForDuplicates(context.Background(), idx, "bad.go", "this is not go code at all{{{", 0.9, 3)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "bad.go", "this is not go code at all{{{", "", 0.9, 3)
 	if err == nil {
 		t.Fatal("expected error for invalid Go code")
 	}
@@ -925,7 +925,7 @@ func TestCheckFileForDuplicates_WarningTextConsistent(t *testing.T) {
 func NewFunc() {}
 `
 
-	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, 0.0, 5)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, "", 0.0, 5)
 	if err != nil {
 		t.Fatalf("CheckFileForDuplicates failed: %v", err)
 	}
@@ -971,7 +971,7 @@ func TestCheckFileForDuplicates_DifferentLengthEmbeddings(t *testing.T) {
 func NewFunc() {}
 `
 
-	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, 0.0, 5)
+	result, err := CheckFileForDuplicates(context.Background(), idx, "new.go", content, "", 0.0, 5)
 	if err != nil {
 		t.Fatalf("failed: %v", err)
 	}

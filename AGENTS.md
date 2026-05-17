@@ -69,11 +69,56 @@ python3 test_runner.py          # Run E2E tests
 
 ## Git Operations Policy
 
-**NEVER COMMIT OR PUSH CHANGES** Without an explicit request. Only the repository owner decides when to commit.
+### Absolute Rules
 
-**Staging specific files is always allowed.** `git add <filepath>` may be used via shell_command by any persona. However, broad patterns (`git add .`, `git add -A`, `git add --all`) are always blocked — use the git tool with specific file paths instead.
+**NEVER FORCE PUSH.** `git push --force`, `git push -f`, `git push --force-with-lease`, and any variant that rewrites remote history is **unconditionally forbidden**. A fast-forward push that drops remote commits has the same destructive effect as a force push — always verify the remote has no divergent commits before pushing.
+
+**NEVER COMMIT OR PUSH CHANGES without an explicit user request.** Only the repository owner decides when to commit.
+
+### Mandatory Pre-Push Safety Check
+
+Before **every** `git push`, you MUST:
+
+1. **Fetch remote state**: `git fetch origin <branch>`
+2. **Check for remote-only commits**: `git log HEAD..FETCH_HEAD --oneline`
+3. **If output is non-empty** (remote has commits you don't have):
+   - You MUST merge those commits in first: `git merge FETCH_HEAD`
+   - Resolve any conflicts (see Conflict Resolution below)
+   - Build and test after merge: `make build-all`
+   - Commit the merge, then push
+4. **If output is empty** (fast-forward safe): proceed with push
+
+**Never skip step 2.** Even if you expect the remote to be behind, verify it. A fast-forward push that discards remote commits is as destructive as `--force`.
+
+### Staging Files
+
+**Staging specific files is always allowed.** `git add <filepath>` may be used via `shell_command` by any persona. However, broad patterns (`git add .`, `git add -A`, `git add --all`) are always blocked — use the git tool with specific file paths instead.
+
+### Committing and Pushing
 
 **`repo_orchestrator` privileges**: This persona can stage files, commit (via the commit tool), and push without interactive approval. However, operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona.
+
+### Conflict Resolution
+
+When a merge produces conflicts:
+
+1. **Read both sides** — understand what HEAD (yours) and the remote (theirs) each changed. Use `git diff HEAD...MERGE_HEAD` or inspect conflict markers directly.
+2. **Merge intentionally** — combine both sides' changes when they are additive (e.g., one side adds `ctx context.Context`, the other adds a new parameter; the correct merge keeps both).
+3. **Never blindly pick one side** — do not resolve a conflict by simply choosing "ours" or "theirs" without understanding what is being discarded. Each `<<<<<<<`/`=======`/`>>>>>>>` block requires human-like reasoning about intent.
+4. **Verify after resolving** — run `make build-all` and relevant tests to confirm the merge compiles and passes.
+5. **Check for stray conflict markers** — after editing, search for `<<<<<<`, `======`, `>>>>>>` to confirm all markers are removed.
+
+### Git Tool Pathways
+
+| Operation | Tool | Approval |
+|-----------|------|----------|
+| `git status`, `git diff`, `git log`, `git show`, `git fetch` | `shell_command` | Always allowed |
+| `git add <specific-file>` | `shell_command` | Always allowed |
+| `git commit -m "..."` | `shell_command` (repo_orchestrator) or commit tool | Per `repo_orchestrator` rules |
+| `git push` | `shell_command` (after pre-push safety check) | Per `repo_orchestrator` rules |
+| `git checkout`, `git switch`, `git restore`, `git reset` | Git tool only | Requires explicit user approval |
+| `git push --force` (any variant) | **FORBIDDEN** | Never allowed |
+| `git rebase` (onto remote) | **FORBIDDEN** | Use merge instead |
 
 ## Code Quality
 

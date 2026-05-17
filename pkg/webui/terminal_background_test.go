@@ -262,6 +262,13 @@ func TestCleanupInactiveSessions_BackgroundTimeout(t *testing.T) {
 		t.Fatalf("ExecuteCommandInBackground failed: %v", err)
 	}
 
+	// Wait for the background command to finish and the PTY readLoop to settle.
+	// The readLoop goroutine resets LastUsed every time it reads PTY output
+	// (including shell prompts after command completion). We need to wait until
+	// the shell is quiet before setting LastUsed to a past time, otherwise the
+	// readLoop will overwrite our timestamp.
+	time.Sleep(500 * time.Millisecond)
+
 	now := time.Now()
 
 	// Set regular session to be 100ms in the past (> 50ms regular timeout, < 500ms bg timeout).

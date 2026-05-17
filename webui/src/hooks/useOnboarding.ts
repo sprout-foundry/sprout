@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
 import { ApiService } from '../services/api';
 import { notificationBus } from '../services/notificationBus';
+import type { OnboardingState } from '../types/app';
 import { debugLog } from '../utils/log';
 
 export interface WindowsOnboardingGuidance {

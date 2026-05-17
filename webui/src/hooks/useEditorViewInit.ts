@@ -10,16 +10,12 @@
  * Target: ~250 lines
  */
 
-import { useEffect, useRef } from 'react';
-import { EditorView as CMEditorView, keymap, type ViewUpdate, type KeyBinding } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
-import { searchKeymap } from '@codemirror/search';
 import type { HighlightStyle } from '@codemirror/language';
-
-import type { EditorBuffer } from '../types/editor';
-import type { EditorSettingsCompartments } from './useEditorSettings';
-import type { UseEditorExtensionsReturn } from './useEditorExtensions';
-import type { KeymapActions } from './useEditorKeymaps';
+import { searchKeymap } from '@codemirror/search';
+import { EditorState } from '@codemirror/state';
+import type { Extension } from '@codemirror/state';
+import { EditorView as CMEditorView, keymap, type ViewUpdate, type KeyBinding } from '@codemirror/view';
+import { useEffect, useRef } from 'react';
 import { resolveLanguageId } from '../extensions/languageRegistry';
 import {
   buildLSPPluginExtensions,
@@ -29,11 +25,14 @@ import {
   registerEditorView,
   unregisterEditorView,
 } from '../extensions/lspExtensions';
-import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
-import { debugLog } from '../utils/log';
-import type { Extension } from '@codemirror/state';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { getLSPClientService, LSP_SUPPORTED_LANGUAGES } from '../services/lspClientService';
 import type { ThemePack } from '../themes/themePacks';
+import type { EditorBuffer } from '../types/editor';
+import { debugLog } from '../utils/log';
+import type { UseEditorExtensionsReturn } from './useEditorExtensions';
+import type { KeymapActions } from './useEditorKeymaps';
+import type { EditorSettingsCompartments } from './useEditorSettings';
 
 // ---------------------------------------------------------------------------
 // Types

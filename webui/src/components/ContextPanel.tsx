@@ -1,9 +1,11 @@
-import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { Bot, Wrench, History, ListTodo, Clock, Activity, PanelRightOpen, PanelRightClose } from 'lucide-react';
+import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
-import TodoPanel from './TodoPanel';
-import RevisionListPanel from './RevisionListPanel';
 
+import { SessionsTab } from './contextPanel/SessionsTab';
+import { StatusTab } from './contextPanel/StatusTab';
+import { SubagentsTab } from './contextPanel/SubagentsTab';
+import { ToolsTab } from './contextPanel/ToolsTab';
 import type {
   ContextPanelProps,
   ContextPanelHandle,
@@ -13,17 +15,13 @@ import type {
   PanelTab,
 } from './contextPanel/types';
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
-
 import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useRevisionManager } from './contextPanel/useRevisionManager';
 import { useSessionManager } from './contextPanel/useSessionManager';
 import { useStatusMetrics } from './contextPanel/useStatusMetrics';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
-
-import { ToolsTab } from './contextPanel/ToolsTab';
-import { SubagentsTab } from './contextPanel/SubagentsTab';
-import { SessionsTab } from './contextPanel/SessionsTab';
-import { StatusTab } from './contextPanel/StatusTab';
+import RevisionListPanel from './RevisionListPanel';
+import TodoPanel from './TodoPanel';
 
 const TAB_IDS = ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'] as const;
 

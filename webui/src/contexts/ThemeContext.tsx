@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { type HighlightStyle } from '@codemirror/language';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { notificationBus } from '../services/notificationBus';
+import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
 import {
   DEFAULT_THEME_PACK_ID,
   getThemePackForMode,
@@ -9,8 +11,6 @@ import {
   type ThemePack,
 } from '../themes/themePacks';
 import { debugLog } from '../utils/log';
-import { ThemeImporter, type VSCodeTheme, type ImportResult } from '../themes/themeImport';
-import { notificationBus } from '../services/notificationBus';
 
 type Theme = ThemeMode;
 

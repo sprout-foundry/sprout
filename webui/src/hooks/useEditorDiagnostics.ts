@@ -11,14 +11,14 @@
  * Target: ~120 lines
  */
 
-import { useRef, useCallback, useEffect } from 'react';
 import type { EditorView } from '@codemirror/view';
-import { clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
+import { useRef, useCallback, useEffect } from 'react';
 import { resolveLanguageId } from '../extensions/languageRegistry';
+import { clearDiagnostics, createDebouncedDiagnosticsUpdater } from '../extensions/lintDiagnostics';
 import { getClientForLanguageSync } from '../extensions/lspExtensions';
 import { ApiService } from '../services/api';
-import { debugLog } from '../utils/log';
 import type { EditorBuffer } from '../types/editor';
+import { debugLog } from '../utils/log';
 
 /** Languages that support semantic diagnostics and LSP integration. */
 function isSemanticLanguage(languageId: string): boolean {

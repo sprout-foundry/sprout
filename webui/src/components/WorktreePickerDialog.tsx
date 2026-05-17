@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
 import { GitBranch, X, Loader2, FolderTree } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { listWorktrees } from '../services/chatSessions';
 import type { WorktreeInfo } from '../services/chatSessions';
 import './WorktreePickerDialog.css';

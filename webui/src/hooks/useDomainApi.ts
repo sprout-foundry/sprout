@@ -15,19 +15,19 @@
 
 import { useMemo } from 'react';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
+import * as chat from '../services/api/chatApi';
+import * as credentials from '../services/api/credentialsApi';
+import * as editor from '../services/api/editorApi';
 import * as files from '../services/api/filesApi';
 import * as git from '../services/api/gitApi';
-import * as chat from '../services/api/chatApi';
-import * as terminal from '../services/api/terminalApi';
-import * as settings from '../services/api/settingsApi';
-import * as credentials from '../services/api/credentialsApi';
-import * as workspace from '../services/api/workspaceApi';
-import * as ssh from '../services/api/sshApi';
-import * as search from '../services/api/searchApi';
-import * as editor from '../services/api/editorApi';
-import * as onboarding from '../services/api/onboardingApi';
-import * as session from '../services/api/sessionApi';
 import * as misc from '../services/api/miscApi';
+import * as onboarding from '../services/api/onboardingApi';
+import * as search from '../services/api/searchApi';
+import * as session from '../services/api/sessionApi';
+import * as settings from '../services/api/settingsApi';
+import * as ssh from '../services/api/sshApi';
+import * as terminal from '../services/api/terminalApi';
+import * as workspace from '../services/api/workspaceApi';
 
 /**
  * Extract all but the first element from a tuple type.

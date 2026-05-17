@@ -4,8 +4,6 @@
  * Displays files edited in this session and revision checkpoints with rollback.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLog } from '../utils/log';
 import type { FileEdit, Revision, RevisionFile } from '@sprout/ui';
 import { normalizeRevision } from '@sprout/ui';
 import {
@@ -26,7 +24,9 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiService } from '../services/api';
+import { useLog } from '../utils/log';
 import { showThemedConfirm, showThemedAlert } from './ThemedDialog';
 import './FileEditsPanel.css';
 

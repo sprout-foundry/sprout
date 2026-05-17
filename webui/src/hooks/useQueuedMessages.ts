@@ -8,8 +8,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { AppState } from '../types/app';
 import { notificationBus } from '../services/notificationBus';
+import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 
 export interface UseQueuedMessagesReturn {

@@ -9,8 +9,8 @@
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { ApiService } from '../services/api';
-import { debugLog, useLog } from '../utils/log';
 import type { AppState } from '../types/app';
+import { debugLog, useLog } from '../utils/log';
 
 export interface UseMessageSendingOptions {
   setState: Dispatch<SetStateAction<AppState>>;

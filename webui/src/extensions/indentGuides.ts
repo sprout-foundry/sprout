@@ -21,9 +21,9 @@
  * - Cursor-line guides use `--cm-indent-guide-active` for a brighter look.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { getIndentUnit } from '@codemirror/language';
 import { type Extension } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 
 // ── Indent helpers ──────────────────────────────────────────────────
 

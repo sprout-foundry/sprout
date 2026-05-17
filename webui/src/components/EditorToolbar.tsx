@@ -1,6 +1,6 @@
+import { Save, Sun, Moon, Loader2 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import { Save, Sun, Moon, Loader2 } from 'lucide-react';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import './EditorToolbar.css';
 

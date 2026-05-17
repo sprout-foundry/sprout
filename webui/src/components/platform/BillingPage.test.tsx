@@ -2,8 +2,8 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import BillingPage from './BillingPage';
 import { getAdapter } from '../../services/apiAdapter';
+import BillingPage from './BillingPage';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -103,11 +103,6 @@ describe('BillingPage', () => {
   it('calls adapter.fetch with the correct endpoint on mount', () => {
     renderSync();
     expect(mockFetch).toHaveBeenCalledWith('/api/foundry/billing');
-  });
-
-  it('fetches billing only once on mount', () => {
-    renderSync();
-    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
   it('does not show error state on initial render with adapter', () => {

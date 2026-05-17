@@ -23,8 +23,8 @@
  *   to inherit the bracket colour instead of their syntax colour.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type Extension, type Text } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // ── Types ──────────────────────────────────────────────────────────
 

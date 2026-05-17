@@ -11,18 +11,17 @@
  * Target: ~400 lines
  */
 
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { indentUnit } from '@codemirror/language';
 import { EditorState, type Compartment } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
-import { indentUnit } from '@codemirror/language';
-
-import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
-import { type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { useRef, useState, useEffect, useCallback } from 'react';
+import type { LineEnding } from '../extensions/lineEndingDetect';
 import { minimapExtension } from '../extensions/minimap';
 import { whitespaceRenderingPlugin } from '../extensions/whitespaceRendering';
+import { type WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { debugLog } from '../utils/log';
-import type { LineEnding } from '../extensions/lineEndingDetect';
+import { TAB_SIZE_TABS_MODE, TAB_SIZE_DEFAULT } from './useEditorExtensions';
 
 // ---------------------------------------------------------------------------
 // Constants

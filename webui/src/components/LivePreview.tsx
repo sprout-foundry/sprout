@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
 import { Code2, Eye, Columns2 } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import './LivePreview.css';
 
 interface LivePreviewProps {

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { useLog } from '../utils/log';
 import { ApiService } from '../services/api';
+import type { useLog } from '../utils/log';
 import {
   type CommandHistoryState,
   dedupeCommands,

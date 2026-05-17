@@ -1,9 +1,9 @@
 // @ts-nocheck
 
-import { createRoot } from 'react-dom/client';
 import { act, createElement } from 'react';
-import Sidebar from './Sidebar';
+import { createRoot } from 'react-dom/client';
 import { ApiService } from '../services/api';
+import Sidebar from './Sidebar';
 
 vi.mock('./SettingsPanel', () => ({ default: () => null }));
 vi.mock('./FileTree', () => ({ default: () => null }));
@@ -44,6 +44,21 @@ vi.mock('../services/api', () => {
 vi.mock('../contexts/NotificationContext', () => ({
   NotificationProvider: ({ children }) => children,
   useNotifications: () => ({ addNotification: () => {} }),
+}));
+
+// Sidebar uses useEditorManager for editor settings within the settings panel
+vi.mock('../contexts/EditorManagerContext', () => ({
+  useEditorManager: () => ({
+    paneSizes: {},
+    updatePaneSize: vi.fn(),
+  }),
+}));
+
+// Sidebar uses usePlatformNav for cloud platform nav items
+vi.mock('../contexts/PlatformNavContext', () => ({
+  usePlatformNav: () => ({
+    platformNavItems: [],
+  }),
 }));
 
 const flushPromises = async () => {

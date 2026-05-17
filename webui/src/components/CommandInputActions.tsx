@@ -1,6 +1,5 @@
-import type { FormEvent } from 'react';
-import type { ChangeEvent } from 'react';
 import { Plus, SquarePen, Send, Square, ListPlus, Database } from 'lucide-react';
+import type { FormEvent, ChangeEvent } from 'react';
 import QueuedMessagesPanel from './QueuedMessagesPanel';
 
 interface CommandInputActionsProps {

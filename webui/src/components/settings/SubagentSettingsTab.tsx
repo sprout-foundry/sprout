@@ -36,12 +36,8 @@ export default function SubagentSettingsTab({
   renderSelect,
   api,
 }: SubagentSettingsTabProps) {
-  const currentSubProvider = String(
-    getNestedValue(settings, 'subagent_provider') || '',
-  );
-  const currentSubModel = String(
-    getNestedValue(settings, 'subagent_model') || '',
-  );
+  const currentSubProvider = String(getNestedValue(settings, 'subagent_provider') || '');
+  const currentSubModel = String(getNestedValue(settings, 'subagent_model') || '');
 
   const selectedProvider = subagentProviders.find((p) => p.id === currentSubProvider);
   const availableModels = selectedProvider?.models || [];

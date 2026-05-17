@@ -121,8 +121,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
                 {hasTruncation(tool.details) && tool.details.result_truncated && (
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
                     {' '}
-                    {'⚠'} Truncated — full result was{' '}
-                    {Number(tool.details.result_length ?? 0)} characters
+                    {'⚠'} Truncated — full result was {Number(tool.details.result_length ?? 0)} characters
                   </div>
                 )}
               </div>

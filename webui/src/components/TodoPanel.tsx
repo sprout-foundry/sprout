@@ -1,5 +1,5 @@
-import { Check, Circle, Loader2, Minus } from 'lucide-react';
 import type { TodoItem } from '@sprout/ui';
+import { Check, Circle, Loader2, Minus } from 'lucide-react';
 import './TodoPanel.css';
 
 interface TodoPanelProps {

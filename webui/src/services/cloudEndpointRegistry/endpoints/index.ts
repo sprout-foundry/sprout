@@ -1,8 +1,8 @@
 import type { CloudEndpoint } from '../types';
-import { wasmLocalEndpoints } from './wasm-local';
 import { foundryBackendEndpoints } from './foundry-backend';
-import { syntheticEndpoints } from './synthetic';
 import { noOpEndpoints } from './noop';
+import { syntheticEndpoints } from './synthetic';
+import { wasmLocalEndpoints } from './wasm-local';
 
 /**
  * All webui API endpoints with their cloud-mode classification.

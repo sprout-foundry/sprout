@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { RefObject } from 'react';
-import { supportsSettings } from '../config/mode';
 import type { FileTreeHandle } from '../components/SidebarFilesSection';
+import { supportsSettings } from '../config/mode';
 import type { SectionTab } from './useSidebarState';
 
 interface OpenSettingsFocusEventDetail {

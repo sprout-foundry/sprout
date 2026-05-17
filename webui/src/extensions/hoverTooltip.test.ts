@@ -44,11 +44,11 @@ vi.mock('../services/lspClientService', () => ({
 
 // ── Module under test ─────────────────────────────────────────────────
 
-import { escapeHtml, formatMarkdown, createHoverTooltipExtension } from './hoverTooltip';
 import { hoverTooltip as mockHoverTooltip } from '@codemirror/view';
 import { ApiService as MockApiService } from '../services/api';
-import { resolveLanguageId as mockResolveLanguageId } from './languageRegistry';
 import { debugLog as mockDebugLog } from '../utils/log';
+import { escapeHtml, formatMarkdown, createHoverTooltipExtension } from './hoverTooltip';
+import { resolveLanguageId as mockResolveLanguageId } from './languageRegistry';
 
 // ── escapeHtml tests ────────────────────────────────────────────────────
 

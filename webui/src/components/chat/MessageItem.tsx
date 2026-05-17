@@ -1,6 +1,6 @@
-import { memo } from 'react';
-import { BrainCircuit } from 'lucide-react';
 import { MessageBubble, MessageSegments, MessageContent } from '@sprout/ui';
+import { BrainCircuit } from 'lucide-react';
+import { memo } from 'react';
 import type { Message, ToolExecution } from './types';
 
 interface MessageItemProps {

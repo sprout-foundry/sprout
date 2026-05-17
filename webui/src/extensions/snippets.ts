@@ -18,9 +18,9 @@
  * ```
  */
 
-import { keymap, EditorView } from '@codemirror/view';
-import { type Extension, Facet, Compartment } from '@codemirror/state';
 import { snippet, hasNextSnippetField } from '@codemirror/autocomplete';
+import { type Extension, Facet, Compartment } from '@codemirror/state';
+import { keymap, EditorView } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 import { isEmmetLanguage } from './emmet';
 

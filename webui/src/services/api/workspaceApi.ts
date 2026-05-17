@@ -29,13 +29,13 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
 
   const suggested_projects = ((): Array<{ path: string; name: string; markers: string[] }> => {
     if (!Array.isArray(data.suggested_projects)) return [];
-    return data.suggested_projects.filter(
-      (p): p is RawProjectEntry => typeof p === 'object' && p != null && 'path' in p,
-    ).map((p) => ({
-      path: String(p.path ?? ''),
-      name: String(p.name ?? ''),
-      markers: parseStrArray(p.markers),
-    }));
+    return data.suggested_projects
+      .filter((p): p is RawProjectEntry => typeof p === 'object' && p != null && 'path' in p)
+      .map((p) => ({
+        path: String(p.path ?? ''),
+        name: String(p.name ?? ''),
+        markers: parseStrArray(p.markers),
+      }));
   })();
 
   const recent_workspaces = ((): Array<{
@@ -46,15 +46,15 @@ function toWorkspaceResponse(data: Record<string, unknown>): WorkspaceResponse {
     session_count: number;
   }> => {
     if (!Array.isArray(data.recent_workspaces)) return [];
-    return data.recent_workspaces.filter(
-      (w): w is RawWorkspaceEntry => typeof w === 'object' && w != null && 'path' in w,
-    ).map((w) => ({
-      path: String(w.path ?? ''),
-      name: String(w.name ?? ''),
-      last_used: String(w.last_used ?? ''),
-      markers: parseStrArray(w.markers),
-      session_count: Number(w.session_count ?? 0),
-    }));
+    return data.recent_workspaces
+      .filter((w): w is RawWorkspaceEntry => typeof w === 'object' && w != null && 'path' in w)
+      .map((w) => ({
+        path: String(w.path ?? ''),
+        name: String(w.name ?? ''),
+        last_used: String(w.last_used ?? ''),
+        markers: parseStrArray(w.markers),
+        session_count: Number(w.session_count ?? 0),
+      }));
   })();
 
   return {

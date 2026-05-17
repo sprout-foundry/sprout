@@ -79,12 +79,7 @@ function ProjectRow({
   onClick: () => void;
 }): JSX.Element {
   return (
-    <button
-      className="workspace-picker-row"
-      type="button"
-      onClick={onClick}
-      title={path}
-    >
+    <button className="workspace-picker-row" type="button" onClick={onClick} title={path}>
       <div className="workspace-picker-row-icon">{icon}</div>
       <div className="workspace-picker-row-info">
         <span className="workspace-picker-row-name">{name}</span>

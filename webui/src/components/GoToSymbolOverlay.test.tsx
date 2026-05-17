@@ -34,13 +34,7 @@ function renderOverlay(props: {
   const container = document.createElement('div');
   document.body.appendChild(container);
 
-  const {
-    visible = true,
-    content = '',
-    fileExtension = '.go',
-    onSelectSymbol = vi.fn(),
-    onClose = vi.fn(),
-  } = props;
+  const { visible = true, content = '', fileExtension = '.go', onSelectSymbol = vi.fn(), onClose = vi.fn() } = props;
 
   let _component: GoToSymbolOverlay | null = null;
 

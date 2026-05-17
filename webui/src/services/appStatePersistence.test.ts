@@ -27,8 +27,8 @@ vi.mock('./notificationBus', () => ({
 
 // ── Imports ──────────────────────────────────────────────────────────
 
-import { getUIContextScope, getAppStateStorageKey, loadPersistedAppState } from './appStatePersistence';
 import { APP_STATE_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
+import { getUIContextScope, getAppStateStorageKey, loadPersistedAppState } from './appStatePersistence';
 import { notificationBus } from './notificationBus';
 
 // ── localStorage / sessionStorage mock factories ─────────────────────

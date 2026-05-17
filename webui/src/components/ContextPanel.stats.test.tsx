@@ -7,8 +7,7 @@ import { createRoot } from 'react-dom/client';
 // Mock heavy child components that ContextPanel imports
 // ---------------------------------------------------------------------------
 
-vi.mock('./TodoPanel', () => ({ default: (props) => props.children }))
-;
+vi.mock('./TodoPanel', () => ({ default: (props) => props.children }));
 vi.mock('./RevisionListPanel', () => ({ default: (props) => props.children }));
 vi.mock('../services/api', () => ({
   // No longer used by ContextPanel — kept for any transitive imports

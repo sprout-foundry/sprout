@@ -1,10 +1,11 @@
 import type { CloudEndpoint } from '../types';
+import { gitEndpoints } from './foundry-backend-git';
 
 /**
  * Category (b) — foundry-backend: Must be proxied to the Foundry backend.
  */
 // --- Chat & Query ---
-export const foundryBackendEndpoints: CloudEndpoint[] = [
+const chatAndQueryEndpoints: CloudEndpoint[] = [
   {
     path: '/api/query',
     methods: ['POST'],
@@ -35,7 +36,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Image upload for vision',
   },
-  // --- Embedding & Semantic Search ---
+];
+
+// --- Embedding & Semantic Search ---
+const embeddingEndpoints: CloudEndpoint[] = [
   {
     path: '/api/embedding-index',
     methods: ['GET'],
@@ -72,7 +76,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Semantic/vector search (needs backend AI infrastructure)',
   },
-  // --- Agent Terminal Sessions ---
+];
+
+// --- Agent Terminal Sessions ---
+const terminalEndpoints: CloudEndpoint[] = [
   {
     path: '/api/terminal/agent-sessions',
     methods: ['GET'],
@@ -86,170 +93,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     isPrefix: true,
     description: 'Agent session actions (output, attach, kill) — needs backend',
   },
-  // --- Git ---
-  {
-    path: '/api/git/status',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Git status',
-  },
-  {
-    path: '/api/git/branches',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'List git branches',
-  },
-  {
-    path: '/api/git/checkout',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Checkout branch/commit',
-  },
-  {
-    path: '/api/git/branch/create',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Create branch',
-  },
-  {
-    path: '/api/git/pull',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Git pull',
-  },
-  {
-    path: '/api/git/push',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Git push',
-  },
-  {
-    path: '/api/git/stage',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Stage files',
-  },
-  {
-    path: '/api/git/unstage',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Unstage files',
-  },
-  {
-    path: '/api/git/discard',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Discard changes',
-  },
-  {
-    path: '/api/git/stage-all',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Stage all files',
-  },
-  {
-    path: '/api/git/unstage-all',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Unstage all files',
-  },
-  {
-    path: '/api/git/commit',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Git commit',
-  },
-  {
-    path: '/api/git/commit-message',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Generate commit message',
-  },
-  {
-    path: '/api/git/revert',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Revert commit',
-  },
-  {
-    path: '/api/git/deep-review',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Deep review',
-  },
-  {
-    path: '/api/git/deep-review/fix',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Fix review items',
-  },
-  {
-    path: '/api/git/deep-review/fix/start',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Start fix process',
-  },
-  {
-    path: '/api/git/deep-review/fix/status',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Fix process status',
-  },
-  {
-    path: '/api/git/diff',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Git diff',
-  },
-  {
-    path: '/api/git/log',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Git log',
-  },
-  {
-    path: '/api/git/confirm',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Confirm git commit',
-  },
-  {
-    path: '/api/git/commit/show',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Show commit details',
-  },
-  {
-    path: '/api/git/commit/show/file',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Show file diff in commit',
-  },
-  {
-    path: '/api/git/worktrees',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'List worktrees',
-  },
-  {
-    path: '/api/git/worktree/create',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Create worktree',
-  },
-  {
-    path: '/api/git/worktree/remove',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Remove worktree',
-  },
-  {
-    path: '/api/git/worktree/checkout',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Checkout worktree',
-  },
-  // --- Diagnostics & LSP ---
+];
+
+// --- Diagnostics & LSP ---
+const diagnosticsEndpoints: CloudEndpoint[] = [
   {
     path: '/api/diagnostics',
     methods: ['POST'],
@@ -274,7 +121,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'LSP WebSocket bridge',
   },
-  // --- Chat Sessions ---
+];
+
+// --- Chat Sessions ---
+const chatSessionEndpoints: CloudEndpoint[] = [
   {
     path: '/api/chat-sessions',
     methods: ['GET', 'POST'],
@@ -348,7 +198,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     isPrefix: true,
     description: 'Worktree sub-endpoints',
   },
-  // --- History ---
+];
+
+// --- History ---
+const historyEndpoints: CloudEndpoint[] = [
   {
     path: '/api/history/changelog',
     methods: ['GET'],
@@ -373,7 +226,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Rollback conversation history',
   },
-  // --- Sessions ---
+];
+
+// --- Sessions ---
+const sessionEndpoints: CloudEndpoint[] = [
   {
     path: '/api/sessions/restore',
     methods: ['POST'],
@@ -386,7 +242,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'List sessions',
   },
-  // --- Settings & Configuration ---
+];
+
+// --- Settings & Configuration ---
+const settingsEndpoints: CloudEndpoint[] = [
   {
     path: '/api/settings',
     methods: ['GET', 'PUT'],
@@ -469,7 +328,10 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Apply hotkey preset',
   },
-  // --- Costs ---
+];
+
+// --- Costs ---
+const costEndpoints: CloudEndpoint[] = [
   {
     path: '/api/costs/summary',
     methods: ['GET'],
@@ -488,25 +350,53 @@ export const foundryBackendEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Cost detail',
   },
-  // --- Providers ---
+];
+
+// --- Providers ---
+const providerEndpoints: CloudEndpoint[] = [
   {
     path: '/api/providers',
     methods: ['GET'],
     category: 'foundry-backend',
     description: 'List available providers',
   },
-  // --- Stats ---
+];
+
+// --- Stats ---
+const statsEndpoints: CloudEndpoint[] = [
   {
     path: '/api/stats',
     methods: ['GET'],
     category: 'foundry-backend',
     description: 'Execution stats',
   },
-  // --- Workspace ---
+];
+
+// --- Workspace ---
+const workspaceEndpoints: CloudEndpoint[] = [
   {
     path: '/api/workspace/symbols',
     methods: ['GET'],
     category: 'foundry-backend',
     description: 'Workspace symbols (LSP)',
   },
+];
+
+/**
+ * All foundry-backend endpoints combined (non-git + git from separate module).
+ */
+export const foundryBackendEndpoints: CloudEndpoint[] = [
+  ...chatAndQueryEndpoints,
+  ...embeddingEndpoints,
+  ...terminalEndpoints,
+  ...gitEndpoints,
+  ...diagnosticsEndpoints,
+  ...chatSessionEndpoints,
+  ...historyEndpoints,
+  ...sessionEndpoints,
+  ...settingsEndpoints,
+  ...costEndpoints,
+  ...providerEndpoints,
+  ...statsEndpoints,
+  ...workspaceEndpoints,
 ];

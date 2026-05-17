@@ -1,5 +1,7 @@
 /** Code actions extension — lightbulb gutter + Ctrl+. quick actions menu. Static analysis in ./staticAnalysis.ts. */
 
+import { LSPPlugin } from '@codemirror/lsp-client';
+import { StateField, type Extension, StateEffect as SE, Facet, RangeSetBuilder } from '@codemirror/state';
 import {
   type EditorView,
   type KeyBinding,
@@ -10,13 +12,11 @@ import {
   gutter,
   GutterMarker,
 } from '@codemirror/view';
-import { StateField, type Extension, StateEffect as SE, Facet, RangeSetBuilder } from '@codemirror/state';
 import { ApiService } from '../services/api';
 import { uriToFilePath, getFileURI } from '../services/lspClientService';
-import { getClientForLanguageSync } from './lspExtensions';
-import { LSPPlugin } from '@codemirror/lsp-client';
-import { resolveLanguageId } from './languageRegistry';
 import { debugLog } from '../utils/log';
+import { resolveLanguageId } from './languageRegistry';
+import { getClientForLanguageSync } from './lspExtensions';
 import { computeStaticActions, kindEmoji } from './staticAnalysis';
 
 import './codeActions.css';

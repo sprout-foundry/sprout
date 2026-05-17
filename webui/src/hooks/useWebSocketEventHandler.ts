@@ -1,14 +1,14 @@
-import { useCallback } from 'react';
 import type { WsEvent } from '@sprout/events';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
+import { useCallback } from 'react';
+import type { AppStoreSetState } from '../contexts/AppStore';
+import { getWebUIClientId } from '../services/clientSession';
 import { toQueryProgress } from '../types/app';
+import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
-import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
-import { trimMessages } from '../utils/messageWindow';
-import { getWebUIClientId } from '../services/clientSession';
 import { generateMessageId } from '../utils/messageId';
-import type { AppStoreSetState } from '../contexts/AppStore';
+import { trimMessages } from '../utils/messageWindow';
 
 // ── Helper Functions ───────────────────────────────────────────────────
 

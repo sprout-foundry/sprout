@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
 import { Bot, Settings, CloudOff } from 'lucide-react';
+import { forwardRef } from 'react';
 
 interface EmptyChatPanelProps {
   /** Show offline panel when backend requires health check and is unreachable */

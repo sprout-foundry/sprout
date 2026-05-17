@@ -6,8 +6,8 @@
  */
 
 // ── Module under test (Jest hoists mocks above imports) ─────────────
-import { countReferences, formatRefText, computeCodeLenses } from './codeLens';
 import { extractSymbols as mockExtractSymbols } from '../utils/symbolUtils';
+import { countReferences, formatRefText, computeCodeLenses } from './codeLens';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────
 

@@ -121,23 +121,20 @@ export function useWorkspace(): UseWorkspaceResult {
     fetchWorkspace();
   }, [fetchWorkspace]);
 
-  const setWorkspace = useCallback(
-    async (path: string) => {
-      try {
-        const data = await apiService.current.setWorkspace(path);
-        const info = mapWorkspaceResponse(data);
-        setWorkspaceInfo(info);
-        setHomeDir(extractHomeDir(info.daemon_root, info.workspace_root));
-        // Reload the page so the whole app picks up the new workspace
-        window.setTimeout(() => window.location.reload(), 300);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[useWorkspace] failed to set workspace:', msg);
-        throw err;
-      }
-    },
-    [],
-  );
+  const setWorkspace = useCallback(async (path: string) => {
+    try {
+      const data = await apiService.current.setWorkspace(path);
+      const info = mapWorkspaceResponse(data);
+      setWorkspaceInfo(info);
+      setHomeDir(extractHomeDir(info.daemon_root, info.workspace_root));
+      // Reload the page so the whole app picks up the new workspace
+      window.setTimeout(() => window.location.reload(), 300);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[useWorkspace] failed to set workspace:', msg);
+      throw err;
+    }
+  }, []);
 
   const refresh = fetchWorkspace;
 

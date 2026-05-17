@@ -1,10 +1,9 @@
-import React, { useEffect } from 'react';
-
-import ErrorBoundary from './ErrorBoundary';
-import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
-import { ApiService } from '../services/api';
 import type { ToolExecution, LogEntry, SubagentActivity, TodoItem, FileEdit } from '@sprout/ui';
+import React, { useEffect } from 'react';
+import { ApiService } from '../services/api';
 import type { QueryProgress } from '../types/app';
+import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
+import ErrorBoundary from './ErrorBoundary';
 
 const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
 const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';

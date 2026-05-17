@@ -5,14 +5,14 @@
  * Provides a singleton service for creating and managing LSP clients per language.
  */
 
+import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-client';
+import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirror/lsp-client';
+import type { EditorView } from '@codemirror/view';
+import { warn } from '../utils/log';
 import { ApiService } from './api';
 import { clientFetch } from './clientSession';
-import { warn } from '../utils/log';
 
 // Types from @codemirror/lsp-client
-import type { Transport, LSPClientConfig, LSPClient } from '@codemirror/lsp-client';
-import type { EditorView } from '@codemirror/view';
-import { LSPClient as LSPClientClass, languageServerExtensions } from '@codemirror/lsp-client';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -763,7 +763,9 @@ class LSPClientService {
       this.reconnectTimers.delete(languageId);
       if (this.disconnectedLanguages.has(languageId)) {
         this.disconnectedLanguages.delete(languageId);
-        this.getClientForLanguage(languageId).catch((err) => { warn('LSP reconnect failed: ' + (err instanceof Error ? err.message : String(err))); });
+        this.getClientForLanguage(languageId).catch((err) => {
+          warn('LSP reconnect failed: ' + (err instanceof Error ? err.message : String(err)));
+        });
       }
     }, backoff);
 

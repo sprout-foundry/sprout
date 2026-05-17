@@ -9,10 +9,10 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
-import { debugLog } from '../utils/log';
+import type { AppStoreSetState } from '../contexts/AppStore';
 import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
-import type { AppStoreSetState } from '../contexts/AppStore';
+import { debugLog } from '../utils/log';
 
 export interface UseModelProviderHandlersOptions {
   state: AppState;

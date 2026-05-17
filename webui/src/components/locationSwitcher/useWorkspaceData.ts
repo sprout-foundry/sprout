@@ -3,6 +3,8 @@ import { ApiService } from '../../services/api';
 import { getSSHProxyContext } from '../../services/clientSession';
 import { showThemedConfirm } from '../ThemedDialog';
 import { normalizePath } from './pathUtils';
+import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
+import { MAX_RECENT_WORKSPACES } from './types';
 import {
   readRecentWorkspaces,
   writeRecentWorkspaces,
@@ -11,8 +13,6 @@ import {
   readSSHFavoriteWorkspaces,
   writeSSHFavoriteWorkspaces,
 } from './workspaceStorage';
-import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
-import { MAX_RECENT_WORKSPACES } from './types';
 
 export interface UseWorkspaceDataProps {
   isConnected: boolean;

@@ -1,6 +1,6 @@
-import { clientFetch } from './clientSession';
 import { showThemedConfirm } from '../components/ThemedDialog';
 import { debugLog } from '../utils/log';
+import { clientFetch } from './clientSession';
 
 const consentTokenHeader = 'X-Sprout-Consent-Token';
 

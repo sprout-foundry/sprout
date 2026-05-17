@@ -10,32 +10,34 @@ import Terminal from './Terminal';
 
 vi.mock('./TerminalPane', async () => {
   const { forwardRef, useImperativeHandle } = await vi.importActual('react');
-  return { default: forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
-    // NOTE: vi.fn() inside useImperativeHandle creates fresh mock instances on
-    // every re-render. This is acceptable because no test asserts on imperative
-    // handle call counts — all assertions check DOM state. If future tests need
-    // to verify clear()/focus() calls, the mock factory will need restructuring
-    // to use stable references (e.g., storing mocks on a shared object that both
-    // the factory and test scope can access).
-    useImperativeHandle(ref, () => ({
-      clear: vi.fn(),
-      focus: vi.fn(),
-    }));
+  return {
+    default: forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
+      // NOTE: vi.fn() inside useImperativeHandle creates fresh mock instances on
+      // every re-render. This is acceptable because no test asserts on imperative
+      // handle call counts — all assertions check DOM state. If future tests need
+      // to verify clear()/focus() calls, the mock factory will need restructuring
+      // to use stable references (e.g., storing mocks on a shared object that both
+      // the factory and test scope can access).
+      useImperativeHandle(ref, () => ({
+        clear: vi.fn(),
+        focus: vi.fn(),
+      }));
 
-    return (
-      <div
-        data-testid="terminal-pane"
-        data-active={isActive ? 'true' : 'false'}
-        data-connected={isConnected ? 'true' : 'false'}
-      >
-        {showCloseButton && (
-          <button className="terminal-pane-close" data-testid="secondary-close-btn" onClick={onClose}>
-            ✕
-          </button>
-        )}
-      </div>
-    );
-  })};
+      return (
+        <div
+          data-testid="terminal-pane"
+          data-active={isActive ? 'true' : 'false'}
+          data-connected={isConnected ? 'true' : 'false'}
+        >
+          {showCloseButton && (
+            <button className="terminal-pane-close" data-testid="secondary-close-btn" onClick={onClose}>
+              ✕
+            </button>
+          )}
+        </div>
+      );
+    }),
+  };
 });
 
 // ---------------------------------------------------------------------------
@@ -682,8 +684,11 @@ describe('Terminal split functionality', () => {
   });
 
   // ── 12. Secondary pane close button ──────────────────────
+  // NOTE: Secondary panes no longer have close buttons — splitting
+  // is toggled via the split button. These tests now verify that
+  // toggling via the split button works correctly.
 
-  it('secondary pane has a close button when split is active', () => {
+  it('splitting creates two panes and a divider', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -692,29 +697,13 @@ describe('Terminal split functionality', () => {
       dispatchTerminalAction('split_vertical');
     });
 
-    // The mocked TerminalPane renders a close button when showCloseButton=true
-    const closeBtn = getSecondaryCloseBtn(container);
-    expect(closeBtn).toBeTruthy();
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(getSplitDivider(container)).toBeTruthy();
   });
 
-  it('primary pane does NOT have a close button (showCloseButton is false)', () => {
-    const view = renderTerminal({ isExpanded: true });
-    container = view.container;
-    root = view.root;
+  // ── 13. Unsplitting via split button toggle ──────────────
 
-    act(() => {
-      dispatchTerminalAction('split_vertical');
-    });
-
-    // Primary pane is the first .terminal-pane-wrapper
-    const primaryWrapper = container.querySelector('.terminal-pane-wrapper');
-    const closeBtnInPrimary = primaryWrapper?.querySelector('.terminal-pane-close');
-    expect(closeBtnInPrimary).toBeNull();
-  });
-
-  // ── 13. Closing secondary pane unsplits ──────────────────
-
-  it('clicking close on secondary pane removes the split', () => {
+  it('toggling split off removes the secondary pane', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -726,19 +715,19 @@ describe('Terminal split functionality', () => {
     // Verify split is active
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
-    // Click the close button on the secondary pane
-    const closeBtn = getSecondaryCloseBtn(container);
-    expect(closeBtn).toBeTruthy();
+    // Toggle off via the same split button
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
+    expect(unsplitBtn).toBeTruthy();
 
     act(() => {
-      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Split should be removed
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
   });
 
-  it('closing secondary pane removes the divider', () => {
+  it('toggling split off removes the divider', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -749,15 +738,15 @@ describe('Terminal split functionality', () => {
 
     expect(getSplitDivider(container)).toBeTruthy();
 
-    const closeBtn = getSecondaryCloseBtn(container);
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
-      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(getSplitDivider(container)).toBeNull();
   });
 
-  it('closing secondary pane removes split CSS classes', () => {
+  it('toggling split off removes split CSS classes', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -769,16 +758,16 @@ describe('Terminal split functionality', () => {
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(true);
 
-    const closeBtn = getSecondaryCloseBtn(container);
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
-      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
     expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(false);
   });
 
-  it('closing secondary pane deactivates split button state', () => {
+  it('toggling split off deactivates split button state', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -790,9 +779,9 @@ describe('Terminal split functionality', () => {
     const splitBtns = getSplitButtons(container);
     expect(splitBtns[0].classList.contains('split-btn-active')).toBe(true);
 
-    const closeBtn = getSecondaryCloseBtn(container);
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
-      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Both buttons should be inactive
@@ -976,7 +965,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
   });
 
-  it('can re-split after unsplitting via secondary pane close button', () => {
+  it('can re-split after unsplitting via split button toggle', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -989,10 +978,10 @@ describe('Terminal split lifecycle and edge cases', () => {
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
-    // Unsplit via secondary pane close
-    const closeBtn = getSecondaryCloseBtn(container);
+    // Unsplit via button toggle
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
-      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
 
@@ -1062,7 +1051,7 @@ describe('Terminal split lifecycle and edge cases', () => {
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
   });
 
-  it('terminal remains functional (1 pane) after closing secondary pane', () => {
+  it('terminal remains functional (1 pane) after unsplitting', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
@@ -1073,10 +1062,10 @@ describe('Terminal split lifecycle and edge cases', () => {
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
-    // Close secondary pane
-    const closeBtn = getSecondaryCloseBtn(container);
+    // Unsplit via button toggle
+    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
-      closeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Should have exactly 1 pane wrapper, no divider, no secondary

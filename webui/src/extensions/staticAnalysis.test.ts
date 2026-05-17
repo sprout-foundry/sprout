@@ -51,15 +51,13 @@ vi.mock('../services/api', () => ({
 vi.mock('./languageRegistry', () => ({ resolveLanguageId: vi.fn() }));
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
 
+import type { Doc, DocLine, Selection } from './staticAnalysis';
 import {
   computeStaticActions,
   isNearImportLine,
   findUnusedJsImports,
   findUnusedGoImports,
   kindEmoji,
-  Doc,
-  DocLine,
-  Selection,
 } from './staticAnalysis';
 
 // Helper to generate filler code for tests requiring >100 lines

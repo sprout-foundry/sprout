@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
 import { WrapText, Map, Paintbrush, ListOrdered, Link2, Hash } from 'lucide-react';
+import { useMemo, type ReactNode } from 'react';
 
 export interface ToolbarAction {
   id: string;

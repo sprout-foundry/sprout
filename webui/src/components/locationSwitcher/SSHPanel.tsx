@@ -1,8 +1,8 @@
-import React from 'react';
 import { Server, Loader2, RefreshCw } from 'lucide-react';
+import React from 'react';
 import { supportsSSH } from '../../config/mode';
-import { collapseHomePath } from './pathUtils';
 import type { SSHHostEntry, SSHSessionEntry } from '../../services/api';
+import { collapseHomePath } from './pathUtils';
 import type { SwitchingState, SSHFailureState, RemoteWorkspaceContext, WorkspaceDirectory } from './types';
 
 export interface SSHPanelProps {

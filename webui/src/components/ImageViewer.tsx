@@ -1,6 +1,6 @@
+import { Image as ImageIcon, Loader2, AlertTriangle, ClipboardCopy, ExternalLink, Pipette } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MouseEvent, WheelEvent } from 'react';
-import { Image as ImageIcon, Loader2, AlertTriangle, ClipboardCopy, ExternalLink, Pipette } from 'lucide-react';
 import { readFileWithConsent } from '../services/fileAccess';
 import { useLog } from '../utils/log';
 import ViewerToolbar from './ViewerToolbar';

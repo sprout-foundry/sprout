@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
-import { showThemedConfirm } from './ThemedDialog';
-import { ApiService } from '../services/api';
-import { debugLog } from '../utils/log';
 import type { Revision, RevisionFile, RevisionDetailFile } from '@sprout/ui';
 import { normalizeRevision, buildRevisionFileKey } from '@sprout/ui';
+import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ApiService } from '../services/api';
+import { debugLog } from '../utils/log';
+import { showThemedConfirm } from './ThemedDialog';
 
 interface RevisionListPanelProps {
   mode: 'global' | 'session';

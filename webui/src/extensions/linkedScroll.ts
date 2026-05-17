@@ -29,10 +29,10 @@
  * that same line at the top of their viewport.
  */
 
+import type { Extension } from '@codemirror/state';
 import { type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // Type alias for readability — referenced by the factory return type.
-import type { Extension } from '@codemirror/state';
 
 // ── Module-level state ──────────────────────────────────────────────
 

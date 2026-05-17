@@ -1,8 +1,8 @@
-import { type EditorView, type KeyBinding } from '@codemirror/view';
-import { EditorSelection } from '@codemirror/state';
-import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
-import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorHistory';
 import { toggleLineComment, toggleBlockComment } from '@codemirror/commands';
+import { selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
+import { EditorSelection } from '@codemirror/state';
+import { type EditorView, type KeyBinding } from '@codemirror/view';
+import { navigateCursorBack, navigateCursorForward } from '../extensions/cursorHistory';
 import type { HotkeyEntry } from '../services/api';
 
 export interface EditorHotkeyActions {

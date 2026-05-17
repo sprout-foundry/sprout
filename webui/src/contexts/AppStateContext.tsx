@@ -14,8 +14,8 @@ import React, {
   type SetStateAction,
   type ReactNode,
 } from 'react';
-import type { AppState } from '../types/app';
 import { loadPersistedAppState } from '../services/appStatePersistence';
+import type { AppState } from '../types/app';
 
 /**
  * Default application state values.

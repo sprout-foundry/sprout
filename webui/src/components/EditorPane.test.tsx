@@ -1,20 +1,20 @@
 // @ts-nocheck
 
-import { createRoot } from 'react-dom/client';
+import { EditorState, Compartment } from '@codemirror/state';
+import { EditorView as _EditorView } from '@codemirror/view';
 import { act } from 'react';
-import EditorPane from './EditorPane';
+import { createRoot } from 'react-dom/client';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { ApiService } from '../services/api';
 import { readFileWithConsent } from '../services/fileAccess';
 import { copyToClipboard } from '../utils/clipboard';
+import EditorPane from './EditorPane';
 
 // Import CodeMirror modules (resolved via mocks defined below).
 // We need references to configure them in beforeEach because react-scripts
 // sets resetMocks:true, which clears factory-configured implementations.
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView as _EditorView } from '@codemirror/view';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -75,31 +75,45 @@ vi.mock('./EditorPaneFooter', () => {
     const tabSizeText = usesTabs ? 'Tabs' : 'Spaces: ' + tabSize;
     const encodingText = 'UTF-8 · ' + lineEnding;
 
-    return React.createElement('div', { className: 'pane-footer' },
-      React.createElement('div', { className: 'editor-stats' },
-        React.createElement('span', { className: 'tab-size',
-          title: 'Click to change tab size (Spaces: 2, 4, 8)',
-          onClick: handleTabSizeClick,
-          tabIndex: 0,
-        }, tabSizeText),
-        React.createElement('span', { className: 'encoding-indicator',
-          title: 'File encoding and line endings',
-        }, encodingText),
-      ),
-      React.createElement(function(props: any) {
-        return React.createElement('div', {
-          'data-testid': 'language-switcher',
-          'data-language-id': props.currentLanguageId ?? '',
-          'data-auto-detected': props.isAutoDetected ?? false,
-          onClick: () => {
-            props.onLanguageChange?.('python');
+    return React.createElement(
+      'div',
+      { className: 'pane-footer' },
+      React.createElement(
+        'div',
+        { className: 'editor-stats' },
+        React.createElement(
+          'span',
+          {
+            className: 'tab-size',
+            title: 'Click to change tab size (Spaces: 2, 4, 8)',
+            onClick: handleTabSizeClick,
+            tabIndex: 0,
           },
-        });
-      }, {
-        currentLanguageId: lsp.languageInfo?.languageId ?? '',
-        isAutoDetected: lsp.languageInfo?.isAutoDetected ?? false,
-        onLanguageChange: lsp.handleLanguageChange,
-      }),
+          tabSizeText,
+        ),
+        React.createElement(
+          'span',
+          { className: 'encoding-indicator', title: 'File encoding and line endings' },
+          encodingText,
+        ),
+      ),
+      React.createElement(
+        function (props: any) {
+          return React.createElement('div', {
+            'data-testid': 'language-switcher',
+            'data-language-id': props.currentLanguageId ?? '',
+            'data-auto-detected': props.isAutoDetected ?? false,
+            onClick: () => {
+              props.onLanguageChange?.('python');
+            },
+          });
+        },
+        {
+          currentLanguageId: lsp.languageInfo?.languageId ?? '',
+          isAutoDetected: lsp.languageInfo?.isAutoDetected ?? false,
+          onLanguageChange: lsp.handleLanguageChange,
+        },
+      ),
     );
   };
   return { default: MockEditorPaneFooter };
@@ -114,7 +128,7 @@ vi.mock('../hooks/useEditorExtensions', () => ({
   }),
   TAB_SIZE_DEFAULT: 4,
 }));
-// Mock useEditorFileIO to avoid deep CodeMirror dependency cascade  
+// Mock useEditorFileIO to avoid deep CodeMirror dependency cascade
 vi.mock('../hooks/useEditorFileIO', () => ({
   useEditorFileIO: () => ({
     editorContent: '',
@@ -249,16 +263,23 @@ vi.mock('../hooks/useEditorContextMenu', () => {
   return {
     useEditorContextMenu: (buffer: any, bufferRef: any, viewRef: any, callbacks: any) => {
       const [menuState, setMenuState] = React.useState<{
-        x: number; y: number; hasSelection: boolean; languageId?: string; buffer?: any;
+        x: number;
+        y: number;
+        hasSelection: boolean;
+        languageId?: string;
+        buffer?: any;
       } | null>(null);
       const [wsRoot, setWsRoot] = React.useState<string | null>(null);
       React.useEffect(() => {
         // Read workspace root from apiService mock
         const apiService = (globalThis as any).__mockApiService;
         if (apiService) {
-          apiService.getWorkspace().then((ws: any) => {
-            setWsRoot(ws?.workspace_root || null);
-          }).catch(() => setWsRoot(null));
+          apiService
+            .getWorkspace()
+            .then((ws: any) => {
+              setWsRoot(ws?.workspace_root || null);
+            })
+            .catch(() => setWsRoot(null));
         }
       }, []);
       return {
@@ -277,9 +298,11 @@ vi.mock('../hooks/useEditorContextMenu', () => {
         handleCopySelection: () => setMenuState(null),
         handleRevealInExplorer: () => {
           if (buffer?.file?.path) {
-            window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', {
-              detail: { path: buffer.file.path },
-            }));
+            window.dispatchEvent(
+              new CustomEvent('sprout:reveal-in-explorer', {
+                detail: { path: buffer.file.path },
+              }),
+            );
           }
           setMenuState(null);
         },
@@ -308,8 +331,15 @@ vi.mock('../hooks/useEditorLSP', () => {
     if (buffer.languageOverride) return { languageId: buffer.languageOverride, isAutoDetected: false };
     const ext = buffer.file.ext ? buffer.file.ext.replace(/^\./, '') : '';
     const map: Record<string, string> = {
-      ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-      py: 'python', css: 'css', json: 'json', png: null, jpg: null,
+      ts: 'typescript',
+      tsx: 'typescript',
+      js: 'javascript',
+      jsx: 'javascript',
+      py: 'python',
+      css: 'css',
+      json: 'json',
+      png: null,
+      jpg: null,
     };
     const base = map[ext];
     if (!base) return { languageId: null, isAutoDetected: false };
@@ -334,17 +364,26 @@ vi.mock('../hooks/useEditorLSP', () => {
 });
 
 vi.mock('../hooks/useEditorFileType', () => ({
-  useEditorFileType: () => ({
-    isImage: false,
-    isAudio: false,
-    isVideo: false,
-    isBinary: false,
-    isSvgFile: false,
-    isHtmlFile: false,
-    isSvgPreviewBuffer: false,
-    isHtmlPreviewBuffer: false,
-    isMarkdownFile: false,
-  }),
+  useEditorFileType: (buffer: any) => {
+    const ext = buffer?.file?.ext || '';
+    const isImage = /\.(png|jpg|jpeg|gif|bmp|ico|webp|tiff|tif)$/i.test(ext);
+    const isSvgFile = /\.svg$/i.test(ext);
+    const isAudio = /\.(mp3|wav|ogg|flac|m4a)$/i.test(ext);
+    const isVideo = /\.(mp4|webm|mov|avi|mkv)$/i.test(ext);
+    const isHtmlFile = /\.(html|htm)$/i.test(ext);
+    const isMarkdownFile = /\.(md|markdown)$/i.test(ext);
+    return {
+      isImage,
+      isAudio,
+      isVideo,
+      isBinary: isImage || isAudio || isVideo,
+      isSvgFile,
+      isHtmlFile,
+      isSvgPreviewBuffer: false,
+      isHtmlPreviewBuffer: false,
+      isMarkdownFile,
+    };
+  },
 }));
 
 vi.mock('../hooks/useEditorUpdate', () => ({
@@ -387,17 +426,56 @@ vi.mock('./EditorContextMenu', () => {
     const menu = ctx.contextMenu;
     if (!menu) return null;
 
+    // Register close listeners to match real ContextMenu behavior
+    React.useEffect(() => {
+      if (!menu) return;
+      const handleMouseDown = (e: MouseEvent) => {
+        ctx.hideContextMenu?.();
+      };
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') ctx.hideContextMenu?.();
+      };
+      document.addEventListener('mousedown', handleMouseDown);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.removeEventListener('mousedown', handleMouseDown);
+        document.removeEventListener('keydown', handleKeyDown);
+      };
+    }, [menu]);
+
     const items: any[] = [];
-    items.push(React.createElement('button', { key: 'reveal', className: 'context-menu-item', type: 'button', onClick: ctx.handleRevealInExplorer }, 'Reveal in Explorer'));
-    items.push(React.createElement('button', { key: 'copy-rel', className: 'context-menu-item', type: 'button', onClick: ctx.handleCopyRelativePath }, 'Copy relative path'));
+    items.push(
+      React.createElement(
+        'button',
+        { key: 'reveal', className: 'context-menu-item', type: 'button', onClick: ctx.handleRevealInExplorer },
+        'Reveal in Explorer',
+      ),
+    );
+    items.push(
+      React.createElement(
+        'button',
+        { key: 'copy-rel', className: 'context-menu-item', type: 'button', onClick: ctx.handleCopyRelativePath },
+        'Copy relative path',
+      ),
+    );
     if (ctx.workspaceRoot) {
-      items.push(React.createElement('button', { key: 'copy-abs', className: 'context-menu-item', type: 'button', onClick: ctx.handleCopyAbsolutePath }, 'Copy absolute path'));
+      items.push(
+        React.createElement(
+          'button',
+          { key: 'copy-abs', className: 'context-menu-item', type: 'button', onClick: ctx.handleCopyAbsolutePath },
+          'Copy absolute path',
+        ),
+      );
     }
 
-    return React.createElement('div', {
-      className: 'context-menu',
-      style: { position: 'fixed', left: menu.x, top: menu.y },
-    }, items);
+    return React.createElement(
+      'div',
+      {
+        className: 'context-menu',
+        style: { position: 'fixed', left: menu.x, top: menu.y },
+      },
+      items,
+    );
   };
   return { default: MockEditorContextMenu };
 });
@@ -571,15 +649,27 @@ vi.mock('@codemirror/view', () => ({
     widget: vi.fn(),
   },
   WidgetType: class MockWidgetType {
-    toDOM() { return document.createElement('span'); }
-    eq() { return false; }
-    ignoreEvent() { return true; }
+    toDOM() {
+      return document.createElement('span');
+    }
+    eq() {
+      return false;
+    }
+    ignoreEvent() {
+      return true;
+    }
   },
   hoverTooltip: vi.fn(() => []),
   GutterMarker: class MockGutterMarker {
-    toDOM() { return document.createElement('div'); }
-    eq() { return false; }
-    compare() { return false; }
+    toDOM() {
+      return document.createElement('div');
+    }
+    eq() {
+      return false;
+    }
+    compare() {
+      return false;
+    }
     elementClass: string = '';
   },
   gutter: vi.fn(() => []),
@@ -1072,9 +1162,7 @@ describe('EditorPane', () => {
       await act(async () => {
         await Promise.resolve();
       });
-
-      // Flush RAF so the menu registers its mousedown listener
-      await flushRAF();
+      await flushPromises();
 
       expect(getMenu()).toBeTruthy();
 
@@ -1099,9 +1187,7 @@ describe('EditorPane', () => {
       await act(async () => {
         await Promise.resolve();
       });
-
-      // Flush RAF so the menu registers its keydown listener
-      await flushRAF();
+      await flushPromises();
 
       expect(getMenu()).toBeTruthy();
 

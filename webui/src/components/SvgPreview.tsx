@@ -1,6 +1,6 @@
+import { Image as ImageIcon, Code2, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { MouseEvent, WheelEvent } from 'react';
-import { Image as ImageIcon, Code2, Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import ViewerToolbar from './ViewerToolbar';
 import './SvgPreview.css';
 import { sanitizeSvg } from '../utils/svgSanitize';

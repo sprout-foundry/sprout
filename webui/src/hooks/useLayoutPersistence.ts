@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
-import type { EditorBuffer, EditorPane } from '../types/editor';
-import { persistTabWorkspacePath } from '../services/clientSession';
 import { ApiService } from '../services/api';
-import { debugLog } from '../utils/log';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
+import { persistTabWorkspacePath } from '../services/clientSession';
 import {
   saveLayoutSnapshot,
   loadLayoutSnapshot,
@@ -17,6 +15,8 @@ import {
   type BufferLayoutEntry,
   type LayoutSnapshot,
 } from '../services/layoutPersistence';
+import type { EditorBuffer, EditorPane } from '../types/editor';
+import { debugLog } from '../utils/log';
 
 interface UseLayoutPersistenceParams {
   buffersRef: MutableRefObject<Map<string, EditorBuffer>>;

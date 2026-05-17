@@ -5,8 +5,8 @@
  * logs those errors, and displays a fallback UI.
  */
 
-import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { error as logError } from '../utils/log';
 
 interface ErrorBoundaryProps {
@@ -107,7 +107,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 onClick={() =>
                   import('../services/api')
                     .then(({ ApiService }) => ApiService.getInstance().exportSupportBundle())
-                    .catch((err) => { logError('Failed to export support bundle: ' + String(err)); })
+                    .catch((err) => {
+                      logError('Failed to export support bundle: ' + String(err));
+                    })
                 }
               >
                 Export Diagnostics

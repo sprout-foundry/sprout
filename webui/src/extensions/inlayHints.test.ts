@@ -58,9 +58,9 @@ vi.mock('./lspExtensions', () => ({
 }));
 vi.mock('../utils/log', () => ({ debugLog: vi.fn() }));
 
+import { ApiService } from '../services/api';
 import { inlayHintsExtension } from './inlayHints';
 import { Decoration, ViewPlugin } from '@codemirror/view';
-import { ApiService } from '../services/api';
 
 const mockDecoration = vi.mocked(Decoration);
 const mockViewPlugin = vi.mocked(ViewPlugin);

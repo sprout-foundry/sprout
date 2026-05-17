@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import { X } from 'lucide-react';
-import type { OnboardingState } from '../types/app';
-import type { OnboardingProviderOption } from '../services/api';
+import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
+import type { OnboardingProviderOption } from '../services/api';
+import type { OnboardingState } from '../types/app';
 
 export interface OnboardingDialogProps {
   onboarding: OnboardingState;

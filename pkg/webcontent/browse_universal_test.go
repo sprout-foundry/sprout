@@ -127,15 +127,16 @@ func (f *fakeBrowserRenderer) Close() {}
 func withFakeGlobalBrowser(t *testing.T, renderer BrowserRenderer) {
 	t.Helper()
 	previousBrowser := globalBrowser
-	previousOnce := globalBrowserOnce
 	globalBrowser = renderer
+	// Reset the Once by creating a new one (cannot copy sync.Once).
+	// Store the old renderer pointer for cleanup.
 	globalBrowserOnce = sync.Once{}
 	globalBrowserOnce.Do(func() {
 		globalBrowser = renderer
 	})
 	t.Cleanup(func() {
 		globalBrowser = previousBrowser
-		globalBrowserOnce = previousOnce
+		globalBrowserOnce = sync.Once{}
 	})
 }
 

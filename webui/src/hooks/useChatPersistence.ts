@@ -7,8 +7,8 @@
  */
 
 import { useEffect } from 'react';
-import type { AppState } from '../types/app';
 import { getAppStateStorageKey } from '../services/appStatePersistence';
+import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 
 export function useChatPersistence(state: AppState): void {

@@ -8,7 +8,7 @@
 
 import { useCallback } from 'react';
 import type { MutableRefObject } from 'react';
-import type { AppState, Message } from '../types/app';
+import type { AppStoreSetState } from '../contexts/AppStore';
 import {
   listChatSessions,
   createChatSession,
@@ -23,8 +23,8 @@ import {
   createWorktree,
   createChatSessionInWorktree,
 } from '../services/chatSessions';
+import type { AppState, Message } from '../types/app';
 import { debugLog } from '../utils/log';
-import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseChatSessionsOptions {
   setState: AppStoreSetState;

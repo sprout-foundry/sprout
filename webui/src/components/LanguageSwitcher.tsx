@@ -1,7 +1,7 @@
+import { Check, FileCode } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, FileCode } from 'lucide-react';
 import { allLanguageEntries } from '../extensions/languageRegistry';
 import './LanguageSwitcher.css';
 

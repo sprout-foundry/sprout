@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ],
+  "extends": "./tsconfig.json",
+  "include": [
+    "src",
+    "vite.config.ts"
+  ]
+}

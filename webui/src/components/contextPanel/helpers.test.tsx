@@ -6,9 +6,9 @@
  * formatDurationMs, formatTokens, formatCost.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act } from 'react';
 import { render } from '@testing-library/react';
+import { act } from 'react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── Mocks (before imports) ──────────────────────────────────────────
 
@@ -46,6 +46,7 @@ vi.mock('../../utils/log', () => ({
 
 // ── Imports ──────────────────────────────────────────────────────────
 
+import { debugLog } from '../../utils/log';
 import {
   isSubagentTool,
   getSubagentPrompt,
@@ -59,7 +60,6 @@ import {
   formatTokens,
   formatCost,
 } from './helpers';
-import { debugLog } from '../../utils/log';
 
 // ── isSubagentTool ───────────────────────────────────────────────────
 

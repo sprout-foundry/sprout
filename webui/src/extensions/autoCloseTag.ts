@@ -7,9 +7,9 @@
  * Only active for HTML, XML, JSX, TSX, and PHP language modes.
  */
 
+import { indentUnit as indentUnitFacet } from '@codemirror/language';
 import { type Extension, Compartment } from '@codemirror/state';
 import { EditorView, type EditorView as EditorViewType } from '@codemirror/view';
-import { indentUnit as indentUnitFacet } from '@codemirror/language';
 import { getLineIndent } from '../utils/editorHotkeys';
 
 /**

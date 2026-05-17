@@ -2,8 +2,8 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { EventsContextProvider, useEvents } from './EventsContext';
 import type { EventsProvider, SproutEvent, SproutEventCallback } from '../types/events';
+import { EventsContextProvider, useEvents } from './EventsContext';
 
 // ---------------------------------------------------------------------------
 // Mock EventsProvider

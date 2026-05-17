@@ -1,5 +1,5 @@
-import { gutter, GutterMarker } from '@codemirror/view';
 import { StateField, StateEffect, RangeSetBuilder } from '@codemirror/state';
+import { gutter, GutterMarker } from '@codemirror/view';
 import { Decoration, type DecorationSet, type EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type DiffLineChange, parseGitDiff } from '../services/gitDiffParser';
 

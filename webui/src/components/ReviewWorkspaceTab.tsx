@@ -1,13 +1,11 @@
-import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { MessageSegments, MessageBubble, MessageContent } from '@sprout/ui';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
-import { MessageSegments } from '@sprout/ui';
-import { MessageBubble } from '@sprout/ui';
-import { MessageContent } from '@sprout/ui';
-import InlinePillRow, { type InlinePillItem } from './InlinePillRow';
-import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
+import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { stripAnsiCodes } from '../utils/ansi';
-import { showThemedConfirm } from './ThemedDialog';
 import { debugLog } from '../utils/log';
+import { parseReviewGuidance, reviewGuidanceToMarkdown } from '../utils/reviewFormatting';
+import InlinePillRow, { type InlinePillItem } from './InlinePillRow';
+import { showThemedConfirm } from './ThemedDialog';
 
 interface DeepReviewResult {
   message: string;

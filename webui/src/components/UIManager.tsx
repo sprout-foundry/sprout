@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useEvents } from '../contexts/EventsContext';
-import Dropdown, { type DropdownItem } from './Dropdown';
-import QuickPrompt from './QuickPrompt';
-import Progress from './Progress';
-import FileBrowser, { type FileNode } from './FileBrowser';
 import { UIService, type UIDropdownItem, type UIDropdownOptions, type UIQuickOption } from '../services/ui';
+import Dropdown, { type DropdownItem } from './Dropdown';
+import FileBrowser, { type FileNode } from './FileBrowser';
+import Progress from './Progress';
+import QuickPrompt from './QuickPrompt';
 
 interface UIManagerProps {
   children: ReactNode;

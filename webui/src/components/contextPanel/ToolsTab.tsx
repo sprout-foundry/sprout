@@ -1,6 +1,6 @@
-import type { ToolExecution } from './types';
-import { ToolCard } from './ToolCard';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ToolCard } from './ToolCard';
+import type { ToolExecution } from './types';
 
 interface ToolsTabProps {
   toolExecutions: ToolExecution[];

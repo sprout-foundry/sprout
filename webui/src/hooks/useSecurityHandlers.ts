@@ -5,8 +5,8 @@
  * useEvents() hook, keeping the dependency explicit and testable.
  */
 
-import { useCallback } from 'react';
 import type { EventsProvider } from '@sprout/events';
+import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseSecurityHandlersOptions {

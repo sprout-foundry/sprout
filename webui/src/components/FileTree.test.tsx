@@ -1,7 +1,7 @@
 // @ts-nocheck
 
-import { createRoot, type Root } from 'react-dom/client';
 import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { Simulate } from 'react-dom/test-utils';
 import FileTree, { type FileInfo } from './FileTree';
 
@@ -1768,13 +1768,7 @@ describe('FileTree data prop – files', () => {
 
     await act(async () => {
       root.render(
-        <FileTree
-          ref={treeRef}
-          onFileSelect={vi.fn()}
-          rootPath="."
-          files={initialFiles}
-          onFetchFiles={onFetchFiles}
-        />,
+        <FileTree ref={treeRef} onFileSelect={vi.fn()} rootPath="." files={initialFiles} onFetchFiles={onFetchFiles} />,
       );
     });
     await flushPromises();

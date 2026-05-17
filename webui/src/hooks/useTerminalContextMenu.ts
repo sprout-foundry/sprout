@@ -5,8 +5,8 @@
  * actions: copy, paste, clear, select all, and split pane.
  */
 
-import { useCallback } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
+import { useCallback } from 'react';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/log';
 

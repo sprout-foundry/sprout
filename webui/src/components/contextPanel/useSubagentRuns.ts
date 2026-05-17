@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
-import type { ChatContextPanelProps, ContextSubagentRun, ContextNormalizedActivity } from './types';
 import { isSubagentTool, getSubagentPrompt } from './helpers';
+import type { ChatContextPanelProps, ContextSubagentRun, ContextNormalizedActivity } from './types';
 
 export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);

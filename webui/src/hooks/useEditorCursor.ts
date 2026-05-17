@@ -9,9 +9,9 @@
  * @see EditorPane.tsx for the original implementation this hook extracts
  */
 
+import type { ViewUpdate } from '@codemirror/view';
 import { useState, useCallback } from 'react';
 import type { EditorBuffer } from '../types/editor';
-import type { ViewUpdate } from '@codemirror/view';
 import { debugLog } from '../utils/log';
 
 export interface SelectionInfo {

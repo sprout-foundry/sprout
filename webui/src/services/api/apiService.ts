@@ -6,11 +6,25 @@
  * exclusively through `ApiService.getInstance()`.
  */
 
-import { clientFetch } from '../clientSession';
 import type { ShellInfo } from '@sprout/ui';
-import type { ChangelogResponse, ChangesResponse, RevisionDetailResponse, RollbackResponse } from './types';
-
+import { clientFetch } from '../clientSession';
+import * as chatApi from './chatApi';
+import * as credentialsApi from './credentialsApi';
+import * as editorApi from './editorApi';
+import * as filesApi from './filesApi';
+import * as gitApi from './gitApi';
+import * as miscApi from './miscApi';
+import * as onboardingApi from './onboardingApi';
+import * as searchApi from './searchApi';
+import * as sessionApi from './sessionApi';
+import * as settingsApi from './settingsApi';
+import * as sshApi from './sshApi';
+import * as terminalApi from './terminalApi';
 import type {
+  ChangelogResponse,
+  ChangesResponse,
+  RevisionDetailResponse,
+  RollbackResponse,
   StatsResponse,
   FilesResponse,
   ProviderOption,
@@ -32,19 +46,6 @@ import type {
   SkillsResponse,
   SubagentTypeInfo,
 } from './types';
-
-import * as miscApi from './miscApi';
-import * as chatApi from './chatApi';
-import * as credentialsApi from './credentialsApi';
-import * as editorApi from './editorApi';
-import * as filesApi from './filesApi';
-import * as gitApi from './gitApi';
-import * as onboardingApi from './onboardingApi';
-import * as searchApi from './searchApi';
-import * as sessionApi from './sessionApi';
-import * as settingsApi from './settingsApi';
-import * as sshApi from './sshApi';
-import * as terminalApi from './terminalApi';
 import * as workspaceApi from './workspaceApi';
 
 class ApiService {

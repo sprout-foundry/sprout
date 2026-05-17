@@ -3,8 +3,8 @@
  * Provides type-safe API calls for billing-related functionality.
  */
 
-import { getAdapter } from '../services/apiAdapter';
 import { debugLog } from '../utils/log';
+import { getAdapter } from './apiAdapter';
 
 export interface ProrationRecord {
   id: string;

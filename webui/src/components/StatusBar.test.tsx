@@ -1,5 +1,5 @@
-import { createRoot } from 'react-dom/client';
 import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import StatusBar from './StatusBar';
 
 // ---------------------------------------------------------------------------

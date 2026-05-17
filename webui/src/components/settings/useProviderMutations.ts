@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
+import type { CustomProviderConfig } from '../../services/api/types';
 import { debugLog } from '../../utils/log';
 import type { MutationContext } from './types';
-import type { CustomProviderConfig } from '../../services/api/types';
 
 interface ProviderMutationParams {
   // Shared context
@@ -39,9 +39,7 @@ function parseModelContextSizes(raw: string): Record<string, number> | undefined
     const size = Number(pair.slice(sep + 1).trim());
     return model && Number.isFinite(size) ? ([model, size] as const) : null;
   });
-  const valid = entries.filter(
-    (e): e is readonly [string, number] => e !== null,
-  );
+  const valid = entries.filter((e): e is readonly [string, number] => e !== null);
   return valid.length > 0 ? Object.fromEntries(valid) : undefined;
 }
 

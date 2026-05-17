@@ -1,5 +1,5 @@
-import { createPortal } from 'react-dom';
 import { Server } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { collapseHomePath, getPathDisplayName } from './pathUtils';
 
 export interface SSHWorkspacePickerDialogProps {

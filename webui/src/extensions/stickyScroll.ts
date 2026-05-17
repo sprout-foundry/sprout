@@ -16,8 +16,8 @@
  * - Falls back to dark/light mode defaults when variables absent.
  */
 
-import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type Extension } from '@codemirror/state';
+import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import {
   extractSymbols,
   getEnclosingSymbols,

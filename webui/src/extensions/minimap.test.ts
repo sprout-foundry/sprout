@@ -5,8 +5,8 @@
  * all CM imports are mocked.
  */
 
-import { minimapExtension, showMinimap } from './minimap';
 import { showMinimap as showMinimapOriginal } from '@replit/codemirror-minimap';
+import { minimapExtension, showMinimap } from './minimap';
 
 vi.mock('@codemirror/view', () => ({
   EditorView: { baseTheme: vi.fn(() => []) },

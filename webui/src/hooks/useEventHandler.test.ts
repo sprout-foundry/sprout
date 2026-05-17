@@ -77,9 +77,9 @@ vi.mock('../utils/agentMessages', () => ({
 }));
 
 // Static import — Vitest hoists vi.mock above all imports automatically
+import type { AppState } from '../types/app';
 import { useEventHandler } from './useEventHandler';
 import type { UseEventHandlerOptions, UseEventHandlerReturn } from './useEventHandler';
-import type { AppState } from '../types/app';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -6,8 +6,8 @@
  * terminal buffer contents to/from IndexedDB.
  */
 
-import { useCallback, useEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
+import { useCallback, useEffect } from 'react';
 import { saveScrollback, loadScrollback, cleanupOldEntries, deleteScrollback } from '../services/terminalScrollback';
 import { debugLog, warn } from '../utils/log';
 
@@ -63,7 +63,12 @@ export function useTerminalScrollback(options: UseTerminalScrollbackOptions): Us
           if (current) {
             current.write(clientScrollback);
           }
-          await deleteScrollback(sessionId).catch((err) => { warn('[TerminalPane] Failed to delete scrollback after load: ' + (err instanceof Error ? err.message : String(err))); });
+          await deleteScrollback(sessionId).catch((err) => {
+            warn(
+              '[TerminalPane] Failed to delete scrollback after load: ' +
+                (err instanceof Error ? err.message : String(err)),
+            );
+          });
         }
       } catch (err) {
         debugLog('[TerminalPane] Failed to load client scrollback:', err);

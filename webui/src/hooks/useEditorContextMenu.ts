@@ -12,15 +12,14 @@
  * Target: ~250 lines
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
 import type { EditorView } from '@codemirror/view';
-
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { resolveLanguageId } from '../extensions/languageRegistry';
 import { ApiService } from '../services/api';
 import { setConfigFetcher } from '../services/formatter';
+import type { EditorBuffer } from '../types/editor';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog, warn } from '../utils/log';
-import { resolveLanguageId } from '../extensions/languageRegistry';
-import type { EditorBuffer } from '../types/editor';
 
 // ---------------------------------------------------------------------------
 // Types

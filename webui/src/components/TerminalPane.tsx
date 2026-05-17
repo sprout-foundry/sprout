@@ -1,22 +1,22 @@
-import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
-import { X, TriangleAlert, Terminal } from 'lucide-react';
-import type { Terminal as XTerm } from '@xterm/xterm';
 import type { SearchAddon } from '@xterm/addon-search';
-import type { TerminalWebSocketService } from '../services/terminalWebSocket';
+import type { Terminal as XTerm } from '@xterm/xterm';
+import { X, TriangleAlert, Terminal } from 'lucide-react';
+import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
-import TerminalSearchBar from './TerminalSearchBar';
-import TerminalContextMenu from './TerminalContextMenu';
-import ReverseSearchOverlay from './ReverseSearchOverlay';
 
 // Hooks extracted from this component
-import { useWasmTerminalInput } from '../hooks/useWasmTerminalInput';
+import { useReverseSearch } from '../hooks/useReverseSearch';
+import { useTerminalContextMenu } from '../hooks/useTerminalContextMenu';
+import { useTerminalResize } from '../hooks/useTerminalResize';
 import { useTerminalScrollback } from '../hooks/useTerminalScrollback';
 import { useTerminalSearch } from '../hooks/useTerminalSearch';
-import { useTerminalXTerm } from '../hooks/useTerminalXTerm';
 import { useTerminalSession } from '../hooks/useTerminalSession';
-import { useReverseSearch } from '../hooks/useReverseSearch';
-import { useTerminalResize } from '../hooks/useTerminalResize';
-import { useTerminalContextMenu } from '../hooks/useTerminalContextMenu';
+import { useTerminalXTerm } from '../hooks/useTerminalXTerm';
+import { useWasmTerminalInput } from '../hooks/useWasmTerminalInput';
+import type { TerminalWebSocketService } from '../services/terminalWebSocket';
+import ReverseSearchOverlay from './ReverseSearchOverlay';
+import TerminalContextMenu from './TerminalContextMenu';
+import TerminalSearchBar from './TerminalSearchBar';
 
 export interface TerminalPaneHandle {
   clear: () => void;

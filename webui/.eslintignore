@@ -1,9 +1,6 @@
 build/
 node_modules/
 coverage/
+dist/
 *.js
-!jest.config.js
-**/*.test.*
-**/*.spec.*
-**/__mocks__/**
-src/vitest.setup.ts
+*.snap

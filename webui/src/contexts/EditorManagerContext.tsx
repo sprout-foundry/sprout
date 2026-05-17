@@ -1,15 +1,15 @@
 import React, { createContext, useContext, type ReactNode } from 'react';
-import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import type { EditorBuffer, EditorPane, PaneLayout, PaneSize } from '../types/editor';
 
 // ---------------------------------------------------------------------------
 // Import sub-contexts
 // ---------------------------------------------------------------------------
 
-import { EditorSettingsProvider, useEditorSettings as useSettings } from './EditorSettingsContext';
-import { PaneManagerProvider, usePaneManager as usePaneContext } from './PaneManagerContext';
 import { BufferManagerProvider, useBufferManager as useBufferContext } from './BufferManagerContext';
 import type { PaneBridge } from './BufferManagerContext';
+import { EditorSettingsProvider, useEditorSettings as useSettings } from './EditorSettingsContext';
+import { PaneManagerProvider, usePaneManager as usePaneContext } from './PaneManagerContext';
 
 // ---------------------------------------------------------------------------
 // Re-export constants and hooks for backward compatibility

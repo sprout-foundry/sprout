@@ -1,13 +1,11 @@
 // @ts-nocheck
 
-import { createElement } from 'react';
+import { createElement, act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
-import { act } from 'react';
-
-import MenuBar from './MenuBar';
 import { HotkeyProvider } from '../contexts/HotkeyContext';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import MenuBar from './MenuBar';
 
 // ---------------------------------------------------------------------------
 // Mocks

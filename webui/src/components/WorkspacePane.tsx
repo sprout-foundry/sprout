@@ -1,12 +1,12 @@
+import { File } from 'lucide-react';
 import type { ComponentProps } from 'react';
 import React from 'react';
-import { File } from 'lucide-react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
 import Chat from './Chat';
-import EditorPane from './EditorPane';
-import DiffWorkspaceTab from './DiffWorkspaceTab';
 import CompareTab from './CompareTab';
+import DiffWorkspaceTab from './DiffWorkspaceTab';
+import EditorPane from './EditorPane';
 import ReviewWorkspaceTab from './ReviewWorkspaceTab';
 import './WorkspacePane.css';
 

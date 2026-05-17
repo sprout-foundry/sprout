@@ -1,8 +1,8 @@
 // @ts-nocheck
 
-import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 import { QueuedMessagesPanel } from '@sprout/ui';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 
 // ---------------------------------------------------------------------------
 // Helpers

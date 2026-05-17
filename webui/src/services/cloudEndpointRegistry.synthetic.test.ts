@@ -9,11 +9,7 @@
  * server-side handlers return identical data.
  */
 
-import {
-  CLOUD_ENDPOINTS,
-  classifyEndpoint,
-  getSyntheticResponse,
-} from './cloudEndpointRegistry';
+import { CLOUD_ENDPOINTS, classifyEndpoint, getSyntheticResponse } from './cloudEndpointRegistry';
 
 // Polyfill Response for jsdom environment (jsdom lacks Response/fetch)
 if (typeof Response === 'undefined') {
@@ -248,9 +244,7 @@ describe('CloudEndpointRegistry — Synthetic Stub Response Verification', () =>
         }
 
         if (endpoint.category !== 'synthetic') {
-          errors.push(
-            `${method} ${path}: expected category 'synthetic', got '${endpoint.category}'`,
-          );
+          errors.push(`${method} ${path}: expected category 'synthetic', got '${endpoint.category}'`);
           continue;
         }
 
@@ -269,9 +263,7 @@ describe('CloudEndpointRegistry — Synthetic Stub Response Verification', () =>
         }
 
         if (response.status !== expectedStatus) {
-          errors.push(
-            `${method} ${path}: expected status ${expectedStatus}, got ${response.status}`,
-          );
+          errors.push(`${method} ${path}: expected status ${expectedStatus}, got ${response.status}`);
         }
 
         if (response.headers.get('Content-Type') !== 'application/json') {
@@ -324,11 +316,7 @@ describe('CloudEndpointRegistry — Synthetic Stub Response Verification', () =>
     });
 
     it('all onboarding-related endpoints are present in CLOUD_ENDPOINTS', () => {
-      const onboardingPaths = [
-        '/api/onboarding/status',
-        '/api/onboarding/complete',
-        '/api/onboarding/skip',
-      ];
+      const onboardingPaths = ['/api/onboarding/status', '/api/onboarding/complete', '/api/onboarding/skip'];
 
       for (const path of onboardingPaths) {
         const found = CLOUD_ENDPOINTS.some((e) => e.path === path);

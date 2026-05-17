@@ -9,12 +9,12 @@
  * uses the backend API. For other languages, falls back to simple text replace.
  */
 
-import type { EditorView } from '@codemirror/view';
-import { Decoration, type DecorationSet } from '@codemirror/view';
 import { StateEffect, StateField, type EditorState } from '@codemirror/state';
+import { Decoration } from '@codemirror/view';
+import type { EditorView, DecorationSet } from '@codemirror/view';
 import { ApiService } from '../services/api';
-import { resolveLanguageId } from './languageRegistry';
 import { debugLog } from '../utils/log';
+import { resolveLanguageId } from './languageRegistry';
 import './renameOverlay.css';
 
 /** Semantic language IDs that support rename. */

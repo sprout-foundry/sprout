@@ -1,6 +1,6 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
-import { useMemo, useRef } from 'react';
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
+import { useMemo, useRef } from 'react';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import './StatusBar.css';
 

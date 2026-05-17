@@ -100,18 +100,13 @@ function requireCtx(): APIAdapter {
 // ---------------------------------------------------------------------------
 
 describe('useSproutAdapter', () => {
-  it('throws an error when used outside of SproutProvider', () => {
-    // Suppress the expected console.error from React when the component throws
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('returns null when used outside of SproutProvider', () => {
+    // Render TestConsumer WITHOUT the provider — the hook should return null
+    act(() => {
+      root.render(createElement(TestConsumer));
+    });
 
-    // Render TestConsumer WITHOUT the provider — the hook should throw
-    expect(() => {
-      act(() => {
-        root.render(createElement(TestConsumer));
-      });
-    }).toThrow('useSproutAdapter must be used within SproutProvider');
-
-    consoleSpy.mockRestore();
+    expect(latestContext).toBeNull();
   });
 });
 

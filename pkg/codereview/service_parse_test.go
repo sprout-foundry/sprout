@@ -13,13 +13,7 @@ func TestParseStructuredReviewResponse_FailClosedOnInvalidJSON(t *testing.T) {
 	response := &api.ChatResponse{
 		Choices: []api.Choice{
 			{
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: "this is not json"},
+				Message: api.Message{Content: "this is not json"},
 			},
 		},
 	}
@@ -38,13 +32,7 @@ func TestParseStructuredReviewResponse_ParsesValidJSONStatus(t *testing.T) {
 	response := &api.ChatResponse{
 		Choices: []api.Choice{
 			{
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: `{"status":"approved","feedback":"looks good"}`},
+				Message: api.Message{Content: `{"status":"approved","feedback":"looks good"}`},
 			},
 		},
 	}
@@ -66,13 +54,7 @@ trailing text`
 	response := &api.ChatResponse{
 		Choices: []api.Choice{
 			{
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: content},
+				Message: api.Message{Content: content},
 			},
 		},
 	}
@@ -95,13 +77,7 @@ func TestParseStructuredReviewResponse_ParsesDetailedGuidanceObject(t *testing.T
 	response := &api.ChatResponse{
 		Choices: []api.Choice{
 			{
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: content},
+				Message: api.Message{Content: content},
 			},
 		},
 	}
@@ -126,13 +102,7 @@ func TestParseStructuredReviewResponse_NormalizesNeedsRevisionStatus(t *testing.
 	response := &api.ChatResponse{
 		Choices: []api.Choice{
 			{
-				Message: struct {
-					Role             string          `json:"role"`
-					Content          string          `json:"content"`
-					ReasoningContent string          `json:"reasoning_content,omitempty"`
-					Images           []api.ImageData `json:"images,omitempty"`
-					ToolCalls        []api.ToolCall  `json:"tool_calls,omitempty"`
-				}{Content: `{"status":"needs revision","feedback":"Please adjust this."}`},
+				Message: api.Message{Content: `{"status":"needs revision","feedback":"Please adjust this."}`},
 			},
 		},
 	}

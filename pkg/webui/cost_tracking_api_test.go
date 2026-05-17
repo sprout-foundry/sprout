@@ -18,16 +18,15 @@ func setCostStoreForTest(t *testing.T, cs *CostStore) {
 	t.Helper()
 	// Save original state for cleanup
 	origStore := costStore
-	origOnce := costStoreOnce
 	// Set the global directly so GetCostStore() returns it
 	costStore = cs
-	// Mark the sync.Once as done so GetCostStore's Do() won't overwrite it
+	// Reset the Once by creating a new one (cannot copy sync.Once).
 	costStoreOnce = sync.Once{}
 	costStoreOnce.Do(func() {}) // consume the Once
 	// Restore on cleanup
 	t.Cleanup(func() {
 		costStore = origStore
-		costStoreOnce = origOnce
+		costStoreOnce = sync.Once{}
 	})
 }
 

@@ -15,10 +15,11 @@ import (
 )
 
 const (
-	repoMapMaxFileSize = 32 * 1024 // 32KB per file (non-Go files only)
-	repoMapTokenBudget = 1024       // target ~1024 tokens
-	repoMapMaxFiles    = 200        // max files to include
-	repoMapCharBudget  = repoMapTokenBudget * 4
+	repoMapMaxFileSize       = 32 * 1024       // 32KB per file (regex-only files)
+	repoMapMaxFullFileSize   = 2 * 1024 * 1024 // 2MB for AST/tree-sitter languages
+	repoMapTokenBudget       = 1024            // target ~1024 tokens
+	repoMapMaxFiles          = 200             // max files to include
+	repoMapCharBudget        = repoMapTokenBudget * 4
 )
 
 // Regex patterns for symbol extraction (top-level declarations).
@@ -138,15 +139,17 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 		default:
 		}
 
-		// Read full file content. Go files and tree-sitter-supported files
-		// need complete content for accurate parsing; other files are truncated
-		// to 32KB since regex only needs a sample.
+		// Read file content with appropriate size limit based on parsing method.
 		content, readErr := os.ReadFile(f.absPath)
-		if readErr == nil && len(content) > repoMapMaxFileSize && f.ext != ".go" && !treeSitterExtensions[f.ext] {
-			content = content[:repoMapMaxFileSize]
-		}
 		if readErr != nil {
 			continue
+		}
+		maxAllowed := repoMapMaxFileSize
+		if f.ext == ".go" || treeSitterExtensions[f.ext] {
+			maxAllowed = repoMapMaxFullFileSize
+		}
+		if len(content) > maxAllowed {
+			continue // skip oversized files silently
 		}
 		if isBinaryContent(content) {
 			continue
@@ -236,7 +239,7 @@ type symbolEntry struct {
 // fallback), and regex for all other languages.
 func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEntry, error) {
 	if ext == ".go" {
-		symbols, err := extractGoSymbolsAST(path)
+		symbols, err := extractGoSymbolsAST(path, content)
 		if err != nil {
 			// Fall back to regex if AST fails (e.g., syntax errors, build tags).
 			return extractSymbolsByRegex(ext, string(content)), nil
@@ -256,14 +259,14 @@ func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEnt
 // extractGoSymbolsAST parses a Go source file using go/ast and extracts
 // top-level functions, methods, and type declarations as symbolEntry values.
 // Test functions (Test*, Benchmark*, Fuzz*) and _test.go files are excluded.
-func extractGoSymbolsAST(path string) ([]symbolEntry, error) {
+func extractGoSymbolsAST(path string, content []byte) ([]symbolEntry, error) {
 	// Skip _test.go files entirely.
 	if strings.HasSuffix(filepath.Base(path), "_test.go") {
 		return nil, nil
 	}
 
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, path, nil, 0)
+	node, err := parser.ParseFile(fset, path, content, 0)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}

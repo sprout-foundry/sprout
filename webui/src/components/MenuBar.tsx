@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { supportsLocalTerminal } from '../config/mode';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { ApiService } from '../services/api';
-import { supportsLocalTerminal } from '../config/mode';
 import './MenuBar.css';
 
 const APP_VERSION = '1.0.0';

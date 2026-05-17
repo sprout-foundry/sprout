@@ -16,8 +16,8 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import NotificationCenter from './NotificationCenter';
 import type { Notification } from '../contexts/NotificationContext';
+import NotificationCenter from './NotificationCenter';
 
 // ---------------------------------------------------------------------------
 // Mocks — must come before the static import of the module under test

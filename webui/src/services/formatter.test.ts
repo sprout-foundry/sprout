@@ -11,6 +11,7 @@ vi.mock('prettier', () => ({
   __esModule: true,
 }));
 
+import { format as _mockedFormat } from 'prettier';
 import {
   formatCode,
   formatCodeWithConfigDiscovery,
@@ -21,7 +22,6 @@ import {
 
 // Get a reference to the mocked format function — vi.mock('prettier', ...) above
 // ensures that any import of 'prettier' gets the mock, so we import directly.
-import { format as _mockedFormat } from 'prettier';
 const mockedFormat = _mockedFormat as vi.Mock;
 
 beforeEach(() => {

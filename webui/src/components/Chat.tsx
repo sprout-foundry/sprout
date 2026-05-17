@@ -1,15 +1,15 @@
-import type { CSSProperties } from 'react';
-import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
-import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { ChevronDown } from 'lucide-react';
-import CommandInput from './CommandInput';
 import { ChatMessageContextMenu } from '@sprout/ui';
+import { ChevronDown } from 'lucide-react';
+import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
+import type { CSSProperties } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { supportsSSH } from '../config/mode';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
+import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, ToolExecution } from './chat/types';
-import type { QueryProgress } from '../types/app';
+import CommandInput from './CommandInput';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -176,7 +176,9 @@ function Chat(props: ChatProps): JSX.Element {
                   <ChatFooter
                     hasSubagentActivity={hasSubagentActivity}
                     subagentActivities={subagentActivities}
-                    queryProgress={queryProgress as QueryProgress | null /* ChatProps.queryProgress is `unknown` in shared pkg */}
+                    queryProgress={
+                      queryProgress as QueryProgress | null /* ChatProps.queryProgress is `unknown` in shared pkg */
+                    }
                     isProcessing={isProcessing}
                     filteredToolExecutions={filteredToolExecutions}
                     lastError={lastError}

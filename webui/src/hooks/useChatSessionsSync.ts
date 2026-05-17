@@ -1,6 +1,6 @@
-import type { EditorBuffer } from '../types/editor';
 import { useEffect } from 'react';
 import type { ChatSession } from '../services/chatSessions';
+import type { EditorBuffer } from '../types/editor';
 
 export interface UseChatSessionsSyncParams {
   chatSessions: ChatSession[] | undefined;

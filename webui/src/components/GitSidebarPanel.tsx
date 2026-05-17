@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -15,14 +14,13 @@ import {
   PlusSquare,
   Plus,
 } from 'lucide-react';
-import { showThemedPrompt } from './ThemedDialog';
-import ContextMenu from './ContextMenu';
-import { copyToClipboard } from '../utils/clipboard';
-import type { FileSection } from '../types/git-types';
-import type { GitBranchesState } from '../types/git-types';
-import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
-import type { GitFile, GitStatusData } from '../types/git-types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
+import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
+import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
+import { copyToClipboard } from '../utils/clipboard';
+import ContextMenu from './ContextMenu';
+import { showThemedPrompt } from './ThemedDialog';
 
 // Re-export types so existing consumers (tests, Sidebar, etc.) don't break.
 export type { GitStatusData, GitFile } from '../types/git-types';

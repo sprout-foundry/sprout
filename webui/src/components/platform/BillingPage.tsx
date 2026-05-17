@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getAdapter } from '../../services/apiAdapter';
-import { useLog } from '../../utils/log';
 import type { BillingStatus, ProrationRecord } from '../../services/billingService';
 import { getBillingStatus, getProrationRecords } from '../../services/billingService';
-import ProrationDisplay from './ProrationDisplay';
+import { useLog } from '../../utils/log';
 import InvoiceHistory from './InvoiceHistory';
+import ProrationDisplay from './ProrationDisplay';
 import './PlatformPages.css';
 
 interface FoundryUsage {

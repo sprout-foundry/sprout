@@ -11,9 +11,9 @@
 
 import { hoverTooltip, type HoverTooltipSource, type EditorView } from '@codemirror/view';
 import { ApiService } from '../services/api';
-import { resolveLanguageId } from './languageRegistry';
 import { LSPClientService } from '../services/lspClientService';
 import { debugLog } from '../utils/log';
+import { resolveLanguageId } from './languageRegistry';
 
 /** Semantic language IDs that support hover. */
 const HOVER_LANGUAGES = new Set(['typescript', 'typescript-jsx', 'javascript', 'javascript-jsx', 'go']);

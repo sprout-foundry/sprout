@@ -6,22 +6,22 @@
  * application state accordingly.
  */
 
+import type { WsEvent } from '@sprout/events';
 import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { AppStoreSetState } from '../contexts/AppStore';
+import { useNotifications } from '../contexts/NotificationContext';
+import { getWebUIClientId } from '../services/clientSession';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import { toQueryProgress } from '../types/app';
-import type { WsEvent } from '@sprout/events';
-import { getWebUIClientId } from '../services/clientSession';
-import { debugLog, error as logError } from '../utils/log';
-import { appendCappedLog } from '../utils/logCap';
-import { useNotifications } from '../contexts/NotificationContext';
-import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import {
   shouldSuppressAgentMessageInChat,
   extractToolNameFromToolLogTarget,
   normalizeTodoList,
 } from '../utils/agentMessages';
-import type { AppStoreSetState } from '../contexts/AppStore';
+import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
+import { debugLog, error as logError } from '../utils/log';
+import { appendCappedLog } from '../utils/logCap';
 
 const MAX_TOOL_EXECUTIONS = 200;
 

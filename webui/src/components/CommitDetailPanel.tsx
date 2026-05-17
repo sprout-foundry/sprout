@@ -1,6 +1,6 @@
+import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } from 'lucide-react';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, firstLine } from '../utils/format';
 import { getStatusInfo } from '../utils/git';

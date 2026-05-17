@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { ChatTabId, ContextPanelProps, ContextPanelBaseProps } from './types';
 import { PANEL_COLLAPSED_KEY, PANEL_TAB_KEY, PANEL_MIN, PANEL_MAX, MOBILE_LAYOUT_MAX_WIDTH } from './types';
-import type { MouseEvent as ReactMouseEvent } from 'react';
 
 interface UseContextPanelStateReturn {
   panelCollapsed: boolean;

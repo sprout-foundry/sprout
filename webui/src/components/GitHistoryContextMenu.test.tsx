@@ -2,10 +2,10 @@ vi.mock('./ThemedDialog', () => ({
   showThemedConfirm: vi.fn().mockResolvedValue(false),
   showThemedPrompt: vi.fn().mockResolvedValue(null),
 }));
-import { createRoot } from 'react-dom/client';
 import { act } from 'react';
-import GitHistoryContextMenu from './GitHistoryContextMenu';
+import { createRoot } from 'react-dom/client';
 import { copyToClipboard } from '../utils/clipboard';
+import GitHistoryContextMenu from './GitHistoryContextMenu';
 import { showThemedConfirm } from './ThemedDialog';
 
 // ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ describe('GitHistoryContextMenu', () => {
   // 13. Checkout calls apiService.checkoutGitCommit with full hash
   test('checkout calls apiService.checkoutGitCommit and shows Checked out feedback', async () => {
     mountContextMenu();
-    
+
     showThemedConfirm.mockResolvedValueOnce(true);
 
     fireContextMenu(commitRow!);
@@ -372,7 +372,7 @@ describe('GitHistoryContextMenu', () => {
   // 14. Revert calls apiService.revertGitCommit with full hash
   test('revert calls apiService.revertGitCommit and shows Reverted feedback', async () => {
     mountContextMenu();
-    
+
     showThemedConfirm.mockResolvedValueOnce(true);
 
     fireContextMenu(commitRow!);
@@ -428,7 +428,7 @@ describe('GitHistoryContextMenu', () => {
   // 17. Checkout error shows error message in actionStatus
   test('checkout error shows error message in actionStatus', async () => {
     mountContextMenu();
-    
+
     showThemedConfirm.mockResolvedValueOnce(true);
     mockApiService.checkoutGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 
@@ -450,7 +450,7 @@ describe('GitHistoryContextMenu', () => {
   // 18. Revert error shows error message in actionStatus
   test('revert error shows error message in actionStatus', async () => {
     mountContextMenu();
-    
+
     showThemedConfirm.mockResolvedValueOnce(true);
     mockApiService.revertGitCommit.mockRejectedValueOnce(new Error('merge conflict'));
 

@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
+import { ContextMenu } from '@sprout/ui';
 import type { Terminal } from '@xterm/xterm';
 import { Copy, ClipboardPaste, Search, Trash2, Rows2, Columns2, TextSelect, Link2 } from 'lucide-react';
-import { ContextMenu } from '@sprout/ui';
+import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import { debugLog } from '../utils/log';
 
 interface TerminalMenuState {

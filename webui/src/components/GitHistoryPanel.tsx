@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, firstLine } from '../utils/format';
 import { debugLog } from '../utils/log';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import CommitDetailPanel from './CommitDetailPanel';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
 import './GitHistoryPanel.css';

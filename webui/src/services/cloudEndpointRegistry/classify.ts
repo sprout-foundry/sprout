@@ -1,5 +1,5 @@
-import type { CloudEndpoint } from './types';
 import { CLOUD_ENDPOINTS } from './endpoints';
+import type { CloudEndpoint } from './types';
 
 /**
  * Extract the path without query parameters from a URL string.

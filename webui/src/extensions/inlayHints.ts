@@ -18,11 +18,11 @@
  * - Inline decorations with reduced opacity and pointer-events: none.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { type Extension, Annotation } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { ApiService } from '../services/api';
-import { isLSPClientConnected } from './lspExtensions';
 import { debugLog } from '../utils/log';
+import { isLSPClientConnected } from './lspExtensions';
 
 // ── Constants ────────────────────────────────────────────────────────
 

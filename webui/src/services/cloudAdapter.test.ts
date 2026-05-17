@@ -2,8 +2,8 @@
  * Tests for CloudAdapter
  */
 
-import { CloudAdapter, type CloudAdapterConfig } from './cloudAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
+import { CloudAdapter, type CloudAdapterConfig } from './cloudAdapter';
 
 // Mock clientSession module
 vi.mock('./clientSession', () => ({
@@ -44,21 +44,19 @@ vi.mock('./wasmShell', () => ({
 
 // Mock cloudWasmHandlers — we test handleWasmLocal directly via the adapter,
 // but the adapter imports jsonError from this module.
-vi.mock(
-  './cloudWasmHandlers',
-  async (importOriginal): Promise<typeof import('./cloudWasmHandlers')> => {
-    const actual = await importOriginal();
-    return {
-      ...actual,
-      jsonError: vi.fn((message: string, status: number) =>
+vi.mock('./cloudWasmHandlers', async (importOriginal): Promise<typeof import('./cloudWasmHandlers')> => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    jsonError: vi.fn(
+      (message: string, status: number) =>
         new Response(JSON.stringify({ error: message, message }), {
           status,
           headers: { 'Content-Type': 'application/json' },
         }),
-      ),
-    };
-  },
-);
+    ),
+  };
+});
 
 // Polyfill Response for jsdom environment (jsdom lacks Response/fetch)
 if (typeof Response === 'undefined') {
@@ -97,47 +95,47 @@ if (typeof Response === 'undefined') {
 // Unconditionally override to support relative URLs (e.g., '/api/stats')
 // since native Node.js Request requires absolute URLs.
 global.Request = class Request {
-    url: string;
-    method: string;
-    headers: Headers | Map<string, string>;
-    private _body: string | null;
+  url: string;
+  method: string;
+  headers: Headers | Map<string, string>;
+  private _body: string | null;
 
-    constructor(input: string | Request, init?: RequestInit | { method?: string }) {
-      if (typeof input === 'string') {
-        // Store relative URLs as-is — the CloudAdapter reads this.url directly
-        this.url = input;
-        this.method = init?.method ?? 'GET';
-        this.headers = new Headers(init?.headers);
-        // Store body for testing
-        if (init?.body) {
-          this._body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
-        } else {
-          this._body = null;
-        }
+  constructor(input: string | Request, init?: RequestInit | { method?: string }) {
+    if (typeof input === 'string') {
+      // Store relative URLs as-is — the CloudAdapter reads this.url directly
+      this.url = input;
+      this.method = init?.method ?? 'GET';
+      this.headers = new Headers(init?.headers);
+      // Store body for testing
+      if (init?.body) {
+        this._body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body);
       } else {
-        this.url = input.url;
-        this.method = input.method;
-        this.headers = input.headers;
-        // Copy body from existing Request
-        this._body = (input as Request & { _body: string | null })._body || null;
+        this._body = null;
       }
+    } else {
+      this.url = input.url;
+      this.method = input.method;
+      this.headers = input.headers;
+      // Copy body from existing Request
+      this._body = (input as Request & { _body: string | null })._body || null;
     }
+  }
 
-    // Support body cloning and reading for chat endpoint tests
-    clone(): Request {
-      const cloned = new Request(this.url, {
-        method: this.method,
-        headers: this.headers,
-        body: this._body || undefined,
-      });
-      (cloned as unknown as { _body: string | null })._body = this._body;
-      return cloned;
-    }
+  // Support body cloning and reading for chat endpoint tests
+  clone(): Request {
+    const cloned = new Request(this.url, {
+      method: this.method,
+      headers: this.headers,
+      body: this._body || undefined,
+    });
+    (cloned as unknown as { _body: string | null })._body = this._body;
+    return cloned;
+  }
 
-    async text(): Promise<string> {
-      return this._body || '';
-    }
-  } as unknown as typeof Request;
+  async text(): Promise<string> {
+    return this._body || '';
+  }
+} as unknown as typeof Request;
 
 describe('CloudAdapter', () => {
   let adapter: CloudAdapter;
@@ -345,7 +343,7 @@ describe('CloudAdapter', () => {
     });
   });
 
-const workspaceSyntheticResponse = {
+  const workspaceSyntheticResponse = {
     message: 'ok',
     workspace_root: '/home/user',
     daemon_root: '/home/user',
@@ -665,10 +663,10 @@ const workspaceSyntheticResponse = {
 
       // Mock the proxy fetch to simulate the server safety-net response
       mockFetch.mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ files: [], handled_by: 'wasm-shell' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
+        new Response(JSON.stringify({ files: [], handled_by: 'wasm-shell' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
       );
 
       const response = await freshAdapter.fetch('/api/files', { method: 'GET' });
@@ -694,10 +692,10 @@ const workspaceSyntheticResponse = {
       const freshAdapter = new CloudAdapter(mockConfig);
 
       mockFetch.mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ entries: [], handled_by: 'wasm-shell' }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
+        new Response(JSON.stringify({ entries: [], handled_by: 'wasm-shell' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
       );
 
       const response = await freshAdapter.fetch('/api/terminal/history', { method: 'GET' });

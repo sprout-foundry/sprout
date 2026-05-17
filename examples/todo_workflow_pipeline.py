@@ -44,24 +44,48 @@ PLACEHOLDER = "{TODO_TEXT}"
 
 # Patterns that indicate the agent is still making progress
 _PROGRESS_PATTERNS = [
+    # Tool execution
     r"tool_call",
     r"running subagent",
     r"spawn.*subagent",
     r"executing tool",
     r"tool result",
+    # LLM activity
     r"llm call",
     r"tokens_",
+    r"streaming",
+    r"token",
+    # Agent lifecycle
     r"iteration",
     r"compacting",
     r"preparing messages",
     r"process_query",
     r"finish_reason",
+    # Git/build activity
     r"staged changes",
     r"commit",
     r"git add",
     r"build",
     r"test",
     r"review",
+    # Sprout-specific output markers
+    r"\[OK\]",          # Completion success
+    r"\[WARN\]",        # Warnings during execution
+    r"\[STOP\]",        # Stop/interrupt messages
+    r"\[FAIL\]",        # Errors (still activity)
+    r"\[~\]",           # Pruning/compaction
+    r"\[>>\]",          # Direct mode processing
+    r"\[web\]",         # Web UI messages
+    r"\[bot\]",         # Interactive mode
+    r"\[chart\]",       # Provider/model info
+    r"\[Detected",      # Command detection
+    r"\[Auto-",         # Auto-execution
+    r"\[!]",            # Fast path
+    r"\[\|",            # Workflow yield
+    r"\[debug\]",       # Debug output
+    r"\[credentials\]", # Credential messages
+    r"\[mcp",           # MCP messages
+    r"\[coder\]|running subagent",  # Subagent persona output
 ]
 _PROGRESS_RE = re.compile("|".join(_PROGRESS_PATTERNS), re.IGNORECASE)
 
@@ -265,8 +289,11 @@ class ProgressMonitor:
     def feed(self, data: str) -> None:
         """Process output data and update progress tracking."""
         self.total_bytes += len(data)
-        if _PROGRESS_RE.search(data):
+        # Always reset on any output — the process is alive if it's producing bytes
+        if data.strip():
             self.last_progress_time = time.time()
+        # Reset stale warnings only on recognized progress indicators
+        if _PROGRESS_RE.search(data):
             self.stale_warnings = 0
 
     def is_stale(self) -> bool:
@@ -289,16 +316,35 @@ def _tee_output(
     monitor: ProgressMonitor,
     label: str = "",
 ) -> str:
-    """Read from pipe, tee to stderr with progress monitoring, return collected text."""
+    """Read from pipe in chunks (not line-buffered) so partial output
+    during LLM streaming is detected by the progress monitor.
+
+    Tee to stderr line-by-line for readability, but feed the monitor
+    on every chunk so we catch activity even when no newlines arrive.
+    """
     collected: list[str] = []
     prefix = f"[{label}] " if label else ""
-    for line in source:
-        line = line if isinstance(line, str) else line.decode("utf-8", errors="replace")
-        monitor.feed(line)
-        collected.append(line)
-        # Only print non-empty lines to avoid flooding stderr
-        if line.strip():
-            print(f"{prefix}{line}", end="", file=sys.stderr)
+    buf = ""
+    while True:
+        chunk = source.read(4096)
+        if not chunk:
+            break
+        if isinstance(chunk, bytes):
+            chunk = chunk.decode("utf-8", errors="replace")
+        buf += chunk
+        monitor.feed(chunk)
+        # Tee complete lines to stderr for readability
+        while "\n" in buf:
+            line, buf = buf.split("\n", 1)
+            line += "\n"
+            collected.append(line)
+            if line.strip():
+                print(f"{prefix}{line}", end="", file=sys.stderr)
+    # Remaining partial line (no trailing newline)
+    if buf:
+        collected.append(buf)
+        if buf.strip():
+            print(f"{prefix}{buf}", end="", file=sys.stderr)
     return "".join(collected)
 
 

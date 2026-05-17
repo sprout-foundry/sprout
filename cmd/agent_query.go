@@ -74,8 +74,8 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 
 	// Ask for confirmation (unless auto-execute)
 	if !shouldAutoExecute {
-		fmt.Print(displayMsg.String())
-		fmt.Print("Execute directly? [Y/n] ")
+		_, _ = os.Stdout.Write([]byte(displayMsg.String()))
+		_, _ = os.Stdout.Write([]byte("Execute directly? [Y/n] "))
 
 		// Read response
 		reader := bufio.NewReader(os.Stdin)
@@ -93,53 +93,53 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	} else {
 		// Auto-execute with color
 		if autoExecute {
-			fmt.Printf("%s%s[Auto-executing with !]%s\n",
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s[Auto-executing with !]%s\n",
 				displayMsg.String(),
 				console.ColorizeBold("Auto-executing with !", console.ColorYellow),
 				console.ColorReset,
-			)
+			)))
 		} else {
-			fmt.Printf("%s%s[Auto-executing]%s\n",
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s[Auto-executing]%s\n",
 				displayMsg.String(),
 				console.ColorizeBold("Auto-executing", console.ColorGreen),
 				console.ColorReset,
-			)
+			)))
 		}
 	}
 
 	// Execute the command with color indicator
-	fmt.Printf("%s▶ Executing:%s %s\n",
+	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s▶ Executing:%s %s\n",
 		console.ColorizeBold("▶ Executing:", console.ColorBlue),
 		console.ColorReset,
 		query,
-	)
+	)))
 
 	// Print separator before streaming output
 	separatorWidth := GetTerminalWidth()
 	separator := strings.Repeat("─", separatorWidth)
-	fmt.Printf("%s%s%s\n",
+	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
 		console.ColorReset,
-	)
+	)))
 
 	_, err = ExecuteCommand(query)
 
 	// Print separator after output
-	fmt.Printf("%s%s%s\n",
+	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
 		console.ColorReset,
-	)
+	)))
 
 	if err != nil {
-		fmt.Printf("%s[FAIL] Error:%s %v\n",
+		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s[FAIL] Error:%s %v\n",
 			console.ColorRed,
 			console.ColorReset,
 			err,
-		)
+		)))
 		// Command execution failed - ask user if they want to send to LLM instead
-		fmt.Print("The command failed. Send this query to the Assistant instead? [Y/n] ")
+		_, _ = os.Stdout.Write([]byte("The command failed. Send this query to the Assistant instead? [Y/n] "))
 
 		// Read response
 		reader := bufio.NewReader(os.Stdin)
@@ -219,37 +219,37 @@ func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 // executeDirectCommand executes a command directly and prints output
 func executeDirectCommand(command string) (bool, error) {
-	fmt.Printf("%s[!] Fast path:%s %s\n",
+	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s[!] Fast path:%s %s\n",
 		console.ColorizeBold("[!] Fast path:", console.ColorYellow),
 		console.ColorReset,
 		command,
-	)
+	)))
 
 	// Print separator before streaming output
 	separatorWidth := GetTerminalWidth()
 	separator := strings.Repeat("─", separatorWidth)
-	fmt.Printf("%s%s%s\n",
+	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
 		console.ColorReset,
-	)
+	)))
 
 	// Execute the command directly (output streams in real-time)
 	_, err := ExecuteCommand(command)
 
 	// Print separator after output
-	fmt.Printf("%s%s%s\n",
+	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
 		console.ColorReset,
-	)
+	)))
 
 	if err != nil {
-		fmt.Printf("%s[FAIL] Error:%s %v\n",
+		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s[FAIL] Error:%s %v\n",
 			console.ColorRed,
 			console.ColorReset,
 			err,
-		)
+		)))
 	}
 	return true, nil
 }
@@ -264,8 +264,8 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	if registry.IsSlashCommand(query) {
 		if err := registry.Execute(query, chatAgent); err != nil {
 			// For slash commands, show error and exit immediately
-			fmt.Fprintf(os.Stderr, "[FAIL] Slash command error: %v\n", err)
-			fmt.Fprintf(os.Stderr, "[i] Use '/help' to see available commands\n")
+			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[FAIL] Slash command error: %v\n", err)))
+			_, _ = os.Stderr.Write([]byte("[i] Use '/help' to see available commands\n"))
 			return fmt.Errorf("slash command failed: %w", err)
 		}
 		return nil
@@ -331,7 +331,7 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		if res.err != nil {
 			// Print the response (user-friendly error message) if available
 			if res.response != "" {
-				fmt.Fprintf(os.Stderr, "[FAIL] %s\n", res.response)
+				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[FAIL] %s\n", res.response)))
 			}
 			errorEvent := events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
@@ -369,12 +369,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 		switch chatAgent.GetLastRunTerminationReason() {
 		case agent.RunTerminationMaxIterations:
-			fmt.Printf("\n[WARN] Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[WARN] Reached max iterations (%d) in %s\n", chatAgent.GetMaxIterations(), FormatDuration(duration))))
 		case agent.RunTerminationInterrupted:
-			fmt.Printf("\n[STOP] Stopped in %s\n", FormatDuration(duration))
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[STOP] Stopped in %s\n", FormatDuration(duration))))
 		default:
 			// Print completion message without automatic summary (use /stats to see summary)
-			fmt.Printf("\n[OK] Completed in %s\n", FormatDuration(duration))
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[OK] Completed in %s\n", FormatDuration(duration))))
 		}
 
 		return nil
@@ -383,7 +383,7 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		// Context was cancelled - agent processing was interrupted
 		chatAgent.TriggerInterrupt()
 		duration := time.Since(startTime)
-		fmt.Printf("\n[STOP] Query interrupted after %s\n", FormatDuration(duration))
+		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[STOP] Query interrupted after %s\n", FormatDuration(duration))))
 
 		// Allow the agent goroutine to stop cleanly after receiving interrupt.
 		select {

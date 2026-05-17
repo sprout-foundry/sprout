@@ -5,8 +5,8 @@ import type { PerChatState } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
-import { TasksPage } from '@sprout/ui';
-import { BillingPage, TeamPage } from './platform';
+import { TasksPage, TeamPage } from '@sprout/ui';
+import { BillingPage } from './platform';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
@@ -508,7 +508,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }
 
   if (currentView === 'team') {
-    return <TeamPage />;
+    return <TeamPage sproutFetch={sproutFetch} />;
   }
 
   return (

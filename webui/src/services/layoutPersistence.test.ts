@@ -91,7 +91,7 @@ beforeEach(() => {
   // Track beforeunload listeners via spy
   beforeUnloadHandlers.length = 0;
 
-  jest
+  vi
     .spyOn(window, 'addEventListener')
     .mockImplementation((type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
       if (type === 'beforeunload' && typeof handler === 'function') {
@@ -100,7 +100,7 @@ beforeEach(() => {
       realAddEventListener.call(window, type, handler, ...rest);
     });
 
-  jest
+  vi
     .spyOn(window, 'removeEventListener')
     .mockImplementation((type: string, handler: EventListenerOrEventListenerObject, ...rest) => {
       if (type === 'beforeunload' && typeof handler === 'function') {

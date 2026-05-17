@@ -5,6 +5,8 @@ import { Terminal } from '@xterm/xterm';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { copyToClipboard } from '../utils/clipboard';
+import { useTheme } from '../contexts/ThemeContext';
 import TerminalPane from './TerminalPane';
 
 // ---------------------------------------------------------------------------
@@ -22,9 +24,12 @@ const mockTerm = {
   clear: vi.fn(),
   loadAddon: vi.fn(),
   open: vi.fn(),
-  onData: vi.fn(),
+  onData: vi.fn(() => ({ dispose: vi.fn() })),
+  onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
   focus: vi.fn(),
   dispose: vi.fn(),
+  registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
+  attachCustomKeyEventHandler: vi.fn(),
   cols: 80,
   rows: 24,
   buffer: {
@@ -66,6 +71,8 @@ const mockService = {
   removeEvent: vi.fn(),
   disconnect: vi.fn(),
   connect: vi.fn(),
+  closeSession: vi.fn(),
+  getSessionId: vi.fn().mockReturnValue('test-session'),
 };
 
 vi.mock('../services/terminalWebSocket', () => ({
@@ -178,21 +185,17 @@ describe.skip('TerminalPane context menu', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    // Re-assert Terminal constructor mock (jest.mock hoisted + clearAllMocks in afterEach)
-    const { Terminal } = require('@xterm/xterm');
-    Terminal.mockImplementation(() => mockTerm);
+    // Re-assert Terminal constructor mock (vi.mock hoisted + clearAllMocks in afterEach)
+    (Terminal as any).mockImplementation(() => mockTerm);
 
     // Re-assert FitAddon constructor mock so it always returns mockFitAddon
-    const { FitAddon } = require('@xterm/addon-fit');
-    FitAddon.mockImplementation(() => mockFitAddon);
+    (FitAddon as any).mockImplementation(() => mockFitAddon);
 
     // Re-assert WebSocket mock service factory
-    const { TerminalWebSocketService } = require('../services/terminalWebSocket');
-    TerminalWebSocketService.createInstance.mockImplementation(() => mockService);
+    (TerminalWebSocketService as any).createInstance.mockImplementation(() => mockService);
 
-    // Re-assert clipboard mock
-    const { copyToClipboard } = require('../utils/clipboard');
-    copyToClipboard.mockResolvedValue(undefined);
+    // Clipboard mock is set up at module level via vi.mock('../utils/clipboard')
+    // No need to re-assert — vi.clearAllMocks preserves mock implementations
 
     // Reset mock term state (not the functions themselves)
     mockTerm.hasSelection.mockReturnValue(false);
@@ -214,9 +217,8 @@ describe.skip('TerminalPane context menu', () => {
     navigator.clipboard.writeText.mockClear();
     navigator.clipboard.writeText.mockResolvedValue(undefined);
 
-    // Theme context
-    const { useTheme } = require('../contexts/ThemeContext');
-    useTheme.mockReturnValue({ themePack: { id: 'default' } });
+    // Theme context (mocked vi.fn via vi.mock)
+    (useTheme as any).mockReturnValue({ themePack: { id: 'default' } });
   });
 
   afterEach(() => {
@@ -332,7 +334,6 @@ describe.skip('TerminalPane context menu', () => {
   });
 
   it('Copy action calls copyToClipboard with selection text', async () => {
-    const { copyToClipboard } = require('../utils/clipboard');
     mockTerm.hasSelection.mockReturnValue(true);
     mockTerm.getSelection.mockReturnValue('selected text');
 
@@ -577,12 +578,11 @@ describe('TerminalPane wordSeparator', () => {
     (FitAddon as any).mockImplementation(() => mockFitAddon);
 
     // Re-assert WebSocket mock service factory
-    const { TerminalWebSocketService } = require('../services/terminalWebSocket');
-    TerminalWebSocketService.createInstance.mockImplementation(() => mockService);
+    // TerminalWebSocketService is already imported at module top and mocked via vi.mock
+    (TerminalWebSocketService as any).createInstance.mockImplementation(() => mockService);
 
-    // Theme context
-    const { useTheme } = require('../contexts/ThemeContext');
-    useTheme.mockReturnValue({ themePack: { id: 'default' } });
+    // Theme context (mocked vi.fn via vi.mock)
+    (useTheme as any).mockReturnValue({ themePack: { id: 'default' } });
   });
 
   afterEach(() => {

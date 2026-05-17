@@ -243,6 +243,10 @@ func TestSanitizeSessionIDPart(t *testing.T) {
 // --- Cleanup timeout tests ---
 
 func TestCleanupInactiveSessions_BackgroundTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping PTY timing-sensitive test in short mode")
+	}
+
 	dir := t.TempDir()
 	tm := NewTerminalManager(dir)
 

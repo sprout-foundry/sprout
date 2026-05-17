@@ -100,6 +100,7 @@ export { default as TerminalTabBar } from './components/TerminalTabBar';
 export { default as Sidebar } from './components/Sidebar';
 export { default as CommandPalette } from './components/CommandPalette';
 export { default as Editor } from './components/Editor';
+export { default as TasksPage } from './components/TasksPage';
 export { Skeleton, SkeletonText } from './components/Skeleton';
 export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
 

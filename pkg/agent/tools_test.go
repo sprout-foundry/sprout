@@ -166,6 +166,7 @@ func TestExecuteToolAppliesOpenFileAlias(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	filePath := filepath.Join(tmpDir, "alias_read_test.txt")
 	if err := os.WriteFile(filePath, []byte("alias works"), 0644); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
@@ -197,6 +198,7 @@ func TestExecuteToolRoutesJSONWritesAndEditsThroughStructuredValidation(t *testi
 	}
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	jsonPath := filepath.Join(tmpDir, "guard_test.json")
 
 	writeCall := api.ToolCall{ID: "call_guard_write", Type: "function"}
@@ -330,6 +332,7 @@ func TestPatchStructuredFileAcceptsOperationsAlias(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	jsonPath := filepath.Join(tmpDir, "alias_patch.json")
 	if err := os.WriteFile(jsonPath, []byte(`{"items":[]}`), 0644); err != nil {
 		t.Fatalf("failed to seed json file: %v", err)
@@ -363,6 +366,7 @@ func TestPatchStructuredFileAcceptsDataFallbackToWrite(t *testing.T) {
 	}
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	jsonPath := filepath.Join(tmpDir, "patch_data_fallback.json")
 	if err := os.WriteFile(jsonPath, []byte(`{"old":1}`), 0644); err != nil {
 		t.Fatalf("failed to seed json file: %v", err)

@@ -11,6 +11,8 @@ import (
 // TestGetConfigDir_HomeError covers the os.UserHomeDir() error path (line 33).
 // When LEDIT_CONFIG and XDG_CONFIG_HOME are both empty and HOME is unset,
 // os.UserHomeDir() returns an error.
+// On some platforms (Android/Termux) os.UserHomeDir still resolves a path
+// even without HOME, so we detect that and skip.
 func TestGetConfigDir_HomeError(t *testing.T) {
 	t.Setenv("HOME", "")
 
@@ -18,6 +20,12 @@ func TestGetConfigDir_HomeError(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
+
+	// Verify that os.UserHomeDir actually fails on this platform.
+	// On Android/Termux it may still resolve via user looked-up home.
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
 
 	_, err := GetConfigDir()
 	if err == nil {
@@ -32,6 +40,10 @@ func TestLoad_GetAPIKeysPathError(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", "")
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
+
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
 
 	_, err := Load()
 	if err == nil {
@@ -63,6 +75,10 @@ func TestResolve_LoadError(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
+
 	// No env var set, so Resolve falls through to Load()
 	_, err := resolve("some-provider", "")
 	if err == nil {
@@ -81,6 +97,10 @@ func TestResolve_LoadErrorWithEnvVarUnsetButNamed(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "")
 	// Explicitly unset the named env var so os.Getenv returns empty
 	t.Setenv("SOME_UNSET_VAR", "")
+
+	if _, err := os.UserHomeDir(); err == nil {
+		t.Skip("skipping: os.UserHomeDir succeeds without HOME on this platform")
+	}
 
 	_, err := resolve("some-provider", "SOME_UNSET_VAR")
 	if err == nil {

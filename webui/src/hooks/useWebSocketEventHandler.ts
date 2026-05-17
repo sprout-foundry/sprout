@@ -1,4 +1,23 @@
-import type { WsEvent } from '@sprout/events';
+import type {
+  WsEvent,
+  ConnectionStatusData,
+  QueryStartedData,
+  QueryProgressData,
+  QueryCompletedData,
+  StreamChunkData,
+  ToolStartData,
+  ToolEndData,
+  SubagentActivityData,
+  AgentMessageData,
+  TodoUpdateData,
+  FileChangedData,
+  ErrorData,
+  MetricsUpdateData,
+  WorkspaceChangedData,
+  SecurityApprovalRequestData,
+  SecurityPromptRequestData,
+  AskUserRequestData,
+} from '@sprout/events';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
@@ -107,7 +126,7 @@ const createLogEntry = (event: WsEvent): LogEntry => ({
 const handleConnectionStatus = (ctx: EventHandlerContext): void => {
   const { event, setState, connectionTimeoutRef, lastConnectionStateRef } = ctx;
   const logEntry = createLogEntry(event);
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as ConnectionStatusData;
   if (data.client_id && String(data.client_id) !== getWebUIClientId()) return;
   logEntry.category = 'system';
   logEntry.level = data.connected === true ? 'success' : 'warning';
@@ -146,7 +165,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'query';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as QueryStartedData;
   const startedQuery = String(data.query || '');
   const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
 
@@ -170,8 +189,8 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
 // Handle query_progress event
 const handleQueryProgress = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
-  const data = (event.data ?? {}) as Record<string, unknown>;
-  setState((_prev) => ({ queryProgress: toQueryProgress(data) }));
+  const data = (event.data ?? {}) as QueryProgressData;
+  setState((_prev) => ({ queryProgress: toQueryProgress(data as Record<string, unknown>) }));
   debugLog('[>>] Query progress:', data);
 };
 
@@ -181,7 +200,7 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'stream';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as StreamChunkData;
   const chunkContent = String(data.chunk || '');
   const chunkType = String(data.content_type || 'assistant_text');
 
@@ -218,7 +237,7 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   logEntry.category = 'query';
   logEntry.level = 'success';
   if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as QueryCompletedData;
   const completedQuery = String(data.query || '')
     .trim()
     .toLowerCase();
@@ -275,7 +294,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as ToolStartData;
   const toolCallID = String(data.tool_call_id || '');
   const toolName = String(data.tool_name || 'unknown_tool');
   const rawArgs = data.arguments != null ? String(data.arguments) : undefined;
@@ -348,7 +367,7 @@ const handleToolEnd = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as ToolEndData;
   logEntry.level = data.status === 'failed' ? 'error' : 'info';
   const toolCallID = String(data.tool_call_id || '');
   const status: ToolExecution['status'] = data.status === 'failed' ? 'error' : 'completed';
@@ -414,7 +433,7 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as SubagentActivityData;
   const activity: SubagentActivity = {
     id: String(event.id || `${Date.now()}-${Math.random()}`),
     toolCallId: String(data.tool_call_id || ''),
@@ -446,7 +465,7 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
 const handleAgentMessage = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as AgentMessageData;
   let category = String(data.category || 'info');
   const message = String(data.message || '');
   const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();
@@ -512,7 +531,7 @@ const handleTodoUpdate = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'tool';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as TodoUpdateData;
   const normalizedTodos = normalizeTodoList(data.todos);
   setState((prev) => ({ currentTodos: normalizedTodos, logs: appendCappedLog(prev.logs, logEntry) }));
 };
@@ -523,7 +542,7 @@ const handleFileChanged = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'file';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as FileChangedData;
   const newFileEdit = {
     path: String(data.path || data.file_path || 'Unknown'),
     action: String(data.action || data.operation || 'edited'),
@@ -553,7 +572,7 @@ const handleError = (ctx: EventHandlerContext): void => {
   logEntry.category = 'system';
   logEntry.level = 'error';
   if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as ErrorData;
   const errorMessage = String(data.message || 'Unknown error');
   const errorCode = typeof data.code === 'string' ? data.code : undefined;
 
@@ -631,7 +650,7 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as MetricsUpdateData;
 
   if (pendingProviderChangeRef.current && data.provider === pendingProviderChangeValueRef.current) {
     pendingProviderChangeRef.current = false;
@@ -649,7 +668,7 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
 // Handle workspace_changed event
 const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
   const { event } = ctx;
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as WorkspaceChangedData;
   debugLog('[workspace] Workspace changed:', data);
   if (!data.client_id || String(data.client_id) === getWebUIClientId()) {
     window.location.reload();
@@ -662,7 +681,7 @@ const handleSecurityApprovalRequest = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'warning';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as SecurityApprovalRequestData;
   if (data.status === 'responded') return;
   setState((prev) => ({
     securityApprovalRequest: {
@@ -685,7 +704,7 @@ const handleSecurityPromptRequest = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'warning';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as SecurityPromptRequestData;
   if (data.status === 'responded') return;
   if (!data.prompt) return;
   setState((prev) => ({
@@ -706,7 +725,7 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'system';
   logEntry.level = 'info';
-  const data = (event.data ?? {}) as Record<string, unknown>;
+  const data = (event.data ?? {}) as AskUserRequestData;
   if (data.status === 'responded') return;
   if (!data.question) return;
   setState((prev) => ({

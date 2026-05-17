@@ -113,7 +113,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	}
 
 	failedProviderName := api.GetProviderName(failedProvider)
-	fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)
+	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)))
 
 	// Detect whether the failure is a model-not-found issue so we can offer
 	// the user the option to pick a different model on the same provider.
@@ -142,8 +142,8 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	if choice == 1 && isModelError {
 		models, listErr := api.GetModelsForProvider(failedProvider)
 		if listErr != nil || len(models) == 0 {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to list models for %s: %v\n", failedProviderName, listErr)
-			fmt.Fprintf(os.Stderr, "Falling back to selecting a different provider.\n")
+			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to list models for %s: %v\n", failedProviderName, listErr)))
+			_, _ = os.Stderr.Write([]byte("Falling back to selecting a different provider.\n"))
 			return recoverProviderBySwitching(configManager, failedProvider, failedProviderName, modelArg)
 		}
 		selectedModel, ok := promptModelSelection(models)
@@ -189,16 +189,16 @@ func isModelNotFoundError(err error) bool {
 func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Fprintln(os.Stderr, "Options:")
+		_, _ = os.Stderr.Write([]byte("Options:\n"))
 		if isModelError {
-			fmt.Fprintln(os.Stderr, "  1. Choose a different model on this provider")
-			fmt.Fprintln(os.Stderr, "  2. Select a different provider")
-			fmt.Fprintln(os.Stderr, "  0. Close")
-			fmt.Fprint(os.Stderr, "Choice (0-2): ")
+			_, _ = os.Stderr.Write([]byte("  1. Choose a different model on this provider\n"))
+			_, _ = os.Stderr.Write([]byte("  2. Select a different provider\n"))
+			_, _ = os.Stderr.Write([]byte("  0. Close\n"))
+			_, _ = os.Stderr.Write([]byte("Choice (0-2): "))
 		} else {
-			fmt.Fprintln(os.Stderr, "  1. Select a different provider")
-			fmt.Fprintln(os.Stderr, "  0. Close")
-			fmt.Fprint(os.Stderr, "Choice (0-1): ")
+			_, _ = os.Stderr.Write([]byte("  1. Select a different provider\n"))
+			_, _ = os.Stderr.Write([]byte("  0. Close\n"))
+			_, _ = os.Stderr.Write([]byte("Choice (0-1): "))
 		}
 
 		input, err := reader.ReadString('\n')
@@ -208,7 +208,7 @@ func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 
 		parsed, err := strconv.Atoi(strings.TrimSpace(input))
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Please enter a valid number.")
+			_, _ = os.Stderr.Write([]byte("Please enter a valid number.\n"))
 			continue
 		}
 
@@ -216,12 +216,12 @@ func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 			if parsed >= 0 && parsed <= 2 {
 				return parsed, nil
 			}
-			fmt.Fprintln(os.Stderr, "Please enter 0, 1, or 2.")
+			_, _ = os.Stderr.Write([]byte("Please enter 0, 1, or 2.\n"))
 		} else {
 			if parsed >= 0 && parsed <= 1 {
 				return parsed, nil
 			}
-			fmt.Fprintln(os.Stderr, "Please enter 0 or 1.")
+			_, _ = os.Stderr.Write([]byte("Please enter 0 or 1.\n"))
 		}
 	}
 }
@@ -231,11 +231,11 @@ func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 // cancels.
 func promptModelSelection(models []api.ModelInfo) (string, bool) {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Fprintln(os.Stderr, "\nAvailable models:")
+	_, _ = os.Stderr.Write([]byte("\nAvailable models:\n"))
 	for i, m := range models {
-		fmt.Fprintf(os.Stderr, "  %2d. %s\n", i+1, m.ID)
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("  %2d. %s\n", i+1, m.ID)))
 	}
-	fmt.Fprint(os.Stderr, "Select a model (number, or 0 to cancel): ")
+	_, _ = os.Stderr.Write([]byte("Select a model (number, or 0 to cancel): "))
 
 	input, err := reader.ReadString('\n')
 	if err != nil {
@@ -249,7 +249,7 @@ func promptModelSelection(models []api.ModelInfo) (string, bool) {
 		return "", false
 	}
 	if idx < 1 || idx > len(models) {
-		fmt.Fprintln(os.Stderr, "Invalid selection. Cancelling.")
+		_, _ = os.Stderr.Write([]byte("Invalid selection. Cancelling.\n"))
 		return "", false
 	}
 	return models[idx-1].ID, true

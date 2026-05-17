@@ -180,7 +180,15 @@ func AskUserWithEventBus(ctx context.Context, question string, eventBus *events.
 
 	// WebUI mode: route through event bus
 	if mgr != nil && eventBus != nil {
+		log.Printf("[ask_user] Routing through event bus: clientID=%q chatID=%q", clientID, chatID)
 		return mgr.RequestAskUser(ctx, eventBus, question, clientID, userID, chatID)
+	}
+
+	if mgr == nil {
+		log.Printf("[ask_user] Global AskUserManager is nil — falling back to stdin (WebUI not initialized?)")
+	}
+	if eventBus == nil {
+		log.Printf("[ask_user] Event bus is nil — falling back to stdin")
 	}
 
 	// CLI mode: read from stdin

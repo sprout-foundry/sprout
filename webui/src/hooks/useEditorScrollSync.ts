@@ -9,10 +9,10 @@
  *
  * @see EditorPane.tsx for the original implementation this hook extracts
  */
-import { useRef, useEffect, useCallback } from 'react';
 import type { EditorView } from '@codemirror/view';
-import type { EditorBuffer } from '../types/editor';
+import { useRef, useEffect, useCallback } from 'react';
 import { setLinkedScrollEnabled, suppressScrollSync } from '../extensions/linkedScroll';
+import type { EditorBuffer } from '../types/editor';
 
 export interface UseEditorScrollSyncOptions {
   /** Editor pane ID (used to filter linked scroll events) */

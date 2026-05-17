@@ -7,9 +7,9 @@
  * during xterm initialization.
  */
 
-import { useRef, useState, useCallback } from 'react';
-import type { Terminal as XTerm } from '@xterm/xterm';
 import type { SearchAddon } from '@xterm/addon-search';
+import type { Terminal as XTerm } from '@xterm/xterm';
+import { useRef, useState, useCallback } from 'react';
 import type { TerminalSearchOptions, TerminalSearchBarHandle } from '../components/TerminalSearchBar';
 
 export interface UseTerminalSearchOptions {

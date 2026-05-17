@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { supportsSSH } from '../../config/mode';
 import type { SSHBrowseEntry, SSHHostEntry, SSHSessionEntry } from '../../services/api';
 import { ApiService, SSHWorkspaceOpenError } from '../../services/api';
-import { supportsSSH } from '../../config/mode';
 import { getSSHBrowseQuery } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
 import { MAX_SUGGESTIONS } from './types';
@@ -58,7 +58,9 @@ export function useSSHData({
     const desktopBridge = window.sproutDesktop;
     let cancelled = false;
     Promise.all([
-      desktopBridge?.listSshHosts ? (desktopBridge.listSshHosts() as Promise<SSHHostEntry[]>) : apiService.current.getSSHHosts(),
+      desktopBridge?.listSshHosts
+        ? (desktopBridge.listSshHosts() as Promise<SSHHostEntry[]>)
+        : apiService.current.getSSHHosts(),
       apiService.current.getSSHSessions().catch(() => []),
     ])
       .then(([hosts, sessions]) => {

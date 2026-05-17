@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { supportsSettings } from '../config/mode';
 import { ApiService, type ProviderOption, type SproutSettings } from '../services/api';
 import { useLog, debugLog } from '../utils/log';
-import { supportsSettings } from '../config/mode';
 
 interface UseSidebarModelParams {
   isConnected: boolean;

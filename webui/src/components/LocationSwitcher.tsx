@@ -1,15 +1,15 @@
-import React, { useState, useMemo } from 'react';
 import { FolderOpen, Monitor, Loader2, Server } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
 import './LocationSwitcher.css';
-import type { SproutInstance } from '../services/api';
 import { supportsSSH } from '../config/mode';
+import type { SproutInstance } from '../services/api';
 import { getPathDisplayName, collapseHomePath } from './locationSwitcher/pathUtils';
-import { useWorkspaceData } from './locationSwitcher/useWorkspaceData';
-import { useSSHData } from './locationSwitcher/useSSHData';
-import { useWorkspaceSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
 import { SSHPanel } from './locationSwitcher/SSHPanel';
-import { WorkspacePopover } from './locationSwitcher/WorkspacePopover';
 import { SSHWorkspacePickerDialog } from './locationSwitcher/SSHWorkspacePickerDialog';
+import { useSSHData } from './locationSwitcher/useSSHData';
+import { useWorkspaceData } from './locationSwitcher/useWorkspaceData';
+import { useWorkspaceSuggestions } from './locationSwitcher/useWorkspaceSuggestions';
+import { WorkspacePopover } from './locationSwitcher/WorkspacePopover';
 
 export interface LocationSwitcherProps {
   isConnected: boolean;

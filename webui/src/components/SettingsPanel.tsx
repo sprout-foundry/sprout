@@ -1,11 +1,22 @@
-import { useRef, useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
 import './SettingsPanel.css';
 import type { SproutSettings } from '../services/api';
 import { Skeleton } from '@sprout/ui';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
+import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
+import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
+import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
+import GeneralSettingsTab from './settings/GeneralSettingsTab';
+import MCPSettingsTab from './settings/MCPSettingsTab';
+import OcrSettingsTab from './settings/OcrSettingsTab';
+import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
+import ProviderSettingsTab from './settings/ProviderSettingsTab';
+import SecuritySettingsTab from './settings/SecuritySettingsTab';
+import SkillsSettingsTab from './settings/SkillsSettingsTab';
+import SubagentSettingsTab from './settings/SubagentSettingsTab';
 import {
   SECTION_GROUPS,
   getSectionForSubsection,
@@ -15,22 +26,11 @@ import {
   type SettingsSection,
   type SettingsPanelProps,
 } from './settings/types';
-import { useSettingsState } from './settings/useSettingsState';
-import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
+import { useSettingsMutation } from './settings/useSettingsMutation';
+import { useSettingsState } from './settings/useSettingsState';
 
 // Import tab sub-components
-import GeneralSettingsTab from './settings/GeneralSettingsTab';
-import SecuritySettingsTab from './settings/SecuritySettingsTab';
-import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
-import OcrSettingsTab from './settings/OcrSettingsTab';
-import SkillsSettingsTab from './settings/SkillsSettingsTab';
-import SubagentSettingsTab from './settings/SubagentSettingsTab';
-import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
-import MCPSettingsTab from './settings/MCPSettingsTab';
-import ProviderSettingsTab from './settings/ProviderSettingsTab';
-import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
-import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
 
 /* ─── Component ──────────────────────────────────────────────── */
 
@@ -165,7 +165,7 @@ function SettingsPanel({
   // Merge with session settings as fallback for missing fields.
   const activeSettings: SproutSettings | null =
     effectiveLayer !== 'session' && state.layerData
-      ? { ...settings, ...state.layerData } as SproutSettings
+      ? ({ ...settings, ...state.layerData } as SproutSettings)
       : settings;
 
   // Sync display ref with active settings (in useEffect to avoid render-time mutation)

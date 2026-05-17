@@ -859,8 +859,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - TYPESCRIPT: Replace `(response.chat_session as any).active_query` with proper type — unsafe type assertion for non-typed field. `webui/src/hooks/useChatSessionManager.ts:144`
 [x] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
 [] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
-[x] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
-[] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — currently only minimal `eslintConfig` in package.json; proper linting is essential for a 131K-line TS project. `webui/package.json`
+[x] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — comprehensive `.eslintrc.json` with React, TypeScript, import ordering, testing-library, and prettier integration; `.prettierrc` with consistent settings; `tsconfig.eslint.json` for test file coverage; npm scripts for lint/format; auto-fixed 724 import-order warnings across codebase. `webui/.eslintrc.json` `webui/.prettierrc` `webui/tsconfig.eslint.json`
 [x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
 [x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
 

@@ -5,8 +5,8 @@
  * Dismissible but re-appears if still disconnected after next poll.
  */
 
-import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import './BackendConnectionBanner.css';
 

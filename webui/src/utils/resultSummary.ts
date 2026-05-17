@@ -3,8 +3,8 @@
  * and formatting tool results for display
  */
 
-import { debugLog } from './log';
 import { stripAnsiCodes } from './ansi';
+import { debugLog } from './log';
 
 /**
  * Truncate text to maxLength characters, adding "..." if needed

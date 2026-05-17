@@ -1,8 +1,8 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
-import { type EditorBuffer } from '../types/editor';
 import { readFileWithConsent } from '../services/fileAccess';
-import { debugLog } from '../utils/log';
 import { notificationBus } from '../services/notificationBus';
+import { type EditorBuffer } from '../types/editor';
+import { debugLog } from '../utils/log';
 
 // Per-path notification cooldown to prevent toast storms from rapid
 // WebSocket-originated file_content_changed events (e.g. build tools

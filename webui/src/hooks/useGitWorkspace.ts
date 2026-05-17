@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { notificationBus } from '../services/notificationBus';
-import type { GitStatusData } from '../types/git-types';
-import type { FileSection } from '../types/git-types';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
-import type { GitBranchesState } from '../types/git-types';
-import { selectionKey, parseSelectionKey } from '../types/git-types';
-import { useLog, debugLog, warn } from '../utils/log';
 import { useEvents } from '../contexts/EventsContext';
-import type { SproutEvent } from '../types/events';
 import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
 import * as workspaceApi from '../services/api/workspaceApi';
+import { notificationBus } from '../services/notificationBus';
+import type { SproutEvent } from '../types/events';
+import type {
+  GitStatusData,
+  FileSection,
+  GitCommitSummary,
+  GitCommitDetail,
+  GitBranchesState,
+} from '../types/git-types';
+import { selectionKey, parseSelectionKey } from '../types/git-types';
+import { useLog, debugLog, warn } from '../utils/log';
 
 export interface GitDiffResponse {
   message: string;

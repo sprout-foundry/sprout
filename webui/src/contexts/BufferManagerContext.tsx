@@ -1,10 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
-import type { EditorBuffer, EditorPane, EditorFileEntry } from '../types/editor';
 import { showThemedPrompt } from '@sprout/ui';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { formatCodeWithConfigDiscovery, isFormattable } from '../services/formatter';
+import type { EditorBuffer, EditorPane, EditorFileEntry } from '../types/editor';
 import { debugLog } from '../utils/log';
-import { useSproutFetch } from './SproutAdapterContext';
 import { writeFileWithFetch } from './fileWriteHelpers';
+import { useSproutFetch } from './SproutAdapterContext';
 
 // ---------------------------------------------------------------------------
 // Pane Bridge Interface for cross-context communication

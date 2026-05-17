@@ -1,10 +1,10 @@
+import { LiveLog } from '@sprout/ui';
+import { Bot, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
 import React from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
-import { LiveLog } from '@sprout/ui';
-import type { ContextSubagentRun, LiveLogLine } from './types';
 import { getPersonaColor, getStatusIcon, formatDuration, formatTime } from './helpers';
-import { Bot, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
+import type { ContextSubagentRun, LiveLogLine } from './types';
 
 interface SubagentsTabProps {
   subagentRuns: ContextSubagentRun[];

@@ -9,8 +9,8 @@
  */
 
 // ── Module under test (Jest hoists mocks above imports) ─────────────
-import { computeStickyScopes, findEnclosingScopes, findScopeEnd, stickyScrollPlugin } from './stickyScroll';
 import { getEnclosingSymbols } from '../utils/symbolUtils';
+import { computeStickyScopes, findEnclosingScopes, findScopeEnd, stickyScrollPlugin } from './stickyScroll';
 import type { SymbolInfo } from './stickyScroll';
 
 // ── Mock CodeMirror modules (ESM internals break Jest 27) ───────────

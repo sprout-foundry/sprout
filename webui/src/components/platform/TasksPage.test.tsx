@@ -2,8 +2,8 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import TasksPage from './TasksPage';
 import { getAdapter } from '../../services/apiAdapter';
+import TasksPage from './TasksPage';
 
 // ---------------------------------------------------------------------------
 // Mocks

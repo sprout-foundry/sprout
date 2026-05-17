@@ -19,11 +19,11 @@
  * - Active parameter is bolded in the signature display.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, keymap } from '@codemirror/view';
 import { Annotation, type Extension } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, keymap } from '@codemirror/view';
 import { ApiService } from '../services/api';
-import { isLSPClientConnected } from './lspExtensions';
 import { debugLog } from '../utils/log';
+import { isLSPClientConnected } from './lspExtensions';
 
 // ── Constants ────────────────────────────────────────────────────────
 

@@ -16,10 +16,10 @@
  * - Falls back to dark/light mode defaults when variables absent.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { type Extension, Annotation } from '@codemirror/state';
-import { extractSymbols, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { debugLog } from '../utils/log';
+import { extractSymbols, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 
 // ── Constants ────────────────────────────────────────────────────────
 

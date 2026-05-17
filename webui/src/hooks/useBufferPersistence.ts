@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
-import type { MutableRefObject } from 'react';
-import type { EditorBuffer } from '../types/editor';
-import type { Dispatch, SetStateAction } from 'react';
-import { writeFileWithConsent } from '../services/fileAccess';
+import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { showThemedPrompt } from '../components/ThemedDialog';
+import { writeFileWithConsent } from '../services/fileAccess';
+import type { EditorBuffer } from '../types/editor';
 import { useLog, warn, debugLog } from '../utils/log';
 
 interface UseBufferPersistenceParams {

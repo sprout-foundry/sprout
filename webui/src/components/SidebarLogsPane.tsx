@@ -1,5 +1,5 @@
-import { useRef, useEffect, useCallback } from 'react';
 import { Download } from 'lucide-react';
+import { useRef, useEffect, useCallback } from 'react';
 import type { ProviderLogEntry } from '../providers/types';
 
 const MAX_LOG_ROWS = 1000;

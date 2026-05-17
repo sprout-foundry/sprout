@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { AppState } from '../types/app';
 import type { Message } from '@sprout/ui';
+import { useCallback, useEffect, useState } from 'react';
+import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import {
   listChatSessions,
@@ -9,10 +9,10 @@ import {
   renameChatSession,
   switchChatSession,
 } from '../services/chatSessions';
+import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
-import { trimMessages } from '../utils/messageWindow';
 import { generateMessageId } from '../utils/messageId';
-import type { AppStoreSetState } from '../contexts/AppStore';
+import { trimMessages } from '../utils/messageWindow';
 
 export interface UseChatSessionManagerParams {
   setState: AppStoreSetState;

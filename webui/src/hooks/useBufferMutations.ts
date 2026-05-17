@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import type { EditorBuffer } from '../types/editor';
 import type { Dispatch, SetStateAction } from 'react';
+import type { EditorBuffer } from '../types/editor';
 
 /**
  * Pure mutation callbacks for the buffers Map.

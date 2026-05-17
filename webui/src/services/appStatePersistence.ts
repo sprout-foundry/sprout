@@ -5,8 +5,8 @@
  * scoped by instance PID and UI context (local vs SSH).
  */
 
-import type { AppState, Message, ToolRef } from '../types/app';
 import { APP_STATE_STORAGE_KEY, INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
+import type { AppState, Message, ToolRef } from '../types/app';
 import { parseDate } from '../utils/dateUtils';
 import { debugLog } from '../utils/log';
 import { notificationBus } from './notificationBus';

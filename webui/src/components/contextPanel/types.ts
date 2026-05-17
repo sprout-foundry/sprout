@@ -1,4 +1,3 @@
-import type { ReactNode, CSSProperties } from 'react';
 import type {
   ToolExecution,
   LogEntry,
@@ -10,6 +9,7 @@ import type {
   Revision,
   RevisionDetailFile,
 } from '@sprout/ui';
+import type { ReactNode, CSSProperties } from 'react';
 import type { SessionEntry } from '../../services/api/types';
 import type { QueryProgress } from '../../types/app';
 

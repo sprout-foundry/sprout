@@ -8,16 +8,16 @@
  * need sendResize from session hook (avoiding circular dependencies).
  */
 
-import { useRef, useEffect, useCallback } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import type { IDisposable } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
+import { Terminal as XTerm } from '@xterm/xterm';
+import type { IDisposable } from '@xterm/xterm';
+import { useRef, useEffect, useCallback } from 'react';
 import '@xterm/xterm/css/xterm.css';
+import { FONT_SIZE_DEFAULT } from '../components/terminalConstants';
 import { registerTerminalFilePathLinks } from '../extensions/terminalFilePaths';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/log';
-import { FONT_SIZE_DEFAULT } from '../components/terminalConstants';
 
 export interface UseTerminalXTermOptions {
   isActive: boolean;

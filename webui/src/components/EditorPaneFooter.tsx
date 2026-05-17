@@ -7,10 +7,9 @@
  */
 
 import type { FC, KeyboardEvent } from 'react';
-
-import LanguageSwitcher from './LanguageSwitcher';
-import type { EditorBuffer } from '../types/editor';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import type { EditorBuffer } from '../types/editor';
+import LanguageSwitcher from './LanguageSwitcher';
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -7,6 +7,7 @@ import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
 import { TasksPage } from '@sprout/ui';
 import { BillingPage, TeamPage } from './platform';
+import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 
@@ -127,6 +128,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   // Refs for values read inside memoized render helpers to keep dependency arrays stable
   const activePaneIdRef = useRef(activePaneId);
   activePaneIdRef.current = activePaneId;
+
+  // Pass the webui's sproutFetch (cloud + local fallback) to TasksPage.
+  const sproutFetch = useSproutFetch();
   const panesRef = useRef(panes);
   panesRef.current = panes;
   const perChatCacheRef = useRef(perChatCache);
@@ -496,7 +500,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }, [handleFocusPaneIndex]);
 
   if (currentView === 'tasks') {
-    return <TasksPage />;
+    return <TasksPage sproutFetch={sproutFetch} />;
   }
 
   if (currentView === 'billing') {

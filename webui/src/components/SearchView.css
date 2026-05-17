@@ -802,6 +802,25 @@
   white-space: pre;
 }
 
+/* ── Duplicate Cluster Hint ─────────────────────────────────── */
+
+.search-duplicate-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--accent-warning, #f0ad4e);
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  border-radius: 0 4px 4px 0;
+}
+
+.search-duplicate-hint-icon {
+  font-size: 14px;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .search-view {

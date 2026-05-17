@@ -434,7 +434,7 @@ describe('cloudEndpointRegistry', () => {
 
     it('should have expected number of foundry-backend endpoints', () => {
       const foundryBackend = getEndpointsByCategory('foundry-backend');
-      expect(foundryBackend.length).toBe(81);
+      expect(foundryBackend.length).toBe(83);
     });
   });
 

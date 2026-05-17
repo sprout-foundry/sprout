@@ -106,7 +106,7 @@ func (l *AgentLogger) writeEntry(level, message string, extraFields map[string]s
 			timestamp := time.Now().Format("15:04:05.000")
 			_, _ = l.file.WriteString(fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, message))
 		} else {
-			fmt.Fprintf(os.Stderr, "[%s] [%s] %s\n", time.Now().Format("15:04:05.000"), level, message)
+			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[%s] [%s] %s\n", time.Now().Format("15:04:05.000"), level, message)))
 		}
 		return
 	}

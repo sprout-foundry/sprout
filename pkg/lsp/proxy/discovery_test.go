@@ -319,6 +319,21 @@ func TestResolveBinaryPathSymlink(t *testing.T) {
 	assert.Equal(t, path, realPath, "path should already be resolved")
 }
 
+// --- Coverage gap tests for discovery.go ---
+
+// TestResolveBinaryPathEvalSymlinkFallback tests the EvalSymlinks failure path.
+// This is difficult to trigger directly since filepath.EvalSymlinks rarely fails
+// on valid paths. We can't easily force this condition without modifying production code.
+// The path is: ResolveBinaryPath calls EvalSymlinks, if it fails, returns original path.
+func TestResolveBinaryPathEvalSymlinkFallbackImpossible(t *testing.T) {
+	t.Run("normal binary still returns resolved path", func(t *testing.T) {
+		// Verify normal operation - EvalSymlinks succeeds
+		path, err := ResolveBinaryPath("cat")
+		require.NoError(t, err)
+		assert.True(t, filepath.IsAbs(path))
+	})
+}
+
 func TestResolveBinaryPathConsistency(t *testing.T) {
 	// Test that ResolveBinaryPath returns consistent results
 	// for the same binary across multiple calls

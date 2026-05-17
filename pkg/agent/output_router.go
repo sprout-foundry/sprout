@@ -161,7 +161,7 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 
 	// Non-streaming terminal fallback: only write assistant text
 	if contentType != "reasoning" {
-		fmt.Print(chunk)
+		_, _ = os.Stdout.Write([]byte(chunk))
 	}
 }
 
@@ -233,12 +233,12 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 
 	// Direct terminal output
 	if configuration.GetEnvSimple("CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		fmt.Print(message)
+		_, _ = os.Stdout.Write([]byte(message))
 		return
 	}
 
-	fmt.Print("\r\033[K")
-	fmt.Print(message)
+	_, _ = os.Stdout.Write([]byte("\r\033[K"))
+	_, _ = os.Stdout.Write([]byte(message))
 }
 
 // RouteToolLog routes a tool execution log message with iteration and context info.

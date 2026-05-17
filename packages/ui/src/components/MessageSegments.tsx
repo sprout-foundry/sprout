@@ -42,12 +42,12 @@ const SHORT_TOOL_NAMES: { [key: string]: string } = {
   'edit_file': 'edit',
   'shell_command': 'shell',
   'search_files': 'search',
-  'analyze_ui_screenshot': 'screenshot',
-  'analyze_image_content': 'image',
-  'web_search': 'web',
-  'fetch_url': 'fetch',
-  'TodoWrite': 'todo',
-  'TodoRead': 'todo',
+  'analyze_ui_screenshot': 'UI screenshot',
+  'analyze_image_content': 'analyze image',
+  'web_search': 'web search',
+  'fetch_url': 'fetch url',
+  'TodoWrite': 'todo write',
+  'TodoRead': 'todo read',
   'view_history': 'history',
   'rollback_changes': 'rollback',
   'mcp_tools': 'mcp',
@@ -55,8 +55,12 @@ const SHORT_TOOL_NAMES: { [key: string]: string } = {
   'run_parallel_subagents': 'subagents',
 };
 
-const getShortToolName = (toolName: string): string =>
-  SHORT_TOOL_NAMES[toolName] ?? toolName;
+const getShortToolName = (toolName: string): string => {
+  if (SHORT_TOOL_NAMES[toolName]) return SHORT_TOOL_NAMES[toolName];
+  // Fallback: replace underscores with spaces, max 2 words
+  const words = toolName.replace(/_/g, ' ').split(' ');
+  return words.slice(0, 2).join(' ');
+};
 
 const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [], onToolClick, onToolRefClick, getToolStatus }) => {
   let segments: MessageSegment[];
@@ -118,7 +122,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             }
 
             return (
-              <div
+              <span
                 key={`seg-${idx}`}
                 className="segment-tool-call"
                 role={matchingRef || onToolClick ? 'button' : undefined}
@@ -145,7 +149,7 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
                 <span className="tool-pill-icon">{getToolIcon(baseName)}</span >
                 <span className="tool-pill-name">{getShortToolName(baseName)}</span >
                 <ExternalLink size={10} className="tool-pill-link-icon" />
-              </div >
+              </span >
             );
           }
 

@@ -10,6 +10,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -155,7 +156,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 
 	// Validate that the operation type is known
 	if !isValidGitOperation(operation) {
-		validOpNames := []string{"commit", "push", "add", "rm", "mv", "reset", "rebase", "merge", "checkout", "branch_delete", "tag", "clean", "stash", "am", "apply", "cherry_pick", "revert"}
+		validOpNames := []string{"commit", "push", "add", "rm", "mv", "reset", "rebase", "merge", "checkout", "branch_delete", "tag", "clean", "stash", "am", "apply", "cherry_pick", "revert", "pull", "fetch", "restore"}
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("invalid git operation type '%s'. Valid operations: %s. For read-only operations like status, log, diff, etc., use shell_command instead.", operationParam, strings.Join(validOpNames, ", ")), nil)
 	}
 
@@ -174,11 +175,18 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 		return handleGitCommitOperation(a)
 	}
 
+	// Enrich context with workspace root so executeGitCommand runs in the
+	// correct directory. The seed execution path passes a bare context
+	// without workspace metadata, so we inject it from the agent's config.
+	if wsRoot := a.currentWorkspaceRoot(); wsRoot != "" {
+		ctx = filesystem.WithWorkspaceRoot(ctx, wsRoot)
+	}
+
 	// repo_orchestrator can stage files and push without approval.
 	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
 	// user approval regardless of persona.
 	isRepoOrchestrator := a.GetActivePersona() == "repo_orchestrator"
-	allowWithoutApproval := isRepoOrchestrator && (operation == tools.GitOpAdd || operation == tools.GitOpPush)
+	allowWithoutApproval := isRepoOrchestrator && (operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch)
 
 	var approvalPrompter tools.GitApprovalPrompter
 	if !allowWithoutApproval {
@@ -207,6 +215,7 @@ func isValidGitOperation(op tools.GitOperationType) bool {
 		tools.GitOpMerge, tools.GitOpCheckout, tools.GitOpBranchDelete,
 		tools.GitOpTag, tools.GitOpClean, tools.GitOpStash,
 		tools.GitOpAm, tools.GitOpApply, tools.GitOpCherryPick, tools.GitOpRevert,
+		tools.GitOpPull, tools.GitOpFetch, tools.GitOpRestore,
 	}
 
 	for _, validOp := range validOps {
@@ -245,26 +254,40 @@ type gitApprovalPrompterAdapter struct {
 	agent *Agent
 }
 
-// PromptForApproval prompts the user for approval to execute a git write operation
+// PromptForApproval prompts the user for approval to execute a git write operation.
+// When a WebUI client is connected, the approval request is routed through the event
+// bus so a dialog appears in the browser. Otherwise it falls back to the terminal UI
+// or stdin.
 func (a *gitApprovalPrompterAdapter) PromptForApproval(command string) (bool, error) {
-	// Build the approval prompt
+	ag := a.agent
+
+	// Prefer the WebUI approval path when a browser tab is connected and the
+	// security approval manager is available. This mirrors the pattern used by
+	// the main ExecuteTool security flow in tool_definitions.go.
+	if mgr := ag.GetSecurityApprovalMgr(); mgr != nil && ag.GetEventBus() != nil && !ag.IsSubagent() && ag.HasActiveWebUIClients() {
+		if ag.debug {
+			ag.debugLog("[GIT] Requesting git approval via webui for: %s\n", command)
+		}
+		clientID := ag.GetEventClientID()
+		userID := ag.GetEventUserID()
+		approved := mgr.RequestToolApproval(ag.GetEventBus(), clientID, userID, "git", "CAUTION", fmt.Sprintf("Git operation: %s", command), nil)
+		return approved, nil
+	}
+
+	// Terminal UI or stdin fallback
 	prompt := fmt.Sprintf("Execute git command: %s", command)
 
-	// Define choices
 	choices := []ChoiceOption{
 		{Label: "Approve", Value: "y"},
 		{Label: "Cancel", Value: "n"},
 	}
 
-	// Show the command to be executed
 	fmt.Printf("\n[LOCK] Git Operation Requires Approval\n")
 	fmt.Printf("Command: %s\n", command)
 	fmt.Printf("\n")
 
-	// Prompt for choice
-	choice, err := a.agent.PromptChoice(prompt, choices)
+	choice, err := ag.PromptChoice(prompt, choices)
 	if err != nil {
-		// If UI is not available, fall back to stdin prompt
 		if err == ErrUINotAvailable {
 			return tools.PromptForGitApprovalStdin(command)
 		}

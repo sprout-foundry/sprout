@@ -15,9 +15,36 @@ interface FoundryTask {
   updated_at?: string;
 }
 
-const TasksPage: React.FC = () => {
-  const adapter = useSproutAdapter();
+/**
+ * Signature matching both the adapter's fetch and the webui's useSproutFetch.
+ */
+type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export interface TasksPageProps {
+  /**
+   * Optional fetch callback. When supplied, TasksPage uses this for all HTTP
+   * calls instead of looking up the @sprout/ui SproutAdapterContext.
+   *
+   * This is the integration point for consumers (e.g. the webui) that need to
+   * inject their own context-aware fetch (e.g. the webui's useSproutFetch
+   * which handles both cloud adapter and local clientFetch).
+   *
+   * When omitted, TasksPage falls back to the @sprout/ui SproutAdapterContext
+   * (i.e. useSproutAdapter from the package itself).
+   */
+  sproutFetch?: FetchFn;
+}
+
+const TasksPage: React.FC<TasksPageProps> = ({ sproutFetch }) => {
   const log = useLog();
+
+  // Always call the hook unconditionally (Rules of Hooks).
+  // useSproutAdapter returns null when no SproutProvider is in the tree.
+  const adapter = useSproutAdapter();
+
+  // Prefer the injected sproutFetch when provided; fall back to the adapter.
+  const doFetch: FetchFn | undefined = sproutFetch ?? adapter?.fetch;
+  const available = !!doFetch;
 
   const [tasks, setTasks] = useState<FoundryTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +61,7 @@ const TasksPage: React.FC = () => {
   const [model, setModel] = useState('');
 
   const fetchTasks = useCallback(async () => {
-    if (!adapter) {
+    if (!available) {
       setError('Not available - running in local mode');
       setLoading(false);
       return;
@@ -44,7 +71,7 @@ const TasksPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await adapter.fetch('/api/tasks');
+      const response = await doFetch('/api/tasks');
       if (!response.ok) {
         throw new Error(`Failed to fetch tasks: ${response.status} ${response.statusText}`);
       }
@@ -57,7 +84,7 @@ const TasksPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [adapter, log]);
+  }, [available, doFetch, log]);
 
   useEffect(() => {
     fetchTasks();
@@ -65,7 +92,7 @@ const TasksPage: React.FC = () => {
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adapter) {
+    if (!available) {
       setCreateError('Not available - running in local mode');
       return;
     }
@@ -82,7 +109,7 @@ const TasksPage: React.FC = () => {
       if (provider) body.provider = provider;
       if (model) body.model = model;
 
-      const response = await adapter.fetch('/api/tasks', {
+      const response = await doFetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -132,6 +159,10 @@ const TasksPage: React.FC = () => {
   const formatTaskId = (id: string) => {
     return id.length > 12 ? id.slice(0, 8) + '\u2026' + id.slice(-4) : id;
   };
+
+  // ------------------------------------------------------------------
+  // Render
+  // ------------------------------------------------------------------
 
   return (
     <div className="sprout-platform-page">

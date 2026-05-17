@@ -146,7 +146,14 @@ func executeGitCommand(ctx context.Context, op GitOperationType, args string) (s
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("git command: %w\nOutput: %s", err, string(output))
+		out := strings.TrimSpace(string(output))
+		if len(out) > 500 {
+			out = out[:500] + "..."
+		}
+		if out != "" {
+			return "", fmt.Errorf("git command: %s: %w", out, err)
+		}
+		return "", fmt.Errorf("git command: %w", err)
 	}
 
 	return string(output), nil

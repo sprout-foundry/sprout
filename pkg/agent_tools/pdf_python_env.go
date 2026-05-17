@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -81,8 +80,8 @@ func getSystemPython3Executable() (string, error) {
 
 func createVenv(systemPython, venvDir string) error {
 	cmd := exec.Command(systemPython, "-m", "venv", venvDir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("create PDF venv at %s: %w: %s", venvDir, err, strings.TrimSpace(string(out)))
+	if _, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("create PDF venv at %s: %w", venvDir, err)
 	}
 	return nil
 }
@@ -96,13 +95,13 @@ func ensurePDFPythonDependencies(venvPython string) error {
 	installCmd := exec.Command(
 		venvPython, "-m", "pip", "install", "--disable-pip-version-check", "pypdf", "Pillow", "pypdfium2",
 	)
-	if out, err := installCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("install PDF Python dependencies: %w: %s", err, strings.TrimSpace(string(out)))
+	if _, err := installCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("install PDF Python dependencies: %w", err)
 	}
 
 	recheckCmd := exec.Command(venvPython, "-c", "import pypdf; from PIL import Image; import pypdfium2")
-	if out, err := recheckCmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("validate PDF Python dependencies: %w: %s", err, strings.TrimSpace(string(out)))
+	if _, err := recheckCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("validate PDF Python dependencies: %w", err)
 	}
 
 	return nil

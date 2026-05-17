@@ -211,11 +211,11 @@ func TestBoost_SetGitDir_EmptyClears(t *testing.T) {
 // =====================================================================
 
 func TestBoost_GitHelpers_InTempRepo(t *testing.T) {
+	// Shared setup: create an initialized git repo with one committed file
 	tmpDir := t.TempDir()
 	SetGitDir(tmpDir)
 	defer SetGitDir("")
 
-	// Init git repo
 	cmd := exec.Command("git", "init")
 	cmd.Dir = tmpDir
 	require.NoError(t, cmd.Run())
@@ -258,31 +258,41 @@ func TestBoost_GitHelpers_InTempRepo(t *testing.T) {
 	})
 
 	t.Run("getStagedFiles_withStaged", func(t *testing.T) {
+		// Self-contained: modify and stage, then verify
 		require.NoError(t, os.WriteFile(testFile, []byte("modified"), 0644))
-		cmd = exec.Command("git", "add", "test.txt")
-		cmd.Dir = tmpDir
-		require.NoError(t, cmd.Run())
+		stageCmd := exec.Command("git", "add", "test.txt")
+		stageCmd.Dir = tmpDir
+		require.NoError(t, stageCmd.Run())
 
 		files, err := getStagedFiles()
 		assert.NoError(t, err)
 		assert.Contains(t, files, "test.txt")
+
+		// Cleanup: commit so the staging area is clean for subsequent tests
+		commitCmd := exec.Command("git", "commit", "-m", "stage test")
+		commitCmd.Dir = tmpDir
+		require.NoError(t, commitCmd.Run())
 	})
 
 	t.Run("getPorcelainStatusLines", func(t *testing.T) {
+		// Self-contained: create untracked file, verify it appears
 		newFile := tmpDir + "/new.txt"
 		require.NoError(t, os.WriteFile(newFile, []byte("new"), 0644))
 
 		lines, err := getPorcelainStatusLines()
 		assert.NoError(t, err)
 		assert.NotEmpty(t, lines)
+
+		// Cleanup: remove the untracked file so it doesn't affect later tests
+		require.NoError(t, os.Remove(newFile))
 	})
 
 	t.Run("CommitFlow_getGitStatus", func(t *testing.T) {
 		cf := &CommitFlow{}
 		staged, unstaged, err := cf.getGitStatus()
 		assert.NoError(t, err)
-		// May or may not have files, but should not error
-		_ = staged
+		// Staging area should be clean after prior cleanup
+		assert.Empty(t, staged)
 		_ = unstaged
 	})
 }
@@ -449,15 +459,14 @@ func TestBoost_IndexCommand_Enable(t *testing.T) {
 	a := agent.NewTestAgent()
 	output := captureOutput(func() {
 		err := c.Execute([]string{"enable"}, a)
-		// EnableEmbeddingIndex on TestAgent succeeds or returns error
-		// Either way, the output should mention index-related text
 		if err != nil {
-			assert.NotContains(t, err.Error(), "unknown action")
+			// TestAgent may not support full embedding index setup
+			assert.Contains(t, err.Error(), "indexing", "error should relate to indexing")
 		}
 	})
-	// Output should contain index-related text on success path
+	// On success path, output mentions "index"
 	if len(output) > 0 {
-		assert.Contains(t, output, "index")
+		assert.Contains(t, output, "index", "output should mention index-related text")
 	}
 }
 
@@ -552,20 +561,6 @@ func TestBoost_CommitStagedWithMessage_NoGitDir(t *testing.T) {
 	defer SetGitDir("")
 
 	cf := &CommitFlow{}
-	err := cf.CommitStagedWithMessage()
-	assert.Error(t, err)
-}
-
-// =====================================================================
-// CommitFlow CommitStagedWithMessage with nil agent (0% coverage)
-// =====================================================================
-
-func TestBoost_CommitStagedWithMessage_NilAgent_TempRepo(t *testing.T) {
-	tmpDir := t.TempDir()
-	SetGitDir(tmpDir)
-	defer SetGitDir("")
-
-	cf := &CommitFlow{agent: nil}
 	err := cf.CommitStagedWithMessage()
 	assert.Error(t, err)
 }

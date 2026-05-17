@@ -166,7 +166,7 @@ describe('BillingPage', () => {
 
   it('calls adapter.fetch with /api/billing/invoices on mount', () => {
     renderSync();
-    expect(mockFetch).toHaveBeenCalledWith('/api/billing/invoices?limit=10');
+    expect(mockFetch).toHaveBeenCalledWith('/api/billing/invoices');
   });
 
   it('does not show error state on initial render with adapter', () => {

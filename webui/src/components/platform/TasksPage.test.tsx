@@ -41,7 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFetch = vi.fn().mockResolvedValue({
     ok: true,
-    json: () => Promise.resolve({ tasks: [] }),
+    json: () => Promise.resolve({ tasks: [], count: 0 }),
   });
   getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
 });
@@ -101,7 +101,7 @@ describe('TasksPage', () => {
     renderSync();
     // The fetch is initiated inside useEffect but may not have completed yet.
     // Verify the call was initiated.
-    expect(mockFetch).toHaveBeenCalledWith('/api/foundry/tasks');
+    expect(mockFetch).toHaveBeenCalledWith('/api/tasks');
   });
 
   it('fetches tasks only once on mount', () => {
@@ -126,5 +126,14 @@ describe('TasksPage', () => {
     getAdapter.mockReturnValue({ name: 'test-adapter', fetch: mockFetch });
     renderSync();
     expect(container.querySelector('.platform-page-empty')).toBeNull();
+  });
+
+  it('shows New Task button in header', () => {
+    renderSync();
+    const buttons = container.querySelectorAll('button');
+    const newTaskButton = Array.from(buttons).find(
+      (b) => b.textContent.includes('New Task'),
+    );
+    expect(newTaskButton).not.toBeUndefined();
   });
 });

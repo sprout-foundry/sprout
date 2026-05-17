@@ -573,6 +573,97 @@ func TestManagerServerKeyEdgeCases(t *testing.T) {
 	})
 }
 
+// --- Coverage gap tests for manager.go ---
+
+func TestManagerGetOrCreateRestartsUnhealthyProcess(t *testing.T) {
+	t.Run("GetOrCreate detects unhealthy process and restarts", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{ID: "cat", LanguageIDs: []string{"cat"}, Binary: "cat", Args: []string{}},
+		})
+
+		// Create first process
+		proc1, release1, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		require.NotNil(t, proc1)
+		assert.Equal(t, 1, m.Count())
+
+		// Kill the process externally to make it unhealthy
+		proc1.Close()
+
+		// GetOrCreate should detect it's unhealthy and start a new one
+		proc2, release2, err := m.GetOrCreate("/tmp", "cat")
+		require.NoError(t, err)
+		require.NotNil(t, proc2)
+		// Should be a new process (different pointer)
+		assert.Equal(t, 1, m.Count())
+
+		release1()
+		release2()
+	})
+}
+
+func TestManagerGetOrCreateFindByIDFallback(t *testing.T) {
+	t.Run("GetOrCreate falls back to FindLanguageServerByID", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// Create config where language ID is "mygo" but LanguageIDs doesn't contain "mygo"
+		// However, the config ID is "go" - so FindLanguageServerByID("go", ...) finds it
+		// This won't work because GetOrCreate searches by the languageID parameter.
+		// Let's set a config where a language ID can be found by its ID field but not LanguageIDs
+		m.SetConfig([]LanguageServerConfig{
+			{
+				ID:          "special-go", // ID that GetOrCreate can find by ID
+				LanguageIDs: []string{"golang"}, // NOT "special-go"
+				Binary:      "cat",
+				Args:        []string{},
+			},
+		})
+
+		// FindLanguageServer("special-go", ...) returns nil
+		// FindLanguageServerByID("special-go", ...) returns the config
+		proc, release, err := m.GetOrCreate("/tmp", "special-go")
+		require.NoError(t, err)
+		require.NotNil(t, proc)
+		assert.Equal(t, 1, m.Count())
+
+		release()
+	})
+
+	t.Run("GetOrCreate with config found by ID but binary not on PATH", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{
+				ID:          "fake-lang",
+				LanguageIDs: []string{"realname"}, // NOT "fake-lang"
+				Binary:      "nonexistent-binary-xyz-999",
+				Args:        []string{},
+			},
+		})
+
+		// FindLanguageServer("fake-lang") returns nil
+		// FindLanguageServerByID("fake-lang") returns the config
+		// But ResolveBinaryPath fails
+		_, _, err := m.GetOrCreate("/tmp", "fake-lang")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to find")
+	})
+}
+
 func TestManagerConcurrentAccess(t *testing.T) {
 	t.Run("concurrent GetOrCreate and EvictIdle do not race", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())

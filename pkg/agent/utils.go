@@ -34,7 +34,7 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 		_, _ = a.debugLogFile.WriteString(fmt.Sprintf("[%s] %s", timestamp, msg))
 		return
 	}
-	fmt.Fprint(os.Stderr, msg)
+	_, _ = os.Stderr.Write([]byte(msg))
 }
 
 // getModelContextLimit returns the maximum context window for a model from the API
@@ -147,7 +147,7 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 		}
 	}
 
-	fmt.Print(message)
+	_, _ = os.Stdout.Write([]byte(message))
 }
 
 // estimateContextTokens estimates the token count for messages
@@ -325,5 +325,5 @@ func (a *Agent) ToolLog(action string, target string) {
 	// Fallback for when router isn't initialized yet
 	message := fmt.Sprintf("%s %s", action, target)
 	a.PublishAgentMessage("tool_log", message, nil)
-	fmt.Print(message + "\n")
+	_, _ = os.Stdout.Write([]byte(message + "\n"))
 }

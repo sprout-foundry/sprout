@@ -35,13 +35,19 @@ func TestCookieSyncMiddleware_SetsCookieFromHeader(t *testing.T) {
 		t.Errorf("cookie path = %q; want /", c.Path)
 	}
 	if c.HttpOnly {
-		t.Error("cookie must NOT be HttpOnly — JS must be able to read it for cross-origin recovery")
+		t.Error("cookie must NOT be HttpOnly — JS must be able to read it for same-origin recovery")
 	}
 	if c.SameSite != http.SameSiteLaxMode {
 		t.Errorf("cookie SameSite = %v (same-origin, no Origin header); want %v", c.SameSite, http.SameSiteLaxMode)
 	}
 	if c.Secure {
 		t.Error("cookie should NOT be Secure for same-origin requests")
+	}
+
+	// Verify X-Sprout-Client-ID response header is set (for cross-origin sync)
+	respClientID := w.Result().Header.Get(clientIDResponseHeader)
+	if respClientID != "test-client-123" {
+		t.Errorf("X-Sprout-Client-ID header = %q; want %q", respClientID, "test-client-123")
 	}
 }
 
@@ -68,6 +74,12 @@ func TestCookieSyncMiddleware_SameSiteNoneForCrossOriginHTTPS(t *testing.T) {
 	}
 	if !c.Secure {
 		t.Error("cookie must be Secure for cross-origin HTTPS (SameSite=None requires Secure)")
+	}
+
+	// Verify response header is set for cross-origin client sync
+	respClientID := w.Result().Header.Get(clientIDResponseHeader)
+	if respClientID != "cross-origin-client" {
+		t.Errorf("X-Sprout-Client-ID header = %q; want %q", respClientID, "cross-origin-client")
 	}
 }
 
@@ -142,6 +154,12 @@ func TestCookieSyncMiddleware_NoHeaderUsesDefault(t *testing.T) {
 	if c.Value != defaultWebClientID {
 		t.Errorf("cookie value = %q; want %q", c.Value, defaultWebClientID)
 	}
+
+	// Response header should also carry the default
+	respClientID := w.Result().Header.Get(clientIDResponseHeader)
+	if respClientID != defaultWebClientID {
+		t.Errorf("X-Sprout-Client-ID header = %q; want %q", respClientID, defaultWebClientID)
+	}
 }
 
 func TestCookieSyncMiddleware_ReadsCookieAsFallback(t *testing.T) {
@@ -166,6 +184,12 @@ func TestCookieSyncMiddleware_ReadsCookieAsFallback(t *testing.T) {
 	c := cookies[0]
 	if c.Value != "persisted-client-456" {
 		t.Errorf("cookie value = %q; want %q (should persist from existing cookie)", c.Value, "persisted-client-456")
+	}
+
+	// Response header should echo the persisted client ID
+	respClientID := w.Result().Header.Get(clientIDResponseHeader)
+	if respClientID != "persisted-client-456" {
+		t.Errorf("X-Sprout-Client-ID header = %q; want %q", respClientID, "persisted-client-456")
 	}
 }
 
@@ -193,6 +217,12 @@ func TestCookieSyncMiddleware_HeaderOverridesCookie(t *testing.T) {
 	if c.Value != "new-client-789" {
 		t.Errorf("cookie value = %q; want %q (header should override cookie)", c.Value, "new-client-789")
 	}
+
+	// Response header should echo the header value (header wins)
+	respClientID := w.Result().Header.Get(clientIDResponseHeader)
+	if respClientID != "new-client-789" {
+		t.Errorf("X-Sprout-Client-ID header = %q; want %q", respClientID, "new-client-789")
+	}
 }
 
 func TestCookieSyncMiddleware_SanitizesCookieValue(t *testing.T) {
@@ -218,6 +248,12 @@ func TestCookieSyncMiddleware_SanitizesCookieValue(t *testing.T) {
 	}
 	if c.Value == "" {
 		t.Error("cookie value should not be empty after sanitization")
+	}
+
+	// Response header should also be sanitized
+	respClientID := w.Result().Header.Get(clientIDResponseHeader)
+	if respClientID == "../../etc/passwd" {
+		t.Errorf("X-Sprout-Client-ID header was NOT sanitized: got %q", respClientID)
 	}
 }
 

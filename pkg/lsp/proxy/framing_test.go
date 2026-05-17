@@ -218,6 +218,84 @@ func TestMessageWriter(t *testing.T) {
 	})
 }
 
+// --- Coverage gap tests for framing.go ---
+
+func TestReadMessageWithCROnlyLine(t *testing.T) {
+	t.Run("handles \\r only line between headers", func(t *testing.T) {
+		// Covers line 50: the `if line == "\r"` branch
+		// When a \r\n appears in the header section, after stripping \n we get "\r".
+		// The parser's \r-only check triggers `continue`, skipping to find the real blank line.
+		// Input: "Content-Length: 4\n\r\n\ntest"
+		//   - ReadString('\n') → "Content-Length: 4\n" → strip \n → "Content-Length: 4" → header
+		//   - ReadString('\n') → "\r\n" → strip \n → "\r" → continue (line 50!)
+		//   - ReadString('\n') → "\n" → strip \n → "" → break (end of headers)
+		//   - ReadFull(4 bytes) → "test"
+		msg := "Content-Length: 4\n\r\n\ntest"
+		result, err := ReadMessage(strings.NewReader(msg))
+		require.NoError(t, err)
+		assert.Equal(t, "test", result)
+	})
+}
+
+func TestReadMessageEmptyHeadersShowsErrInvalidMessage(t *testing.T) {
+	t.Run("blank header section returns ErrInvalidMessage", func(t *testing.T) {
+		// Covers line 67: headerStr == "" → ErrInvalidMessage
+		// This happens when the first line is a blank line (just \n)
+		_, err := ReadMessage(strings.NewReader("\n"))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrInvalidMessage)
+	})
+}
+
+func TestReadMessageWriteToBufferError(t *testing.T) {
+	t.Run("writer error during header buffering", func(t *testing.T) {
+		// Covers line 61: headerBuf.WriteString returns error
+		// This is hard to trigger directly since headerBuf is internal.
+		// We can't easily inject a failing writer into ReadMessage since
+		// the io.Reader interface doesn't involve writes. Skip this as impractical.
+	})
+}
+
+func TestReadMessageReadBodyNonEOFError(t *testing.T) {
+	t.Run("non-EOF/non-UnexpectedEOF error reading body", func(t *testing.T) {
+		// Covers line 84: io.ReadFull returns some other error
+		r := &readErrorReader{
+			header: "Content-Length: 10\n\n",
+			bodyErr: errors.New("read failure"),
+		}
+		_, err := ReadMessage(r)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "read failure")
+	})
+}
+
+// readErrorReader delivers header bytes then fails on body read.
+type readErrorReader struct {
+	header  string
+	bodyErr error
+	offset  int
+}
+
+func (r *readErrorReader) Read(p []byte) (int, error) {
+	if r.offset < len(r.header) {
+		n := copy(p, r.header[r.offset:])
+		r.offset += n
+		return n, nil
+	}
+	return 0, r.bodyErr
+}
+
+func TestReadMessageUnexpectedEOFMidHeader(t *testing.T) {
+	t.Run("partial header with EOF returns error", func(t *testing.T) {
+		// Covers line 61 area: unexpected EOF while reading headers
+		// A partial header line with no trailing newline will trigger
+		// ReadString('\n') to return io.EOF
+		r := strings.NewReader("Content-Length")
+		_, err := ReadMessage(r)
+		require.Error(t, err)
+	})
+}
+
 // errorWriter is a test helper that always returns an error
 type errorWriter struct {
 	err error

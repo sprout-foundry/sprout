@@ -40,6 +40,38 @@ type OSKeyringBackend struct {
 	service string
 }
 
+// safeKeyringGet wraps keyring.Get with panic recovery.
+// The go-keyring library panics on unsupported platforms (Android/Termux, headless)
+// instead of returning an error. This wrapper converts panics to errors.
+func safeKeyringGet(service, key string) (val string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("keyring get panic: %v", r)
+		}
+	}()
+	return keyring.Get(service, key)
+}
+
+// safeKeyringSet wraps keyring.Set with panic recovery.
+func safeKeyringSet(service, key, value string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("keyring set panic: %v", r)
+		}
+	}()
+	return keyring.Set(service, key, value)
+}
+
+// safeKeyringDelete wraps keyring.Delete with panic recovery.
+func safeKeyringDelete(service, key string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("keyring delete panic: %v", r)
+		}
+	}()
+	return keyring.Delete(service, key)
+}
+
 // NewOSKeyringBackend creates a new OS keyring backend.
 func NewOSKeyringBackend() *OSKeyringBackend {
 	return &OSKeyringBackend{
@@ -56,7 +88,7 @@ func (b *OSKeyringBackend) Get(provider string) (string, error) {
 		return "", fmt.Errorf("provider name cannot be empty")
 	}
 
-	value, err := keyring.Get(b.service, provider)
+	value, err := safeKeyringGet(b.service, provider)
 	if err == keyring.ErrNotFound {
 		// Keyring doesn't have this credential - return empty, no error
 		// This matches the behavior of the file store
@@ -88,7 +120,7 @@ func (b *OSKeyringBackend) Set(provider, value string) error {
 	// Trim whitespace from value to store canonical form
 	value = strings.TrimSpace(value)
 
-	err := keyring.Set(b.service, provider, value)
+	err := safeKeyringSet(b.service, provider, value)
 	if err != nil {
 		return fmt.Errorf("failed to store credential in keyring for provider %q: %w", provider, err)
 	}
@@ -104,7 +136,7 @@ func (b *OSKeyringBackend) Delete(provider string) error {
 		return fmt.Errorf("provider name cannot be empty")
 	}
 
-	err := keyring.Delete(b.service, provider)
+	err := safeKeyringDelete(b.service, provider)
 	if err == keyring.ErrNotFound {
 		// Key doesn't exist - this is not an error
 		return nil
@@ -189,19 +221,24 @@ func (b *FileBackend) Delete(provider string) error {
 }
 
 // IsKeyringAvailable checks if the OS keyring is available for use.
-// This is useful for auto-detection of the preferred backend.
-func IsKeyringAvailable() bool {
+// It is safe to call on any platform — panics from the underlying keyring
+// library (e.g. on Android/Termux where no keyring service exists) are
+// recovered and treated as "unavailable".
+func IsKeyringAvailable() (available bool) {
+	// Recover from panics in go-keyring on unsupported platforms (Android, headless, etc.)
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[credentials] OS keyring not available (panic): %v", r)
+			available = false
+		}
+	}()
+
 	backend := NewOSKeyringBackend()
 	_, err := backend.Get(keyringProbeProvider)
-	// If we get ErrNotFound or no error, keyring is available
-	// If we get any other error, keyring is not available
-	if err == keyring.ErrNotFound {
-		return true
-	}
 	if err != nil {
 		log.Printf("[credentials] OS keyring not available: %v", err)
 		return false
 	}
-	// Probe key exists - keyring is available
+	// No error means keyring responded successfully (entry absent or present).
 	return true
 }

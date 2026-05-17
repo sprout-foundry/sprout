@@ -8,7 +8,10 @@ interface SemanticSearchResultsProps extends SemanticResultCallbacks {
 
 /**
  * Renders semantic search results: file-level cards and code-unit cards
- * with similarity bars and optional cluster badges.
+ * with similarity bars, cluster badges, and inline duplicate hints.
+ *
+ * Results with a cluster_id > 0 are grouped together with a warning
+ * banner that explains they share similar patterns.
  */
 function SemanticSearchResults({
   results,
@@ -16,8 +19,75 @@ function SemanticSearchResults({
   onMouseEnter,
   onMouseLeave,
 }: SemanticSearchResultsProps): JSX.Element {
+  // Partition into clustered and non-clustered, preserving original order.
+  const clustered = results.filter((r) => r.cluster_id && r.cluster_id > 0);
+  const nonClustered = results.filter((r) => !r.cluster_id || r.cluster_id === 0);
+
+  // Group clustered results by cluster_id, preserving insertion order.
+  const clusterMap = new Map<number, SemanticSearchResult[]>();
+  for (const r of clustered) {
+    const id = r.cluster_id!;
+    if (!clusterMap.has(id)) clusterMap.set(id, []);
+    clusterMap.get(id)!.push(r);
+  }
+
   return (
     <>
+      {/* Render each cluster group with a hint banner */}
+      {Array.from(clusterMap.entries()).map(([clusterId, clusterResults]) => (
+        <ClusterGroup
+          key={clusterId}
+          clusterId={clusterId}
+          results={clusterResults}
+          onFileClick={onFileClick}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+      ))}
+
+      {/* Render non-clustered results in original order */}
+      {nonClustered.map((result) => {
+        if (result.type === 'file') {
+          return <SemanticFileResult key={`file-${result.file}`} result={result} onFileClick={onFileClick} />;
+        }
+
+        return (
+          <SemanticCodeUnitResult
+            key={`${result.file}-${result.start_line}`}
+            result={result}
+            onFileClick={onFileClick}
+            onMouseEnter={onMouseEnter}
+            onMouseLeave={onMouseLeave}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+// ── Internal: cluster group with hint banner ──────────────────
+
+interface ClusterGroupProps {
+  clusterId: number;
+  results: SemanticSearchResult[];
+  onFileClick: (filePath: string, lineNumber?: number) => void;
+  onMouseEnter: (e: MouseEvent<HTMLDivElement>, result: SemanticSearchResult) => void;
+  onMouseLeave: () => void;
+}
+
+function ClusterGroup({
+  clusterId,
+  results,
+  onFileClick,
+  onMouseEnter,
+  onMouseLeave,
+}: ClusterGroupProps): JSX.Element {
+  return (
+    <>
+      <div className="search-duplicate-hint">
+        <span className="search-duplicate-hint-icon">⚠️</span>
+        {results.length} result{results.length > 1 ? 's' : ''} share similar patterns (cluster {clusterId})
+      </div>
       {results.map((result) => {
         if (result.type === 'file') {
           return <SemanticFileResult key={`file-${result.file}`} result={result} onFileClick={onFileClick} />;

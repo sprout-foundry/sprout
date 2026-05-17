@@ -86,13 +86,13 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleShellCommand,
 	})
 
-	// Register git tool - handles write operations that require approval
+	// Register git tool - handles operations that modify repository state or require network access
 	registry.RegisterTool(ToolConfig{
 		Name:        "git",
-		Description: "Execute git write operations that modify the repository. All operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, etc.), use the shell_command tool instead.",
+		Description: "Execute git operations that modify repository state or require network access. All destructive operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, branch, show), use shell_command instead.",
 		Parameters: []ParameterConfig{
-			{"operation", "string", true, []string{"op"}, "Git operation type: commit, push, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert"},
-			{"args", "string", false, []string{}, "Arguments to pass to the git command (optional)"},
+			{"operation", "string", true, []string{"op"}, "Git operation type: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
+			{"args", "string", false, []string{}, "Arguments to pass to the git command (optional). For pull: --rebase, --ff-only, remote/branch. For fetch: --all, --prune, remote. For restore: --staged, pathspec."},
 		},
 		Handler: handleGitOperation,
 	})
@@ -478,20 +478,16 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
-		// CRITICAL: Prevent subagents from creating nested subagents
-	// This check ensures that subagents cannot spawn further subagents, preventing runaway agent chains
-	if agent != nil && agent.IsSubagent() {if toolName == "run_subagent" || toolName == "run_parallel_subagents" || toolName == "ask_user" {
-			var errMsg string
-			switch toolName {
-			case "ask_user":
-				errMsg = "SUBAGENT_RESTRICTION: Subagents cannot ask the user questions directly. " +
-					"Complete your current task and return results to the primary agent for further delegation."
-			default:
-				errMsg = "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
-					"This restriction prevents runaway agent chains and ensures proper task delegation. " +
-					"If you need additional work done, please complete your current task and return " +
-					"your results to the primary agent for further delegation."
-			}
+	// CRITICAL: Prevent subagents from creating nested subagents
+	// This check ensures that subagents cannot spawn further subagents, preventing runaway agent chains.
+	// ask_user is NOT blocked for subagents — they share the event bus and questions
+	// are routed through the same WebUI/CLI prompt mechanism as the primary agent.
+	if agent != nil && agent.IsSubagent() {
+		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
+			errMsg := "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
+				"This restriction prevents runaway agent chains and ensures proper task delegation. " +
+				"If you need additional work done, please complete your current task and return " +
+				"your results to the primary agent for further delegation."
 			if agent != nil && agent.debug {
 				agent.debugLog("[NO] Blocked subagent tool '%s' - not allowed in subagent context\n", toolName)
 			}

@@ -2,10 +2,9 @@ import { useMemo, useCallback } from 'react';
 import { fuzzyFilter, highlightMatches } from '../../utils/fuzzyMatch';
 import type { FuzzyResult } from '../../utils/fuzzyMatch';
 import type { SymbolInfo } from '../../utils/symbolUtils';
-import type { PaletteMode, FileResult, PaletteResult } from './types';
-import { parsePrefixAndQuery } from './utils';
-import { toWorkspaceRelativePath, getDirectoryName } from './utils';
 import { VISIBLE_COMMANDS, MAX_FILE_RESULTS, MAX_SYMBOL_RESULTS, NAVIGABLE_KINDS } from './constants';
+import type { PaletteMode, FileResult, PaletteResult } from './types';
+import { parsePrefixAndQuery, toWorkspaceRelativePath, getDirectoryName } from './utils';
 
 interface UsePaletteResultsOptions {
   query: string;

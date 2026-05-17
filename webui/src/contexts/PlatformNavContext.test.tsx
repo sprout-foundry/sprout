@@ -2,8 +2,8 @@
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { PlatformNavProvider, usePlatformNav } from './PlatformNavContext';
 import { getAdapter } from '../services/apiAdapter';
+import { PlatformNavProvider, usePlatformNav } from './PlatformNavContext';
 
 // ---------------------------------------------------------------------------
 // Mocks

@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
 import './DocumentOutlinePanel.css';
-import { extractSymbols, findSymbolScopeEnd, KIND_ICONS, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import { fuzzyFilter, highlightMatches } from '../utils/fuzzyMatch';
+import { extractSymbols, findSymbolScopeEnd, KIND_ICONS, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import { ChevronRight, ChevronDown, Search, ListTree, UnfoldVertical, FoldVertical, FileCode } from 'lucide-react';
 
 /**

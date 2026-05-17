@@ -6,8 +6,15 @@
  * verify the resulting document content, not just that dispatch was called.
  */
 
-import { EditorView } from '@codemirror/view';
+// Polyfill Range.prototype.getClientRects for jsdom (CodeMirror needs it)
+if (typeof Range !== 'undefined' && !Range.prototype.getClientRects) {
+  Range.prototype.getClientRects = function () {
+    return [];
+  };
+}
+
 import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { createDragDropHandlers } from './dragDropMove';
 
 // ── Helper: create a minimal real EditorView ────────────────────────

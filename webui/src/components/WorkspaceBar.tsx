@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
 import { Monitor, Server } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ApiService } from '../services/api';
 import { getSSHProxyContext } from '../services/clientSession';
 import { debugLog } from '../utils/log';
@@ -42,7 +42,9 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
           (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
         setBar({ workspacePath: collapsed, hostAlias, isRemote });
       })
-      .catch((err) => { debugLog('[WorkspaceBar] Failed to fetch workspace:', err); });
+      .catch((err) => {
+        debugLog('[WorkspaceBar] Failed to fetch workspace:', err);
+      });
     return () => {
       cancelled = true;
     };
@@ -64,7 +66,9 @@ const WorkspaceBar: React.FC<WorkspaceBarProps> = ({ isConnected, isMobileMenuOp
             (ws.ssh_context?.is_remote ? ws.ssh_context?.host_alias : null) ?? proxyCtx?.hostAlias ?? null;
           setBar({ workspacePath: collapsed, hostAlias, isRemote });
         })
-        .catch((err) => { debugLog('[WorkspaceBar] Failed to refresh workspace:', err); });
+        .catch((err) => {
+          debugLog('[WorkspaceBar] Failed to refresh workspace:', err);
+        });
     };
     window.addEventListener('sprout:workspace-changed', onWorkspaceChange);
     return () => window.removeEventListener('sprout:workspace-changed', onWorkspaceChange);

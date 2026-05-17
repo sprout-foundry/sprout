@@ -27,8 +27,8 @@ vi.mock('../utils/log', () => ({
 }));
 
 // Static import — Vitest hoists vi.mock above all imports automatically
-import { useEditorCursor } from './useEditorCursor';
 import { debugLog } from '../utils/log';
+import { useEditorCursor } from './useEditorCursor';
 
 // ---------------------------------------------------------------------------
 // Helpers

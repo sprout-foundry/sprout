@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { type ApiService, type SproutInstance } from '../services/api';
 import { INSTANCE_PID_STORAGE_KEY, INSTANCE_SWITCH_RESET_KEY } from '../constants/app';
+import { type ApiService, type SproutInstance } from '../services/api';
 import { useLog } from '../utils/log';
 
 export interface UseInstanceManagerOptions {

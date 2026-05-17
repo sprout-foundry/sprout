@@ -5,9 +5,9 @@
  * Used when adapter requires health checks to provide graceful degradation when backend is unreachable.
  */
 
-import { clientFetch } from './clientSession';
-import { getAdapter } from './apiAdapter';
 import { debugLog } from '../utils/log';
+import { getAdapter } from './apiAdapter';
+import { clientFetch } from './clientSession';
 
 const DEFAULT_INTERVAL_MS = 5000; /* Poll every 5 seconds */
 const HEALTH_ENDPOINT = '/health';

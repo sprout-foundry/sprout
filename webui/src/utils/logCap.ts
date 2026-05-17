@@ -1,5 +1,5 @@
-import type { LogEntry } from '../types/app';
 import { MAX_LOG_ENTRIES } from '../constants/app';
+import type { LogEntry } from '../types/app';
 
 /**
  * Append a log entry to the array, capping the total at MAX_LOG_ENTRIES.

@@ -41,8 +41,12 @@ export interface SproutDesktopAPI {
   cancelPendingInstall: () => Promise<DesktopApiResponse<{ pending?: boolean; willInstallOnQuit?: boolean }>>;
 
   // Auto-update event listeners
-  onUpdateError: (callback: (data: { title: string; message: string; version?: string; duration?: number }) => void) => () => void;
-  onUpdateAvailable: (callback: (data: { title: string; message: string; version?: string; duration?: number }) => void) => () => void;
+  onUpdateError: (
+    callback: (data: { title: string; message: string; version?: string; duration?: number }) => void,
+  ) => () => void;
+  onUpdateAvailable: (
+    callback: (data: { title: string; message: string; version?: string; duration?: number }) => void,
+  ) => () => void;
   onUpdateDownloadProgress: (callback: (progress: { percent?: number }) => void) => () => void;
   onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void;
   onTriggerUpdateCheck: (callback: () => void) => () => void;

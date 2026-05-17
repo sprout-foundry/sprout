@@ -13,18 +13,17 @@
  * Target: ~200 lines
  */
 
-import { useRef, useCallback } from 'react';
-import type { Extension } from '@codemirror/state';
-import type { EditorView } from '@codemirror/view';
-import { keymap, type KeyBinding } from '@codemirror/view';
-import { searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
 import { jumpToDefinition, findReferences, renameSymbol } from '@codemirror/lsp-client';
-
-import { getEditorKeymap, type EditorHotkeyActions } from '../utils/editorHotkeys';
-import type { HotkeyEntry } from '../services/api';
-import { triggerRename } from '../extensions/renameOverlay';
+import { searchKeymap, openSearchPanel, replaceAll } from '@codemirror/search';
+import type { Extension } from '@codemirror/state';
+import { keymap } from '@codemirror/view';
+import type { EditorView, KeyBinding } from '@codemirror/view';
+import { useRef, useCallback } from 'react';
 import { codeActionsKeybinding } from '../extensions/codeActions';
+import { triggerRename } from '../extensions/renameOverlay';
+import type { HotkeyEntry } from '../services/api';
 import type { EditorBuffer } from '../types/editor';
+import { getEditorKeymap, type EditorHotkeyActions } from '../utils/editorHotkeys';
 
 // ---------------------------------------------------------------------------
 // Types

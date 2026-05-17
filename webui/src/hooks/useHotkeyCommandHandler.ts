@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import type { EditorBuffer } from '../types/editor';
-import { clearLayoutSnapshot } from '../services/layoutPersistence';
 import { showThemedConfirm } from '../components/ThemedDialog';
 import { supportsLocalTerminal } from '../config/mode';
+import { clearLayoutSnapshot } from '../services/layoutPersistence';
+import type { EditorBuffer } from '../types/editor';
 
 type ViewMode = 'chat' | 'editor' | 'git';
 

@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, useContext, useMemo, useState, useEffect, useCallback } from 'react';
 import { ApiService, type HotkeyEntry } from '../services/api';
-import { useNotifications } from './NotificationContext';
 import { error as logError } from '../utils/log';
+import { useNotifications } from './NotificationContext';
 
 interface HotkeyContextValue {
   hotkeys: HotkeyEntry[] | null;

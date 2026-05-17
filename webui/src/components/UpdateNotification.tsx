@@ -1,6 +1,6 @@
+import { AlertTriangle, Download, RefreshCw, X, Loader } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
-import { AlertTriangle, Download, RefreshCw, X, Loader } from 'lucide-react';
 
 interface UpdateInfo {
   version: string;

@@ -22,6 +22,7 @@ vi.mock('../utils/log', () => ({
 
 // ── Imports ──────────────────────────────────────────────────────────
 
+import { getAdapter, installAdapter } from './apiAdapter';
 import {
   getBillingStatus,
   getInvoices,
@@ -31,7 +32,6 @@ import {
   getDunningReport,
   createBillingPortalSession,
 } from './billingService';
-import { getAdapter, installAdapter } from '../services/apiAdapter';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
-import type { CloudEndpoint, EndpointCategory } from './types';
 import { classifyEndpoint } from './classify';
 import { CLOUD_ENDPOINTS } from './endpoints';
+import type { CloudEndpoint, EndpointCategory } from './types';
 
 /**
  * Get all endpoints by category.

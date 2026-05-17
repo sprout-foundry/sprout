@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
 import { GitCompareArrows, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { parseUnifiedDiffToDocuments } from '../utils/diffParser';
 import DiffSurface from './DiffSurface';
 import { MergeViewWrapper } from './MergeViewWrapper';
-import { parseUnifiedDiffToDocuments } from '../utils/diffParser';
 
 interface GitDiffResponse {
   message: string;

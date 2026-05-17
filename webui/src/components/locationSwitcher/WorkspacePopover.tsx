@@ -1,13 +1,13 @@
-import React from 'react';
 import { FolderOpen, RefreshCw, Loader2 } from 'lucide-react';
-import type { SproutInstance } from '../../services/api';
+import React from 'react';
 import { supportsInstances } from '../../config/mode';
+import type { SproutInstance } from '../../services/api';
 import { normalizePath } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
-import { WorkspaceSuggestionList } from './WorkspaceSuggestionList';
-import { WorkspaceSSHFavorites } from './WorkspaceSSHFavorites';
-import { WorkspaceRecentList } from './WorkspaceRecentList';
 import { WorkspaceInstances } from './WorkspaceInstances';
+import { WorkspaceRecentList } from './WorkspaceRecentList';
+import { WorkspaceSSHFavorites } from './WorkspaceSSHFavorites';
+import { WorkspaceSuggestionList } from './WorkspaceSuggestionList';
 
 export interface WorkspacePopoverProps {
   workspaceRoot: string;

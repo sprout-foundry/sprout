@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useNotifications } from '../../contexts/NotificationContext';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import type { SubagentTypeInfo } from '../../services/api/types';
-import { useNotifications } from '../../contexts/NotificationContext';
 import { debugLog } from '../../utils/log';
 import { getNestedValue } from './settingsHelpers';
 import type { SubagentTypeEntry, SettingsSubTab } from './types';

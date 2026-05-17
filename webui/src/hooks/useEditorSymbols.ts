@@ -11,8 +11,8 @@
  * ```
  */
 import { useMemo } from 'react';
-import { extractSymbols, findSymbolScopeEnd, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 import type { EditorBuffer } from '../types/editor';
+import { extractSymbols, findSymbolScopeEnd, CONTAINER_KINDS, type SymbolInfo } from '../utils/symbolUtils';
 
 /** BreadcrumbSymbol is an alias for SymbolInfo (re-exported for convenience) */
 export type BreadcrumbSymbol = SymbolInfo;

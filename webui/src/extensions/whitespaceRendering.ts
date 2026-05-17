@@ -17,8 +17,8 @@
  * - Falls back to mode-aware defaults when variables are absent.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 import { type Extension } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

@@ -15,9 +15,9 @@
  * Exported factory: {@link errorLensPlugin}
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
-import { type Extension, Annotation } from '@codemirror/state';
 import { forEachDiagnostic, diagnosticCount, type Diagnostic } from '@codemirror/lint';
+import { type Extension, Annotation } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view';
 
 import './errorLens.css';
 import { debugLog } from '../utils/log';

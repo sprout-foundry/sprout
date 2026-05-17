@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
 import { Film, Music, Loader2, AlertTriangle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { readFileWithConsent } from '../services/fileAccess';
 import { useLog } from '../utils/log';
 import './MediaViewer.css';

@@ -18,9 +18,9 @@
  * Exported factory: {@link wordHighlightsExtension}
  */
 
-import { EditorView } from '@codemirror/view';
-import type { Extension } from '@codemirror/state';
 import { highlightSelectionMatches } from '@codemirror/search';
+import type { Extension } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 
 // ── Base Theme ─────────────────────────────────────────────────────
 

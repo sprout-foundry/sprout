@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { Skeleton } from '@sprout/ui';
 import { Folder, File, ArrowUp, X, FolderOpen } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
-import { Skeleton } from '@sprout/ui';
 import './FileBrowser.css';
 
 export interface FileNode {

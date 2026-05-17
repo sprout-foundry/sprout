@@ -5,8 +5,8 @@
  * and automatic activation/reload on new versions.
  */
 
-import { getAdapter } from './apiAdapter';
 import { debugLog } from '../utils/log';
+import { getAdapter } from './apiAdapter';
 
 export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
   // Skip SW registration when adapter is installed (cloud mode doesn't have sw.js)

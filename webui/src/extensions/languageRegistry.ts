@@ -6,38 +6,37 @@
  * helpers for auto-detection and CodeMirror extension creation.
  */
 
-import { type Extension } from '@codemirror/state';
-
 // Language support — official @codemirror/lang-* packages
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { go } from '@codemirror/lang-go';
-import { json } from '@codemirror/lang-json';
-import { html } from '@codemirror/lang-html';
+import { cpp } from '@codemirror/lang-cpp';
 import { css } from '@codemirror/lang-css';
+import { go } from '@codemirror/lang-go';
+import { html } from '@codemirror/lang-html';
+import { java } from '@codemirror/lang-java';
+import { javascript } from '@codemirror/lang-javascript';
+import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { php } from '@codemirror/lang-php';
-import { wast } from '@codemirror/lang-wast';
+import { python } from '@codemirror/lang-python';
 import { rust } from '@codemirror/lang-rust';
-import { cpp } from '@codemirror/lang-cpp';
-import { java } from '@codemirror/lang-java';
-import { yaml } from '@codemirror/lang-yaml';
-import { xml } from '@codemirror/lang-xml';
 import { sql } from '@codemirror/lang-sql';
-import { ruby } from 'codemirror-lang-ruby';
+import { wast } from '@codemirror/lang-wast';
+import { xml } from '@codemirror/lang-xml';
+import { yaml } from '@codemirror/lang-yaml';
 
 // Legacy modes
 import { StreamLanguage } from '@codemirror/language';
-import { shell } from '@codemirror/legacy-modes/mode/shell';
-import { toml } from '@codemirror/legacy-modes/mode/toml';
-import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
 import { clike } from '@codemirror/legacy-modes/mode/clike';
 import { clojure } from '@codemirror/legacy-modes/mode/clojure';
+import { cmake } from '@codemirror/legacy-modes/mode/cmake';
 import { coffeeScript } from '@codemirror/legacy-modes/mode/coffeescript';
+import { crystal } from '@codemirror/legacy-modes/mode/crystal';
+import { d } from '@codemirror/legacy-modes/mode/d';
 import { diff } from '@codemirror/legacy-modes/mode/diff';
+import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
 import { elm } from '@codemirror/legacy-modes/mode/elm';
 import { erlang } from '@codemirror/legacy-modes/mode/erlang';
 import { fortran } from '@codemirror/legacy-modes/mode/fortran';
+import { gas } from '@codemirror/legacy-modes/mode/gas';
 import { groovy } from '@codemirror/legacy-modes/mode/groovy';
 import { haskell } from '@codemirror/legacy-modes/mode/haskell';
 import { julia } from '@codemirror/legacy-modes/mode/julia';
@@ -51,16 +50,16 @@ import { protobuf } from '@codemirror/legacy-modes/mode/protobuf';
 import { r } from '@codemirror/legacy-modes/mode/r';
 import { sass } from '@codemirror/legacy-modes/mode/sass';
 import { scheme } from '@codemirror/legacy-modes/mode/scheme';
+import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { swift } from '@codemirror/legacy-modes/mode/swift';
 import { tcl } from '@codemirror/legacy-modes/mode/tcl';
+import { textile } from '@codemirror/legacy-modes/mode/textile';
+import { toml } from '@codemirror/legacy-modes/mode/toml';
 import { vb } from '@codemirror/legacy-modes/mode/vb';
 import { verilog } from '@codemirror/legacy-modes/mode/verilog';
 import { vhdl } from '@codemirror/legacy-modes/mode/vhdl';
-import { cmake } from '@codemirror/legacy-modes/mode/cmake';
-import { crystal } from '@codemirror/legacy-modes/mode/crystal';
-import { d } from '@codemirror/legacy-modes/mode/d';
-import { gas } from '@codemirror/legacy-modes/mode/gas';
-import { textile } from '@codemirror/legacy-modes/mode/textile';
+import { type Extension } from '@codemirror/state';
+import { ruby } from 'codemirror-lang-ruby';
 
 // ---------------------------------------------------------------------------
 // Types

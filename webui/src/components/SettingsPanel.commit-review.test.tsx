@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom';
 // @ts-nocheck
 
-import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
-import SettingsPanel from './SettingsPanel';
+import { createRoot, type Root } from 'react-dom/client';
 import { NotificationProvider } from '../contexts/NotificationContext';
+import SettingsPanel from './SettingsPanel';
 
 // ---------------------------------------------------------------------------
 // Mocks

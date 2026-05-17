@@ -239,7 +239,7 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 			line := content[:idx]
 			// Print non-empty lines with prefix
 			if strings.TrimSpace(line) != "" {
-				fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+line+"\n")
+				_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + line + "\n"))
 			}
 			// Reset and write remaining content after the newline
 			lineBuf.Reset()
@@ -258,7 +258,7 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 		if lineBuf.Len() > 0 {
 			remaining := strings.TrimSpace(lineBuf.String())
 			if remaining != "" {
-				fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+remaining+"\n")
+				_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + remaining + "\n"))
 			}
 			lineBuf.Reset()
 		}
@@ -266,7 +266,7 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 		msg := strings.TrimRight(message, "\n")
 		msg = strings.TrimSpace(msg)
 		if msg != "" {
-			fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+msg+"\n")
+			_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + msg + "\n"))
 		}
 	})
 
@@ -334,7 +334,7 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 	if lineBuf.Len() > 0 {
 		remaining := strings.TrimSpace(lineBuf.String())
 		if remaining != "" {
-			fmt.Fprint(os.Stderr, dimGray+prefix+reset+" "+remaining+"\n")
+			_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + remaining + "\n"))
 		}
 		lineBuf.Reset()
 	}

@@ -643,24 +643,34 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 	session := createAndReadySession(t, tm, "exec-reuse")
 
 	// First: trigger a timeout with a short-lived command.
-	// After timeout, the session is closed to force recreation on next use.
+	// After timeout (DeadlineExceeded), the session is promoted to background
+	// (not closed) — this is the key behavioral change from the old behavior
+	// where the session would be asynchronously closed.
 	shortCtx, shortCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer shortCancel()
-	_, exitCode, _ := tm.ExecuteCommandAndWait(shortCtx, session, "sleep 10")
+	_, exitCode, err := tm.ExecuteCommandAndWait(shortCtx, session, "sleep 10")
 	if exitCode != -1 {
 		t.Errorf("expected exit code -1 for timeout, got %d", exitCode)
 	}
-
-	// Wait for the async CloseSession goroutine to complete.
-	time.Sleep(500 * time.Millisecond)
-
-	// The session should now be inactive — closed by the timeout handler.
-	if tm.IsSessionActive("exec-reuse") {
-		t.Error("expected session to be inactive after timeout")
+	if err == nil {
+		t.Fatal("expected error from timeout, got nil")
+	}
+	if !strings.Contains(err.Error(), "COMMAND_PROMOTED_TO_BACKGROUND") {
+		t.Errorf("expected COMMAND_PROMOTED_TO_BACKGROUND error, got: %v", err)
 	}
 
-	// GetOrCreateHiddenSessionForChat should create a fresh session
-	// (the old one was closed by the timeout handler).
+	// The session should still be active — NOT closed by the timeout handler.
+	// (Previously, a goroutine would close it after 100ms; now it's promoted to background.)
+	if !tm.IsSessionActive("exec-reuse") {
+		t.Error("expected session to still be active after timeout (promoted to background, not closed)")
+	}
+
+	// Clean up the old session (sleep 10 is still running in the PTY).
+	tm.CloseSession("exec-reuse")
+
+	// GetOrCreateHiddenSessionForChat should create a fresh session.
+	// The old session had ChatID="chat-1" (from createAndReadySession), so
+	// looking up by chatID "exec-reuse" will not find it and will create new.
 	newSessionID, err := tm.GetOrCreateHiddenSessionForChat(context.Background(), "exec-reuse")
 	if err != nil {
 		t.Fatalf("failed to create new session after old one was closed: %v", err)
@@ -670,6 +680,8 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 	if !exists {
 		t.Fatal("new session not found after creation")
 	}
+
+	defer tm.CloseSession(newSessionID)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

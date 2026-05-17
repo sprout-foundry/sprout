@@ -96,7 +96,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	if agent.debug {
 		if err := agent.initDebugLogger(); err != nil {
 			// Non-fatal: fall back to stdout debug
-			fmt.Fprintf(os.Stderr, "WARNING: Failed to initialize debug logger: %v\n", err)
+			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to initialize debug logger: %v\n", err)))
 		}
 	}
 
@@ -112,7 +112,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		// the very first agent, not on every subsequent chat session.
 		sessionCleanupOnce.Do(func() {
 			if err := cleanupMemorySessions(); err != nil && agent.debug {
-				fmt.Fprintf(os.Stderr, "WARNING: Failed to clean up old sessions: %v\n", err)
+				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to clean up old sessions: %v\n", err)))
 			}
 		})
 
@@ -270,7 +270,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	// unreachable via the non-interactive path when this early check succeeds.
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] Failed to resolve configured provider/model: %v\n", err)
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to resolve configured provider/model: %v\n", err)))
 		// SSH daemon exception: allow startup even without provider
 		if isSSHDaemon() {
 			// Continue with whatever clientType was resolved (may be EditorClientType)
@@ -278,7 +278,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, err, "", "")
 		} else {
 			// Interactive mode: offer to select a provider
-			fmt.Fprintf(os.Stderr, "[tool] Selecting an available provider...\n")
+			_, _ = os.Stderr.Write([]byte("[tool] Selecting an available provider...\n"))
 			clientType, err = configManager.SelectNewProvider()
 			if err != nil {
 				return nil, agenterrors.NewProviderError("failed to select provider", err, "", "")
@@ -295,7 +295,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		// SSH daemon exception: try to find a provider with API key automatically
 		if isSSHDaemon() {
 			if autoProvider, autoModel := findProviderWithAPIKey(configManager); autoProvider != "" {
-				fmt.Fprintf(os.Stderr, "[SSH] Auto-selected provider %s (has API key)\n", autoProvider)
+				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[SSH] Auto-selected provider %s (has API key)\n", autoProvider)))
 				clientType = autoProvider
 				finalModel = autoModel
 			} else {
@@ -314,7 +314,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	var client api.ClientInterface
 	for {
 		if err := configManager.EnsureAPIKey(clientType); err != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)
+			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)))
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
 				return nil, agenterrors.NewProviderError("provider recovery failed after ensuring API key", recoverErr, "", "")
@@ -354,7 +354,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 				continue
 			}
 		} else if debug {
-			fmt.Printf("\n[WARN] Skipping provider connection check for %s\n", api.GetProviderName(clientType))
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[WARN] Skipping provider connection check for %s\n", api.GetProviderName(clientType))))
 		}
 
 		break
@@ -362,11 +362,11 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 
 	// Save the selection
 	if err := configManager.SetProvider(clientType); err != nil {
-		fmt.Printf("Warning: Failed to save provider selection: %v\n", err)
+		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("Warning: Failed to save provider selection: %v\n", err)))
 	}
 	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) && clientType != api.TestClientType {
 		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
-			fmt.Printf("\n[WARN] Warning: Failed to save model selection: %v\n", err)
+			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[WARN] Warning: Failed to save model selection: %v\n", err)))
 		}
 	}
 

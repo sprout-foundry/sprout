@@ -173,7 +173,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 		if fallbackModel == "" {
 			fallbackModel = availableModels[0].ID
 		}
-		fmt.Fprintf(os.Stderr, "[info] Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[info] Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)))
 		model = fallbackModel
 	}
 
@@ -208,7 +208,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 
 	// Notify user if model was different due to fallback
 	if actualModel != model {
-		fmt.Fprintf(os.Stderr, "[info] Using model: %s (requested: %s)\n", actualModel, model)
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[info] Using model: %s (requested: %s)\n", actualModel, model)))
 	}
 
 	if a.debug {
@@ -259,7 +259,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 		if fallbackModel == "" {
 			fallbackModel = availableModels[0].ID
 		}
-		fmt.Fprintf(os.Stderr, "[info] Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[info] Configured model %s is not available for %s. Using %s.\n", model, api.GetProviderName(provider), fallbackModel)))
 		model = fallbackModel
 	}
 
@@ -297,7 +297,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 
 	// Notify user if model was different due to fallback
 	if actualModel != model {
-		fmt.Fprintf(os.Stderr, "[info] Using model: %s (requested: %s)\n", actualModel, model)
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[info] Using model: %s (requested: %s)\n", actualModel, model)))
 	}
 
 	if a.debug {

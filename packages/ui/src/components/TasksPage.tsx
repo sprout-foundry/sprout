@@ -103,11 +103,13 @@ const TasksPage: React.FC<TasksPageProps> = ({ sproutFetch }) => {
 
     try {
       const body: Record<string, string> = {
-        repo_url: repoUrl,
-        prompt,
+        repo_url: repoUrl.trim(),
+        prompt: prompt.trim(),
       };
-      if (provider) body.provider = provider;
-      if (model) body.model = model;
+      const trimmedProvider = provider.trim();
+      const trimmedModel = model.trim();
+      if (trimmedProvider) body.provider = trimmedProvider;
+      if (trimmedModel) body.model = trimmedModel;
 
       const response = await doFetch('/api/tasks', {
         method: 'POST',
@@ -121,7 +123,8 @@ const TasksPage: React.FC<TasksPageProps> = ({ sproutFetch }) => {
       }
 
       const data = await response.json();
-      setCreateSuccess(`Task created successfully (ID: ${data.task_id})`);
+      const taskId = data.task_id ?? '(unknown)';
+      setCreateSuccess(`Task created successfully (ID: ${taskId})`);
       setRepoUrl('');
       setPrompt('');
       setProvider('');

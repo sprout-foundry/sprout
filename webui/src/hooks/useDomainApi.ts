@@ -42,13 +42,12 @@ type Tail<T extends unknown[]> = T extends [unknown, ...infer R] ? R : never;
  * Creates bound API methods from a domain module and a fetch function.
  * Binds the fetch function as the first argument to every exported function.
  *
- * Note: The generic constraint uses `any` because TypeScript cannot express
- * "a function whose first parameter is some specific type (any type)" while
- * still preserving that specific type for type inference. The actual bound
- * functions are fully typed - the `any` only affects the constraint validation.
+ * The generic constraint uses `never[]` to accept any function signature.
+ * Contravariance of function parameters means `(a: A, b: B) => R` extends
+ * `(...args: never[]) => unknown`, so the constraint matches all functions
+ * while preserving full type inference for the bound result.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function bindModule<T extends Record<string, (...args: any[]) => unknown>>(
+function bindModule<T extends Record<string, (...args: never[]) => unknown>>(
   mod: T,
   fetchFn: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
 ): { [K in keyof T]: (...args: Tail<Parameters<T[K]>>) => ReturnType<T[K]> } {

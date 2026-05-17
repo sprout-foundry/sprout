@@ -7,8 +7,8 @@
  * and WASM shell lifecycle (activation when backend disconnects).
  */
 
-import { useRef, useState, useCallback, useEffect } from 'react';
 import type { Terminal as XTerm } from '@xterm/xterm';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { initWasmShell, type WasmShell, type WasmShellResult } from '../services/wasmShell';
 import { debugLog } from '../utils/log';
 

@@ -1,5 +1,5 @@
-import React from 'react';
 import { PanelRightClose } from 'lucide-react';
+import React from 'react';
 import MenuBar from './MenuBar';
 import WorkspaceBar from './WorkspaceBar';
 

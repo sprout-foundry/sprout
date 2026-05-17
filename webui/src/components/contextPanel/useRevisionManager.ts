@@ -1,7 +1,7 @@
+import { normalizeRevision, buildRevisionFileKey } from '@sprout/ui';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLog } from '../../utils/log';
 import type { ChatContextPanelProps, ChatTabId, Revision, RevisionDetailFile } from './types';
-import { normalizeRevision, buildRevisionFileKey } from '@sprout/ui';
 
 export function useRevisionManager(chatProps: ChatContextPanelProps | null, chatTab: ChatTabId) {
   const log = useLog();

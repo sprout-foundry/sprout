@@ -9,9 +9,8 @@
  * Target: ~100 lines
  */
 
-import { useMemo, type ReactNode } from 'react';
 import { Eye, Columns2, ListOrdered, Paintbrush, SaveAll } from 'lucide-react';
-
+import { useMemo, type ReactNode } from 'react';
 import type { ToolbarAction } from './EditorToolbarActions';
 
 // ---------------------------------------------------------------------------

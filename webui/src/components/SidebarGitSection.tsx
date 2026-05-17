@@ -1,12 +1,12 @@
+import { GitBranch, GitFork, History } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { GitBranch, GitFork, History } from 'lucide-react';
+import { type SectionTab } from '../hooks/useSidebarState';
+import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
+import GitHistoryPanel from './GitHistoryPanel';
 import GitSidebarPanel from './GitSidebarPanel';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
-import GitHistoryPanel from './GitHistoryPanel';
-import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import WorktreePanel from './WorktreePanel';
-import { type SectionTab } from '../hooks/useSidebarState';
 
 type GitSubTab = 'changes' | 'history' | 'worktrees';
 

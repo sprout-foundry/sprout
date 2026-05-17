@@ -230,7 +230,11 @@ function WelcomeTab(props: WelcomeTabProps): JSX.Element {
   }
 
   // Normal welcome content
-  return <div className="welcome-tab"><WelcomeContent {...props} /></div>;
+  return (
+    <div className="welcome-tab">
+      <WelcomeContent {...props} />
+    </div>
+  );
 }
 
 export default WelcomeTab;

@@ -8,19 +8,18 @@
  * Returns nothing — this is a fire-and-forget initialisation hook.
  */
 
+import type { EventsProvider } from '@sprout/events';
 import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import type { StatsResponse, FilesResponse } from '../services/api';
 import type { SessionEntry } from '../services/api/types';
-import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import { getTabWorkspacePath } from '../services/clientSession';
-import { debugLog } from '../utils/log';
+import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
-import { useLog } from '../utils/log';
-import type { EventsProvider } from '@sprout/events';
 import type { SproutEvent } from '../types/events';
-import type { AppStoreSetState } from '../contexts/AppStore';
+import { debugLog, useLog } from '../utils/log';
 
 interface RecentFile {
   path: string;
@@ -167,7 +166,9 @@ export function useAppInitialization({
         debugLog('[startup] session restore check failed:', error);
       }
     };
-    restoreStartupState().catch((err) => { debugLog('[startup] Restore startup state failed:', err); });
+    restoreStartupState().catch((err) => {
+      debugLog('[startup] Restore startup state failed:', err);
+    });
 
     // Set up periodic stats updates
     const statsInterval = setInterval(loadStats, 5000);

@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import ModelSelectionModal from './ModelSelectionModal';
 import { ApiService } from '../services/api';
 import { debugLog } from '../utils/log';
+import ModelSelectionModal from './ModelSelectionModal';
 
 // Mock dependencies
 vi.mock('../services/api');

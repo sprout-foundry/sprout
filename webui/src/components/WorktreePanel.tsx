@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { Plus, X, ChevronRight, ChevronDown, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { useWorktrees } from '../hooks/useWorktrees';
 import { showThemedConfirm } from './ThemedDialog';
 import './WorktreePanel.css';

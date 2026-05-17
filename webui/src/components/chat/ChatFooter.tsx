@@ -1,8 +1,8 @@
-import { Zap, AlertTriangle } from 'lucide-react';
-import { SubagentActivityFeed } from './SubagentActivityFeed';
 import { SkeletonText } from '@sprout/ui';
-import type { ToolExecution, SubagentActivity } from './types';
+import { Zap, AlertTriangle } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
+import { SubagentActivityFeed } from './SubagentActivityFeed';
+import type { ToolExecution, SubagentActivity } from './types';
 
 interface ChatFooterProps {
   hasSubagentActivity: boolean;
@@ -38,9 +38,7 @@ export function ChatFooter({
           <span className="progress-icon">
             <Zap size={14} />
           </span>
-          <span className="progress-text">
-            {queryProgress.message || 'Processing...'}
-          </span>
+          <span className="progress-text">{queryProgress.message || 'Processing...'}</span>
         </div>
         {queryProgress.details != null && (
           <div className="progress-details">

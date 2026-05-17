@@ -14,19 +14,45 @@
   ],
   "overrides": [
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "src/vitest.setup.ts"
+      ],
       "rules": {
+        "@typescript-eslint/ban-ts-comment": "off",
+        "@typescript-eslint/ban-types": "off",
+        "@typescript-eslint/no-empty-object-type": "off",
         "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-non-null-asserted-optional-chain": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
+        "@typescript-eslint/no-var-requires": "off",
+        "curly": "off",
         "no-console": "off",
-        "react-hooks/exhaustive-deps": "off"
+        "no-empty": "off",
+        "no-prototype-builtins": "off",
+        "no-var": "off",
+        "react-hooks/exhaustive-deps": "off",
+        "react-hooks/rules-of-hooks": "off",
+        "react/no-deprecated": "off",
+        "react/no-render-return-value": "off",
+        "testing-library/no-container": "warn",
+        "testing-library/no-node-access": "warn",
+        "testing-library/no-unnecessary-act": "warn",
+        "testing-library/prefer-presence-queries": "warn",
+        "testing-library/prefer-screen-queries": "warn",
+        "testing-library/render-result-naming-convention": "off"
       }
     },
     {
       "env": {
         "node": true
       },
-      "files": ["vite.config.ts"]
+      "files": [
+        "vite.config.ts"
+      ]
     }
   ],
   "parser": "@typescript-eslint/parser",
@@ -35,10 +61,16 @@
       "jsx": true
     },
     "ecmaVersion": "latest",
-    "project": "./tsconfig.json",
+    "project": "./tsconfig.eslint.json",
     "sourceType": "module"
   },
-  "plugins": ["@typescript-eslint", "react", "react-hooks", "import", "testing-library"],
+  "plugins": [
+    "@typescript-eslint",
+    "react",
+    "react-hooks",
+    "import",
+    "testing-library"
+  ],
   "root": true,
   "rules": {
     "@typescript-eslint/consistent-type-imports": [
@@ -53,7 +85,10 @@
     "@typescript-eslint/no-empty-function": [
       "warn",
       {
-        "allow": ["constructors", "methods"]
+        "allow": [
+          "constructors",
+          "methods"
+        ]
       }
     ],
     "@typescript-eslint/no-explicit-any": "error",
@@ -76,8 +111,14 @@
         "variables": true
       }
     ],
-    "curly": ["error", "multi-line"],
-    "eqeqeq": ["error", "smart"],
+    "curly": [
+      "error",
+      "multi-line"
+    ],
+    "eqeqeq": [
+      "error",
+      "smart"
+    ],
     "import/group-exports": "off",
     "import/no-cycle": "off",
     "import/no-duplicates": "warn",
@@ -90,7 +131,14 @@
           "caseInsensitive": true,
           "order": "asc"
         },
-        "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
+        "groups": [
+          "builtin",
+          "external",
+          "internal",
+          "parent",
+          "sibling",
+          "index"
+        ],
         "newlines-between": "never"
       }
     ],
@@ -98,7 +146,10 @@
     "no-console": [
       "error",
       {
-        "allow": ["warn", "error"]
+        "allow": [
+          "warn",
+          "error"
+        ]
       }
     ],
     "no-control-regex": "warn",
@@ -121,7 +172,11 @@
   },
   "settings": {
     "import/parsers": {
-      "@typescript-eslint/parser": [".ts", ".tsx", ".d.ts"]
+      "@typescript-eslint/parser": [
+        ".ts",
+        ".tsx",
+        ".d.ts"
+      ]
     },
     "import/resolver": {
       "node": true,

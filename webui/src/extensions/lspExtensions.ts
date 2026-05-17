@@ -6,12 +6,11 @@
  * diagnostics, signature help, and keyboard shortcuts.
  */
 
-import type { EditorView, ViewUpdate } from '@codemirror/view';
-import { ViewPlugin } from '@codemirror/view';
+import type { LSPClient } from '@codemirror/lsp-client';
 import { StateEffect, StateField } from '@codemirror/state';
 import type { Extension } from '@codemirror/state';
-import type { LSPClient } from '@codemirror/lsp-client';
-
+import type { EditorView, ViewUpdate } from '@codemirror/view';
+import { ViewPlugin } from '@codemirror/view';
 import { getLSPClientService, LSPClientService, getFileURI, uriToFilePath } from '../services/lspClientService';
 
 // ---------------------------------------------------------------------------

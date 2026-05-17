@@ -1,5 +1,5 @@
-import type { EditorBuffer } from '../types/editor';
 import { useEffect } from 'react';
+import type { EditorBuffer } from '../types/editor';
 
 export interface UseActiveChatTabParams {
   activeBufferId: string | null;

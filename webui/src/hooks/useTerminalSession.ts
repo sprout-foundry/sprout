@@ -6,10 +6,10 @@
  * pty_exit, error), and scrollback loading on session restore.
  */
 
-import { useRef, useState, useCallback, useEffect } from 'react';
-import type { Terminal as XTerm } from '@xterm/xterm';
-import type { FitAddon } from '@xterm/addon-fit';
 import type { WsEvent } from '@sprout/events';
+import type { FitAddon } from '@xterm/addon-fit';
+import type { Terminal as XTerm } from '@xterm/xterm';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 
 export interface UseTerminalSessionOptions {

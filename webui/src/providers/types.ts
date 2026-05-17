@@ -5,8 +5,8 @@
  * and other UI components in an extensible, maintainable, data-driven way.
  */
 
-import { type ReactNode } from 'react';
 import type { LogEntry } from '@sprout/ui';
+import { type ReactNode } from 'react';
 
 /** @deprecated Use LogEntry from @sprout/ui instead */
 export type ProviderLogEntry = LogEntry;

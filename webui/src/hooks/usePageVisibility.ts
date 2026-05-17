@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
+import { useEvents } from '../contexts/EventsContext';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { debugLog } from '../utils/log';
-import { useEvents } from '../contexts/EventsContext';
 
 /** Interval (ms) to debounce rapid visibility toggles and avoid freeze/resume thrashing. */
 const VISIBILITY_DEBOUNCE_MS = 500;

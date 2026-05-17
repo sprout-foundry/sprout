@@ -1,7 +1,10 @@
 // @ts-nocheck
 
-import { createRoot } from 'react-dom/client';
+import { FitAddon } from '@xterm/addon-fit';
+import { Terminal } from '@xterm/xterm';
 import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import TerminalPane from './TerminalPane';
 
 // ---------------------------------------------------------------------------
@@ -567,13 +570,11 @@ describe('TerminalPane wordSeparator', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    // Re-assert Terminal constructor mock
-    const { Terminal } = require('@xterm/xterm');
-    Terminal.mockImplementation(() => mockTerm);
+    // Re-assert Terminal constructor mock (imported at module level via vi.mock)
+    (Terminal as any).mockImplementation(() => mockTerm);
 
-    // Re-assert FitAddon constructor mock
-    const { FitAddon } = require('@xterm/addon-fit');
-    FitAddon.mockImplementation(() => mockFitAddon);
+    // Re-assert FitAddon constructor mock (imported at module level via vi.mock)
+    (FitAddon as any).mockImplementation(() => mockFitAddon);
 
     // Re-assert WebSocket mock service factory
     const { TerminalWebSocketService } = require('../services/terminalWebSocket');
@@ -599,8 +600,7 @@ describe('TerminalPane wordSeparator', () => {
     });
     await flushPromises();
 
-    const { Terminal } = require('@xterm/xterm');
-    const calls = Terminal.mock.calls;
+    const calls = (Terminal as any).mock.calls;
     // Find the call that passed options (first arg is an object)
     const optionsCall = calls.find((call: unknown[]) => call[0] && typeof call[0] === 'object');
     expect(optionsCall).toBeDefined();

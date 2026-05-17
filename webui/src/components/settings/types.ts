@@ -1,6 +1,5 @@
-import type { SproutSettings, ProviderOption } from '../../services/api';
+import type { SproutSettings, ProviderOption, ApiService } from '../../services/api';
 import type { SubagentTypeInfo } from '../../services/api/types';
-import type { ApiService } from '../../services/api';
 
 /**
  * Shared context passed to domain-specific mutation hooks.

@@ -17,9 +17,9 @@
 
 import { createElement, type ReactElement, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import OnboardingDialog from './OnboardingDialog';
-import type { OnboardingState } from '../types/app';
 import type { OnboardingProviderOption } from '../services/api';
+import type { OnboardingState } from '../types/app';
+import OnboardingDialog from './OnboardingDialog';
 
 // ---------------------------------------------------------------------------
 // Mocks

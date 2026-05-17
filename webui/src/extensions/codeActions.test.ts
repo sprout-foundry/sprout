@@ -119,6 +119,11 @@ vi.mock('../utils/log', () => ({
 
 // ── Module under test ─────────────────────────────────────────────────
 
+import { LSPPlugin as MockLSPPlugin } from '@codemirror/lsp-client';
+import { StateField as MockStateField, Facet as MockFacet } from '@codemirror/state';
+import { ViewPlugin as MockViewPlugin } from '@codemirror/view';
+import { ApiService as MockApiService } from '../services/api';
+import { debugLog as mockDebugLog } from '../utils/log';
 import {
   createCodeActionsExtension,
   codeActionsKeybinding,
@@ -130,13 +135,8 @@ import {
 
 // ── Import mocks (vi.mock is hoisted above imports by Vitest) ────────
 
-import { ViewPlugin as MockViewPlugin } from '@codemirror/view';
-import { StateField as MockStateField, Facet as MockFacet } from '@codemirror/state';
-import { ApiService as MockApiService } from '../services/api';
-import { LSPPlugin as MockLSPPlugin } from '@codemirror/lsp-client';
-import { getClientForLanguageSync as mockGetClientForLanguageSync } from './lspExtensions';
 import { resolveLanguageId as mockResolveLanguageId } from './languageRegistry';
-import { debugLog as mockDebugLog } from '../utils/log';
+import { getClientForLanguageSync as mockGetClientForLanguageSync } from './lspExtensions';
 
 // ── Test setup ───────────────────────────────────────────────────────
 
@@ -156,17 +156,15 @@ describe('Type exports', () => {
   it('creates CodeActionEdit type', () => {
     // Verify the interface is exported by checking it's a valid type in the code
     // In TypeScript interfaces, they disappear at runtime, so we verify the module loads
-    
+
     expect(createCodeActionsExtension).toBeDefined();
   });
 
   it('creates CodeAction type', () => {
-    
     expect(codeActionsKeybinding).toBeDefined();
   });
 
   it('creates CodeActionState type', () => {
-    
     expect(codeActionsConfig).toBeDefined();
   });
 });

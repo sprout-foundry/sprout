@@ -145,13 +145,7 @@ export async function exportSupportBundle(fetchFn: typeof fetch): Promise<void> 
     // Read the error body for a descriptive message (e.g., in cloud mode the
     // server returns { error: 'Support bundles not available in cloud mode' }).
     const errData = await response.json().catch(() => ({}));
-    throw new Error(
-      String(
-        errData.error ||
-          errData.message ||
-          `Support bundle failed: HTTP ${response.status}`,
-      ),
-    );
+    throw new Error(String(errData.error || errData.message || `Support bundle failed: HTTP ${response.status}`));
   }
 
   const disposition = response.headers.get('Content-Disposition') ?? '';

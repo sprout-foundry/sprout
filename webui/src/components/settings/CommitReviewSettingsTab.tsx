@@ -12,18 +12,10 @@ export default function CommitReviewSettingsTab({
   commitReviewProviders,
   updateSetting,
 }: CommitReviewSettingsTabProps) {
-  const currentCommitProvider = String(
-    getNestedValue(settings, 'commit_provider') || '',
-  );
-  const currentCommitModel = String(
-    getNestedValue(settings, 'commit_model') || '',
-  );
-  const currentReviewProvider = String(
-    getNestedValue(settings, 'review_provider') || '',
-  );
-  const currentReviewModel = String(
-    getNestedValue(settings, 'review_model') || '',
-  );
+  const currentCommitProvider = String(getNestedValue(settings, 'commit_provider') || '');
+  const currentCommitModel = String(getNestedValue(settings, 'commit_model') || '');
+  const currentReviewProvider = String(getNestedValue(settings, 'review_provider') || '');
+  const currentReviewModel = String(getNestedValue(settings, 'review_model') || '');
 
   const selectedCommitProvider = commitReviewProviders.find((p) => p.id === currentCommitProvider);
   const commitAvailableModels = selectedCommitProvider?.models || [];

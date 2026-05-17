@@ -7,17 +7,17 @@
  * and handleReconnect recovery logic.
  */
 
+import type { WsEvent } from '@sprout/events';
+import type { Message } from '@sprout/ui';
 import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { Message } from '@sprout/ui';
-import type { AppState } from '../types/app';
-import type { WsEvent } from '@sprout/events';
+import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import { switchChatSession, listChatSessions } from '../services/chatSessions';
-import { trimMessages } from '../utils/messageWindow';
+import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
+import { trimMessages } from '../utils/messageWindow';
 import { useEventHandler } from './useEventHandler';
-import type { AppStoreSetState } from '../contexts/AppStore';
 
 export interface UseWebSocketEventsOptions {
   state: AppState;
@@ -145,9 +145,7 @@ export default function useWebSocketEvents({
       .then((stats) => {
         const backendProcessing = stats.is_processing === true;
         if (!backendProcessing && activeRequestsRef.current > 0) {
-          debugLog(
-            '[reconnect] Backend idle but frontend had active request(s) — clearing stale state',
-          );
+          debugLog('[reconnect] Backend idle but frontend had active request(s) — clearing stale state');
           activeRequestsRef.current = 0;
           setState((prev) => ({
             isProcessing: false,

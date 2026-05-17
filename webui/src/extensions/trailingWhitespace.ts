@@ -10,8 +10,8 @@
  * - Falls back to mode-aware defaults when the variable is absent.
  */
 
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { type Extension } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 
 // ── Whitespace detection ────────────────────────────────────────────
 

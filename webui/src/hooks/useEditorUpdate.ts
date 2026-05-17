@@ -9,8 +9,8 @@
  * @see EditorPane.tsx for the original implementation this hook extracts
  */
 
-import { useRef, useCallback } from 'react';
 import type { ViewUpdate } from '@codemirror/view';
+import { useRef, useCallback } from 'react';
 import type { EditorBuffer } from '../types/editor';
 import type { DiagnosticTrigger } from './useEditorDiagnostics';
 

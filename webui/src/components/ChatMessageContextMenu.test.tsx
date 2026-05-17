@@ -1,8 +1,7 @@
-import { createRef } from 'react';
-import type { MutableRefObject } from 'react';
-import { createRoot } from 'react-dom/client';
-import { act } from 'react';
 import { ChatMessageContextMenu } from '@sprout/ui';
+import type { MutableRefObject } from 'react';
+import { createRef, act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { copyToClipboard } from '../utils/clipboard';
 
 // ---------------------------------------------------------------------------

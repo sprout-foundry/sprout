@@ -1,7 +1,5 @@
-import type { PaletteMode } from './types';
-import type { CommandDef } from './types';
-import type { ResultKind } from './types';
 import { supportsLocalTerminal } from '../../config/mode';
+import type { PaletteMode, CommandDef, ResultKind } from './types';
 
 // ── Command definitions ────────────────────────────────────────────────────
 

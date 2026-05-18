@@ -99,6 +99,7 @@ func TestEditFileEmitsFileChangedEvent(t *testing.T) {
 	ch := bus.Subscribe("edit_test")
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	filePath := filepath.Join(tmpDir, "config.txt")
 
 	// Create initial file
@@ -336,6 +337,7 @@ func TestWriteFileNoEventBusDoesNotPanic(t *testing.T) {
 	agent.SetUnsafeMode(true)
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	filePath := filepath.Join(tmpDir, "no-bus.txt")
 
 	assert.NotPanics(t, func() {
@@ -359,6 +361,7 @@ func TestEditFileNoEventBusDoesNotPanic(t *testing.T) {
 	agent.SetUnsafeMode(true)
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	filePath := filepath.Join(tmpDir, "no-bus-edit.txt")
 
 	err := os.WriteFile(filePath, []byte("original content"), 0644)

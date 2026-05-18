@@ -30,6 +30,12 @@ type EmbeddingManager struct {
 	// under lock on every query call (SHOULD_FIX #7).
 	threshold  float32
 	maxResults int
+
+	// Conversation store (lazy-initialized)
+	convoStore *ConversationStore
+
+	// Resolved index directory path (stored during init)
+	indexDir string
 }// NewEmbeddingManager creates a new manager with the given config.
 // The manager is NOT initialized until Init() or a query method is called.
 func NewEmbeddingManager(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) *EmbeddingManager {
@@ -85,6 +91,9 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		}
 		indexDir = filepath.Join(configDir, "embeddings")
 	}
+
+	// Store the resolved index directory for reuse
+	m.indexDir = indexDir
 
 	// Create workspace-specific index file
 	indexFile := filepath.Join(indexDir, "index.jsonl")
@@ -339,6 +348,39 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 	return idx.QuerySimilar(ctx, query, topK, threshold)
 }
 
+// GetConversationStore returns the conversation store, creating it lazily on first use.
+// The store is user-scoped and lives at {indexDir}/conversation_turns.jsonl.
+// Multiple calls return the same instance.
+func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*ConversationStore, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Return cached instance if already created
+	if m.convoStore != nil {
+		return m.convoStore, nil
+	}
+
+	// Match Init() behavior: return cached error if a prior init failed
+	if m.initError != nil {
+		return nil, m.initError
+	}
+
+	// Ensure the manager itself is initialized
+	if err := m.initLocked(ctx); err != nil {
+		return nil, err
+	}
+
+	// Create conversation store in the same directory as the main index
+	convoPath := filepath.Join(m.indexDir, "conversation_turns.jsonl")
+	convoStore, err := NewConversationStore(m.provider, convoPath)
+	if err != nil {
+		return nil, fmt.Errorf("embedding: create conversation store: %w", err)
+	}
+
+	m.convoStore = convoStore
+	return convoStore, nil
+}
+
 // Close releases all resources.
 func (m *EmbeddingManager) Close() error {
 	m.mu.Lock()
@@ -347,16 +389,26 @@ func (m *EmbeddingManager) Close() error {
 		return nil
 	}
 	var firstErr error
+	if m.convoStore != nil {
+		if err := m.convoStore.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.convoStore = nil
+	}
 	if m.provider != nil {
 		if err := m.provider.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
+		m.provider = nil
 	}
 	if m.store != nil {
 		if err := m.store.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
+		m.store = nil
 	}
+	m.indexMgr = nil
 	m.initialized = false
+	m.initError = nil
 	return firstErr
 }

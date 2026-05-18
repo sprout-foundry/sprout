@@ -83,6 +83,10 @@ type VectorRecord struct {
 	// Type is the record type: "code_unit" for extracted code symbols, or "file" for full-file embeddings.
 	// Empty string for backward compatibility with legacy records (treated as "code_unit").
 	Type string `json:"type"`
+
+	// Metadata holds arbitrary key-value data for non-code-unit record types
+	// (e.g., conversation turns, memories). Nil for code_unit/file records.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // QueryResult pairs a VectorRecord with its similarity score for ranking.

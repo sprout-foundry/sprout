@@ -28,6 +28,7 @@ type Definition struct {
 	AllowedTools     []string `json:"allowed_tools,omitempty"`
 	Enabled          bool     `json:"enabled"`
 	Aliases          []string `json:"aliases,omitempty"`
+	LocalOnly        bool     `json:"local_only,omitempty"`
 }
 
 var (

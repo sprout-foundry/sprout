@@ -360,6 +360,36 @@ func (a *Agent) CanSpawnSubagents() bool {
 	return a.subagentDepth < a.MaxSubagentDepth()
 }
 
+// IsLocalMode returns true when the agent is running locally (CLI or local WebUI),
+// not in a cloud environment. This controls whether LocalOnly personas (like the
+// Executive Assistant) are available.
+//
+// Cloud mode is detected via the SPROUT_CLOUD environment variable.
+// Local mode is the default when the variable is unset or empty.
+func (a *Agent) IsLocalMode() bool {
+	return configuration.GetEnvSimple("CLOUD") != "1"
+}
+
+// EvaluateOperationRisk determines the risk level of a command for the
+// currently active persona, using the persona's auto-approve rules.
+// Returns RiskLevelLow, RiskLevelMedium, or RiskLevelHigh.
+// For personas without auto-approve rules, returns RiskLevelLow (no EA risk cascade).
+func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
+	personaID := a.GetActivePersona()
+	if personaID == "" {
+		return configuration.RiskLevelLow
+	}
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return configuration.RiskLevelLow
+	}
+	persona := cfg.GetSubagentType(personaID)
+	if persona == nil || persona.AutoApproveRules == nil {
+		return configuration.RiskLevelLow
+	}
+	return persona.EvaluateOperationRisk(command)
+}
+
 // GenerateResponse generates a simple response using the current model without tool calls
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking

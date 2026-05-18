@@ -468,9 +468,9 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			// Prefer webui approval path when a browser tab is connected
 			agentConfig := a.GetConfig()
 			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-			canPrompt := logger != nil && logger.IsInteractive() && !a.isSubagent
+			canPrompt := logger != nil && logger.IsInteractive() && !a.IsSubagent()
 
-			if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.isSubagent && a.HasActiveWebUIClients() {
+			if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.IsSubagent() && a.HasActiveWebUIClients() {
 				// WEBUI: request approval via event bus for the browser dialog
 				extras := map[string]string{
 					"risk_type": "Subagent External Workspace",

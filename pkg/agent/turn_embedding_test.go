@@ -2,6 +2,10 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -419,6 +423,215 @@ func TestMeanEmbedding_NegativeValues(t *testing.T) {
 	for i := range expected {
 		if result[i] != expected[i] {
 			t.Errorf("at index %d: expected %f, got %f", i, expected[i], result[i])
+		}
+	}
+}
+
+// TestEmbedAndStoreTurn_RoundTripWithQuery tests the full embed→store→query round-trip.
+// It creates and stores two conversation turns, then queries the store using one
+// turn's embedding and verifies the results match expectations.
+func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary directory for test isolation
+	tempDir := t.TempDir()
+
+	// Set config env vars to use temp dir
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// Create EmbeddingManager with minimal config
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: tempDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	// Initialize the manager
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// Create and embed/store the first conversation turn
+	turn1, err := NewConversationTurn("test-query-session", 1, "How do I implement a REST API in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create first conversation turn: %v", err)
+	}
+	turn1.ActionableSummary = "Implement a REST API using net/http package with handlers for GET and POST endpoints"
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn1); err != nil {
+		t.Errorf("EmbedAndStoreTurn returned unexpected error for turn1: %v", err)
+	}
+
+	// Verify that the turn's PromptEmbedding was set
+	if turn1.PromptEmbedding == nil {
+		t.Error("PromptEmbedding was not set after EmbedAndStoreTurn for turn1")
+	}
+
+	// Create and embed/store a second conversation turn with different content
+	turn2, err := NewConversationTurn("test-query-session", 2, "What is the difference between channels and mutexes in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create second conversation turn: %v", err)
+	}
+	turn2.ActionableSummary = "Channels are for communication between goroutines, mutexes are for protecting shared state from concurrent access"
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn2); err != nil {
+		t.Errorf("EmbedAndStoreTurn returned unexpected error for turn2: %v", err)
+	}
+
+	// Verify that the turn's PromptEmbedding was set
+	if turn2.PromptEmbedding == nil {
+		t.Error("PromptEmbedding was not set after EmbedAndStoreTurn for turn2")
+	}
+
+	// Get the conversation store
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	// Query the store using the first turn's embedding as the query vector
+	results, err := store.Query(turn1.PromptEmbedding, 5, 0.0)
+	if err != nil {
+		t.Fatalf("failed to query conversation store: %v", err)
+	}
+
+	// Verify query returned at least one result
+	if len(results) == 0 {
+		t.Fatal("expected at least one result from query, got 0")
+	}
+
+	// The first result should be the most similar (turn1 itself, since we're using its embedding)
+	firstResult := results[0]
+
+	// Verify the top-ranked result is turn1 (querying with its own embedding should rank it first)
+	if firstResult.Record.ID != turn1.ID {
+		t.Errorf("expected first result to be turn1 (ID %s), got %s", turn1.ID, firstResult.Record.ID)
+	}
+
+	// Verify similarity score is non-trivial (> 0)
+	if firstResult.Similarity <= 0 {
+		t.Errorf("expected similarity > 0, got %f", firstResult.Similarity)
+	}
+
+	// Verify the stored VectorRecord has correct fields
+	record := firstResult.Record
+	if record.Type != "conversation_turn" {
+		t.Errorf("expected record type 'conversation_turn', got '%s'", record.Type)
+	}
+
+	// Verify Signature contains the prompt text
+	if record.Signature == "" {
+		t.Error("expected non-empty Signature field")
+	}
+	// The signature should contain part of the prompt (truncated to maxSignatureLen)
+	promptSnippet := "REST API"
+	if !strings.Contains(record.Signature, promptSnippet) {
+		t.Errorf("expected Signature to contain prompt snippet '%s', got '%s'", promptSnippet, record.Signature)
+	}
+
+	// Verify Metadata has the expected fields
+	if record.Metadata == nil {
+		t.Fatal("expected record metadata to be non-nil")
+	}
+
+	// Check actionableSummary in metadata
+	if summary, ok := record.Metadata["actionableSummary"].(string); !ok || summary == "" {
+		t.Errorf("expected actionableSummary in metadata, got %v", record.Metadata["actionableSummary"])
+	}
+
+	// Check sessionId in metadata
+	if sessionID, ok := record.Metadata["sessionId"].(string); !ok || sessionID != turn1.SessionID {
+		t.Errorf("expected sessionId %s in metadata, got %v", turn1.SessionID, record.Metadata["sessionId"])
+	}
+
+	// Check turnNumber in metadata
+	if turnNum, ok := record.Metadata["turnNumber"].(int); !ok || turnNum != turn1.TurnNumber {
+		t.Errorf("expected turnNumber %d in metadata, got %v", turn1.TurnNumber, record.Metadata["turnNumber"])
+	}
+
+	// Load all records to verify both turns are present
+	allRecords, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("failed to load all records from conversation store: %v", err)
+	}
+
+	if len(allRecords) != 2 {
+		t.Errorf("expected 2 records in conversation store, got %d", len(allRecords))
+	}
+
+	// Verify both turn IDs are present and embeddings are non-nil
+	ids := make(map[string]bool)
+	for _, rec := range allRecords {
+		ids[rec.ID] = true
+		if rec.Embedding == nil {
+			t.Errorf("expected non-nil embedding for record ID %s", rec.ID)
+		}
+	}
+
+	if !ids[turn1.ID] {
+		t.Errorf("expected to find turn1 ID %s in records", turn1.ID)
+	}
+	if !ids[turn2.ID] {
+		t.Errorf("expected to find turn2 ID %s in records", turn2.ID)
+	}
+}
+
+// TestEmbedAndStoreTurn_GracefulFailure_ProviderUnavailable tests graceful failure
+// when the embedding manager points to an unwritable directory and cannot initialize.
+func TestEmbedAndStoreTurn_GracefulFailure_ProviderUnavailable(t *testing.T) {
+	ctx := context.Background()
+
+	// For the unwritable-dir approach, /proc/nonexistent only exists on Linux.
+	// On other platforms, create a temp dir and remove permissions instead.
+	var unwritableDir string
+	if runtime.GOOS == "linux" {
+		unwritableDir = "/proc/nonexistent/embeddings"
+	} else {
+		// Create a temp dir and remove write permissions to simulate unwritable path
+		readOnlyDir := filepath.Join(t.TempDir(), "readonly")
+		if err := os.MkdirAll(readOnlyDir, 0o555); err != nil {
+			t.Fatalf("failed to create read-only dir: %v", err)
+		}
+		unwritableDir = filepath.Join(readOnlyDir, "nested", "embeddings")
+	}
+
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: unwritableDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, unwritableDir)
+
+	// Verify init fails — if it unexpectedly succeeds, the test premise is invalid.
+	if err := mgr.Init(ctx); err == nil {
+		t.Skip("provider initialized despite unwritable dir; skipping platform-specific test")
+	}
+	defer mgr.Close()
+
+	// Create a valid ConversationTurn
+	turn, err := NewConversationTurn("test-unavailable", 1, "Test prompt with unavailable provider", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create conversation turn: %v", err)
+	}
+	turn.ActionableSummary = "Test summary"
+
+	// Call EmbedAndStoreTurn - should return nil (graceful failure, not an error)
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
+	}
+
+	// Verify the turn's PromptEmbedding is still nil (nothing was embedded)
+	if turn.PromptEmbedding != nil {
+		t.Error("PromptEmbedding should remain nil when provider is unavailable")
+	}
+
+	// Optionally verify that store cannot be retrieved or is empty
+	store, err := mgr.GetConversationStore(ctx)
+	if err == nil && store != nil {
+		// Store was available, verify nothing was stored
+		if store.Size() != 0 {
+			t.Errorf("expected 0 records with unavailable provider, got %d", store.Size())
 		}
 	}
 }

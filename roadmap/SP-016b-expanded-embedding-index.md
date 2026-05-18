@@ -7,7 +7,7 @@
 
 ## Background
 
-SP-016 built the core embedding infrastructure: a static model provider (gemma-distilled, 128d, int8, ~0.05ms/embedding), code extractors for Go/Python/TypeScript, a JSONL vector store, and the index manager. The index currently only contains **extracted code units** (functions, methods, classes, types).
+SP-016 built the core embedding infrastructure: a static model provider (bge-base-en-v1.5, 256d, int8, ~0.05ms/embedding), code extractors for Go/Python/TypeScript, a JSONL vector store, and the index manager. The index currently only contains **extracted code units** (functions, methods, classes, types).
 
 The static model refactor replaced the ONNX MiniLM (384d, ~280ms/embedding, requires CGO) with a pure-Go implementation that is ~5600x faster and has zero external dependencies. This speed makes it practical to index the entire workspace, not just extracted code symbols.
 

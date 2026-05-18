@@ -100,6 +100,9 @@ func (m *mockStateManager) GetConfigOverrides() map[string]interface{}       { r
 func (m *mockStateManager) SetConfigOverrides(map[string]interface{})        {}
 func (m *mockStateManager) GetCurrentIteration() int                         { return 0 }
 func (m *mockStateManager) SetCurrentIteration(int)                          {}
+func (m *mockStateManager) GetSessionIntentEmbedding() []float32             { return nil }
+func (m *mockStateManager) SetSessionIntentEmbedding([]float32)              {}
+func (m *mockStateManager) SetSessionIntentEmbeddingIfNil([]float32) bool    { return false }
 
 // ---------------------------------------------------------------------------
 // Mock OutputManager — satisfies every method on OutputManager with no-ops

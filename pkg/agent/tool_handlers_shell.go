@@ -7,11 +7,12 @@ import (
 	"os/exec"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
@@ -80,6 +81,16 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	// Validate that we have a command to execute (required when not checking background)
 	if command == "" {
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
+	}
+
+	// Risk cascade for personas with auto-approve rules (e.g., Executive Assistant).
+	// High-risk operations (including any -f/--force flag) are auto-rejected.
+	// Medium-risk operations are allowed but the persona's system prompt guides reasoning.
+	// Low-risk operations are auto-approved (no interception needed).
+	if risk := a.EvaluateOperationRisk(command); risk == configuration.RiskLevelHigh {
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("high-risk operation rejected by persona risk cascade: %s (command: '%s')", risk, command), nil,
+		)
 	}
 
 	// Block git checkout/switch commands from shell_command for ALL personas.
@@ -175,6 +186,18 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 		return handleGitCommitOperation(a)
 	}
 
+	// EA risk cascade: check operation + args for high-risk patterns.
+	// Build a pseudo-command string for risk evaluation.
+	pseudoCmd := "git " + string(operation)
+	if argsStr != "" {
+		pseudoCmd += " " + argsStr
+	}
+	if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelHigh {
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("high-risk git operation rejected by persona risk cascade: %s (command: '%s')", risk, pseudoCmd), nil,
+		)
+	}
+
 	// Enrich context with workspace root so executeGitCommand runs in the
 	// correct directory. The seed execution path passes a bare context
 	// without workspace metadata, so we inject it from the agent's config.
@@ -183,10 +206,17 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	}
 
 	// repo_orchestrator can stage files and push without approval.
+	// Personas with EA auto-approve rules (e.g., executive_assistant) that include
+	// git write operations in their medium-risk list can also stage/push/pull/fetch
+	// without interactive approval (the EA reasons about these itself).
 	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
 	// user approval regardless of persona.
 	isRepoOrchestrator := a.GetActivePersona() == "repo_orchestrator"
-	allowWithoutApproval := isRepoOrchestrator && (operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch)
+	basicGitOps := operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch
+	allowWithoutApproval := isRepoOrchestrator && basicGitOps
+	if !allowWithoutApproval && basicGitOps && a.hasEAGitWriteApproval() {
+		allowWithoutApproval = true
+	}
 
 	var approvalPrompter tools.GitApprovalPrompter
 	if !allowWithoutApproval {
@@ -341,15 +371,31 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		configManager = cm
 	}
 
+	// EA risk cascade: reject commit if the message or notes contain force flags
+	// or other high-risk patterns. This prevents the EA from being tricked into
+	// committing messages with embedded shell commands or dangerous patterns.
+	// Note: This is a defense-in-depth check; commit messages are not shell commands,
+	// but an LLM might construct a message containing patterns that could be
+	// misinterpreted by downstream systems.
+	if message != "" {
+		if risk := a.EvaluateOperationRisk(message); risk == configuration.RiskLevelHigh {
+			return "", agenterrors.NewSecurityError(
+				fmt.Sprintf("commit rejected by persona risk cascade: high-risk pattern detected in message (message: '%s')", message), nil,
+			)
+		}
+	}
+
 	// Auto-approve commits for repo_orchestrator — this persona is explicitly
 	// opted into by the user and is designed for autonomous commit workflows.
 	// Also auto-approve subagents (no interactive UI available).
+	// Also auto-approve personas with auto-approve EA rules (executive_assistant).
 	// All other personas still require interactive approval.
 	persona := a.GetActivePersona()
 	isRepoOrchestrator := persona == "repo_orchestrator"
 	isSubagent := a.IsSubagent()
+	hasEAAutoApprove := a.hasEAGitWriteApproval()
 
-	if !isRepoOrchestrator && !isSubagent {
+	if !isRepoOrchestrator && !isSubagent && !hasEAAutoApprove {
 		// Prompt user for approval before committing (only in interactive mode)
 		choices := []ChoiceOption{
 			{Label: "Approve", Value: "approve"},

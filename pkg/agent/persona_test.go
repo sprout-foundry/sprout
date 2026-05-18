@@ -93,3 +93,474 @@ func TestApplyPersonaNotFoundIncludesAvailablePersonas(t *testing.T) {
 		t.Fatalf("expected orchestrator in available persona list, got: %s", msg)
 	}
 }
+
+// =============================================================================
+// IsLocalMode tests
+// =============================================================================
+
+func TestIsLocalMode_DefaultReturnsTrue(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	if !agent.IsLocalMode() {
+		t.Errorf("IsLocalMode() = false, want true (default)")
+	}
+}
+
+func TestIsLocalMode_CloudEnvReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	t.Setenv("SPROUT_CLOUD", "1")
+
+	if agent.IsLocalMode() {
+		t.Errorf("IsLocalMode() = true, want false (SPROUT_CLOUD=1)")
+	}
+}
+
+func TestIsLocalMode_CloudEnvNonOneReturnsTrue(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	t.Setenv("SPROUT_CLOUD", "0")
+
+	if !agent.IsLocalMode() {
+		t.Errorf("IsLocalMode() = false, want true (SPROUT_CLOUD=0)")
+	}
+}
+
+func TestIsLocalMode_CloudEnvEmptyReturnsTrue(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	t.Setenv("SPROUT_CLOUD", "")
+
+	if !agent.IsLocalMode() {
+		t.Errorf("IsLocalMode() = false, want true (SPROUT_CLOUD=empty)")
+	}
+}
+
+// =============================================================================
+// GetAvailablePersonaIDs LocalOnly filtering
+// =============================================================================
+
+func TestGetAvailablePersonaIDs_LocalOnlyFilteredInCloudMode(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a LocalOnly persona
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_localonly_persona_x"] = configuration.SubagentType{
+			ID:        "test_localonly_persona_x",
+			Name:      "Local Only Test",
+			Enabled:   true,
+			LocalOnly: true,
+		}
+		// Also add a regular (non-local-only) persona
+		cfg.SubagentTypes["test_regular_persona_x"] = configuration.SubagentType{
+			ID:      "test_regular_persona_x",
+			Name:    "Regular Test",
+			Enabled: true,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	// In local mode (default), both should be present
+	ids := agent.GetAvailablePersonaIDs()
+	localOnlyFound := false
+	regularFound := false
+	for _, id := range ids {
+		if id == "test_localonly_persona_x" {
+			localOnlyFound = true
+		}
+		if id == "test_regular_persona_x" {
+			regularFound = true
+		}
+	}
+	if !localOnlyFound {
+		t.Error("LocalOnly persona should be present in local mode")
+	}
+	if !regularFound {
+		t.Error("regular persona should be present in local mode")
+	}
+
+	// In cloud mode, LocalOnly persona should be filtered out
+	t.Setenv("SPROUT_CLOUD", "1")
+	ids = agent.GetAvailablePersonaIDs()
+	for _, id := range ids {
+		if id == "test_localonly_persona_x" {
+			t.Error("LocalOnly persona should NOT be present in cloud mode")
+		}
+	}
+	// Regular persona should still be present
+	regularFound = false
+	for _, id := range ids {
+		if id == "test_regular_persona_x" {
+			regularFound = true
+		}
+	}
+	if !regularFound {
+		t.Error("regular persona should still be present in cloud mode")
+	}
+}
+
+func TestGetAvailablePersonaIDs_LocalOnlyDisabledStillExcludedInCloud(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_disabled_localonly_x"] = configuration.SubagentType{
+			ID:        "test_disabled_localonly_x",
+			Name:      "Disabled Local Only",
+			Enabled:   false,
+			LocalOnly: true,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	// Disabled + LocalOnly: should be excluded in both modes
+	ids := agent.GetAvailablePersonaIDs()
+	for _, id := range ids {
+		if id == "test_disabled_localonly_x" {
+			t.Error("disabled persona should never appear in available IDs (local mode)")
+		}
+	}
+
+	t.Setenv("SPROUT_CLOUD", "1")
+	ids = agent.GetAvailablePersonaIDs()
+	for _, id := range ids {
+		if id == "test_disabled_localonly_x" {
+			t.Error("disabled persona should never appear in available IDs (cloud mode)")
+		}
+	}
+}
+
+// =============================================================================
+// Agent.EvaluateOperationRisk tests
+// =============================================================================
+
+func TestEvaluateOperationRisk_NoPersonaReturnsLow(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// With no active persona, EvaluateOperationRisk should return Low
+	risk := agent.EvaluateOperationRisk("rm -rf /tmp")
+	if risk != configuration.RiskLevelLow {
+		t.Errorf("EvaluateOperationRisk with no persona = %q, want %q", risk, configuration.RiskLevelLow)
+	}
+}
+
+func TestEvaluateOperationRisk_PersonaWithoutAutoApproveRulesReturnsLow(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Activate a persona that has no AutoApproveRules (e.g., "coder")
+	agent.state.SetActivePersona("coder")
+
+	// Personas without auto-approve rules return Low
+	risk := agent.EvaluateOperationRisk("rm -rf /tmp")
+	if risk != configuration.RiskLevelLow {
+		t.Errorf("EvaluateOperationRisk with persona without rules = %q, want %q", risk, configuration.RiskLevelLow)
+	}
+}
+
+func TestEvaluateOperationRisk_PersonaWithAutoApproveRulesReturnsCorrectRisk(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a persona with auto-approve rules
+	rules := configuration.DefaultAutoApproveRules()
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_ea_persona_risk"] = configuration.SubagentType{
+			ID:               "test_ea_persona_risk",
+			Name:             "Test EA",
+			Enabled:          true,
+			AutoApproveRules: &rules,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_ea_persona_risk")
+
+	// Low risk: git status
+	if risk := agent.EvaluateOperationRisk("git status"); risk != configuration.RiskLevelLow {
+		t.Errorf("git status risk = %q, want %q", risk, configuration.RiskLevelLow)
+	}
+
+	// Medium risk: git commit
+	if risk := agent.EvaluateOperationRisk("git commit -m msg"); risk != configuration.RiskLevelMedium {
+		t.Errorf("git commit risk = %q, want %q", risk, configuration.RiskLevelMedium)
+	}
+
+	// High risk: rm -rf
+	if risk := agent.EvaluateOperationRisk("rm -rf /tmp"); risk != configuration.RiskLevelHigh {
+		t.Errorf("rm -rf risk = %q, want %q", risk, configuration.RiskLevelHigh)
+	}
+
+	// High risk: git reset --hard
+	if risk := agent.EvaluateOperationRisk("git reset --hard HEAD~1"); risk != configuration.RiskLevelHigh {
+		t.Errorf("git reset --hard risk = %q, want %q", risk, configuration.RiskLevelHigh)
+	}
+
+	// High risk: force flag escalation
+	if risk := agent.EvaluateOperationRisk("git status --force"); risk != configuration.RiskLevelHigh {
+		t.Errorf("force flag escalation risk = %q, want %q", risk, configuration.RiskLevelHigh)
+	}
+}
+
+func TestEvaluateOperationRisk_NilConfigReturnsLow(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("some_persona")
+	agent.configManager = nil
+
+	risk := agent.EvaluateOperationRisk("rm -rf /tmp")
+	if risk != configuration.RiskLevelLow {
+		t.Errorf("EvaluateOperationRisk with nil configManager = %q, want %q", risk, configuration.RiskLevelLow)
+	}
+}
+
+// =============================================================================
+// hasEAGitWriteApproval tests
+// =============================================================================
+
+func TestHasEAGitWriteApproval_WithGitCommitInMediumRisk(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a persona with git_commit in MediumRiskOps
+	customRules := configuration.AutoApproveRules{
+		LowRiskOps:     []string{"git_status"},
+		MediumRiskOps:  []string{"git_commit", "git_push"},
+		HighRiskNever:  []string{"force_flag"},
+	}
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_ea_with_git_medium"] = configuration.SubagentType{
+			ID:               "test_ea_with_git_medium",
+			Name:             "EA with Git Medium",
+			Enabled:          true,
+			AutoApproveRules: &customRules,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_ea_with_git_medium")
+
+	if !agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected hasEAGitWriteApproval to return true with git_commit in MediumRiskOps")
+	}
+}
+
+func TestHasEAGitWriteApproval_WithGitAddInLowRisk(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a persona with git_add in LowRiskOps
+	customRules := configuration.AutoApproveRules{
+		LowRiskOps:     []string{"git_add", "git_status"},
+		MediumRiskOps:  []string{},
+		HighRiskNever:  []string{"force_flag"},
+	}
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_ea_with_git_low"] = configuration.SubagentType{
+			ID:               "test_ea_with_git_low",
+			Name:             "EA with Git Low",
+			Enabled:          true,
+			AutoApproveRules: &customRules,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_ea_with_git_low")
+
+	if !agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected hasEAGitWriteApproval to return true with git_add in LowRiskOps")
+	}
+}
+
+func TestHasEAGitWriteApproval_WithGitPushInLowRisk(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a persona with git_push in LowRiskOps
+	customRules := configuration.AutoApproveRules{
+		LowRiskOps:     []string{"git_push", "git_status"},
+		MediumRiskOps:  []string{},
+		HighRiskNever:  []string{},
+	}
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_ea_with_git_push_low"] = configuration.SubagentType{
+			ID:               "test_ea_with_git_push_low",
+			Name:             "EA with Git Push Low",
+			Enabled:          true,
+			AutoApproveRules: &customRules,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_ea_with_git_push_low")
+
+	if !agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected hasEAGitWriteApproval to return true with git_push in LowRiskOps")
+	}
+}
+
+func TestHasEAGitWriteApproval_WithoutGitRulesReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a persona with auto-approve rules but NO git write operations
+	customRules := configuration.AutoApproveRules{
+		LowRiskOps:     []string{"git_status", "git_log", "read_file"},
+		MediumRiskOps:  []string{"write_file", "shell_command"},
+		HighRiskNever:  []string{"force_flag"},
+	}
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes["test_ea_no_git_write"] = configuration.SubagentType{
+			ID:               "test_ea_no_git_write",
+			Name:             "EA without Git Write",
+			Enabled:          true,
+			AutoApproveRules: &customRules,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_ea_no_git_write")
+
+	if agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected hasEAGitWriteApproval to return false without git write operations in rules")
+	}
+}
+
+func TestHasEAGitWriteApproval_NoAutoApproveRulesReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Activate a persona with no AutoApproveRules
+	agent.state.SetActivePersona("coder")
+
+	if agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected hasEAGitWriteApproval to return false for persona without AutoApproveRules")
+	}
+}
+
+func TestHasEAGitWriteApproval_NilConfigReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("some_persona")
+	agent.configManager = nil
+
+	if agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected hasEAGitWriteApproval to return false with nil configManager")
+	}
+}
+
+// =============================================================================
+// isOrchestratorGitWriteAllowed for orchestrator persona
+// =============================================================================
+
+func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigEnabled(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("orchestrator")
+
+	// Enable AllowOrchestratorGitWrite in config
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.AllowOrchestratorGitWrite = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	if !agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected isOrchestratorGitWriteAllowed to return true for orchestrator with config enabled")
+	}
+}
+
+func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigDisabled(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("orchestrator")
+
+	// Default: AllowOrchestratorGitWrite is false
+	if agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected isOrchestratorGitWriteAllowed to return false for orchestrator with default config")
+	}
+}
+
+func TestIsOrchestratorGitWriteAllowed_RepoOrchestratorPersonaWithConfigEnabled(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("repo_orchestrator")
+
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.AllowOrchestratorGitWrite = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	if !agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected isOrchestratorGitWriteAllowed to return true for repo_orchestrator with config enabled")
+	}
+}
+
+func TestIsOrchestratorGitWriteAllowed_NonOrchestratorNonEAPersonaReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("coder")
+
+	if agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected isOrchestratorGitWriteAllowed to return false for non-orchestrator, non-EA persona")
+	}
+}

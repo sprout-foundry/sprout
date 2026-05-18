@@ -123,7 +123,8 @@ func normalizeAgentPersonaID(raw string) string {
 	return normalized
 }
 
-// GetAvailablePersonaIDs returns all configured persona IDs.
+// GetAvailablePersonaIDs returns all configured persona IDs,
+// filtering out LocalOnly personas when running in cloud mode.
 func (a *Agent) GetAvailablePersonaIDs() []string {
 	if a.configManager == nil {
 		return nil
@@ -133,9 +134,15 @@ func (a *Agent) GetAvailablePersonaIDs() []string {
 		return nil
 	}
 
+	isLocal := a.IsLocalMode()
+
 	personaIDs := make([]string, 0, len(config.SubagentTypes))
 	for id, persona := range config.SubagentTypes {
 		if !persona.Enabled {
+			continue
+		}
+		// Filter out LocalOnly personas in cloud mode
+		if persona.LocalOnly && !isLocal {
 			continue
 		}
 		personaIDs = append(personaIDs, id)
@@ -210,6 +217,11 @@ func (a *Agent) GetAvailableToolNames() []string {
 func (a *Agent) isOrchestratorGitWriteAllowed() bool {
 	persona := a.GetActivePersona()
 	if persona != "orchestrator" && persona != "repo_orchestrator" {
+		// Personas with auto-approve rules (e.g., executive_assistant) are treated
+		// as having git write access when their rules include git write operations.
+		if persona != "" && a.hasEAGitWriteApproval() {
+			return true
+		}
 		return false
 	}
 	if a.configManager == nil {
@@ -220,4 +232,35 @@ func (a *Agent) isOrchestratorGitWriteAllowed() bool {
 		return false
 	}
 	return config.AllowOrchestratorGitWrite
+}
+
+// hasEAGitWriteApproval checks if the active persona has auto-approve rules
+// that explicitly include git write operations (git_commit, git_push, etc.)
+// in its low or medium risk lists. This is used to grant git write access
+// to the Executive Assistant persona.
+func (a *Agent) hasEAGitWriteApproval() bool {
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	personaID := a.GetActivePersona()
+	persona := cfg.GetSubagentType(personaID)
+	if persona == nil || persona.AutoApproveRules == nil {
+		return false
+	}
+	rules := persona.GetAutoApproveRules()
+	gitWriteOps := []string{"git_commit", "git_push", "git_add"}
+	for _, op := range gitWriteOps {
+		for _, low := range rules.LowRiskOps {
+			if low == op {
+				return true
+			}
+		}
+		for _, med := range rules.MediumRiskOps {
+			if med == op {
+				return true
+			}
+		}
+	}
+	return false
 }

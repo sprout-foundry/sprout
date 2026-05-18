@@ -5,19 +5,21 @@ import (
 	"strings"
 )
 
-// StaticTokenizer implements a SentencePiece-style BPE tokenizer.
-// It uses greedy longest-prefix matching with byte fallback.
+// StaticTokenizer implements both SentencePiece-style BPE and WordPiece tokenization.
+// - BPE/SentencePiece: uses ▁ (U+2581) as space prefix (usesSpacePrefix=true)
+// - WordPiece: uses ## as subword prefix (usesSpacePrefix=false)
+// Both use greedy longest-prefix matching with byte fallback.
 type StaticTokenizer struct {
 	vocabMap        map[string]uint16 // token string -> ID
 	vocabSize       int
 	unkID           uint16
-	usesSpacePrefix bool // true if tokenizer uses ▁ (U+2581) space prefix
+	usesSpacePrefix bool // true if tokenizer uses ▁ (U+2581) space prefix (BPE/SentencePiece)
 }
 
 // Tokenize converts text to a list of token IDs using the full pipeline:
 // 1. Pre-tokenize: split on whitespace
-// 2. Prepend ▁ to non-first words (if usesSpacePrefix)
-// 3. For each word segment, apply longest-prefix matching with byte fallback
+// 2. For each word segment, apply longest-prefix matching with the appropriate
+//    prefix strategy (▁ for BPE, ## for WordPiece) and byte fallback.
 func (t *StaticTokenizer) Tokenize(text string) []uint16 {
 	// Pre-tokenize: split on whitespace
 	words := strings.Fields(text)
@@ -26,17 +28,17 @@ func (t *StaticTokenizer) Tokenize(text string) []uint16 {
 	}
 
 	var ids []uint16
-	for i, word := range words {
-		// Prepend ▁ (U+2581) to non-first words if tokenizer uses space prefix
-		if t.usesSpacePrefix && i > 0 {
-			word = "\u2581" + word
-		}
+	for _, word := range words {
 		ids = append(ids, t.tokenizeWord(word)...)
 	}
 	return ids
 }
 
 // tokenizeWord applies longest-prefix matching to a single word segment.
+// For BPE/SentencePiece (usesSpacePrefix=true): first word in a sequence gets
+// ▁ prefix; subsequent subwords do not (▁ is added at the Tokenize level).
+// For WordPiece (usesSpacePrefix=false): first subword is matched as-is;
+// subsequent subwords need ## prefix.
 func (t *StaticTokenizer) tokenizeWord(word string) []uint16 {
 	var ids []uint16
 	i := 0
@@ -53,10 +55,22 @@ func (t *StaticTokenizer) tokenizeWord(word string) []uint16 {
 
 		for end := maxLen; end > i; end-- {
 			sub := word[i:end]
+
+			// For WordPiece: if this is not the first subword, try with ## prefix
+			if !t.usesSpacePrefix && len(ids) > 0 {
+				key := "##" + sub
+				if id, ok := t.vocabMap[key]; ok {
+					bestLen = end - i
+					bestID = id
+					break
+				}
+			}
+
+			// Direct lookup
 			if id, ok := t.vocabMap[sub]; ok {
 				bestLen = end - i
 				bestID = id
-				break // longest match found
+				break
 			}
 		}
 

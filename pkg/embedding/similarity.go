@@ -3,6 +3,7 @@ package embedding
 import (
 	"math"
 	"slices"
+	"time"
 )
 
 // CosineSimilarity computes the cosine similarity between two vectors.
@@ -88,4 +89,21 @@ func TopK(query []float32, candidates []VectorRecord, k int, threshold float32) 
 	}
 
 	return scored
+}
+
+// ScoreWithDecay computes a time-decayed similarity score by combining
+// a raw similarity value with exponential decay based on the age of the record.
+// The decay uses a 30-day half-life, meaning the score is halved every 30 days.
+//
+// Parameters:
+//   - similarity: The raw cosine similarity value (typically in [-1, 1])
+//   - timestamp: The timestamp when the record was created/indexed
+//   - now: The current reference time (usually time.Now())
+//
+// Returns: The decayed score as a float64. Recent records (same day) have
+// decay ≈ 1.0. Old records are deprioritized but never eliminated completely.
+func ScoreWithDecay(similarity float64, timestamp time.Time, now time.Time) float64 {
+	daysAgo := now.Sub(timestamp).Hours() / 24.0
+	decay := math.Pow(0.5, daysAgo/30.0) // 30-day half-life
+	return similarity * decay
 }

@@ -266,45 +266,53 @@ func TestCleanupInactiveSessions_BackgroundTimeout(t *testing.T) {
 		t.Fatalf("ExecuteCommandInBackground failed: %v", err)
 	}
 
-	now := time.Now()
+	// Wait for the background command to finish and the PTY readLoop to settle.
+	// The readLoop goroutine resets LastUsed every time it reads PTY output
+	// (including shell prompts after command completion). We need to wait until
+	// the shell is quiet before setting LastUsed to a past time, otherwise the
+	// readLoop will overwrite our timestamp.
+	time.Sleep(1 * time.Second)
 
-	// Set regular session to be 100ms in the past (> 50ms regular timeout, < 500ms bg timeout).
+	// Use large time deltas for reliability on slow platforms.
+	// Set regular session to be 5s in the past (> 1s regular timeout).
 	regularSession.mutex.Lock()
-	regularSession.LastUsed = now.Add(-100 * time.Millisecond)
+	regularSession.LastUsed = time.Now().Add(-5 * time.Second)
 	regularSession.mutex.Unlock()
 
-	// Set background session to be 100ms in the past (> 50ms regular timeout, < 500ms bg timeout).
-	// But since it's a background session, the 500ms timeout should protect it.
+	// Set background session to be 5s in the past (> 1s regular timeout, < 30s bg timeout).
 	bgSession, _ := tm.GetSession(bgSessionID)
 	bgSession.mutex.Lock()
-	bgSession.LastUsed = now.Add(-100 * time.Millisecond)
+	bgSession.LastUsed = time.Now().Add(-5 * time.Second)
 	bgSession.mutex.Unlock()
 
-	// Cleanup with 50ms regular timeout and 500ms background timeout.
-	tm.CleanupInactiveSessions(50*time.Millisecond, 500*time.Millisecond)
+	// Cleanup with 1s regular timeout and 30s background timeout.
+	tm.CleanupInactiveSessions(1*time.Second, 30*time.Second)
 
-	// Regular hidden session should be cleaned up (100ms > 50ms).
+	// Regular hidden session should be cleaned up (5s > 1s).
 	_, exists := tm.GetSession("regular-hidden")
 	if exists {
-		t.Error("regular hidden session should be cleaned up after 50ms timeout (was inactive for 100ms)")
+		t.Error("regular hidden session should be cleaned up after 1s timeout (was inactive for 5s)")
 	}
 
-	// Background session should NOT be cleaned up yet (100ms < 500ms background timeout).
+	// Background session should NOT be cleaned up yet (5s < 30s background timeout).
 	_, exists = tm.GetSession(bgSessionID)
 	if !exists {
-		t.Error("background session should NOT be cleaned up before 500ms timeout")
+		t.Error("background session should NOT be cleaned up before 30s timeout")
 	}
 
-	// Wait for the longer timeout to elapse (total 100ms + 550ms = 650ms > 500ms).
-	time.Sleep(550 * time.Millisecond)
+	// Set the background session far enough in the past to exceed the 30s timeout.
+	bgSession2, _ := tm.GetSession(bgSessionID)
+	bgSession2.mutex.Lock()
+	bgSession2.LastUsed = time.Now().Add(-31 * time.Second)
+	bgSession2.mutex.Unlock()
 
 	// Run cleanup again.
-	tm.CleanupInactiveSessions(50*time.Millisecond, 500*time.Millisecond)
+	tm.CleanupInactiveSessions(1*time.Second, 30*time.Second)
 
 	// Now the background session should be cleaned up.
 	_, exists = tm.GetSession(bgSessionID)
 	if exists {
-		t.Error("background session should be cleaned up after 500ms timeout")
+		t.Error("background session should be cleaned up after 30s timeout")
 	}
 }
 

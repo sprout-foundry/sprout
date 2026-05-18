@@ -459,7 +459,7 @@ func TestSafeResolvePathTmpExemption(t *testing.T) {
 	tmpFile := "/tmp/testfile_existing.txt"
 	defer os.Remove(tmpFile)
 	if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
-		t.Fatalf("Failed to create temp file in /tmp: %v", err)
+		t.Skipf("skipping: cannot write to /tmp on this platform: %v", err)
 	}
 
 	tests := []struct {

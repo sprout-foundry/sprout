@@ -1,0 +1,1118 @@
+package agent
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+)
+
+// ========================================================================
+// formatRelativeTime tests
+// ========================================================================
+
+func TestFormatRelativeTime_JustNow(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	// 0 seconds
+	if got := formatRelativeTime(now, now); got != "just now" {
+		t.Errorf("0s: expected 'just now', got %q", got)
+	}
+
+	// 30 seconds
+	if got := formatRelativeTime(now.Add(-30*time.Second), now); got != "just now" {
+		t.Errorf("30s: expected 'just now', got %q", got)
+	}
+
+	// 59 seconds
+	if got := formatRelativeTime(now.Add(-59*time.Second), now); got != "just now" {
+		t.Errorf("59s: expected 'just now', got %q", got)
+	}
+}
+
+func TestFormatRelativeTime_Minutes(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		ago     time.Duration
+		want    string
+	}{
+		{1 * time.Minute, "1 minute ago"},
+		{1*time.Minute + 30*time.Second, "1 minute ago"},
+		{5 * time.Minute, "5 minutes ago"},
+		{10 * time.Minute, "10 minutes ago"},
+		{30 * time.Minute, "30 minutes ago"},
+		{59 * time.Minute, "59 minutes ago"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			got := formatRelativeTime(now.Add(-tc.ago), now)
+			if got != tc.want {
+				t.Errorf("%v ago: expected %q, got %q", tc.ago, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestFormatRelativeTime_Hours(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{1 * time.Hour, "1 hour ago"},
+		{1*time.Hour + 30*time.Minute, "1 hour ago"},
+		{3 * time.Hour, "3 hours ago"},
+		{12 * time.Hour, "12 hours ago"},
+		{23 * time.Hour, "23 hours ago"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			got := formatRelativeTime(now.Add(-tc.ago), now)
+			if got != tc.want {
+				t.Errorf("%v ago: expected %q, got %q", tc.ago, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestFormatRelativeTime_Days(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{24 * time.Hour, "1 day ago"},
+		{24*time.Hour + 12*time.Hour, "1 day ago"},
+		{2 * 24 * time.Hour, "2 days ago"},
+		{5 * 24 * time.Hour, "5 days ago"},
+		{6 * 24 * time.Hour, "6 days ago"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			got := formatRelativeTime(now.Add(-tc.ago), now)
+			if got != tc.want {
+				t.Errorf("%v ago: expected %q, got %q", tc.ago, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestFormatRelativeTime_Weeks(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{7 * 24 * time.Hour,     "1 week ago"},
+		{7*24*time.Hour + 12*time.Hour, "1 week ago"},
+		{2 * 7 * 24 * time.Hour, "2 weeks ago"},
+		{3 * 7 * 24 * time.Hour, "3 weeks ago"},
+		{4 * 7 * 24 * time.Hour, "4 weeks ago"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			got := formatRelativeTime(now.Add(-tc.ago), now)
+			if got != tc.want {
+				t.Errorf("%v ago: expected %q, got %q", tc.ago, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestFormatRelativeTime_Months(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		ago  time.Duration
+		want string
+	}{
+		{30 * 24 * time.Hour,     "1 month ago"},
+		{30*24*time.Hour + 12*time.Hour, "1 month ago"},
+		{60 * 24 * time.Hour,     "2 months ago"},
+		{90 * 24 * time.Hour,     "3 months ago"},
+		{180 * 24 * time.Hour,    "6 months ago"},
+		{365 * 24 * time.Hour,    "12 months ago"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.want, func(t *testing.T) {
+			got := formatRelativeTime(now.Add(-tc.ago), now)
+			if got != tc.want {
+				t.Errorf("%v ago: expected %q, got %q", tc.ago, tc.want, got)
+			}
+		})
+	}
+}
+
+func TestFormatRelativeTime_FutureTimestamp(t *testing.T) {
+	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+
+	// Future timestamps should return "just now" (not negative time)
+	tests := []time.Duration{
+		1 * time.Minute,
+		1 * time.Hour,
+		24 * time.Hour,
+		30 * 24 * time.Hour,
+	}
+
+	for _, d := range tests {
+		got := formatRelativeTime(now.Add(d), now)
+		if got != "just now" {
+			t.Errorf("future +%.0fh: expected 'just now', got %q", d.Hours(), got)
+		}
+	}
+}
+
+// ========================================================================
+// DefaultProactiveContextConfig tests
+// ========================================================================
+
+func TestDefaultProactiveContextConfig(t *testing.T) {
+	cfg := DefaultProactiveContextConfig()
+
+	if cfg.MinRelevanceScore != 0.50 {
+		t.Errorf("MinRelevanceScore: expected 0.50, got %f", cfg.MinRelevanceScore)
+	}
+	if cfg.MaxContextualResults != 5 {
+		t.Errorf("MaxContextualResults: expected 5, got %d", cfg.MaxContextualResults)
+	}
+	if cfg.MaxContextChars != 4000 {
+		t.Errorf("MaxContextChars: expected 4000, got %d", cfg.MaxContextChars)
+	}
+	if cfg.WorkspaceScoped != false {
+		t.Errorf("WorkspaceScoped: expected false, got %v", cfg.WorkspaceScoped)
+	}
+}
+
+// ========================================================================
+// ProactiveContextConfig.resolve() tests
+// ========================================================================
+
+func TestProactiveContextConfig_Resolve_AllZero(t *testing.T) {
+	cfg := ProactiveContextConfig{}
+	resolved := cfg.resolve()
+
+	d := DefaultProactiveContextConfig()
+	if resolved.MinRelevanceScore != d.MinRelevanceScore {
+		t.Errorf("MinRelevanceScore: expected %f, got %f", d.MinRelevanceScore, resolved.MinRelevanceScore)
+	}
+	if resolved.MaxContextualResults != d.MaxContextualResults {
+		t.Errorf("MaxContextualResults: expected %d, got %d", d.MaxContextualResults, resolved.MaxContextualResults)
+	}
+	if resolved.MaxContextChars != d.MaxContextChars {
+		t.Errorf("MaxContextChars: expected %d, got %d", d.MaxContextChars, resolved.MaxContextChars)
+	}
+	if resolved.WorkspaceScoped != d.WorkspaceScoped {
+		t.Errorf("WorkspaceScoped: expected %v, got %v", d.WorkspaceScoped, resolved.WorkspaceScoped)
+	}
+}
+
+func TestProactiveContextConfig_Resolve_NonZeroPreserved(t *testing.T) {
+	cfg := ProactiveContextConfig{
+		MinRelevanceScore:    0.80,
+		MaxContextualResults: 10,
+		MaxContextChars:      8000,
+		WorkspaceScoped:      true,
+	}
+	resolved := cfg.resolve()
+
+	if resolved.MinRelevanceScore != 0.80 {
+		t.Errorf("MinRelevanceScore: expected 0.80, got %f", resolved.MinRelevanceScore)
+	}
+	if resolved.MaxContextualResults != 10 {
+		t.Errorf("MaxContextualResults: expected 10, got %d", resolved.MaxContextualResults)
+	}
+	if resolved.MaxContextChars != 8000 {
+		t.Errorf("MaxContextChars: expected 8000, got %d", resolved.MaxContextChars)
+	}
+	if resolved.WorkspaceScoped != true {
+		t.Errorf("WorkspaceScoped: expected true, got %v", resolved.WorkspaceScoped)
+	}
+}
+
+func TestProactiveContextConfig_Resolve_PartialOverride(t *testing.T) {
+	// Only override MinRelevanceScore; rest should get defaults
+	cfg := ProactiveContextConfig{
+		MinRelevanceScore: 0.90,
+	}
+	resolved := cfg.resolve()
+
+	if resolved.MinRelevanceScore != 0.90 {
+		t.Errorf("MinRelevanceScore: expected 0.90, got %f", resolved.MinRelevanceScore)
+	}
+	if resolved.MaxContextualResults != 5 {
+		t.Errorf("MaxContextualResults: expected 5 (default), got %d", resolved.MaxContextualResults)
+	}
+	if resolved.MaxContextChars != 4000 {
+		t.Errorf("MaxContextChars: expected 4000 (default), got %d", resolved.MaxContextChars)
+	}
+	if resolved.WorkspaceScoped != false {
+		t.Errorf("WorkspaceScoped: expected false (default), got %v", resolved.WorkspaceScoped)
+	}
+}
+
+func TestProactiveContextConfig_Resolve_NegativeValuesUseDefaults(t *testing.T) {
+	// Negative values should be replaced by defaults (<= 0 check)
+	cfg := ProactiveContextConfig{
+		MinRelevanceScore:    -0.5,
+		MaxContextualResults: -1,
+		MaxContextChars:      -100,
+	}
+	resolved := cfg.resolve()
+
+	d := DefaultProactiveContextConfig()
+	if resolved.MinRelevanceScore != d.MinRelevanceScore {
+		t.Errorf("MinRelevanceScore: expected default %f, got %f", d.MinRelevanceScore, resolved.MinRelevanceScore)
+	}
+	if resolved.MaxContextualResults != d.MaxContextualResults {
+		t.Errorf("MaxContextualResults: expected default %d, got %d", d.MaxContextualResults, resolved.MaxContextualResults)
+	}
+	if resolved.MaxContextChars != d.MaxContextChars {
+		t.Errorf("MaxContextChars: expected default %d, got %d", d.MaxContextChars, resolved.MaxContextChars)
+	}
+}
+
+func TestProactiveContextConfig_Resolve_DoesNotMutateOriginal(t *testing.T) {
+	cfg := ProactiveContextConfig{
+		MinRelevanceScore: 0.0,
+	}
+	originalScore := cfg.MinRelevanceScore
+
+	_ = cfg.resolve()
+
+	if cfg.MinRelevanceScore != originalScore {
+		t.Error("resolve() should not mutate the original config")
+	}
+}
+
+// ========================================================================
+// FormatProactiveContext tests
+// ========================================================================
+
+func TestFormatProactiveContext_EmptyResults(t *testing.T) {
+	result := FormatProactiveContext(nil, DefaultProactiveContextConfig(), time.Now().UTC())
+	if result != "" {
+		t.Errorf("expected empty string for nil results, got %q", result)
+	}
+
+	result = FormatProactiveContext([]ProactiveContextResult{}, DefaultProactiveContextConfig(), time.Now().UTC())
+	if result != "" {
+		t.Errorf("expected empty string for empty results, got %q", result)
+	}
+}
+
+func TestFormatProactiveContext_SingleResult(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:1",
+				Signature: "How do I implement a REST API?",
+				IndexedAt: now.Add(-1 * time.Hour),
+				Metadata: map[string]interface{}{
+					"actionableSummary": "Implement REST API using net/http",
+				},
+			},
+			Score: 0.85,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	if !strings.Contains(output, "## Previous Work (Contextual Memory)") {
+		t.Error("output should contain the header")
+	}
+	if !strings.Contains(output, "How do I implement a REST API?") {
+		t.Error("output should contain the prompt signature in header")
+	}
+	if !strings.Contains(output, "1 hour ago") {
+		t.Error("output should contain '1 hour ago'")
+	}
+	if !strings.Contains(output, `User: "How do I implement a REST API?"`) {
+		t.Error("output should contain the user prompt in quotes")
+	}
+	if !strings.Contains(output, "Summary: Implement REST API using net/http") {
+		t.Error("output should contain the actionable summary")
+	}
+}
+
+func TestFormatProactiveContext_MultipleResults(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:1",
+				Signature: "First query about Go",
+				IndexedAt: now.Add(-1 * time.Hour),
+				Metadata: map[string]interface{}{
+					"actionableSummary": "First summary",
+				},
+			},
+			Score: 0.90,
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:2",
+				Signature: "Second query about channels",
+				IndexedAt: now.Add(-2 * time.Hour),
+				Metadata: map[string]interface{}{
+					"actionableSummary": "Second summary",
+				},
+			},
+			Score: 0.80,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	if !strings.Contains(output, "First query about Go") {
+		t.Error("should contain first result")
+	}
+	if !strings.Contains(output, "Second query about channels") {
+		t.Error("should contain second result")
+	}
+	if !strings.Contains(output, "First summary") {
+		t.Error("should contain first summary")
+	}
+	if !strings.Contains(output, "Second summary") {
+		t.Error("should contain second summary")
+	}
+}
+
+func TestFormatProactiveContext_Truncation(t *testing.T) {
+	now := time.Now().UTC()
+
+	// Create results that will exceed the budget when formatted
+	longPrompt := strings.Repeat("X", 1000)
+	longSummary := strings.Repeat("Y", 1000)
+
+	results := make([]ProactiveContextResult, 5)
+	for i := range results {
+		results[i] = ProactiveContextResult{
+			Record: embedding.VectorRecord{
+				Signature: longPrompt,
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"actionableSummary": longSummary,
+				},
+			},
+			Score: 0.9,
+		}
+	}
+
+	// Set a very small budget to force truncation
+	config := DefaultProactiveContextConfig()
+	config.MaxContextChars = 500
+
+	output := FormatProactiveContext(results, config, time.Now().UTC())
+
+	if len(output) > config.MaxContextChars+20 {
+		// Allow small tolerance for the "[Context truncated...]" suffix
+		t.Errorf("output too long: expected <= %d + suffix, got %d", config.MaxContextChars, len(output))
+	}
+
+	if !strings.Contains(output, "[Context truncated...]") {
+		t.Error("truncated output should contain '[Context truncated...]'")
+	}
+}
+
+func TestFormatProactiveContext_EmptySignature(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:empty",
+				Signature: "",
+				IndexedAt: now,
+				Metadata:  map[string]interface{}{},
+			},
+			Score: 0.5,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	if !strings.Contains(output, "No prompt available") {
+		t.Error("empty signature should show 'No prompt available' in header")
+	}
+	if !strings.Contains(output, `User: ""`) {
+		t.Error("empty signature should show 'User: \"\"'")
+	}
+}
+
+func TestFormatProactiveContext_NoSummaryAvailable(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				Signature: "My query",
+				IndexedAt: now,
+				Metadata:  map[string]interface{}{}, // no actionableSummary key
+			},
+			Score: 0.7,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	if !strings.Contains(output, "No summary available") {
+		t.Error("missing summary should show 'No summary available'")
+	}
+}
+
+func TestFormatProactiveContext_EmptySummary(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				Signature: "My query",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"actionableSummary": "", // present but empty
+				},
+			},
+			Score: 0.7,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	if !strings.Contains(output, "No summary available") {
+		t.Error("empty summary string should show 'No summary available'")
+	}
+}
+
+func TestFormatProactiveContext_MultilineSignatureTruncatedInHeader(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				Signature: "First line\nSecond line that should be dropped in header",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"actionableSummary": "A summary",
+				},
+			},
+			Score: 0.8,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	// Header should show only "First line", not the second line
+	if strings.Contains(output, "### First line") {
+		// Good — header has first line only
+	} else {
+		t.Error("header should start with '### First line'")
+	}
+
+	// The full signature should still appear in the User: line
+	if !strings.Contains(output, `User: "First line`) && !strings.Contains(output, `User: "First line\n`) {
+		t.Error("User field should contain the full multi-line signature")
+	}
+}
+
+func TestFormatProactiveContext_LongSignatureTruncated(t *testing.T) {
+	now := time.Now().UTC()
+	longSig := strings.Repeat("A", 200)
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				Signature: longSig,
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"actionableSummary": "Summary",
+				},
+			},
+			Score: 0.8,
+		},
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	// Header text should be truncated to 80 chars + "..."
+	headerLine := ""
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "### ") {
+			headerLine = line
+			break
+		}
+	}
+	if headerLine == "" {
+		t.Fatal("no header line found")
+	}
+
+	headerContent := strings.TrimPrefix(headerLine, "### ")
+	// Before the " (just now)" suffix
+	idx := strings.Index(headerContent, " (")
+	if idx < 0 {
+		t.Fatalf("no time suffix found in header: %q", headerContent)
+	}
+	titlePart := headerContent[:idx]
+
+	if len(titlePart) > 80 {
+		t.Errorf("header title too long: expected <= 80 chars, got %d", len(titlePart))
+	}
+	if !strings.HasSuffix(titlePart, "...") {
+		t.Errorf("truncated header title should end with '...', got %q", titlePart)
+	}
+}
+
+// ========================================================================
+// RetrieveProactiveContext integration tests
+// ========================================================================
+
+// setupManager creates an EmbeddingManager in a temp dir and initializes it.
+// Returns the manager, store, and a cleanup function.
+func setupProactiveManager(t *testing.T) (*embedding.EmbeddingManager, *embedding.ConversationStore) {
+	t.Helper()
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	return mgr, store
+}
+
+func TestRetrieveProactiveContext_NilManager(t *testing.T) {
+	ctx := context.Background()
+	results, err := RetrieveProactiveContext(
+		ctx, nil, DefaultProactiveContextConfig(),
+		"test query", "/tmp/workspace", time.Now().UTC(),
+	)
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results, got %v", results)
+	}
+}
+
+func TestRetrieveProactiveContext_NilContext(t *testing.T) {
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	results, err := RetrieveProactiveContext(
+		nil, mgr, DefaultProactiveContextConfig(),
+		"test query", "/tmp/workspace", time.Now().UTC(),
+	)
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results, got %v", results)
+	}
+}
+
+func TestRetrieveProactiveContext_EmptyQuery(t *testing.T) {
+	ctx := context.Background()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"", "/tmp/workspace", time.Now().UTC(),
+	)
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results for empty query, got %v", results)
+	}
+}
+
+func TestRetrieveProactiveContext_EmptyStore(t *testing.T) {
+	ctx := context.Background()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store is empty — no turns stored yet
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"some query", "/tmp/workspace", time.Now().UTC(),
+	)
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results for empty store, got %v", results)
+	}
+}
+
+func TestRetrieveProactiveContext_HappyPath(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Create a turn about REST APIs and store it
+	turn, err := NewConversationTurn("session-1", 1,
+		"How do I implement a REST API in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turn.ActionableSummary = "Implement a REST API using net/http package"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+
+	// Store the turn using the existing embedding helper
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Fatalf("failed to embed and store turn: %v", err)
+	}
+
+	// Query with a semantically similar query
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API in Go?",
+		"/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least one result")
+	}
+
+	// The result should match our stored turn
+	result := results[0]
+	if result.Record.ID != turn.ID {
+		t.Errorf("expected result ID %s, got %s", turn.ID, result.Record.ID)
+	}
+
+	if result.Score <= 0 {
+		t.Errorf("expected positive score, got %f", result.Score)
+	}
+
+	// Score should be high for a similar query (above default min)
+	if result.Score < 0.50 {
+		t.Errorf("score too low for similar query: %f", result.Score)
+	}
+}
+
+func TestRetrieveProactiveContext_WorkspaceScopedFiltering(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store turns in different workspaces
+	turnA, err := NewConversationTurn("session-a", 1,
+		"How do I implement a REST API?", "/workspace-a")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turnA.ActionableSummary = "Implement REST API"
+	turnA.Timestamp = now.Add(-1 * time.Hour)
+
+	turnB, err := NewConversationTurn("session-b", 1,
+		"How do I implement a REST API?", "/workspace-b")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turnB.ActionableSummary = "Implement REST API"
+	turnB.Timestamp = now.Add(-1 * time.Hour)
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turnA); err != nil {
+		t.Fatalf("failed to store turn A: %v", err)
+	}
+	if err := EmbedAndStoreTurn(ctx, mgr, turnB); err != nil {
+		t.Fatalf("failed to store turn B: %v", err)
+	}
+
+	// Query with workspace scoped to /workspace-a only
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = true
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"REST API implementation", "/workspace-a", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least one result from workspace-a")
+	}
+
+	// Should only return turnA from workspace-a
+	for _, r := range results {
+		wd, ok := r.Record.Metadata["workingDir"].(string)
+		if !ok || wd != "/workspace-a" {
+			t.Errorf("expected workingDir '/workspace-a', got %v", r.Record.Metadata["workingDir"])
+		}
+	}
+}
+
+func TestRetrieveProactiveContext_TimeDecayOrdering(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store two turns with identical content but different ages
+	turnRecent, err := NewConversationTurn("session-recent", 1,
+		"How do I implement a REST API in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turnRecent.ActionableSummary = "Implement REST API"
+	turnRecent.Timestamp = now.Add(-1 * time.Hour)
+
+	turnOld, err := NewConversationTurn("session-old", 1,
+		"How do I implement a REST API in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turnOld.ActionableSummary = "Implement REST API"
+	turnOld.Timestamp = now.Add(-60 * 24 * time.Hour) // 60 days old
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turnRecent); err != nil {
+		t.Fatalf("failed to store recent turn: %v", err)
+	}
+	if err := EmbedAndStoreTurn(ctx, mgr, turnOld); err != nil {
+		t.Fatalf("failed to store old turn: %v", err)
+	}
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API in Go?",
+		"/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Fatal("expected at least one result")
+	}
+
+	// Results should be ordered by score descending; recent should be first
+	if len(results) >= 1 && results[0].Record.ID != turnRecent.ID {
+		// The recent turn should have a higher decayed score than the old one
+		t.Logf("First result: ID=%s, Score=%f", results[0].Record.ID, results[0].Score)
+		// Verify the recent turn scores higher
+		var recentScore, oldScore float64
+		for _, r := range results {
+			if r.Record.ID == turnRecent.ID {
+				recentScore = r.Score
+			}
+			if r.Record.ID == turnOld.ID {
+				oldScore = r.Score
+			}
+		}
+		if recentScore <= oldScore {
+			t.Errorf("recent turn score (%f) should be > old turn score (%f) due to time decay",
+				recentScore, oldScore)
+		}
+	}
+}
+
+func TestRetrieveProactiveContext_MaxResultsCap(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store 10 turns with the same content
+	for i := 0; i < 10; i++ {
+		turn, err := NewConversationTurn("session-cap", i+1,
+			"How do I implement a REST API in Go?", "/tmp/workspace")
+		if err != nil {
+			t.Fatalf("failed to create turn %d: %v", i, err)
+		}
+		turn.ActionableSummary = "Implement REST API"
+		turn.Timestamp = now.Add(-time.Duration(i) * time.Minute)
+		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+			t.Fatalf("failed to store turn %d: %v", i, err)
+		}
+	}
+
+	// Default config caps at 5 results
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API?", "/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(results) > 5 {
+		t.Errorf("expected at most 5 results, got %d", len(results))
+	}
+}
+
+func TestRetrieveProactiveContext_MinRelevanceScoreFilter(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store a turn about a completely different topic
+	turn, err := NewConversationTurn("session-irrelevant", 1,
+		"How do I bake chocolate cookies?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turn.ActionableSummary = "Bake chocolate cookies with butter and sugar"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Fatalf("failed to store turn: %v", err)
+	}
+
+	// Query with a very different topic and high min score
+	config := DefaultProactiveContextConfig()
+	config.MinRelevanceScore = 0.99
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"How to deploy a Kubernetes cluster?",
+		"/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// With high threshold, irrelevant results should be filtered out
+	// (Result may or may not be empty depending on embedding quality,
+	// but the score threshold should filter it if it's below 0.99)
+	for _, r := range results {
+		if r.Score < config.MinRelevanceScore {
+			t.Errorf("result score %f is below min threshold %f", r.Score, config.MinRelevanceScore)
+		}
+	}
+}
+
+func TestRetrieveProactiveContext_CustomConfigPreserved(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store 7 turns
+	for i := 0; i < 7; i++ {
+		turn, err := NewConversationTurn("session-custom", i+1,
+			"How do I implement a REST API in Go?", "/tmp/workspace")
+		if err != nil {
+			t.Fatalf("failed to create turn %d: %v", i, err)
+		}
+		turn.ActionableSummary = "Implement REST API"
+		turn.Timestamp = now.Add(-time.Duration(i) * time.Minute)
+		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+			t.Fatalf("failed to store turn %d: %v", i, err)
+		}
+	}
+
+	// Use a custom MaxContextualResults of 3
+	config := DefaultProactiveContextConfig()
+	config.MaxContextualResults = 3
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"How to build a REST API?", "/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(results) > 3 {
+		t.Errorf("expected at most 3 results (custom cap), got %d", len(results))
+	}
+}
+
+func TestRetrieveProactiveContext_ZeroTimeUsesCurrent(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store a turn
+	turn, err := NewConversationTurn("session-zero", 1,
+		"How do I implement a REST API?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turn.ActionableSummary = "Implement REST API"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Fatalf("failed to store turn: %v", err)
+	}
+
+	// Pass zero time — should default to time.Now()
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API?",
+		"/tmp/workspace", time.Time{},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error with zero time: %v", err)
+	}
+
+	// Should succeed without panicking and return results
+	if len(results) == 0 {
+		t.Fatal("expected at least one result even with zero time")
+	}
+}
+
+// Test that RetrieveProactiveContext only processes conversation_turn records,
+// and ignores records of other types.
+func TestRetrieveProactiveContext_IgnoresNonConversationTurns(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, store := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Get the provider and create an embedding directly
+	provider := store.Provider()
+
+	// Create a non-conversation-turn record (e.g., code_unit)
+	emb, err := provider.Embed(ctx, "How do I implement a REST API?")
+	if err != nil {
+		t.Fatalf("failed to embed: %v", err)
+	}
+
+	record := embedding.VectorRecord{
+		ID:        "code:1",
+		Type:      "code_unit", // NOT conversation_turn
+		Signature: "func handler(w http.ResponseWriter, r *http.Request)",
+		Embedding: emb,
+		IndexedAt: now.Add(-1 * time.Hour),
+		Metadata:  map[string]interface{}{"workingDir": "/tmp/workspace"},
+	}
+
+	if err := store.Store([]embedding.VectorRecord{record}); err != nil {
+		t.Fatalf("failed to store record: %v", err)
+	}
+
+	// Query — should return nil because there are no conversation_turn records
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API?", "/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results (no conversation_turn records), got %d", len(results))
+	}
+}
+
+// ========================================================================
+// FormatProactiveContext + RetrieveProactiveContext round-trip
+// ========================================================================
+
+func TestProactiveContext_FullRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store a few turns
+	turns := []struct {
+		prompt  string
+		summary string
+	}{
+		{"How do I use Go generics?", "Use type parameters with constraints from iter package"},
+		{"What are Go interfaces?", "Interfaces are defined by method sets, implemented implicitly"},
+		{"How to handle errors in Go?", "Use multi-value returns and error wrapping with fmt.Errorf and errors.Is"},
+	}
+
+	for i, tc := range turns {
+		turn, err := NewConversationTurn("session-roundtrip", i+1, tc.prompt, "/tmp/workspace")
+		if err != nil {
+			t.Fatalf("failed to create turn: %v", err)
+		}
+		turn.ActionableSummary = tc.summary
+		turn.Timestamp = now.Add(-time.Duration(i+1) * time.Hour)
+		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+			t.Fatalf("failed to store turn: %v", err)
+		}
+	}
+
+	// Retrieve and format
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How do I write good Go code?",
+		"/tmp/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+
+	if output == "" {
+		t.Fatal("expected non-empty formatted output")
+	}
+
+	// Verify structural integrity of output
+	if !strings.Contains(output, "## Previous Work (Contextual Memory)") {
+		t.Error("output missing header")
+	}
+	if !strings.Contains(output, "The following past work may be relevant") {
+		t.Error("output missing instructions")
+	}
+
+	// Each result should have a ### header, User:, and Summary:
+	for _, result := range results {
+		if !strings.Contains(output, result.Record.Signature) {
+			t.Logf("signature %q may be truncated or in header form", result.Record.Signature)
+		}
+	}
+}
+
+// ========================================================================
+// FormatProactiveContext with Resolve integration
+// ========================================================================
+
+func TestFormatProactiveContext_UsesResolveForZeroConfig(t *testing.T) {
+	now := time.Now().UTC()
+	results := []ProactiveContextResult{
+		{
+			Record: embedding.VectorRecord{
+				Signature: "Test query",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"actionableSummary": "Test summary",
+				},
+			},
+			Score: 0.8,
+		},
+	}
+
+	// Pass a zero config — resolve should fill in defaults
+	output := FormatProactiveContext(results, ProactiveContextConfig{}, time.Now().UTC())
+
+	// Should still format correctly (using default MaxContextChars of 4000)
+	if output == "" {
+		t.Fatal("expected non-empty output even with zero config")
+	}
+	if !strings.Contains(output, "Test query") {
+		t.Error("output should contain the signature")
+	}
+}

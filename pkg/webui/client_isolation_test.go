@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -21,6 +22,9 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 	t.Setenv("HOME", isolatedHome)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
+	t.Cleanup(func() { credentials.ResetStorageBackend() })
+	credentials.ResetStorageBackend()
 
 	daemonRoot := t.TempDir()
 	workspaceA := filepath.Join(daemonRoot, "workspace-a")
@@ -217,6 +221,9 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 
 func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 	daemonRoot := t.TempDir()
+	t.Setenv("SPROUT_CREDENTIAL_BACKEND", "file")
+	t.Cleanup(func() { credentials.ResetStorageBackend() })
+	credentials.ResetStorageBackend()
 	startWorkspace := filepath.Join(daemonRoot, "start")
 	nextWorkspace := filepath.Join(daemonRoot, "next")
 	if err := os.MkdirAll(startWorkspace, 0o755); err != nil {

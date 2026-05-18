@@ -33,7 +33,7 @@ Both paths must handle the same set of ~100 API endpoints. The CloudAdapter live
 |-----------|------|--------|
 | API Adapter interface | `webui/src/services/apiAdapter.ts` | ✅ Complete |
 | CloudAdapter class | `webui/src/services/cloudAdapter.ts` | ✅ Complete |
-| CloudEndpointRegistry | `webui/src/services/cloudEndpointRegistry.ts` | ✅ Complete |
+| CloudEndpointRegistry | `webui/src/services/cloudEndpointRegistry/` | ✅ Complete |
 | Feature flag module | `webui/src/config/mode.ts` | ✅ Complete |
 | Bootstrap adapter | `webui/src/bootstrapAdapter.ts` | ✅ Complete |
 
@@ -184,7 +184,7 @@ The CloudAdapter's `getWebSocketURL()` only addresses pattern 1.
 | File | Action |
 |------|--------|
 | `webui/src/services/cloudAdapter.ts` | Modify: add WASM interception (R1), env var fix (R2) |
-| `webui/src/services/cloudEndpointRegistry.ts` | Maintain: keep in sync with Foundry |
+| `webui/src/services/cloudEndpointRegistry/` | Maintain: keep in sync with Foundry |
 | `webui/src/services/clientSession.ts` | Review: adapter delegation |
 | `webui/src/config/mode.ts` | Review: flag consistency (R2) |
 | `webui/src/bootstrapAdapter.ts` | Modify: env var name if needed (R2) |

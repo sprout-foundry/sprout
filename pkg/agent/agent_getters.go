@@ -330,10 +330,64 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 	return a.subagentRunner
 }
 
-// IsSubagent returns true if this agent was spawned as a subagent.
+// IsSubagent returns true if this agent was spawned as a subagent (depth > 0).
 // Used to prevent nested subagent spawning and skip interactive prompts.
 func (a *Agent) IsSubagent() bool {
-	return a.isSubagent
+	return a.subagentDepth > 0
+}
+
+// SubagentDepth returns the nesting depth of this agent.
+// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
+func (a *Agent) SubagentDepth() int {
+	return a.subagentDepth
+}
+
+// MaxSubagentDepth returns the configured maximum nesting depth.
+// Falls back to config, then to default of 2.
+func (a *Agent) MaxSubagentDepth() int {
+	if cfg := a.GetConfig(); cfg != nil {
+		return cfg.GetSubagentMaxDepth()
+	}
+	return 2 // Default
+}
+
+// CanSpawnSubagents returns true if this agent is allowed to spawn subagents
+// (i.e., current depth is less than the configured max depth).
+func (a *Agent) CanSpawnSubagents() bool {
+	if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" {
+		return false
+	}
+	return a.subagentDepth < a.MaxSubagentDepth()
+}
+
+// IsLocalMode returns true when the agent is running locally (CLI or local WebUI),
+// not in a cloud environment. This controls whether LocalOnly personas (like the
+// Executive Assistant) are available.
+//
+// Cloud mode is detected via the SPROUT_CLOUD environment variable.
+// Local mode is the default when the variable is unset or empty.
+func (a *Agent) IsLocalMode() bool {
+	return configuration.GetEnvSimple("CLOUD") != "1"
+}
+
+// EvaluateOperationRisk determines the risk level of a command for the
+// currently active persona, using the persona's auto-approve rules.
+// Returns RiskLevelLow, RiskLevelMedium, or RiskLevelHigh.
+// For personas without auto-approve rules, returns RiskLevelLow (no EA risk cascade).
+func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
+	personaID := a.GetActivePersona()
+	if personaID == "" {
+		return configuration.RiskLevelLow
+	}
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return configuration.RiskLevelLow
+	}
+	persona := cfg.GetSubagentType(personaID)
+	if persona == nil || persona.AutoApproveRules == nil {
+		return configuration.RiskLevelLow
+	}
+	return persona.EvaluateOperationRisk(command)
 }
 
 // GenerateResponse generates a simple response using the current model without tool calls

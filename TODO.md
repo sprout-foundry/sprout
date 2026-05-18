@@ -270,15 +270,12 @@ These gaps were identified by cross-referencing the current editor implementatio
 
 ### Per-Provider Key Rotation & Multi-Key Support
 
-[x] - CREDENTIALS: Support key rotation without service interruption — When a user updates an API key, the new key should be validated before replacing the old one. If validation fails, keep the old key and show an error. Currently `SetAPIKey` → `SaveAPIKeys` is a blind write with no validation that the new key works.
 [x] - CREDENTIALS: Support key rotation without service interruption — When a user updates an API key, the new key should be validated before replacing the old one. If validation fails, keep the old key and show an error. Currently `SetAPIKey` → `SaveAPIKeys` is a blind write with no validation that the new key works. (ValidateAndSaveAPIKey validates before persisting and restores old key on failure; Manager.RefreshAPIKeys keeps in-memory cache in sync; deprecated blind-write SaveAPIKeys)
-[x] - CREDENTIALS: Support multiple keys per provider — Some users may want to use different keys for different projects or to distribute load. Supporting a list of keys per provider with automatic rotation/fallback would help (low priority — env var per-project covers some of this).
 [x] - CREDENTIALS: Support multiple keys per provider — Some users may want to use different keys for different projects or to distribute load. Supporting a list of keys per provider with automatic rotation/fallback would help (low priority — env var per-project covers some of this). (KeyPool, KeyRotator, round-robin resolution, auto-rotation on 429 rate limits, pool CRUD REST API, backward-compat single-key format, TOCTOU mutex protection)
 
 ### Cleanup & Hardening
 
 [x] - CREDENTIALS: File permissions audit — `api_keys.json` is written with `0600` which is correct, but `config.json` (which may contain MCP env vars with secrets and the `CustomProviderConfig.APIKey` field) uses whatever `os.WriteFile` default is in `config.go`. Ensure all files containing secrets are created with `0600` and the config directory has `0700`. Add a startup permission check that warns if permissions are too open.
-[x] - CREDENTIALS: Add credential redaction to config export/debug commands — Any command that dumps config (e.g., `ledit diag`, `ledit log`, config export) should redact all credential values before output. Audit `cmd/diag.go` and any other config-dumping paths.
 [x] - CREDENTIALS: Add credential redaction to config export/debug commands — Any command that dumps config (e.g., `ledit diag`, `ledit log`, config export) should redact all credential values before output. Audit `cmd/diag.go` and any other config-dumping paths. → Addressed: Created `RedactConfig()` in `pkg/configuration/redact.go`, added `ledit config show` command, fixed unredacted Args in `cmd/mcp.go` and `pkg/agent_commands/mcp.go`, deep-copied Args in `RedactServerConfig`. Fixed: WebUI `sanitizedConfig()` leaking raw MCP config to browser, `runMCPList`/`listServers` now use `RedactMCPConfig` upfront (`cmd/mcp.go`, `pkg/agent_commands/mcp.go`), completed `RedactConfig()` deep copies for `APITimeouts`/`SubagentTypes`/`Skills`, expanded `knownSecretVars` with 13 additional providers and narrowed `LEDIT_` prefix exclusion (`pkg/credentials/redact.go`, `pkg/mcp/secrets.go`).
 
 ---
@@ -761,7 +758,6 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-011 Phase 1: Add copy-on-select preference — When enabled, automatically copy terminal selection to clipboard via `terminal.onSelectionChange()`.
 [x] - SP-011 Phase 2: Add right-click context menu for terminal — Paste, Copy Selection (if text selected), Search, Clear Terminal, Split Pane, Select All. Reuses `ContextMenu` from `@sprout/ui`. `webui/src/components/TerminalContextMenu.tsx`
 [x] - SP-011 Phase 2: Add reverse-i-search (Ctrl+R) — Passthrough Ctrl+R to PTY shell (bash/zsh handle natively). Client-side display enhancement to show search prompt overlay. Future: client-side history search.
-[x] - SP-011 Phase 2: Add reverse-i-search (Ctrl+R) — Passthrough Ctrl+R to PTY shell (bash/zsh handle natively). Client-side display enhancement to show search prompt overlay. Future: client-side history search.
 [x] - SP-011 Phase 3: Add scrollback persistence — Serialize terminal buffer on unmount to IndexedDB keyed by session ID. Restore on reconnect. Max 500KB per session, 24h auto-cleanup. `webui/src/services/terminalScrollback.ts`
 [x] - SP-011 Phase 3: Add double/triple click selection — Double-click: select word. Triple-click: select line. Configure `wordSeparator` option on xterm.js Terminal.
 
@@ -774,12 +770,9 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - SP-012 Phase 1: Add ARIA tree pattern to FileTree — Add `role="treeitem"`, `aria-expanded` to tree items. `webui/src/components/FileTree.tsx`
 [x] - SP-012 Phase 1: Add aria-live to CommandPalette — Results list announced to screen readers. `packages/ui/src/components/CommandPalette.tsx`
 [x] - SP-012 Phase 1: Add role="log" to ChatPanel — Messages in a landmark region with aria-label. `packages/ui/src/components/ChatPanel.tsx`
-[x] - SP-012 Phase 1: Add role="log" to ChatPanel — Messages in a landmark region with aria-label. `packages/ui/src/components/ChatPanel.tsx`
 [x] - SP-012 Phase 1: Add global focus indicators — `:focus-visible` outline on all interactive elements. Remove default outline for mouse users. `webui/src/index.css`
 [x] - SP-012 Phase 2: Remove 3-pane editor limit — Allow up to 6 panes with minimum width enforcement. Persist pane count preference. `webui/src/contexts/EditorManagerContext.tsx`
 [x] - SP-012 Phase 2: Ensure sidebar state persistence — Verify isCollapsed, activeTab, and width all persist to localStorage and survive page reload. `webui/src/hooks/useSidebarState.ts`
-[x] - SP-012 Phase 2: Ensure sidebar state persistence — Verify isCollapsed, activeTab, and width all persist to localStorage and survive page reload. `webui/src/hooks/useSidebarState.ts`
-[x] - SP-012 Phase 2: Add responsive layout breakpoints — Tablet (768-1024px): sidebar icons-only, stack editor/chat. Mobile (< 768px): single-panel view, full-screen terminal overlay. `webui/src/index.css`, `webui/src/App.css`
 [x] - SP-012 Phase 2: Add responsive layout breakpoints — Tablet (768-1024px): sidebar icons-only, stack editor/chat. Mobile (< 768px): single-panel view, full-screen terminal overlay. `webui/src/index.css`, `webui/src/App.css`
 [x] - SP-012 Phase 2: Add loading skeletons — Replace loading spinners with skeleton screens for file tree, chat history, editor, and settings panel.
 [x] - SP-012 Phase 2: Add panel collapse animations — Smooth 200ms transitions on sidebar collapse, context panel resize, terminal toggle.
@@ -809,10 +802,8 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 [x] - REFACTOR: Split `SearchView.tsx` (1,168 lines → 416 lines). Extracted `search/types.ts`, `search/useSearchState.ts`, `search/highlightMatch.tsx`, `search/SearchResults.tsx`, `search/SemanticSearchResults.tsx`, `search/SemanticPreviewTooltip.tsx`, `search/SearchContextMenu.tsx`. `webui/src/components/SearchView.tsx`
 [x] - REFACTOR: Split `CommandPalette.tsx` (896 → 371 lines). Extracted `CommandPalette/types.ts`, `CommandPalette/constants.ts`, `CommandPalette/utils.ts`, `CommandPalette/useFileIndex.ts`, `CommandPalette/usePaletteResults.ts`, `CommandPalette/useCommandExecutor.ts`, `CommandPalette/index.ts`. `webui/src/components/CommandPalette/CommandPalette.tsx`
 [x] - REFACTOR: Split `cloudAdapter.ts` (919 → 233 lines) by routing layer. Extracted `cloudProxyRoutes.ts` (227 lines, backend proxy handlers), `cloudWasmHandlers.ts` (501 lines, WASM-local file ops), `cloudEndpointRegistry.ts` (817 lines, endpoint definitions and synthetic responses). `webui/src/services/cloudAdapter.ts`
-[x] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
-[] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry.ts`
+[x] - REFACTOR: Split `cloudEndpointRegistry.ts` (817 lines). `webui/src/services/cloudEndpointRegistry/` — split into `types.ts` (26), `classify.ts` (47), `queries.ts` (37), `synthetic-response.ts` (33), `index.ts` (16), and `endpoints/` directory with `wasm-local.ts` (98), `foundry-backend.ts` (419), `foundry-backend-git.ts` (170), `synthetic.ts` (114), `noop.ts` (15), `index.ts` (25). Total ~1000 lines across 11 files, largest is 419. Updated `scripts/export-endpoint-manifest.mjs` to parse directory instead of single file.
 [x] - REFACTOR: Split `api.ts` (2,007 lines) by domain — partial split exists (`gitApi.ts`, `terminalApi.ts`, etc.) but main file remains monolithic. `webui/src/services/api.ts`
-[x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
 [x] - REFACTOR: Split `edit.go` (421 lines) — extract whitespace normalization logic (~200 lines) to `normalization.go`. `pkg/agent_tools/edit.go`
 [x] - REFACTOR: Deduplicate `AnalyzeImage` and `AnalyzeImageWithPrompt` (~95% identical) into single function with optional prompt parameter. `pkg/agent_tools/vision_analyze.go`
 [x] - REFACTOR: Deduplicate `populateAgentStats` copied inline in `gatherStatsForClientIDLocked` (~30 lines duplicated). `pkg/webui/api_files.go`
@@ -851,48 +842,33 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 ### TypeScript Quality
 
-[x] - TYPESCRIPT: Replace `handleEvent(event: any)` with typed `WsEvent` — entire 800-line event handler is untyped; `WsEvent` type should exist in events. `webui/src/hooks/useWebSocketEventHandler.ts:649`
-[] - TYPESCRIPT: Replace `handleEvent(event: any)` with typed `WsEvent` — entire 800-line event handler is untyped; `WsEvent` type should exist in events. `webui/src/hooks/useWebSocketEventHandler.ts:649`
 [x] - TYPESCRIPT: Replace `(message: any)` and `(edit: any)` casts in localStorage deserialization with proper partial types — typed `Message` and `FileEdit` interfaces exist but aren't used. `webui/src/services/appStatePersistence.ts`
 [x] - TYPESCRIPT: Replace `(stats: any)` casts where typed `StatsResponse` exists — 3 locations in App.tsx. `webui/src/hooks/useWebSocketEventHandler.ts:492,693`
 [x] - TYPESCRIPT: Replace `(response.chat_session as any).active_query` with proper type — unsafe type assertion for non-typed field. `webui/src/hooks/useChatSessionManager.ts:144`
-[x] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
-[] - TYPESCRIPT: Replace remaining `any` and `as unknown as` casts across non-test files — 7 non-test files have `any` usage; several `as unknown as` casts in `api.ts` for `WorkspaceResponse`. `webui/src/`
 [x] - TYPESCRIPT: Add `eslint` and `prettier` config for frontend — comprehensive `.eslintrc.json` with React, TypeScript, import ordering, testing-library, and prettier integration; `.prettierrc` with consistent settings; `tsconfig.eslint.json` for test file coverage; npm scripts for lint/format; auto-fixed 724 import-order warnings across codebase. `webui/.eslintrc.json` `webui/.prettierrc` `webui/tsconfig.eslint.json`
-[x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
-[x] - TYPESCRIPT: Eliminate silent error swallowing — `.catch(() => {})` on onboarding, hotkey config, workspace ops hides real failures; at minimum log at debug/warn level. `webui/src/hooks/useOnboarding.ts`
 
 ### Test Quality
 
-[x] - TESTING: Fix 208 frontend test failures from Jest→Vitest migration — tests using `jest.fn()`, `jest.spyOn()`, `jest.useFakeTimers()`, `jest.clearAllMocks()` fail with `ReferenceError: jest is not defined`; migrate to Vitest equivalents (`vi.fn()`, `vi.spyOn()`, etc.). `webui/src/utils/log.test.tsx` and others
-[] - TESTING: Fix 208 frontend test failures from Jest→Vitest migration — tests using `jest.fn()`, `jest.spyOn()`, `jest.useFakeTimers()`, `jest.clearAllMocks()` fail with `ReferenceError: jest is not defined`; migrate to Vitest equivalents (`vi.fn()`, `vi.spyOn()`, etc.). `webui/src/utils/log.test.tsx` and others
-[x] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/`
 [] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/`
-[x] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
 [] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
-[x] - TESTING: Add tests for `pkg/lsp/semantic` (6.2% coverage) — nearly untested. `pkg/lsp/semantic/`
-[] - TESTING: Add tests for `pkg/lsp/semantic` (6.2% coverage) — nearly untested. `pkg/lsp/semantic/`
-[x] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
-[] - TESTING: Add tests for `pkg/agent_commands` (16.7% coverage). `pkg/agent_commands/`
-[x] - TESTING: Add tests for `pkg/lsp/proxy` (15.6% coverage). `pkg/lsp/proxy/`
-[] - TESTING: Add tests for `pkg/lsp/proxy` (15.6% coverage). `pkg/lsp/proxy/`
-[x] - TESTING: Add tests for `pkg/spec`, `pkg/types`, `pkg/ui` — packages with no tests. `pkg/spec/`, `pkg/types/`, `pkg/ui/`
-[] - TESTING: Add tests for `pkg/spec`, `pkg/types`, `pkg/ui` — packages with no tests. `pkg/spec/`, `pkg/types/`, `pkg/ui/`
-[x] - TESTING: Migrate 26 test files from `os.Setenv` + `defer` to `t.Setenv()` — `t.Setenv` auto-cleans on test completion; manual defer can leak on panic. Affects: `cmd/coverage_utils_test.go`, `pkg/credentials/encrypt_test.go`, `pkg/credentials/keyring_test.go`, and 23 others.
-[] - TESTING: Migrate 26 test files from `os.Setenv` + `defer` to `t.Setenv()` — `t.Setenv` auto-cleans on test completion; manual defer can leak on panic. Affects: `cmd/coverage_utils_test.go`, `pkg/credentials/encrypt_test.go`, `pkg/credentials/keyring_test.go`, and 23 others.
 [x] - TESTING: Fix ~30 test files setting `LEDIT_CONFIG` without also setting `SPROUT_CONFIG` — `envutil.GetEnvSimple("CONFIG")` checks `SPROUT_CONFIG` first; if only `LEDIT_CONFIG` is set, the `SPROUT_CONFIG` value from a previous test leaks. Set both to same temp dir. `pkg/configuration/*_test.go`, `pkg/credentials/*_test.go`, `pkg/mcp/*_test.go`
-[x] - TESTING: Improve coverage for `pkg/webui` (46.8%), `pkg/configuration` (48.0%), `pkg/agent_tools` (51.0%), `pkg/security` (51.2%), `pkg/agent_api` (44.8%) — all in the 40-52% range.
-[] - TESTING: Improve coverage for `pkg/webui` (46.8%), `pkg/configuration` (48.0%), `pkg/agent_tools` (51.0%), `pkg/security` (51.2%), `pkg/agent_api` (44.8%) — all in the 40-52% range.
 
 ### Structural
 
 [x] - STRUCTURAL: Replace global singleton managers with dependency injection — `NewReactWebServer` sets global `ApprovalManager` and `AskUserManager` via package-level setters; prevents parallel testing and creates hidden coupling. `pkg/webui/server.go:117-124`
-[] - STRUCTURAL: Replace global singleton managers with dependency injection — `NewReactWebServer` sets global `ApprovalManager` and `AskUserManager` via package-level setters; prevents parallel testing and creates hidden coupling. `pkg/webui/server.go:117-124`
-[x] - STRUCTURAL: Use `defer cleanup()` instead of manual cleanup calls in `binary_fetch.go` — cleanup called at 3 error points but not deferred; new error paths would leak temp files. `pkg/agent_tools/binary_fetch.go:120-135`
-[] - STRUCTURAL: Use `defer cleanup()` instead of manual cleanup calls in `binary_fetch.go` — cleanup called at 3 error points but not deferred; new error paths would leak temp files. `pkg/agent_tools/binary_fetch.go:120-135`
-[x] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
-[] - STRUCTURAL: Standardize error wrapping across `pkg/agent_tools/` — three inconsistent patterns exist (varying context detail in `fmt.Errorf`); adopt convention of `fmt.Errorf("operation: %w", err)`.
 [x] - STRUCTURAL: Add `initSubManagers` safety net as explicit `NewTestAgent()` factory — lazy initialization is a safety net for tests creating bare `&Agent{}`; formalize as dedicated test factory. `pkg/agent/agent.go`
 [x] - STRUCTURAL: Add `make build-all` to CI/automation to catch frontend build failures early — per AGENTS.md, `make build-all` is required after code changes but may not be in CI.
 [x] - STRUCTURAL: Replace process-based subagent execution with in-process SubagentRunner — current approach spawns `os/exec` subprocesses with stdin/stdout pipes; in-process enables shared state (event bus, todos, embeddings), structured events, precise token budgeting, and graceful cancellation. `pkg/agent/subagent_runner.go`, `pkg/agent/tool_handlers_subagent.go`, `pkg/agent_tools/subagent.go`
 [x] - STRUCTURAL: Wire SubagentRunner into tool handlers — replace `tools.RunSubagent()` and `tools.RunParallelSubagents()` calls with `SubagentRunner.Run()` and `SubagentRunner.RunParallel()`. `pkg/agent/tool_handlers_subagent.go`
+
+---
+
+## SP-026: Executive Assistant Persona
+
+Spec: `roadmap/SP-026-executive-assistant.md`
+
+[] - SP-026 Phase A: Replace `isSubagent bool` with `subagentDepth int` on Agent struct — enables 3-level nesting: EA (depth=0) → orchestrator (depth=1) → coder/tester (depth=2). Update `getOptimizedToolDefinitions()` to filter delegation tools at depth >= 2. Add `MaxSubagentDepth` config (default: 2). Update all references. `pkg/agent/agent.go`, `pkg/agent/agent_getters.go`, `pkg/agent/conversation.go`, `pkg/agent/subagent_runner.go`, `pkg/configuration/config.go`
+[] - SP-026 Phase B: Add `working_dir` parameter to `run_subagent` tool — allows spawning subagents at any directory under `$HOME`. Add `WorkingDir` to `SubagentOptions` and `SubagentTask`. Validate target exists and is within `$HOME`. `pkg/agent/subagent_runner.go`, `pkg/agent/tool_handlers_subagent.go`
+[] - SP-026 Phase C: File-based task queue tools — `task_queue_read`, `task_queue_publish`, `task_queue_add` with atomic writes, file locking, and persistent storage at `~/.config/sprout/task_queue.json`. `pkg/agent_tools/task_queue.go`, `pkg/agent/tool_definitions.go`
+[] - SP-026 Phase D: Persona infrastructure — `LocalOnly bool` on `SubagentType`, `IsLocalMode()` detection, sliding risk cascade for EA approvals (auto-approve low-risk, reason about medium-risk, escalate high-risk), `-f`/`--force` auto-reject. `pkg/configuration/config.go`, `pkg/agent/persona.go`, `pkg/agent/tool_handlers_shell.go`
+[] - SP-026 Phase E: Executive Assistant persona definition — full replacement system prompt, project discovery (AGENTS.md → git scan → memory → organic), auto-activate when started from `~`, commit tool with strict rules (reject force, require meaningful message), EA-spawned subagents get depth=1, two startup modes (queue mode for autonomous processing, interactive mode for standard chat). `subagent_prompts/executive_assistant.md`, `pkg/agent/project_discovery.go`, `pkg/agent/agent_creation.go`, `cmd/sprout/main.go`

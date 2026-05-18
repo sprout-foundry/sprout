@@ -1217,7 +1217,7 @@ describe('CloudAdapter Integration Tests', () => {
       expect(foundryBackend).toBeGreaterThan(0);
       expect(synthetic).toBeGreaterThan(0);
       expect(noOp).toBeGreaterThan(0);
-      expect(CLOUD_ENDPOINTS.length).toBe(111); // Current total
+      expect(CLOUD_ENDPOINTS.length).toBe(113); // Current total
     });
   });
 });

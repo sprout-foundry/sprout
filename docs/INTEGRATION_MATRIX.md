@@ -87,7 +87,7 @@ The integration uses **two independent paths** (both must stay in sync):
 ```
 services/apiAdapter.ts          — Interface definition (APIAdapter)
 services/cloudAdapter.ts        — Cloud implementation (CloudAdapter)
-services/cloudEndpointRegistry.ts — Maps every /api/* endpoint to a category
+services/cloudEndpointRegistry/ — Maps every /api/* endpoint to a category
 config/mode.ts                  — Feature flags derived from adapter capabilities
 bootstrapAdapter.ts             — Installs CloudAdapter when VITE_SPROUT_MODE=cloud
 ```
@@ -158,5 +158,5 @@ classification between the two.
    flags from `mode.ts` to avoid rendering local-only UI in cloud mode.
 
 3. **Endpoint registry sync.** Adding a new API endpoint in sprout must be
-   reflected in both `cloudEndpointRegistry.ts` AND `sprout-sw.ts`. There is
+   reflected in both `cloudEndpointRegistry/` AND `sprout-sw.ts`. There is
    no automated check for this.

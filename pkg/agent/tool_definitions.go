@@ -439,6 +439,44 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleSemanticSearch,
 	})
 
+	// Register task_queue_read tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "task_queue_read",
+		Description: "Read pending tasks from the persistent task queue. Returns tasks sorted by priority (high > medium > low). The queue persists across sessions and is stored at ~/.config/sprout/task_queue.json.",
+		Parameters: []ParameterConfig{
+			{"status", "string", false, []string{}, "Filter tasks by status: pending, in_progress, completed, failed, blocked, or all (default: pending)"},
+			{"limit", "integer", false, []string{}, "Maximum number of tasks to return (default: 10)"},
+		},
+		Handler: handleTaskQueueRead,
+	})
+
+	// Register task_queue_publish tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "task_queue_publish",
+		Description: "Update a task in the persistent queue. Used to claim tasks (set status to in_progress), record progress, mark completion, or publish failure. Optionally break a task into subtasks.",
+		Parameters: []ParameterConfig{
+			{"task_id", "string", true, []string{}, "The task ID to update"},
+			{"status", "string", true, []string{}, "New status: in_progress, completed, failed, or blocked"},
+			{"result", "string", false, []string{}, "Summary of work done or error message"},
+			{"subtasks", "array", false, []string{}, "Break down into subtasks. Each item: {title, working_dir?, persona?, priority?}"},
+		},
+		Handler: handleTaskQueuePublish,
+	})
+
+	// Register task_queue_add tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "task_queue_add",
+		Description: "Add a new task to the persistent queue. Tasks persist across sessions and can be processed by the Executive Assistant persona.",
+		Parameters: []ParameterConfig{
+			{"title", "string", true, []string{}, "Task title (required)"},
+			{"description", "string", false, []string{}, "Detailed task description"},
+			{"priority", "string", false, []string{}, "Priority: high, medium, or low (default: medium)"},
+			{"working_dir", "string", false, []string{}, "Working directory for the task (e.g., ~/projects/my-repo)"},
+			{"persona", "string", false, []string{}, "Persona to use when executing this task (e.g., repo_orchestrator)"},
+		},
+		Handler: handleTaskQueueAdd,
+	})
+
 	return registry
 }
 

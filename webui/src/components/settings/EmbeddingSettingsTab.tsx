@@ -143,13 +143,13 @@ export default function EmbeddingSettingsTab({
       <div className="settings-card" style={{ marginBottom: '16px' }}>
         <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
           <div style={{ marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-primary)' }}>Provider:</span> bundled-static
+            <span style={{ color: 'var(--text-primary)' }}>Provider:</span> bge-base-en-v1.5-256d
           </div>
           <div style={{ marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-primary)' }}>Model:</span> sprout-embed-gemma-128d (INT8 quantized)
+            <span style={{ color: 'var(--text-primary)' }}>Model:</span> bge-base-en-v1.5 (INT8 quantized)
           </div>
           <div>
-            <span style={{ color: 'var(--text-primary)' }}>Dimensions:</span> 128
+            <span style={{ color: 'var(--text-primary)' }}>Dimensions:</span> 256
           </div>
         </div>
       </div>

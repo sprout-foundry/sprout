@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // ConversationTurn represents a completed conversation turn stored for
@@ -56,4 +58,61 @@ func generateConversationTurnID() (string, error) {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 	return hex.EncodeToString(bytes), nil
+}
+
+const maxSignatureLen = 2000
+
+// ToVectorRecord converts a ConversationTurn into a VectorRecord for storage
+// in the conversation embedding store. The prompt text is truncated to
+// maxSignatureLen characters for the Signature field. All turn metadata
+// (summary, files, working dir, duration, tokens) is preserved in the
+// Metadata map so no information is lost.
+func (t *ConversationTurn) ToVectorRecord() embedding.VectorRecord {
+	// Truncate the user prompt for the signature field at a rune boundary
+	// to avoid splitting multi-byte UTF-8 characters.
+	runes := []rune(t.UserPrompt)
+	if len(runes) > maxSignatureLen {
+		runes = runes[:maxSignatureLen]
+	}
+	signature := string(runes)
+
+	// Create a defensive copy of the embedding to avoid aliasing.
+	// Note: The caller (EmbedAndStoreTurn in Phase 1d) is expected to set
+	// PromptEmbedding to the mean of the prompt and summary embeddings
+	// before calling ToVectorRecord(). See SP-027 §3.2 and §4.2.
+	var emb []float32
+	if t.PromptEmbedding != nil {
+		emb = make([]float32, len(t.PromptEmbedding))
+		copy(emb, t.PromptEmbedding)
+	}
+
+	// Build metadata map with turn-specific information
+	metadata := make(map[string]interface{})
+	metadata["sessionId"] = t.SessionID
+	metadata["turnNumber"] = t.TurnNumber
+	metadata["workingDir"] = t.WorkingDir
+	metadata["duration"] = t.Duration
+	metadata["tokenUsage"] = t.TokenUsage
+
+	// Only include optional fields if they have meaningful values.
+	// filesTouched is defensively copied to prevent aliasing.
+	if t.ActionableSummary != "" {
+		metadata["actionableSummary"] = t.ActionableSummary
+	}
+	if t.FilesTouched != nil && len(t.FilesTouched) > 0 {
+		filesCopy := make([]string, len(t.FilesTouched))
+		copy(filesCopy, t.FilesTouched)
+		metadata["filesTouched"] = filesCopy
+	}
+
+	return embedding.VectorRecord{
+		ID:        t.ID,
+		File:      fmt.Sprintf("session_%s.json", t.SessionID),
+		Name:      fmt.Sprintf("turn_%d", t.TurnNumber),
+		Signature: signature,
+		Embedding: emb,
+		Type:      "conversation_turn",
+		IndexedAt: t.Timestamp,
+		Metadata:  metadata,
+	}
 }

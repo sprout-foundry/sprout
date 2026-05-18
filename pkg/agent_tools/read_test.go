@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // TestReadLargeFileWithLineRange tests that line ranges work correctly on files larger than the default 32KB limit
@@ -26,7 +28,7 @@ func TestReadLargeFileWithLineRange(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading lines 500-510 (should succeed even though file is >100KB)
 	result, err := ReadFileWithRange(ctx, largeFile, 500, 510)
@@ -62,7 +64,7 @@ func TestReadFileWithInvalidLineRange(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test start line greater than end line
 	_, err = ReadFileWithRange(ctx, testFile, 10, 5)
@@ -90,7 +92,7 @@ func TestReadFileWithLineRangeExceedingFileLength(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test start line exceeding file length
 	_, err = ReadFileWithRange(ctx, testFile, 20, 30)
@@ -113,7 +115,7 @@ func TestReadFileWithZeroLines(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading empty file
 	result, err := ReadFile(ctx, testFile)
@@ -137,7 +139,7 @@ func TestReadFileWithNonTextFile(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading binary file
 	_, err = ReadFile(ctx, testFile)
@@ -161,7 +163,7 @@ func TestReadFileNormalOperation(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test normal read
 	result, err := ReadFile(ctx, testFile)
@@ -189,7 +191,7 @@ func TestReadFileWithLineRangeNormalSize(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading specific line range
 	result, err := ReadFileWithRange(ctx, testFile, 5, 8)
@@ -228,7 +230,7 @@ func TestReadFileWithStartLineOnly(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading from line 8 to end (endLine = 0 should default to end of file)
 	result, err := ReadFileWithRange(ctx, testFile, 8, 0)
@@ -250,7 +252,8 @@ func TestReadFileWithStartLineOnly(t *testing.T) {
 
 // TestReadFileNonExistent tests that reading a non-existent file returns an error
 func TestReadFileNonExistent(t *testing.T) {
-	ctx := context.Background()
+	tmpDir := t.TempDir()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading non-existent file
 	_, err := ReadFile(ctx, "/nonexistent/path/to/file.txt")
@@ -266,7 +269,7 @@ func TestReadFileNonExistent(t *testing.T) {
 func TestReadFileDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test reading a directory
 	_, err := ReadFile(ctx, tmpDir)
@@ -290,7 +293,7 @@ func TestReadFileEnvOverride(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Without env var: should truncate to 32KB default
 	result, err := ReadFile(ctx, testFile)

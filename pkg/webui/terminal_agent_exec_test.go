@@ -646,25 +646,48 @@ func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
 
 	session := createAndReadySession(t, tm, "exec-reuse")
 
-	// First: trigger a timeout with a short-lived command.
-	// After timeout, the session is closed to force recreation on next use.
-	shortCtx, shortCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer shortCancel()
-	_, exitCode, _ := tm.ExecuteCommandAndWait(shortCtx, session, "sleep 10")
-	if exitCode != -1 {
-		t.Errorf("expected exit code -1 for timeout, got %d", exitCode)
+	// First: trigger a cancel (not timeout) to ensure the session gets closed.
+	// Using context.WithTimeout causes DeadlineExceeded which promotes the session
+	// to background instead of closing it. Using WithCancel triggers the close path.
+	shortCtx, shortCancel := context.WithCancel(context.Background())
+
+	// Start the command in a goroutine and cancel after a short delay
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, exitCode, _ := tm.ExecuteCommandAndWait(shortCtx, session, "sleep 10")
+		if exitCode != -1 {
+			t.Errorf("expected exit code -1 for cancel, got %d", exitCode)
+		}
+	}()
+
+	// Wait for the command to be running, then cancel
+	time.Sleep(200 * time.Millisecond)
+	shortCancel()
+
+	// Wait for ExecuteCommandAndWait to return
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("ExecuteCommandAndWait didn't return after cancel")
 	}
 
 	// Wait for the async CloseSession goroutine to complete.
-	time.Sleep(500 * time.Millisecond)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if !tm.IsSessionActive("exec-reuse") {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 
-	// The session should now be inactive — closed by the timeout handler.
+	// The session should now be inactive — closed by the cancel handler.
 	if tm.IsSessionActive("exec-reuse") {
-		t.Error("expected session to be inactive after timeout")
+		t.Error("expected session to be inactive after cancel")
 	}
 
 	// GetOrCreateHiddenSessionForChat should create a fresh session
-	// (the old one was closed by the timeout handler).
+	// (the old one was closed by the cancel handler).
 	newSessionID, err := tm.GetOrCreateHiddenSessionForChat(context.Background(), "exec-reuse")
 	if err != nil {
 		t.Fatalf("failed to create new session after old one was closed: %v", err)

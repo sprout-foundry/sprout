@@ -291,6 +291,60 @@ func FormatProactiveContext(results []ProactiveContextResult, config ProactiveCo
 	return b.String()
 }
 
+// InjectProactiveContext retrieves semantically relevant past turns and
+// injects them into the agent's system prompt supplement. This is called
+// once per session — on the first turn or after a cold session restore.
+//
+// Graceful degradation: all errors are logged; the agent is never blocked.
+func (a *Agent) InjectProactiveContext(ctx context.Context, query string) error {
+	if a == nil {
+		return nil
+	}
+
+	mgr := a.GetEmbeddingManager()
+	if mgr == nil {
+		a.debugLog("[proactive-context] skipping: no embedding manager\n")
+		return nil
+	}
+
+	config := DefaultProactiveContextConfig()
+	workingDir := a.currentWorkspaceRoot()
+	now := time.Now().UTC()
+
+	results, err := RetrieveProactiveContext(ctx, mgr, config, query, workingDir, now)
+	if err != nil {
+		a.debugLog("[proactive-context] retrieval failed: %v\n", err)
+		return nil // graceful degradation
+	}
+
+	if len(results) == 0 {
+		return nil
+	}
+
+	formatted := FormatProactiveContext(results, config, now)
+	if formatted == "" {
+		return nil
+	}
+
+	// Prepend any existing supplement (e.g. "Context From Previous Session"
+	// set by ProcessQueryWithContinuity) so both sections are preserved.
+	existing := ""
+	if a.state != nil {
+		existing = a.consumePendingSystemSupplement()
+	}
+
+	combined := formatted
+	if existing != "" {
+		combined = existing + "\n\n" + formatted
+	}
+	a.setPendingSystemSupplement(combined)
+
+	log.Printf("[proactive-context] injected %d results (%d chars) into system prompt",
+		len(results), len(formatted))
+
+	return nil
+}
+
 // formatRelativeTime returns a human-readable relative time string such as
 // "just now", "2 hours ago", "3 days ago". Future timestamps return "just now".
 func formatRelativeTime(t time.Time, now time.Time) string {

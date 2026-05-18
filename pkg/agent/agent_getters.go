@@ -330,10 +330,34 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 	return a.subagentRunner
 }
 
-// IsSubagent returns true if this agent was spawned as a subagent.
+// IsSubagent returns true if this agent was spawned as a subagent (depth > 0).
 // Used to prevent nested subagent spawning and skip interactive prompts.
 func (a *Agent) IsSubagent() bool {
-	return a.isSubagent
+	return a.subagentDepth > 0
+}
+
+// SubagentDepth returns the nesting depth of this agent.
+// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
+func (a *Agent) SubagentDepth() int {
+	return a.subagentDepth
+}
+
+// MaxSubagentDepth returns the configured maximum nesting depth.
+// Falls back to config, then to default of 2.
+func (a *Agent) MaxSubagentDepth() int {
+	if cfg := a.GetConfig(); cfg != nil {
+		return cfg.GetSubagentMaxDepth()
+	}
+	return 2 // Default
+}
+
+// CanSpawnSubagents returns true if this agent is allowed to spawn subagents
+// (i.e., current depth is less than the configured max depth).
+func (a *Agent) CanSpawnSubagents() bool {
+	if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" {
+		return false
+	}
+	return a.subagentDepth < a.MaxSubagentDepth()
 }
 
 // GenerateResponse generates a simple response using the current model without tool calls

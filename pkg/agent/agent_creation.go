@@ -44,8 +44,9 @@ type agentInitParams struct {
 	debug           bool
 	interruptCtx    context.Context
 	interruptCancel context.CancelFunc
-	// isSubagent indicates this agent was spawned as a subagent.
-	isSubagent bool
+	// subagentDepth tracks the nesting depth of this agent.
+	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
+	subagentDepth int
 	// isProduction indicates this is a production agent, not a test agent.
 	// Production agents have additional initialization steps (context limits,
 	// todo clearing, session cleanup, tool registry initialization).

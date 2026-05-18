@@ -442,9 +442,9 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		embeddingMgr:  r.shared.EmbeddingMgr,
 	}
 
-	// Set isSubagent=true so the subagent knows it's a subagent.
-	// This prevents nested subagent spawning and skips interactive prompts.
-	agent.isSubagent = true
+	// Set subagentDepth based on parent's depth + 1.
+	// This enables configurable nesting: EA (0) → orchestrator (1) → coder/tester (2).
+	agent.subagentDepth = r.parentAgent.subagentDepth + 1
 
 	return agent, nil
 }

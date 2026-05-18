@@ -98,6 +98,7 @@ type Config struct {
 	SubagentTypes          map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
 	SubagentMaxParallel    int                     `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
 	SubagentParallelEnabled *bool                   `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
+	SubagentMaxDepth       int                     `json:"subagent_max_depth,omitempty"`       // Maximum subagent nesting depth (default: 2)
 
 	// Commit Configuration
 	CommitProvider string `json:"commit_provider,omitempty"` // Provider for commit message generation (defaults to LastUsedProvider)
@@ -508,6 +509,9 @@ func MergeConfig(base, override *Config) *Config {
 	}
 	if override.SubagentParallelEnabled != nil {
 		result.SubagentParallelEnabled = override.SubagentParallelEnabled
+	}
+	if override.SubagentMaxDepth > 0 {
+		result.SubagentMaxDepth = override.SubagentMaxDepth
 	}
 
 	// Merge SubagentTypes
@@ -1484,4 +1488,13 @@ func (c *Config) GetSubagentParallelEnabled() bool {
 		return true // default when not configured
 	}
 	return *c.SubagentParallelEnabled
+}
+
+// GetSubagentMaxDepth returns the maximum subagent nesting depth.
+// Defaults to 2 if not configured or set to 0.
+func (c *Config) GetSubagentMaxDepth() int {
+	if c.SubagentMaxDepth > 0 {
+		return c.SubagentMaxDepth
+	}
+	return 2 // Default
 }

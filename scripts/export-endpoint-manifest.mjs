@@ -2,14 +2,14 @@
 /**
  * export-endpoint-manifest.mjs
  *
- * Parses cloudEndpointRegistry.ts and exports CLOUD_ENDPOINTS into a JSON
- * manifest file that the Foundry Service Worker can import at build time.
+ * Parses the cloudEndpointRegistry endpoint files and exports CLOUD_ENDPOINTS
+ * into a JSON manifest file that the Foundry Service Worker can import at build time.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 
-const SOURCE_FILE = resolve(process.cwd(), 'webui', 'src', 'services', 'cloudEndpointRegistry.ts');
+const SOURCE_DIR = resolve(process.cwd(), 'webui', 'src', 'services', 'cloudEndpointRegistry', 'endpoints');
 const OUTPUT_DIR = resolve(process.cwd(), 'dist');
 const OUTPUT_FILE = resolve(OUTPUT_DIR, 'endpoint-manifest.json');
 
@@ -269,20 +269,72 @@ function parseRegistry(source) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  File Discovery                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Get all TypeScript endpoint files from the source directory.
+ * Excludes 'index.ts' and non-.ts files.
+ */
+function getEndpointFiles(dir) {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+
+    // Skip index.ts and non-TypeScript files
+    if (entry.name === 'index.ts') continue;
+    if (!entry.name.endsWith('.ts')) continue;
+    // Skip test files
+    if (entry.name.endsWith('.test.ts')) continue;
+
+    files.push(join(dir, entry.name));
+  }
+
+  return files;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Main                                                              */
 /* ------------------------------------------------------------------ */
 
 function main() {
-  let source;
+  // Find all endpoint files
+  let sourceFiles;
   try {
-    source = readFileSync(SOURCE_FILE, 'utf-8');
+    sourceFiles = getEndpointFiles(SOURCE_DIR);
   } catch (err) {
-    console.error(`Error: Cannot read source file: ${SOURCE_FILE}`);
+    console.error(`Error: Cannot read source directory: ${SOURCE_DIR}`);
     console.error(err.message);
     process.exit(1);
   }
 
-  const endpoints = parseRegistry(source);
+  if (sourceFiles.length === 0) {
+    console.error(`Error: No endpoint files found in ${SOURCE_DIR}`);
+    process.exit(1);
+  }
+
+  console.log(`Found ${sourceFiles.length} endpoint files to parse`);
+
+  // Read and parse each file
+  const allEndpoints = [];
+  for (const sourceFile of sourceFiles) {
+    let source;
+    try {
+      source = readFileSync(sourceFile, 'utf-8');
+    } catch (err) {
+      console.error(`Error: Cannot read source file: ${sourceFile}`);
+      console.error(err.message);
+      process.exit(1);
+    }
+
+    const endpoints = parseRegistry(source);
+    console.log(`  - ${sourceFile.split('/').pop()}: ${endpoints.length} endpoints`);
+    allEndpoints.push(...endpoints);
+  }
+
+  const endpoints = allEndpoints;
 
   if (endpoints.length === 0) {
     console.error('Error: No endpoints parsed from source file. Regex may need updating.');

@@ -63,9 +63,10 @@ func LoadStaticModel(data []byte) (*StaticModel, error) {
 	// UnkTokenID: uint16
 	unkID := binary.LittleEndian.Uint16(data[15:17])
 
-	// SpacePrefix: uint8
-	spacePrefix := data[17]
-	usesSpacePrefix := spacePrefix == 1
+	// TokenizerType: uint8
+	// 0 = BPE/SentencePiece (▁ space prefix), 1 = WordPiece (## subword prefix), 2 = Unigram (▁ space prefix)
+	tokenizerType := data[17]
+	usesSpacePrefix := tokenizerType == 0 || tokenizerType == 2
 
 	model := &StaticModel{
 		dims:            dims,
@@ -141,4 +142,28 @@ func (m *StaticModel) Validate() error {
 			len(m.embeddings), expectedEmbeddingSize)
 	}
 	return nil
+}
+
+// Dims returns the embedding dimensionality.
+func (m *StaticModel) Dims() int { return m.dims }
+
+// VocabSize returns the vocabulary size.
+func (m *StaticModel) VocabSize() int { return m.vocabSize }
+
+// UnkID returns the UNK token ID.
+func (m *StaticModel) UnkID() uint16 { return m.unkID }
+
+// PadID returns the PAD token ID.
+func (m *StaticModel) PadID() uint16 { return m.padID }
+
+// UsesSpacePrefix returns true if the model uses BPE/SentencePiece space prefix.
+func (m *StaticModel) UsesSpacePrefix() bool { return m.usesSpacePrefix }
+
+// GetEmbedding returns the raw int8 embedding vector for a given token ID.
+func (m *StaticModel) GetEmbedding(id int) []int8 {
+	if id < 0 || id >= m.vocabSize {
+		return nil
+	}
+	offset := id * m.dims
+	return m.embeddings[offset : offset+m.dims]
 }

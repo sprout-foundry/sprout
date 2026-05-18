@@ -11,7 +11,7 @@ const (
 	modelVersion = 1
 )
 
-// StaticModel holds all the data from the binary model file.
+// StaticModel holds all the data from a BGE-base-en-v1.5 static model binary (256d, int8 quantized).
 type StaticModel struct {
 	dims            int
 	vocabSize       int
@@ -29,7 +29,7 @@ type StaticModel struct {
 	merges [][2]uint16
 }
 
-// LoadStaticModel parses a binary model file and returns a StaticModel.
+// LoadStaticModel parses a BGE-base-en-v1.5 binary model file and returns a StaticModel.
 func LoadStaticModel(data []byte) (*StaticModel, error) {
 	if len(data) < 18 {
 		return nil, fmt.Errorf("file too small to be a valid model (got %d bytes)", len(data))

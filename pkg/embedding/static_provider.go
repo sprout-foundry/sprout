@@ -12,7 +12,7 @@ import (
 //go:embed static_model.bin
 var staticModelData []byte
 
-// StaticProvider is an EmbeddingProvider backed by a model2vec static model.
+// StaticProvider is an EmbeddingProvider backed by a BGE-base-en-v1.5 static model (256d, int8).
 // It uses pure Go with no CGO dependencies.
 type StaticProvider struct {
 	mu        sync.RWMutex
@@ -170,7 +170,7 @@ func (p *StaticProvider) Dimensions() int {
 
 // Name returns a human-readable identifier for the provider.
 func (p *StaticProvider) Name() string {
-	return "bundled-static"
+	return "bge-base-en-v1.5-256d"
 }
 
 // ModelHash returns a SHA-256 hex digest of the embedded model data.

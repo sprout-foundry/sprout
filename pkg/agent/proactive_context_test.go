@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -767,66 +768,457 @@ func TestRetrieveProactiveContext_WorkspaceScopedFiltering(t *testing.T) {
 	}
 }
 
-func TestRetrieveProactiveContext_TimeDecayOrdering(t *testing.T) {
+// ========================================================================
+// Time decay deterministic tests (hand-crafted embeddings)
+// ========================================================================
+
+func TestRetrieveProactiveContext_TimeDecayDeterministic(t *testing.T) {
+	/*
+		SP-027-2e: Verify that RetrieveProactiveContext correctly applies
+		time-decay scoring via ScoreWithDecay.
+
+		Strategy: create hand-crafted embeddings with identical cosine
+		similarity to the query, but at different ages. Verify that:
+		- The decay formula (30-day half-life) produces expected scores
+		- Results are sorted by descending score
+		- Results are capped at MaxContextualResults
+	*/
 	ctx := context.Background()
-	now := time.Now().UTC()
-	mgr, _ := setupProactiveManager(t)
+	now := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC) // fixed time for determinism
+	mgr, store := setupProactiveManager(t)
 	defer mgr.Close()
 
-	// Store two turns with identical content but different ages
-	turnRecent, err := NewConversationTurn("session-recent", 1,
-		"How do I implement a REST API in Go?", "/tmp/workspace")
-	if err != nil {
-		t.Fatalf("failed to create turn: %v", err)
-	}
-	turnRecent.ActionableSummary = "Implement REST API"
-	turnRecent.Timestamp = now.Add(-1 * time.Hour)
+	provider := store.Provider()
 
-	turnOld, err := NewConversationTurn("session-old", 1,
-		"How do I implement a REST API in Go?", "/tmp/workspace")
+	// Get the query embedding once — all records will have the same similarity
+	queryEmb, err := provider.Embed(ctx, "How do I implement a REST API?")
 	if err != nil {
-		t.Fatalf("failed to create turn: %v", err)
+		t.Fatalf("failed to embed query: %v", err)
 	}
-	turnOld.ActionableSummary = "Implement REST API"
-	turnOld.Timestamp = now.Add(-60 * 24 * time.Hour) // 60 days old
 
-	if err := EmbedAndStoreTurn(ctx, mgr, turnRecent); err != nil {
-		t.Fatalf("failed to store recent turn: %v", err)
+	// Create 8 records with the SAME embedding (cosine similarity = 1.0) but
+	// different ages. This isolates the time-decay component.
+	type recordSpec struct {
+		id      string
+		daysAgo int
 	}
-	if err := EmbedAndStoreTurn(ctx, mgr, turnOld); err != nil {
-		t.Fatalf("failed to store old turn: %v", err)
+	specs := []recordSpec{
+		{"rec-today", 0},
+		{"rec-1day", 1},
+		{"rec-7day", 7},
+		{"rec-14day", 14},
+		{"rec-30day", 30},
+		{"rec-60day", 60},
+		{"rec-90day", 90},
+		{"rec-180day", 180},
 	}
+
+	for _, spec := range specs {
+		record := embedding.VectorRecord{
+			ID:        spec.id,
+			Type:      "conversation_turn",
+			Signature: "How do I implement a REST API?",
+			Embedding: make([]float32, len(queryEmb)),
+			IndexedAt: now.Add(-time.Duration(spec.daysAgo) * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"workingDir":        "/test/ws",
+				"actionableSummary": "Implement REST API",
+			},
+		}
+		copy(record.Embedding, queryEmb) // identical → cosine = 1.0
+		if err := store.Store([]embedding.VectorRecord{record}); err != nil {
+			t.Fatalf("failed to store %s: %v", spec.id, err)
+		}
+	}
+
+	// Set max results to 5 (default), so oldest records get cut off
+	config := DefaultProactiveContextConfig()
+	config.MaxContextualResults = 5
 
 	results, err := RetrieveProactiveContext(
-		ctx, mgr, DefaultProactiveContextConfig(),
-		"How to build a REST API in Go?",
-		"/tmp/workspace", now,
+		ctx, mgr, config,
+		"How do I implement a REST API?",
+		"/test/ws", now,
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if len(results) == 0 {
-		t.Fatal("expected at least one result")
+		t.Fatal("expected results from deterministic embeddings")
 	}
 
-	// Results should be ordered by score descending; recent should be first
-	if len(results) >= 1 && results[0].Record.ID != turnRecent.ID {
-		// The recent turn should have a higher decayed score than the old one
-		t.Logf("First result: ID=%s, Score=%f", results[0].Record.ID, results[0].Score)
-		// Verify the recent turn scores higher
-		var recentScore, oldScore float64
-		for _, r := range results {
-			if r.Record.ID == turnRecent.ID {
-				recentScore = r.Score
-			}
-			if r.Record.ID == turnOld.ID {
-				oldScore = r.Score
+	// Verify cap
+	if len(results) > config.MaxContextualResults {
+		t.Errorf("expected at most %d results, got %d", config.MaxContextualResults, len(results))
+	}
+
+	// Verify that the oldest record (rec-180day) is excluded by the cap
+	for _, r := range results {
+		if r.Record.ID == "rec-180day" {
+			t.Errorf("rec-180day should be excluded by cap (oldest, lowest score), but it was returned")
+		}
+	}
+
+	// Verify descending order
+	for i := 1; i < len(results); i++ {
+		if results[i].Score > results[i-1].Score {
+			t.Errorf("results not sorted descending: [%d]=%.6f > [%d]=%.6f",
+				i, results[i].Score, i-1, results[i-1].Score)
+		}
+	}
+
+	// Verify the decay formula for each result
+	// With identical embeddings, cosine similarity = 1.0, so decayed score = decay factor
+	tolerance := 0.01 // allow small float32→float64 conversion error
+	for _, r := range results {
+		// Find the daysAgo for this record
+		var daysAgo int
+		for _, spec := range specs {
+			if spec.id == r.Record.ID {
+				daysAgo = spec.daysAgo
+				break
 			}
 		}
-		if recentScore <= oldScore {
-			t.Errorf("recent turn score (%f) should be > old turn score (%f) due to time decay",
-				recentScore, oldScore)
+
+		// Expected: 1.0 * 0.5^(daysAgo/30)
+		expectedDecay := math.Pow(0.5, float64(daysAgo)/30.0)
+		if math.Abs(r.Score-expectedDecay) > tolerance {
+			t.Errorf("record %s: score %.6f, expected %.6f (decay for %d days)",
+				r.Record.ID, r.Score, expectedDecay, daysAgo)
+		}
+	}
+
+	// Verify that the most recent record is first (highest decay factor ≈ 1.0)
+	if results[0].Record.ID != "rec-today" {
+		t.Errorf("expected most recent record first, got %s", results[0].Record.ID)
+	}
+
+	// Verify 30-day record scores ≈ half of today's score
+	var todayScore, thirtyDayScore float64
+	for _, r := range results {
+		if r.Record.ID == "rec-today" {
+			todayScore = r.Score
+		}
+		if r.Record.ID == "rec-30day" {
+			thirtyDayScore = r.Score
+		}
+	}
+	if todayScore > 0 {
+		ratio := thirtyDayScore / todayScore
+		if math.Abs(ratio-0.5) > tolerance {
+			t.Errorf("30-day half-life: ratio %.6f, expected ~0.5", ratio)
+		}
+	}
+}
+
+func TestRetrieveProactiveContext_DifferentSimilarities(t *testing.T) {
+	/*
+		Verify that records with different cosine similarities are correctly
+		scored and sorted, even when combined with time decay.
+
+		Strategy: Use provider embeddings with verifiable similarity relationships:
+		- Get embedding for "implement REST API" - this is our query
+		- Use the same embedding for records with high similarity (similarity = 1.0)
+		- Get embedding for a different but related topic for medium similarity
+		- Get embedding for a completely different topic for low similarity
+	*/
+	ctx := context.Background()
+	now := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+	mgr, store := setupProactiveManager(t)
+	defer mgr.Close()
+
+	provider := store.Provider()
+
+	// Get embeddings for different strings to create known similarity relationships
+	// The query will be "implement REST API"
+	queryEmb, err := provider.Embed(ctx, "implement REST API")
+	if err != nil {
+		t.Fatalf("failed to embed query: %v", err)
+	}
+
+	// Get embedding for a related topic (should have moderate similarity)
+	relatedEmb, err := provider.Embed(ctx, "build HTTP endpoints")
+	if err != nil {
+		t.Fatalf("failed to embed related: %v", err)
+	}
+
+	// Get embedding for a completely different topic (should have low similarity)
+	differentEmb, err := provider.Embed(ctx, "bake chocolate chip cookies")
+	if err != nil {
+		t.Fatalf("failed to embed different: %v", err)
+	}
+
+	// Verify cosine similarity expectations
+	relatedSim := embedding.CosineSimilarity(queryEmb, relatedEmb)
+	differentSim := embedding.CosineSimilarity(queryEmb, differentEmb)
+
+	t.Logf("query vs related similarity: %.4f (expected > 0.5)", relatedSim)
+	t.Logf("query vs different similarity: %.4f (expected < 0.5)", differentSim)
+
+	if relatedSim <= 0.5 {
+		t.Errorf("query vs related similarity %.4f is not > 0.5", relatedSim)
+	}
+
+	// Store records with different embeddings at different ages
+	// Record A: high similarity (same as query), 1 hour ago (recent)
+	// Record B: high similarity (same as query), 90 days ago (old)
+	// Record C: medium similarity (related), just now (recent)
+	// Record D: low similarity (different), 1 day ago (old and irrelevant)
+
+	records := []embedding.VectorRecord{
+		{
+			ID:        "rec-A",
+			Type:      "conversation_turn",
+			Signature: "How do I implement a REST API?",
+			Embedding: queryEmb,
+			IndexedAt: now.Add(-1 * time.Hour),
+			Metadata: map[string]interface{}{
+				"workingDir":        "/test/ws",
+				"actionableSummary": "Implement REST API",
+			},
+		},
+		{
+			ID:        "rec-B",
+			Type:      "conversation_turn",
+			Signature: "How do I implement a REST API?",
+			Embedding: queryEmb,
+			IndexedAt: now.Add(-90 * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"workingDir":        "/test/ws",
+				"actionableSummary": "Implement REST API",
+			},
+		},
+		{
+			ID:        "rec-C",
+			Type:      "conversation_turn",
+			Signature: "How do I build HTTP endpoints?",
+			Embedding: relatedEmb,
+			IndexedAt: now,
+			Metadata: map[string]interface{}{
+				"workingDir":        "/test/ws",
+				"actionableSummary": "Build HTTP endpoints",
+			},
+		},
+		{
+			ID:        "rec-D",
+			Type:      "conversation_turn",
+			Signature: "How do I bake cookies?",
+			Embedding: differentEmb,
+			IndexedAt: now.Add(-24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"workingDir":        "/test/ws",
+				"actionableSummary": "Bake cookies",
+			},
+		},
+	}
+
+	for _, rec := range records {
+		if err := store.Store([]embedding.VectorRecord{rec}); err != nil {
+			t.Fatalf("failed to store %s: %v", rec.ID, err)
+		}
+	}
+
+	// Query with "implement REST API" - this will create an embedding
+	// identical to what we stored for rec-A and rec-B (embedding provider is deterministic)
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"implement REST API",
+		"/test/ws", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Build a map of returned results by ID
+	resultMap := make(map[string]ProactiveContextResult)
+	for _, r := range results {
+		resultMap[r.Record.ID] = r
+	}
+
+	// rec-A should always be in results (highest similarity = 1.0, recent)
+	if _, ok := resultMap["rec-A"]; !ok {
+		t.Error("rec-A (high-sim, recent) should be in results")
+	}
+
+	// rec-B should be in results (high similarity = 1.0, though decayed)
+	// but should have a lower score than rec-A
+	if scoreA, hasA := resultMap["rec-A"]; hasA {
+		if scoreB, hasB := resultMap["rec-B"]; hasB {
+			if scoreB.Score >= scoreA.Score {
+				t.Errorf("rec-B (90 days old) should score < rec-A (1 hour old), got %.6f vs %.6f",
+					scoreB.Score, scoreA.Score)
+			}
+		}
+	}
+
+	// rec-C should be present if related similarity > 0.5
+	// If related similarity <= 0.5, it will be filtered by MinRelevanceScore
+	if relatedSim > 0.5 {
+		if _, ok := resultMap["rec-C"]; !ok {
+			t.Errorf("rec-C (medium-sim %.4f > 0.5, very recent) should be in results", relatedSim)
+		}
+	}
+
+	// rec-D should either be excluded or have a very low score (below 0.5 threshold)
+	if scoreD, hasD := resultMap["rec-D"]; hasD {
+		t.Logf("rec-D (low-sim %.4f) is included with score %.6f", differentSim, scoreD.Score)
+		// This is unusual - low similarity might still pass if it's high enough
+		if scoreD.Score >= 0.5 {
+			t.Logf("warning: rec-D has score %.6f >= 0.5 despite low similarity %.4f", scoreD.Score, differentSim)
+		}
+	}
+
+	// Results should be sorted in descending order by score
+	for i := 1; i < len(results); i++ {
+		if results[i].Score > results[i-1].Score {
+			t.Errorf("results not sorted descending: [%d]=%.6f > [%d]=%.6f",
+				i, results[i].Score, i-1, results[i-1].Score)
+		}
+	}
+
+	// At minimum, rec-A and rec-B should be returned (high similarity = 1.0)
+	// rec-C may or may not be returned depending on related similarity
+	if len(results) < 2 {
+		t.Errorf("expected at least 2 results (rec-A, rec-B with similarity = 1.0), got %d", len(results))
+	}
+}
+
+func TestRetrieveProactiveContext_AllScoresBelowThreshold(t *testing.T) {
+	/*
+		SP-027-2e: Verify graceful no-op when all records score below
+		MinRelevanceScore. No error should be returned.
+
+		Uses hand-crafted orthogonal embeddings for deterministic behavior:
+		- Create a query embedding
+		- Create an orthogonal embedding by negating the query embedding (cosine similarity = -1.0)
+		- Store a record with the negated embedding
+		- Query with default threshold of 0.5
+		- Assert results is nil (negative similarity * any decay = negative, always below 0.5)
+	*/
+	ctx := context.Background()
+	now := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+	mgr, store := setupProactiveManager(t)
+	defer mgr.Close()
+
+	provider := store.Provider()
+
+	// Get a query embedding
+	queryEmb, err := provider.Embed(ctx, "How do I implement a REST API?")
+	if err != nil {
+		t.Fatalf("failed to embed query: %v", err)
+	}
+
+	// Create an orthogonal embedding by negating the query embedding
+	// Cosine similarity with query will be -1.0 (completely opposite)
+	orthogonalEmb := make([]float32, len(queryEmb))
+	for i, v := range queryEmb {
+		orthogonalEmb[i] = -v
+	}
+
+	// Store a record with the orthogonal embedding
+	record := embedding.VectorRecord{
+		ID:        "rec-orthogonal",
+		Type:      "conversation_turn",
+		Signature: "Completely unrelated topic",
+		Embedding: orthogonalEmb,
+		IndexedAt: now,
+		Metadata: map[string]interface{}{
+			"workingDir":        "/test/ws",
+			"actionableSummary": "Unrelated summary",
+		},
+	}
+
+	if err := store.Store([]embedding.VectorRecord{record}); err != nil {
+		t.Fatalf("failed to store record: %v", err)
+	}
+
+	// Query with default threshold of 0.5
+	// The orthogonal embedding has similarity = -1.0 with the query
+	// Even with no time decay, -1.0 < 0.5, so no results should be returned
+	config := DefaultProactiveContextConfig()
+	config.MinRelevanceScore = 0.5
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"How to implement a REST API?",
+		"/test/ws", now,
+	)
+	if err != nil {
+		t.Errorf("expected nil error for graceful no-op, got %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results when all scores below threshold (orthogonal similarity = -1.0), got %d results", len(results))
+	}
+}
+
+func TestRetrieveProactiveContext_WorkspaceScopedFalse(t *testing.T) {
+	/*
+		SP-027-2e: Verify that when WorkspaceScoped is false, ALL records
+		regardless of workingDir are candidates for retrieval.
+	*/
+	ctx := context.Background()
+	now := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store turns in DIFFERENT workspaces
+	turns := []struct {
+		session string
+		dir     string
+		prompt  string
+	}{
+		{"session-alpha", "/workspace-alpha", "How do I implement authentication?"},
+		{"session-beta", "/workspace-beta", "How do I implement authentication?"},
+		{"session-gamma", "/workspace-gamma", "How do I implement authentication?"},
+	}
+
+	for _, t2 := range turns {
+		turn, err := NewConversationTurn(t2.session, 1, t2.prompt, t2.dir)
+		if err != nil {
+			t.Fatalf("failed to create turn: %v", err)
+		}
+		turn.ActionableSummary = "Implement authentication"
+		turn.Timestamp = now.Add(-1 * time.Hour)
+		if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+			t.Fatalf("failed to store turn: %v", err)
+		}
+	}
+
+	// Query with WorkspaceScoped=false (default) — should return ALL matching records
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = false
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"How to implement authentication?",
+		"/any/workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// All 3 turns should be returned (same embedding = high similarity, recent = high decay)
+	if len(results) < 3 {
+		t.Errorf("expected at least 3 results (all workspaces), got %d", len(results))
+	}
+
+	// Verify results come from ALL different workspaces
+	dirs := make(map[string]bool)
+	for _, r := range results {
+		if wd, ok := r.Record.Metadata["workingDir"].(string); ok {
+			dirs[wd] = true
+		}
+	}
+
+	expectedDirs := map[string]bool{
+		"/workspace-alpha": true,
+		"/workspace-beta": true,
+		"/workspace-gamma": true,
+	}
+	for dir := range expectedDirs {
+		if !dirs[dir] {
+			t.Errorf("WorkspaceScoped=false: missing results from %s", dir)
 		}
 	}
 }

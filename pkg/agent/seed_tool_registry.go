@@ -275,6 +275,7 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 			{Name: "persona", Type: "string", Required: true, Description: "REQUIRED: Subagent persona ID or alias (see /persona list)"},
 			{Name: "context", Type: "string", Description: "Context from previous subagent work (files created, summaries, etc.)"},
 			{Name: "files", Type: "string", Description: "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
+			{Name: "working_dir", Type: "string", Description: "Optional: directory to use as the subagent's working directory (must be within $HOME). Use this to spawn subagents operating in a different project directory."},
 		},
 		Timeout: 30 * time.Minute,
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {

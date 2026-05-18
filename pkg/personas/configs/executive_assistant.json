@@ -1,0 +1,49 @@
+{
+  "personas": [
+    {
+      "aliases": [
+        "ea",
+        "assistant"
+      ],
+      "allowed_tools": [
+        "shell_command",
+        "git",
+        "commit",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "write_structured_file",
+        "patch_structured_file",
+        "search_files",
+        "analyze_ui_screenshot",
+        "analyze_image_content",
+        "browse_url",
+        "web_search",
+        "fetch_url",
+        "run_subagent",
+        "run_parallel_subagents",
+        "mcp_tools",
+        "view_history",
+        "rollback_changes",
+        "self_review",
+        "list_skills",
+        "activate_skill",
+        "TodoWrite",
+        "TodoRead",
+        "add_memory",
+        "read_memory",
+        "list_memories",
+        "delete_memory",
+        "task_queue_read",
+        "task_queue_publish",
+        "task_queue_add"
+      ],
+      "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority. Activated automatically when started from home directory.",
+      "enabled": true,
+      "id": "executive_assistant",
+      "local_only": true,
+      "name": "Executive Assistant",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/executive_assistant.md"
+    }
+  ]
+}

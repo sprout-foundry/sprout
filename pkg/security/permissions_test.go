@@ -58,6 +58,15 @@ func TestCheckFilePermissions_Insecure(t *testing.T) {
 	err := os.WriteFile(tmpFile, []byte("{}"), 0644)
 	require.NoError(t, err)
 
+	// Verify chmod actually took effect — on some platforms (e.g. Android/Termux
+	// with restrictive umask) the file may still end up with secure permissions
+	// despite requesting 0644, making this test non-deterministic.
+	info, err := os.Stat(tmpFile)
+	require.NoError(t, err)
+	if info.Mode().Perm() == 0600 {
+		t.Skip("skipping: umask already enforces secure permissions, chmod had no visible effect")
+	}
+
 	pc := NewPermissionChecker(t.TempDir())
 	warning := pc.CheckFilePermissions(tmpFile)
 	assert.NotEmpty(t, warning)

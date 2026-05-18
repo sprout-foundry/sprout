@@ -664,6 +664,65 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		},
 	})
 
+	// 31. task_queue_read
+	registry.Register(core.ToolConfig{
+		Name:        "task_queue_read",
+		Description: "Read pending tasks from the persistent task queue. Returns tasks sorted by priority (high > medium > low). The queue persists across sessions and is stored at ~/.config/sprout/task_queue.json.",
+		Parameters: []core.ParameterConfig{
+			{Name: "status", Type: "string", Description: "Filter tasks by status: pending, in_progress, completed, failed, blocked, or all (default: pending)"},
+			{Name: "limit", Type: "integer", Description: "Maximum number of tasks to return (default: 10)"},
+		},
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "task_queue_read")
+			result, err := handleTaskQueueRead(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "task_queue_read")
+			}
+			return postProcessResult(ctx, agent, "task_queue_read", args, result), nil
+		},
+	})
+
+	// 32. task_queue_publish
+	registry.Register(core.ToolConfig{
+		Name:        "task_queue_publish",
+		Description: "Update a task in the persistent queue. Used to claim tasks (set status to in_progress), record progress, mark completion, or publish failure. Optionally break a task into subtasks.",
+		Parameters: []core.ParameterConfig{
+			{Name: "task_id", Type: "string", Required: true, Description: "The task ID to update"},
+			{Name: "status", Type: "string", Required: true, Description: "New status: in_progress, completed, failed, or blocked"},
+			{Name: "result", Type: "string", Description: "Summary of work done or error message"},
+			{Name: "subtasks", Type: "array", Description: "Break down into subtasks. Each item: {title, working_dir?, persona?, priority?}"},
+		},
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "task_queue_publish")
+			result, err := handleTaskQueuePublish(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "task_queue_publish")
+			}
+			return postProcessResult(ctx, agent, "task_queue_publish", args, result), nil
+		},
+	})
+
+	// 33. task_queue_add
+	registry.Register(core.ToolConfig{
+		Name:        "task_queue_add",
+		Description: "Add a new task to the persistent queue. Tasks persist across sessions and can be processed by the Executive Assistant persona.",
+		Parameters: []core.ParameterConfig{
+			{Name: "title", Type: "string", Required: true, Description: "Task title (required)"},
+			{Name: "description", Type: "string", Description: "Detailed task description"},
+			{Name: "priority", Type: "string", Description: "Priority: high, medium, or low (default: medium)"},
+			{Name: "working_dir", Type: "string", Description: "Working directory for the task (e.g., ~/projects/my-repo)"},
+			{Name: "persona", Type: "string", Description: "Persona to use when executing this task (e.g., repo_orchestrator)"},
+		},
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "task_queue_add")
+			result, err := handleTaskQueueAdd(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "task_queue_add")
+			}
+			return postProcessResult(ctx, agent, "task_queue_add", args, result), nil
+		},
+	})
+
 	return registry
 }
 

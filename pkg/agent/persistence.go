@@ -47,6 +47,10 @@ type ConversationState struct {
 	// Applied on top of global and workspace config when the session is restored.
 	// Only non-empty values are considered overrides.
 	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
+
+	// SessionIntentEmbedding stores the embedding of the first user prompt in a session.
+	// Used for drift detection to track conversation intent over time.
+	SessionIntentEmbedding []float32 `json:"session_intent_embedding,omitempty"`
 }
 
 // Variable to allow overriding GetStateDir for testing
@@ -234,6 +238,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		Name:                    sessionName,
 		WorkingDirectory:        cleanWorkingDir,
 		ConfigOverrides:         a.state.GetConfigOverrides(),
+		SessionIntentEmbedding:  a.state.GetSessionIntentEmbedding(),
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -676,6 +681,9 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	// CRITICAL: Reset session state to prevent hanging issues after session restore
 	a.state.SetCurrentIteration(0)
 	a.state.SetContextWarningIssued(false)
+
+	// Restore session intent embedding for drift detection
+	a.state.SetSessionIntentEmbedding(state.SessionIntentEmbedding)
 
 	// Reset circuit breaker state to prevent false positives
 	if a.state.GetCircuitBreaker() != nil {

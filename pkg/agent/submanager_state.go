@@ -148,6 +148,14 @@ type StateManager interface {
 	// Current iteration
 	GetCurrentIteration() int
 	SetCurrentIteration(int)
+
+	// Session intent embedding
+	GetSessionIntentEmbedding() []float32
+	SetSessionIntentEmbedding([]float32)
+	// SetSessionIntentEmbeddingIfNil atomically sets the embedding only if it is
+	// currently nil. Returns true if the embedding was set, false if it already
+	// had a value. Used to capture the first-turn intent without TOCTOU races.
+	SetSessionIntentEmbeddingIfNil(emb []float32) bool
 }
 
 // AgentStateManager implements StateManager with simple field-backed getters/setters.
@@ -195,6 +203,7 @@ type AgentStateManager struct {
 	sessionModel                string
 	configOverrides             map[string]interface{}
 	currentIteration             int
+	sessionIntentEmbedding      []float32
 }
 
 // NewAgentStateManager creates a new AgentStateManager with sensible defaults.
@@ -662,4 +671,44 @@ func (s *AgentStateManager) SetCurrentIteration(iter int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.currentIteration = iter
+}
+
+// --- Session intent embedding ---
+
+func (s *AgentStateManager) GetSessionIntentEmbedding() []float32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.sessionIntentEmbedding == nil {
+		return nil
+	}
+	// Return a defensive copy
+	result := make([]float32, len(s.sessionIntentEmbedding))
+	copy(result, s.sessionIntentEmbedding)
+	return result
+}
+
+func (s *AgentStateManager) SetSessionIntentEmbedding(emb []float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if emb == nil || len(emb) == 0 {
+		s.sessionIntentEmbedding = nil
+		return
+	}
+	// Store a defensive copy
+	s.sessionIntentEmbedding = make([]float32, len(emb))
+	copy(s.sessionIntentEmbedding, emb)
+}
+
+func (s *AgentStateManager) SetSessionIntentEmbeddingIfNil(emb []float32) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sessionIntentEmbedding != nil {
+		return false
+	}
+	if emb == nil || len(emb) == 0 {
+		return false
+	}
+	s.sessionIntentEmbedding = make([]float32, len(emb))
+	copy(s.sessionIntentEmbedding, emb)
+	return true
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -132,13 +133,12 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 		require.NoError(t, err)
 
 		// Use a test-specific path
-		testPath := "/tmp/test-custom-provider.json"
+		testPath := filepath.Join(t.TempDir(), "test-custom-provider.json")
 		data, err := json.MarshalIndent(normalized, "", "  ")
 		require.NoError(t, err)
 
 		err = os.WriteFile(testPath, data, 0600)
 		require.NoError(t, err)
-		defer os.Remove(testPath)
 
 		// Load from temp directory
 		loadedCfg, err := LoadCustomProviderFile(testPath)

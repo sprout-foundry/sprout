@@ -142,6 +142,11 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	// Restore embedding index if previously enabled for this workspace
 	agent.RestoreEmbeddingIndex()
 
+	// Auto-activate Executive Assistant persona when started from home directory
+	if params.isProduction {
+		agent.autoActivateEAPersona()
+	}
+
 	return agent, nil
 }
 
@@ -397,4 +402,41 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		interruptCancel: interruptCancel,
 		isProduction:    true,
 	})
+}
+
+// autoActivateEAPersona checks if the Executive Assistant persona should be
+// auto-activated based on the workspace root being the user's home directory.
+// This is a no-op if a persona is already set or if the EA persona is unavailable.
+func (a *Agent) autoActivateEAPersona() {
+	// Don't override an already-set persona
+	if a.state.GetActivePersona() != "" {
+		return
+	}
+
+	// Only activate when workspace is home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	if a.workspaceRoot != homeDir {
+		return
+	}
+
+	// Check if EA persona is available
+	personaID := "executive_assistant"
+	available := a.GetAvailablePersonaIDs()
+	found := false
+	for _, id := range available {
+		if id == personaID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+
+	if err := a.ApplyPersona(personaID); err != nil {
+		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to auto-activate EA persona: %v\n", err)))
+	}
 }

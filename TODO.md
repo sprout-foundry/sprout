@@ -20,6 +20,7 @@ Spec: `roadmap/SP-027-persistent-context.md`
 
 ### Phase 1: Conversation Turn Embedding (Foundation)
 
+[x] - SP-027-1a: Create `ConversationTurn` struct in `pkg/agent/conversation_turn.go` — struct with ID, SessionID, TurnNumber, Timestamp, UserPrompt, ActionableSummary, PromptEmbedding, FilesTouched, WorkingDir, Duration, TokenUsage fields
 [] - SP-027-1a: Create `ConversationTurn` struct in `pkg/agent/conversation_turn.go` — struct with ID, SessionID, TurnNumber, Timestamp, UserPrompt, ActionableSummary, PromptEmbedding, FilesTouched, WorkingDir, Duration, TokenUsage fields
 [] - SP-027-1b: Create `ConversationStore` in `pkg/embedding/conversation_store.go` — wraps a second `JSONLFileStore` instance for `~/.config/sprout/embeddings/conversation_turns.jsonl`, lazy initialization via `EmbeddingManager.GetConversationStore()`
 [] - SP-027-1c: Implement `VectorRecord` serialization mapping — `ConversationTurn` → `VectorRecord` with explicit field mapping (ID→ID, prompt→Signature, mean embedding→Embedding, Type→"conversation_turn", metadata map for FilesTouched/WorkingDir/Duration/TokenUsage)

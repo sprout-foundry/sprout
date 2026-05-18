@@ -208,6 +208,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"persona", "string", true, []string{}, "REQUIRED: Subagent persona ID or alias (see /persona list)"},
 			{"context", "string", false, []string{}, "Context from previous subagent work (files created, summaries, etc.)"},
 			{"files", "string", false, []string{}, "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
+			{"working_dir", "string", false, []string{}, "Optional: directory to use as the subagent's working directory (must be within $HOME). Use this to spawn subagents operating in a different project directory."},
 		},
 		Handler: handleRunSubagent,
 	})

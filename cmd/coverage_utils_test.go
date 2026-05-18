@@ -347,9 +347,11 @@ func TestGetConfigDir_Fallback(t *testing.T) {
 	t.Setenv("HOME", "")
 
 	got := getConfigDir()
-	want := "/data/data/com.termux/files/home/.config/sprout"
-	if got != want {
-		t.Errorf("getConfigDir() fallback = %q, want %q", got, want)
+
+	// When all env vars are empty, getConfigDir falls back to os.UserHomeDir()
+	// which varies by platform. Just verify the result is a valid config path.
+	if !strings.HasSuffix(got, "/.config/sprout") {
+		t.Errorf("getConfigDir() fallback = %q, want path ending in /.config/sprout", got)
 	}
 }
 

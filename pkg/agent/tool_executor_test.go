@@ -174,6 +174,7 @@ func TestToolExecutorAppliesOpenFileAlias(t *testing.T) {
 	executor := NewToolExecutor(agent)
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	filePath := filepath.Join(tmpDir, "alias_open_file.txt")
 	if err := os.WriteFile(filePath, []byte("alias path works"), 0o644); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
@@ -255,6 +256,7 @@ func TestExecuteSingleTool_UsesRepairedArguments(t *testing.T) {
 	executor := NewToolExecutor(agent)
 
 	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
 	filePath := filepath.Join(tmpDir, "repaired_args.txt")
 	if err := os.WriteFile(filePath, []byte("repaired args work"), 0o644); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
@@ -453,7 +455,9 @@ func TestConstrainToolResultForModel_NonFetchURLUnchanged(t *testing.T) {
 }
 
 func TestConstrainToolResultForModel_FetchURLTruncatesLargeOutput(t *testing.T) {
+	archiveDir := t.TempDir()
 	t.Setenv("LEDIT_FETCH_URL_MAX_CHARS", "100")
+	t.Setenv("SPROUT_FETCH_URL_ARCHIVE_DIR", archiveDir)
 	input := strings.Repeat("x", 220)
 
 	got := constrainToolResultForModel("fetch_url", map[string]interface{}{"url": "https://example.com"}, input)

@@ -380,6 +380,64 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
+	// Parse optional working_dir parameter
+	var workingDir string
+	if wdVal, ok := args["working_dir"]; ok && wdVal != nil {
+		if wdStr, ok := wdVal.(string); ok && wdStr != "" {
+			workingDir = wdStr
+			a.debugLog("Subagent working_dir specified: %s\n", workingDir)
+		}
+	}
+
+	// Validate working_dir if provided
+	if workingDir != "" {
+		// Expand ~ to $HOME
+		if strings.HasPrefix(workingDir, "~/") {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return "", fmt.Errorf("failed to resolve home directory: %w", err)
+			}
+			workingDir = filepath.Join(homeDir, workingDir[2:])
+		}
+
+		// Resolve to absolute path
+		absWorkingDir, err := filepath.Abs(workingDir)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve working_dir: %w", err)
+		}
+
+		// Resolve symlinks to prevent symlink escape attacks
+		resolvedWorkingDir, err := filepath.EvalSymlinks(absWorkingDir)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve working_dir symlinks: %w", err)
+		}
+
+		// Verify target exists and is a directory (use resolved path)
+		info, err := os.Stat(resolvedWorkingDir)
+		if err != nil {
+			return "", fmt.Errorf("working_dir does not exist: %s", resolvedWorkingDir)
+		}
+		if !info.IsDir() {
+			return "", fmt.Errorf("working_dir is not a directory: %s", resolvedWorkingDir)
+		}
+
+		// Verify resolved (symlink-target) path is within $HOME
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve home directory: %w", err)
+		}
+		// Also resolve $HOME itself in case it's a symlink
+		resolvedHome, err := filepath.EvalSymlinks(homeDir)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve home directory symlinks: %w", err)
+		}
+		if !isPathInWorkspace(resolvedWorkingDir, resolvedHome) {
+			return "", fmt.Errorf("working_dir resolves outside $HOME via symlink: %s -> %s", absWorkingDir, resolvedWorkingDir)
+		}
+
+		workingDir = resolvedWorkingDir
+	}
+
 	// Parse persona parameter (required, but default to "general" if not specified)
 	var persona string
 	var systemPromptPath string
@@ -504,6 +562,18 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		// Compute common parent directory of all files as the new workspace root
 		subagentWorkspaceRoot = commonParent(absFilePaths)
 		a.debugLog("Computed subagent workspace root: %s (from %d file paths)\n", subagentWorkspaceRoot, len(absFilePaths))
+	}
+
+	// If working_dir is explicitly specified, override the subagent workspace root
+	if workingDir != "" {
+		// Warn if any referenced files fall outside the working_dir scope
+		for _, absPath := range absFilePaths {
+			if !isPathInWorkspace(absPath, workingDir) && !isPathInTmp(absPath) {
+				a.debugLog("Warning: file %s is outside working_dir %s; subagent may not be able to access it\n", absPath, workingDir)
+			}
+		}
+		subagentWorkspaceRoot = workingDir
+		a.debugLog("Overriding subagent workspace root with working_dir: %s\n", subagentWorkspaceRoot)
 	}
 
 	// Build enhanced prompt with context and files
@@ -646,6 +716,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		Model:        model,
 		Provider:     provider,
 		SystemPrompt: systemPromptText,
+		WorkingDir:   workingDir,
 	})
 
 	// Convert SubagentResult to resultMap format for backward compatibility
@@ -727,6 +798,13 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		resultMap["files_used"] = filesStr
 	} else {
 		resultMap["files_used"] = ""
+	}
+
+	// Add working_dir field
+	if workingDir != "" {
+		resultMap["working_dir"] = workingDir
+	} else {
+		resultMap["working_dir"] = ""
 	}
 
 	// Check if subagent failed with security-related errors

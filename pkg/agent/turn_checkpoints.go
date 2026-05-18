@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"sort"
 	"strings"
 
@@ -69,21 +70,62 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		ActionableSummary: actionableSummary,
 	}
 
-	mu := a.state.GetCheckpointMutex()
-	mu.Lock()
-	defer mu.Unlock()
-	checkpoints := a.state.GetTurnCheckpoints()
-	if n := len(checkpoints); n > 0 && checkpoints[n-1].StartIndex == startIndex {
-		checkpoints[n-1] = checkpoint
-		a.state.SetTurnCheckpoints(checkpoints)
-		return
+	// Extract the first user message content for embedding.
+	var userPrompt string
+	for _, msg := range turnMessages {
+		if msg.Role == "user" && msg.Content != "" {
+			userPrompt = msg.Content
+			break
+		}
 	}
 
-	checkpoints = append(checkpoints, checkpoint)
-	sort.Slice(checkpoints, func(i, j int) bool {
-		return checkpoints[i].StartIndex < checkpoints[j].StartIndex
-	})
-	a.state.SetTurnCheckpoints(checkpoints)
+	// Record checkpoint under mutex — capture embedding decision and related
+	// data inside the lock so the embedding call can run *after* release.
+	shouldEmbed := false
+	var turnNumber int
+	var sessionID, workspaceRoot string
+
+	func() {
+		mu := a.state.GetCheckpointMutex()
+		mu.Lock()
+		defer mu.Unlock()
+		checkpoints := a.state.GetTurnCheckpoints()
+		if n := len(checkpoints); n > 0 && checkpoints[n-1].StartIndex == startIndex {
+			checkpoints[n-1] = checkpoint
+			a.state.SetTurnCheckpoints(checkpoints)
+		} else {
+			checkpoints = append(checkpoints, checkpoint)
+			sort.Slice(checkpoints, func(i, j int) bool {
+				return checkpoints[i].StartIndex < checkpoints[j].StartIndex
+			})
+			a.state.SetTurnCheckpoints(checkpoints)
+		}
+
+		// Capture embedding decision while still holding the lock so all
+		// related values come from the same consistent state snapshot.
+		if a.embeddingMgr != nil && userPrompt != "" && len(checkpoints) > 0 {
+			shouldEmbed = true
+			sessionID = a.state.GetSessionID()
+			workspaceRoot = a.currentWorkspaceRoot()
+			for i, cp := range checkpoints {
+				if cp.StartIndex == startIndex {
+					turnNumber = i + 1 // 1-based
+					break
+				}
+			}
+		}
+	}()
+
+	// Embed and store the turn *after* releasing the mutex so embedding I/O
+	// does not block concurrent checkpoint access.
+	if shouldEmbed {
+		turn, err := NewConversationTurn(sessionID, turnNumber, userPrompt, workspaceRoot)
+		if err == nil {
+			turn.ActionableSummary = actionableSummary
+			// FilesTouched, Duration, TokenUsage are left as zero values to be enriched later
+			_ = EmbedAndStoreTurn(context.Background(), a.embeddingMgr, turn)
+		}
+	}
 }
 
 func (a *Agent) buildTurnCheckpointSummary(messages []api.Message) string {

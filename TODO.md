@@ -850,7 +850,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 ### Test Quality
 
 [x] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/` (41 tests, 97.1% coverage — only GetConfigDir os.UserHomeDir() error path uncovered)
-[] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
+[x] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
 [x] - TESTING: Fix ~30 test files setting `LEDIT_CONFIG` without also setting `SPROUT_CONFIG` — `envutil.GetEnvSimple("CONFIG")` checks `SPROUT_CONFIG` first; if only `LEDIT_CONFIG` is set, the `SPROUT_CONFIG` value from a previous test leaks. Set both to same temp dir. `pkg/configuration/*_test.go`, `pkg/credentials/*_test.go`, `pkg/mcp/*_test.go`
 
 ### Structural
@@ -867,6 +867,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 Spec: `roadmap/SP-026-executive-assistant.md`
 
+[x] - SP-026 Phase A: Replace `isSubagent bool` with `subagentDepth int` on Agent struct — enables 3-level nesting: EA (depth=0) → orchestrator (depth=1) → coder/tester (depth=2). Update `getOptimizedToolDefinitions()` to filter delegation tools at depth >= 2. Add `MaxSubagentDepth` config (default: 2). Update all references. `pkg/agent/agent.go`, `pkg/agent/agent_getters.go`, `pkg/agent/conversation.go`, `pkg/agent/subagent_runner.go`, `pkg/configuration/config.go`
 [] - SP-026 Phase A: Replace `isSubagent bool` with `subagentDepth int` on Agent struct — enables 3-level nesting: EA (depth=0) → orchestrator (depth=1) → coder/tester (depth=2). Update `getOptimizedToolDefinitions()` to filter delegation tools at depth >= 2. Add `MaxSubagentDepth` config (default: 2). Update all references. `pkg/agent/agent.go`, `pkg/agent/agent_getters.go`, `pkg/agent/conversation.go`, `pkg/agent/subagent_runner.go`, `pkg/configuration/config.go`
 [] - SP-026 Phase B: Add `working_dir` parameter to `run_subagent` tool — allows spawning subagents at any directory under `$HOME`. Add `WorkingDir` to `SubagentOptions` and `SubagentTask`. Validate target exists and is within `$HOME`. `pkg/agent/subagent_runner.go`, `pkg/agent/tool_handlers_subagent.go`
 [] - SP-026 Phase C: File-based task queue tools — `task_queue_read`, `task_queue_publish`, `task_queue_add` with atomic writes, file locking, and persistent storage at `~/.config/sprout/task_queue.json`. `pkg/agent_tools/task_queue.go`, `pkg/agent/tool_definitions.go`

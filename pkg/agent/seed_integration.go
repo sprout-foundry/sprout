@@ -498,6 +498,22 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Set conversation start time for duration calculation
 	a.conversationStartTime = time.Now()
 
+	// Proactive context injection: retrieve relevant past work on first turn
+	// or cold session restore. Only inject when the conversation is new (no
+	// prior user messages) or the session was just restored from persistence
+	// AND proactive context has not already been injected this session.
+	existingSupplement := a.state.GetPendingSystemSupplement()
+	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Contextual Memory)")
+	shouldInjectProactiveContext := !alreadyInjected &&
+		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
+	if shouldInjectProactiveContext {
+		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := a.InjectProactiveContext(injectCtx, processedQuery); err != nil {
+			a.debugLog("[proactive-context] injection failed: %v\n", err)
+		}
+		injectCancel()
+	}
+
 	// Build the user message with processed (cleaned) query and images
 	userMessage := api.Message{
 		Role:    "user",
@@ -554,6 +570,13 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
+	}
+
+	// Consume any pending system supplement (previous session context,
+	// proactive context) and append to the system prompt so the seed agent
+	// includes it in its first message.
+	if supplement := a.consumePendingSystemSupplement(); supplement != "" {
+		opts.SystemPrompt = opts.SystemPrompt + "\n\n" + supplement
 	}
 
 	// OnIteration callback: sync per-iteration context token estimates

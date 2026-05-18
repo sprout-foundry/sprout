@@ -31,6 +31,7 @@ func (m *mockProvider) EmbedBatch(_ context.Context, texts []string) ([][]float3
 
 func (m *mockProvider) Dimensions() int { return m.dims }
 func (m *mockProvider) Name() string    { return "mock" }
+func (m *mockProvider) ModelHash() string { return "mock-model-hash" }
 
 func newMockProvider(dims int) *mockProvider {
 	return &mockProvider{dims: dims}
@@ -59,7 +60,7 @@ func WriteOutput(data []byte) error {
 	}
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -114,7 +115,7 @@ func ReadConfig(path string) string {
 	}
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -179,7 +180,7 @@ func ReadConfig(path string) string {
 	}
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -227,7 +228,7 @@ func ReadConfig(path string) string {
 	}
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -260,7 +261,7 @@ func TestBuildIndexEmptyDirectory(t *testing.T) {
 	dir := t.TempDir()
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -289,7 +290,7 @@ func TestBuildIndexSkipsTestFiles(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "main_test.go"), []byte("package main\nimport \"testing\"\nfunc TestXxx(t *testing.T) {}\n"), 0o644)
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

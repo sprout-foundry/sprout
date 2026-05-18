@@ -17,8 +17,9 @@ type ConversationStore struct {
 //
 // The provider is used for embedding operations and is not closed when
 // the store is closed (the provider's lifecycle is managed externally).
-func NewConversationStore(provider EmbeddingProvider, filePath string) (*ConversationStore, error) {
-	store, err := NewJSONLFileStore(filePath)
+// The modelHash is used to detect model changes and invalidate stale records.
+func NewConversationStore(provider EmbeddingProvider, filePath string, modelHash string) (*ConversationStore, error) {
+	store, err := NewJSONLFileStore(filePath, modelHash)
 	if err != nil {
 		return nil, err
 	}

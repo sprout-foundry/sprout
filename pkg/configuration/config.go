@@ -122,6 +122,9 @@ type Config struct {
 	// Embedding Index Configuration
 	EmbeddingIndex *EmbeddingIndexConfig `json:"embedding_index,omitempty"`
 
+	// Persistent Context Configuration
+	PersistentContext *PersistentContextConfig `json:"persistent_context,omitempty"`
+
 	// Skills Configuration
 	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
 
@@ -490,6 +493,29 @@ type EmbeddingIndexConfig struct {
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
 }
 
+// PersistentContextConfig configures persistent conversational context across sessions.
+type PersistentContextConfig struct {
+	// ProactiveContextEnabled enables proactive context retrieval on session start.
+	// Default: true
+	ProactiveContextEnabled *bool `json:"proactive_context_enabled,omitempty"`
+
+	// MaxContextualResults is the maximum number of relevant past turns to retrieve.
+	// Default: 5
+	MaxContextualResults int `json:"max_contextual_results,omitempty"`
+
+	// MinRelevanceScore is the minimum time-decayed similarity score required for inclusion.
+	// Range: 0.0 to 1.0. Default: 0.50
+	MinRelevanceScore float64 `json:"min_relevance_score,omitempty"`
+
+	// MaxContextChars is the character budget for formatted proactive context injection.
+	// Default: 4000
+	MaxContextChars int `json:"max_context_chars,omitempty"`
+
+	// WorkspaceScopedRetrieval filters retrieval to turns from the same working directory when true.
+	// Default: false
+	WorkspaceScopedRetrieval bool `json:"workspace_scoped_retrieval,omitempty"`
+}
+
 // Optional helpers
 func (a APIKeys) Get(provider string) string {
 	return a[provider]
@@ -551,6 +577,13 @@ func NewConfig() *Config {
 			AutoIndex:           false,
 			SimilarityThreshold: 0.90,
 			MaxResults:          3,
+		},
+		PersistentContext: &PersistentContextConfig{
+			ProactiveContextEnabled:  func() *bool { b := true; return &b }(),
+			MaxContextualResults:     5,
+			MinRelevanceScore:        0.50,
+			MaxContextChars:          4000,
+			WorkspaceScopedRetrieval: false,
 		},
 	}
 }
@@ -734,6 +767,29 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if len(override.EmbeddingIndex.ExcludePaths) > 0 {
 			result.EmbeddingIndex.ExcludePaths = append([]string{}, override.EmbeddingIndex.ExcludePaths...)
+		}
+	}
+
+	// Merge PersistentContext
+	if override.PersistentContext != nil {
+		if result.PersistentContext == nil {
+			result.PersistentContext = &PersistentContextConfig{}
+		}
+		// Only override non-zero values
+		if override.PersistentContext.ProactiveContextEnabled != nil {
+			result.PersistentContext.ProactiveContextEnabled = override.PersistentContext.ProactiveContextEnabled
+		}
+		if override.PersistentContext.MaxContextualResults > 0 {
+			result.PersistentContext.MaxContextualResults = override.PersistentContext.MaxContextualResults
+		}
+		if override.PersistentContext.MinRelevanceScore > 0 {
+			result.PersistentContext.MinRelevanceScore = override.PersistentContext.MinRelevanceScore
+		}
+		if override.PersistentContext.MaxContextChars > 0 {
+			result.PersistentContext.MaxContextChars = override.PersistentContext.MaxContextChars
+		}
+		if override.PersistentContext.WorkspaceScopedRetrieval {
+			result.PersistentContext.WorkspaceScopedRetrieval = override.PersistentContext.WorkspaceScopedRetrieval
 		}
 	}
 
@@ -1807,4 +1863,33 @@ func (c *Config) GetEAMode() string {
 		return "interactive"
 	}
 	return c.EAMode
+}
+
+// GetPersistentContextConfig returns the persistent context configuration,
+// initializing defaults if not set.
+func (c *Config) GetPersistentContextConfig() *PersistentContextConfig {
+	if c.PersistentContext == nil {
+		return &PersistentContextConfig{
+			ProactiveContextEnabled:  func() *bool { b := true; return &b }(),
+			MaxContextualResults:     5,
+			MinRelevanceScore:        0.50,
+			MaxContextChars:          4000,
+			WorkspaceScopedRetrieval: false,
+		}
+	}
+	// Fill in zero-value fields with defaults
+	result := *c.PersistentContext
+	if result.MaxContextualResults == 0 {
+		result.MaxContextualResults = 5
+	}
+	if result.MinRelevanceScore == 0 {
+		result.MinRelevanceScore = 0.50
+	}
+	if result.MaxContextChars == 0 {
+		result.MaxContextChars = 4000
+	}
+	if result.ProactiveContextEnabled == nil {
+		result.ProactiveContextEnabled = func() *bool { b := true; return &b }()
+	}
+	return &result
 }

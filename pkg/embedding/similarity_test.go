@@ -3,6 +3,7 @@ package embedding
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestCosineSimilarity(t *testing.T) {
@@ -177,6 +178,126 @@ func TestTopK(t *testing.T) {
 		results := TopK(query, []VectorRecord{}, 5, 0.0)
 		if len(results) != 0 {
 			t.Errorf("expected 0 results, got %d", len(results))
+		}
+	})
+}
+
+func TestScoreWithDecay(t *testing.T) {
+	tolerance := 1e-4
+
+	t.Run("recent record (0 days old)", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now
+		similarity := 0.9
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 0.9 // decay ≈ 1.0
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("30-day half-life", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-30 * 24 * time.Hour)
+		similarity := 1.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 0.5 // decay = 0.5^(30/30) = 0.5
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("60-day decay", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-60 * 24 * time.Hour)
+		similarity := 1.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 0.25 // decay = 0.5^(60/30) = 0.25
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("90-day decay", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-90 * 24 * time.Hour)
+		similarity := 1.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 0.125 // decay = 0.5^(90/30) = 0.125
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("zero similarity", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-30 * 24 * time.Hour)
+		similarity := 0.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 0.0 // 0 * decay = 0
+		if result != expected {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("negative similarity", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-30 * 24 * time.Hour)
+		similarity := -0.5
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := -0.25 // -0.5 * 0.5 = -0.25
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("future timestamp", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(30 * 24 * time.Hour) // 30 days in the future
+		similarity := 1.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 2.0 // decay = 0.5^(-30/30) = 2.0
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("old record still contributes", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-365 * 24 * time.Hour)
+		similarity := 1.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := math.Pow(0.5, 365.0/30.0) // ≈ 1.5e-4
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+		if result <= 0 {
+			t.Errorf("expected non-zero result for old record, got %.6f", result)
+		}
+	})
+
+	t.Run("combined effect", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-30 * 24 * time.Hour)
+		similarity := 0.8
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := 0.4 // 0.8 * 0.5 = 0.4
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+	})
+
+	t.Run("180-day heavy deprioritization", func(t *testing.T) {
+		now := time.Now()
+		timestamp := now.Add(-180 * 24 * time.Hour)
+		similarity := 1.0
+		result := ScoreWithDecay(similarity, timestamp, now)
+		expected := math.Pow(0.5, 180.0/30.0) // 0.5^6 = 0.015625
+		if math.Abs(result-expected) > tolerance {
+			t.Errorf("expected %.6f, got %.6f", expected, result)
+		}
+		if result > 0.02 {
+			t.Errorf("180-day-old record should be heavily deprioritized, got %.6f", result)
 		}
 	})
 }

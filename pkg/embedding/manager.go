@@ -97,7 +97,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 
 	// Create workspace-specific index file
 	indexFile := filepath.Join(indexDir, "index.jsonl")
-	store, err := NewJSONLFileStore(indexFile)
+	store, err := NewJSONLFileStore(indexFile, provider.ModelHash())
 	if err != nil {
 		provider.Close()
 		m.initError = fmt.Errorf("embedding: open store: %w", err)
@@ -372,7 +372,7 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 
 	// Create conversation store in the same directory as the main index
 	convoPath := filepath.Join(m.indexDir, "conversation_turns.jsonl")
-	convoStore, err := NewConversationStore(m.provider, convoPath)
+	convoStore, err := NewConversationStore(m.provider, convoPath, m.provider.ModelHash())
 	if err != nil {
 		return nil, fmt.Errorf("embedding: create conversation store: %w", err)
 	}

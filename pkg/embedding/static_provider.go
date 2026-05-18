@@ -2,6 +2,7 @@ package embedding
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
 	"fmt"
 	"math"
@@ -170,6 +171,11 @@ func (p *StaticProvider) Dimensions() int {
 // Name returns a human-readable identifier for the provider.
 func (p *StaticProvider) Name() string {
 	return "bundled-static"
+}
+
+// ModelHash returns a SHA-256 hex digest of the embedded model data.
+func (p *StaticProvider) ModelHash() string {
+	return fmt.Sprintf("%x", sha256.Sum256(staticModelData))
 }
 
 // Close releases resources held by the provider.

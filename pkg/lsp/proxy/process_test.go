@@ -392,7 +392,7 @@ func TestLSPProcessSendAndReceive(t *testing.T) {
 		require.NoError(t, err)
 		defer os.Remove(echoScript)
 
-		proc, err := StartLSPProcess(ctx, "/tmp", "/bin/bash", []string{echoScript})
+		proc, err := StartLSPProcess(ctx, t.TempDir(), resolveShell(t), []string{echoScript})
 		require.NoError(t, err)
 		defer proc.Close()
 

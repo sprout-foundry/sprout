@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,6 +14,26 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// resolveShell returns the path to a usable shell binary, skipping the test
+// if none can be found. Prefers /bin/bash but falls back to whatever is in PATH.
+func resolveShell(t *testing.T) string {
+	t.Helper()
+	// Try /bin/bash first (standard Linux/macOS).
+	if _, err := os.Stat("/bin/bash"); err == nil {
+		return "/bin/bash"
+	}
+	// Try to find bash in PATH.
+	if p, err := exec.LookPath("bash"); err == nil {
+		return p
+	}
+	// Fall back to sh.
+	if p, err := exec.LookPath("sh"); err == nil {
+		return p
+	}
+	t.Skip("no shell found for LSP bridge test")
+	return ""
+}
 
 func TestNewBridge(t *testing.T) {
 	t.Run("creates bridge successfully", func(t *testing.T) {
@@ -377,7 +398,8 @@ func TestBridgeBidirectional(t *testing.T) {
 		require.NoError(t, err)
 
 		// Start the echo process directly
-		proc, err := StartLSPProcess(ctx, t.TempDir(), "/bin/bash", []string{echoScript})
+		shell := resolveShell(t)
+		proc, err := StartLSPProcess(ctx, t.TempDir(), shell, []string{echoScript})
 		require.NoError(t, err)
 		defer proc.Close()
 
@@ -880,7 +902,8 @@ func TestBridgeLSPToWSWSWriteError(t *testing.T) {
 		err := os.WriteFile(echoScript, []byte(script), 0755)
 		require.NoError(t, err)
 
-		proc, err := StartLSPProcess(ctx, t.TempDir(), "/bin/bash", []string{echoScript})
+		shell := resolveShell(t)
+		proc, err := StartLSPProcess(ctx, t.TempDir(), shell, []string{echoScript})
 		require.NoError(t, err)
 		defer proc.Close()
 

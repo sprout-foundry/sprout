@@ -366,13 +366,6 @@ func TestSessionsCommand_selectSessionWithDropdown_NonTerminal(t *testing.T) {
 	assert.Contains(t, output, "Interactive session selection requires a terminal")
 }
 
-// TestSessionsCommand_selectSessionWithDropdown_Interactive tests interactive selection
-func TestSessionsCommand_selectSessionWithDropdown_Interactive(t *testing.T) {
-	// This test is skipped because it requires actual terminal input
-	// In production, this would need stdin pipe setup
-	t.Skip("Interactive selection test requires terminal input simulation")
-}
-
 // TestDisplayConversationPreview tests the conversation preview display
 func TestDisplayConversationPreview(t *testing.T) {
 	testAgent := newIsolatedTestAgent(t)

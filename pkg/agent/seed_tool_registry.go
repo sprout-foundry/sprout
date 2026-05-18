@@ -275,6 +275,7 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 			{Name: "persona", Type: "string", Required: true, Description: "REQUIRED: Subagent persona ID or alias (see /persona list)"},
 			{Name: "context", Type: "string", Description: "Context from previous subagent work (files created, summaries, etc.)"},
 			{Name: "files", Type: "string", Description: "Comma-separated list of relevant file paths (e.g., 'models/user.go,pkg/auth/jwt.go')"},
+			{Name: "working_dir", Type: "string", Description: "Optional: directory to use as the subagent's working directory (must be within $HOME). Use this to spawn subagents operating in a different project directory."},
 		},
 		Timeout: 30 * time.Minute,
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
@@ -660,6 +661,65 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 				return handleToolError(agent, err, "semantic_search")
 			}
 			return postProcessResult(ctx, agent, "semantic_search", args, result), nil
+		},
+	})
+
+	// 31. task_queue_read
+	registry.Register(core.ToolConfig{
+		Name:        "task_queue_read",
+		Description: "Read pending tasks from the persistent task queue. Returns tasks sorted by priority (high > medium > low). The queue persists across sessions and is stored at ~/.config/sprout/task_queue.json.",
+		Parameters: []core.ParameterConfig{
+			{Name: "status", Type: "string", Description: "Filter tasks by status: pending, in_progress, completed, failed, blocked, or all (default: pending)"},
+			{Name: "limit", Type: "integer", Description: "Maximum number of tasks to return (default: 10)"},
+		},
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "task_queue_read")
+			result, err := handleTaskQueueRead(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "task_queue_read")
+			}
+			return postProcessResult(ctx, agent, "task_queue_read", args, result), nil
+		},
+	})
+
+	// 32. task_queue_publish
+	registry.Register(core.ToolConfig{
+		Name:        "task_queue_publish",
+		Description: "Update a task in the persistent queue. Used to claim tasks (set status to in_progress), record progress, mark completion, or publish failure. Optionally break a task into subtasks.",
+		Parameters: []core.ParameterConfig{
+			{Name: "task_id", Type: "string", Required: true, Description: "The task ID to update"},
+			{Name: "status", Type: "string", Required: true, Description: "New status: in_progress, completed, failed, or blocked"},
+			{Name: "result", Type: "string", Description: "Summary of work done or error message"},
+			{Name: "subtasks", Type: "array", Description: "Break down into subtasks. Each item: {title, working_dir?, persona?, priority?}"},
+		},
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "task_queue_publish")
+			result, err := handleTaskQueuePublish(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "task_queue_publish")
+			}
+			return postProcessResult(ctx, agent, "task_queue_publish", args, result), nil
+		},
+	})
+
+	// 33. task_queue_add
+	registry.Register(core.ToolConfig{
+		Name:        "task_queue_add",
+		Description: "Add a new task to the persistent queue. Tasks persist across sessions and can be processed by the Executive Assistant persona.",
+		Parameters: []core.ParameterConfig{
+			{Name: "title", Type: "string", Required: true, Description: "Task title (required)"},
+			{Name: "description", Type: "string", Description: "Detailed task description"},
+			{Name: "priority", Type: "string", Description: "Priority: high, medium, or low (default: medium)"},
+			{Name: "working_dir", Type: "string", Description: "Working directory for the task (e.g., ~/projects/my-repo)"},
+			{Name: "persona", Type: "string", Description: "Persona to use when executing this task (e.g., repo_orchestrator)"},
+		},
+		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
+			logToolExecution(agent, "task_queue_add")
+			result, err := handleTaskQueueAdd(ctx, agent, args)
+			if err != nil {
+				return handleToolError(agent, err, "task_queue_add")
+			}
+			return postProcessResult(ctx, agent, "task_queue_add", args, result), nil
 		},
 	})
 
@@ -1073,18 +1133,19 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		return nil
 	}
 	return func(name string, args map[string]interface{}) error {
-		// 1. Subagent nesting prevention
-		// Only block run_subagent and run_parallel_subagents — nested agent chains
-		// cause runaway resource consumption. ask_user is allowed for subagents
-		// because they share the event bus with the primary agent and questions
-		// are routed through the same WebUI/CLI prompt mechanism.
-		if agent.IsSubagent() {
+		// 1. Depth-based subagent nesting prevention
+		// Agents at or beyond the maximum nesting depth cannot spawn further subagents.
+		// This prevents runaway agent chains while allowing configurable multi-level nesting.
+		// ask_user is allowed for subagents because they share the event bus with the
+		// primary agent and questions are routed through the same WebUI/CLI prompt mechanism.
+		if !agent.CanSpawnSubagents() {
 			if name == "run_subagent" || name == "run_parallel_subagents" {
 				return agenterrors.NewSecurityError(
-					"SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. "+
+					fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 						"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 						"If you need additional work done, please complete your current task and return "+
-						"your results to the primary agent for further delegation.", nil)
+						"your results to the parent agent for further delegation.",
+						agent.SubagentDepth(), agent.MaxSubagentDepth()), nil)
 			}
 		}
 

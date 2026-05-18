@@ -637,6 +637,10 @@ func TestExecuteCommandAndWait_OutputContainsDollar(t *testing.T) {
 }
 
 func TestExecuteCommandAndWait_SessionReuseAfterTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping PTY timing-sensitive test in short mode")
+	}
+
 	dir := t.TempDir()
 	tm := NewTerminalManager(dir)
 

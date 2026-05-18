@@ -24,6 +24,7 @@ type SubagentOptions struct {
 	SystemPrompt string          // optional system prompt override
 	MaxTokens    int             // token budget (0 = unlimited)
 	Timeout      time.Duration   // execution timeout (0 = unlimited)
+	WorkingDir   string          // optional: override workspace root (must be within $HOME)
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -50,11 +51,12 @@ type SubagentResult struct {
 
 // SubagentTask represents a single parallel subagent task
 type SubagentTask struct {
-	ID       string
-	Prompt   string
-	Model    string
-	Provider string
-	Persona  string
+	ID         string
+	Prompt     string
+	Model      string
+	Provider   string
+	Persona    string
+	WorkingDir string // optional: override workspace root
 }
 
 // SubagentRunner manages in-process subagent execution
@@ -130,6 +132,9 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			}
 			if t.Persona != "" {
 				taskOpts.Persona = t.Persona
+			}
+			if t.WorkingDir != "" {
+				taskOpts.WorkingDir = t.WorkingDir
 			}
 			results[idx] = r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts)
 		}(i, task)
@@ -409,6 +414,12 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		systemPrompt = "You are a helpful coding assistant that can execute tools to complete tasks."
 	}
 
+	// Determine effective workspace root
+	effectiveWorkspaceRoot := r.shared.WorkspaceRoot
+	if opts.WorkingDir != "" {
+		effectiveWorkspaceRoot = opts.WorkingDir
+	}
+
 	// Create interrupt context for this subagent
 	interruptCtx, interruptCancel := context.WithCancel(context.Background())
 
@@ -431,7 +442,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
 		interruptCtx:        interruptCtx,
 		interruptCancel:     interruptCancel,
-		workspaceRoot:       r.shared.WorkspaceRoot,
+		workspaceRoot:       effectiveWorkspaceRoot,
 		state:               stateMgr,
 		output:              outputMgr,
 		security:            securityMgr,
@@ -442,9 +453,9 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		embeddingMgr:  r.shared.EmbeddingMgr,
 	}
 
-	// Set isSubagent=true so the subagent knows it's a subagent.
-	// This prevents nested subagent spawning and skips interactive prompts.
-	agent.isSubagent = true
+	// Set subagentDepth based on parent's depth + 1.
+	// This enables configurable nesting: EA (0) → orchestrator (1) → coder/tester (2).
+	agent.subagentDepth = r.parentAgent.subagentDepth + 1
 
 	return agent, nil
 }

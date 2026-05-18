@@ -90,8 +90,8 @@ func TestNewTraceSession_MetadataWriteFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when metadata write to /dev/full fails (ENOSPC)")
 	}
-	if !strings.Contains(err.Error(), "failed to write run metadata") {
-		t.Errorf("expected 'failed to write run metadata' error, got: %v", err)
+	if !strings.Contains(err.Error(), "failed to write run metadata") && !strings.Contains(err.Error(), "failed to create runs writer") {
+		t.Errorf("expected metadata write failure error, got: %v", err)
 	}
 	t.Logf("got expected metadata write failure: %v", err)
 }

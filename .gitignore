@@ -150,3 +150,5 @@ pkg/embedding/staticmodel/
 # Old model files (replaced by static_model.bin)
 pkg/embedding/models/
 pkg/embedding/staticmodel/mkembed
+
+code_review_output.json

@@ -12,17 +12,17 @@ func TestLoadStaticModel(t *testing.T) {
 		t.Fatalf("Failed to load static model: %v", err)
 	}
 
-	if model.dims != 256 {
-		t.Errorf("Expected dimensions 256, got %d", model.dims)
+	if model.Dims() != 384 {
+		t.Errorf("Expected dimensions 384, got %d", model.Dims())
 	}
 
-	if model.vocabSize != 29525 {
-		t.Errorf("Expected vocab size 29525, got %d", model.vocabSize)
+	if model.VocabSize() != 32000 {
+		t.Errorf("Expected vocab size 32000, got %d", model.VocabSize())
 	}
 
-	if len(model.embeddings) != model.vocabSize*model.dims {
-		t.Errorf("Expected %d embedding entries, got %d",
-			model.vocabSize*model.dims, len(model.embeddings))
+	if len(model.GetEmbedding(0)) != model.Dims() {
+		t.Errorf("Expected embedding length %d, got %d",
+			model.Dims(), len(model.GetEmbedding(0)))
 	}
 
 	if err := model.Validate(); err != nil {
@@ -37,12 +37,12 @@ func TestNewStaticProvider(t *testing.T) {
 	}
 	defer provider.Close()
 
-	if provider.Dimensions() != 256 {
-		t.Errorf("Expected dimensions 256, got %d", provider.Dimensions())
+	if provider.Dimensions() != 384 {
+		t.Errorf("Expected dimensions 384, got %d", provider.Dimensions())
 	}
 
-	if provider.Name() != "bge-base-en-v1.5-256d" {
-		t.Errorf("Expected name 'bge-base-en-v1.5-256d', got %s", provider.Name())
+	if provider.Name() != "static-384d-f32" {
+		t.Errorf("Expected name 'static-384d-f32', got %s", provider.Name())
 	}
 }
 
@@ -58,8 +58,8 @@ func TestStaticTokenizer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to embed empty string: %v", err)
 	}
-	if len(vec) != 256 {
-		t.Errorf("Expected 256 dimensions for empty string, got %d", len(vec))
+	if len(vec) != 384 {
+		t.Errorf("Expected 384 dimensions for empty string, got %d", len(vec))
 	}
 
 	// Test single word
@@ -67,8 +67,8 @@ func TestStaticTokenizer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to embed single word: %v", err)
 	}
-	if len(vec) != 256 {
-		t.Errorf("Expected 256 dimensions for single word, got %d", len(vec))
+	if len(vec) != 384 {
+		t.Errorf("Expected 384 dimensions for single word, got %d", len(vec))
 	}
 
 	// Test multiple words
@@ -76,8 +76,8 @@ func TestStaticTokenizer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to embed multiple words: %v", err)
 	}
-	if len(vec) != 256 {
-		t.Errorf("Expected 256 dimensions for multiple words, got %d", len(vec))
+	if len(vec) != 384 {
+		t.Errorf("Expected 384 dimensions for multiple words, got %d", len(vec))
 	}
 }
 
@@ -94,8 +94,8 @@ func TestStaticProviderEmbed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to embed empty string: %v", err)
 	}
-	if len(vec) != 256 {
-		t.Errorf("Expected 256 dimensions, got %d", len(vec))
+	if len(vec) != 384 {
+		t.Errorf("Expected 384 dimensions, got %d", len(vec))
 	}
 
 	// Test non-empty string
@@ -103,8 +103,8 @@ func TestStaticProviderEmbed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to embed text: %v", err)
 	}
-	if len(vec) != 256 {
-		t.Errorf("Expected 256 dimensions, got %d", len(vec))
+	if len(vec) != 384 {
+		t.Errorf("Expected 384 dimensions, got %d", len(vec))
 	}
 
 	// Verify L2 normalization is approximately 1
@@ -137,8 +137,8 @@ func TestStaticProviderEmbedBatch(t *testing.T) {
 	}
 
 	for i, vec := range vecs {
-		if len(vec) != 256 {
-			t.Errorf("Vector %d: Expected 256 dimensions, got %d", i, len(vec))
+		if len(vec) != 384 {
+			t.Errorf("Vector %d: Expected 384 dimensions, got %d", i, len(vec))
 		}
 	}
 }

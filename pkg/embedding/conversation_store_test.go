@@ -17,7 +17,7 @@ func TestNewConversationStore_CreatesFile(t *testing.T) {
 	path := filepath.Join(dir, "convo.jsonl")
 
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
-	store, err := NewConversationStore(provider, path)
+	store, err := NewConversationStore(provider, path, provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestNewConversationStore_LoadsExistingFile(t *testing.T) {
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
 	// Create store, add records, close.
-	store1, err := NewConversationStore(provider, path)
+	store1, err := NewConversationStore(provider, path, provider.ModelHash())
 	if err != nil {
 		t.Fatalf("first NewConversationStore failed: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestNewConversationStore_LoadsExistingFile(t *testing.T) {
 	}
 
 	// Create a NEW store at the same path — records should reload.
-	store2, err := NewConversationStore(provider, path)
+	store2, err := NewConversationStore(provider, path, provider.ModelHash())
 	if err != nil {
 		t.Fatalf("second NewConversationStore failed: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestConversationStore_StoreAndQuery(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestConversationStore_Store_Upsert(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestConversationStore_LoadAll(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestConversationStore_LoadAll_Empty(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestConversationStore_Size(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestConversationStore_Provider(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0, 1}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -280,7 +280,7 @@ func TestConversationStore_Close(t *testing.T) {
 	path := filepath.Join(dir, "convo.jsonl")
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, path)
+	store, err := NewConversationStore(provider, path, provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestConversationStore_Close(t *testing.T) {
 	}
 
 	// Verify data persisted to disk by opening a new store at the same path.
-	store2, err := NewConversationStore(provider, path)
+	store2, err := NewConversationStore(provider, path, provider.ModelHash())
 	if err != nil {
 		t.Fatalf("re-open after close failed: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestConversationStore_Close_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestConversationStore_Query_EmptyStore(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestConversationStore_Query_Threshold(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -389,7 +389,7 @@ func TestConversationStore_Query_TopK(t *testing.T) {
 	dir := t.TempDir()
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 
-	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
 	if err != nil {
 		t.Fatalf("NewConversationStore failed: %v", err)
 	}
@@ -563,9 +563,13 @@ func TestEmbeddingManager_Close_ClosesConversationStore(t *testing.T) {
 
 	// The data should have been flushed to disk on close.
 	// Re-open a new store at the same path to verify persistence.
+	// Use a new StaticProvider so the model hash matches what was written.
 	expectedPath := filepath.Join(dir, "conversation_turns.jsonl")
-	provider := &constantProvider{vec: []float32{1, 0, 0}}
-	store2, err := NewConversationStore(provider, expectedPath)
+	newProvider, err := NewStaticProvider()
+	if err != nil {
+		t.Fatalf("create new static provider: %v", err)
+	}
+	store2, err := NewConversationStore(newProvider, expectedPath, newProvider.ModelHash())
 	if err != nil {
 		t.Fatalf("re-open after manager close failed: %v", err)
 	}

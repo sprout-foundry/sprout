@@ -21,9 +21,12 @@ func makeTestRecord(id, file, name string, embedding []float32) VectorRecord {
 	}
 }
 
+// testHash is a stable model hash used in tests.
+const testHash = "test-model-hash"
+
 func TestStoreAndQuery(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"), testHash)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -60,7 +63,7 @@ func TestStoreAndQuery(t *testing.T) {
 
 func TestStoreUpsert(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"), testHash)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -101,7 +104,7 @@ func TestStoreUpsert(t *testing.T) {
 
 func TestDeleteByFile(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"), testHash)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -146,7 +149,7 @@ func TestStoreReload(t *testing.T) {
 	path := filepath.Join(dir, "store.jsonl")
 
 	// Create store, store records, close.
-	store1, err := NewJSONLFileStore(path)
+	store1, err := NewJSONLFileStore(path, testHash)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -164,7 +167,7 @@ func TestStoreReload(t *testing.T) {
 	}
 
 	// Create new store at same path — records should reload.
-	store2, err := NewJSONLFileStore(path)
+	store2, err := NewJSONLFileStore(path, testHash)
 	if err != nil {
 		t.Fatalf("failed to reload store: %v", err)
 	}
@@ -192,7 +195,7 @@ func TestStoreReload(t *testing.T) {
 
 func TestEmptyQuery(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "store.jsonl"), testHash)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -211,7 +214,7 @@ func TestEmptyQuery(t *testing.T) {
 
 func TestStoreNonExistentFile(t *testing.T) {
 	dir := t.TempDir()
-	store, err := NewJSONLFileStore(filepath.Join(dir, "nonexistent.jsonl"))
+	store, err := NewJSONLFileStore(filepath.Join(dir, "nonexistent.jsonl"), testHash)
 	if err != nil {
 		t.Fatalf("failed to create store for nonexistent file: %v", err)
 	}
@@ -219,5 +222,67 @@ func TestStoreNonExistentFile(t *testing.T) {
 
 	if store.Size() != 0 {
 		t.Errorf("expected size 0, got %d", store.Size())
+	}
+}
+
+func TestModelHash_InvalidationOnMismatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "store.jsonl")
+
+	// Create store with model-v1, store a record, close.
+	store1, err := NewJSONLFileStore(path, "model-v1-abcdef0123456789")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	rec := makeTestRecord("1", "a.go", "funcA", []float32{1, 0, 0})
+	if err := store1.Store([]VectorRecord{rec}); err != nil {
+		t.Fatalf("failed to store record: %v", err)
+	}
+
+	if err := store1.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+
+	// Open at same path with a different model hash — records should be invalidated.
+	store2, err := NewJSONLFileStore(path, "model-v2-abcdef0123456789")
+	if err != nil {
+		t.Fatalf("failed to reload store with new model hash: %v", err)
+	}
+	defer store2.Close()
+
+	if store2.Size() != 0 {
+		t.Errorf("expected size 0 after model hash mismatch, got %d", store2.Size())
+	}
+}
+
+func TestModelHash_PersistsOnMatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "store.jsonl")
+
+	// Create store with model-v1, store a record, close.
+	store1, err := NewJSONLFileStore(path, "model-v1-abcdef0123456789")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+
+	rec := makeTestRecord("1", "a.go", "funcA", []float32{1, 0, 0})
+	if err := store1.Store([]VectorRecord{rec}); err != nil {
+		t.Fatalf("failed to store record: %v", err)
+	}
+
+	if err := store1.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+
+	// Open at same path with the same model hash — records should be preserved.
+	store2, err := NewJSONLFileStore(path, "model-v1-abcdef0123456789")
+	if err != nil {
+		t.Fatalf("failed to reload store: %v", err)
+	}
+	defer store2.Close()
+
+	if store2.Size() != 1 {
+		t.Errorf("expected size 1 after reload with matching model hash, got %d", store2.Size())
 	}
 }

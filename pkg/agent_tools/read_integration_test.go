@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // TestReadFileTruncationBehavior tests that:
@@ -29,7 +31,7 @@ func TestReadFileTruncationBehavior(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Test 1: Full file read should truncate and warn
 	// With 32KB limit on a ~300KB file: head ~19KB (60%), tail ~13KB (40%)
@@ -131,7 +133,7 @@ func TestEditAfterTruncatedRead(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	ctx := context.Background()
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), tmpDir)
 
 	// Step 1: Model does full read, gets truncation warning
 	fullRead, err := ReadFile(ctx, testFile)

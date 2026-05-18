@@ -1073,18 +1073,19 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		return nil
 	}
 	return func(name string, args map[string]interface{}) error {
-		// 1. Subagent nesting prevention
-		// Only block run_subagent and run_parallel_subagents — nested agent chains
-		// cause runaway resource consumption. ask_user is allowed for subagents
-		// because they share the event bus with the primary agent and questions
-		// are routed through the same WebUI/CLI prompt mechanism.
-		if agent.IsSubagent() {
+		// 1. Depth-based subagent nesting prevention
+		// Agents at or beyond the maximum nesting depth cannot spawn further subagents.
+		// This prevents runaway agent chains while allowing configurable multi-level nesting.
+		// ask_user is allowed for subagents because they share the event bus with the
+		// primary agent and questions are routed through the same WebUI/CLI prompt mechanism.
+		if !agent.CanSpawnSubagents() {
 			if name == "run_subagent" || name == "run_parallel_subagents" {
 				return agenterrors.NewSecurityError(
-					"SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. "+
+					fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 						"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 						"If you need additional work done, please complete your current task and return "+
-						"your results to the primary agent for further delegation.", nil)
+						"your results to the parent agent for further delegation.",
+						agent.SubagentDepth(), agent.MaxSubagentDepth()), nil)
 			}
 		}
 

@@ -478,18 +478,21 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
-	// CRITICAL: Prevent subagents from creating nested subagents
-	// This check ensures that subagents cannot spawn further subagents, preventing runaway agent chains.
+	// CRITICAL: Depth-based subagent nesting prevention
+	// Agents at or beyond the maximum nesting depth cannot spawn further subagents.
+	// This prevents runaway agent chains while allowing configurable multi-level nesting
+	// (e.g., EA (depth=0) → orchestrator (depth=1) → coder/tester (depth=2)).
 	// ask_user is NOT blocked for subagents — they share the event bus and questions
 	// are routed through the same WebUI/CLI prompt mechanism as the primary agent.
-	if agent != nil && agent.IsSubagent() {
+	if agent != nil && !agent.CanSpawnSubagents() {
 		if toolName == "run_subagent" || toolName == "run_parallel_subagents" {
-			errMsg := "SUBAGENT_RESTRICTION: Subagents are not allowed to spawn nested subagents. " +
-				"This restriction prevents runaway agent chains and ensures proper task delegation. " +
-				"If you need additional work done, please complete your current task and return " +
-				"your results to the primary agent for further delegation."
+			errMsg := fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
+				"This restriction prevents runaway agent chains and ensures proper task delegation. "+
+				"If you need additional work done, please complete your current task and return "+
+				"your results to the parent agent for further delegation.",
+				agent.SubagentDepth(), agent.MaxSubagentDepth())
 			if agent != nil && agent.debug {
-				agent.debugLog("[NO] Blocked subagent tool '%s' - not allowed in subagent context\n", toolName)
+				agent.debugLog("[NO] Blocked subagent tool '%s' at depth %d (max: %d)\n", toolName, agent.SubagentDepth(), agent.MaxSubagentDepth())
 			}
 			return nil, "", agenterrors.NewSecurityError(errMsg, nil)
 		}

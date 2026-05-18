@@ -21,21 +21,17 @@ Spec: `roadmap/SP-027-persistent-context.md`
 ### Phase 1: Conversation Turn Embedding (Foundation)
 
 [x] - SP-027-1a: Create `ConversationTurn` struct in `pkg/agent/conversation_turn.go` — struct with ID, SessionID, TurnNumber, Timestamp, UserPrompt, ActionableSummary, PromptEmbedding, FilesTouched, WorkingDir, Duration, TokenUsage fields
-[] - SP-027-1a: Create `ConversationTurn` struct in `pkg/agent/conversation_turn.go` — struct with ID, SessionID, TurnNumber, Timestamp, UserPrompt, ActionableSummary, PromptEmbedding, FilesTouched, WorkingDir, Duration, TokenUsage fields
+
 [x] - SP-027-1b: Create `ConversationStore` in `pkg/embedding/conversation_store.go` — wraps a second `JSONLFileStore` instance for `~/.config/sprout/embeddings/conversation_turns.jsonl`, lazy initialization via `EmbeddingManager.GetConversationStore()`
-[] - SP-027-1b: Create `ConversationStore` in `pkg/embedding/conversation_store.go` — wraps a second `JSONLFileStore` instance for `~/.config/sprout/embeddings/conversation_turns.jsonl`, lazy initialization via `EmbeddingManager.GetConversationStore()`
 [x] - SP-027-1c: Implement `VectorRecord` serialization mapping — `ConversationTurn` → `VectorRecord` with explicit field mapping (ID→ID, prompt→Signature, mean embedding→Embedding, Type→"conversation_turn", metadata map for FilesTouched/WorkingDir/Duration/TokenUsage)
-[] - SP-027-1c: Implement `VectorRecord` serialization mapping — `ConversationTurn` → `VectorRecord` with explicit field mapping (ID→ID, prompt→Signature, mean embedding→Embedding, Type→"conversation_turn", metadata map for FilesTouched/WorkingDir/Duration/TokenUsage)
 [x] - SP-027-1d: Add `EmbedAndStoreTurn()` function — compute embeddings for prompt and actionable summary using static provider, store as `VectorRecord` in `ConversationStore`. Graceful failure: checkpoint still recorded if embedding/storage fails
-[] - SP-027-1d: Add `EmbedAndStoreTurn()` function — compute embeddings for prompt and actionable summary using static provider, store as `VectorRecord` in `ConversationStore`. Graceful failure: checkpoint still recorded if embedding/storage fails
 [x] - SP-027-1e: Hook `EmbedAndStoreTurn()` into `pkg/agent/turn_checkpoints.go` — call after existing checkpoint recording in the same goroutine
-[] - SP-027-1e: Hook `EmbedAndStoreTurn()` into `pkg/agent/turn_checkpoints.go` — call after existing checkpoint recording in the same goroutine
-[] - SP-027-1f: Add `SessionIntentEmbedding []float32` to `ConversationState` in `pkg/agent/persistence.go` — computed on first turn, restored on session load
-[] - SP-027-1g: Tests — unit test for embed→store round-trip, test for graceful failure when provider unavailable
+[x] - SP-027-1f: Add `SessionIntentEmbedding []float32` to `ConversationState` in `pkg/agent/persistence.go` — computed on first turn, restored on session load
+[x] - SP-027-1g: Tests — unit test for embed→store round-trip, test for graceful failure when provider unavailable
 
 ### Phase 2: Proactive Context Retrieval
 
-[] - SP-027-2a: Implement time-decayed similarity scoring — `ScoreWithDecay()` with 30-day half-life exponential decay combining cosine similarity and temporal weighting
+[x] - SP-027-2a: Implement time-decayed similarity scoring — `ScoreWithDecay()` with 30-day half-life exponential decay combining cosine similarity and temporal weighting
 [] - SP-027-2b: Create `pkg/agent/proactive_context.go` — query `ConversationStore` with time decay, filter by `MinRelevanceScore` (0.50), cap at `MaxContextualResults` (5), format as "Previous Work" section for system prompt injection
 [] - SP-027-2c: Hook `proactiveContext.Inject()` into `ProcessQuery()` pre-loop — only on first turn (no prior messages beyond system prompt) or cold session restore
 [] - SP-027-2d: Add `PersistentContextConfig` struct to `pkg/configuration/config.go` — `ProactiveContextEnabled` (true), `MaxContextualResults` (5), `MinRelevanceScore` (0.50), `MaxContextChars` (4000), `WorkspaceScopedRetrieval` (false)

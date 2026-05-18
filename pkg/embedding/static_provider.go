@@ -178,6 +178,13 @@ func (p *StaticProvider) ModelHash() string {
 	return fmt.Sprintf("%x", sha256.Sum256(staticModelData))
 }
 
+// DebugTokenize returns token strings and IDs for debugging purposes.
+func (p *StaticProvider) DebugTokenize(text string) ([]string, []uint16) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.tokenizer.TokenizeWithTokens(text)
+}
+
 // Close releases resources held by the provider.
 func (p *StaticProvider) Close() error {
 	p.mu.Lock()

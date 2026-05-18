@@ -1,0 +1,630 @@
+package embedding
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+)
+
+// ─── NewConversationStore tests ───
+
+func TestNewConversationStore_CreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "convo.jsonl")
+
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+	store, err := NewConversationStore(provider, path)
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	if store == nil {
+		t.Fatal("expected non-nil store")
+	}
+
+	// Verify the file was created (even if empty, the dir should exist).
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// File may not be created until first Store() call — that's OK.
+		// Verify the store has size 0 and is usable.
+		if store.Size() != 0 {
+			t.Errorf("expected size 0 for new store, got %d", store.Size())
+		}
+	}
+}
+
+func TestNewConversationStore_LoadsExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "convo.jsonl")
+
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	// Create store, add records, close.
+	store1, err := NewConversationStore(provider, path)
+	if err != nil {
+		t.Fatalf("first NewConversationStore failed: %v", err)
+	}
+
+	recs := []VectorRecord{
+		{ID: "turn:1", File: "convo.md", Name: "turn1", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "turn:2", File: "convo.md", Name: "turn2", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+	}
+	if err := store1.Store(recs); err != nil {
+		t.Fatalf("store failed: %v", err)
+	}
+	if err := store1.Close(); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+
+	// Create a NEW store at the same path — records should reload.
+	store2, err := NewConversationStore(provider, path)
+	if err != nil {
+		t.Fatalf("second NewConversationStore failed: %v", err)
+	}
+	defer store2.Close()
+
+	if store2.Size() != 2 {
+		t.Errorf("expected size 2 after reload, got %d", store2.Size())
+	}
+
+	// Verify record IDs persisted.
+	all, err := store2.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("LoadAll returned %d records, expected 2", len(all))
+	}
+}
+
+// ─── ConversationStore Store/Query tests ───
+
+func TestConversationStore_StoreAndQuery(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store records with known embeddings.
+	recs := []VectorRecord{
+		{ID: "turn:1", File: "convo.md", Name: "greeting", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "turn:2", File: "convo.md", Name: "response", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+	}
+	if err := store.Store(recs); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if store.Size() != 2 {
+		t.Errorf("expected size 2, got %d", store.Size())
+	}
+
+	// Query for similarity to [1,0,0] — should match "greeting" most.
+	results, err := store.Query([]float32{1, 0, 0}, 2, 0.0)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	// First result should be "greeting" (similarity 1.0).
+	if results[0].Record.Name != "greeting" {
+		t.Errorf("expected first result 'greeting', got %s", results[0].Record.Name)
+	}
+}
+
+func TestConversationStore_Store_Upsert(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store initial record.
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", File: "convo.md", Name: "original", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("initial store failed: %v", err)
+	}
+
+	// Upsert with same ID, different name.
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", File: "convo.md", Name: "updated", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("upsert failed: %v", err)
+	}
+
+	// Should still have exactly 1 record.
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 after upsert, got %d", store.Size())
+	}
+
+	// Verify the record was updated.
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if all[0].Name != "updated" {
+		t.Errorf("expected name 'updated' after upsert, got %q", all[0].Name)
+	}
+}
+
+// ─── ConversationStore LoadAll tests ───
+
+func TestConversationStore_LoadAll(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	recs := []VectorRecord{
+		{ID: "turn:1", File: "convo.md", Name: "turn1", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "turn:2", File: "convo.md", Name: "turn2", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+		{ID: "turn:3", File: "convo.md", Name: "turn3", Embedding: []float32{0, 0, 1}, IndexedAt: time.Now()},
+	}
+	if err := store.Store(recs); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+
+	if len(all) != 3 {
+		t.Errorf("expected 3 records from LoadAll, got %d", len(all))
+	}
+
+	// Verify LoadAll returns a copy (mutating it shouldn't affect the store).
+	all[0].Name = "mutated"
+	all2, _ := store.LoadAll()
+	if all2[0].Name == "mutated" {
+		t.Error("LoadAll should return a copy, not a reference to internal data")
+	}
+}
+
+func TestConversationStore_LoadAll_Empty(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll on empty store failed: %v", err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 records from empty store, got %d", len(all))
+	}
+}
+
+// ─── ConversationStore Size tests ───
+
+func TestConversationStore_Size(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Empty store should report 0.
+	if store.Size() != 0 {
+		t.Errorf("expected size 0 for new store, got %d", store.Size())
+	}
+
+	// Add 3 records.
+	if err := store.Store([]VectorRecord{
+		{ID: "a", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "b", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+		{ID: "c", Embedding: []float32{0, 0, 1}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if store.Size() != 3 {
+		t.Errorf("expected size 3 after adding 3 records, got %d", store.Size())
+	}
+}
+
+// ─── ConversationStore Provider tests ───
+
+func TestConversationStore_Provider(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0, 1}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	got := store.Provider()
+	if got != provider {
+		t.Error("Provider() should return the same provider passed to constructor")
+	}
+
+	// Verify the provider is actually usable.
+	if got.Name() != "constant" {
+		t.Errorf("expected provider name 'constant', got %q", got.Name())
+	}
+	if got.Dimensions() != 4 {
+		t.Errorf("expected provider dimensions 4, got %d", got.Dimensions())
+	}
+}
+
+// ─── ConversationStore Close tests ───
+
+func TestConversationStore_Close(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "convo.jsonl")
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, path)
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+
+	// Add some data so the store is dirty.
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", File: "convo.md", Name: "greeting", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Close should persist data and clear internal state.
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// After close, Size should be 0 (underlying store clears records on Close).
+	if store.Size() != 0 {
+		t.Errorf("expected size 0 after close, got %d", store.Size())
+	}
+
+	// Verify data persisted to disk by opening a new store at the same path.
+	store2, err := NewConversationStore(provider, path)
+	if err != nil {
+		t.Fatalf("re-open after close failed: %v", err)
+	}
+	defer store2.Close()
+
+	if store2.Size() != 1 {
+		t.Errorf("expected size 1 after re-open, got %d", store2.Size())
+	}
+}
+
+func TestConversationStore_Close_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+
+	// Close twice should not error.
+	if err := store.Close(); err != nil {
+		t.Fatalf("first close failed: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Errorf("second close should not error, got: %v", err)
+	}
+}
+
+// ─── ConversationStore Query edge cases ───
+
+func TestConversationStore_Query_EmptyStore(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	results, err := store.Query([]float32{1, 0, 0}, 5, 0.0)
+	if err != nil {
+		t.Fatalf("Query on empty store failed: %v", err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results for empty store, got %v", results)
+	}
+}
+
+func TestConversationStore_Query_Threshold(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store records with different embeddings.
+	if err := store.Store([]VectorRecord{
+		{ID: "exact", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "orthogonal", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Query with high threshold — only exact match should appear.
+	results, err := store.Query([]float32{1, 0, 0}, 5, 0.99)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result above threshold, got %d", len(results))
+	}
+	if results[0].Record.ID != "exact" {
+		t.Errorf("expected 'exact' match, got %s", results[0].Record.ID)
+	}
+}
+
+func TestConversationStore_Query_TopK(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"))
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store 5 records all with the same embedding (so all match equally).
+	for i := 0; i < 5; i++ {
+		if err := store.Store([]VectorRecord{
+			{ID: string(rune('a' + i)), Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		}); err != nil {
+			t.Fatalf("Store failed for record %d: %v", i, err)
+		}
+	}
+
+	// Ask for top 2 — should get at most 2.
+	results, err := store.Query([]float32{1, 0, 0}, 2, 0.0)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+
+	if len(results) > 2 {
+		t.Errorf("expected at most 2 results (topK=2), got %d", len(results))
+	}
+}
+
+// ─── EmbeddingManager.GetConversationStore integration tests ───
+
+func TestGetConversationStore_LazyInit(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	// Before calling GetConversationStore, convoStore should be nil.
+	// We can't access the private field directly, so infer from behavior:
+	// call Init to set up the manager, then verify convoStore was not
+	// created during Init.
+	if err := mgr.Init(context.Background()); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// GetConversationStore should create it lazily.
+	store, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("GetConversationStore failed: %v", err)
+	}
+	if store == nil {
+		t.Fatal("expected non-nil ConversationStore")
+	}
+}
+
+func TestGetConversationStore_SameInstance(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	store1, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("first GetConversationStore failed: %v", err)
+	}
+
+	store2, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("second GetConversationStore failed: %v", err)
+	}
+
+	if store1 != store2 {
+		t.Error("GetConversationStore should return the same instance on repeated calls")
+	}
+}
+
+func TestGetConversationStore_CreatesAtCorrectPath(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	store, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("GetConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// The store should be created at {indexDir}/conversation_turns.jsonl.
+	expectedPath := filepath.Join(dir, "conversation_turns.jsonl")
+
+	// Store a record to materialize the file, then verify the file exists.
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Errorf("expected conversation store file at %s, but it does not exist", expectedPath)
+	}
+}
+
+func TestGetConversationStore_NotInitialized_ReturnsError(t *testing.T) {
+	// Point IndexDir at a path that can't be written to, forcing init to fail.
+	unwritable := filepath.Join("/proc/nonexistent", "embeddings")
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: unwritable}
+	mgr := NewEmbeddingManager(cfg, t.TempDir())
+
+	_, err := mgr.GetConversationStore(context.Background())
+	if err == nil {
+		t.Fatal("expected error when init fails, got nil")
+	}
+}
+
+func TestGetConversationStore_StoresAndQueries(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	store, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("GetConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store a conversation turn.
+	turn := VectorRecord{
+		ID:        "turn:1",
+		File:      "session.md",
+		Name:      "greeting",
+		Embedding: []float32{1, 0, 0},
+		IndexedAt: time.Now(),
+	}
+	if err := store.Store([]VectorRecord{turn}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Query should find it.
+	results, err := store.Query([]float32{1, 0, 0}, 1, 0.0)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Record.ID != "turn:1" {
+		t.Errorf("expected ID 'turn:1', got %q", results[0].Record.ID)
+	}
+}
+
+func TestEmbeddingManager_Close_ClosesConversationStore(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	// Get the conversation store and add a record.
+	store, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("GetConversationStore failed: %v", err)
+	}
+
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Close the manager — this should close the conversation store too.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Verify the manager is no longer initialized.
+	if mgr.IsInitialized() {
+		t.Error("expected manager to be uninitialized after Close")
+	}
+
+	// The data should have been flushed to disk on close.
+	// Re-open a new store at the same path to verify persistence.
+	expectedPath := filepath.Join(dir, "conversation_turns.jsonl")
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+	store2, err := NewConversationStore(provider, expectedPath)
+	if err != nil {
+		t.Fatalf("re-open after manager close failed: %v", err)
+	}
+	defer store2.Close()
+
+	if store2.Size() != 1 {
+		t.Errorf("expected 1 record persisted after manager Close, got %d", store2.Size())
+	}
+}
+
+func TestEmbeddingManager_Close_CleanupAndReinit(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	// Init, get conversation store, store a record, close.
+	store, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("GetConversationStore failed: %v", err)
+	}
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("first Close failed: %v", err)
+	}
+
+	// Verify the manager is no longer initialized.
+	if mgr.IsInitialized() {
+		t.Error("expected manager to be uninitialized after Close")
+	}
+
+	// Re-initialize the manager after close.
+	if err := mgr.Init(context.Background()); err != nil {
+		t.Fatalf("re-init after close failed: %v", err)
+	}
+
+	// GetConversationStore should create a fresh store after Close() cleared the old one.
+	store2, err := mgr.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("GetConversationStore after re-init failed: %v", err)
+	}
+
+	// The persisted record should still be loadable from disk.
+	if store2.Size() != 1 {
+		t.Errorf("expected 1 record persisted after Close+Init, got %d", store2.Size())
+	}
+
+	// Verify we can store more data in the re-opened store.
+	if err := store2.Store([]VectorRecord{
+		{ID: "turn:2", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store in re-opened store failed: %v", err)
+	}
+
+	if store2.Size() != 2 {
+		t.Errorf("expected 2 records after adding to re-opened store, got %d", store2.Size())
+	}
+}

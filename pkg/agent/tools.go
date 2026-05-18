@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // executeTool handles the execution of individual tool calls
@@ -63,7 +64,8 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	}
 
 	// Use the tool registry for data-driven tool execution
-	_, result, err := registry.ExecuteTool(context.Background(), toolName, args, a)
+	ctx := filesystem.WithWorkspaceRoot(context.Background(), a.GetWorkspaceRoot())
+	_, result, err := registry.ExecuteTool(ctx, toolName, args, a)
 
 	// Track tool call count
 	a.state.IncrementTotalToolCalls()

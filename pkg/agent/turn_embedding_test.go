@@ -1,0 +1,424 @@
+package agent
+
+import (
+	"context"
+	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+)
+
+// TestEmbedAndStoreTurn_RealProvider tests the full flow with a real static provider.
+// It creates an EmbeddingManager with a temp config dir, calls EmbedAndStoreTurn,
+// and verifies the record was stored by loading it back from the conversation store.
+func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary directory for test isolation
+	tempDir := t.TempDir()
+
+	// Set config env vars to use temp dir
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// Create EmbeddingManager with minimal config
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: tempDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	// Initialize the manager
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// Create a test conversation turn
+	turn, err := NewConversationTurn("test-session", 1, "How do I implement a REST API in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create conversation turn: %v", err)
+	}
+	turn.ActionableSummary = "Implement a REST API using net/http package with handlers for GET and POST endpoints"
+
+	// Call EmbedAndStoreTurn
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn returned unexpected error: %v", err)
+	}
+
+	// Verify that the turn's PromptEmbedding was set
+	if turn.PromptEmbedding == nil {
+		t.Error("PromptEmbedding was not set after EmbedAndStoreTurn")
+	}
+
+	// Verify the embedding was stored by loading it back from the conversation store
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	allRecords, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("failed to load records from conversation store: %v", err)
+	}
+
+	if len(allRecords) != 1 {
+		t.Errorf("expected 1 record in conversation store, got %d", len(allRecords))
+	}
+
+	record := allRecords[0]
+	if record.ID != turn.ID {
+		t.Errorf("expected record ID %s, got %s", turn.ID, record.ID)
+	}
+
+	if record.Type != "conversation_turn" {
+		t.Errorf("expected record type 'conversation_turn', got '%s'", record.Type)
+	}
+
+	if record.Metadata == nil {
+		t.Error("expected record metadata to be non-nil")
+	} else {
+		if sessionID, ok := record.Metadata["sessionId"].(string); !ok || sessionID != turn.SessionID {
+			t.Errorf("expected sessionId %s in metadata, got %v", turn.SessionID, record.Metadata["sessionId"])
+		}
+	}
+}
+
+// TestEmbedAndStoreTurn_EmptySummary tests the case where only the prompt is embedded
+// because the actionable summary is empty.
+func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary directory for test isolation
+	tempDir := t.TempDir()
+
+	// Set config env vars to use temp dir
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// Create EmbeddingManager with minimal config
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: tempDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	// Initialize the manager
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// Create a test conversation turn without an actionable summary
+	turn, err := NewConversationTurn("test-session", 1, "How do I declare a variable in Go?", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create conversation turn: %v", err)
+	}
+	// Leave ActionableSummary empty
+
+	// Call EmbedAndStoreTurn
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn returned unexpected error: %v", err)
+	}
+
+	// Verify that the turn's PromptEmbedding was set
+	if turn.PromptEmbedding == nil {
+		t.Error("PromptEmbedding was not set after EmbedAndStoreTurn")
+	}
+
+	// Verify the embedding was stored by loading it back from the conversation store
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	allRecords, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("failed to load records from conversation store: %v", err)
+	}
+
+	if len(allRecords) != 1 {
+		t.Errorf("expected 1 record in conversation store, got %d", len(allRecords))
+	}
+
+	// Verify the stored record matches the turn
+	record := allRecords[0]
+	if record.ID != turn.ID {
+		t.Errorf("expected record ID %s, got %s", turn.ID, record.ID)
+	}
+}
+
+// TestEmbedAndStoreTurn_GracefulFailure_NilManager tests graceful failure when
+// the embedding manager is nil.
+func TestEmbedAndStoreTurn_GracefulFailure_NilManager(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a test conversation turn
+	turn, err := NewConversationTurn("test-session", 1, "test prompt", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create conversation turn: %v", err)
+	}
+
+	// Call EmbedAndStoreTurn with nil manager - should not panic or return error
+	if err := EmbedAndStoreTurn(ctx, nil, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
+	}
+
+	// Verify PromptEmbedding was not set
+	if turn.PromptEmbedding != nil {
+		t.Error("PromptEmbedding should remain nil when manager is nil")
+	}
+}
+
+// TestEmbedAndStoreTurn_GracefulFailure_NilTurn tests graceful failure when
+// the conversation turn is nil.
+func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary directory for test isolation
+	tempDir := t.TempDir()
+
+	// Set config env vars to use temp dir
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// Create EmbeddingManager with minimal config
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: tempDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	// Initialize the manager
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// Call EmbedAndStoreTurn with nil turn - should not panic or return error
+	if err := EmbedAndStoreTurn(ctx, mgr, nil); err != nil {
+		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
+	}
+}
+
+// TestEmbedAndStoreTurn_GracefulFailure_NilContext tests graceful failure when
+// the context is nil.
+func TestEmbedAndStoreTurn_GracefulFailure_NilContext(t *testing.T) {
+	// Create a temporary directory for test isolation
+	tempDir := t.TempDir()
+
+	// Set config env vars to use temp dir
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// Create EmbeddingManager with minimal config
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: tempDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	// Create a test conversation turn
+	turn, err := NewConversationTurn("test-session", 1, "test prompt", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create conversation turn: %v", err)
+	}
+
+	// Call EmbedAndStoreTurn with nil context - should not panic or return error
+	if err := EmbedAndStoreTurn(nil, mgr, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
+	}
+
+	// Verify PromptEmbedding was not set
+	if turn.PromptEmbedding != nil {
+		t.Error("PromptEmbedding should remain nil when context is nil")
+	}
+}
+
+// TestEmbedAndStoreTurn_GracefulFailure_CancelledContext tests graceful failure when
+// the context is cancelled before embedding completes.
+func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	// Create a temporary directory for test isolation
+	tempDir := t.TempDir()
+
+	// Set config env vars to use temp dir
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	// Create EmbeddingManager with minimal config
+	cfg := &configuration.EmbeddingIndexConfig{
+		IndexDir: tempDir,
+	}
+
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+
+	// Create a test conversation turn
+	turn, err := NewConversationTurn("test-session", 1, "test prompt", "/tmp/workspace")
+	if err != nil {
+		t.Fatalf("failed to create conversation turn: %v", err)
+	}
+
+	// Call EmbedAndStoreTurn with cancelled context - should handle gracefully
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
+	}
+
+	// PromptEmbedding may or may not be set depending on when the cancellation is processed,
+	// but the function should not return an error
+}
+
+// TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt tests graceful failure when
+// the user prompt is empty.
+func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer mgr.Close()
+
+	// Create a turn with empty prompt
+	turn := &ConversationTurn{
+		ID:         "test-empty-prompt",
+		SessionID:  "test-session",
+		TurnNumber: 1,
+		UserPrompt: "",
+		WorkingDir: "/tmp/workspace",
+	}
+
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
+	}
+
+	// Verify nothing was stored
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+	if store.Size() != 0 {
+		t.Errorf("expected 0 records with empty prompt, got %d", store.Size())
+	}
+
+	// Verify PromptEmbedding was not set
+	if turn.PromptEmbedding != nil {
+		t.Error("PromptEmbedding should remain nil when prompt is empty")
+	}
+}
+
+// TestMeanEmbedding_SameLength tests the meanEmbedding helper with vectors of the same length.
+func TestMeanEmbedding_SameLength(t *testing.T) {
+	a := []float32{1.0, 2.0, 3.0}
+	b := []float32{3.0, 5.0, 7.0}
+
+	result := meanEmbedding(a, b)
+
+	expected := []float32{2.0, 3.5, 5.0}
+	if len(result) != len(expected) {
+		t.Fatalf("expected result length %d, got %d", len(expected), len(result))
+	}
+	for i := range expected {
+		if result[i] != expected[i] {
+			t.Errorf("at index %d: expected %f, got %f", i, expected[i], result[i])
+		}
+	}
+
+	// Verify original slices are not modified
+	if a[0] != 1.0 {
+		t.Error("original slice a was modified")
+	}
+	if b[0] != 3.0 {
+		t.Error("original slice b was modified")
+	}
+}
+
+// TestMeanEmbedding_DifferentLength tests the meanEmbedding helper with vectors of different lengths.
+func TestMeanEmbedding_DifferentLength(t *testing.T) {
+	a := []float32{1.0, 2.0}
+	b := []float32{3.0, 5.0, 7.0, 9.0}
+
+	result := meanEmbedding(a, b)
+
+	// Should return a copy of the longer vector (b)
+	if len(result) != len(b) {
+		t.Fatalf("expected result length %d, got %d", len(b), len(result))
+	}
+	for i := range b {
+		if result[i] != b[i] {
+			t.Errorf("at index %d: expected %f, got %f", i, b[i], result[i])
+		}
+	}
+}
+
+// TestMeanEmbedding_FirstLonger tests the meanEmbedding helper when the first vector is longer.
+func TestMeanEmbedding_FirstLonger(t *testing.T) {
+	a := []float32{1.0, 2.0, 3.0, 4.0}
+	b := []float32{5.0, 6.0}
+
+	result := meanEmbedding(a, b)
+
+	// Should return a copy of the longer vector (a)
+	if len(result) != len(a) {
+		t.Fatalf("expected result length %d, got %d", len(a), len(result))
+	}
+	for i := range a {
+		if result[i] != a[i] {
+			t.Errorf("at index %d: expected %f, got %f", i, a[i], result[i])
+		}
+	}
+}
+
+// TestMeanEmbedding_EmptyVectors tests the meanEmbedding helper with empty vectors.
+func TestMeanEmbedding_EmptyVectors(t *testing.T) {
+	a := []float32{}
+	b := []float32{}
+
+	result := meanEmbedding(a, b)
+
+	if len(result) != 0 {
+		t.Errorf("expected empty result, got length %d", len(result))
+	}
+}
+
+// TestMeanEmbedding_OneEmpty tests the meanEmbedding helper with one empty vector.
+func TestMeanEmbedding_OneEmpty(t *testing.T) {
+	a := []float32{1.0, 2.0, 3.0}
+	b := []float32{}
+
+	result := meanEmbedding(a, b)
+
+	// Should return a copy of the non-empty vector
+	if len(result) != len(a) {
+		t.Fatalf("expected result length %d, got %d", len(a), len(result))
+	}
+	for i := range a {
+		if result[i] != a[i] {
+			t.Errorf("at index %d: expected %f, got %f", i, a[i], result[i])
+		}
+	}
+}
+
+// TestMeanEmbedding_NegativeValues tests the meanEmbedding helper with negative values.
+func TestMeanEmbedding_NegativeValues(t *testing.T) {
+	a := []float32{-2.0, 0.0, 2.0}
+	b := []float32{-4.0, 0.0, 4.0}
+
+	result := meanEmbedding(a, b)
+
+	expected := []float32{-3.0, 0.0, 3.0}
+	if len(result) != len(expected) {
+		t.Fatalf("expected result length %d, got %d", len(expected), len(result))
+	}
+	for i := range expected {
+		if result[i] != expected[i] {
+			t.Errorf("at index %d: expected %f, got %f", i, expected[i], result[i])
+		}
+	}
+}

@@ -60,11 +60,9 @@ func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
 	// Start with standard tools
 	tools := api.GetToolDefinitions()
 
-	// Filter out run_subagent and run_parallel_subagents when:
-	// 1. Running as a subagent (prevents nested subagents)
-	// 2. User explicitly disabled subagents via --no-subagents flag or SPROUT_NO_SUBAGENTS env
-	noSubagents := a.IsSubagent() || configuration.GetEnvSimple("NO_SUBAGENTS") == "1"
-	if noSubagents {
+	// Filter out run_subagent and run_parallel_subagents when
+	// the agent is not allowed to spawn subagents (depth limit or NO_SUBAGENTS env).
+	if !a.CanSpawnSubagents() {
 		filtered := make([]api.Tool, 0, len(tools))
 		for _, tool := range tools {
 			// Skip run_subagent and run_parallel_subagents

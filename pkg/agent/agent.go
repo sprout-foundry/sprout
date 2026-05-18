@@ -113,9 +113,10 @@ type Agent struct {
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner
 
-	// isSubagent is true when this agent instance was spawned as a subagent.
-	// Used to prevent nested subagent spawning and to skip interactive prompts.
-	isSubagent bool
+	// subagentDepth tracks the nesting depth of this agent.
+	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
+	// Used to control tool availability and prevent excessive nesting.
+	subagentDepth int
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

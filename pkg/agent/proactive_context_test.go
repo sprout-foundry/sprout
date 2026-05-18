@@ -1116,3 +1116,105 @@ func TestFormatProactiveContext_UsesResolveForZeroConfig(t *testing.T) {
 		t.Error("output should contain the signature")
 	}
 }
+
+// ========================================================================
+// InjectProactiveContext tests
+// ========================================================================
+
+func TestInjectProactiveContext_NilAgent(t *testing.T) {
+	// Should not panic on nil agent
+	var a *Agent
+	err := a.InjectProactiveContext(context.Background(), "test query")
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+}
+
+func TestInjectProactiveContext_NoEmbeddingManager(t *testing.T) {
+	// Agent without embedding manager should be a graceful no-op
+	a := &Agent{}
+	a.state = NewAgentStateManager(false)
+	a.output = NewAgentOutputManager()
+
+	err := a.InjectProactiveContext(context.Background(), "test query")
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+}
+
+func TestInjectProactiveContext_EmptyStore(t *testing.T) {
+	ctx := context.Background()
+	tempDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to init: %v", err)
+	}
+	defer mgr.Close()
+
+	a := &Agent{}
+	a.state = NewAgentStateManager(false)
+	a.output = NewAgentOutputManager()
+	a.workspaceRoot = tempDir
+	a.embeddingMgr = mgr
+
+	err := a.InjectProactiveContext(ctx, "some query")
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+
+	// No supplement should be set
+	supplement := a.consumePendingSystemSupplement()
+	if supplement != "" {
+		t.Errorf("expected no supplement for empty store, got %q", supplement)
+	}
+}
+
+func TestInjectProactiveContext_WithResults(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	tempDir := t.TempDir()
+	t.Setenv("SPROUT_CONFIG", tempDir)
+	t.Setenv("LEDIT_CONFIG", tempDir)
+
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
+	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+	if err := mgr.Init(ctx); err != nil {
+		t.Fatalf("failed to init: %v", err)
+	}
+	defer mgr.Close()
+
+	// Store a turn about REST APIs
+	turn, err := NewConversationTurn("session-1", 1, "How do I implement a REST API?", tempDir)
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turn.ActionableSummary = "Implemented REST API"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Fatalf("failed to embed and store: %v", err)
+	}
+
+	a := &Agent{}
+	a.state = NewAgentStateManager(false)
+	a.output = NewAgentOutputManager()
+	a.workspaceRoot = tempDir
+	a.embeddingMgr = mgr
+
+	err = a.InjectProactiveContext(ctx, "How to build REST endpoints?")
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
+	}
+
+	// Supplement should be set with formatted results
+	supplement := a.consumePendingSystemSupplement()
+	if supplement == "" {
+		t.Fatal("expected non-empty supplement after successful retrieval")
+	}
+	if !strings.Contains(supplement, "Previous Work (Contextual Memory)") {
+		t.Error("supplement should contain the Previous Work header")
+	}
+}

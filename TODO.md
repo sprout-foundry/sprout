@@ -849,7 +849,7 @@ User clicks "Attach" → Promote hidden → Visible terminal tab (reattach + scr
 
 ### Test Quality
 
-[] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/`
+[x] - TESTING: Add tests for `pkg/envutil` — critical config resolution layer (every test touches it) has zero test coverage. `pkg/envutil/` (41 tests, 97.1% coverage — only GetConfigDir os.UserHomeDir() error path uncovered)
 [] - TESTING: Add tests for `pkg/commands` (2.6% coverage) — nearly untested. `pkg/commands/`
 [x] - TESTING: Fix ~30 test files setting `LEDIT_CONFIG` without also setting `SPROUT_CONFIG` — `envutil.GetEnvSimple("CONFIG")` checks `SPROUT_CONFIG` first; if only `LEDIT_CONFIG` is set, the `SPROUT_CONFIG` value from a previous test leaks. Set both to same temp dir. `pkg/configuration/*_test.go`, `pkg/credentials/*_test.go`, `pkg/mcp/*_test.go`
 

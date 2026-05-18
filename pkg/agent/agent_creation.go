@@ -82,6 +82,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		security:            securityMgr,
 		mcpSub:              mcpMgr,
 		todoMgr:             tools.NewTodoManager(),
+		subagentDepth:       params.subagentDepth,
 	}
 
 	// Set up output router
@@ -418,7 +419,16 @@ func (a *Agent) autoActivateEAPersona() {
 	if err != nil {
 		return
 	}
-	if a.workspaceRoot != homeDir {
+	// Resolve symlinks on both paths to avoid mismatch
+	// (e.g., macOS /Users → /private/Users, or custom symlinked home)
+	resolvedWorkspace, wsErr := filepath.EvalSymlinks(a.workspaceRoot)
+	resolvedHome, homeErr := filepath.EvalSymlinks(homeDir)
+	if wsErr != nil || homeErr != nil {
+		// Fall back to direct comparison if symlink resolution fails
+		resolvedWorkspace = a.workspaceRoot
+		resolvedHome = homeDir
+	}
+	if resolvedWorkspace != resolvedHome {
 		return
 	}
 

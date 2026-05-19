@@ -123,9 +123,189 @@ func TestMCPToolWrapper_ToAgentTool(t *testing.T) {
 }
 
 func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
-	w := newTestWrapper("srv", "tool")
-	assert.NoError(t, w.ValidateArgs(nil))
-	assert.NoError(t, w.ValidateArgs(map[string]interface{}{"key": "val"}))
+
+	// ---------------------------------------------------------------------------
+	// Required fields
+	// ---------------------------------------------------------------------------
+	requiredSchema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"name", "age"},
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+			"age":  map[string]interface{}{"type": "integer"},
+		},
+	}
+
+	t.Run("RequiredFields_MissingAll_ReturnsError", func(t *testing.T) {
+		w := testWrapper("reqtool", "reqsrv", requiredSchema)
+		err := w.ValidateArgs(map[string]interface{}{})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("RequiredFields_MissingOne_ReturnsError", func(t *testing.T) {
+		w := testWrapper("reqtool", "reqsrv", requiredSchema)
+		err := w.ValidateArgs(map[string]interface{}{"name": "Alice"})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("RequiredFields_AllPresent_ReturnsNil", func(t *testing.T) {
+		w := testWrapper("reqtool", "reqsrv", requiredSchema)
+		err := w.ValidateArgs(map[string]interface{}{
+			"name": "Alice",
+			"age":  30,
+		})
+		assert.NoError(t, err)
+	})
+
+	// ---------------------------------------------------------------------------
+	// Type mismatches
+	// ---------------------------------------------------------------------------
+	typeSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"name":   map[string]interface{}{"type": "string"},
+			"age":    map[string]interface{}{"type": "integer"},
+			"score":  map[string]interface{}{"type": "number"},
+			"active": map[string]interface{}{"type": "boolean"},
+		},
+	}
+
+	t.Run("TypeMismatch_StringWhereInteger_ReturnsError", func(t *testing.T) {
+		w := testWrapper("typetool", "typesrv", typeSchema)
+		err := w.ValidateArgs(map[string]interface{}{"age": "not a number"})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("TypeMismatch_IntegerWhereString_ReturnsError", func(t *testing.T) {
+		w := testWrapper("typetool", "typesrv", typeSchema)
+		err := w.ValidateArgs(map[string]interface{}{"name": 42})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("TypeMismatch_BooleanWhereNumber_ReturnsError", func(t *testing.T) {
+		w := testWrapper("typetool", "typesrv", typeSchema)
+		err := w.ValidateArgs(map[string]interface{}{"score": true})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("TypeMismatch_CorrectTypes_ReturnsNil", func(t *testing.T) {
+		w := testWrapper("typetool", "typesrv", typeSchema)
+		err := w.ValidateArgs(map[string]interface{}{
+			"name":   "Alice",
+			"age":    30,
+			"score":  9.5,
+			"active": true,
+		})
+		assert.NoError(t, err)
+	})
+
+	// ---------------------------------------------------------------------------
+	// Enum violations
+	// ---------------------------------------------------------------------------
+	enumSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"status": map[string]interface{}{
+				"type": "string",
+				"enum": []interface{}{"active", "inactive", "pending"},
+			},
+		},
+	}
+
+	t.Run("EnumViolation_ValidValue_ReturnsNil", func(t *testing.T) {
+		w := testWrapper("enumtool", "enumsrv", enumSchema)
+		err := w.ValidateArgs(map[string]interface{}{"status": "active"})
+		assert.NoError(t, err)
+	})
+
+	t.Run("EnumViolation_InvalidValue_ReturnsError", func(t *testing.T) {
+		w := testWrapper("enumtool", "enumsrv", enumSchema)
+		err := w.ValidateArgs(map[string]interface{}{"status": "deleted"})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	// ---------------------------------------------------------------------------
+	// Nested objects
+	// ---------------------------------------------------------------------------
+	nestedSchema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"address": map[string]interface{}{
+				"type":     "object",
+				"required": []interface{}{"city"},
+				"properties": map[string]interface{}{
+					"city": map[string]interface{}{"type": "string"},
+					"zip":  map[string]interface{}{"type": "string"},
+				},
+			},
+		},
+	}
+
+	t.Run("NestedObject_Valid_ReturnsNil", func(t *testing.T) {
+		w := testWrapper("nestedtool", "nestedsrv", nestedSchema)
+		err := w.ValidateArgs(map[string]interface{}{
+			"address": map[string]interface{}{
+				"city": "Springfield",
+				"zip":  "12345",
+			},
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("NestedObject_MissingRequiredField_ReturnsError", func(t *testing.T) {
+		w := testWrapper("nestedtool", "nestedsrv", nestedSchema)
+		err := w.ValidateArgs(map[string]interface{}{
+			"address": map[string]interface{}{
+				"zip": "12345",
+			},
+		})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("NestedObject_WrongTypeInNestedField_ReturnsError", func(t *testing.T) {
+		w := testWrapper("nestedtool", "nestedsrv", nestedSchema)
+		err := w.ValidateArgs(map[string]interface{}{
+			"address": map[string]interface{}{
+				"city": 12345, // should be string
+			},
+		})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
+
+	t.Run("NestedObject_NotAnObject_ReturnsError", func(t *testing.T) {
+		w := testWrapper("nestedtool", "nestedsrv", nestedSchema)
+		err := w.ValidateArgs(map[string]interface{}{
+			"address": "not an object",
+		})
+		assert.Error(t, err)
+		_, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+		assert.Contains(t, err.Error(), "invalid arguments")
+	})
 }
 
 func TestMCPToolWrapper_ValidateArgs_NoSchema(t *testing.T) {
@@ -1247,7 +1427,7 @@ func TestValidateArgs_InvalidArgs_ReturnsInvalidArgsError(t *testing.T) {
 // omitting a required schema field produces an *InvalidArgsError.
 func TestValidateArgs_MissingRequiredField_ReturnsInvalidArgsError(t *testing.T) {
 	w := testWrapper("mytool", "myserver", map[string]interface{}{
-		"type": "object",
+		"type":     "object",
 		"required": []interface{}{"name"},
 		"properties": map[string]interface{}{
 			"name": map[string]interface{}{"type": "string"},
@@ -1267,8 +1447,8 @@ func TestValidateArgs_MissingRequiredField_ReturnsInvalidArgsError(t *testing.T)
 
 // TestValidateArgs_CompileError_FailOpen_WarnOnce validates that when the
 // tool's InputSchema cannot be compiled:
-//   1. The first call to ValidateArgs returns nil (fail-open).
-//   2. The warnedCompileErr flag is set so a second call does NOT warn again.
+//  1. The first call to ValidateArgs returns nil (fail-open).
+//  2. The warnedCompileErr flag is set so a second call does NOT warn again.
 func TestValidateArgs_CompileError_FailOpen_WarnOnce(t *testing.T) {
 	w := testWrapper("bad-tool", "bad-server", map[string]interface{}{
 		"type": "invalid-junk", // not a valid JSON Schema
@@ -1443,8 +1623,8 @@ func TestMCPToolWrapper_Execute_ValidationPasses_ProceedsToNetwork(t *testing.T)
 		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
 			calledArgs = args
 			return &MCPToolCallResult{
-				Content:  []MCPContent{{Type: "text", Text: "age is 30"}},
-				IsError:  false,
+				Content: []MCPContent{{Type: "text", Text: "age is 30"}},
+				IsError: false,
 			}, nil
 		},
 		getServer: func(name string) (MCPServer, bool) {
@@ -1485,8 +1665,8 @@ func TestMCPToolWrapper_Execute_NoSchema_SkipsValidation(t *testing.T) {
 		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
 			callToolCalled = true
 			return &MCPToolCallResult{
-				Content:  []MCPContent{{Type: "text", Text: "ok"}},
-				IsError:  false,
+				Content: []MCPContent{{Type: "text", Text: "ok"}},
+				IsError: false,
 			}, nil
 		},
 		getServer: func(name string) (MCPServer, bool) {

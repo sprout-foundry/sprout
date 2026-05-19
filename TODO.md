@@ -67,7 +67,7 @@ Spec: `roadmap/SP-028-test-suite-stabilization.md`
 
 ### Phase 1: Unblock CI (loud failures instead of silent hangs)
 
-[] - SP-028-1a: Add `go.uber.org/goleak` to `go.mod` test deps
+[x] - SP-028-1a: Add `go.uber.org/goleak` to `go.mod` test deps
 [] - SP-028-1b: Create `pkg/webui/main_test.go` with `TestMain` calling `goleak.VerifyNone(t)` — ignore known long-lived workers from `pkg/logging`/`pkg/history` via `goleak.IgnoreTopFunction(...)`
 [] - SP-028-1c: Create `pkg/agent/main_test.go` with `TestMain` calling `goleak.VerifyNone(t)` — same ignore list as webui
 [] - SP-028-1d: Update `Makefile` `test` target — add `-race -count=1 -timeout=90s` to `pkg/agent` and `pkg/webui` test invocations

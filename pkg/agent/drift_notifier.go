@@ -101,6 +101,14 @@ func (a *Agent) checkDriftAsync(prompt string, turnNumber int) <-chan struct{} {
 		return done
 	}
 
+	// Check suppression BEFORE spawning a goroutine — avoids unnecessary
+	// goroutine creation + context allocation when drift detection is
+	// disabled for the remainder of the session (3+ consecutive rejections).
+	if a.state.GetDriftRejectionCount() >= maxDriftRejections {
+		close(done)
+		return done
+	}
+
 	go func() {
 		defer close(done)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

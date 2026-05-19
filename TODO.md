@@ -42,7 +42,7 @@ Spec: `roadmap/SP-027-persistent-context.md`
 [x] - SP-027-3a: Create `pkg/agent/drift_detection.go` — track `SessionIntentEmbedding` (from `ConversationState`), compute cosine similarity with current prompt every Nth turn, flag if below `DriftThreshold` (0.60)
 [x] - SP-027-3b: Implement non-blocking drift notification — WebUI: toast-style notification with "Continue here" / "Start new chat" options (non-modal, agent continues). CLI: post-turn prompt with Enter to continue, 's' for new chat
 [x] - SP-027-3c: Implement suppression logic — disable drift detection for session after 3 consecutive rejections
-[] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
+[x] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
 [] - SP-027-3e: Add drift config fields to `PersistentContextConfig` — `DriftDetectionEnabled` (true), `DriftThreshold` (0.60), `DriftCheckInterval` (5 turns)
 [] - SP-027-3f: Create WebUI drift notification component in `webui/src/components/` — non-modal toast with "Continue here" / "Start new chat" buttons
 [] - SP-027-3g: Tests — unit test for drift detection with threshold, test for suppression after 3 rejections, test for intent embedding persistence across session restore

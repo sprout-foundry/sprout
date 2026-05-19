@@ -1,5 +1,12 @@
 package embedding
 
+import (
+	"context"
+	"crypto/md5"
+	"fmt"
+	"time"
+)
+
 // ConversationStore wraps a JSONLFileStore for storing and querying
 // conversation turn embeddings. It provides a user-scoped persistent
 // store that survives across workspace changes.
@@ -63,4 +70,81 @@ func (s *ConversationStore) Provider() EmbeddingProvider {
 // The embedding provider is not closed (its lifecycle is managed externally).
 func (s *ConversationStore) Close() error {
 	return s.store.Close()
+}
+
+// StoreMemory embeds memory content and stores it as a VectorRecord with Type "memory".
+// The record ID is "memory:" + name to ensure unique naming and easy lookup.
+func (s *ConversationStore) StoreMemory(ctx context.Context, name string, content string) error {
+	embedding, err := s.provider.Embed(ctx, content)
+	if err != nil {
+		return fmt.Errorf("failed to embed memory: %w", err)
+	}
+	if len(embedding) == 0 {
+		return fmt.Errorf("embedding returned empty result")
+	}
+
+	contentPreview := content
+	if len(contentPreview) > 200 {
+		contentPreview = contentPreview[:200]
+	}
+
+	record := VectorRecord{
+		ID:        "memory:" + name,
+		File:      "",
+		Name:      name,
+		Type:      "memory",
+		Embedding: embedding,
+		Hash:      fmt.Sprintf("%x", md5.Sum([]byte(content))),
+		IndexedAt: time.Now(),
+		Metadata:  map[string]interface{}{"name": name, "content_preview": contentPreview},
+	}
+
+	return s.Store([]VectorRecord{record})
+}
+
+// DeleteMemoryByName removes all memory records with the given name.
+// This is useful when a memory file is deleted or updated and its old
+// embedding should be removed from the store.
+func (s *ConversationStore) DeleteMemoryByName(name string) error {
+	all, err := s.LoadAll()
+	if err != nil {
+		return fmt.Errorf("failed to load records: %w", err)
+	}
+
+	var remaining []VectorRecord
+	for _, r := range all {
+		if r.Type == "memory" && r.Name == name {
+			continue
+		}
+		remaining = append(remaining, r)
+	}
+
+	return s.store.ReplaceAll(remaining)
+}
+
+// QueryMemories searches memory records by embedding the query and returning
+// top-K results. Results are filtered to only include records with Type "memory".
+func (s *ConversationStore) QueryMemories(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
+	embedding, err := s.provider.Embed(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to embed query: %w", err)
+	}
+	if len(embedding) == 0 {
+		return nil, fmt.Errorf("embedding returned empty result")
+	}
+
+	results, err := s.Query(embedding, topK, threshold)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter to only memory records
+	var memoryResults []QueryResult
+	for _, r := range results {
+		if r.Record.Type == "memory" {
+			memoryResults = append(memoryResults, r)
+		}
+	}
+
+	return memoryResults, nil
 }

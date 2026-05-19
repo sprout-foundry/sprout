@@ -422,12 +422,25 @@ def _run_process(
                 )
 
             # Check for staleness (no output progress)
+            # Only count as a "warning" if the process has actually exited.
+            # If the process is still running, it's likely in a long LLM call
+            # (extended thinking) or synchronous tool execution — these produce
+            # no stdout but are NOT stuck. Log a heartbeat instead.
             if monitor.is_stale():
-                if elapsed - last_stale_warning > stale_warning_interval:
-                    monitor.stale_warnings += 1
+                if proc.poll() is not None:
+                    # Process has exited — output is genuinely stale
+                    if elapsed - last_stale_warning > stale_warning_interval:
+                        monitor.stale_warnings += 1
+                        _log(
+                            f"STALE output (warning #{monitor.stale_warnings}): "
+                            f"process exited, no output for {stale_timeout}s. "
+                            f"{monitor.status()}"
+                        )
+                        last_stale_warning = elapsed
+                elif elapsed - last_stale_warning > stale_warning_interval:
+                    # Process still alive but silent (e.g., LLM extended thinking)
                     _log(
-                        f"STALE output (warning #{monitor.stale_warnings}): "
-                        f"no progress indicators for {stale_timeout}s. "
+                        f"[heartbeat] Process alive, no output for {stale_timeout}s+. "
                         f"{monitor.status()}"
                     )
                     last_stale_warning = elapsed

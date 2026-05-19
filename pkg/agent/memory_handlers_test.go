@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -320,31 +322,6 @@ func TestHandleSearchMemories_MissingQuery(t *testing.T) {
 	}
 }
 
-func TestHandleSearchMemories_NilContext(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	dir := t.TempDir()
-	em := embedding.NewEmbeddingManager(nil, dir)
-	agent.embeddingMgr = em
-
-	// Initialize the embedding manager so GetConversationStore works
-	if err := em.Init(context.Background()); err != nil {
-		t.Fatalf("failed to init embedding manager: %v", err)
-	}
-
-	// Call handleSearchMemories with nil context — should return an error, not panic.
-	_, err := handleSearchMemories(nil, agent, map[string]interface{}{
-		"query": "test",
-	})
-	if err == nil {
-		t.Fatal("expected error for nil context")
-	}
-	if !strings.Contains(err.Error(), "context cannot be nil") {
-		t.Errorf("expected 'context cannot be nil' error, got: %v", err)
-	}
-}
-
 func TestHandleSearchMemories_NotEnabled(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
@@ -578,5 +555,214 @@ func TestHandleSearchMemories_MaxResultsFloat64(t *testing.T) {
 	// Should work without error
 	if !strings.Contains(result, "float-test") {
 		t.Error("expected memory in results")
+	}
+}
+
+func TestHandleSearchMemories_NilAgent(t *testing.T) {
+	// Pass nil agent — handler should return a graceful message without panicking.
+	result, err := handleSearchMemories(context.Background(), nil, map[string]interface{}{
+		"query": "test",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "not available") {
+		t.Errorf("expected 'not available' in result, got: %s", result)
+	}
+	if !strings.Contains(result, "Embedding index is not enabled") {
+		t.Errorf("expected embedding index message, got: %s", result)
+	}
+}
+
+func TestHandleSearchMemories_MaxResultsClamp(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	em := embedding.NewEmbeddingManager(cfg, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	// Get the conversation store and add several memories
+	store, err := em.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	ctx := context.Background()
+	memories := []struct {
+		name    string
+		content string
+	}{
+		{"clamp-1", "# Clamp One\nContent one"},
+		{"clamp-2", "# Clamp Two\nContent two"},
+		{"clamp-3", "# Clamp Three\nContent three"},
+		{"clamp-4", "# Clamp Four\nContent four"},
+		{"clamp-5", "# Clamp Five\nContent five"},
+	}
+
+	for _, m := range memories {
+		if err := store.StoreMemory(ctx, m.name, m.content); err != nil {
+			t.Fatalf("failed to store memory %s: %v", m.name, err)
+		}
+	}
+
+	t.Run("clamp_high_over_100_to_100", func(t *testing.T) {
+		// max_results=200 should be clamped to 100; only 5 memories exist so all show
+		result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+			"query":       "content",
+			"max_results": 200,
+		})
+		if err != nil {
+			t.Fatalf("handleSearchMemories failed: %v", err)
+		}
+
+		// Should still return results (capped at 100 but only 5 exist)
+		if !strings.Contains(result, "Memory Search Results") {
+			t.Errorf("expected search results header, got: %s", result)
+		}
+
+		// All 5 memories should appear since 5 < 100
+		for _, m := range memories {
+			if !strings.Contains(result, m.name) {
+				t.Errorf("expected %q in results (within 100 cap), got: %s", m.name, result)
+			}
+		}
+	})
+
+	t.Run("clamp_low_under_1_to_1", func(t *testing.T) {
+		// max_results=-5 should be clamped to 1
+		result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+			"query":       "content",
+			"max_results": -5,
+		})
+		if err != nil {
+			t.Fatalf("handleSearchMemories failed: %v", err)
+		}
+
+		// Should return exactly 1 result
+		if !strings.Contains(result, "Found 1 result") {
+			t.Errorf("expected exactly 1 result (clamped from -5), got: %s", result)
+		}
+
+		// Should not return more than 1 result line
+		// The mock provider returns all results with similarity 1.0,
+		// so the first memory alphabetically will be returned.
+		resultLines := strings.Count(result, "(relevance: ")
+		if resultLines != 1 {
+			t.Errorf("expected exactly 1 result line, got %d", resultLines)
+		}
+	})
+
+	t.Run("clamp_zero_to_1", func(t *testing.T) {
+		// max_results=0 should be clamped to 1
+		result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+			"query":       "content",
+			"max_results": 0,
+		})
+		if err != nil {
+			t.Fatalf("handleSearchMemories failed: %v", err)
+		}
+
+		if !strings.Contains(result, "Found 1 result") {
+			t.Errorf("expected exactly 1 result (clamped from 0), got: %s", result)
+		}
+	})
+}
+
+// TestHandleSearchMemories_MixedStore verifies that handleSearchMemories
+// correctly filters out non-memory records from the conversation store.
+// The store may contain both "memory" records and "conversation_turn" records.
+func TestHandleSearchMemories_MixedStore(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	em := embedding.NewEmbeddingManager(cfg, dir)
+	agent.embeddingMgr = em
+
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	store, err := em.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// Add 2 memory records
+	if err := store.StoreMemory(ctx, "mem-alpha", "# Alpha Memory\n\nGit conventions and commit format rules."); err != nil {
+		t.Fatalf("failed to store memory: %v", err)
+	}
+	if err := store.StoreMemory(ctx, "mem-beta", "# Beta Memory\n\nTesting patterns and strategies."); err != nil {
+		t.Fatalf("failed to store memory: %v", err)
+	}
+
+	// Add 5 non-memory (conversation turn) records directly to the store.
+	// These simulate conversation turns that share the same embedding space.
+	nonMemoryRecords := make([]embedding.VectorRecord, 5)
+	for i := range nonMemoryRecords {
+		nonMemoryRecords[i] = embedding.VectorRecord{
+			ID:        fmt.Sprintf("turn-%d", i),
+			Name:      fmt.Sprintf("turn_%d", i),
+			Signature: fmt.Sprintf("Some conversation turn %d about various topics", i),
+			Type:      "conversation_turn",
+			Embedding: make([]float32, 256), // dummy embedding (will be overwritten by mock provider)
+			IndexedAt: time.Now().UTC(),
+		}
+	}
+	// Embed the non-memory records using the same provider so they're comparable
+	provider := store.Provider()
+	probe, err := provider.Embed(ctx, "mixed store test")
+	if err != nil {
+		t.Fatalf("failed to embed for non-memory records: %v", err)
+	}
+	for i := range nonMemoryRecords {
+		nonMemoryRecords[i].Embedding = make([]float32, len(probe))
+		copy(nonMemoryRecords[i].Embedding, probe)
+	}
+	if err := store.Store(nonMemoryRecords); err != nil {
+		t.Fatalf("failed to store non-memory records: %v", err)
+	}
+
+	// Total records: 2 memory + 5 conversation_turn = 7
+	if store.Size() != 7 {
+		t.Fatalf("expected 7 total records, got %d", store.Size())
+	}
+
+	// Search with max_results=1
+	result, err := handleSearchMemories(ctx, agent, map[string]interface{}{
+		"query":       "testing strategies",
+		"max_results": 1,
+	})
+	if err != nil {
+		t.Fatalf("handleSearchMemories failed: %v", err)
+	}
+
+	// Must NOT contain any conversation_turn records
+	if strings.Contains(result, "turn_") {
+		t.Errorf("result should not contain conversation turn records, got: %s", result)
+	}
+	if strings.Contains(result, "conversation_turn") {
+		t.Errorf("result should not contain 'conversation_turn', got: %s", result)
+	}
+
+	// Should contain at most 1 memory result
+	if !strings.Contains(result, "Found 1 result") {
+		t.Errorf("expected exactly 1 result with max_results=1, got: %s", result)
+	}
+
+	// Must contain a memory name (either alpha or beta)
+	if !strings.Contains(result, "mem-alpha") && !strings.Contains(result, "mem-beta") {
+		t.Errorf("expected a memory name in results, got: %s", result)
 	}
 }

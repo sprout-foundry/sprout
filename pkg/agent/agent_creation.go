@@ -3,10 +3,12 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -142,6 +144,20 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 	// Restore embedding index if previously enabled for this workspace
 	agent.RestoreEmbeddingIndex()
+
+	// Migrate existing memory files into the conversation store (one-time operation).
+	// Runs in the background so it doesn't block agent startup.
+	if params.isProduction {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := RunMemoryMigration(ctx, agent.embeddingMgr); err != nil {
+				if agent.debug {
+					log.Printf("[memory-migration] error: %v", err)
+				}
+			}
+		}()
+	}
 
 	// Auto-activate Executive Assistant persona when started from home directory
 	if params.isProduction {

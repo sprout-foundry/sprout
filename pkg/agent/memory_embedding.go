@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
+
+// migrationOnce ensures the one-time memory migration runs at most once per process.
+var migrationOnce sync.Once
 
 // EmbedMemory embeds a memory file's content and stores it in the
 // ConversationStore as a VectorRecord with Type "memory".
@@ -72,4 +76,78 @@ func DeleteMemoryEmbedding(mgr *embedding.EmbeddingManager, name string) error {
 
 	log.Printf("[memory-embedding] successfully deleted memory embedding for '%s'", name)
 	return nil
+}
+
+// MigrateMemories performs a one-time migration of all existing memory files
+// to the ConversationStore. It uses sync.Once to ensure it only runs once
+// per process lifetime, even if called multiple times.
+//
+// Migration skips files that are already embedded (by checking if a record
+// with ID "memory:<name>" exists in the store).
+func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
+	migrationOnce.Do(func() {
+		if mgr == nil {
+			return
+		}
+
+		memories, err := LoadAllMemories()
+		if err != nil {
+			log.Printf("[memory-embedding] migration: failed to list memories: %v", err)
+			return
+		}
+
+		if len(memories) == 0 {
+			log.Printf("[memory-embedding] migration: no existing memories to migrate")
+			return
+		}
+
+		store, err := mgr.GetConversationStore(ctx)
+		if err != nil {
+			log.Printf("[memory-embedding] migration: failed to get conversation store: %v", err)
+			return
+		}
+
+		// Load existing records to skip already-migrated memories
+		existing, err := store.LoadAll()
+		if err != nil {
+			log.Printf("[memory-embedding] migration: failed to load existing records: %v", err)
+			return
+		}
+
+		existingIDs := make(map[string]bool)
+		for _, r := range existing {
+			if r.Type == "memory" {
+				existingIDs[r.ID] = true
+			}
+		}
+
+		migrated := 0
+		for _, mem := range memories {
+			recordID := "memory:" + mem.Name
+			if existingIDs[recordID] {
+				continue // already migrated
+			}
+
+			if mem.Content == "" {
+				continue
+			}
+
+			if err := store.StoreMemory(ctx, mem.Name, mem.Content); err != nil {
+				log.Printf("[memory-embedding] migration: failed to embed '%s': %v", mem.Name, err)
+				continue
+			}
+			migrated++
+		}
+
+		if migrated > 0 {
+			log.Printf("[memory-embedding] migration: embedded %d/%d memories", migrated, len(memories))
+		} else {
+			log.Printf("[memory-embedding] migration: all %d memories already embedded", len(memories))
+		}
+	})
+}
+
+// ResetMigrationForTesting resets the one-time migration guard for testing purposes.
+func ResetMigrationForTesting() {
+	migrationOnce = sync.Once{}
 }

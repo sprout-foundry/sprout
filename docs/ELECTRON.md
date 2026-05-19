@@ -5,7 +5,7 @@ This repo can be wrapped in an Electron desktop shell without replacing the exis
 ## Model
 
 - Electron main process owns desktop windows.
-- Each desktop window launches its own `ledit` backend on a unique localhost port.
+- Each desktop window launches its own `sprout` backend on a unique localhost port.
 - Each window is bound to a working directory path.
 - The Go backend still serves the existing embedded web UI and WebSocket APIs.
 - On Windows, a workspace window can also run its backend inside a selected WSL distro instead of as a native Windows process.
@@ -34,7 +34,7 @@ On Windows, the launcher now exposes a WSL section when installed distros are de
 
 - keeps the Electron shell on Windows
 - stages the bundled Linux backend into the chosen distro
-- launches `ledit` inside WSL
+- launches `sprout` inside WSL
 - keeps the backend working directory, Git, terminal, and file operations inside that distro
 
 Use a Linux path such as `/home/you/project` for WSL-backed windows. Recent entries remember whether they were opened natively or through WSL, including the selected distro.
@@ -84,7 +84,7 @@ The packaging flow keeps the existing app architecture intact:
 - Windows packaging also includes the matching Linux backend so WSL-backed windows can launch without an external install.
 - `desktop:verify` checks that the unpacked app includes the Electron app bundle and bundled Go backend before release artifacts are published.
 - Windows and Linux installer assets now use checked-in desktop icons from `desktop/resources/`.
-- The desktop app now registers a `ledit://` protocol and handles OS open-file events by routing them into the existing multi-window worktree launcher.
+- The desktop app now registers a `sprout://` protocol and handles OS open-file events by routing them into the existing multi-window worktree launcher.
 - macOS signing/notarization is scaffolded via `scripts/electron-after-sign.cjs` and hardened-runtime entitlements in `desktop/resources/entitlements.mac.plist`.
 
 ## Cross-Platform CI
@@ -119,7 +119,7 @@ For signed macOS builds, configure these CI secrets:
 - The launcher restores previously open worktrees on relaunch and now reuses each worktree window's last saved size, position, and maximized state.
 - This keeps the existing backend-driven functionality where it already works well instead of reimplementing it in Electron IPC.
 - Windows and Linux packaging now uses branded installer/application icons. macOS signing/notarization is scaffolded, but a proper `.icns` generated on a macOS host is still the remaining native-branding gap.
-- Deep links can target a workspace with `ledit://open?path=/absolute/path/to/worktree` or `ledit://open?workspace=/absolute/path/to/worktree`.
+- Deep links can target a workspace with `sprout://open?path=/absolute/path/to/worktree` or `sprout://open?workspace=/absolute/path/to/worktree`.
 - Native open events can now target either a worktree directory or a file inside a worktree; the desktop app resolves the containing Git root before opening the workspace window.
 
 ## Productization

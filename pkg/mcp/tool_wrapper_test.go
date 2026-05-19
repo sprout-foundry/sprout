@@ -1184,3 +1184,191 @@ func TestInvalidArgsError_NoWrappedError(t *testing.T) {
 	expected := "invalid arguments for tool mysrv/mytool: <nil>"
 	assert.Equal(t, expected, err.Error())
 }
+
+// ---------------------------------------------------------------------------
+// Execute + ValidateArgs integration tests
+// ---------------------------------------------------------------------------
+
+// TestMCPToolWrapper_Execute_ValidationBeforeNetwork verifies that Execute
+// calls ValidateArgs *before* the network round-trip, returning early when
+// validation fails. The mock CallTool must never be invoked.
+func TestMCPToolWrapper_Execute_ValidationBeforeNetwork(t *testing.T) {
+	serverName := "val-server"
+	toolName := "calc_age"
+
+	// Schema requires "birth_year" to be an integer
+	schema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"birth_year"},
+		"properties": map[string]interface{}{
+			"birth_year": map[string]interface{}{"type": "integer"},
+		},
+	}
+
+	callToolCalled := false
+
+	mockMgr := &mockMCPManager{
+		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
+			callToolCalled = true
+			return &MCPToolCallResult{Content: []MCPContent{{Type: "text", Text: "ok"}}, IsError: false}, nil
+		},
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	tool := MCPTool{
+		Name:        toolName,
+		Description: "Calculate age from birth year",
+		ServerName:  serverName,
+		InputSchema: schema,
+	}
+
+	w := NewMCPToolWrapper(tool, mockMgr)
+
+	// Pass args with wrong type — "birth_year" is a string, not an integer
+	result, err := w.Execute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{"birth_year": "not-a-number"},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.Success, "Execute should return failure when validation fails")
+	assert.Contains(t, result.Errors[0], "validation failed")
+	assert.False(t, callToolCalled, "CallTool must NOT be invoked when validation fails")
+}
+
+// TestMCPToolWrapper_Execute_ValidationMissingRequired verifies that a missing
+// required field causes Execute to return early without calling the server.
+func TestMCPToolWrapper_Execute_ValidationMissingRequired(t *testing.T) {
+	schema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"name"},
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+		},
+	}
+
+	callToolCalled := false
+
+	mockMgr := &mockMCPManager{
+		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
+			callToolCalled = true
+			return &MCPToolCallResult{Content: []MCPContent{{Type: "text", Text: "ok"}}, IsError: false}, nil
+		},
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	tool := MCPTool{
+		Name:        "greet",
+		Description: "Greet someone",
+		ServerName:  "greet-server",
+		InputSchema: schema,
+	}
+
+	w := NewMCPToolWrapper(tool, mockMgr)
+
+	// Omit the required "name" field
+	result, err := w.Execute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Errors[0], "validation failed")
+	assert.False(t, callToolCalled, "CallTool must NOT be invoked when a required field is missing")
+}
+
+// TestMCPToolWrapper_Execute_ValidationPasses_ProceedsToNetwork verifies that
+// when validation passes, Execute proceeds to call the server normally.
+func TestMCPToolWrapper_Execute_ValidationPasses_ProceedsToNetwork(t *testing.T) {
+	schema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"birth_year"},
+		"properties": map[string]interface{}{
+			"birth_year": map[string]interface{}{"type": "integer"},
+		},
+	}
+
+	calledArgs := map[string]interface{}(nil)
+
+	mockMgr := &mockMCPManager{
+		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
+			calledArgs = args
+			return &MCPToolCallResult{
+				Content:  []MCPContent{{Type: "text", Text: "age is 30"}},
+				IsError:  false,
+			}, nil
+		},
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	tool := MCPTool{
+		Name:        "calc_age",
+		Description: "Calculate age",
+		ServerName:  "calc-server",
+		InputSchema: schema,
+	}
+
+	w := NewMCPToolWrapper(tool, mockMgr)
+
+	result, err := w.Execute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{"birth_year": 1995},
+	})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.Success, "Execute should succeed when validation passes")
+	assert.Equal(t, "age is 30", result.Output)
+	assert.NotNil(t, calledArgs, "CallTool should have been invoked")
+	assert.Equal(t, 1995, calledArgs["birth_year"])
+}
+
+// TestMCPToolWrapper_Execute_NoSchema_SkipsValidation verifies that when no
+// InputSchema is present, Execute does not attempt validation and proceeds
+// directly to the network call.
+func TestMCPToolWrapper_Execute_NoSchema_SkipsValidation(t *testing.T) {
+	callToolCalled := false
+
+	mockMgr := &mockMCPManager{
+		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
+			callToolCalled = true
+			return &MCPToolCallResult{
+				Content:  []MCPContent{{Type: "text", Text: "ok"}},
+				IsError:  false,
+			}, nil
+		},
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	tool := MCPTool{
+		Name:       "no_schema_tool",
+		ServerName: "some-server",
+		// InputSchema is nil — no validation
+	}
+
+	w := NewMCPToolWrapper(tool, mockMgr)
+
+	result, err := w.Execute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{"anything": "goes"},
+	})
+
+	assert.NoError(t, err)
+	assert.True(t, result.Success)
+	assert.True(t, callToolCalled, "CallTool should be invoked when there is no schema to validate against")
+}

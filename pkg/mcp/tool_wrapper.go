@@ -69,6 +69,15 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params Parameters) (*Resul
 		args = make(map[string]interface{})
 	}
 
+	// Validate arguments against the tool's input schema before the network round-trip
+	if err := w.ValidateArgs(args); err != nil {
+		return &Result{
+			Success:       false,
+			Errors:        []string{"validation failed: " + err.Error()},
+			ExecutionTime: time.Since(startTime),
+		}, nil
+	}
+
 	// Call the MCP tool
 	result, err := w.manager.CallTool(ctx, w.mcpTool.ServerName, w.mcpTool.Name, args)
 	if err != nil {

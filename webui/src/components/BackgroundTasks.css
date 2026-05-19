@@ -35,7 +35,7 @@
 .background-tasks-badge {
   background: var(--accent-secondary);
   color: var(--text-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 2px 8px;
   font-size: 10px;
   font-weight: 600;
@@ -70,7 +70,7 @@
 
 .background-tasks-body::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .background-tasks-empty {
@@ -88,7 +88,7 @@
   padding: 12px;
   color: var(--accent-error);
   background: color-mix(in srgb, var(--accent-error) 10%, transparent);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   margin: 8px;
 }
 
@@ -221,7 +221,7 @@
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;

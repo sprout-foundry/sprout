@@ -632,3 +632,429 @@ func TestEmbeddingManager_Close_CleanupAndReinit(t *testing.T) {
 		t.Errorf("expected 2 records after adding to re-opened store, got %d", store2.Size())
 	}
 }
+
+// ─── StoreMemory tests ───
+
+func TestConversationStore_StoreMemory(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.StoreMemory(context.Background(), "git-safety", "Always use --force-create when creating branches"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 after StoreMemory, got %d", store.Size())
+	}
+
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+
+	if len(all) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(all))
+	}
+
+	r := all[0]
+	if r.ID != "memory:git-safety" {
+		t.Errorf("expected ID 'memory:git-safety', got %q", r.ID)
+	}
+	if r.Name != "git-safety" {
+		t.Errorf("expected Name 'git-safety', got %q", r.Name)
+	}
+	if r.Type != "memory" {
+		t.Errorf("expected Type 'memory', got %q", r.Type)
+	}
+	if r.File != "" {
+		t.Errorf("expected empty File, got %q", r.File)
+	}
+	if r.Hash == "" {
+		t.Error("expected non-empty Hash")
+	}
+
+	// Check metadata
+	if r.Metadata == nil {
+		t.Fatal("expected non-nil Metadata")
+	}
+	if r.Metadata["name"] != "git-safety" {
+		t.Errorf("expected metadata name 'git-safety', got %v", r.Metadata["name"])
+	}
+	if preview, ok := r.Metadata["content_preview"].(string); !ok {
+		t.Error("expected content_preview in metadata")
+	} else if preview != "Always use --force-create when creating branches" {
+		t.Errorf("expected content_preview 'Always use --force-create when creating branches', got %q", preview)
+	}
+}
+
+func TestConversationStore_StoreMemory_ContentTruncation(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Content longer than 200 characters
+	longContent := ""
+	for i := 0; i < 50; i++ {
+		longContent += "abcd"
+	}
+	// longContent is now 200 chars exactly, add more
+	longContent += "extra"
+
+	if err := store.StoreMemory(context.Background(), "long-memory", longContent); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+
+	preview := all[0].Metadata["content_preview"].(string)
+	if len(preview) > 200 {
+		t.Errorf("expected content_preview <= 200 chars, got %d", len(preview))
+	}
+	if preview != longContent[:200] {
+		t.Errorf("expected content_preview to be first 200 chars, got %q", preview)
+	}
+}
+
+func TestConversationStore_StoreMemory_Upsert(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.StoreMemory(context.Background(), "test-mem", "original content"); err != nil {
+		t.Fatalf("first StoreMemory failed: %v", err)
+	}
+	if err := store.StoreMemory(context.Background(), "test-mem", "updated content"); err != nil {
+		t.Fatalf("second StoreMemory failed: %v", err)
+	}
+
+	// Should still have exactly 1 record (upsert by ID)
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 after upsert, got %d", store.Size())
+	}
+}
+
+func TestConversationStore_StoreMemory_WithOtherRecords(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store a non-memory record first
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Name: "greeting", Type: "turn", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if err := store.StoreMemory(context.Background(), "my-mem", "memory content"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	if store.Size() != 2 {
+		t.Errorf("expected size 2, got %d", store.Size())
+	}
+
+	all, _ := store.LoadAll()
+	memoryCount := 0
+	for _, r := range all {
+		if r.Type == "memory" {
+			memoryCount++
+		}
+	}
+	if memoryCount != 1 {
+		t.Errorf("expected 1 memory record, got %d", memoryCount)
+	}
+}
+
+// ─── DeleteMemoryByName tests ───
+
+func TestConversationStore_DeleteMemoryByName(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store some memories and a non-memory record
+	if err := store.StoreMemory(context.Background(), "mem-1", "memory 1"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+	if err := store.StoreMemory(context.Background(), "mem-2", "memory 2"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Name: "greeting", Type: "turn", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	if store.Size() != 3 {
+		t.Errorf("expected size 3 before delete, got %d", store.Size())
+	}
+
+	// Delete mem-1
+	if err := store.DeleteMemoryByName("mem-1"); err != nil {
+		t.Fatalf("DeleteMemoryByName failed: %v", err)
+	}
+
+	if store.Size() != 2 {
+		t.Errorf("expected size 2 after delete, got %d", store.Size())
+	}
+
+	all, _ := store.LoadAll()
+	// Verify mem-1 is gone, mem-2 and turn:1 remain
+	names := make(map[string]bool)
+	for _, r := range all {
+		names[r.Name] = true
+	}
+	if names["mem-1"] {
+		t.Error("expected mem-1 to be deleted")
+	}
+	if !names["mem-2"] {
+		t.Error("expected mem-2 to still exist")
+	}
+	if !names["greeting"] {
+		t.Error("expected greeting (non-memory) to still exist")
+	}
+}
+
+func TestConversationStore_DeleteMemoryByName_NonExistent(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Delete a memory that doesn't exist — should not error
+	if err := store.DeleteMemoryByName("nonexistent"); err != nil {
+		t.Fatalf("DeleteMemoryByName for nonexistent should not error, got: %v", err)
+	}
+
+	if store.Size() != 0 {
+		t.Errorf("expected size 0, got %d", store.Size())
+	}
+}
+
+func TestConversationStore_DeleteMemoryByName_DoesNotDeleteNonMemory(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store a non-memory record with same name as a memory
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Name: "my-mem", Type: "turn", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Delete memory named "my-mem" — should NOT delete the turn record
+	if err := store.DeleteMemoryByName("my-mem"); err != nil {
+		t.Fatalf("DeleteMemoryByName failed: %v", err)
+	}
+
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 (non-memory preserved), got %d", store.Size())
+	}
+
+	all, _ := store.LoadAll()
+	if all[0].Type != "turn" {
+		t.Errorf("expected remaining record to be type 'turn', got %q", all[0].Type)
+	}
+}
+
+func TestConversationStore_DeleteMemoryByName_EmptyStore(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Deleting from empty store should not error
+	if err := store.DeleteMemoryByName("anything"); err != nil {
+		t.Fatalf("DeleteMemoryByName on empty store should not error, got: %v", err)
+	}
+}
+
+// ─── QueryMemories tests ───
+
+func TestConversationStore_QueryMemories(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store some memories
+	if err := store.StoreMemory(context.Background(), "git-safety", "Always use --force-create when creating branches"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+	if err := store.StoreMemory(context.Background(), "test-conventions", "Write tests before implementation"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	// Also store a non-memory record (should be filtered out)
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Name: "greeting", Type: "turn", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// Query for memories
+	results, err := store.QueryMemories(context.Background(), "git branch creation", 10, 0.0)
+	if err != nil {
+		t.Fatalf("QueryMemories failed: %v", err)
+	}
+
+	// Should return only memory records, not the turn record
+	if len(results) != 2 {
+		t.Errorf("expected 2 memory results, got %d", len(results))
+	}
+
+	for _, r := range results {
+		if r.Record.Type != "memory" {
+			t.Errorf("QueryMemories should only return memory records, got type %q", r.Record.Type)
+		}
+	}
+}
+
+func TestConversationStore_QueryMemories_EmptyStore(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	results, err := store.QueryMemories(context.Background(), "any query", 10, 0.0)
+	if err != nil {
+		t.Fatalf("QueryMemories on empty store failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results from empty store, got %d", len(results))
+	}
+}
+
+func TestConversationStore_QueryMemories_Filtering(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store only non-memory records
+	if err := store.Store([]VectorRecord{
+		{ID: "turn:1", Name: "greeting", Type: "turn", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "code:1", Name: "main.go", Type: "code", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+	}); err != nil {
+		t.Fatalf("Store failed: %v", err)
+	}
+
+	// QueryMemories should return nothing (no memory records)
+	results, err := store.QueryMemories(context.Background(), "any query", 10, 0.0)
+	if err != nil {
+		t.Fatalf("QueryMemories failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 memory results when no memory records exist, got %d", len(results))
+	}
+}
+
+func TestConversationStore_QueryMemories_TopK(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Store 5 memories (all with the same embedding due to constantProvider)
+	for i := 1; i <= 5; i++ {
+		name := "mem-" + string(rune('a'+i-1))
+		if err := store.StoreMemory(context.Background(), name, "memory content "+string(rune('a'+i-1))); err != nil {
+			t.Fatalf("StoreMemory failed for %s: %v", name, err)
+		}
+	}
+
+	// Query with topK=2
+	results, err := store.QueryMemories(context.Background(), "query", 2, 0.0)
+	if err != nil {
+		t.Fatalf("QueryMemories failed: %v", err)
+	}
+
+	if len(results) > 2 {
+		t.Errorf("expected at most 2 results with topK=2, got %d", len(results))
+	}
+}
+
+func TestConversationStore_QueryMemories_Threshold(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.StoreMemory(context.Background(), "mem-1", "memory 1"); err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	// Query with very high threshold — constantProvider returns [1,0,0] for everything,
+	// so the cosine similarity should be 1.0
+	results, err := store.QueryMemories(context.Background(), "any query", 10, 0.99)
+	if err != nil {
+		t.Fatalf("QueryMemories failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Errorf("expected 1 result above threshold, got %d", len(results))
+	}
+}

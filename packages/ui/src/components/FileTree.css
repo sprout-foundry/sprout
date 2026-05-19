@@ -602,7 +602,7 @@
   display: flex;
   align-items: center;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
   transition: color 0.1s;
 }
@@ -625,7 +625,7 @@
 .file-tree .file-tree-name mark {
   background: rgba(99, 102, 241, 0.3);
   color: var(--text-primary);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 0 1px;
 }
 
@@ -688,7 +688,7 @@
   width: 14px;
   height: 14px;
   border: 1.5px solid var(--border-strong);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;

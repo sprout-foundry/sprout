@@ -64,11 +64,17 @@
   --space-10: 20px;
   --space-12: 24px;
 
-  /* Radius */
+  /* Radius — use these instead of bare px values.
+     Mapping: list rows = none; chips/badges = sm; compact controls = md;
+     primary buttons & textareas = lg; panels & modals = xl;
+     count badges & sync pills = pill; browser-style tabs = tab. */
+  --radius-none: 0;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+  --radius-pill: 999px;
+  --radius-tab: 6px 6px 0 0;
 
   --shadow-subtle: 0 2px 6px rgba(2, 6, 23, 0.32);
   --shadow-elevated: 0 10px 22px rgba(2, 6, 23, 0.42);
@@ -116,9 +122,14 @@
   --sidebar-select-bg: #242932;
   --sidebar-rail-bg: rgba(0, 0, 0, 0.15);
 
-  /* Transitions */
+  /* Transitions — use these instead of bare durations.
+     quick = hover/state flips (120ms); base = visual property changes (160ms);
+     deliberate = layout/disclosure (240ms). */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-quick: 0.12s var(--ease-out);
+  --motion-base: 0.16s var(--ease-out);
+  --motion-deliberate: 0.24s var(--ease-out);
 }
 
 :root[data-theme='light'] {
@@ -1154,7 +1165,7 @@ body,
   gap: 4px;
   min-height: 22px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent-success) 18%, transparent);
   color: var(--accent-success);
   font-size: 11px;
@@ -1179,7 +1190,7 @@ body,
   align-items: center;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
   color: var(--accent-primary);
   font-size: 11px;
@@ -1240,7 +1251,7 @@ body,
 }
 
 .onboarding-platform-panel {
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   padding: 12px 14px;
   background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
@@ -1528,7 +1539,7 @@ button.primary.success {
   color: var(--text-muted, #888);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -36,7 +36,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -66,7 +66,7 @@
   background: var(--button-secondary-bg);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
@@ -86,7 +86,7 @@
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -153,7 +153,7 @@
   background: var(--button-primary-bg);
   color: var(--button-primary-text);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -171,7 +171,7 @@
 }
 
 .worktree-item {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -182,7 +182,7 @@
   padding: 10px 12px;
   background: var(--item-bg);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -198,7 +198,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -249,7 +249,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -278,7 +278,7 @@
 
 .worktree-modal {
   background: var(--modal-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   width: 100%;
   max-width: 500px;
@@ -309,7 +309,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -345,7 +345,7 @@
 .worktree-form-group input {
   padding: 10px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
@@ -376,7 +376,7 @@
 .worktree-form-actions button {
   flex: 1;
   padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -416,7 +416,7 @@
   padding: 12px;
   background: var(--error-bg);
   border: 1px solid var(--error-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--error-text);
   font-size: 13px;
 }

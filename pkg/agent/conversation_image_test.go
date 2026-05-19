@@ -136,7 +136,7 @@ func TestReadImageAsImageData(t *testing.T) {
 	})
 
 	t.Run("non-existent file returns failed to stat file error", func(t *testing.T) {
-		_, _, err := readImageAsImageData("/tmp/__nonexistent_ledit_test_file_12345.png")
+		_, _, err := readImageAsImageData("/tmp/__nonexistent_sprout_test_file_12345.png")
 		if err == nil {
 			t.Fatal("expected error for non-existent file, got nil")
 		}
@@ -354,7 +354,7 @@ func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOn
 
 func TestProcessImagesInQuery_VisionClient_InvalidImagePath_SkipsImage(t *testing.T) {
 	// Use a non-existent file path so readImageAsImageData fails.
-	query := "Pasted image saved to disk: /tmp/__nonexistent_ledit_test_noimage.png — what is this?"
+	query := "Pasted image saved to disk: /tmp/__nonexistent_sprout_test_noimage.png — what is this?"
 
 	a := &Agent{client: &visionSupportingClient{supportsVision: true}}
 

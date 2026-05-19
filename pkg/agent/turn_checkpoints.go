@@ -133,27 +133,11 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 }
 
 func (a *Agent) buildTurnCheckpointSummary(messages []api.Message) string {
-	if len(messages) == 0 {
-		return ""
-	}
-	if a != nil && a.state.GetOptimizer() != nil {
-		return a.state.GetOptimizer().buildGoCompactionSummary(messages)
-	}
-	optimizer := NewConversationOptimizer(true, false)
-	return optimizer.buildGoCompactionSummary(messages)
+	return buildTurnCheckpointGoSummary(messages)
 }
 
 func (a *Agent) buildActionableTurnCheckpointSummary(messages []api.Message) string {
-	if len(messages) == 0 {
-		return ""
-	}
-	var optimizer *ConversationOptimizer
-	if a != nil && a.state.GetOptimizer() != nil {
-		optimizer = a.state.GetOptimizer()
-	} else {
-		optimizer = NewConversationOptimizer(true, false)
-	}
-	return optimizer.buildActionableSummary(messages)
+	return buildTurnCheckpointActionableSummary(messages)
 }
 
 func (a *Agent) HasTurnCheckpoints() bool {
@@ -284,66 +268,12 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	return compacted, remaining
 }
 
-// TriggerCompaction forces a compaction of the conversation history.
-// This is called when an API error indicates the context window limit was exceeded.
-// Returns true if compaction was applied, false if nothing could be compacted.
-func (a *Agent) TriggerCompaction() bool {
-	if a == nil {
-		return false
-	}
-
-	msgs := a.state.GetMessages()
-
-	// Try checkpoint compaction first (lighter weight)
-	if a.HasTurnCheckpoints() {
-		checkpointed, remaining := a.BuildCheckpointCompactedMessages(msgs)
-		if len(checkpointed) < len(msgs) {
-			a.state.SetMessages(checkpointed)
-			a.ReplaceTurnCheckpoints(remaining)
-			if a.debug {
-				a.debugLog("[~] Context limit exceeded - applied checkpoint compaction\n")
-			}
-			return true
-		}
-	}
-
-	// Try structural compaction (LLM-based)
-	optimizer := a.state.GetOptimizer()
-	if optimizer != nil && optimizer.IsEnabled() {
-		// Run observation masking first (dedup + consumed-tool-result masking),
-		// then structural compaction on the optimized messages. This matches the
-		// normal pruning pipeline in conversation_pruner.go.
-		optimized := optimizer.OptimizeConversation(msgs)
-		llmCompacted := optimizer.CompactConversation(optimized)
-		if len(llmCompacted) < len(msgs) {
-			a.state.SetMessages(llmCompacted)
-			a.clearTurnCheckpoints()
-			if a.debug {
-				a.debugLog("[~] Context limit exceeded - applied LLM structural compaction\n")
-			}
-			return true
-		}
-	}
-
-	// Last resort: emergency truncation
-	// Keep at least 2 non-system messages to preserve the last conversation turn
-	if len(msgs) > 2 {
-		// Determine where to start (skip system prompt if present)
-		keepStart := 0
-		if len(msgs) > 0 && msgs[0].Role == "system" {
-			keepStart = 1
-		}
-		// Only truncate if we'd still have at least 2 messages after truncation
-		if len(msgs)-keepStart > 2 {
-			keepEnd := len(msgs)
-			a.state.SetMessages(append(msgs[:keepStart:keepStart], msgs[keepEnd-2:]...))
-			a.clearTurnCheckpoints()
-			if a.debug {
-				a.debugLog("[~] Context limit exceeded - applied emergency truncation\n")
-			}
-			return true
-		}
-	}
-
-	return false
-}
+// TriggerCompaction used to live here as a 3-tier compaction fallback
+// (checkpoint → LLM-summary → emergency truncate). It was never wired into
+// a live call path. Context-limit recovery now happens inside seed's chat
+// loop and retry layer via core.Options.LLMSummarizer / Options.Pruner /
+// Options.CompactionTriggerFraction (set in seed_integration.go), so this
+// duplicate path is no longer needed. The TurnCheckpoint primitives above
+// (HasTurnCheckpoints, BuildCheckpointCompactedMessages,
+// ReplaceTurnCheckpoints) remain because pkg/agent_commands/compact.go
+// still uses them for the /compact slash command.

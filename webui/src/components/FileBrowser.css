@@ -14,7 +14,7 @@
 .filebrowser-container {
   background: #2a2a2a;
   border: 1px solid #444;
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   width: 90%;
   max-width: 700px;
   height: 80vh;
@@ -48,7 +48,7 @@
   font-size: 18px;
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   transition: all 0.2s;
 }
 
@@ -71,7 +71,7 @@
   border: 1px solid transparent;
   color: #fff;
   padding: 6px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s;
@@ -97,7 +97,7 @@
   border: 1px solid #555;
   color: #fff;
   padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   font-size: 13px;
   font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
 }
@@ -209,7 +209,7 @@
   border: 1px solid #555;
   color: #fff;
   padding: 8px 16px;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
@@ -250,7 +250,7 @@
 
 .filebrowser-list::-webkit-scrollbar-thumb {
   background: #555;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .filebrowser-list::-webkit-scrollbar-thumb:hover {

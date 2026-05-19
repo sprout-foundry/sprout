@@ -52,7 +52,7 @@
   background: var(--bg-tertiary);
   border: 1px solid transparent;
   border-bottom: 2px solid transparent;
-  border-radius: var(--radius-tab);
+  border-radius: 6px 6px 0 0;
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
@@ -140,7 +140,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   transition: all 0.1s ease;
   flex-shrink: 0;
   opacity: 0.4;
@@ -169,7 +169,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   transition: all 0.15s ease;
   flex-shrink: 0;
   opacity: 0;
@@ -260,7 +260,7 @@
   color: var(--text-tertiary);
   background: var(--bg-tertiary);
   padding: 4px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .tabs-toolbar-actions {
@@ -284,7 +284,7 @@
 
 .tabs-list::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
 }
 
 .tabs-list::-webkit-scrollbar-thumb:hover {
@@ -344,7 +344,7 @@
 
 .close-confirm-dialog {
   background: var(--bg-secondary);
-  border-radius: var(--radius-xl);
+  border-radius: 12px;
   border: 1px solid var(--border-default);
   box-shadow: var(--shadow-elevated);
   max-width: 360px;
@@ -386,7 +386,7 @@
 .close-confirm-dialog .dialog-btn {
   padding: 8px 14px;
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -477,7 +477,7 @@
   border: none;
   background: transparent;
   color: var(--text-tertiary);
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   cursor: pointer;
   font-size: 12px;
   transition:
@@ -505,7 +505,7 @@
   background: none;
   color: var(--text-secondary, #8b949e);
   cursor: pointer;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   flex-shrink: 0;
   transition:
     background 0.12s ease,
@@ -524,7 +524,7 @@
   height: 100%;
   background: var(--bg-surface, var(--bg-primary));
   border: 1px solid var(--border-strong, var(--accent-primary));
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   padding: 0 6px;
   font-size: 13px;
   font-family: var(--font-mono, inherit);

@@ -20,7 +20,7 @@
 .cm-errorLens-warning,
 .cm-errorLens-info,
 .cm-errorLens-hint {
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
 }
 
 /* ── Selection behavior ──────────────────────────────────────────── */

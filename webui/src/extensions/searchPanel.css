@@ -20,7 +20,7 @@
   font-family: inherit;
   background-color: var(--cm-panel-input-bg, var(--cm-bg, #fff));
   border: 1px solid var(--cm-panel-input-border, var(--cm-border-color, #ccc));
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   color: var(--cm-fg, #000);
   outline: none;
   transition:
@@ -62,7 +62,7 @@
   font-family: 'Monaco', 'Menlo', 'Fira Code', monospace;
   background-color: transparent;
   border: 1px solid var(--cm-panel-button-border, var(--cm-border-color, #ccc));
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   color: var(--cm-panel-button-fg, var(--cm-fg, #000));
   cursor: pointer;
   transition: all 0.15s ease;
@@ -102,7 +102,7 @@
   font-family: inherit;
   background-color: var(--cm-panel-button-bg, transparent);
   border: 1px solid var(--cm-panel-button-border, var(--cm-border-color, #ccc));
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   color: var(--cm-panel-button-fg, var(--cm-fg, #000));
   cursor: pointer;
   transition: all 0.15s ease;

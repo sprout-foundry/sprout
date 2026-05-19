@@ -8,7 +8,7 @@
   padding: 0 8px;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   cursor: pointer;
   color: var(--toolbar-fg, #ccc);
   font-size: 11px;
@@ -73,7 +73,7 @@
   border: 1px solid var(--border-default, #555);
   color: var(--text-primary, #fff);
   padding: 6px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   font-size: 12px;
   outline: none;
   box-sizing: border-box;
@@ -111,7 +111,7 @@
 
 .language-switcher-list::-webkit-scrollbar-thumb {
   background: var(--border-default, #555);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .language-switcher-list::-webkit-scrollbar-thumb:hover {
@@ -125,7 +125,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.08s;
   font-size: 12px;

@@ -2,7 +2,7 @@
 # Provides clear commands for different types of tests and builds
 
 .PHONY: help test test-unit test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
-       clean build build-all build-version build-ui deploy-ui build-wasm setup-packages \
+       clean build build-all build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local
 
@@ -104,9 +104,7 @@ clean:
 	rm -f e2e_results.csv
 	rm -f /tmp/sprout-coverage.out /tmp/sprout-unit-coverage.out /tmp/sprout-coverage-func.txt
 	rm -f /tmp/sprout-test-coverage.log /tmp/sprout-test-unit.log
-	rm -f ./sprout
-	rm -f code_review_output.json
-	find . -maxdepth 1 -name "*.test" -type f -delete
+	find . -name "*.test" -delete
 	find . -name "test_failure_*.log" -delete
 
 # Quick test for development (just unit tests)
@@ -189,38 +187,25 @@ lint-fix:
 	@echo "Auto-fixing frontend linting issues..."
 	@cd webui && npm run lint:fix && npm run format && echo "Lint fix completed"
 
-# Build local workspace packages (@sprout/ui, @sprout/events) that webui depends on.
-# Must run before webui npm install so the dist/ directories exist.
-setup-packages:
-	@for pkg in packages/ui packages/events; do \
-		if [ -f "$$pkg/package.json" ]; then \
-			if [ ! -d "$$pkg/dist" ]; then \
-				echo "Installing dependencies for $$pkg..."; \
-				cd $$pkg && npm install --ignore-scripts 2>&1 && cd "$(CURDIR)"; \
-				echo "Building $$pkg..."; \
-				cd $$pkg && npm run build 2>&1 && cd "$(CURDIR)"; \
-			fi; \
-		fi; \
-	done
-
 # Build React web UI only (doesn't deploy to Go static)
-build-ui: setup-packages
+build-ui:
 	@echo "Building React web UI with Vite..."
 	@if [ ! -d "webui" ]; then \
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	@cd webui && npm install --ignore-scripts 2>&1
+	@# Install npm dependencies if needed
+	@cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true
 	@cd webui && npm run build
 	@echo "React web UI build completed in webui/dist/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
 # Optimized: skips React build if source files haven't changed
-deploy-ui: setup-packages
+deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
-		cd webui && npm install --ignore-scripts 2>&1; \
+		cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true; \
 		cd webui && npm run build; \
 		echo "React web UI build completed in webui/dist/"; \
 		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs; \

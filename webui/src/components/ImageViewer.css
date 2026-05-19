@@ -5,7 +5,7 @@
   height: 100%;
   background: var(--editor-pane-bg);
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
 }
 
 .image-viewer-empty {
@@ -79,7 +79,7 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
@@ -126,7 +126,7 @@
   gap: 6px;
   padding: 2px 8px;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   background: var(--bg-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -140,7 +140,7 @@
 .image-viewer-picked-swatch {
   width: 16px;
   height: 16px;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   border: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }

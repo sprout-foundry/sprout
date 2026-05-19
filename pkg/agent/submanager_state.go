@@ -156,11 +156,6 @@ type StateManager interface {
 	// currently nil. Returns true if the embedding was set, false if it already
 	// had a value. Used to capture the first-turn intent without TOCTOU races.
 	SetSessionIntentEmbeddingIfNil(emb []float32) bool
-
-	// Drift detection suppression
-	GetDriftRejectionCount() int
-	IncrementDriftRejectionCount()
-	ResetDriftRejectionCount()
 }
 
 // AgentStateManager implements StateManager with simple field-backed getters/setters.
@@ -209,7 +204,6 @@ type AgentStateManager struct {
 	configOverrides             map[string]interface{}
 	currentIteration             int
 	sessionIntentEmbedding      []float32
-	driftRejectionCount         int
 }
 
 // NewAgentStateManager creates a new AgentStateManager with sensible defaults.
@@ -717,24 +711,4 @@ func (s *AgentStateManager) SetSessionIntentEmbeddingIfNil(emb []float32) bool {
 	s.sessionIntentEmbedding = make([]float32, len(emb))
 	copy(s.sessionIntentEmbedding, emb)
 	return true
-}
-
-// --- Drift detection suppression ---
-
-func (s *AgentStateManager) GetDriftRejectionCount() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.driftRejectionCount
-}
-
-func (s *AgentStateManager) IncrementDriftRejectionCount() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.driftRejectionCount++
-}
-
-func (s *AgentStateManager) ResetDriftRejectionCount() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.driftRejectionCount = 0
 }

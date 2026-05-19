@@ -1,0 +1,37 @@
+{
+  "__runCommand": "sprout agent --workflow-config examples/ea_todo_workflow.json",
+  "continue_on_error": true,
+  "initial": {
+    "max_iterations": 500,
+    "model": "glm-5.1",
+    "persona": "executive_assistant",
+    "prompt": "Process incomplete TODO items from TODO.md in the current working directory.\n\nWorkflow for each [] item:\n1. Read TODO.md and identify the first incomplete [] item\n2. Create a task_queue entry for it (status=in_progress)\n3. Delegate implementation to repo_orchestrator with a clear prompt derived from the TODO text with a reminder to use subagents and follow the code -> test -> review -> iterate/fix workflow until it is ready.\n4. After the subagent completes, verify that the followed the process and then verify the build passes (run the project's build command)\n5. If build fails, delegate a fix to repo_orchestrator and re-verify\n6. Review staged changes with git diff --cached, then commit using the commit tool with the `notes` parameter (NOT the `message` parameter). Pass the TODO item description and a brief summary of what changed in `notes` so the LLM can generate a proper conventional commit message.\n7. Mark the TODO item [x] in TODO.md using edit_file\n8. Update the task_queue entry to completed\n9. Move to the next [] item\n\nRules:\n- Process at most 200 TODO items per session\n- If a subagent fails or the build cannot be fixed after 2 attempts, mark the task_queue entry as failed with a description of the error, then continue to the next item\n- Do NOT use git add . or git add -A — only stage specific files you created or modified\n- Do NOT use git push\n- Commit after each TODO item, not in bulk\n- Skip items already marked [x]\n- Stop when no [] items remain",
+    "provider": "zai",
+    "skip_prompt": true,
+    "subagent_overrides": {
+      "code_reviewer": {
+        "model": "qwen3.6-27b",
+        "provider": "ai-worker"
+      },
+      "coder": {
+        "model": "qwen3.6-27b",
+        "provider": "ai-worker"
+      },
+      "debugger": {
+        "model": "qwen3.6-27b",
+        "provider": "ai-worker"
+      },
+      "repo_orchestrator": {
+        "model": "qwen3.6-27b",
+        "provider": "ai-worker"
+      },
+      "tester": {
+        "model": "qwen3.6-27b",
+        "provider": "ai-worker"
+      }
+    },
+    "unsafe": true
+  },
+  "no_web_ui": true,
+  "persist_runtime_overrides": false
+}

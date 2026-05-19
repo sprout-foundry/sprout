@@ -1,13 +1,20 @@
+/**
+ * DriftNotification.css — Toast banner for conversation drift warnings.
+ *
+ * Shows at the bottom of the app when topic similarity falls below threshold.
+ * Uses CSS variables for theme awareness (dark/light mode).
+ */
+
 .drift-notification {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 1000;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-top: 1px solid rgba(245, 166, 35, 0.3);
+  z-index: 1050;
+  background: color-mix(in srgb, var(--accent-warning) 15%, var(--bg-primary));
+  border-top: 1px solid var(--accent-warning);
   padding: 10px 16px;
-  animation: drift-slide-up 0.3s ease-out;
+  animation: drift-slide-up 0.3s var(--ease-out);
 }
 
 @keyframes drift-slide-up {
@@ -27,6 +34,7 @@
   gap: 12px;
   max-width: 900px;
   margin: 0 auto;
+  position: relative;
 }
 
 .drift-notification-icon {
@@ -39,16 +47,17 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: #e0e0e0;
-  font-size: 13px;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  min-width: 0;
 }
 
 .drift-notification-text strong {
-  color: #f5a623;
+  color: var(--accent-warning);
 }
 
 .drift-notification-detail {
-  color: #888;
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -61,28 +70,65 @@
 .drift-notification-btn {
   padding: 6px 14px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: background 0.15s var(--ease-out), color 0.15s var(--ease-out);
 }
 
 .drift-notification-btn-primary {
-  background: #f5a623;
-  color: #1a1a2e;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
 }
 
 .drift-notification-btn-primary:hover {
-  background: #e09515;
+  filter: brightness(1.1);
+}
+
+.drift-notification-btn-primary:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .drift-notification-btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e0e0e0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .drift-notification-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.drift-notification-btn-secondary:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.drift-notification-dismiss {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s var(--ease-out), background 0.15s var(--ease-out), border-color 0.15s var(--ease-out);
+}
+
+.drift-notification-dismiss:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.drift-notification-dismiss:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }

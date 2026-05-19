@@ -14,6 +14,7 @@ import (
 type ModelConfig struct {
 	Name          string // e.g. "embeddinggemma-300m-q8"
 	ModelURL      string // HuggingFace download URL for model.onnx
+	ModelDataURL  string // HuggingFace download URL for model.onnx_data (companion weights)
 	TokenizerURL  string // HuggingFace download URL for tokenizer.json
 	ModelHash     string // SHA256 hex of model file
 	TokenizerHash string // SHA256 hex of tokenizer file
@@ -53,6 +54,7 @@ func (d *ModelDownloader) Download(ctx context.Context, cfg ModelConfig, progres
 	}
 
 	modelPath := filepath.Join(dir, "model.onnx")
+	modelDataPath := filepath.Join(dir, "model.onnx_data")
 	tokenizerPath := filepath.Join(dir, "tokenizer.json")
 
 	// Determine total download phases for progress calculation.
@@ -60,11 +62,14 @@ func (d *ModelDownloader) Download(ctx context.Context, cfg ModelConfig, progres
 	if cfg.ModelURL != "" {
 		phases++
 	}
+	if cfg.ModelDataURL != "" {
+		phases++
+	}
 	if cfg.TokenizerURL != "" {
 		phases++
 	}
 
-	// Download model.
+	// Download model graph.
 	if cfg.ModelURL != "" {
 		phaseStart := 0.0
 		if err := d.downloadFile(ctx, modelPath, cfg.ModelURL, cfg.ModelHash,
@@ -73,11 +78,23 @@ func (d *ModelDownloader) Download(ctx context.Context, cfg ModelConfig, progres
 		}
 	}
 
-	// Download tokenizer.
-	if cfg.TokenizerURL != "" {
+	// Download model data weights (companion file for large models).
+	if cfg.ModelDataURL != "" {
 		phaseStart := float64(0)
 		if phases > 1 {
 			phaseStart = 1.0 / float64(phases)
+		}
+		if err := d.downloadFile(ctx, modelDataPath, cfg.ModelDataURL, "",
+			func(frac float64) { progress(phaseStart + frac/float64(phases)); }); err != nil {
+			return fmt.Errorf("model: download model data: %w", err)
+		}
+	}
+
+	// Download tokenizer.
+	if cfg.TokenizerURL != "" {
+		phaseStart := float64(0)
+		if phases > 2 {
+			phaseStart = 2.0 / float64(phases)
 		}
 		if err := d.downloadFile(ctx, tokenizerPath, cfg.TokenizerURL, cfg.TokenizerHash,
 			func(frac float64) { progress(phaseStart + frac/float64(phases)); }); err != nil {
@@ -221,7 +238,7 @@ func (d *ModelDownloader) fileHash(path string) (string, error) {
 
 // GetModelPath returns the path to the model file for the given model name.
 func (d *ModelDownloader) GetModelPath(name string) string {
-	return filepath.Join(d.modelDir, name, "model.onnx")
+	return filepath.Join(d.modelDir, name, "model_q4.onnx")
 }
 
 // GetTokenizerPath returns the path to the tokenizer file for the given model name.
@@ -231,7 +248,16 @@ func (d *ModelDownloader) GetTokenizerPath(name string) string {
 
 // IsDownloaded returns true if both the model and tokenizer files exist for the given name.
 func (d *ModelDownloader) IsDownloaded(name string) bool {
-	_, err1 := os.Stat(d.GetModelPath(name))
-	_, err2 := os.Stat(d.GetTokenizerPath(name))
-	return err1 == nil && err2 == nil
+	if _, err := os.Stat(d.GetModelPath(name)); err != nil {
+		return false
+	}
+	if _, err := os.Stat(d.GetTokenizerPath(name)); err != nil {
+		return false
+	}
+	return true
+}
+
+// GetModelDataPath returns the path to the companion .onnx_data file.
+func (d *ModelDownloader) GetModelDataPath(name string) string {
+	return filepath.Join(d.modelDir, name, "model_q4.onnx_data")
 }

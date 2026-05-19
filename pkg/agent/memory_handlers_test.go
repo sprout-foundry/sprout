@@ -1,10 +1,14 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // setupMemoryHandlers creates an isolated memory directory for testing
@@ -299,5 +303,280 @@ func TestHandleDeleteMemoryWithSuffix(t *testing.T) {
 
 	if !strings.Contains(result, "del-me") {
 		t.Errorf("result should mention name without suffix: %s", result)
+	}
+}
+
+// --- handleSearchMemories ---
+
+func TestHandleSearchMemories_MissingQuery(t *testing.T) {
+	t.Parallel()
+
+	_, err := handleSearchMemories(nil, nil, map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected error for missing query")
+	}
+	if !strings.Contains(err.Error(), "query is required") {
+		t.Errorf("wrong error: %v", err)
+	}
+}
+
+func TestHandleSearchMemories_NilContext(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	em := embedding.NewEmbeddingManager(nil, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager so GetConversationStore works
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	// Call handleSearchMemories with nil context — should return an error, not panic.
+	_, err := handleSearchMemories(nil, agent, map[string]interface{}{
+		"query": "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for nil context")
+	}
+	if !strings.Contains(err.Error(), "context cannot be nil") {
+		t.Errorf("expected 'context cannot be nil' error, got: %v", err)
+	}
+}
+
+func TestHandleSearchMemories_NotEnabled(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// No embedding manager set (nil) — handler should return a helpful message.
+	result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+		"query": "git conventions",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "not available") {
+		t.Errorf("expected 'not available' in result, got: %s", result)
+	}
+	if !strings.Contains(result, "Embedding index is not enabled") {
+		t.Errorf("expected embedding index message, got: %s", result)
+	}
+}
+
+func TestHandleSearchMemories_NoResults(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	em := embedding.NewEmbeddingManager(nil, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager so GetConversationStore works
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+		"query": "nonexistent topic",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(result, "No memories found") {
+		t.Errorf("expected no-results message, got: %s", result)
+	}
+	if !strings.Contains(result, "list_memories") {
+		t.Errorf("expected list_memories suggestion, got: %s", result)
+	}
+}
+
+func TestHandleSearchMemories_WithResults(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	em := embedding.NewEmbeddingManager(cfg, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	// Get the conversation store and add some memories
+	store, err := em.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	// Add two memories with different content
+	ctx := context.Background()
+	if err := store.StoreMemory(ctx, "git-conventions", "# Git Conventions\n\nAlways use conventional commits with type(scope): description."); err != nil {
+		t.Fatalf("failed to store memory: %v", err)
+	}
+	if err := store.StoreMemory(ctx, "test-patterns", "# Test Patterns\n\nUse table-driven tests for multiple scenarios."); err != nil {
+		t.Fatalf("failed to store memory: %v", err)
+	}
+
+	// Search for git-related content
+	result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+		"query": "git commit format",
+	})
+	if err != nil {
+		t.Fatalf("handleSearchMemories failed: %v", err)
+	}
+
+	// Should find results with proper formatting
+	if !strings.Contains(result, "Memory Search Results") {
+		t.Errorf("expected header in result, got: %s", result)
+	}
+	if !strings.Contains(result, "relevance:") {
+		t.Errorf("expected relevance score in result, got: %s", result)
+	}
+
+	// The mock provider returns the same vector for all content, so all memories
+	// will have similarity 1.0. Both should appear in results.
+	if !strings.Contains(result, "git-conventions") {
+		t.Error("expected 'git-conventions' in results")
+	}
+	if !strings.Contains(result, "Git Conventions") {
+		t.Error("expected title 'Git Conventions' in results")
+	}
+}
+
+func TestHandleSearchMemories_MaxResults(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	em := embedding.NewEmbeddingManager(cfg, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	// Get the conversation store and add multiple memories
+	store, err := em.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	ctx := context.Background()
+	memories := []struct {
+		name    string
+		content string
+	}{
+		{"mem-1", "# First Memory\nContent 1"},
+		{"mem-2", "# Second Memory\nContent 2"},
+		{"mem-3", "# Third Memory\nContent 3"},
+	}
+
+	for _, m := range memories {
+		if err := store.StoreMemory(ctx, m.name, m.content); err != nil {
+			t.Fatalf("failed to store memory %s: %v", m.name, err)
+		}
+	}
+
+	// Request only 2 results
+	result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+		"query":       "test",
+		"max_results": 2,
+	})
+	if err != nil {
+		t.Fatalf("handleSearchMemories failed: %v", err)
+	}
+
+	// Should say "Found 2 result(s)" not 3
+	if strings.Contains(result, "Found 3 result") {
+		t.Error("max_results should limit to 2, got 3")
+	}
+	if !strings.Contains(result, "Found 2 result") {
+		t.Errorf("expected 'Found 2 result', got: %s", result)
+	}
+}
+
+func TestHandleSearchMemories_DefaultMaxResults(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	em := embedding.NewEmbeddingManager(cfg, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	// Get the conversation store and add memories
+	store, err := em.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := store.StoreMemory(ctx, "default-test", "# Test\nContent"); err != nil {
+		t.Fatalf("failed to store memory: %v", err)
+	}
+
+	// Search without max_results — should default to 5
+	result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+		"query": "test",
+	})
+	if err != nil {
+		t.Fatalf("handleSearchMemories failed: %v", err)
+	}
+
+	// Should work without error and find the memory
+	if !strings.Contains(result, "default-test") {
+		t.Error("expected memory in results")
+	}
+}
+
+func TestHandleSearchMemories_MaxResultsFloat64(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	em := embedding.NewEmbeddingManager(cfg, dir)
+	agent.embeddingMgr = em
+
+	// Initialize the embedding manager
+	if err := em.Init(context.Background()); err != nil {
+		t.Fatalf("failed to init embedding manager: %v", err)
+	}
+
+	// Get the conversation store and add memories
+	store, err := em.GetConversationStore(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := store.StoreMemory(ctx, "float-test", "# Test\nContent"); err != nil {
+		t.Fatalf("failed to store memory: %v", err)
+	}
+
+	// max_results as float64 (common from JSON) should be accepted
+	result, err := handleSearchMemories(context.Background(), agent, map[string]interface{}{
+		"query":       "test",
+		"max_results": float64(3), // float64
+	})
+	if err != nil {
+		t.Fatalf("handleSearchMemories failed: %v", err)
+	}
+
+	// Should work without error
+	if !strings.Contains(result, "float-test") {
+		t.Error("expected memory in results")
 	}
 }

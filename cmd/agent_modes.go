@@ -69,6 +69,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 	applyWorkflowCommandOverrides(workflowConfig)
 
+	// When a workflow config defines an initial prompt, force non-interactive
+	// (direct) mode. Without this, the isInteractive branch calls
+	// runInteractiveMode which never consults the workflow config, so the
+	// user sees a blank REPL instead of the workflow executing.
+	if workflowConfig != nil && workflowConfig.Initial != nil &&
+		(strings.TrimSpace(workflowConfig.Initial.Prompt) != "" || strings.TrimSpace(workflowConfig.Initial.PromptFile) != "") {
+		isInteractive = false
+	}
+
 	// Determine if web UI should be enabled
 	// Web UI requires: interactive mode, daemon mode, not disabled, and not in CI/subagent
 	enableWebUI := (isInteractive || daemonMode) && !disableWebUI && !IsCI()

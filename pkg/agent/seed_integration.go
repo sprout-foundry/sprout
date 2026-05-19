@@ -568,6 +568,19 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		EventPublisher: seedPublisher,
 	}
 
+	// Context-management wiring: hand seed the optimizer, summarizer, and
+	// pruner so the chat loop's compaction cascade (proactive threshold +
+	// recovery-on-overflow) uses sprout's configuration end-to-end. All three
+	// fields are nil-tolerant on the seed side, so any that aren't configured
+	// here simply fall back to seed's defaults.
+	if optWrap := a.state.GetOptimizer(); optWrap != nil {
+		opts.Optimizer = optWrap.Inner()
+	}
+	if pruner := a.state.GetConversationPruner(); pruner != nil {
+		opts.Pruner = pruner
+	}
+	opts.LLMSummarizer = newLLMSummarizer(a.client, a.GetProvider())
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}

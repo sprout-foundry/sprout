@@ -24,6 +24,43 @@ type MCPSubManager interface {
 }
 
 // AgentMCPManager implements MCPSubManager.
+//
+// LOCK-ORDER INVARIANT
+//
+// AgentMCPManager uses a single internal lock (initMu, a sync.RWMutex) to
+// protect the initialization state (initialized, initErr, toolsCache).
+// The lock is exposed through the MCPSubManager interface as LockInit,
+// UnlockInit, RLockInit, and RUnlockInit.
+//
+// Lock ordering:
+//
+//   initMu → debugLogMutex (via a.debugLog() in getMCPTools)
+//   initMu → mcp.Manager.mutex (via initializeMCP → AddServer/StartAll/GetAllTools)
+//
+// No reverse ordering exists. debugLogMutex is never held before calling
+// getMCPTools, and mcp.Manager's internal mutexes are never held before calling
+// getMCPTools or RefreshMCPTools. This prevents lock-order inversions and
+// deadlocks.
+//
+// Direct callers of getMCPTools():
+//   - getOptimizedToolDefinitions()
+//   - isValidMCPTool()
+//   - handleMCPToolsCommand()
+//
+// Direct callers of RefreshMCPTools():
+//   - handleMCPToolsCommand()
+//   - github_setup_prompt.go
+//
+// Within getMCPTools(), the read lock (RLockInit) is always released
+// before the write lock (LockInit) is acquired. The pattern is:
+//   1. RLockInit; check cache; RUnlockInit
+//   2. LockInit; double-check; operate; UnlockInit (deferred)
+// The RLock and Lock are never nested, preventing self-deadlock.
+//
+// The initializeMCP() function is called while initMu is held (write).
+// It accesses the mcp.MCPManager (manager field) and calls methods on it
+// that acquire mcp.Manager's internal mutexes, but does NOT try to
+// re-acquire initMu, avoiding recursive locking.
 type AgentMCPManager struct {
 	manager     mcp.MCPManager
 	toolsCache  []api.Tool

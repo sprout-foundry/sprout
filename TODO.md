@@ -80,7 +80,7 @@ Spec: `roadmap/SP-028-test-suite-stabilization.md`
 ### Phase 3: Fix WebUI PTY goroutine leak
 
 [x] - SP-028-3a: Add `done chan struct{}` to terminal session struct; close it on `session.Close()` (`pkg/webui/terminal_session.go`)
-[] - SP-028-3b: Rewrite the PTY read loop at `pkg/webui/terminal_create.go:146-175` — `select` on `done` alongside the read; use `pty.SetDeadline()` (with periodic-polling fallback if unsupported on platform)
+[x] - SP-028-3b: Rewrite the PTY read loop at `pkg/webui/terminal_create.go:146-175` — `select` on `done` alongside the read; use `pty.SetDeadline()` (with periodic-polling fallback if unsupported on platform)
 [] - SP-028-3c: Audit every test that creates a terminal session; add `t.Cleanup(session.Close)` — sweep `pkg/webui/*_test.go`
 [] - SP-028-3d: Verify with `go test -race -count=5 ./pkg/webui/` — `goleak` reports zero leaks
 

@@ -251,10 +251,17 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 // UpdateFile re-indexes a single file: deletes old records, extracts, embeds, and stores.
 // Handles both code files (symbol extraction) and non-code files (file-level embedding)
 // when IndexFileLevel is enabled.
+// If the file does not exist, it deletes any existing records for that file and returns nil
+// (graceful handling of deleted files).
 func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 	// Always delete old records first (handles deleted files too).
 	if err := m.store.DeleteByFile(filePath); err != nil {
 		return fmt.Errorf("index: delete file %s: %w", filePath, err)
+	}
+
+	// If the file doesn't exist, we're done — records were already deleted.
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil
 	}
 
 	// Determine which extractor to use

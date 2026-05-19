@@ -171,9 +171,15 @@ func NewConfig() *Config {
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(),
 		EmbeddingIndex: &EmbeddingIndexConfig{
 			Enabled:             false,
+			Provider:            "auto",
 			AutoIndex:           false,
 			SimilarityThreshold: 0.90,
 			MaxResults:          3,
+			ONNX: &ONNXConfig{
+				ModelURL:     "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q8.onnx",
+				TokenizerURL: "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.json",
+				Dimensions:   256,
+			},
 		},
 		PersistentContext: &PersistentContextConfig{
 			ProactiveContextEnabled:  func() *bool { b := true; return &b }(),

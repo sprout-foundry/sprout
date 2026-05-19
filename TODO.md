@@ -350,3 +350,40 @@ Four user-visible defects: Stop button doesn't cancel the in-flight LLM HTTP cal
 ### Phase 6: Documentation
 
 [] - SP-034-6a: Write `docs/WEBUI_PROTOCOL.md` — REST endpoints table, WebSocket inbound + outbound message types, event payload shapes, reattach flow, error envelope, type-generation workflow.
+
+---
+
+## SP-035: Persona System Tightening
+
+Spec: `roadmap/SP-035-persona-system-tightening.md`
+
+The persona system works today but several behaviors that *should be loud are silent*: EA inherits its risk cascade implicitly, the two-gate model has no integration test, force-flag detection lacks fuzz coverage, dropped user overrides emit no warning, and SP-026 docs point at the wrong path. Each is fixable cheaply.
+
+### Phase 1: Explicit EA rules
+
+[] - SP-035-1a: Add `auto_approve_rules` block to `pkg/personas/configs/executive_assistant.json`. Initial values: literal copy of `DefaultAutoApproveRules()` from `pkg/configuration/config.go:195-213`. The PR review is the "should EA differ from defaults?" conversation.
+[] - SP-035-1b: Audit `pkg/personas/configs/default_personas.json` and `project_planner.json` — per persona, decide explicitly whether to declare rules or inherit. Add a `"_rules_source"` annotation field so the decision is visible.
+[] - SP-035-1c: Add `TestPersona_EA_RiskCascadeBaseline` in `pkg/configuration/` — load EA, call `GetAutoApproveRules()`, deep-equal against the approved baseline. Failure prints the diff so a drift is impossible to miss.
+
+### Phase 2: Two-gate invariant tests
+
+[] - SP-035-2a: Add `TestRiskGates_GlobalClassifierIsNotBypassedByPersona` — synthetic persona with `rm_command` in `LowRiskOps`; submit `rm -rf /`; assert the global `ClassifyToolCall` at `pkg/agent/tool_definitions.go:541` still blocks.
+[] - SP-035-2b: Add `TestRiskGates_BothGatesEvaluate` with counter wrappers around `EvaluateOperationRisk` (`pkg/agent/tool_handlers_shell.go:90,195,381`) and `ClassifyToolCall` — assert both run for each command in a dangerous-commands fixture.
+[] - SP-035-2c: Add a package-level doc comment to `pkg/agent/tool_handlers_shell.go` describing the two-gate model and the invariant "neither gate may suppress the other."
+
+### Phase 3: Force-flag fuzz tests
+
+[] - SP-035-3a: Extend `pkg/configuration/config_risk_test.go:119,143` tables with: `tar -xzf`, `tar -fvz`, `grep -f patterns`, `git -f commit` (malformed position), `rsync --force`, `rsync --force-with-lease`, `cp -rf`, `mv -f`, `git push --force-with-lease`, `docker rm -f`, `docker rm --force`. Each entry carries a one-line `why:` comment.
+[] - SP-035-3b: Add `TestContainsForceFlag_Property` using `testing/quick` with iteration count 1000 — generates random {command, flags, args} combos and asserts the function's verdict matches a documented reference for the curated cases.
+
+### Phase 4: Loud warnings on silent overrides
+
+[] - SP-035-4a: At `pkg/configuration/config.go:1408-1414`, after the existing comment block, detect `len(userOverride.AllowedTools) > 0` for a built-in persona and log a warning via `pkg/logging` naming the persona and the dropped tool list — message: "AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools."
+[] - SP-035-4b: In `mergeLegacyStructuredToolsIntoPersonaAllowlists` at `pkg/configuration/config.go:1462`, iterate every persona (not just defaults). For custom personas with `write_file` but no `write_structured_file`, log a one-time warning per config-load.
+[] - SP-035-4c: Tests — `TestAllowedToolsOverride_WarnsAndDrops`, `TestLegacyCustomPersona_WarnsOnce`. Both assert the warning is emitted via the logger fixture and that the underlying behavior (drop / no-migrate) is unchanged.
+
+### Phase 5: Documentation
+
+[] - SP-035-5a: Update `roadmap/SP-026-executive-assistant.md` Phase E — correct the prompt path from `subagent_prompts/executive_assistant.md` to `pkg/agent/prompts/subagent_prompts/executive_assistant.md`. Add a "Where prompts live" subsection near the top of the spec.
+[] - SP-035-5b: Write `docs/PERSONAS.md` covering: the three-layer architecture (catalog → config → session), merge resolution rules (what overrides, what doesn't, why), the two-gate risk model, the depth model (0/1/2), `LocalOnly` + `IsLocalMode` semantics, how to define a custom persona, and provider/model cost considerations.
+[] - SP-035-5c: When SP-033's `docs/SECURITY.md` lands, add a cross-link from its "trust boundaries" section to `docs/PERSONAS.md`. (Tracked here as a forward-reference; do the edit in whichever order the specs land.)

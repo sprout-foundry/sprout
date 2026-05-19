@@ -106,6 +106,12 @@ export interface AppState {
   modelSelectionRequest: {
     provider: string;
   } | null;
+  driftNotification: {
+    similarity: number;
+    threshold: number;
+    sessionId: string;
+    options: string[];
+  } | null;
 }
 
 export interface OnboardingState {

@@ -67,8 +67,12 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 		return nil, fmt.Errorf("onnx embedding: load tokenizer: %w", err)
 	}
 
-	// Create inference session.
-	session, err := runtime.NewDynamicSession(modelPath, nil, nil, SessionOption{
+	// Create inference session with input/output names.
+	// EmbeddingGemma uses standard names: input_ids, attention_mask for inputs;
+	// last_hidden_state for output.
+	inputNames := []string{"input_ids", "attention_mask"}
+	outputNames := []string{"last_hidden_state"}
+	session, err := runtime.NewDynamicSession(modelPath, inputNames, outputNames, SessionOption{
 		IntraOpNumThreads: 1, // Single thread is fast enough for embeddings.
 	})
 	if err != nil {

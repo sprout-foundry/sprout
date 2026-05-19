@@ -306,6 +306,31 @@ func (s *JSONLFileStore) DeleteByFile(filePath string) error {
 	return s.saveAll(kept)
 }
 
+// ReplaceAll replaces all records in the store with the given slice.
+// The records are sorted by ID for deterministic output order.
+// Use this when you need to perform a full replacement rather than a merge.
+func (s *JSONLFileStore) ReplaceAll(records []VectorRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Sort by ID for deterministic output order.
+	sorted := make([]VectorRecord, len(records))
+	copy(sorted, records)
+	slices.SortFunc(sorted, func(a, b VectorRecord) int {
+		if a.ID < b.ID {
+			return -1
+		}
+		if a.ID > b.ID {
+			return 1
+		}
+		return 0
+	})
+
+	s.records = sorted
+	s.dirty = true
+	return s.saveAll(sorted)
+}
+
 // Size returns the number of records currently in the store.
 func (s *JSONLFileStore) Size() int {
 	s.mu.RLock()

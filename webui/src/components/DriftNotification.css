@@ -1,0 +1,201 @@
+/* ── DriftNotification.css ───────────────────────────────────────
+   Theme-aware styles for the DriftNotification component.
+   Uses CSS custom properties defined on the <html> element.
+   ─────────────────────────────────────────────────────────────── */
+
+/* ── Overlay ─────────────────────────────────────────────────────── */
+.drift-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: drift-fade-in 0.2s ease-out;
+}
+
+@keyframes drift-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── Card ────────────────────────────────────────────────────────── */
+.drift-card {
+  background: var(--color-panel-bg, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 480px;
+  overflow: hidden;
+  animation: drift-slide-up 0.25s ease-out;
+}
+
+@keyframes drift-slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ── Accent Bar (warning) ────────────────────────────────────────── */
+.drift-accent-bar {
+  height: 4px;
+  background: var(--color-warning, #f59e0b);
+}
+
+/* ── Header ──────────────────────────────────────────────────────── */
+.drift-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 12px 24px;
+}
+
+.drift-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  color: var(--color-warning, #f59e0b);
+}
+
+.drift-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text, #1a1a1a);
+}
+
+/* ── Body ────────────────────────────────────────────────────────── */
+.drift-body {
+  padding: 0 24px 20px 24px;
+}
+
+.drift-message {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #666);
+}
+
+.drift-stats {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--color-surface-secondary, #f5f5f5);
+  border-radius: 6px;
+}
+
+.drift-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drift-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary, #666);
+}
+
+.drift-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text, #1a1a1a);
+}
+
+.drift-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #666);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+.drift-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border, #e5e5e5);
+  background: var(--color-surface-secondary, #fafafa);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.drift-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.drift-btn--continue {
+  background: var(--color-primary, #3b82f6);
+  color: #ffffff;
+}
+
+.drift-btn--continue:hover {
+  background: var(--color-primary-hover, #2563eb);
+}
+
+.drift-btn--new-chat {
+  background: transparent;
+  color: var(--color-text, #1a1a1a);
+  border: 1px solid var(--color-border, #d1d5db);
+}
+
+.drift-btn--new-chat:hover {
+  background: var(--color-surface-secondary, #f5f5f5);
+  border-color: var(--color-text-secondary, #9ca3af);
+}
+
+/* ── Dark mode overrides ─────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  .drift-card {
+    background: var(--color-panel-bg, #1e1e1e);
+  }
+
+  .drift-title,
+  .drift-stat-value {
+    color: var(--color-text, #e5e5e5);
+  }
+
+  .drift-message,
+  .drift-hint,
+  .drift-stat-label {
+    color: var(--color-text-secondary, #a3a3a3);
+  }
+
+  .drift-stats {
+    background: var(--color-surface-secondary, #2a2a2a);
+  }
+
+  .drift-footer {
+    border-top-color: var(--color-border, #333333);
+    background: var(--color-surface-secondary, #1a1a1a);
+  }
+
+  .drift-btn--new-chat {
+    color: var(--color-text, #e5e5e5);
+    border-color: var(--color-border, #555555);
+  }
+
+  .drift-btn--new-chat:hover {
+    background: var(--color-surface-secondary, #2a2a2a);
+    border-color: var(--color-text-secondary, #777777);
+  }
+}

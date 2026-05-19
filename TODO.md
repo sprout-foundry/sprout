@@ -207,7 +207,7 @@ Phases 1–3 are complete: `pkg/ast/` is in place (tree-sitter via `odvcencio/go
 ### Phase 4: WASM Integration (finish)
 
 [x] SP-025-4a: Add a `pkg/ast` import to `pkg/wasmshell/` and surface a basic code-intelligence entry point (e.g. a function-symbol lookup that the WASM shell can call). Today `pkg/ast/browser_cache.go` exists but no caller in `wasmshell` exercises it.
-[] - SP-025-4b: Run `make build-wasm` and record the binary-size delta from enabling `pkg/ast` in the WASM target. Document the threshold the team is willing to accept.
+[x] SP-025-4b: Run `make build-wasm` and record the binary-size delta from enabling `pkg/ast` in the WASM target. Document the threshold the team is willing to accept. (Baseline: 4.3M, With ast: 34M, Delta: +29.7M. See roadmap/SP-025-tree-sitter-integration.md)
 [] - SP-025-4c: Verify `pkg/ast/browser_cache.go` (290 LOC) actually persists compiled grammars to browser storage (IndexedDB / localStorage) across page loads — write a manual reproduction note or a headless test.
 
 ### Phase 5: Embedding Extractor Migration (the consistency fix)

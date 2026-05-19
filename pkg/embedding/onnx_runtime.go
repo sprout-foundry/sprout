@@ -82,6 +82,16 @@ func (r *ONNXRuntime) init() error {
 	// Initialize the global ONNX environment if not already done.
 	// onnxruntime_go uses a global singleton; this is idempotent.
 	if !onnxruntime.IsInitialized() {
+		// Set the shared library path to the bundled platform library.
+		// The onnxruntime_go module ships platform-specific .so/.dylib files
+		// in its test_data/ directory. We extract the correct one based on
+		// GOOS/GOARCH.
+		libPath, libErr := findBundledONNXLib()
+		if libErr != nil {
+			return fmt.Errorf("onnx: find bundled library: %w", libErr)
+		}
+		onnxruntime.SetSharedLibraryPath(libPath)
+
 		if err := onnxruntime.InitializeEnvironment(onnxruntime.WithLogLevelWarning()); err != nil {
 			return fmt.Errorf("onnx: initialize environment: %w", err)
 		}
@@ -89,6 +99,57 @@ func (r *ONNXRuntime) init() error {
 
 	r.ready = true
 	return nil
+}
+
+// findBundledONNXLib locates the platform-specific ONNX Runtime shared library
+// bundled with the onnxruntime_go module in its test_data/ directory.
+func findBundledONNXLib() (string, error) {
+	// Use runtime/debug to find the module path
+	libName := "onnxruntime_arm64.so" // linux arm64 (M-series, AWS Graviton)
+	goos := os.Getenv("GOOS")
+	if goos == "" {
+		// Detect from runtime
+		if _, err := os.Stat("/System/Library/CoreServices/SystemVersion.plist"); err == nil {
+			goos = "darwin"
+		} else {
+			goos = "linux"
+		}
+	}
+
+	arch := os.Getenv("GOARCH")
+	if arch == "" {
+		arch = "arm64" // default for aarch64 machines
+	}
+
+	switch goos + "/" + arch {
+	case "linux/arm64":
+		libName = "onnxruntime_arm64.so"
+	case "linux/amd64":
+		libName = "onnxruntime_x86_64.so"
+	case "darwin/arm64":
+		libName = "onnxruntime_arm64.dylib"
+	case "darwin/amd64":
+		libName = "onnxruntime_x86_64.dylib"
+	case "windows/amd64":
+		libName = "onnxruntime.dll"
+	}
+
+	// Search in the onnxruntime_go module cache
+	gomodcache := os.Getenv("GOMODCACHE")
+	if gomodcache == "" {
+		home, _ := os.UserHomeDir()
+		gomodcache = filepath.Join(home, "go", "pkg", "mod")
+	}
+
+	// Try exact version path first (fast path)
+	// Read go.sum to find the exact version? Too complex. Just glob.
+	searchPath := filepath.Join(gomodcache, "github.com", "yalue", "onnxruntime_go@*", "test_data", libName)
+	matches, err := filepath.Glob(searchPath)
+	if err != nil || len(matches) == 0 {
+		return "", fmt.Errorf("onnx: bundled library %s not found (searched %s)", libName, searchPath)
+	}
+
+	return matches[0], nil
 }
 
 // Ready returns true if the runtime has been successfully initialized.

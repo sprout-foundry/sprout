@@ -38,9 +38,9 @@ type GemmaTokenizer struct {
 // tokenizerJSON is a partial representation of the HuggingFace tokenizer.json.
 type tokenizerJSON struct {
 	Model struct {
-		Type  string            `json:"type"`
-		Vocab map[string]int    `json:"vocab"`
-		Merges []string         `json:"merges"`
+		Type   string         `json:"type"`
+		Vocab  map[string]int `json:"vocab"`
+		Merges []interface{}  `json:"merges"` // can be ["a","b"] arrays or "a b" strings
 	} `json:"model"`
 	AddedTokens []struct {
 		ID          int    `json:"id"`
@@ -48,8 +48,8 @@ type tokenizerJSON struct {
 		Special     bool   `json:"special"`
 	} `json:"added_tokens,omitempty"`
 	PreTokenizer struct {
-		Type     string `json:"type"`
-		Pattern  string `json:"pattern"`
+		Type    string      `json:"type"`
+		Pattern interface{} `json:"pattern"` // can be string or object like {"String": " "}
 	} `json:"pre_tokenizer,omitempty"`
 	Decoder struct {
 		Type  string `json:"type"`
@@ -87,7 +87,24 @@ func NewGemmaTokenizer(path string) (*GemmaTokenizer, error) {
 	}
 
 	// Build merge ranking (order matters for BPE).
-	for i, merge := range tj.Model.Merges {
+	for i, raw := range tj.Model.Merges {
+		var merge string
+		switch m := raw.(type) {
+		case string:
+			merge = m // "a b" format
+		case []interface{}:
+			// ["a", "b"] array format
+			if len(m) >= 2 {
+				if a, ok := m[0].(string); ok {
+					if b, ok := m[1].(string); ok {
+						merge = a + " " + b
+					}
+				}
+			}
+		}
+		if merge == "" {
+			continue
+		}
 		t.merges = append(t.merges, merge)
 		t.bpeRanks[merge] = i
 	}
@@ -98,8 +115,19 @@ func NewGemmaTokenizer(path string) (*GemmaTokenizer, error) {
 	t.unkToken = "<unk>"
 
 	// Parse pre-tokenizer regex if present.
-	if tj.PreTokenizer.Pattern != "" {
-		t.preTokenizer = regexp.MustCompile(tj.PreTokenizer.Pattern)
+	switch p := tj.PreTokenizer.Pattern.(type) {
+	case string:
+		if p != "" {
+			t.preTokenizer = regexp.MustCompile(p)
+		}
+	case map[string]interface{}:
+		// HuggingFace format: {"String": " "} or {"Regex": "..."}
+		if regex, ok := p["Regex"]; ok {
+			if s, ok := regex.(string); ok && s != "" {
+				t.preTokenizer = regexp.MustCompile(s)
+			}
+		}
+		// "String" type means split on literal string — we use it as a simple split
 	}
 
 	return t, nil

@@ -41,7 +41,7 @@ func TestModelDownloader_GetPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	d := NewModelDownloaderWithDir(tmpDir)
 	modelPath := d.GetModelPath("test-model")
-	if modelPath != filepath.Join(tmpDir, "test-model", "model.onnx") {
+	if modelPath != filepath.Join(tmpDir, "test-model", "model_q4.onnx") {
 		t.Errorf("unexpected model path: %s", modelPath)
 	}
 	tokenizerPath := d.GetTokenizerPath("test-model")

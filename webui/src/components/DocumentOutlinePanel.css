@@ -7,7 +7,7 @@
   width: 260px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
+  border-radius: 0;
   overflow: hidden;
   transition: width 0.2s ease;
 }
@@ -173,7 +173,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .outline-kind-icon.function {
@@ -305,7 +305,7 @@
 
 .outline-panel-tree::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .outline-panel-tree::-webkit-scrollbar-thumb:hover {

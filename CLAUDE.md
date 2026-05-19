@@ -35,47 +35,14 @@ make deploy-ui                  # Build and embed React UI only
 make build                      # Build Go binary with embedded UI
 ```
 
-### Running — Scoped Instance vs Daemon
-
-There are two run modes and they use **different ports**. Getting this wrong wastes time and risks port conflicts with a real daemon.
-
-```bash
-./sprout                        # Scoped per-repo instance — auto-picks a free port starting at 56001
-./sprout agent -d               # Daemon mode — always port 56000, only ONE per machine
-./sprout --web-port 12345       # Explicit port — overrides both defaults
-```
-
-**Use the scoped instance (`./sprout`) for:**
-- Local UI work and verification (visual checks, screenshots via chrome-devtools MCP)
-- Per-repo testing that shouldn't disturb the user's running daemon
-- Multiple instances side-by-side (each picks a unique port from 56001, 56002, …)
-
-**The daemon (`./sprout agent -d`) is:**
-- A single, long-lived service the user bookmarks at `http://localhost:56000`
-- Installed via `./sprout service install` (launchd/systemd unit)
-- **Do not start a daemon to test changes** — it collides with the user's real daemon. Use the scoped instance instead.
-
-The port logic lives in `cmd/agent_modes.go:118-144`. The scoped path calls `webui.FindAvailablePort(DaemonPort+1)`; the daemon path uses `webui.DaemonPort` (56000).
-
 ### Testing
 ```bash
+python3 test_runner.py          # Run E2E tests via Python test runner
 go test ./...                   # Run unit tests
 go test ./... -v                # Run unit tests with verbose output
 go test -race ./...             # Run unit tests with race detection
-go test ./pkg/console/ -v       # Run UI component tests (critical for console UI)
+go test ./pkg/console/ -v  # Run UI component tests (critical for console UI)
 ```
-
-Python-driven shell test suites (use the one that matches what you're validating):
-
-```bash
-python3 workspace_test_runner.py    # Workspace functionality (real AI) — drives e2e_tests/*.sh; previously named test_runner.py
-python3 integration_test_runner.py  # Mocked-AI integration tests under integration_tests/
-python3 e2e_test_runner.py          # Real-AI end-to-end user workflows under e2e_tests/
-```
-
-- Use `integration_test_runner.py` for fast iteration — it uses the `test:test` mock model and exercises the CLI's mechanics without calling any provider.
-- Use `e2e_test_runner.py` when you need to validate behavior against a real model. It will consume API credits.
-- Use `workspace_test_runner.py` for the broader workspace-functionality suite (parallel runner, real model).
 
 **IMPORTANT - UI Testing Policy:**
 When making changes to console UI components (`pkg/console/`), **ALWAYS** run the UI component tests to ensure functionality remains intact:

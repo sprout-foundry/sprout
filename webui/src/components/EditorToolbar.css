@@ -55,7 +55,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   cursor: pointer;
   color: var(--toolbar-fg, #ccc);
   transition:

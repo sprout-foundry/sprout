@@ -20,7 +20,8 @@
     "strict": true,
     "target": "ES2020",
     "types": [
-      "vite/client"
+      "vite/client",
+      "vitest/globals"
     ]
   },
   "exclude": [

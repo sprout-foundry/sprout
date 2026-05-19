@@ -17,7 +17,7 @@
 /* Worktree Picker Card */
 .wt-picker-card {
   background: var(--bg-tertiary);
-  border-radius: var(--radius-xl);
+  border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   width: 100%;
   max-width: 520px;
@@ -62,7 +62,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 6px;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,7 +89,7 @@
   padding: 12px;
   background: var(--error-bg);
   border: 1px solid var(--error-border);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   color: var(--error-text);
   font-size: 13px;
 }
@@ -131,7 +131,7 @@
   gap: 10px;
   width: 100%;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 13px;
@@ -180,7 +180,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   flex-shrink: 0;
 }
 
@@ -205,7 +205,7 @@
 
 .wt-picker-btn-cancel {
   padding: 8px 16px;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;

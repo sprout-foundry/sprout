@@ -42,7 +42,7 @@
   background-color: var(--bg-elevated, #303742);
   color: var(--text-primary, #abb2bf);
   border: 1px solid var(--border-default, rgba(171, 178, 191, 0.22));
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   padding: 4px 8px;
   font-size: 12px;
   line-height: 1.4;
@@ -77,7 +77,7 @@
   padding: 2px 6px;
   font-size: 12px;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;

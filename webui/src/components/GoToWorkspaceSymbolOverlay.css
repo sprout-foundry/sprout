@@ -11,7 +11,7 @@
   max-height: 360px;
   background: var(--input-bg, #252525);
   border: 1px solid var(--border-color, #444);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
@@ -172,7 +172,7 @@
   font-size: 11px;
   font-weight: 700;
   font-family: var(--font-mono, 'Monaco', 'Menlo', 'Fira Code', monospace);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   user-select: none;
   line-height: 1;
 }
@@ -264,7 +264,7 @@
 
 .goto-workspace-symbol-list::-webkit-scrollbar-thumb {
   background: var(--border-color, #444);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .goto-workspace-symbol-list::-webkit-scrollbar-thumb:hover {

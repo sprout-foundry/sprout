@@ -104,7 +104,7 @@ Spec: `roadmap/SP-029-monolith-decomposition.md`
 
 ### Phase 2: Configuration and optimizer
 
-[] - SP-029-2a: Split `pkg/configuration/config.go` (1895 LOC) into 9 files per the table in SP-029 — `config_types.go`, `config_risk.go`, `config_subagents.go`, `config_skills.go`, `config_paths.go`, `config_persistence.go`, `config_accessors.go`, `config_validate.go`, plus the slimmed `config.go`. Single PR; coordinate to avoid merge conflicts.
+[x] - SP-029-2a: Split `pkg/configuration/config.go` (1895 LOC) into 9 files per the table in SP-029 — `config_types.go`, `config_risk.go`, `config_subagents.go`, `config_skills.go`, `config_paths.go`, `config_persistence.go`, `config_accessors.go`, `config_validate.go`, plus the slimmed `config.go`. Single PR; coordinate to avoid merge conflicts.
 [] - SP-029-2b: Split `pkg/agent/conversation_optimizer.go` (1319 LOC) — extract summary builders to `conversation_optimizer_summary.go`, file-read tracking to `conversation_optimizer_files.go`, shell-command tracking to `conversation_optimizer_shell.go`
 
 ### Phase 3: Surface area packages

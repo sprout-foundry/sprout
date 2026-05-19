@@ -1,6 +1,7 @@
 package webui
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -176,5 +177,64 @@ func TestRandomSuffix(t *testing.T) {
 	}
 	if len(s2) != 8 {
 		t.Errorf("expected 8 chars for 4 bytes, got %d", len(s2))
+	}
+}
+
+func TestCreateSessionWithHandoff(t *testing.T) {
+	cc := &webClientContext{
+		ChatSessions:   make(map[string]*chatSession),
+		nextChatNumber: 1,
+	}
+
+	// Create handoff with summary
+	newID := cc.CreateSessionWithHandoff("source-id", "Implementing user authentication")
+	if newID == "" {
+		t.Fatal("expected non-empty new ID")
+	}
+
+	newSession := cc.getChatSession(newID)
+	if newSession == nil {
+		t.Fatal("expected new session to exist")
+	}
+	if newSession.HandoffContext != "Implementing user authentication" {
+		t.Errorf("HandoffContext = %q, want %q", newSession.HandoffContext, "Implementing user authentication")
+	}
+}
+
+func TestCreateSessionWithHandoff_EmptySummary(t *testing.T) {
+	cc := &webClientContext{
+		ChatSessions:   make(map[string]*chatSession),
+		nextChatNumber: 1,
+	}
+
+	// Empty summary should create a regular session without handoff
+	newID := cc.CreateSessionWithHandoff("source-id", "")
+	if newID == "" {
+		t.Fatal("expected non-empty new ID")
+	}
+
+	newSession := cc.getChatSession(newID)
+	if newSession == nil {
+		t.Fatal("expected new session to exist")
+	}
+	if newSession.HandoffContext != "" {
+		t.Errorf("HandoffContext should be empty, got %q", newSession.HandoffContext)
+	}
+}
+
+func TestFormatHandoffSystemPrompt(t *testing.T) {
+	result := formatHandoffSystemPrompt("building a REST API")
+	if !strings.Contains(result, "Context from Previous Chat") {
+		t.Error("expected header in handoff prompt")
+	}
+	if !strings.Contains(result, "building a REST API") {
+		t.Error("expected summary in handoff prompt")
+	}
+}
+
+func TestFormatHandoffSystemPrompt_Empty(t *testing.T) {
+	result := formatHandoffSystemPrompt("")
+	if result != "" {
+		t.Errorf("expected empty string for empty summary, got %q", result)
 	}
 }

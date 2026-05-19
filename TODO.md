@@ -52,7 +52,7 @@ Spec: `roadmap/SP-027-persistent-context.md`
 
 ### Phase 4: Memory Integration
 
-[] - SP-027-4a: Add `StoreMemory()` to `ConversationStore` — embed memory file content, store as `VectorRecord` with Type: "memory"
+[x] - SP-027-4a: Add `StoreMemory()` to `ConversationStore` — embed memory file content, store as `VectorRecord` with Type: "memory"
 [] - SP-027-4b: Create `pkg/agent/memory_embedding.go` — `EmbedMemory()` function called from `SaveMemory()`, `DeleteMemory()` also removes from store
 [] - SP-027-4c: Implement one-time memory migration — on first `search_memories` call or app startup, embed all existing `~/.config/sprout/memories/*.md` files into conversation store
 [] - SP-027-4d: Add `search_memories` tool to `pkg/agent/tool_definitions.go` — `search_memories(query: string, max_results?: int) → []{name, title, relevance}`

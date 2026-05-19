@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -630,5 +631,460 @@ func TestEmbeddingManager_Close_CleanupAndReinit(t *testing.T) {
 
 	if store2.Size() != 2 {
 		t.Errorf("expected 2 records after adding to re-opened store, got %d", store2.Size())
+	}
+}
+
+// ─── StoreMemory tests ───
+
+func TestStoreMemory_Success(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	content := "# My Memory\n\nThis is some important context to remember."
+	ctx := context.Background()
+
+	err = store.StoreMemory(ctx, "my-memory", content)
+	if err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	// Store size should be 1.
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 after StoreMemory, got %d", store.Size())
+	}
+
+	// Verify the stored record has correct fields.
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	if len(all) != 1 {
+		t.Fatalf("LoadAll returned %d records, expected 1", len(all))
+	}
+
+	rec := all[0]
+
+	if rec.Type != "memory" {
+		t.Errorf("expected Type 'memory', got %q", rec.Type)
+	}
+	if rec.ID != "my-memory" {
+		t.Errorf("expected ID 'my-memory', got %q", rec.ID)
+	}
+	if rec.File != "my-memory.md" {
+		t.Errorf("expected File 'my-memory.md', got %q", rec.File)
+	}
+	if rec.Name != "my-memory" {
+		t.Errorf("expected Name 'my-memory', got %q", rec.Name)
+	}
+
+	// Verify title extraction: first non-empty line trimmed.
+	if rec.Metadata == nil {
+		t.Fatal("Metadata is nil")
+	}
+	title, ok := rec.Metadata["title"].(string)
+	if !ok {
+		t.Fatalf("Metadata[\"title\"] is not a string, got %T", rec.Metadata["title"])
+	}
+	if title != "# My Memory" {
+		t.Errorf("expected title '# My Memory', got %q", title)
+	}
+
+	// Verify contentLength (stored as int in memory; may be float64 after JSON round-trip).
+	var clInt int
+	switch v := rec.Metadata["contentLength"].(type) {
+	case int:
+		clInt = v
+	case float64:
+		clInt = int(v)
+	default:
+		t.Fatalf("Metadata[\"contentLength\"] is not a number, got %T", rec.Metadata["contentLength"])
+	}
+	if clInt != len(content) {
+		t.Errorf("expected contentLength %d, got %d", len(content), clInt)
+	}
+
+	// Verify embedding is non-empty.
+	if len(rec.Embedding) == 0 {
+		t.Error("expected non-empty Embedding")
+	}
+}
+
+func TestStoreMemory_EmptyContent(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	err = store.StoreMemory(context.Background(), "my-memory", "")
+	if err == nil {
+		t.Fatal("expected error for empty content, got nil")
+	}
+}
+
+func TestStoreMemory_EmptyName(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	err = store.StoreMemory(context.Background(), "", "some content")
+	if err == nil {
+		t.Fatal("expected error for empty name, got nil")
+	}
+
+	// Store should still be empty.
+	if store.Size() != 0 {
+		t.Errorf("expected size 0 after failed StoreMemory, got %d", store.Size())
+	}
+}
+
+func TestStoreMemory_NilContext(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Nil context should return nil (graceful-failure pattern).
+	err = store.StoreMemory(nil, "my-memory", "some content")
+	if err != nil {
+		t.Errorf("expected no error for nil context, got: %v", err)
+	}
+
+	// Store should remain empty — nothing was stored.
+	if store.Size() != 0 {
+		t.Errorf("expected size 0 after nil context, got %d", store.Size())
+	}
+}
+
+func TestStoreMemory_ReplaceExisting(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Store initial memory.
+	content1 := "# Old Title\n\nOriginal content."
+	if err := store.StoreMemory(ctx, "my-memory", content1); err != nil {
+		t.Fatalf("first StoreMemory failed: %v", err)
+	}
+
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 after first store, got %d", store.Size())
+	}
+
+	// Store again with same name, different content.
+	content2 := "# New Title\n\nThis is updated content that is longer than the original."
+	if err := store.StoreMemory(ctx, "my-memory", content2); err != nil {
+		t.Fatalf("second StoreMemory failed: %v", err)
+	}
+
+	// Size should still be 1 (replaced, not duplicated).
+	if store.Size() != 1 {
+		t.Errorf("expected size 1 after replace, got %d", store.Size())
+	}
+
+	// Verify the new record reflects the new content.
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+
+	rec := all[0]
+	if rec.Signature != content2 {
+		t.Errorf("expected signature to be new content, got %q", rec.Signature)
+	}
+
+	// Verify contentLength reflects the new content (may be int or float64).
+	var clInt int
+	switch v := rec.Metadata["contentLength"].(type) {
+	case int:
+		clInt = v
+	case float64:
+		clInt = int(v)
+	default:
+		t.Fatalf("Metadata[\"contentLength\"] is not a number, got %T", rec.Metadata["contentLength"])
+	}
+	if clInt != len(content2) {
+		t.Errorf("expected contentLength %d for new content, got %d", len(content2), clInt)
+	}
+
+	// Verify title updated.
+	title := rec.Metadata["title"].(string)
+	if title != "# New Title" {
+		t.Errorf("expected title '# New Title', got %q", title)
+	}
+}
+
+func TestStoreMemory_SignatureTruncation(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	// Create content longer than 2000 runes.
+	longContent := strings.Repeat("A", 3000)
+
+	err = store.StoreMemory(context.Background(), "long-memory", longContent)
+	if err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+
+	rec := all[0]
+	sigRunes := len([]rune(rec.Signature))
+	if sigRunes != 2000 {
+		t.Errorf("expected signature length 2000 runes, got %d", sigRunes)
+	}
+
+	// Signature should be a prefix of the original content.
+	expectedPrefix := string([]rune(longContent)[:2000])
+	if rec.Signature != expectedPrefix {
+		t.Errorf("signature should be prefix of original content")
+	}
+}
+
+func TestStoreMemory_TitleExtraction(t *testing.T) {
+	tests := []struct {
+		name           string
+		content        string
+		expectedTitle  string
+	}{
+		{
+			name:          "markdown_heading",
+			content:       "# Title\n\nBody text here.",
+			expectedTitle: "# Title",
+		},
+		{
+			name:          "leading_blank_lines",
+			content:       "\n\n\n# Actual Title\n\nBody.",
+			expectedTitle: "# Actual Title",
+		},
+		{
+			name:          "no_title_all_blank",
+			content:       "\n\n\n",
+			expectedTitle: "",
+		},
+		{
+			name:          "plain_text_first_line",
+			content:       "This is a plain sentence.\n\nMore text.",
+			expectedTitle: "This is a plain sentence.",
+		},
+		{
+			name:          "single_line",
+			content:       "Just one line",
+			expectedTitle: "Just one line",
+		},
+		{
+			name:          "whitespace_trimmed",
+			content:       "  leading spaces\n\nbody",
+			expectedTitle: "leading spaces",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+			store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+			if err != nil {
+				t.Fatalf("NewConversationStore failed: %v", err)
+			}
+			defer store.Close()
+
+			err = store.StoreMemory(context.Background(), "mem", tc.content)
+			if err != nil {
+				t.Fatalf("StoreMemory failed: %v", err)
+			}
+
+			all, err := store.LoadAll()
+			if err != nil {
+				t.Fatalf("LoadAll failed: %v", err)
+			}
+
+			title, ok := all[0].Metadata["title"].(string)
+			if !ok {
+				t.Fatalf("Metadata[\"title\"] is not a string, got %T", all[0].Metadata["title"])
+			}
+			if title != tc.expectedTitle {
+				t.Errorf("expected title %q, got %q", tc.expectedTitle, title)
+			}
+		})
+	}
+}
+
+func TestStoreMemory_Queryable(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	content := "Important project context about database connections."
+	err = store.StoreMemory(context.Background(), "db-context", content)
+	if err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	// Query using the same embedding the provider returns for any input.
+	results, err := store.Query([]float32{1, 0, 0}, 1, 0.0)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result from Query, got %d", len(results))
+	}
+
+	if results[0].Record.ID != "db-context" {
+		t.Errorf("expected ID 'db-context', got %q", results[0].Record.ID)
+	}
+	if results[0].Record.Type != "memory" {
+		t.Errorf("expected Type 'memory', got %q", results[0].Record.Type)
+	}
+}
+
+func TestStoreMemory_LoadAll(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	memories := []struct {
+		name    string
+		content string
+	}{
+		{"mem-a", "# First\n\nContent A"},
+		{"mem-b", "# Second\n\nContent B"},
+		{"mem-c", "# Third\n\nContent C"},
+	}
+
+	for _, m := range memories {
+		if err := store.StoreMemory(ctx, m.name, m.content); err != nil {
+			t.Fatalf("StoreMemory(%q) failed: %v", m.name, err)
+		}
+	}
+
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+
+	if len(all) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(all))
+	}
+
+	// Build a map by ID for easier verification.
+	recordMap := make(map[string]VectorRecord)
+	for _, rec := range all {
+		recordMap[rec.ID] = rec
+	}
+
+	for _, m := range memories {
+		rec, exists := recordMap[m.name]
+		if !exists {
+			t.Errorf("expected record with ID %q not found", m.name)
+			continue
+		}
+		if rec.Type != "memory" {
+			t.Errorf("record %q: expected Type 'memory', got %q", m.name, rec.Type)
+		}
+		if rec.File != m.name+".md" {
+			t.Errorf("record %q: expected File %q, got %q", m.name, m.name+".md", rec.File)
+		}
+		if rec.Name != m.name {
+			t.Errorf("record %q: expected Name %q, got %q", m.name, m.name, rec.Name)
+		}
+		if len(rec.Embedding) == 0 {
+			t.Errorf("record %q: expected non-empty Embedding", m.name)
+		}
+	}
+}
+
+func TestStoreMemory_EmbeddingCopy(t *testing.T) {
+	dir := t.TempDir()
+	provider := &constantProvider{vec: []float32{1, 0, 0}}
+
+	store, err := NewConversationStore(provider, filepath.Join(dir, "convo.jsonl"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("NewConversationStore failed: %v", err)
+	}
+	defer store.Close()
+
+	content := "Memory content for embedding copy test."
+	err = store.StoreMemory(context.Background(), "copy-test", content)
+	if err != nil {
+		t.Fatalf("StoreMemory failed: %v", err)
+	}
+
+	// Get the stored embedding from LoadAll.
+	all, err := store.LoadAll()
+	if err != nil {
+		t.Fatalf("LoadAll failed: %v", err)
+	}
+	storedEmbedding := all[0].Embedding
+
+	// The embedding should be the provider's vector [1, 0, 0].
+	if len(storedEmbedding) != 3 {
+		t.Fatalf("expected embedding length 3, got %d", len(storedEmbedding))
+	}
+	if storedEmbedding[0] != 1 || storedEmbedding[1] != 0 || storedEmbedding[2] != 0 {
+		t.Errorf("expected embedding [1,0,0], got %v", storedEmbedding)
+	}
+
+	// Query with the same vector — should find the memory with high similarity.
+	results, err := store.Query([]float32{1, 0, 0}, 1, 0.99)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].Record.ID != "copy-test" {
+		t.Errorf("expected ID 'copy-test', got %q", results[0].Record.ID)
+	}
+	if results[0].Similarity < 0.99 {
+		t.Errorf("expected similarity >= 0.99, got %f", results[0].Similarity)
 	}
 }

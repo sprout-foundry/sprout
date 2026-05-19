@@ -252,7 +252,7 @@ func TestGenerateFallbackCommitMessage_MixedPartial(t *testing.T) {
 
 func newTestGitRepo(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "ledit-test-*")
+	dir, err := os.MkdirTemp("", "sprout-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

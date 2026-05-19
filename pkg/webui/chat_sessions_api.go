@@ -815,3 +815,65 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 	}
 	return nil
 }
+
+// handoffRequest is the JSON payload for creating a session with handoff context.
+type handoffRequest struct {
+	SourceChatID string `json:"sourceChatId"`
+	Name         string `json:"name,omitempty"` // optional name override
+}
+
+// handleAPIChatSessionsCreateWithHandoff handles POST /api/chat-sessions/create-with-handoff
+// Creates a new chat session with context carried over from the source session's last turn.
+func (ws *ReactWebServer) handleAPIChatSessionsCreateWithHandoff(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
+	var req handoffRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	sourceChatID := strings.TrimSpace(req.SourceChatID)
+	if sourceChatID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "sourceChatId is required",
+			"code":  "missing_source_chat_id",
+		})
+		return
+	}
+
+	clientID := ws.resolveClientID(r)
+
+	ws.mutex.Lock()
+	ctx := ws.getOrCreateClientContextLocked(clientID)
+	ctx.ensureDefaultChatSession()
+
+	newSession, err := ctx.CreateSessionWithHandoff(sourceChatID, strings.TrimSpace(req.Name))
+	ws.mutex.Unlock()
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": err.Error(),
+			"code":  "handoff_failed",
+		})
+		return
+	}
+
+	log.Printf("handleAPIChatSessionsCreateWithHandoff: created chat session %s with handoff from %s for client %s",
+		newSession.ID, sourceChatID, clientID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"message":       "Chat session created with context from previous chat",
+		"active_chat_id": newSession.ID,
+		"chat_session":  newSession.chatSessionSummary(false),
+	})
+}

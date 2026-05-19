@@ -303,6 +303,15 @@ func (a *Agent) setPendingSystemSupplement(supplement string) {
 	a.state.SetPendingSystemSupplement(strings.TrimSpace(supplement))
 }
 
+// SetHandoffContext sets a one-shot system prompt supplement providing context
+// from a previous chat session. Used by drift detection "start new chat".
+func (a *Agent) SetHandoffContext(context string) {
+	if a == nil || context == "" {
+		return
+	}
+	a.setPendingSystemSupplement(context)
+}
+
 func (a *Agent) consumePendingSystemSupplement() string {
 	if a == nil || a.state == nil {
 		return ""

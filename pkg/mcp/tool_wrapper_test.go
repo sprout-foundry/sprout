@@ -262,6 +262,146 @@ func TestMCPToolWrapper_CanExecute_ServerNotFound(t *testing.T) {
 	assert.False(t, w.CanExecute(nil, Parameters{}))
 }
 
+// ---------------------------------------------------------------------------
+// CanExecute Method Tests
+// ---------------------------------------------------------------------------
+
+// TestCanExecute_ServerNotRunning verifies that when the server exists but
+// IsRunning() returns false, CanExecute returns false.
+func TestCanExecute_ServerNotRunning(t *testing.T) {
+	mockMgr := &mockMCPManager{
+		getServer: func(name string) (MCPServer, bool) {
+			// Server exists but is NOT started (running defaults to false)
+			mockSrv := newMockMCPServer(name)
+			return mockSrv, true
+		},
+	}
+
+	w := NewMCPToolWrapper(MCPTool{
+		Name:        "tool",
+		Description: "A test tool",
+		ServerName:  "srv",
+	}, mockMgr)
+
+	assert.False(t, w.CanExecute(context.Background(), Parameters{}))
+}
+
+// TestCanExecute_NilSchema verifies that when there is no InputSchema and
+// the server is running, CanExecute returns true (validation is skipped).
+func TestCanExecute_NilSchema(t *testing.T) {
+	mockMgr := &mockMCPManager{
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	w := NewMCPToolWrapper(MCPTool{
+		Name:        "tool",
+		Description: "A test tool",
+		ServerName:  "srv",
+		// InputSchema is nil — no validation
+	}, mockMgr)
+
+	assert.True(t, w.CanExecute(context.Background(), Parameters{}))
+}
+
+// TestCanExecute_ValidArgs verifies that with a valid schema and correct
+// arguments, CanExecute returns true.
+func TestCanExecute_ValidArgs(t *testing.T) {
+	schema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"name"},
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+		},
+	}
+
+	mockMgr := &mockMCPManager{
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	w := NewMCPToolWrapper(MCPTool{
+		Name:        "greet",
+		Description: "Greet someone",
+		ServerName:  "greet-server",
+		InputSchema: schema,
+	}, mockMgr)
+
+	assert.True(t, w.CanExecute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{"name": "Alice"},
+	}))
+}
+
+// TestCanExecute_InvalidArgs verifies that when arguments are missing a
+// required field, CanExecute returns false without making a network call.
+func TestCanExecute_InvalidArgs(t *testing.T) {
+	schema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"name"},
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+		},
+	}
+
+	mockMgr := &mockMCPManager{
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	w := NewMCPToolWrapper(MCPTool{
+		Name:        "greet",
+		Description: "Greet someone",
+		ServerName:  "greet-server",
+		InputSchema: schema,
+	}, mockMgr)
+
+	// Missing required field "name"
+	assert.False(t, w.CanExecute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{},
+	}))
+}
+
+// TestCanExecute_ArgsWrongType verifies that when argument types don't match
+// the schema, CanExecute returns false without making a network call.
+func TestCanExecute_ArgsWrongType(t *testing.T) {
+	schema := map[string]interface{}{
+		"type":     "object",
+		"required": []interface{}{"age"},
+		"properties": map[string]interface{}{
+			"age": map[string]interface{}{"type": "integer"},
+		},
+	}
+
+	mockMgr := &mockMCPManager{
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	w := NewMCPToolWrapper(MCPTool{
+		Name:        "calc",
+		Description: "Calculate age",
+		ServerName:  "calc-server",
+		InputSchema: schema,
+	}, mockMgr)
+
+	// "age" should be an integer but we pass a string
+	assert.False(t, w.CanExecute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{"age": "not a number"},
+	}))
+}
+
 func TestMCPToolWrapper_IsAvailable_ServerNotFound(t *testing.T) {
 	m := NewMCPManager(nil)
 	w := NewMCPToolWrapper(MCPTool{Name: "tool", ServerName: "missing"}, m)

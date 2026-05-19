@@ -97,11 +97,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		return "", fmt.Errorf("query is required: %w", err)
 	}
 
-	// Validate context is not nil
-	if ctx == nil {
-		return "", fmt.Errorf("context cannot be nil")
-	}
-
 	// Extract max_results with default of 5, clamped to [1, 100]
 	maxResults := 5
 	if mr, ok := args["max_results"]; ok {
@@ -143,10 +138,11 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		return "", fmt.Errorf("failed to embed query: %w", err)
 	}
 
-	// Query with a larger topK to account for non-memory records in the shared store.
-	// We fetch up to 3× maxResults then filter to memory type, capping at maxResults.
-	queryTopK := maxResults * 3
-	results, err := store.Query(emb, queryTopK, 0.0)
+	// Since the store uses a linear scan for TopK, request all records.
+	// This ensures memory records are never missed when the store contains
+	// a mix of memory and non-memory (e.g., conversation turn) records.
+	// We then filter to only memory type and cap at maxResults.
+	results, err := store.Query(emb, store.Size(), 0.0)
 	if err != nil {
 		return "", fmt.Errorf("failed to search memories: %w", err)
 	}

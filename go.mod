@@ -29,6 +29,8 @@ require github.com/odvcencio/gotreesitter v0.16.0
 
 require go.uber.org/goleak v1.3.0 // indirect
 
+require github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
+
 require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect

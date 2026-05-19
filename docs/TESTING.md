@@ -1,6 +1,6 @@
-# Testing Strategy for Ledit
+# Testing Strategy for Sprout
 
-This document defines the testing strategy and guidelines for the ledit project.
+This document defines the testing strategy and guidelines for the sprout project.
 
 ## 🎯 Testing Philosophy
 
@@ -106,7 +106,7 @@ make test-all # unit + integration + smoke
 ## 📁 File Organization
 
 ```
-ledit/
+sprout/
 ├── Makefile                     # Test commands
 ├── TESTING.md                   # This file
 ├── pkg/                         # Unit tests (*_test.go)
@@ -141,10 +141,10 @@ func TestWithRealAPI(t *testing.T) {
 ```bash
 #!/bin/bash
 # Good: Uses mock model, tests real CLI behavior
-ledit agent "test command" --model test:test
+sprout agent "test command" --model test:test
 
 # Bad: Uses real API in integration test
-ledit agent "test command" --model openai:gpt-4  # EXPENSIVE
+sprout agent "test command" --model openai:gpt-4  # EXPENSIVE
 ```
 
 ### E2E Test Guidelines
@@ -152,11 +152,11 @@ ledit agent "test command" --model openai:gpt-4  # EXPENSIVE
 ```bash
 #!/bin/bash
 # Good: Complete workflow with real model
-ledit agent "Add error handling to main.go" --model $MODEL
+sprout agent "Add error handling to main.go" --model $MODEL
 # Verify the actual changes were made correctly
 
 # Good: Validates real provider integration
-ledit agent "Analyze this codebase" --provider openai --model gpt-4
+sprout agent "Analyze this codebase" --provider openai --model gpt-4
 ```
 
 ## 🔧 Test Commands Reference

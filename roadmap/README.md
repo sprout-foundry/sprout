@@ -35,3 +35,4 @@ architectural area, its current state, and open work.
 | SP-029 | [Monolith Decomposition — File Size Reduction](./SP-029-monolith-decomposition.md) | 📋 Spec |
 | SP-030 | [Repository Hygiene — Stale Artifacts & Predecessor Cleanup](./SP-030-repository-hygiene.md) | 📋 Spec |
 | SP-031 | [MCP Tool Input Validation Hardening](./SP-031-mcp-input-validation.md) | 📋 Spec |
+| SP-032 | [Daemon Mode Hardening](./SP-032-daemon-mode-hardening.md) | 📋 Spec |

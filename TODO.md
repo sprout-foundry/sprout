@@ -152,10 +152,10 @@ Spec: `roadmap/SP-030-repository-hygiene.md`
 [] - SP-030-3a: Per-file audit and update of `ledit` references in `docs/ELECTRON.md`, `docs/AGENT_WORKFLOW.md`, `docs/PROVIDER_CATALOG.md`, `docs/TESTING.md`, `docs/PRODUCT_BACKLOG.md`, `docs/subagent_personas.md`
 [] - SP-030-3b: Audit `README.md` and update non-historical `ledit` references; leave `CHANGELOG.md` historical sections intact
 
-### Phase 4: Decide-then-act on service names
+### Phase 4: Decide-then-act on service names — **DE-SCOPED (moved to SP-032)**
 
-[] - SP-030-4a: Audit `cmd/service_darwin_test.go` and `cmd/service_linux_test.go` plus the production service install code paths — decide whether the on-disk service identifier (`launchd`/`systemd` label) stays `ledit` for backwards compat. **Document the decision in the audit PR.**
-[] - SP-030-4b: If keeping the service name: add a `// keep: backwards-compat with installed daemons` comment at each `ledit` literal. If renaming: implement upgrade migration (uninstall old + install new, bump config version)
+[x] - SP-030-4a: ~~Audit `cmd/service_*` code paths~~ — Done as part of SP-032 audit; live install uses `sprout-daemon` and `cmd/service_linux.go` refuses non-sprout binaries. Pre-existing `ledit` daemon detection becomes **SP-032-2b**; fixture cleanup becomes **SP-032-4a**.
+[x] - SP-030-4b: ~~Service name comment/migration~~ — No action required under SP-030. Covered by SP-032.
 
 ### Phase 5: Test fixtures
 
@@ -214,3 +214,35 @@ Phases 1–3 are complete: `pkg/ast/` is in place (tree-sitter via `odvcencio/go
 [] - SP-025-5d: Add a symbol-coverage parity test in `pkg/embedding/extractor_parity_test.go` — given a fixture file in each of TS, JS, Python, assert that the set of symbol names returned by `repo_map`, `pkg/index/symbols`, and `pkg/embedding/extractor` is identical. This is the regression test that would have caught today's three-way disagreement.
 [] - SP-025-5e: Delete the now-orphaned regex variables at the top of `extractor_ts.go` and `extractor_py.go` after the body migration in 5a/5b. Net code reduction target: ~700 LOC (with corresponding test simplification).
 [] - SP-025-5f: Run `make build-all && go test ./pkg/embedding/...` and exercise an embedding refresh against the repo itself — verify previously-missed symbols (TS arrow functions, decorated Python methods, multi-line signatures) now appear in `~/.config/sprout/embeddings/*.jsonl`.
+
+---
+
+## SP-032: Daemon Mode Hardening
+
+Spec: `roadmap/SP-032-daemon-mode-hardening.md`
+
+The daemon's install/uninstall surface is solid, but `systemctl stop sprout` leaks the agent, MCP children, and active PTYs — and the HTTP API can be exposed unauthenticated if `SPROUT_BIND_ADDR` is misconfigured. SP-032 closes these gaps.
+
+### Phase 1: Graceful shutdown (CRITICAL)
+
+[] - SP-032-1a: Add `chatAgent.Shutdown()` call to the graceful-shutdown block at `cmd/agent_modes.go:447-460` — with a bounded context (5s) so it can't block daemon exit. `chatAgent.Shutdown()` is defined at `pkg/agent/agent_lifecycle.go:10` and is currently never invoked from the daemon path.
+[] - SP-032-1b: Wire `ws.terminalManager.CloseAllSessions()` into `pkg/webui/server_lifecycle.go:126` `Shutdown()` before `ws.server.Shutdown(ctx)`. **Blocked by SP-028 Phase 3** (cancellable PTY read loop is a prerequisite — without it, `CloseAllSessions()` will block on `pty.Read`).
+[] - SP-032-1c: Update the systemd unit template in `cmd/service_linux.go` — add `TimeoutStopSec=15`, `KillMode=mixed`, `KillSignal=SIGTERM` to the `[Service]` block.
+[] - SP-032-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. `pgrep -f sprout` (and `pgrep -f gopls` / `pgrep -f bash` from the terminal) returns empty within 15s.
+
+### Phase 2: Security & migration (HIGH)
+
+[] - SP-032-2a: At `pkg/webui/server.go:161`, read both `SPROUT_AUTH_TOKEN` and `SPROUT_BIND_ADDR`. If bind is non-`127.0.0.1`/`localhost` and token is empty, refuse to start with: `"Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set."` Cover this with a startup test.
+[] - SP-032-2b: Add `detectLegacyService()` helper in `cmd/service.go` (cross-platform). Darwin checks `~/Library/LaunchAgents/com.ledit.*.plist`; Linux checks `~/.config/systemd/user/ledit*.service`. On `sprout service install`: print notice, prompt for confirmation (`-y` bypasses), then `launchctl bootout` / `systemctl --user disable && rm` the old unit before installing.
+[] - SP-032-2c: Launchd crash backoff — `cmd/service_darwin.go:77`, switch `KeepAlive=true` to the dictionary form with `SuccessfulExit=false` (and `ExponentialBackoff=true` if targeting macOS 12+; document the minimum). Prevents the panic hot-loop.
+
+### Phase 3: Operability (MEDIUM/LOW)
+
+[] - SP-032-3a: Wrap Darwin daemon stdout/stderr log files (`~/.sprout/logs/daemon.{stdout,stderr}.log` from `cmd/service_darwin.go:35-36`) in `lumberjack.Logger` — 10MB max, 5 backups. `lumberjack` is already a dep.
+[] - SP-032-3b: Pre-uninstall active-session check — before `Uninstall()` in `cmd/service_darwin.go:220` and `cmd/service_linux.go:125`, query the running daemon (if any) for active session count via its HTTP API. Print warning + count; require `-y`/`--yes` flag to skip.
+[] - SP-032-3c: Add `syscall.SIGHUP` to the signal handler at `cmd/agent_modes.go:240`. On SIGHUP, call `configuration.Reload()`. Scope is on-disk config re-read only; running agents/tools unaffected.
+[] - SP-032-3d: Write `docs/SERVICE.md` — install, start, stop, uninstall, troubleshoot, log file locations, env-file structure, and the security model section (user-uid execution, 127.0.0.1 default, auth-token requirement for non-local binds).
+
+### Phase 4: Test fixture cleanup
+
+[] - SP-032-4a: Update `cmd/service_darwin_test.go` (lines 11, 28, 69, 96) and `cmd/service_linux_test.go` (lines 18, 20, 102, 130) — replace `/usr/local/bin/ledit`, `/opt/ledit/bin/ledit`, `/usr/bin/ledit` test fixtures with the `sprout` equivalents so tests actually exercise the binary-name guard in `cmd/service_linux.go` `Install()`.

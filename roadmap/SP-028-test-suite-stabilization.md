@@ -4,7 +4,7 @@
 **Date:** 2026-05-18
 **Priority:** CRITICAL (blocks reliable regression detection)
 **Depends on:** None
-**Related:** SP-008 (Reliability Engineering — long-term concurrency audit)
+**Related:** SP-008 (Reliability Engineering — long-term concurrency audit), SP-032 (Daemon Mode Hardening — shares the PTY shutdown fix; Phase 3 here is a prerequisite for SP-032 A2)
 
 ## Problem
 
@@ -53,6 +53,8 @@
 1. **Give the reader an exit signal.** Add a `done chan struct{}` to the terminal session and select on it alongside the read. Use `pty.SetDeadline()` (or a periodic short read with deadline) so the goroutine periodically rechecks `done`.
 2. **Enforce close in tests.** Add `t.Cleanup(session.Close)` everywhere a terminal session is created in tests.
 3. **Add a goroutine-leak detector** to `pkg/webui` tests using `goleak.VerifyNone(t)` in `TestMain` so leaks fail the test instead of hanging it.
+
+> **Shared root cause with SP-032.** The reason daemon shutdown leaks PTYs in production is the same reason tests hang: there is no production caller of `terminalManager.CloseAllSessions()` (defined at `pkg/webui/terminal_lifecycle.go:65`). SP-028 Phase 3 makes the read loop cancellable so `CloseAllSessions()` can actually return; SP-032 A2 then wires the call into the production shutdown path. Land Phase 3 first.
 
 ### Track C — CI hardening
 

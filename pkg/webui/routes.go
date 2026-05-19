@@ -176,6 +176,7 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
 	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
 	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
+	mux.HandleFunc("/api/chat-sessions/create-with-handoff", ws.handleAPIChatSessionsCreateWithHandoff)
 	mux.HandleFunc("/api/chat-sessions/create-in-worktree", ws.handleAPIChatSessionCreateInWorktree)
 	mux.HandleFunc("/api/chat-sessions/delete", ws.handleAPIChatSessionsDelete)
 	mux.HandleFunc("/api/chat-sessions/delete-all", ws.handleAPIChatSessionsDeleteAll)

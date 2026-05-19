@@ -2,6 +2,7 @@ import { EventsContextProvider, useEvents } from '@sprout/events';
 import { useState, useCallback, useRef, useMemo } from 'react';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
+import DriftNotification from './components/DriftNotification';
 import ErrorBoundary from './components/ErrorBoundary';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import Notification from './components/Notification';
@@ -64,6 +65,7 @@ function App() {
       securityPromptRequest: null,
       askUserRequest: null,
       modelSelectionRequest: null,
+      driftNotification: null,
     };
   }, []);
 
@@ -327,6 +329,19 @@ function AppInner() {
                       requestId={state.askUserRequest.requestId}
                       question={state.askUserRequest.question}
                       onRespond={handleAskUserResponse}
+                    />
+                  )}
+                  {state.driftNotification && (
+                    <DriftNotification
+                      similarity={state.driftNotification.similarity}
+                      threshold={state.driftNotification.threshold}
+                      sessionId={state.driftNotification.sessionId}
+                      options={state.driftNotification.options}
+                      onContinue={() => setState(() => ({ driftNotification: null }))}
+                      onNewChat={() => {
+                        setState(() => ({ driftNotification: null }));
+                        chatManager.handleCreateChat();
+                      }}
                     />
                   )}
                   {state.modelSelectionRequest && (

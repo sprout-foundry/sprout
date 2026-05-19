@@ -35,6 +35,8 @@ var skipDirs = map[string]bool{
 	"build":        true,
 	"out":          true,
 	"target":       true,
+	"storybook-static": true, // Storybook build output
+	".storybook":   true,     // Storybook config
 	// IDE
 	".idea":        true,
 	".vscode":      true,

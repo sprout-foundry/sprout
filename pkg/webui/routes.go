@@ -187,6 +187,7 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
 	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
+	mux.HandleFunc("/api/drift-response", ws.handleAPIDriftResponse)
 }
 
 func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {

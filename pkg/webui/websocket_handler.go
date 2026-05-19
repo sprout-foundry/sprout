@@ -269,7 +269,7 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	// No client_id and no chat_id - only allow known global event types
 	// or events with user_id (user-scoped broadcasts after passing user filtering above)
 	switch event.Type {
-	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest, events.EventTypeAskUserRequest:
+	case events.EventTypeMetricsUpdate, events.EventTypeFileContentChanged, events.EventTypeSecurityPromptRequest, events.EventTypeSecurityApprovalRequest, events.EventTypeAskUserRequest, events.EventTypeDriftDetected:
 		return true
 	default:
 		// Allow events with a non-empty user_id (user-scoped broadcasts)

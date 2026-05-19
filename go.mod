@@ -25,11 +25,13 @@ require (
 
 require github.com/sprout-foundry/seed v0.2.1
 
-require github.com/odvcencio/gotreesitter v0.16.0
+require (
+	github.com/odvcencio/gotreesitter v0.16.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/yalue/onnxruntime_go v1.30.1
+)
 
-require go.uber.org/goleak v1.3.0 // indirect
-
-require github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
+require go.uber.org/goleak v1.3.0
 
 require (
 	filippo.io/hpke v0.4.0 // indirect

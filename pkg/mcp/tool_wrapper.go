@@ -71,6 +71,14 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params Parameters) (*Resul
 
 	// Validate arguments against the tool's input schema before the network round-trip
 	if err := w.ValidateArgs(args); err != nil {
+		invalidErr, ok := err.(*InvalidArgsError)
+		if ok {
+			return &Result{
+				Success:       false,
+				Errors:        []string{invalidErr.FormatForLLM()},
+				ExecutionTime: time.Since(startTime),
+			}, nil
+		}
 		return &Result{
 			Success:       false,
 			Errors:        []string{"validation failed: " + err.Error()},

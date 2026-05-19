@@ -183,7 +183,7 @@ Spec: `roadmap/SP-031-mcp-input-validation.md`
 ### Phase 3: Tests
 
 [x] - SP-031-3a: Replace the trivial assertions in `TestMCPToolWrapper_ValidateArgs` (`pkg/mcp/tool_wrapper_test.go:124-127`) with real cases — required fields, type mismatches, enum violations, nested objects
-[] - SP-031-3b: Add test: `ValidateArgs` with `nil` schema → returns nil (skip path)
+[x] - SP-031-3b: Add test: `ValidateArgs` with `nil` schema → returns nil (skip path)
 [] - SP-031-3c: Add test: `ValidateArgs` with malformed schema → warns once, returns nil (fail-open on our bug)
 [] - SP-031-3d: Add integration test in `pkg/agent/` — stub MCP wrapper that returns `InvalidArgsError`; verify agent surfaces a useful tool-result message to the LLM mock
 

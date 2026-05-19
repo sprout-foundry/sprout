@@ -13,8 +13,8 @@ const DefaultDriftThreshold = 0.60
 // DefaultDriftCheckInterval is the default number of turns between drift checks.
 const DefaultDriftCheckInterval = 5
 
-// MaxDriftRejections is the number of rejections after which drift detection
-// is suppressed for the remainder of the session.
+// MaxDriftRejections is the number of CONSECUTIVE rejections after which drift
+// detection is suppressed for the remainder of the session.
 const MaxDriftRejections = 3
 
 // DriftDetector tracks conversational drift by comparing the current turn's
@@ -24,8 +24,9 @@ type DriftDetector struct {
 	threshold      float64 // cosine similarity threshold (default: 0.60)
 	checkInterval  int     // check every N turns (default: 5)
 	driftCount     int     // number of drift detections in this session
-	rejectionCount int     // number of times user rejected drift suggestion
-	suppressed     bool    // true after MaxDriftRejections rejections
+	// rejectionCount tracks consecutive rejections (reset by RecordAcceptance)
+	rejectionCount int
+	suppressed     bool // true after MaxDriftRejections consecutive rejections
 }
 
 // NewDriftDetector creates a new DriftDetector with the given threshold and
@@ -80,8 +81,8 @@ func (d *DriftDetector) RecordDrift() {
 	d.driftCount++
 }
 
-// RecordRejection increments the rejection counter and suppresses drift
-// detection if the user has rejected MaxDriftRejections times.
+// RecordRejection increments the consecutive rejection counter and suppresses
+// drift detection if the user has rejected MaxDriftRejections times in a row.
 func (d *DriftDetector) RecordRejection() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -89,6 +90,15 @@ func (d *DriftDetector) RecordRejection() {
 	if d.rejectionCount >= MaxDriftRejections {
 		d.suppressed = true
 	}
+}
+
+// RecordAcceptance resets the consecutive rejection counter.
+// Called when the user chooses "Continue here" (accepts) in response to a
+// drift notification.
+func (d *DriftDetector) RecordAcceptance() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.rejectionCount = 0
 }
 
 // IsSuppressed returns true if drift detection has been suppressed for this
@@ -106,7 +116,8 @@ func (d *DriftDetector) DriftCount() int {
 	return d.driftCount
 }
 
-// RejectionCount returns the number of drift rejections in this session.
+// RejectionCount returns the number of consecutive drift rejections.
+// This counter is reset to 0 when RecordAcceptance is called.
 func (d *DriftDetector) RejectionCount() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()

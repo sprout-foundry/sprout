@@ -270,3 +270,33 @@ func TestDriftDetector_ConcurrentAccess(t *testing.T) {
 		t.Error("detector should be suppressed after 10 rejections")
 	}
 }
+
+func TestRecordRejection_ConsecutiveReset(t *testing.T) {
+	d := NewDriftDetector(0.60, 5)
+
+	// Two rejections
+	d.RecordRejection()
+	d.RecordRejection()
+	if d.IsSuppressed() {
+		t.Error("should not be suppressed after 2 rejections")
+	}
+
+	// Acceptance resets the counter
+	d.RecordAcceptance()
+	if d.RejectionCount() != 0 {
+		t.Errorf("RejectionCount() = %d, want 0 after acceptance", d.RejectionCount())
+	}
+
+	// Two more rejections — count starts from 0 again
+	d.RecordRejection()
+	d.RecordRejection()
+	if d.IsSuppressed() {
+		t.Error("should not be suppressed after 2 more rejections (counter was reset)")
+	}
+
+	// Third consecutive rejection — now suppressed
+	d.RecordRejection()
+	if !d.IsSuppressed() {
+		t.Error("should be suppressed after 3 consecutive rejections")
+	}
+}

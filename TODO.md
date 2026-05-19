@@ -110,7 +110,7 @@ Spec: `roadmap/SP-029-monolith-decomposition.md`
 ### Phase 3: Surface area packages
 
 [x] - SP-029-3a: Split `pkg/wasmshell/commands.go` (1633 LOC) — `commands_fs.go` (filesystem builtins), `commands_text.go` (text-processing builtins), `commands_env.go` (env/help/util builtins), `commands_util.go` (private helpers)
-[] - SP-029-3b: Split `pkg/webcontent/browser_rod.go` (1335 LOC) — `browser_rod_session.go`, `browser_rod_actions.go`, `browser_rod_capture.go`, `browser_rod_gpu.go`
+[x] - SP-029-3b: Split `pkg/webcontent/browser_rod.go` (1335 LOC) — `browser_rod_session.go`, `browser_rod_actions.go`, `browser_rod_capture.go`, `browser_rod_gpu.go`
 
 ### Phase 4: Investigate-then-split
 

@@ -177,11 +177,12 @@ Spec: `roadmap/SP-031-mcp-input-validation.md`
 
 [x] - SP-031-2a: Call `w.ValidateArgs(args)` at the top of `MCPToolWrapper.Execute` before the network round-trip; return early on validation error
 [x] - SP-031-2b: Update `CanExecute` (`pkg/mcp/tool_wrapper.go:171`) to call `ValidateArgs` and return `false` on failure; remove the TODO comment
+[x] - SP-031-2c: Format validation errors as a concise LLM-visible message — enumerate failing field paths and reasons, not raw `jsonschema` output. Use this as the tool result so the model can self-correct on the next iteration.
 [] - SP-031-2c: Format validation errors as a concise LLM-visible message — enumerate failing field paths and reasons, not raw `jsonschema` output. Use this as the tool result so the model can self-correct on the next iteration.
 
 ### Phase 3: Tests
 
-[] - SP-031-3a: Replace the trivial assertions in `TestMCPToolWrapper_ValidateArgs` (`pkg/mcp/tool_wrapper_test.go:124-127`) with real cases — required fields, type mismatches, enum violations, nested objects
+[x] - SP-031-3a: Replace the trivial assertions in `TestMCPToolWrapper_ValidateArgs` (`pkg/mcp/tool_wrapper_test.go:124-127`) with real cases — required fields, type mismatches, enum violations, nested objects
 [] - SP-031-3b: Add test: `ValidateArgs` with `nil` schema → returns nil (skip path)
 [] - SP-031-3c: Add test: `ValidateArgs` with malformed schema → warns once, returns nil (fail-open on our bug)
 [] - SP-031-3d: Add integration test in `pkg/agent/` — stub MCP wrapper that returns `InvalidArgsError`; verify agent surfaces a useful tool-result message to the LLM mock

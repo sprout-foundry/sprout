@@ -306,6 +306,9 @@ func TestPersistentContextConfigResolve_NilReturnsDefaults(t *testing.T) {
 	assert.Equal(t, 0.50, result.MinRelevanceScore)
 	assert.Equal(t, 4000, result.MaxContextChars)
 	assert.False(t, result.WorkspaceScopedRetrieval)
+	assert.True(t, result.DriftDetectionEnabled)
+	assert.Equal(t, 0.60, result.DriftThreshold)
+	assert.Equal(t, 5, result.DriftCheckInterval)
 }
 
 func TestPersistentContextConfigResolve_ExplicitValuesPreserved(t *testing.T) {
@@ -315,6 +318,9 @@ func TestPersistentContextConfigResolve_ExplicitValuesPreserved(t *testing.T) {
 		MinRelevanceScore:         0.75,
 		MaxContextChars:           8000,
 		WorkspaceScopedRetrieval:  true,
+		DriftDetectionEnabled:     false,
+		DriftThreshold:            0.80,
+		DriftCheckInterval:        10,
 	}
 	result := cfg.Resolve()
 
@@ -323,6 +329,9 @@ func TestPersistentContextConfigResolve_ExplicitValuesPreserved(t *testing.T) {
 	assert.Equal(t, 0.75, result.MinRelevanceScore)
 	assert.Equal(t, 8000, result.MaxContextChars)
 	assert.True(t, result.WorkspaceScopedRetrieval)
+	assert.False(t, result.DriftDetectionEnabled)
+	assert.Equal(t, 0.80, result.DriftThreshold)
+	assert.Equal(t, 10, result.DriftCheckInterval)
 }
 
 func TestPersistentContextConfigResolve_PartialOverrides(t *testing.T) {
@@ -332,6 +341,8 @@ func TestPersistentContextConfigResolve_PartialOverrides(t *testing.T) {
 		MinRelevanceScore:        0.8,  // explicit
 		MaxContextChars:          0,    // zero — should get default
 		WorkspaceScopedRetrieval: true,
+		DriftThreshold:           0.70, // explicit
+		DriftCheckInterval:       0,    // zero — should get default
 	}
 	result := cfg.Resolve()
 
@@ -340,6 +351,9 @@ func TestPersistentContextConfigResolve_PartialOverrides(t *testing.T) {
 	assert.Equal(t, 0.8, result.MinRelevanceScore)       // explicit
 	assert.Equal(t, 4000, result.MaxContextChars)        // default
 	assert.True(t, result.WorkspaceScopedRetrieval)
+	assert.False(t, result.DriftDetectionEnabled)        // false (zero value) treated as explicit
+	assert.Equal(t, 0.70, result.DriftThreshold)         // explicit
+	assert.Equal(t, 5, result.DriftCheckInterval)        // default
 }
 
 func TestPersistentContextConfigResolve_DoesNotMutateOriginal(t *testing.T) {

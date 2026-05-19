@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -158,6 +160,50 @@ func TestDeleteMemoryEmbedding_Success(t *testing.T) {
 		if r.Type == "memory" && r.Name == "delete-test" {
 			t.Error("memory record should have been deleted")
 		}
+	}
+}
+
+func TestMigrateMemories_NilManager(t *testing.T) {
+	// Should not panic
+	ResetMigrationForTesting()
+	MigrateMemories(context.Background(), nil)
+}
+
+func TestMigrateMemories_SkipsAlreadyEmbedded(t *testing.T) {
+	mgr := setupMemoryEmbeddingManager(t)
+	defer mgr.Close()
+	ctx := context.Background()
+
+	// Pre-embed a memory
+	err := EmbedMemory(ctx, mgr, "existing-mem", "already embedded")
+	if err != nil {
+		t.Fatalf("pre-embed failed: %v", err)
+	}
+
+	// Create a memory file on disk
+	memDir := getMemoryDir()
+	if memDir == "" {
+		t.Fatal("getMemoryDir returned empty")
+	}
+	err = os.WriteFile(filepath.Join(memDir, "existing-mem.md"), []byte("already embedded"), 0644)
+	if err != nil {
+		t.Fatalf("write memory file: %v", err)
+	}
+
+	ResetMigrationForTesting()
+	MigrateMemories(ctx, mgr)
+
+	// Should only have 1 record for "existing-mem"
+	store, _ := mgr.GetConversationStore(ctx)
+	all, _ := store.LoadAll()
+	count := 0
+	for _, r := range all {
+		if r.Type == "memory" && r.Name == "existing-mem" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected 1 record for existing-mem, got %d", count)
 	}
 }
 

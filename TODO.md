@@ -292,3 +292,61 @@ Three trust boundaries to defend: the project (skills auto-load silently), the d
 [] - SP-033-5a: Extend runlog entries in `pkg/agent/tool_executor*.go` to capture all four of: raw tool-call JSON, executed (post-substitution) command, classifier decision (`SecuritySafe`/`SecurityCaution`/`SecurityDangerous`), and approval source (auto-rule X / manual / denied).
 [] - SP-033-5b: Write `docs/SECURITY.md` — trust boundaries, classifier limitations (lift from `pkg/agent_tools/security_classifier.go:12-25` header), file layout per directory, how to clear persisted data, skill allowlist model, auth-token requirement for non-local binds (refs SP-032 B1).
 [] - SP-033-5c: Create `SECURITY.md` at repo root with vuln-reporting contact and a link to `docs/SECURITY.md`.
+
+---
+
+## SP-034: WebUI ↔ Backend Workflow Hardening
+
+Spec: `roadmap/SP-034-webui-workflow-hardening.md`
+
+Four user-visible defects: Stop button doesn't cancel the in-flight LLM HTTP call, reloading the page during an agent run loses the live stream, two tabs on the same chat corrupt each other's state, and UI config writes silently overwrite concurrent CLI writes. Plus protocol hygiene: hand-maintained TS types drift from Go structs, outbound WebSocket messages aren't validated, error envelope is inconsistent.
+
+### Phase 1: Cancellation that actually cancels (CRITICAL)
+
+[] - SP-034-1a: Add `ctx context.Context` as first arg to `api.ClientInterface.SendChatRequest` and `SendChatRequestStream` in `pkg/agent_api/interface.go`. Mechanical signature change.
+[] - SP-034-1b: Update every implementation in `pkg/agent_providers/` (Generic, Ollama, etc.) and the test scripted client to accept and forward the context.
+[] - SP-034-1c: Update every caller in `pkg/agent/` (`api_client.go`, `conversation.go`, `seed_integration.go`) to pass through a real context.
+[] - SP-034-1d: At `pkg/agent_providers/generic_provider.go:1160`, change bare `http.NewRequest("POST", ...)` to `http.NewRequestWithContext(ctx, "POST", ...)`. Grep the package for any other contextless `http.NewRequest` and convert.
+[] - SP-034-1e: In `pkg/webui/api_query.go`, create `ctx, cancel := context.WithCancel(parent)` when a query starts; stash the `cancel` on the chat session struct.
+[] - SP-034-1f: `handleAPIQueryStop` (around `pkg/webui/api_query.go:399`) calls **both** the existing `TriggerInterrupt()` and the stashed `cancel()` so the provider HTTP request gets aborted.
+[] - SP-034-1g: Add a `RequestTimeout` (default 10min) to the chat http.Client in `pkg/agent_providers/generic_provider.go:172-176`. Defensive bound against hung providers.
+[] - SP-034-1h: Integration test — start a query against a stub provider that sleeps 30s; click Stop after 1s; assert HTTP request was cancelled within 1s and tokens stopped accruing.
+
+### Phase 2: Chat reattach (HIGH)
+
+[] - SP-034-2a: Add a `chatRunRingBuffer` to the chat session struct in `pkg/webui/chat_sessions.go` — last 5,000 stream chunks (configurable) with monotonic `seq`. Cap by chunk-count *and* total bytes.
+[] - SP-034-2b: In `publishClientEventWithChat` (`pkg/webui/api_query.go:85`), append stream-chunk events to the ring buffer.
+[] - SP-034-2c: Extend the chat WebSocket handler to accept `?reattach=<chat-id>&after_seq=<n>`; replay buffered events with `seq > n`, then resume live stream. Mirror the shape of terminal reattach at `pkg/webui/terminal_websocket.go:48-74`.
+[] - SP-034-2d: Send a `chat_run_restored` message on reattach with `{chat_id, last_seq, missed_chunks_count}`. Register this type in the outbound list (Phase 5 E2).
+[] - SP-034-2e: Frontend — on WebSocket open during an active chat (detect via `/api/query/status`), automatically reconnect with `reattach` + last-seen `seq`. Transparent to the user.
+[] - SP-034-2f: Buffer TTL — clear 60s after run completion; total memory cap to prevent runaway on multi-million-token runs.
+
+### Phase 3: Multi-tab consistency (CRITICAL)
+
+[] - SP-034-3a: Add `chatSubscribers map[string][]connection` to `ReactWebServer` (`pkg/webui/server.go:42`) under `sync.RWMutex`.
+[] - SP-034-3b: Handle inbound `subscribe` WebSocket message (already whitelisted at `pkg/webui/websocket_message_types.go:42`) by adding the connection to the chat's subscriber list. Clean up on disconnect.
+[] - SP-034-3c: Refactor `publishClientEventWithChat` (`pkg/webui/api_query.go:85`) — when `chatID != ""`, fan out to every connection in `chatSubscribers[chatID]` rather than only the originator.
+[] - SP-034-3d: Add a per-chat writer mutex for `AgentState` mutations in `pkg/webui/chat_sessions.go:32`. Reads snapshot under RLock; writes serialize.
+[] - SP-034-3e: Emit `session_changed` events on rename/pin/switch in `pkg/webui/chat_sessions_api.go`. Register this type in the outbound list.
+[] - SP-034-3f: Frontend — on `session_changed`, reconcile by replacing local session state with the broadcast payload (canonical wins over optimistic).
+
+### Phase 4: Config conflict detection (CRITICAL)
+
+[] - SP-034-4a: Add private `loadedModTime time.Time, loadedSize int64` fields to `Config` (`pkg/configuration/config.go`). Populate in `Load()` in `pkg/configuration/config_persistence.go`.
+[] - SP-034-4b: Before each `Save()`, `os.Stat` the target path. If `(modTime, size) != (loadedModTime, loadedSize)`, return a new typed `ConfigConflictError` (create `pkg/configuration/errors.go`).
+[] - SP-034-4c: Surface the typed error in `pkg/webui/websocket_message_handlers.go:49-59` as `{code: "config_conflict", current_summary: {provider, model, ...}}`.
+[] - SP-034-4d: Frontend — non-blocking "Settings changed on disk" toast with a Reload action.
+[] - SP-034-4e: Regression test — load config, modify file externally (touch mtime), attempt save → expect `ConfigConflictError`.
+
+### Phase 5: Protocol hygiene (HIGH)
+
+[] - SP-034-5a: Add `tygo` (or equivalent Go→TS type generator) to dev tooling. New `make generate-ts-types` Makefile target emits `webui/src/types/generated.ts` from annotated Go structs.
+[] - SP-034-5b: Annotate `chatSession` (`pkg/webui/chat_sessions.go:27-52`), event payloads (`pkg/webui/events/*.go`), and key API response shapes with the tygo emit marker.
+[] - SP-034-5c: Replace the hand-maintained TS interface in `webui/src/.../chatSessions.ts:6-21` with an import from `generated.ts`. Keep computed-only fields (`is_default`, `is_active`) in a separate wrapper type.
+[] - SP-034-5d: Extract the inbound message-type whitelist from `pkg/webui/websocket_message_types.go:42` into a shared registry; add `validateOutbound(msg)` called by every `WriteJSON` site (panic in dev builds, log+drop in prod).
+[] - SP-034-5e: Define a `WebUIError` struct `{Code, Message, Details, Retryable}` in `pkg/webui/errors.go`. Replace stringy 503 returns at `pkg/webui/api_query.go:391-396` and audit other handlers for the same anti-pattern.
+[] - SP-034-5f: Frontend — shared error-handling util keyed on `Code`; deprecate string-matching on `Message`.
+
+### Phase 6: Documentation
+
+[] - SP-034-6a: Write `docs/WEBUI_PROTOCOL.md` — REST endpoints table, WebSocket inbound + outbound message types, event payload shapes, reattach flow, error envelope, type-generation workflow.

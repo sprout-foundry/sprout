@@ -44,6 +44,7 @@ Spec: `roadmap/SP-027-persistent-context.md`
 [x] - SP-027-3c: Implement suppression logic — disable drift detection for session after 3 consecutive rejections
 [x] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
 [] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
+[x] - SP-027-3e: Add drift config fields to `PersistentContextConfig` — `DriftDetectionEnabled` (true), `DriftThreshold` (0.60), `DriftCheckInterval` (5 turns)
 [] - SP-027-3e: Add drift config fields to `PersistentContextConfig` — `DriftDetectionEnabled` (true), `DriftThreshold` (0.60), `DriftCheckInterval` (5 turns)
 [] - SP-027-3f: Create WebUI drift notification component in `webui/src/components/` — non-modal toast with "Continue here" / "Start new chat" buttons
 [] - SP-027-3g: Tests — unit test for drift detection with threshold, test for suppression after 3 rejections, test for intent embedding persistence across session restore
@@ -190,3 +191,26 @@ Spec: `roadmap/SP-031-mcp-input-validation.md`
 
 [] - SP-031-4a: Add structured log entry on validation failure with `{tool, server, errors[]}` fields (cooperates with SP-008 structured logging)
 [] - SP-031-4b: Add a counter/metric for `mcp_validation_failures` so we can see if a particular server is producing bad arguments at rate
+
+---
+
+## SP-025: Tree-Sitter Integration — Remaining Work
+
+Spec: `roadmap/SP-025-tree-sitter-integration.md`
+
+Phases 1–3 are complete: `pkg/ast/` is in place (tree-sitter via `odvcencio/gotreesitter v0.16.0`) and consumed by `pkg/agent_tools/repo_map.go` and `pkg/index/symbols.go`. The remaining work closes the gap so `pkg/embedding/extractor_*.go` stops maintaining its own parallel regex zoo, and finishes the WASM wiring.
+
+### Phase 4: WASM Integration (finish)
+
+[] - SP-025-4a: Add a `pkg/ast` import to `pkg/wasmshell/` and surface a basic code-intelligence entry point (e.g. a function-symbol lookup that the WASM shell can call). Today `pkg/ast/browser_cache.go` exists but no caller in `wasmshell` exercises it.
+[] - SP-025-4b: Run `make build-wasm` and record the binary-size delta from enabling `pkg/ast` in the WASM target. Document the threshold the team is willing to accept.
+[] - SP-025-4c: Verify `pkg/ast/browser_cache.go` (290 LOC) actually persists compiled grammars to browser storage (IndexedDB / localStorage) across page loads — write a manual reproduction note or a headless test.
+
+### Phase 5: Embedding Extractor Migration (the consistency fix)
+
+[] - SP-025-5a: Replace the body of `pkg/embedding/extractor_ts.go` (~531 LOC, 9 standalone regex patterns starting at `tsFuncRegex` line 13) with a thin adapter that calls `pkg/ast.ExtractSymbols()` and emits the existing embedding record shape. Keep the public function signature stable so callers in `pkg/embedding/index.go:106` don't change.
+[] - SP-025-5b: Replace the body of `pkg/embedding/extractor_py.go` (~345 LOC, regex + indent-level tracking starting at `pyFuncRegex` line 14) with the same adapter pattern over `pkg/ast.ExtractSymbols()`. Confirm class/method nesting comes out of the AST scope info correctly — that's the subtle case the old indent tracker handled.
+[] - SP-025-5c: Decide on `pkg/embedding/extractor_go.go` (currently uses native `go/ast` directly) — keep as-is for performance (no tree-sitter overhead) or migrate to `pkg/ast` for codebase consistency. Document the decision in a one-line comment at the top of the file.
+[] - SP-025-5d: Add a symbol-coverage parity test in `pkg/embedding/extractor_parity_test.go` — given a fixture file in each of TS, JS, Python, assert that the set of symbol names returned by `repo_map`, `pkg/index/symbols`, and `pkg/embedding/extractor` is identical. This is the regression test that would have caught today's three-way disagreement.
+[] - SP-025-5e: Delete the now-orphaned regex variables at the top of `extractor_ts.go` and `extractor_py.go` after the body migration in 5a/5b. Net code reduction target: ~700 LOC (with corresponding test simplification).
+[] - SP-025-5f: Run `make build-all && go test ./pkg/embedding/...` and exercise an embedding refresh against the repo itself — verify previously-missed symbols (TS arrow functions, decorated Python methods, multi-line signatures) now appear in `~/.config/sprout/embeddings/*.jsonl`.

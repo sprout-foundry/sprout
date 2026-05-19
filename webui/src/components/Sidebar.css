@@ -126,7 +126,7 @@
 .sidebar .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: var(--radius-pill);
+  border-radius: 999px;
   flex-shrink: 0;
 }
 
@@ -165,7 +165,7 @@
   padding: 0 42px 0 18px;
   font-size: 12px;
   line-height: 1.1;
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
   font-weight: 560;
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -439,7 +439,7 @@
   padding: 0 38px 0 var(--space-4);
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
@@ -469,7 +469,7 @@
   padding: 0 var(--space-4);
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
@@ -516,7 +516,7 @@
   min-height: 34px;
   padding: 0 14px;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -686,7 +686,7 @@
   padding: var(--space-4);
   background: var(--bg-elevated);
   border: none;
-  border-radius: var(--radius-none);
+  border-radius: 0;
   font-size: var(--text-xs);
   line-height: 1.5;
 }
@@ -788,7 +788,7 @@
   min-height: 30px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-none);
+  border-radius: 0;
   background: var(--bg-elevated);
   color: inherit;
   font: inherit;
@@ -828,7 +828,7 @@
 
 .sidebar .badge {
   font-size: 11px;
-  border-radius: var(--radius-pill);
+  border-radius: 999px;
   padding: 2px 7px;
   line-height: 1;
   margin-left: auto;
@@ -1013,7 +1013,7 @@
 .sidebar .search-file-group {
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
-  border-radius: var(--radius-none);
+  border-radius: 0;
   margin-bottom: var(--space-3);
   overflow: hidden;
 }
@@ -1056,7 +1056,7 @@
   padding: 2px 6px;
   background: var(--accent-primary-alpha, rgba(14, 165, 233, 0.15));
   color: var(--accent-primary);
-  border-radius: var(--radius-pill);
+  border-radius: 999px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -1117,7 +1117,7 @@
   background: var(--accent-warning-alpha, rgba(234, 179, 8, 0.25));
   color: var(--text-primary);
   padding: 1px 2px;
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
   font-weight: 500;
 }
 
@@ -1407,7 +1407,7 @@
   height: 28px;
   padding: 0 9px;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: 11px;
@@ -1438,7 +1438,7 @@
 }
 .terminal-logs::-webkit-scrollbar-thumb {
   background: var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .term-log-line {
@@ -1509,45 +1509,6 @@
   position: relative;
 }
 
-.git-sidebar-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 32px 16px;
-  color: var(--text-secondary);
-  text-align: center;
-}
-
-.git-sidebar-empty-state p {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.git-sidebar-empty-state-hint {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  max-width: 280px;
-  line-height: 1.4;
-}
-
-.git-sidebar-empty-state-hint code {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-}
-
-.git-sidebar-empty-state .spinner {
-  animation: spin 1s linear infinite;
-  color: var(--text-tertiary);
-}
-
 .git-sidebar-header,
 .git-sidebar-commit-box,
 .git-sidebar-file-section,
@@ -1556,7 +1517,7 @@
 .git-sidebar-warning {
   background: transparent;
   border: none;
-  border-radius: var(--radius-none);
+  border-radius: 0;
 }
 
 .git-sidebar-header {
@@ -1604,7 +1565,7 @@
   padding: 0 30px 0 8px;
   min-height: 36px;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background: var(--bg-elevated);
   transition: border-color 0.15s var(--ease-out);
 }
@@ -1679,13 +1640,14 @@
   gap: 6px;
   min-height: 32px;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 9px;
   background: var(--bg-elevated);
   color: var(--text-primary);
   cursor: pointer;
   transition:
-    background var(--motion-quick),
-    color var(--motion-quick);
+    background 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
 }
 
 .git-header-icon-btn {
@@ -1702,30 +1664,13 @@
 .git-header-icon-btn:hover:not(:disabled),
 .git-header-action-btn:hover:not(:disabled) {
   background: var(--bg-tertiary);
+  border-color: var(--border-strong);
 }
 
 .git-header-icon-btn:disabled,
 .git-header-action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.git-header-action-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  min-width: 18px;
-  padding: 1px 5px 1px 4px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
-  color: var(--accent-primary);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.git-header-action-btn:disabled .git-header-action-badge {
-  opacity: 0.6;
 }
 
 .git-sidebar-commit-box {
@@ -1761,7 +1706,7 @@
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -1781,7 +1726,7 @@
   min-height: 72px;
   resize: vertical;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background: var(--bg-primary);
   color: var(--text-primary);
   padding: 10px;
@@ -1854,11 +1799,6 @@
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
-  /* Stay visible while scrolling through long file lists. */
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  box-shadow: 0 1px 0 0 var(--border-subtle);
 }
 
 .git-sidebar-selection-summary {
@@ -1890,7 +1830,7 @@
   overflow: hidden;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
+  border-radius: 0;
   background: transparent;
 }
 
@@ -1939,7 +1879,7 @@
   padding: 10px 12px;
   background: transparent;
   border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
@@ -1955,7 +1895,7 @@
 .git-sidebar-file-limit-note {
   padding: 8px 12px;
   background: var(--bg-secondary);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   color: var(--text-tertiary);
   font-size: 11px;
   text-align: center;
@@ -1975,39 +1915,18 @@
   border-top: 1px solid var(--border-subtle);
   cursor: pointer;
   user-select: none;
-  /* Reserve space for the 2px left accent so selected/unselected rows
-     have identical content offset (no horizontal shift on selection). */
-  box-shadow: inset 2px 0 0 transparent;
-  transition:
-    background var(--motion-quick),
-    box-shadow var(--motion-quick);
 }
 
 .git-sidebar-file-row:hover {
   background: var(--bg-elevated);
 }
 
-/* Previewing = "this file is shown in the diff pane right now."
-   A neutral fill reads as "current viewport," not "actioned." */
 .git-sidebar-file-row.previewing {
   background: var(--sidebar-nav-btn-active-bg);
 }
 
-/* Selected = "this file is in the multi-select set."
-   A left-edge accent reads as a state flag, composes cleanly with
-   previewing (background + accent visible simultaneously). */
 .git-sidebar-file-row.selected {
-  background: transparent;
-  box-shadow: inset 2px 0 0 var(--accent-primary);
-}
-
-.git-sidebar-file-row.selected:hover {
-  background: var(--bg-elevated);
-}
-
-.git-sidebar-file-row.selected.previewing {
-  background: var(--sidebar-nav-btn-active-bg);
-  box-shadow: inset 2px 0 0 var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary-alpha, rgba(56, 189, 248, 0.18)) 70%, transparent);
 }
 
 .git-sidebar-file-path {
@@ -2034,7 +1953,7 @@
   border: none;
   background: transparent;
   color: var(--text-tertiary);
-  border-radius: var(--radius-md);
+  border-radius: 7px;
   cursor: pointer;
   transition:
     color 0.12s ease,
@@ -2059,7 +1978,7 @@
   gap: 0;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
-  border-radius: var(--radius-none);
+  border-radius: 0;
   background: transparent;
   overflow: hidden;
 }
@@ -2110,5 +2029,3 @@
   background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-elevated));
   color: var(--accent-primary);
 }
-
-/* design-token unification 2026-05-19 */

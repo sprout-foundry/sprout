@@ -20,7 +20,7 @@
 
 .chat-tab-bar::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .chat-tab-bar::-webkit-scrollbar-track {
@@ -38,7 +38,7 @@
   max-width: 180px;
   padding: 0 10px;
   margin: 2px 0;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -109,7 +109,7 @@
   width: 16px;
   height: 16px;
   min-width: 16px;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -144,7 +144,7 @@
   height: 28px;
   min-width: 28px;
   margin: 2px 0;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -169,7 +169,7 @@
   min-width: 0;
   height: 18px;
   border: 1px solid var(--accent-primary);
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 12px;
@@ -209,7 +209,7 @@
   background: none;
   color: var(--text-secondary, #8b949e);
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   flex-shrink: 0;
 }
 

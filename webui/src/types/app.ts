@@ -63,11 +63,6 @@ export interface PerChatState {
   queryCount: number;
 }
 
-export interface DriftNotification {
-  similarity: number;
-  threshold: number;
-}
-
 export interface AppState {
   isConnected: boolean;
   provider: string;
@@ -111,7 +106,6 @@ export interface AppState {
   modelSelectionRequest: {
     provider: string;
   } | null;
-  driftNotification: DriftNotification | null;
 }
 
 export interface OnboardingState {

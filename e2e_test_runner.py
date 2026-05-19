@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-End-to-End Test Runner for sprout.
-
-Drives the shell-based test suite under `e2e_tests/`, exercising complete
-user workflows against real AI models.
+End-to-End Test Runner for ledit
+Tests complete user workflows with real AI models
 """
 
 import os

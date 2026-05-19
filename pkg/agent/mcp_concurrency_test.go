@@ -262,17 +262,13 @@ func TestMCPConcurrency_StateConsistency(t *testing.T) {
 // TestMCPConcurrency_StressTest is a stress test with very high concurrency
 // Note: Not parallel because history package initialization races when tests run in parallel
 func TestMCPConcurrency_StressTest(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping stress test in short mode")
-	}
 	agent, err := NewAgent()
 	if err != nil {
 		t.Skipf("Skipping test due to agent creation error: %v", err)
 	}
-	t.Cleanup(func() { if agent != nil { agent.Shutdown() } })
 
-	const numGoroutines = 32
-	const iterationsPerGoroutine = 50
+	const numGoroutines = 200
+	const iterationsPerGoroutine = 10
 	var wg sync.WaitGroup
 
 	for i := 0; i < numGoroutines; i++ {

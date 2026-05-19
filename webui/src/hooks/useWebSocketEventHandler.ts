@@ -17,7 +17,6 @@ import type {
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   AskUserRequestData,
-  DriftDetectedData,
 } from '@sprout/events';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
@@ -750,20 +749,6 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   debugLog('[ask_user] Question:', data.question);
 };
 
-// Handle drift_detected event
-const handleDriftDetected = (ctx: EventHandlerContext): void => {
-  const { event, setState } = ctx;
-  const data = (event.data ?? {}) as DriftDetectedData;
-  setState((prev) => ({
-    driftNotification: {
-      similarity: typeof data.similarity === 'number' ? data.similarity : 0,
-      threshold: typeof data.threshold === 'number' ? data.threshold : 0.6,
-    },
-    logs: appendCappedLog(prev.logs, createLogEntry(event)),
-  }));
-  debugLog('[drift] Drift detected:', data);
-};
-
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -822,7 +807,6 @@ export function useWebSocketEventHandler({
         'subagent_activity',
         'agent_message',
         'error',
-        'drift_detected',
       ]);
       const eventData = (event.data ?? {}) as Record<string, unknown>;
       if (
@@ -884,8 +868,6 @@ export function useWebSocketEventHandler({
           return handleSecurityPromptRequest(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
-        case 'drift_detected':
-          return handleDriftDetected(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

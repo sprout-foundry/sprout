@@ -16,7 +16,7 @@
   max-height: min(70vh, 560px);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-xl);
+  border-radius: 12px;
   box-shadow: var(--shadow-elevated);
   display: flex;
   flex-direction: column;
@@ -122,7 +122,7 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .command-palette-selected .command-palette-shortcut {
@@ -215,7 +215,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   cursor: pointer;
   transition:
     background-color 0.1s ease,
@@ -250,7 +250,7 @@
   font-size: 12px;
   font-weight: 700;
   font-family: var(--font-mono);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   background: var(--bg-elevated);
 }
 
@@ -340,7 +340,7 @@
 
 .command-palette-results::-webkit-scrollbar-thumb {
   background: var(--bg-surface);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .command-palette-results::-webkit-scrollbar-thumb:hover {

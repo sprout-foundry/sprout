@@ -46,6 +46,7 @@ const DEFAULT_APP_STATE: AppState = {
   securityPromptRequest: null,
   askUserRequest: null,
   modelSelectionRequest: null,
+  driftNotification: null,
 };
 
 /**

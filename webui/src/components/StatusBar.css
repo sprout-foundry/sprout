@@ -40,7 +40,7 @@
   align-items: center;
   gap: 4px;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   cursor: default;
   transition: background-color 0.15s var(--ease-out);
   white-space: nowrap;
@@ -116,7 +116,7 @@
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   background: var(--accent-error, #ef4444);
   color: white;
   font-size: 9px;

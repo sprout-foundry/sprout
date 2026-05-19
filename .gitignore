@@ -57,6 +57,9 @@ test_home/
 .bin/
 plans/
 
+# Runtime checkpoint state (written live during pipeline runs; not source)
+examples/.todo_pipeline_checkpoint.json
+
 # Project-specific log files
 debug.log
 debug_logs/

@@ -286,9 +286,9 @@ func (w *MCPToolWrapper) ValidateArgs(args map[string]interface{}) error {
 
 	if err := w.compiledSchema.Validate(args); err != nil {
 		return &InvalidArgsError{
-			ServerName: w.mcpTool.ServerName,
-			ToolName:   w.mcpTool.Name,
-			Causes:     []string{err.Error()},
+			Server:  w.mcpTool.ServerName,
+			Tool:    w.mcpTool.Name,
+			Wrapped: err,
 		}
 	}
 	return nil

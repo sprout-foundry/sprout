@@ -32,7 +32,7 @@ make build-all   # builds React UI → embeds into Go → compiles binary
 - `webui/` — React-based web UI (Create React App + TypeScript + CodeMirror)
 - `scripts/` — Build and utility scripts (build-webui-embed.mjs, build-wasm.sh, etc.)
 - `smoke_tests/` — API smoke tests
-- `test_runner.py` — E2E test runner (workspace-level tests, uses real AI models)
+- `workspace_test_runner.py` — Workspace functionality test runner (uses real AI models)
 - `integration_test_runner.py` — Integration test runner (infrastructure/mechanics, mocked AI)
 - `e2e_test_runner.py` — E2E test runner variant
 - `.github/workflows/` — CI configuration

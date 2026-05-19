@@ -59,7 +59,7 @@
   padding: 32px;
   background: var(--bg-error, rgba(224, 108, 117, 0.12));
   border: 1px solid var(--accent-error);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
 }
 
@@ -81,7 +81,7 @@
   margin-top: 12px;
   padding: 8px 12px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: monospace;
   font-size: 12px;
   color: var(--text-secondary);
@@ -116,7 +116,7 @@
 .platform-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 20px;
   margin-bottom: 16px;
 }
@@ -167,7 +167,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 12px;
   font-weight: 500;
   text-transform: capitalize;
@@ -208,7 +208,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -269,7 +269,7 @@
 .platform-metric-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 20px;
 }
 
@@ -305,7 +305,7 @@
 .platform-progress-bar {
   height: 8px;
   background: var(--bg-tertiary);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   margin-top: 8px;
 }
@@ -338,7 +338,7 @@
   padding: 12px 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease;
@@ -404,7 +404,7 @@
 /* Buttons */
 .platform-button {
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

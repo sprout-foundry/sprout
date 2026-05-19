@@ -305,7 +305,7 @@
 
 .gitpanel-files::-webkit-scrollbar-thumb {
   background: var(--border-subtle);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
 }
 
 .gitpanel-files::-webkit-scrollbar-thumb:hover {

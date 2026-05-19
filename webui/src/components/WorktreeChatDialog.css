@@ -17,7 +17,7 @@
 /* Worktree Chat Dialog Card */
 .wt-chat-dialog-card {
   background: var(--bg-tertiary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   width: 100%;
   max-width: 520px;
@@ -62,7 +62,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -99,7 +99,7 @@
 .wt-chat-dialog-form-group input {
   padding: 10px 12px;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 14px;
@@ -161,7 +161,7 @@
   padding: 12px;
   background: var(--error-bg);
   border: 1px solid var(--error-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--error-text);
   font-size: 13px;
   animation: wt-chat-shake 0.3s ease-out;
@@ -182,7 +182,7 @@
 .wt-chat-dialog-actions button {
   flex: 1;
   padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -235,7 +235,7 @@
   padding: 12px;
   background: var(--bg-primary, rgba(0, 0, 0, 0.15));
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .wt-chat-dialog-worktrees-header {
@@ -281,7 +281,7 @@
   width: 100%;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 13px;
   padding: 6px 8px;
@@ -314,7 +314,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: rgba(56, 139, 253, 0.15);
   color: var(--accent-color);
   flex-shrink: 0;

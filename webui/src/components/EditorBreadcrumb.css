@@ -36,7 +36,7 @@
   text-overflow: ellipsis;
   max-width: 120px;
   min-width: 0;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 1px 4px;
   transition:
     background-color 0.1s,
@@ -58,7 +58,7 @@
 .breadcrumb-segment:focus-visible {
   outline: 1px solid var(--accent-primary, #6366f1);
   outline-offset: -1px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .breadcrumb-segment-current {

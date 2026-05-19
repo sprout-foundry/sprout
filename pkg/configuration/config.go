@@ -517,6 +517,21 @@ type PersistentContextConfig struct {
 	// When false (default), retrieval searches across all workspaces.
 	// Default: false
 	WorkspaceScopedRetrieval bool `json:"workspaceScopedRetrieval,omitempty"`
+
+	// DriftDetectionEnabled controls whether conversational drift detection is active.
+	// When enabled, the system checks if the conversation has drifted from its original intent.
+	// Default: true
+	DriftDetectionEnabled bool `json:"driftDetectionEnabled,omitempty"`
+
+	// DriftThreshold is the cosine similarity threshold below which drift is flagged.
+	// Range: 0.0 to 1.0. Lower values require more divergence before flagging.
+	// Default: 0.60
+	DriftThreshold float64 `json:"driftThreshold,omitempty"`
+
+	// DriftCheckInterval is the number of turns between drift checks.
+	// For example, 5 means drift is checked on turns 5, 10, 15, etc.
+	// Default: 5
+	DriftCheckInterval int `json:"driftCheckInterval,omitempty"`
 }
 
 // Resolve returns a copy of the config with default values filled in for any
@@ -529,6 +544,9 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 		MinRelevanceScore:         0.50,
 		MaxContextChars:           4000,
 		WorkspaceScopedRetrieval:  false,
+		DriftDetectionEnabled:     true,
+		DriftThreshold:            0.60,
+		DriftCheckInterval:        5,
 	}
 	if c != nil {
 		result.ProactiveContextEnabled = c.ProactiveContextEnabled
@@ -542,6 +560,13 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 			result.MaxContextChars = c.MaxContextChars
 		}
 		result.WorkspaceScopedRetrieval = c.WorkspaceScopedRetrieval
+		result.DriftDetectionEnabled = c.DriftDetectionEnabled
+		if c.DriftThreshold > 0 {
+			result.DriftThreshold = c.DriftThreshold
+		}
+		if c.DriftCheckInterval > 0 {
+			result.DriftCheckInterval = c.DriftCheckInterval
+		}
 	}
 	return result
 }

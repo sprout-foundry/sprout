@@ -38,3 +38,4 @@ architectural area, its current state, and open work.
 | SP-032 | [Daemon Mode Hardening](./SP-032-daemon-mode-hardening.md) | 📋 Spec |
 | SP-033 | [Agent Trust Boundary Hardening](./SP-033-agent-trust-boundary-hardening.md) | 📋 Spec |
 | SP-034 | [WebUI ↔ Backend Workflow Hardening](./SP-034-webui-workflow-hardening.md) | 📋 Spec |
+| SP-035 | [Persona System Tightening](./SP-035-persona-system-tightening.md) | 📋 Spec |

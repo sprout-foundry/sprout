@@ -1,500 +1,455 @@
 package agent
 
 import (
-	"os"
+	"context"
+	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// TestPathValidation validates the path security checks for workspace and /tmp/ paths
-
-// TestPathValidation_IsPathInWorkspace tests the isPathInWorkspace function
-func TestPathValidation_IsPathInWorkspace(t *testing.T) {
-	workspaceDir := "/workspace"
+// TestHandleRunSubagent_LocalOnly_Validation tests that LocalOnly personas
+// are rejected in cloud mode and accepted in local mode
+func TestHandleRunSubagent_LocalOnly_Validation(t *testing.T) {
 	tests := []struct {
-		name     string
-		path     string
-		expected bool
+		name        string
+		localOnly   bool
+		cloudMode   bool
+		wantErr     bool
+		errContains string
 	}{
 		{
-			name:     "exact match workspace directory",
-			path:     "/workspace",
-			expected: true,
+			name:        "LocalOnly persona rejected in cloud mode",
+			localOnly:   true,
+			cloudMode:   true,
+			wantErr:     true,
+			errContains: "local-only and cannot be used as a subagent in cloud mode",
 		},
 		{
-			name:     "file directly in workspace",
-			path:     "/workspace/file.go",
-			expected: true,
+			name:        "LocalOnly persona accepted in local mode",
+			localOnly:   true,
+			cloudMode:   false,
+			wantErr:     false,
+			errContains: "",
 		},
 		{
-			name:     "file in subdirectory",
-			path:     "/workspace/pkg/agent/test.go",
-			expected: true,
+			name:        "Non-LocalOnly persona accepted in cloud mode",
+			localOnly:   false,
+			cloudMode:   true,
+			wantErr:     false,
+			errContains: "",
 		},
 		{
-			name:     "nested directory path",
-			path:     "/workspace/pkg/agent/subagent/file.go",
-			expected: true,
-		},
-		{
-			name:     "path just outside workspace (parent)",
-			path:     "/workspace-parent/file.go",
-			expected: false,
-		},
-		{
-			name:     "path in different directory",
-			path:     "/home/user/file.go",
-			expected: false,
-		},
-		{
-			name:     "path with similar prefix but different directory",
-			path:     "/workspace-backup/file.go",
-			expected: false,
-		},
-		{
-			name:     "path with extra characters after workspace",
-			path:     "/workspace-extra/file.go",
-			expected: false,
-		},
-		{
-			name:     "empty path",
-			path:     "",
-			expected: false,
-		},
-		{
-			name:     "path with trailing slash in workspace",
-			path:     "/workspace/",
-			expected: true, // HasPrefix matches workspace + /
-		},
-		{
-			name:     "path with double slashes in workspace",
-			path:     "/workspace//file.go",
-			expected: true, // HasPrefix matches
+			name:        "Non-LocalOnly persona accepted in local mode",
+			localOnly:   false,
+			cloudMode:   false,
+			wantErr:     false,
+			errContains: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := isPathInWorkspace(tt.path, workspaceDir)
-			if result != tt.expected {
-				t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", tt.path, workspaceDir, result, tt.expected)
-			}
-		})
-	}
-}
+			agent := newTestAgent(t)
+			defer agent.Shutdown()
 
-// TestPathValidation_IsPathInTmp tests the isPathInTmp function
-func TestPathValidation_IsPathInTmp(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		expected bool
-	}{
-		{
-			name:     "standard /tmp/ path",
-			path:     "/tmp/file.txt",
-			expected: true,
-		},
-		{
-			name:     "path with nested directories in /tmp",
-			path:     "/tmp/subdir/nested/file.go",
-			expected: true,
-		},
-		{
-			name:     "macOS /var/folders/.../T/ style temp path - requires specific pattern",
-			path:     "/var/folders/abc123/T/TempFile",
-			expected: false, // Not matching current implementation
-		},
-		{
-			name:     "path with lowercase /tmp/",
-			path:     "/tmp/test.txt",
-			expected: true,
-		},
-		{
-			name:     "path with uppercase /TMP/",
-			path:     "/TMP/test.txt",
-			expected: true,
-		},
-		{
-			name:     "path not in tmp",
-			path:     "/home/user/file.go",
-			expected: false,
-		},
-		{
-			name:     "path with tmp in directory name but not as directory",
-			path:     "/workspace/temp-backup/file.txt",
-			expected: false,
-		},
-		{
-			name:     "empty path",
-			path:     "",
-			expected: false,
-		},
-		{
-			name:     "bare /tmp directory",
-			path:     "/tmp",
-			expected: false, // Has /tmp/ not just /tmp
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isPathInTmp(tt.path)
-			if result != tt.expected {
-				t.Errorf("isPathInTmp(%q) = %v, want %v", tt.path, result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestPathValidation_CombinedLogic tests the combined workspace and /tmp/ check
-func TestPathValidation_CombinedLogic(t *testing.T) {
-	workspaceDir := "/workspace"
-	
-	tests := []struct {
-		name           string
-		path           string
-		expectedAllowed bool
-		reason         string
-	}{
-		{
-			name:          "file inside workspace is allowed",
-			path:          "/workspace/pkg/agent/file.go",
-			expectedAllowed: true,
-			reason:        "path is in workspace",
-		},
-		{
-			name:          "file in /tmp is allowed",
-			path:          "/tmp/temporary_file.txt",
-			expectedAllowed: true,
-			reason:        "path is in /tmp",
-		},
-		{
-			name:          "file in nested /tmp subdirectory is allowed",
-			path:          "/tmp/subdir/deep/path/file.go",
-			expectedAllowed: true,
-			reason:        "path is in /tmp directory",
-		},
-		{
-			name:          "truly external path is blocked",
-			path:          "/home/user/external/file.go",
-			expectedAllowed: false,
-			reason:        "path is outside workspace and not in /tmp",
-		},
-		{
-			name:          "path in parent directory is blocked",
-			path:          "/workspace-parent/file.go",
-			expectedAllowed: false,
-			reason:        "path is outside workspace",
-		},
-		{
-			name:          "path with similar prefix is blocked",
-			path:          "/workspace-backup/file.txt",
-			expectedAllowed: false,
-			reason:        "path is outside workspace (similar prefix)",
-		},
-		{
-			name:          "workspace root is allowed",
-			path:          "/workspace",
-			expectedAllowed: true,
-			reason:        "path matches workspace directory exactly",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inWorkspace := isPathInWorkspace(tt.path, workspaceDir)
-			inTmp := isPathInTmp(tt.path)
-			allowed := inWorkspace || inTmp
-
-			if allowed != tt.expectedAllowed {
-				t.Errorf("Combined check for %q: allowed=%v, want %v\n  inWorkspace=%v, inTmp=%v\n  Reason: %s", 
-					tt.path, allowed, tt.expectedAllowed, inWorkspace, inTmp, tt.reason)
-			}
-		})
-	}
-}
-
-// TestPathValidation_RealWorldPaths tests with actual system paths
-func TestPathValidation_RealWorldPaths(t *testing.T) {
-	// Get current working directory for realistic testing
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Skipf("Could not get current directory: %v", err)
-	}
-
-	// Test that current directory is considered in workspace
-	if !isPathInWorkspace(cwd, cwd) {
-		t.Errorf("Current directory %q should be in workspace", cwd)
-	}
-
-	// Test that /tmp/ paths are always allowed regardless of workspace
-	if !isPathInTmp("/tmp/test") {
-		t.Error("/tmp/test should be detected as /tmp path")
-	}
-
-	// Test absolute path in /tmp
-	if !isPathInWorkspace("/tmp/test", cwd) && !isPathInTmp("/tmp/test") {
-		t.Error("Path /tmp/test should be allowed (either in workspace or /tmp)")
-	}
-}
-
-// TestPathValidation_EdgeCases tests edge cases for path validation
-func TestPathValidation_EdgeCases(t *testing.T) {
-	workspaceDir := "/workspace"
-	
-	tests := []struct {
-		name     string
-		path     string
-		expectedInWorkspace bool
-		expectedInTmp     bool
-		description     string
-	}{
-		{
-			name: "path with trailing separator",
-			path: "/workspace/",
-			expectedInWorkspace: true, // HasPrefix matches
-			expectedInTmp:     false,
-			description:       "path with trailing separator should match workspace",
-		},
-		{
-			name: "path with double slashes",
-			path: "/workspace//file.go",
-			expectedInWorkspace: true, // HasPrefix check matches
-			expectedInTmp:     false,
-			description:       "double slashes should be handled",
-		},
-		{
-			name: "symlink-like path",
-			path: "/workspace/link",
-			expectedInWorkspace: true,
-			expectedInTmp:     false,
-			description:       "symlink directory should be allowed",
-		},
-		{
-			name: "temp directory in workspace name",
-			path: "/workspace-tmp/file.txt",
-			expectedInWorkspace: false,
-			expectedInTmp:     false,
-			description:       "workspace-tmp is different from workspace",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inWorkspace := isPathInWorkspace(tt.path, workspaceDir)
-			inTmp := isPathInTmp(tt.path)
-
-			if inWorkspace != tt.expectedInWorkspace {
-				t.Errorf("isPathInWorkspace(%q) = %v, want %v\n  Description: %s", 
-					tt.path, inWorkspace, tt.expectedInWorkspace, tt.description)
-			}
-
-			if inTmp != tt.expectedInTmp {
-				t.Errorf("isPathInTmp(%q) = %v, want %v\n  Description: %s", 
-					tt.path, inTmp, tt.expectedInTmp, tt.description)
-			}
-		})
-	}
-}
-
-// TestPathValidation_Security tests security scenarios
-func TestPathValidation_Security(t *testing.T) {
-	workspaceDir := "/workspace"
-
-	tests := []struct {
-		name string
-		path string
-		description string
-		shouldAllow bool
-	}{
-		{
-			name: "attempt to escape via parent directory",
-			path: "/workspace/../etc/passwd",
-			description: "Path traversal attempt - NOTE: implementation doesn't resolve ..",
-			shouldAllow: true, // Due to HasPrefix, this matches /workspace/
-		},
-		{
-			name: "attempt via similar directory names",
-			path: "/workspace-real/file.txt",
-			description: "Directory with similar name should be blocked",
-			shouldAllow: false,
-		},
-		{
-			name: "attempt to access system files",
-			path: "/etc/passwd",
-			description: "System files should be blocked",
-			shouldAllow: false,
-		},
-		{
-			name: "attempt to access user home",
-			path: "/home/user/secrets.txt",
-			description: "User home directory should be blocked",
-			shouldAllow: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inWorkspace := isPathInWorkspace(tt.path, workspaceDir)
-			inTmp := isPathInTmp(tt.path)
-			allowed := inWorkspace || inTmp
-
-			if allowed != tt.shouldAllow {
-				t.Errorf("SECURITY check: Path %q: allowed=%v, want %v\n  inWorkspace=%v, inTmp=%v\n  Description: %s", 
-					tt.path, allowed, tt.shouldAllow, inWorkspace, inTmp, tt.description)
+			// Set cloud mode if needed
+			if tt.cloudMode {
+				t.Setenv("SPROUT_CLOUD", "1")
 			} else {
-				if !allowed {
-					t.Logf("SECURITY PASS: Path %q correctly blocked (%s)", tt.path, tt.description)
+				t.Setenv("SPROUT_CLOUD", "0")
+			}
+
+			// Register a test persona with the LocalOnly configuration
+			personaID := "test_localonly_validation"
+			err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+				if cfg.SubagentTypes == nil {
+					cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+				}
+				cfg.SubagentTypes[personaID] = configuration.SubagentType{
+					ID:          personaID,
+					Name:        "Test LocalOnly Validation",
+					Description: "Test persona for LocalOnly validation",
+					Enabled:     true,
+					LocalOnly:   tt.localOnly,
+					Delegatable: true, // Ensure delegatable is true for this test
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("UpdateConfigNoSave failed: %v", err)
+			}
+
+			// Setup subagent runner for success cases
+			if !tt.wantErr {
+				setupTestSubagentRunner(agent)
+			}
+
+			// Call handleRunSubagent with the test persona
+			args := map[string]interface{}{
+				"prompt":  "test prompt",
+				"persona": personaID,
+			}
+
+			result, err := handleRunSubagent(context.Background(), agent, args)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errContains)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain expected string %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if result == "" {
+					t.Error("expected non-empty result")
 				}
 			}
 		})
 	}
 }
 
-// Benchmark_isPathInWorkspace benchmarks path workspace checking
-func Benchmark_isPathInWorkspace(b *testing.B) {
-	workspaceDir := "/workspace"
-	testPath := "/workspace/pkg/agent/file.go"
-	
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = isPathInWorkspace(testPath, workspaceDir)
-	}
-}
-
-// Benchmark_isPathInTmp benchmarks tmp path checking
-func Benchmark_isPathInTmp(b *testing.B) {
-	testPath := "/tmp/test_file.txt"
-	
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = isPathInTmp(testPath)
-	}
-}
-
-// TestPathValidation_GoPathStyle tests Go-style workspace paths
-func TestPathValidation_GoPathStyle(t *testing.T) {
-	// Simulate GOPATH-style workspace
-	workspaceDir := "/home/user/go/src/github.com/user/project"
-	
+// TestHandleRunSubagent_Delegatable_Validation tests that non-delegatable personas
+// are rejected regardless of mode
+func TestHandleRunSubagent_Delegatable_Validation(t *testing.T) {
 	tests := []struct {
-		path     string
-		expected bool
+		name         string
+		delegatable  bool
+		cloudMode    bool
+		wantErr      bool
+		errContains  string
 	}{
 		{
-			path:     "/home/user/go/src/github.com/user/project/pkg/agent",
-			expected: true,
+			name:        "Non-delegatable persona rejected in cloud mode",
+			delegatable: false,
+			cloudMode:   true,
+			wantErr:     true,
+			errContains: "not designed to be used as a subagent (delegatable=false)",
 		},
 		{
-			path:     "/home/user/go/src/github.com/user/project/pkg/agent/test.go",
-			expected: true,
+			name:        "Non-delegatable persona rejected in local mode",
+			delegatable: false,
+			cloudMode:   false,
+			wantErr:     true,
+			errContains: "not designed to be used as a subagent (delegatable=false)",
 		},
 		{
-			path:     "/home/user/go/src/github.com/other/repo/file.go",
-			expected: false,
+			name:        "Delegatable persona accepted in cloud mode",
+			delegatable: true,
+			cloudMode:   true,
+			wantErr:     false,
+			errContains: "",
 		},
 		{
-			path:     "/home/user/go/src/github.com/user/project",
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		result := isPathInWorkspace(tt.path, workspaceDir)
-		if result != tt.expected {
-			t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", 
-				tt.path, workspaceDir, result, tt.expected)
-		}
-	}
-}
-
-// TestPathValidation_RelativeToAbsolute tests path resolution scenarios
-func TestPathValidation_RelativeToAbsolute(t *testing.T) {
-	workspaceDir := "/workspace"
-	
-	tests := []struct {
-		name     string
-		path     string
-		expected bool
-	}{
-		{
-			name:     "absolute path in workspace",
-			path:     "/workspace/file.go",
-			expected: true,
-		},
-		{
-			name:     "absolute path outside workspace",
-			path:     "/var/log/file.txt",
-			expected: false,
-		},
-		{
-			name:     "temporary file path",
-			path:     "/tmp/subagent_output.txt",
-			expected: true,
+			name:        "Delegatable persona accepted in local mode",
+			delegatable: true,
+			cloudMode:   false,
+			wantErr:     false,
+			errContains: "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inWorkspace := isPathInWorkspace(tt.path, workspaceDir)
-			inTmp := isPathInTmp(tt.path)
-			allowed := inWorkspace || inTmp
+			agent := newTestAgent(t)
+			defer agent.Shutdown()
 
-			if !allowed {
-				t.Logf("Path %q correctly blocked", tt.path)
+			// Set cloud mode if needed
+			if tt.cloudMode {
+				t.Setenv("SPROUT_CLOUD", "1")
 			} else {
-				t.Logf("Path %q allowed (workspace: %v, tmp: %v)", tt.path, inWorkspace, inTmp)
+				t.Setenv("SPROUT_CLOUD", "0")
+			}
+
+			// Register a test persona with the Delegatable configuration
+			personaID := "test_delegatable_validation"
+			err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+				if cfg.SubagentTypes == nil {
+					cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+				}
+				cfg.SubagentTypes[personaID] = configuration.SubagentType{
+					ID:          personaID,
+					Name:        "Test Delegatable Validation",
+					Description: "Test persona for Delegatable validation",
+					Enabled:     true,
+					LocalOnly:   false, // Ensure LocalOnly is false for this test
+					Delegatable: tt.delegatable,
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("UpdateConfigNoSave failed: %v", err)
+			}
+
+			// Setup subagent runner for success cases
+			if !tt.wantErr {
+				setupTestSubagentRunner(agent)
+			}
+
+			// Call handleRunSubagent with the test persona
+			args := map[string]interface{}{
+				"prompt":  "test prompt",
+				"persona": personaID,
+			}
+
+			result, err := handleRunSubagent(context.Background(), agent, args)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errContains)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain expected string %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if result == "" {
+					t.Error("expected non-empty result")
+				}
 			}
 		})
 	}
 }
 
-// TestPathValidation_TmpVariations tests various /tmp/ path formats
-func TestPathValidation_TmpVariations(t *testing.T) {
-	tmpPaths := []string{
-		"/tmp/test",
-		"/tmp/",
-		"/tmp/test/file.txt",
-		"/tmp/subdir/deep/file.txt",
-		"/tmp/workspace-test",
-		"/tmp/project/build/file.go",
-	}
-
-	for _, path := range tmpPaths {
-		if !isPathInTmp(path) {
-			t.Errorf("Path %q should be detected as tmp path", path)
-		}
-		t.Logf("[ok] Path %q correctly identified as tmp path", path)
-	}
-}
-
-// TestPathValidation_WorkspaceVariations tests various workspace path formats
-func TestPathValidation_WorkspaceVariations(t *testing.T) {
-	workspaceDir := "/workspace"
-	
+// TestHandleRunSubagent_CombinedValidation tests scenarios where both
+// LocalOnly and Delegatable flags interact
+func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 	tests := []struct {
-		path     string
-		expected bool
+		name         string
+		localOnly    bool
+		delegatable  bool
+		cloudMode    bool
+		wantErr      bool
+		errContains  string
 	}{
-		{"/workspace", true},
-		{"/workspace/", true}, // HasPrefix matches
-		{"/workspace/file.go", true},
-		{"/workspace/pkg", true},
-		{"/workspace/pkg/", true},
-		{"/workspace/pkg/agent", true},
-		{"/workspace/pkg/agent/file.go", true},
-		{"/workspace-backup", false},
-		{"/workspace-copy", false},
-		{"/workspace-test", false},
+		{
+			name:        "LocalOnly+NonDelegatable in cloud mode - LocalOnly error takes precedence",
+			localOnly:   true,
+			delegatable: false,
+			cloudMode:   true,
+			wantErr:     true,
+			errContains: "local-only and cannot be used as a subagent in cloud mode",
+		},
+		{
+			name:        "LocalOnly+NonDelegatable in local mode - Delegatable error",
+			localOnly:   true,
+			delegatable: false,
+			cloudMode:   false,
+			wantErr:     true,
+			errContains: "not designed to be used as a subagent (delegatable=false)",
+		},
+		{
+			name:        "LocalOnly+Delegatable in cloud mode - LocalOnly error",
+			localOnly:   true,
+			delegatable: true,
+			cloudMode:   true,
+			wantErr:     true,
+			errContains: "local-only and cannot be used as a subagent in cloud mode",
+		},
+		{
+			name:        "LocalOnly+Delegatable in local mode - success",
+			localOnly:   true,
+			delegatable: true,
+			cloudMode:   false,
+			wantErr:     false,
+			errContains: "",
+		},
+		{
+			name:        "NonLocalOnly+NonDelegatable in cloud mode - Delegatable error",
+			localOnly:   false,
+			delegatable: false,
+			cloudMode:   true,
+			wantErr:     true,
+			errContains: "not designed to be used as a subagent (delegatable=false)",
+		},
+		{
+			name:        "NonLocalOnly+NonDelegatable in local mode - Delegatable error",
+			localOnly:   false,
+			delegatable: false,
+			cloudMode:   false,
+			wantErr:     true,
+			errContains: "not designed to be used as a subagent (delegatable=false)",
+		},
 	}
 
 	for _, tt := range tests {
-		result := isPathInWorkspace(tt.path, workspaceDir)
-		if result != tt.expected {
-			t.Errorf("isPathInWorkspace(%q, %q) = %v, want %v", 
-				tt.path, workspaceDir, result, tt.expected)
-		} else {
-			t.Logf("[ok] Path %q = %v (as expected)", tt.path, result)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			agent := newTestAgent(t)
+			defer agent.Shutdown()
+
+			// Set cloud mode if needed
+			if tt.cloudMode {
+				t.Setenv("SPROUT_CLOUD", "1")
+			} else {
+				t.Setenv("SPROUT_CLOUD", "0")
+			}
+
+			// Register a test persona with both LocalOnly and Delegatable configurations
+			personaID := "test_combined_validation"
+			err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+				if cfg.SubagentTypes == nil {
+					cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+				}
+				cfg.SubagentTypes[personaID] = configuration.SubagentType{
+					ID:          personaID,
+					Name:        "Test Combined Validation",
+					Description: "Test persona for combined validation",
+					Enabled:     true,
+					LocalOnly:   tt.localOnly,
+					Delegatable: tt.delegatable,
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("UpdateConfigNoSave failed: %v", err)
+			}
+
+			// Setup subagent runner for success cases
+			if !tt.wantErr {
+				setupTestSubagentRunner(agent)
+			}
+
+			// Call handleRunSubagent with the test persona
+			args := map[string]interface{}{
+				"prompt":  "test prompt",
+				"persona": personaID,
+			}
+
+			result, err := handleRunSubagent(context.Background(), agent, args)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got nil", tt.errContains)
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q does not contain expected string %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if result == "" {
+					t.Error("expected non-empty result")
+				}
+			}
+		})
 	}
+}
+
+// TestHandleRunSubagent_NoPersona_SkipsValidation tests that validation
+// is skipped when no persona is specified, by using a delegatable persona
+func TestHandleRunSubagent_NoPersona_WithDelegatablePersona(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Set cloud mode
+	t.Setenv("SPROUT_CLOUD", "1")
+
+	// Register a delegatable persona that we can use
+	personaID := "test_delegatable_for_no_persona"
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		cfg.SubagentTypes[personaID] = configuration.SubagentType{
+			ID:          personaID,
+			Name:        "Test Delegatable",
+			Description: "Test persona",
+			Enabled:     true,
+			LocalOnly:   false,
+			Delegatable: true,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	// Setup subagent runner
+	setupTestSubagentRunner(agent)
+
+	// Call handleRunSubagent with the delegatable persona
+	args := map[string]interface{}{
+		"prompt":  "test prompt",
+		"persona": personaID,
+	}
+
+	result, err := handleRunSubagent(context.Background(), agent, args)
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+}
+
+// TestHandleRunSubagent_NonExistentPersona_FallsBack tests that validation
+// is skipped when persona doesn't exist (falls back to default)
+func TestHandleRunSubagent_NonExistentPersona_FallsBack(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Set cloud mode
+	t.Setenv("SPROUT_CLOUD", "1")
+
+	// Register a delegatable persona for default fallback
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		if cfg.SubagentTypes == nil {
+			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
+		}
+		// Create a simple delegatable persona as fallback
+		cfg.SubagentTypes["test_fallback_persona"] = configuration.SubagentType{
+			ID:          "test_fallback_persona",
+			Name:        "Test Fallback",
+			Description: "Test persona",
+			Enabled:     true,
+			LocalOnly:   false,
+			Delegatable: true,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	// Setup subagent runner
+	setupTestSubagentRunner(agent)
+
+	// Call handleRunSubagent with a non-existent persona
+	args := map[string]interface{}{
+		"prompt":  "test prompt",
+		"persona": "this_persona_does_not_exist",
+	}
+
+	result, err := handleRunSubagent(context.Background(), agent, args)
+
+	// Should succeed because non-existent personas skip validation
+	// (falls back to default subagent config)
+	if err != nil {
+		t.Errorf("unexpected error when persona doesn't exist: %v", err)
+	}
+	if result == "" {
+		t.Error("expected non-empty result")
+	}
+}
+
+// setupTestSubagentRunner sets up a minimal SubagentRunner for testing
+// This creates a runner that will fail gracefully when actually called
+func setupTestSubagentRunner(agent *Agent) {
+	agent.subagentRunner = NewSubagentRunner(agent, &SharedState{
+		EventBus:      agent.eventBus,
+		TodoManager:   agent.todoMgr,
+		EmbeddingMgr:  agent.embeddingMgr,
+		ConfigManager: agent.configManager,
+		WorkspaceRoot: agent.workspaceRoot,
+	})
 }

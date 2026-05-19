@@ -37,12 +37,23 @@ make build                      # Build Go binary with embedded UI
 
 ### Testing
 ```bash
-python3 test_runner.py          # Run E2E tests via Python test runner
 go test ./...                   # Run unit tests
 go test ./... -v                # Run unit tests with verbose output
 go test -race ./...             # Run unit tests with race detection
-go test ./pkg/console/ -v  # Run UI component tests (critical for console UI)
+go test ./pkg/console/ -v       # Run UI component tests (critical for console UI)
 ```
+
+Python-driven shell test suites (use the one that matches what you're validating):
+
+```bash
+python3 workspace_test_runner.py    # Workspace functionality (real AI) — drives e2e_tests/*.sh; previously named test_runner.py
+python3 integration_test_runner.py  # Mocked-AI integration tests under integration_tests/
+python3 e2e_test_runner.py          # Real-AI end-to-end user workflows under e2e_tests/
+```
+
+- Use `integration_test_runner.py` for fast iteration — it uses the `test:test` mock model and exercises the CLI's mechanics without calling any provider.
+- Use `e2e_test_runner.py` when you need to validate behavior against a real model. It will consume API credits.
+- Use `workspace_test_runner.py` for the broader workspace-functionality suite (parallel runner, real model).
 
 **IMPORTANT - UI Testing Policy:**
 When making changes to console UI components (`pkg/console/`), **ALWAYS** run the UI component tests to ensure functionality remains intact:

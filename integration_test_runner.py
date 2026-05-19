@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-Integration Test Runner for ledit
-Tests infrastructure and mechanics without requiring real AI models
+Integration Test Runner for sprout.
+
+Drives the shell-based test suite under `integration_tests/`, exercising
+infrastructure and mechanics with a mocked AI model (no real network calls).
 """
 
 import os

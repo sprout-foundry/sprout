@@ -96,7 +96,7 @@ var BuiltinNames = map[string]bool{
 	"date": true, "whoami": true, "env": true, "export": true, "which": true,
 	"type": true, "history": true, "println": true, "basename": true,
 	"dirname": true, "realpath": true, "tr": true, "uniq": true,
-	"cut": true, "tee": true,
+	"cut": true, "tee": true, "symbols": true,
 }
 
 func init() {
@@ -135,6 +135,7 @@ func init() {
 	CmdRegistry["uniq"] = cmdUniq
 	CmdRegistry["cut"] = cmdCut
 	CmdRegistry["tee"] = cmdTee
+	CmdRegistry["symbols"] = cmdSymbols
 }
 
 func cmdHelp(args []string, stdin string) CmdResult {
@@ -173,6 +174,9 @@ func cmdHelp(args []string, stdin string) CmdResult {
 	out.WriteString("  basename <path>     Print directory name from path\n")
 	out.WriteString("  dirname <path>      Print directory name from path\n")
 	out.WriteString("  realpath <path>     Print resolved path\n")
+	out.WriteString("  symbols <file>      Show code symbols from a source file\n")
+	out.WriteString("  symbols -j <file>   Show symbols as JSON\n")
+	out.WriteString("  symbols -d <file>   Deep symbol extraction with scope info\n")
 	out.WriteString("\nShell features:\n")
 	out.WriteString("  |   Pipe commands\n")
 	out.WriteString("  >   Redirect stdout to file\n")

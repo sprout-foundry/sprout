@@ -180,7 +180,15 @@ func (w *MCPToolWrapper) CanExecute(ctx context.Context, params Parameters) bool
 		return false
 	}
 
-	// TODO: Could add schema validation here based on w.mcpTool.InputSchema
+	// Validate arguments against the tool's input schema
+	args := params.Kwargs
+	if args == nil {
+		args = make(map[string]interface{})
+	}
+	if err := w.ValidateArgs(args); err != nil {
+		return false
+	}
+
 	return true
 }
 

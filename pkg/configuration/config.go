@@ -122,6 +122,9 @@ type Config struct {
 	// Embedding Index Configuration
 	EmbeddingIndex *EmbeddingIndexConfig `json:"embedding_index,omitempty"`
 
+	// Persistent Context Configuration
+	PersistentContext *PersistentContextConfig `json:"persistent_context,omitempty"`
+
 	// Skills Configuration
 	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
 
@@ -488,6 +491,59 @@ type EmbeddingIndexConfig struct {
 
 	// ExcludePaths is a list of additional paths to exclude from indexing.
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
+}
+
+// PersistentContextConfig configures persistent conversational context and memory retrieval.
+type PersistentContextConfig struct {
+	// ProactiveContextEnabled controls whether the system primes new sessions with
+	// relevant past work via semantic retrieval from conversation history.
+	// Default: true
+	ProactiveContextEnabled bool `json:"proactiveContextEnabled,omitempty"`
+
+	// MaxContextualResults is the maximum number of past turns to retrieve for context.
+	// Default: 5
+	MaxContextualResults int `json:"maxContextualResults,omitempty"`
+
+	// MinRelevanceScore is the minimum time-decayed cosine similarity score for retrieval.
+	// Range: 0.0 to 1.0. Results below this score are filtered out.
+	// Default: 0.50
+	MinRelevanceScore float64 `json:"minRelevanceScore,omitempty"`
+
+	// MaxContextChars is the hard cap on total injected character count for context.
+	// Default: 4000
+	MaxContextChars int `json:"maxContextChars,omitempty"`
+
+	// WorkspaceScopedRetrieval restricts retrieval to turns from the current workspace only.
+	// When false (default), retrieval searches across all workspaces.
+	// Default: false
+	WorkspaceScopedRetrieval bool `json:"workspaceScopedRetrieval,omitempty"`
+}
+
+// Resolve returns a copy of the config with default values filled in for any
+// zero-value fields. Use this after loading from disk to ensure sensible defaults.
+// If the receiver is nil, returns a fully-defaulted config.
+func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
+	result := PersistentContextConfig{
+		ProactiveContextEnabled:   true,
+		MaxContextualResults:      5,
+		MinRelevanceScore:         0.50,
+		MaxContextChars:           4000,
+		WorkspaceScopedRetrieval:  false,
+	}
+	if c != nil {
+		result.ProactiveContextEnabled = c.ProactiveContextEnabled
+		if c.MaxContextualResults > 0 {
+			result.MaxContextualResults = c.MaxContextualResults
+		}
+		if c.MinRelevanceScore > 0 {
+			result.MinRelevanceScore = c.MinRelevanceScore
+		}
+		if c.MaxContextChars > 0 {
+			result.MaxContextChars = c.MaxContextChars
+		}
+		result.WorkspaceScopedRetrieval = c.WorkspaceScopedRetrieval
+	}
+	return result
 }
 
 // Optional helpers

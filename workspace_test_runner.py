@@ -13,7 +13,9 @@ import json
 import re
 
 """
-This script performs a robust test of the `ledit` workspace functionality.
+workspace functionality test runner for sprout.
+
+This script performs a robust test of sprout's workspace functionality.
 It can run all tests in parallel to speed up validation or run a single test interactively.
 
 Features:

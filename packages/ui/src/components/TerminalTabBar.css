@@ -22,7 +22,7 @@
 
 .terminal-tab-bar::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.2);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .terminal-tab-bar::-webkit-scrollbar-track {
@@ -40,7 +40,7 @@
   max-width: 180px;
   padding: 0 10px;
   margin: 1px 0;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -88,7 +88,7 @@
   width: 16px;
   height: 16px;
   min-width: 16px;
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
   border: none;
   background: transparent;
   color: #94a3b8;
@@ -123,7 +123,7 @@
   height: 26px;
   min-width: 28px;
   margin: 1px 0;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   border: none;
   background: transparent;
   color: #94a3b8;
@@ -148,7 +148,7 @@
   min-width: 0;
   height: 18px;
   border: 1px solid #22d3ee;
-  border-radius: var(--radius-sm);
+  border-radius: 2px;
   background: #0f172a;
   color: #e2e8f0;
   font-size: 12px;
@@ -191,7 +191,7 @@
   height: 26px;
   min-width: 28px;
   margin: 1px 0;
-  border-radius: var(--radius-tab);
+  border-radius: 4px 4px 0 0;
   border: none;
   background: transparent;
   color: #94a3b8;
@@ -219,7 +219,7 @@
   overflow-y: auto;
   background: rgba(15, 23, 42, 0.98);
   border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   padding: 4px;
   z-index: 200;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -234,7 +234,7 @@
 
 .agent-sessions-menu::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.2);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .agent-sessions-menu::-webkit-scrollbar-track {
@@ -268,7 +268,7 @@
   gap: 8px;
   width: 100%;
   padding: 6px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   background: transparent;
   border: none;
   color: #cbd5e1;

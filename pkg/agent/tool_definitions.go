@@ -417,17 +417,6 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleDeleteMemory,
 	})
 
-	// Register search_memories tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "search_memories",
-		Description: "Search saved memories semantically by query. Returns memories ranked by relevance with name, title, and similarity score.",
-		Parameters: []ParameterConfig{
-			{"query", "string", true, []string{}, "Natural language search query to find relevant memories"},
-			{"max_results", "integer", false, []string{}, "Maximum results to return (default: 5)"},
-		},
-		Handler: handleSearchMemories,
-	})
-
 	// Register embedding_index tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "embedding_index",

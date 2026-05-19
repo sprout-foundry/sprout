@@ -9,7 +9,7 @@
 .workspace-diff-view-toggle {
   display: flex;
   background: var(--bg-tertiary, rgba(255, 255, 255, 0.06));
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   padding: 2px;
   border: 1px solid var(--border-subtle);
 }
@@ -17,7 +17,7 @@
 .workspace-diff-view-btn {
   padding: 3px 10px;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: 5px;
   background: transparent;
   color: var(--text-tertiary);
   font-size: 11px;
@@ -91,7 +91,7 @@
   line-height: 1.5;
   max-height: calc(100vh - 300px);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  border-radius: 8px;
   background: var(--bg-primary);
 }
 

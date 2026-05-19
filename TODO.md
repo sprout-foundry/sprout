@@ -157,6 +157,7 @@ Spec: `roadmap/SP-030-repository-hygiene.md`
 
 ### Phase 5: Test fixtures
 
+[x] - SP-030-5a: Per-file audit of `pkg/agent/conversation_image_test.go`, `pkg/agent/tool_handlers_search_new_test.go`, `pkg/git/commit_helpers_test.go`, `pkg/history/history_tools_test.go` — replace `ledit` where it's incidental; leave where the literal string is being asserted
 [] - SP-030-5a: Per-file audit of `pkg/agent/conversation_image_test.go`, `pkg/agent/tool_handlers_search_new_test.go`, `pkg/git/commit_helpers_test.go`, `pkg/history/history_tools_test.go` — replace `ledit` where it's incidental; leave where the literal string is being asserted
 
 ---
@@ -167,7 +168,7 @@ Spec: `roadmap/SP-031-mcp-input-validation.md`
 
 ### Phase 1: Implement validation
 
-[] - SP-031-1a: Add `github.com/santhosh-tekuri/jsonschema/v6` to `go.mod`
+[x] - SP-031-1a: Add `github.com/santhosh-tekuri/jsonschema/v6` to `go.mod`
 [] - SP-031-1b: Add `compiledSchema *jsonschema.Schema` field to `MCPToolWrapper` and a `compileSchema()` method with lazy initialization (cache once at first use). `pkg/mcp/tool_wrapper.go`
 [] - SP-031-1c: Replace the `ValidateArgs` stub at `pkg/mcp/tool_wrapper.go:233-238` with real validation — skip on nil schema, fail-open on compile error (warn once), return `*InvalidArgsError` on validation failure
 [] - SP-031-1d: Create `pkg/mcp/errors.go` with `InvalidArgsError` typed error (Tool, Server, Wrapped fields; implements `Error()` and `Unwrap()`)

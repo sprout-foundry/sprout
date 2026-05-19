@@ -21,6 +21,7 @@ type MCPSubManager interface {
 	UnlockInit()
 	RLockInit()
 	RUnlockInit()
+	DoInit(f func())
 }
 
 // AgentMCPManager implements MCPSubManager.
@@ -35,12 +36,11 @@ type MCPSubManager interface {
 // Lock ordering:
 //
 //   initMu → debugLogMutex (via a.debugLog() in getMCPTools)
-//   initMu → mcp.Manager.mutex (via initializeMCP → AddServer/StartAll/GetAllTools)
 //
 // No reverse ordering exists. debugLogMutex is never held before calling
-// getMCPTools, and mcp.Manager's internal mutexes are never held before calling
-// getMCPTools or RefreshMCPTools. This prevents lock-order inversions and
-// deadlocks.
+// getMCPTools. initMu is never held while calling into mcp.Manager (the
+// Manager's internal mutexes are acquired outside of initMu). This prevents
+// lock-order inversions and deadlocks.
 //
 // Direct callers of getMCPTools():
 //   - getOptimizedToolDefinitions()
@@ -51,22 +51,23 @@ type MCPSubManager interface {
 //   - handleMCPToolsCommand()
 //   - github_setup_prompt.go
 //
-// Within getMCPTools(), the read lock (RLockInit) is always released
-// before the write lock (LockInit) is acquired. The pattern is:
-//   1. RLockInit; check cache; RUnlockInit
-//   2. LockInit; double-check; operate; UnlockInit (deferred)
-// The RLock and Lock are never nested, preventing self-deadlock.
+// Within getMCPTools(), the initialization is performed using sync.Once
+// (via DoInit) WITHOUT holding initMu. The slow initializeMCP() call,
+// which can take seconds when starting subprocesses, runs outside of
+// any lock. Only the final cache store requires a brief write lock.
+// Reads use RLock for fast-path cache access. This pattern eliminates
+// deadlocks under high concurrency.
 //
-// The initializeMCP() function is called while initMu is held (write).
-// It accesses the mcp.MCPManager (manager field) and calls methods on it
-// that acquire mcp.Manager's internal mutexes, but does NOT try to
-// re-acquire initMu, avoiding recursive locking.
+// The initializeMCP() function accesses the mcp.MCPManager (manager field)
+// and calls methods on it that acquire mcp.Manager's internal mutexes, but
+// does NOT try to re-acquire initMu, avoiding recursive locking.
 type AgentMCPManager struct {
 	manager     mcp.MCPManager
 	toolsCache  []api.Tool
 	initialized bool
 	initErr     error
 	initMu      sync.RWMutex
+	initOnce    sync.Once
 }
 
 // NewAgentMCPManager creates a new AgentMCPManager with default values.
@@ -123,4 +124,11 @@ func (m *AgentMCPManager) RLockInit() {
 
 func (m *AgentMCPManager) RUnlockInit() {
 	m.initMu.RUnlock()
+}
+
+// DoInit executes the given function exactly once using sync.Once.
+// This is used for MCP initialization without holding initMu during
+// the slow initializeMCP() call.
+func (m *AgentMCPManager) DoInit(f func()) {
+	m.initOnce.Do(f)
 }

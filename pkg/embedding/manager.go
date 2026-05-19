@@ -168,6 +168,15 @@ func (m *EmbeddingManager) InitError() error {
 	return m.initError
 }
 
+// GetIndexDir returns the resolved index directory path.
+// Returns empty string if the manager has not been initialized.
+// This is the same directory that stores conversation_turns.jsonl.
+func (m *EmbeddingManager) GetIndexDir() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.indexDir
+}
+
 // IndexSize returns the number of records in the vector store.
 // Returns 0 and a nil error if the manager is not yet initialized.
 func (m *EmbeddingManager) IndexSize() int {

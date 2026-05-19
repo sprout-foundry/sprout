@@ -52,10 +52,10 @@ func (a *Agent) GetPruningStats() map[string]interface{} {
 	pruner := a.state.GetConversationPruner()
 	return map[string]interface{}{
 		"enabled":               true,
-		"strategy":              pruner.Strategy(),
-		"threshold":             pruner.Threshold(),
-		"recent_messages_kept":  pruner.RecentMessagesToKeep(),
-		"sliding_window_size":   pruner.SlidingWindowSize(),
+		"strategy":              pruner.strategy,
+		"threshold":             pruner.contextThreshold,
+		"recent_messages_kept":  pruner.recentMessagesToKeep,
+		"sliding_window_size":   pruner.slidingWindowSize,
 		"current_message_count": len(a.state.GetMessages()),
 		"current_context_usage": float64(a.state.GetCurrentContextTokens()) / float64(a.state.GetMaxContextTokens()),
 	}

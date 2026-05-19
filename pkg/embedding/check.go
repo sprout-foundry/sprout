@@ -126,19 +126,13 @@ func CheckFileForDuplicates(ctx context.Context, mgr *IndexManager, filePath str
 }
 
 // NormalizePathToWorkspace normalizes a file path to a relative path
-// from the workspace root for consistent comparison. If the path is relative,
-// it is resolved against workspaceRoot (not CWD). If workspaceRoot is empty
-// or the path cannot be resolved relative to it, returns the cleaned path as-is.
+// from the workspace root for consistent comparison. If workspaceRoot is
+// empty or the path cannot be resolved relative to it, returns the cleaned
+// path as-is.
 func NormalizePathToWorkspace(workspaceRoot, path string) string {
 	path = filepath.Clean(path)
 	if workspaceRoot == "" {
 		return path
-	}
-	// If the path is relative, resolve it against the workspace root
-	// (not CWD) so that self-match filtering works correctly when
-	// CheckDuplicates is called with relative file paths.
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(workspaceRoot, path)
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {

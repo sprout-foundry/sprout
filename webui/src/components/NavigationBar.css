@@ -22,7 +22,7 @@
   align-items: center;
   gap: 6px;
   background: var(--bg-secondary);
-  border-radius: var(--radius-xl);
+  border-radius: 14px;
   padding: 4px;
   border: 1px solid var(--border-default);
 }
@@ -34,7 +34,7 @@
   padding: 9px 18px;
   background: transparent;
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;

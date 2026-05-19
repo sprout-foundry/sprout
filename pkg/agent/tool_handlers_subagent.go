@@ -6,9 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -18,6 +22,329 @@ const (
 	BATCH_SIZE                  = 50               // Number of lines to batch before publishing
 	DefaultSubagentTokenBudget  = 2_000_000        // Default token budget for subagents
 )
+
+// MILESTONE_PHASES defines phases that trigger immediate publish without batching
+var MILESTONE_PHASES = []string{"spawn", "complete", "step"}
+
+// subagentBatchBuffer holds buffered output for a subagent task
+type subagentBatchBuffer struct {
+	lines      []string
+	lineCount  int
+	taskID     string
+	persona    string
+	isParallel bool
+}
+
+// Global batch buffer manager
+var (
+	batchBuffers = make(map[string]*subagentBatchBuffer)
+	bufferMu     sync.Mutex
+)
+
+// flushSubagentBatch publishes buffered lines and clears the buffer
+func flushSubagentBatch(buffer *subagentBatchBuffer, a *Agent, toolCallID, toolName string) {
+	if len(buffer.lines) == 0 {
+		return
+	}
+
+	// Publish all buffered lines as a batch
+	batchMessage := strings.Join(buffer.lines, "\n")
+	details := map[string]interface{}{
+		"task_id":     buffer.taskID,
+		"persona":     buffer.persona,
+		"is_parallel": buffer.isParallel,
+		"batch_size":  len(buffer.lines),
+	}
+
+	a.publishEvent(events.EventTypeSubagentActivity, events.SubagentActivityEvent(toolCallID, toolName, "output", batchMessage, details))
+}
+
+// cleanupSubagentBatch flushes any remaining buffered output for a task
+func cleanupSubagentBatch(taskID string, a *Agent, toolCallID, toolName string) {
+	bufferMu.Lock()
+	defer bufferMu.Unlock()
+
+	if buffer, exists := batchBuffers[taskID]; exists {
+		if len(buffer.lines) > 0 {
+			flushSubagentBatch(buffer, a, toolCallID, toolName)
+		}
+		// Remove the buffer to free memory
+		delete(batchBuffers, taskID)
+	}
+}
+
+func publishSubagentActivity(ctx context.Context, a *Agent, phase, message string, details map[string]interface{}) {
+	if a == nil {
+		return
+	}
+	message = strings.TrimSpace(stripAnsiCodes(message))
+	if message == "" {
+		return
+	}
+	toolCallID, toolName := toolExecutionMetadataFromContext(ctx)
+
+	// Check if this is a milestone phase - publish immediately
+	isMilestone := false
+	for _, milestone := range MILESTONE_PHASES {
+		if phase == milestone {
+			isMilestone = true
+			break
+		}
+	}
+
+	// Extract task ID from details for batching
+	taskID := ""
+	if tid, ok := details["task_id"]; ok {
+		if tidStr, ok := tid.(string); ok {
+			taskID = tidStr
+		}
+	}
+
+	// If milestone phase, publish immediately without batching
+	if isMilestone {
+		// Clean up any pending batch buffers before publishing milestone
+		if taskID != "" {
+			cleanupSubagentBatch(taskID, a, toolCallID, toolName)
+		}
+		a.publishEvent(events.EventTypeSubagentActivity, events.SubagentActivityEvent(toolCallID, toolName, phase, message, details))
+		return
+	}
+
+	// For output lines, use batching
+	bufferMu.Lock()
+
+	// Get or create buffer for this task
+	if taskID == "" {
+		taskID = toolCallID
+	}
+
+	buffer, exists := batchBuffers[taskID]
+	if !exists {
+		// Extract persona and is_parallel safely
+		persona := ""
+		if p, ok := details["persona"]; ok {
+			if pStr, ok := p.(string); ok {
+				persona = pStr
+			}
+		}
+		isParallel := false
+		if p, ok := details["is_parallel"]; ok {
+			if pBool, ok := p.(bool); ok {
+				isParallel = pBool
+			}
+		}
+
+		buffer = &subagentBatchBuffer{
+			lines:      make([]string, 0, BATCH_SIZE),
+			lineCount:  0,
+			taskID:     taskID,
+			persona:    persona,
+			isParallel: isParallel,
+		}
+		batchBuffers[taskID] = buffer
+	}
+
+	// Add line to buffer
+	buffer.lines = append(buffer.lines, message)
+	buffer.lineCount++
+
+	// Check if batch is full - clear buffer first, then flush
+	if buffer.lineCount >= BATCH_SIZE {
+		buffer.lines = buffer.lines[:0]
+		buffer.lineCount = 0
+		bufferMu.Unlock()
+		flushSubagentBatch(buffer, a, toolCallID, toolName)
+		bufferMu.Lock()
+	}
+
+	bufferMu.Unlock()
+}
+
+// Tool handler implementations for subagent operations
+
+// extractSubagentSummary parses stdout from a subagent execution to extract key information
+// Optimized to avoid regex compilation in loops and process only relevant lines
+func extractSubagentSummary(stdout string) map[string]string {
+	summary := make(map[string]string)
+
+	// Pre-compile regex patterns once (outside the loop)
+	passedRe := regexp.MustCompile(`(\d+)\s+passed`)
+	failedRe := regexp.MustCompile(`(\d+)\s+failed`)
+	todoRe := regexp.MustCompile(`(Added|Marked|Created|Updated|Completed|Removed)\s+(\d+)\s+todos?`)
+	cmdRe := regexp.MustCompile(`(?:command|Running):\s+([^\n]+)`)
+
+	// Compile metrics regex patterns once
+	totalTokensRe := regexp.MustCompile(`total_tokens=(\d+)`)
+	promptTokensRe := regexp.MustCompile(`prompt_tokens=(\d+)`)
+	completionTokensRe := regexp.MustCompile(`completion_tokens=(\d+)`)
+	totalCostRe := regexp.MustCompile(`total_cost=([\d.]+)`)
+	cachedTokensRe := regexp.MustCompile(`cached_tokens=(\d+)`)
+
+	lines := strings.Split(stdout, "\n")
+
+	var fileChanges []string
+	var buildStatus string
+	var testStatus string
+	var errors []string
+	var todosCreated []string
+	var commandsExecuted []string
+	var testPassCount, testFailCount int
+
+	// Process lines but limit to first 10,000 to avoid excessive processing
+	maxLines := 10000
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+
+	for _, line := range lines {
+		// Skip empty lines early
+		if line == "" {
+			continue
+		}
+
+		// Only trim if needed (check if line has leading/trailing whitespace)
+		trimmedLine := line
+		if line[0] == ' ' || line[0] == '\t' || line[len(line)-1] == ' ' || line[len(line)-1] == '\t' {
+			trimmedLine = strings.TrimSpace(line)
+		}
+
+		// Fast-path checks using byte operations for common prefixes
+		if len(trimmedLine) > 0 {
+			firstChar := trimmedLine[0]
+
+			// Extract file operations (fast ASCII checks)
+			switch firstChar {
+			case 'C', 'c':
+				if strings.HasPrefix(trimmedLine, "Created:") || strings.HasPrefix(trimmedLine, "Wrote") {
+					file := strings.TrimSpace(trimmedLine[8:])
+					if strings.HasPrefix(trimmedLine, "Created:") {
+						file = strings.TrimSpace(trimmedLine[8:])
+					} else if strings.HasPrefix(trimmedLine, "Wrote") {
+						file = strings.TrimSpace(trimmedLine[6:])
+					}
+					fileChanges = append(fileChanges, "Created: "+file)
+				}
+			case 'M', 'm':
+				if strings.HasPrefix(trimmedLine, "Modified:") {
+					file := strings.TrimSpace(trimmedLine[9:])
+					fileChanges = append(fileChanges, "Modified: "+file)
+				}
+			case 'D', 'd':
+				if strings.HasPrefix(trimmedLine, "Deleted:") {
+					file := strings.TrimSpace(trimmedLine[8:])
+					fileChanges = append(fileChanges, "Deleted: "+file)
+				}
+			case 'U', 'u':
+				if strings.HasPrefix(trimmedLine, "Updated:") {
+					file := strings.TrimSpace(trimmedLine[8:])
+					fileChanges = append(fileChanges, "Updated: "+file)
+				}
+			case 'E', 'e':
+				if strings.HasPrefix(trimmedLine, "Error:") || strings.HasPrefix(trimmedLine, "error:") {
+					errors = append(errors, trimmedLine)
+				}
+			case 'S', 's':
+				if strings.HasPrefix(trimmedLine, "SUBAGENT_METRICS:") {
+					// Parse the metrics using pre-compiled regex
+					if matches := totalTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_total_tokens"] = matches[1]
+					}
+					if matches := promptTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_prompt_tokens"] = matches[1]
+					}
+					if matches := completionTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_completion_tokens"] = matches[1]
+					}
+					if matches := totalCostRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_total_cost"] = matches[1]
+					}
+					if matches := cachedTokensRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						summary["subagent_cached_tokens"] = matches[1]
+					}
+					continue // Skip further processing for metrics lines
+				}
+			}
+
+			// Extract build status (only if line contains "Build:")
+			if strings.Contains(trimmedLine, "Build:") {
+				if strings.Contains(trimmedLine, "[OK] Passed") {
+					buildStatus = "passed"
+				} else if strings.Contains(trimmedLine, "[OK] Failed") || strings.Contains(trimmedLine, "[FAIL] Failed") {
+					buildStatus = "failed"
+				}
+			}
+
+			// Extract test status and counts
+			if strings.Contains(trimmedLine, "Test:") || strings.Contains(trimmedLine, "Tests:") {
+				if strings.Contains(trimmedLine, "[OK] Passed") {
+					testStatus = "passed"
+				} else if strings.Contains(trimmedLine, "[OK] Failed") || strings.Contains(trimmedLine, "[FAIL] Failed") {
+					testStatus = "failed"
+				}
+
+				// Extract test counts using pre-compiled regex
+				if matches := passedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					fmt.Sscanf(matches[1], "%d", &testPassCount)
+				}
+				if matches := failedRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+					fmt.Sscanf(matches[1], "%d", &testFailCount)
+				}
+			}
+
+			// Extract todo list operations
+			if strings.Contains(trimmedLine, "TodoWrite") || strings.Contains(trimmedLine, "todo list") {
+				if matches := todoRe.FindStringSubmatch(trimmedLine); len(matches) > 2 {
+					todosCreated = append(todosCreated, matches[0])
+				}
+			}
+
+			// Extract shell commands executed
+			if strings.Contains(trimmedLine, "$") || strings.Contains(trimmedLine, "shell_command") {
+				if strings.HasPrefix(trimmedLine, "$") {
+					cmd := strings.TrimSpace(trimmedLine[1:])
+					if cmd != "" {
+						commandsExecuted = append(commandsExecuted, cmd)
+					}
+				}
+				if strings.Contains(trimmedLine, "Executing command") || strings.Contains(trimmedLine, "Running") {
+					if matches := cmdRe.FindStringSubmatch(trimmedLine); len(matches) > 1 {
+						commandsExecuted = append(commandsExecuted, strings.TrimSpace(matches[1]))
+					}
+				}
+			}
+		}
+	}
+
+	if len(fileChanges) > 0 {
+		summary["files"] = strings.Join(fileChanges, "; ")
+	}
+	if buildStatus != "" {
+		summary["build_status"] = buildStatus
+	}
+	if testStatus != "" {
+		summary["test_status"] = testStatus
+		if testPassCount > 0 || testFailCount > 0 {
+			summary["test_counts"] = fmt.Sprintf("%d passed, %d failed", testPassCount, testFailCount)
+		}
+	}
+	if len(errors) > 0 {
+		summary["errors"] = strings.Join(errors, "; ")
+	}
+	if len(todosCreated) > 0 {
+		summary["todos"] = strings.Join(todosCreated, "; ")
+	}
+	if len(commandsExecuted) > 0 {
+		// Limit to first 10 commands to avoid overwhelming output
+		if len(commandsExecuted) > 10 {
+			commandsExecuted = commandsExecuted[:10]
+			summary["commands"] = strings.Join(commandsExecuted, "; ") + "..."
+		} else {
+			summary["commands"] = strings.Join(commandsExecuted, "; ")
+		}
+	}
+
+	return summary
+}
 
 func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	prompt, err := convertToString(args["prompt"], "prompt")
@@ -610,4 +937,382 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
 	return string(jsonBytes), nil
+}
+
+func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	// Accept "tasks", "prompts", or "subagents" parameter names for LLM flexibility
+	var tasksRaw interface{}
+	var ok bool
+
+	if tasksRaw, ok = args["tasks"]; !ok {
+		if tasksRaw, ok = args["prompts"]; !ok {
+			tasksRaw, ok = args["subagents"]
+		}
+	}
+	if !ok {
+		return "", agenterrors.NewInvalidInputError("missing tasks, prompts, or subagents argument", nil)
+	}
+
+	// Parse the tasks array
+	tasksSlice, ok := tasksRaw.([]interface{})
+	if !ok {
+		return "", agenterrors.NewInvalidInputError("tasks/prompts must be an array", nil)
+	}
+
+	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
+
+	var parallelTasks []SubagentTask
+	for i, taskRaw := range tasksSlice {
+		task := SubagentTask{}
+
+		// Support two formats:
+		// 1. Simple string: "task description"
+		// 2. Object: {"id": "task-id", "prompt": "task description", ...}
+		if taskStr, ok := taskRaw.(string); ok {
+			// Simple string format - auto-generate ID
+			task.ID = fmt.Sprintf("task-%d", i+1)
+			task.Prompt = taskStr
+		} else if taskMap, ok := taskRaw.(map[string]interface{}); ok {
+			// Object format
+			if id, ok := taskMap["id"].(string); ok {
+				task.ID = id
+			} else {
+				// Auto-generate ID if not provided
+				task.ID = fmt.Sprintf("task-%d", i+1)
+			}
+
+			prompt, err := convertToString(taskMap["prompt"], "prompt")
+			if err != nil {
+				return "", fmt.Errorf("failed to convert prompt parameter: %w", err)
+			}
+			task.Prompt = prompt
+
+			// Note: model and provider are set from configuration, not from LLM parameters
+			// This ensures consistent subagent behavior configured by the user
+		} else {
+			return "", agenterrors.NewInvalidInputError("each task must be a string or an object", nil)
+		}
+
+		parallelTasks = append(parallelTasks, task)
+	}
+
+	// Get configured subagent model/provider and apply to all tasks
+	var subagentProvider, subagentModel string
+	if a.configManager != nil {
+		config := a.configManager.GetConfig()
+		subagentProvider = config.GetSubagentProvider()
+		subagentModel = config.GetSubagentModel()
+		a.warnSubagentFallback("parallel subagent defaults", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
+
+		// If no explicit subagent config, inherit from parent agent's runtime values.
+		if config.SubagentProvider == "" && config.SubagentModel == "" {
+			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {
+				subagentProvider = parentProvider
+			}
+			if parentModel := a.GetModel(); parentModel != "" && parentModel != "unknown" {
+				subagentModel = parentModel
+			}
+		}
+	} else {
+		subagentProvider = a.GetProvider()
+		subagentModel = a.GetModel()
+	}
+
+	// Apply configuration to all tasks (overriding any empty values)
+	for i := range parallelTasks {
+		if subagentProvider != "" && parallelTasks[i].Provider == "" {
+			parallelTasks[i].Provider = subagentProvider
+		}
+		if subagentModel != "" && parallelTasks[i].Model == "" {
+			parallelTasks[i].Model = subagentModel
+		}
+	}
+
+	// Check if parallel subagents are enabled
+	if a.configManager != nil && !a.configManager.GetConfig().GetSubagentParallelEnabled() {
+		return "", agenterrors.NewPermanentError("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.", nil)
+	}
+
+	// Validate number of parallel tasks against configured max
+	if a.configManager != nil {
+		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
+		if len(parallelTasks) > maxParallel {
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("too many parallel tasks: %d exceeds configured max of %d", len(parallelTasks), maxParallel), nil)
+		}
+	}
+
+	a.debugLog("Spawning %d parallel subagents\n", len(parallelTasks))
+
+	// Print the provider/model being used for these parallel subagents
+	displayProvider := subagentProvider
+	if displayProvider == "" {
+		displayProvider = "default"
+	}
+	displayModel := subagentModel
+	if displayModel == "" {
+		displayModel = "default"
+	}
+	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %d parallel subagents", len(parallelTasks)), map[string]interface{}{
+		"provider":    displayProvider,
+		"model":       displayModel,
+		"is_parallel": true,
+		"task_count":  len(parallelTasks),
+	})
+	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)))
+
+	runner := a.GetSubagentRunner()
+	var tasks []SubagentTask
+	for _, pt := range parallelTasks {
+		tasks = append(tasks, SubagentTask{
+			ID:       pt.ID,
+			Prompt:   pt.Prompt,
+			Model:    pt.Model,
+			Provider: pt.Provider,
+		})
+	}
+	results := runner.RunParallel(ctx, tasks, SubagentOptions{})
+
+	// Convert to resultMap format for backward compatibility
+	resultMap := make(map[string]map[string]string)
+	for _, r := range results {
+		resultMap[r.ID] = map[string]string{
+			"stdout":          r.Output,
+			"stderr":          "",
+			"exit_code":       "0",
+			"completed":       "true",
+			"timed_out":       "false",
+			"budget_exceeded": fmt.Sprintf("%t", r.BudgetExceeded),
+			"elapsed_seconds": fmt.Sprintf("%.1f", r.Elapsed.Seconds()),
+			"tokens_used":     fmt.Sprintf("%d", r.TokensUsed),
+			"cost":            fmt.Sprintf("%.6f", r.Cost),
+			"tool_calls":      fmt.Sprintf("%d", r.ToolCalls),
+		}
+		if r.Error != nil {
+			resultMap[r.ID]["exit_code"] = "1"
+			resultMap[r.ID]["stderr"] = r.Error.Error()
+		}
+	}
+	failedCount := 0
+	for _, result := range resultMap {
+		if result["exit_code"] != "0" {
+			failedCount++
+		}
+	}
+	completionMessage := fmt.Sprintf("Parallel subagents completed (%d tasks)", len(resultMap))
+	if failedCount > 0 {
+		completionMessage = fmt.Sprintf("Parallel subagents finished with %d failure(s)", failedCount)
+	}
+	publishSubagentActivity(ctx, a, "complete", completionMessage, map[string]interface{}{
+		"is_parallel": true,
+		"task_count":  len(resultMap),
+		"failures":    failedCount,
+	})
+
+	// Clean up any remaining batch buffers for all tasks
+	for taskID := range resultMap {
+		cleanupSubagentBatch(taskID, a, "", "")
+	}
+
+	// Track costs from all parallel subagents
+	for taskID, result := range resultMap {
+		if stdout, ok := result["stdout"]; ok {
+			summary := extractSubagentSummary(stdout)
+
+			// Track subagent costs in parent agent's totals
+			if totalTokensStr, ok := summary["subagent_total_tokens"]; ok {
+				if totalCostStr, ok := summary["subagent_total_cost"]; ok {
+					promptTokensStr := summary["subagent_prompt_tokens"]
+					completionTokensStr := summary["subagent_completion_tokens"]
+					cachedTokensStr := summary["subagent_cached_tokens"]
+
+					// Parse the values
+					var totalTokens, promptTokens, completionTokens, cachedTokens int
+					var totalCost float64
+					fmt.Sscanf(totalTokensStr, "%d", &totalTokens)
+					fmt.Sscanf(promptTokensStr, "%d", &promptTokens)
+					fmt.Sscanf(completionTokensStr, "%d", &completionTokens)
+					fmt.Sscanf(cachedTokensStr, "%d", &cachedTokens)
+					fmt.Sscanf(totalCostStr, "%f", &totalCost)
+
+					// Add to parent agent's totals using TrackMetricsFromResponse
+					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
+					a.debugLog("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
+				}
+			}
+		}
+	}
+
+	// Check for security errors in any of the parallel subagents
+	// When running as a subagent, we need to delegate security decisions to the primary agent
+	if a.IsSubagent() {
+		for taskID, result := range resultMap {
+			exitCode := result["exit_code"]
+			stderr := result["stderr"]
+
+			// Check for filesystem security errors or failures
+			if strings.Contains(stderr, "outside working directory") ||
+				strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "security warning") ||
+				exitCode != "0" {
+
+				// One of the parallel subagents encountered a security error or failed
+				// Return a special error format that tells the primary agent to stop retrying
+				errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: A parallel subagent encountered a security-related error or requires user authorization.\n\n"+
+					"Task ID: %s\n"+
+					"Exit code: %s\n"+
+					"Stderr: %s\n"+
+					"Stdout: %s\n\n"+
+					"IMPORTANT: This subagent task requires user authorization or encountered a blocking error. "+
+					"Do NOT retry this parallel subagent call with the same parameters. "+
+					"Instead, inform the user about the error and ask for guidance on how to proceed.",
+					taskID, exitCode, stderr, result["stdout"])
+
+				a.debugLog("Parallel subagent [%s] failed with security error, delegating to primary agent\n", taskID)
+				return errorMsg, nil
+			}
+		}
+	}
+
+	// Flush any remaining buffered output for parallel subagents
+	flushAllSubagentBuffers(a)
+
+	// For non-subagent context (primary agent), check if any subagent failed
+	// and add a clear message to prevent retry loops
+	var failedTasks []string
+	var securityErrors []string
+
+	for taskID, result := range resultMap {
+		exitCode := result["exit_code"]
+		stderr := result["stderr"]
+		stdout := result["stdout"]
+
+		if exitCode != "0" {
+			// Check for specific error patterns that indicate we should stop retrying
+			if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+				strings.Contains(stderr, "security") ||
+				strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+
+				// This is a security/authorization error - don't retry
+				securityErrors = append(securityErrors, fmt.Sprintf(
+					"Task %s: exit code %s, error: %s", taskID, exitCode, stderr))
+			} else {
+				// Other failures - track but allow potential retry
+				failedTasks = append(failedTasks, fmt.Sprintf(
+					"Task %s: exit code %s", taskID, exitCode))
+				result["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
+			}
+		}
+	}
+
+	// If we have security errors, return a clear error message to prevent retry loops
+	if len(securityErrors) > 0 {
+		errorMsg := fmt.Sprintf("SUBAGENT_FAILED: One or more parallel subagents encountered security or authorization errors that prevent them from completing their tasks.\n\n"+
+			"%s\n\n"+
+			"These errors require user intervention. Do NOT retry the parallel subagent call. "+
+			"Instead, report the errors to the user and ask for guidance.",
+			strings.Join(securityErrors, "\n"))
+
+		a.debugLog("Parallel subagents failed with security errors, stopping retry loop\n")
+		return errorMsg, nil
+	}
+
+	// Convert map result to JSON for return
+	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
+	if jsonErr != nil {
+		return "", fmt.Errorf("failed to marshal parallel subagents result: %w", jsonErr)
+	}
+
+	a.debugLog("Parallel subagents spawn result: %s\n", string(jsonBytes))
+
+	return string(jsonBytes), nil
+}
+
+func (a *Agent) warnSubagentFallback(scope, configuredProvider, configuredModel, effectiveProvider, effectiveModel string) {
+	usesProviderFallback := configuredProvider == "" && strings.TrimSpace(effectiveProvider) != ""
+	usesModelFallback := configuredModel == "" && strings.TrimSpace(effectiveModel) != ""
+	if !usesProviderFallback && !usesModelFallback {
+		return
+	}
+
+	provider := strings.TrimSpace(effectiveProvider)
+	if provider == "" {
+		provider = "<system default>"
+	}
+	model := strings.TrimSpace(effectiveModel)
+	if model == "" {
+		model = "<provider default>"
+	}
+
+	a.PrintLineAsync(fmt.Sprintf("[WARN] Subagent fallback active (%s): provider=%s model=%s", scope, provider, model))
+}
+
+// Helper functions for subagent handlers
+
+// truncateString truncates a string to a maximum length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// stripAnsiCodes removes ANSI escape codes from a string
+func stripAnsiCodes(s string) string {
+	// ANSI escape code regex pattern
+	ansiEscape := regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+	return ansiEscape.ReplaceAllString(s, "")
+}
+
+// isPathInWorkspace checks if a path is within the workspace directory
+func isPathInWorkspace(path, workspaceDir string) bool {
+	if path == workspaceDir {
+		return true
+	}
+	return strings.HasPrefix(path, workspaceDir+string(filepath.Separator))
+}
+
+// isPathInTmp checks if a path is in /tmp/ for temporary file access
+func isPathInTmp(path string) bool {
+	// Check for /tmp/ or /var/folders/.../T/ (macOS temp dir) or any path containing tmp
+	return strings.Contains(path, "/tmp/") ||
+		strings.Contains(path, "/var/folders/.../T/") ||
+		strings.Contains(strings.ToLower(path), "/tmp/")
+}
+
+// commonParent finds the common parent directory of multiple paths
+func commonParent(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	if len(paths) == 1 {
+		return filepath.Dir(paths[0])
+	}
+	result := paths[0]
+	for _, p := range paths[1:] {
+		for !strings.HasPrefix(p+string(filepath.Separator), result+string(filepath.Separator)) && p != result {
+			result = filepath.Dir(result)
+			if result == "/" || result == "." {
+				return result
+			}
+		}
+	}
+	return result
+}
+
+// flushAllSubagentBuffers flushes all pending batch buffers
+func flushAllSubagentBuffers(a *Agent) {
+	bufferMu.Lock()
+	defer bufferMu.Unlock()
+
+	for taskID, buffer := range batchBuffers {
+		if len(buffer.lines) > 0 {
+			toolCallID := taskID
+			toolName := "subagent"
+			flushSubagentBatch(buffer, a, toolCallID, toolName)
+			// Delete buffer immediately after flushing to prevent memory leak
+			delete(batchBuffers, taskID)
+		}
+	}
 }

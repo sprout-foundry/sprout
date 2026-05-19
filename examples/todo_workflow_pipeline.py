@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Iterate through TODO.md items using sprout workflow configs.
+"""Iterate through TODO.md items using ledit workflow configs.
 
 For each incomplete TODO item this script:
   1. Loads a workflow JSON and templates the TODO text into the initial prompt
-  2. Runs ``sprout agent --workflow-config <config> --skip-prompt --no-web-ui``
-  3. Commits staged changes with ``sprout commit --skip-prompt``
+  2. Runs ``ledit agent --workflow-config <config> --skip-prompt --no-web-ui``
+  3. Commits staged changes with ``ledit commit --skip-prompt``
   4. Marks the TODO as complete in TODO.md
   5. Advances to the next incomplete item
 
@@ -103,7 +103,7 @@ class Opts:
     repo: pathlib.Path
     todo_file: pathlib.Path
     workflow_config: pathlib.Path
-    sprout_bin: str
+    ledit_bin: str
     max_todos: int
     single: bool
     dry_run: bool
@@ -263,7 +263,7 @@ def build_templated_workflow(
     tmp = tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".json",
-        prefix="sprout_workflow_",
+        prefix="ledit_workflow_",
         delete=False,
         encoding="utf-8",
     )
@@ -422,25 +422,12 @@ def _run_process(
                 )
 
             # Check for staleness (no output progress)
-            # Only count as a "warning" if the process has actually exited.
-            # If the process is still running, it's likely in a long LLM call
-            # (extended thinking) or synchronous tool execution — these produce
-            # no stdout but are NOT stuck. Log a heartbeat instead.
             if monitor.is_stale():
-                if proc.poll() is not None:
-                    # Process has exited — output is genuinely stale
-                    if elapsed - last_stale_warning > stale_warning_interval:
-                        monitor.stale_warnings += 1
-                        _log(
-                            f"STALE output (warning #{monitor.stale_warnings}): "
-                            f"process exited, no output for {stale_timeout}s. "
-                            f"{monitor.status()}"
-                        )
-                        last_stale_warning = elapsed
-                elif elapsed - last_stale_warning > stale_warning_interval:
-                    # Process still alive but silent (e.g., LLM extended thinking)
+                if elapsed - last_stale_warning > stale_warning_interval:
+                    monitor.stale_warnings += 1
                     _log(
-                        f"[heartbeat] Process alive, no output for {stale_timeout}s+. "
+                        f"STALE output (warning #{monitor.stale_warnings}): "
+                        f"no progress indicators for {stale_timeout}s. "
                         f"{monitor.status()}"
                     )
                     last_stale_warning = elapsed
@@ -468,13 +455,13 @@ def _run_process(
         raise
 
 
-def run_sprout_agent(
+def run_ledit_agent(
     opts: Opts,
     workflow_config_path: pathlib.Path,
 ) -> subprocess.CompletedProcess[str]:
-    """Run ``sprout agent --workflow-config <path> --skip-prompt --no-web-ui``."""
+    """Run ``ledit agent --workflow-config <path> --skip-prompt --no-web-ui``."""
     cmd = [
-        opts.sprout_bin,
+        opts.ledit_bin,
         "agent",
         "--workflow-config",
         str(workflow_config_path),
@@ -484,7 +471,7 @@ def run_sprout_agent(
     ]
     _log(f"Running: {' '.join(cmd)}")
     if opts.dry_run:
-        _log("[DRY RUN] Would run sprout agent (skipped)")
+        _log("[DRY RUN] Would run ledit agent (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
     result = _run_process(
@@ -513,18 +500,18 @@ def has_staged_changes(repo: pathlib.Path) -> bool:
     return result.returncode != 0
 
 
-def run_sprout_commit(opts: Opts) -> subprocess.CompletedProcess[str]:
-    """Run ``sprout commit --skip-prompt`` if there are staged changes."""
+def run_ledit_commit(opts: Opts) -> subprocess.CompletedProcess[str]:
+    """Run ``ledit commit --skip-prompt`` if there are staged changes."""
     if not has_staged_changes(opts.repo):
         _log("No staged changes – skipping commit")
         return subprocess.CompletedProcess(
-            ["sprout", "commit"], returncode=0, stdout="", stderr=""
+            ["ledit", "commit"], returncode=0, stdout="", stderr=""
         )
 
-    cmd = [opts.sprout_bin, "commit", "--skip-prompt"]
+    cmd = [opts.ledit_bin, "commit", "--skip-prompt"]
     _log(f"Running: {' '.join(cmd)}")
     if opts.dry_run:
-        _log("[DRY RUN] Would run sprout commit (skipped)")
+        _log("[DRY RUN] Would run ledit commit (skipped)")
         return subprocess.CompletedProcess(cmd, returncode=0, stdout="", stderr="")
 
     result = _run_process(cmd, cwd=opts.repo, timeout=min(opts.timeout, 300))
@@ -556,8 +543,8 @@ class TodoPipeline:
         # 1. Build templated workflow config
         tmp_workflow = build_templated_workflow(self.opts.workflow_config, item.text)
         try:
-            # 2. Run sprout agent
-            agent_result = run_sprout_agent(self.opts, tmp_workflow)
+            # 2. Run ledit agent
+            agent_result = run_ledit_agent(self.opts, tmp_workflow)
 
             # Handle timeout (returncode == -1 sentinel)
             if agent_result.returncode == -1:
@@ -574,21 +561,21 @@ class TodoPipeline:
                 else:
                     _log("Raising timeout error (default behavior)")
                     raise RuntimeError(
-                        f"sprout agent timed out for TODO {item.text!r} "
+                        f"ledit agent timed out for TODO {item.text!r} "
                         f"(after {self.opts.timeout}s)"
                     )
 
             if agent_result.returncode != 0:
                 raise RuntimeError(
-                    f"sprout agent failed for TODO {item.text!r} "
+                    f"ledit agent failed for TODO {item.text!r} "
                     f"(exit code {agent_result.returncode})"
                 )
 
             # 3. Commit staged changes
-            commit_result = run_sprout_commit(self.opts)
+            commit_result = run_ledit_commit(self.opts)
             if commit_result.returncode != 0:
                 raise RuntimeError(
-                    f"sprout commit failed for TODO {item.text!r} "
+                    f"ledit commit failed for TODO {item.text!r} "
                     f"(exit code {commit_result.returncode})"
                 )
 
@@ -610,7 +597,7 @@ class TodoPipeline:
         _log(f"Starting TODO workflow pipeline – repo={self.opts.repo}")
         _log(f"  TODO file:       {self.opts.todo_file}")
         _log(f"  Workflow config: {self.opts.workflow_config}")
-        _log(f"  Sprout binary:   {self.opts.sprout_bin}")
+        _log(f"  Ledit binary:    {self.opts.ledit_bin}")
         _log(f"  Max todos:       {self.opts.max_todos or 'unlimited'}")
         _log(f"  Single mode:     {self.opts.single}")
         _log(f"  Dry run:         {self.opts.dry_run}")
@@ -701,7 +688,7 @@ class TodoPipeline:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Iterate through TODO.md items using sprout workflow configs",
+        description="Iterate through TODO.md items using ledit workflow configs",
     )
     parser.add_argument(
         "--repo",
@@ -719,9 +706,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the workflow JSON (default: examples/todo_workflow.json)",
     )
     parser.add_argument(
-        "--sprout-bin",
-        default="sprout",
-        help="Path to sprout binary (default: sprout)",
+        "--ledit-bin",
+        default="ledit",
+        help="Path to ledit binary (default: ledit)",
     )
     parser.add_argument(
         "--max-todos",
@@ -743,7 +730,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout",
         type=int,
         default=7200,
-        help="Timeout in seconds for sprout agent subprocess (default: 7200)",
+        help="Timeout in seconds for ledit agent subprocess (default: 7200)",
     )
     parser.add_argument(
         "--stale-timeout",
@@ -788,7 +775,7 @@ def main() -> None:
         repo=repo,
         todo_file=todo_file,
         workflow_config=workflow_config,
-        sprout_bin=args.sprout_bin,
+        ledit_bin=args.ledit_bin,
         max_todos=args.max_todos,
         single=args.single,
         dry_run=args.dry_run,

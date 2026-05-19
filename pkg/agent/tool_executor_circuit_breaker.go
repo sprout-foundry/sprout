@@ -1,9 +1,5 @@
 // Circuit breaker: prevents infinite tool-execution loops by tracking
 // repeated identical actions within a sliding time window.
-//
-// Read-only tools (TodoRead, search_files, etc.) are excluded from circuit breaker
-// tracking because they are idempotent and side-effect-free. Circuit-breaking them
-// causes false positives — e.g., TodoRead takes no args so every call has the same key.
 package agent
 
 import (
@@ -11,26 +7,8 @@ import (
 	"fmt"
 )
 
-// readOnlyTools are side-effect-free tools excluded from circuit breaker tracking.
-// Repeated calls to these tools are harmless (they don't modify files or state),
-// and many take no/few arguments so they produce identical keys that cause false positives.
-var readOnlyTools = map[string]bool{
-	"TodoRead":       true,
-	"search_files":   true,
-	"semantic_search": true,
-	"repo_map":       true,
-	"list_skills":    true,
-	"list_memories":  true,
-	"read_memory":    true,
-}
-
 // checkCircuitBreaker checks if an action should be blocked
 func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]interface{}) bool {
-	// Read-only tools are never circuit-broken
-	if readOnlyTools[toolName] {
-		return false
-	}
-
 	if te.agent.state == nil || te.agent.state.GetCircuitBreaker() == nil {
 		return false
 	}
@@ -76,11 +54,6 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 // updateCircuitBreaker updates the circuit breaker state
 // The caller expects this function to be thread-safe with respect to the circuitBreaker map.
 func (te *ToolExecutor) updateCircuitBreaker(toolName string, args map[string]interface{}) {
-	// Read-only tools are idempotent and side-effect-free; never circuit-break them.
-	if readOnlyTools[toolName] {
-		return
-	}
-
 	if te.agent.state == nil || te.agent.state.GetCircuitBreaker() == nil {
 		return
 	}

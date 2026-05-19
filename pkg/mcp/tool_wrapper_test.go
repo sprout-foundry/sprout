@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -1096,9 +1097,9 @@ func TestValidateArgs_InvalidArgs_ReturnsInvalidArgsError(t *testing.T) {
 	assert.Error(t, err)
 	invalidErr, ok := err.(*InvalidArgsError)
 	assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
-	assert.Equal(t, "myserver", invalidErr.ServerName)
-	assert.Equal(t, "mytool", invalidErr.ToolName)
-	assert.NotEmpty(t, invalidErr.Causes)
+	assert.Equal(t, "myserver", invalidErr.Server)
+	assert.Equal(t, "mytool", invalidErr.Tool)
+	assert.NotNil(t, invalidErr.Wrapped)
 	assert.Contains(t, err.Error(), "invalid arguments")
 }
 
@@ -1118,9 +1119,9 @@ func TestValidateArgs_MissingRequiredField_ReturnsInvalidArgsError(t *testing.T)
 	assert.Error(t, err)
 	invalidErr, ok := err.(*InvalidArgsError)
 	assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
-	assert.Equal(t, "myserver", invalidErr.ServerName)
-	assert.Equal(t, "mytool", invalidErr.ToolName)
-	assert.NotEmpty(t, invalidErr.Causes)
+	assert.Equal(t, "myserver", invalidErr.Server)
+	assert.Equal(t, "mytool", invalidErr.Tool)
+	assert.NotNil(t, invalidErr.Wrapped)
 	assert.Contains(t, err.Error(), "invalid arguments")
 }
 
@@ -1146,40 +1147,40 @@ func TestValidateArgs_CompileError_FailOpen_WarnOnce(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// InvalidArgsError Error() Formatting Tests
+// InvalidArgsError Error() and Unwrap() Tests
 // ---------------------------------------------------------------------------
 
-// TestInvalidArgsError_SingleCause verifies that Error() formats a single
-// cause correctly: "invalid arguments for tool <server>/<tool>: <cause>"
-func TestInvalidArgsError_SingleCause(t *testing.T) {
+// TestInvalidArgsError_Error verifies that Error() formats as
+// "invalid arguments for tool <server>/<tool>: <wrapped error>"
+func TestInvalidArgsError_Error(t *testing.T) {
+	wrapped := fmt.Errorf("reason A")
 	err := &InvalidArgsError{
-		ServerName: "mysrv",
-		ToolName:   "mytool",
-		Causes:     []string{"reason A"},
+		Server:  "mysrv",
+		Tool:    "mytool",
+		Wrapped: wrapped,
 	}
 	expected := "invalid arguments for tool mysrv/mytool: reason A"
 	assert.Equal(t, expected, err.Error())
 }
 
-// TestInvalidArgsError_MultipleCauses verifies that Error() joins multiple
-// causes with "; ": "invalid arguments for tool <server>/<tool>: <cause1>; <cause2>"
-func TestInvalidArgsError_MultipleCauses(t *testing.T) {
+// TestInvalidArgsError_Unwrap verifies that Unwrap() returns the wrapped error.
+func TestInvalidArgsError_Unwrap(t *testing.T) {
+	wrapped := fmt.Errorf("validation failed")
 	err := &InvalidArgsError{
-		ServerName: "mysrv",
-		ToolName:   "mytool",
-		Causes:     []string{"reason A", "reason B", "reason C"},
+		Server:  "mysrv",
+		Tool:    "mytool",
+		Wrapped: wrapped,
 	}
-	expected := "invalid arguments for tool mysrv/mytool: reason A; reason B; reason C"
-	assert.Equal(t, expected, err.Error())
+	assert.Equal(t, wrapped, err.Unwrap())
 }
 
-// TestInvalidArgsError_NoCauses verifies the fallback message when Causes is empty.
-func TestInvalidArgsError_NoCauses(t *testing.T) {
+// TestInvalidArgsError_NoWrappedError verifies Error() handles nil Wrapped gracefully.
+func TestInvalidArgsError_NoWrappedError(t *testing.T) {
 	err := &InvalidArgsError{
-		ServerName: "mysrv",
-		ToolName:   "mytool",
-		Causes:     []string{},
+		Server:  "mysrv",
+		Tool:    "mytool",
+		Wrapped: nil,
 	}
-	expected := "invalid arguments for tool mysrv/mytool"
+	expected := "invalid arguments for tool mysrv/mytool: <nil>"
 	assert.Equal(t, expected, err.Error())
 }

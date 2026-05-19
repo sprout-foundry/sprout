@@ -188,8 +188,6 @@ func HotkeyPresetConfig(preset string) *HotkeyConfig {
 		return WebStormHotkeyConfig()
 	case "sprout":
 		return DefaultHotkeyConfig()
-	case "ledit": // legacy alias
-		return DefaultHotkeyConfig()
 	default:
 		return DefaultHotkeyConfig()
 	}

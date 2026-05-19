@@ -43,11 +43,8 @@ Spec: `roadmap/SP-027-persistent-context.md`
 [x] - SP-027-3b: Implement non-blocking drift notification — WebUI: toast-style notification with "Continue here" / "Start new chat" options (non-modal, agent continues). CLI: post-turn prompt with Enter to continue, 's' for new chat
 [x] - SP-027-3c: Implement suppression logic — disable drift detection for session after 3 consecutive rejections
 [x] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
-[] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
 [x] - SP-027-3e: Add drift config fields to `PersistentContextConfig` — `DriftDetectionEnabled` (true), `DriftThreshold` (0.60), `DriftCheckInterval` (5 turns)
-[] - SP-027-3e: Add drift config fields to `PersistentContextConfig` — `DriftDetectionEnabled` (true), `DriftThreshold` (0.60), `DriftCheckInterval` (5 turns)
 [x] - SP-027-3f: Create WebUI drift notification component in `webui/src/components/` — non-modal toast with "Continue here" / "Start new chat" buttons
-[] - SP-027-3f: Create WebUI drift notification component in `webui/src/components/` — non-modal toast with "Continue here" / "Start new chat" buttons
 [x] - SP-027-3g: Tests — unit test for drift detection with threshold, test for suppression after 3 rejections, test for intent embedding persistence across session restore
 
 ### Phase 4: Memory Integration
@@ -78,11 +75,11 @@ Spec: `roadmap/SP-028-test-suite-stabilization.md`
 [] - SP-028-2a: Add double-checked RWMutex fast path to `getMCPTools` in `pkg/agent/mcp.go` (sites at lines 162 and 184) — `RLock` and check init flag; only acquire write lock on cache miss
 [] - SP-028-2b: Audit every transitive caller of `LockInit` (`pkg/agent/submanager_mcp.go:73`) for lock-order violations; document the lock-order invariant as a doc comment on `AgentMCPManager`
 [x] - SP-028-2c: Reduce `TestMCPConcurrency_StressTest` (`pkg/agent/mcp_concurrency_test.go:264`) from 200×10 to 32×50 and add `t.Cleanup(func() { agent.Shutdown() })`
-[] - SP-028-2d: Verify with `go test -race -run TestMCPConcurrency -count=20 ./pkg/agent/` — must pass 20× in a row
+[x] - SP-028-2d: Verify with `go test -race -run TestMCPConcurrency -count=20 ./pkg/agent/` — must pass 20× in a row
 
 ### Phase 3: Fix WebUI PTY goroutine leak
 
-[] - SP-028-3a: Add `done chan struct{}` to terminal session struct; close it on `session.Close()` (`pkg/webui/terminal_session.go`)
+[x] - SP-028-3a: Add `done chan struct{}` to terminal session struct; close it on `session.Close()` (`pkg/webui/terminal_session.go`)
 [] - SP-028-3b: Rewrite the PTY read loop at `pkg/webui/terminal_create.go:146-175` — `select` on `done` alongside the read; use `pty.SetDeadline()` (with periodic-polling fallback if unsupported on platform)
 [] - SP-028-3c: Audit every test that creates a terminal session; add `t.Cleanup(session.Close)` — sweep `pkg/webui/*_test.go`
 [] - SP-028-3d: Verify with `go test -race -count=5 ./pkg/webui/` — `goleak` reports zero leaks

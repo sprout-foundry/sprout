@@ -36,3 +36,4 @@ architectural area, its current state, and open work.
 | SP-030 | [Repository Hygiene — Stale Artifacts & Predecessor Cleanup](./SP-030-repository-hygiene.md) | 📋 Spec |
 | SP-031 | [MCP Tool Input Validation Hardening](./SP-031-mcp-input-validation.md) | 📋 Spec |
 | SP-032 | [Daemon Mode Hardening](./SP-032-daemon-mode-hardening.md) | 📋 Spec |
+| SP-033 | [Agent Trust Boundary Hardening](./SP-033-agent-trust-boundary-hardening.md) | 📋 Spec |

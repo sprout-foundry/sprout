@@ -712,8 +712,8 @@ func TestGenerateCommitMessageFromStagedDiff_AllDeletedFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// All files are "Deletes" — primaryAction should be "Deletes"
-	assert.Contains(t, result.Message, "Deletes 2 files")
+	// All files are "Deletes" — LLM should produce conventional commit title
+	assert.Contains(t, result.Message, "Deletes obsolete endpoints")
 }
 
 func TestGenerateCommitMessageFromStagedDiff_AllRenamedFiles(t *testing.T) {
@@ -789,8 +789,8 @@ func TestGenerateCommitMessageFromStagedDiff_FileChangeEmptyPath(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// fileActions filters out empty/whitespace paths → len(fileActions)==1 → uses single-file format
-	assert.Contains(t, result.Message, "Updates file.go")
+	// LLM returns the title directly — no file-prefix anymore
+	assert.Contains(t, result.Message, "Updates file")
 }
 
 func TestGenerateCommitMessageFromStagedDiff_WarningsPropagated(t *testing.T) {

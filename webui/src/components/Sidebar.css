@@ -1509,6 +1509,45 @@
   position: relative;
 }
 
+.git-sidebar-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.git-sidebar-empty-state p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.git-sidebar-empty-state-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+.git-sidebar-empty-state-hint code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.git-sidebar-empty-state .spinner {
+  animation: spin 1s linear infinite;
+  color: var(--text-tertiary);
+}
+
 .git-sidebar-header,
 .git-sidebar-commit-box,
 .git-sidebar-file-section,
@@ -1673,6 +1712,24 @@
   cursor: not-allowed;
 }
 
+.git-header-action-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 18px;
+  padding: 1px 5px 1px 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.git-header-action-btn:disabled .git-header-action-badge {
+  opacity: 0.6;
+}
+
 .git-sidebar-commit-box {
   display: flex;
   flex-direction: column;
@@ -1799,6 +1856,11 @@
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
+  /* Stay visible while scrolling through long file lists. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 1px 0 0 var(--border-subtle);
 }
 
 .git-sidebar-selection-summary {

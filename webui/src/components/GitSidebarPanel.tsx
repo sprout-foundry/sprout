@@ -4,7 +4,9 @@ import {
   ArrowUp,
   CheckCircle2,
   CheckSquare,
+  FolderGit2,
   GitBranch,
+  Loader2,
   MinusSquare,
   RefreshCw,
   ShieldCheck,
@@ -116,19 +118,21 @@ function GitSidebarPanel({
     deleted: MAX_FILES_INITIAL,
   });
 
-  const handleResetVisibleCounts = useCallback(() => {
+  // Reset visible counts whenever any section size changes so pagination state
+  // doesn't lag behind stage/unstage/refresh. The previous version depended on a
+  // stable useCallback and therefore only fired on mount.
+  const stagedCount = gitStatus?.staged.length ?? 0;
+  const modifiedCount = gitStatus?.modified.length ?? 0;
+  const untrackedCount = gitStatus?.untracked.length ?? 0;
+  const deletedCount = gitStatus?.deleted.length ?? 0;
+  useEffect(() => {
     setVisibleCounts({
       staged: MAX_FILES_INITIAL,
       modified: MAX_FILES_INITIAL,
       untracked: MAX_FILES_INITIAL,
       deleted: MAX_FILES_INITIAL,
     });
-  }, []);
-
-  // Reset visible counts when git status changes
-  useEffect(() => {
-    handleResetVisibleCounts();
-  }, [handleResetVisibleCounts]);
+  }, [stagedCount, modifiedCount, untrackedCount, deletedCount]);
 
   const handleLoadMore = useCallback(
     (section: FileSection) => {
@@ -145,7 +149,10 @@ function GitSidebarPanel({
   if (isLoading) {
     return (
       <div className="git-sidebar-panel">
-        <div className="empty">Loading git status…</div>
+        <div className="git-sidebar-empty-state">
+          <Loader2 size={20} className="spinner" aria-hidden="true" />
+          <p>Loading git status…</p>
+        </div>
       </div>
     );
   }
@@ -153,13 +160,21 @@ function GitSidebarPanel({
   if (!gitStatus) {
     return (
       <div className="git-sidebar-panel">
-        <div className="empty">No git repository found</div>
+        <div className="git-sidebar-empty-state">
+          <FolderGit2 size={28} aria-hidden="true" />
+          <p>No git repository in this workspace.</p>
+          <span className="git-sidebar-empty-state-hint">
+            Initialize one with <code>git init</code> in a terminal to enable version control here.
+          </span>
+        </div>
       </div>
     );
   }
 
   const hasStagedFiles = (gitStatus?.staged.length ?? 0) > 0;
   const branchName = gitBranches.current || gitStatus?.branch || 'detached';
+  const aheadCount = gitStatus?.ahead ?? 0;
+  const behindCount = gitStatus?.behind ?? 0;
   const visibleSections = FILE_SECTIONS.filter((section) => (gitStatus?.[section.id].length ?? 0) > 0);
   const hiddenSectionCount = FILE_SECTIONS.length - visibleSections.length;
   const selectedEntries = Array.from(selectedFiles)
@@ -239,25 +254,37 @@ function GitSidebarPanel({
                 Changes
               </span>
             )}
-            {gitStatus?.ahead && gitStatus.ahead > 0 ? (
-              <span className="ahead">
-                <ArrowUp size={12} />
-                {gitStatus.ahead}
-              </span>
-            ) : null}
-            {gitStatus?.behind && gitStatus.behind > 0 ? (
-              <span className="behind">
-                <ArrowDown size={12} />
-                {gitStatus.behind}
-              </span>
-            ) : null}
           </div>
           <div className="git-sidebar-toolbar-actions">
-            <button type="button" className="git-header-action-btn" onClick={onPull} disabled={isActing || isLoading}>
+            <button
+              type="button"
+              className="git-header-action-btn"
+              onClick={onPull}
+              disabled={isActing || isLoading}
+              title={behindCount > 0 ? `Pull ${behindCount} commit${behindCount === 1 ? '' : 's'}` : 'Pull'}
+            >
               Pull
+              {behindCount > 0 ? (
+                <span className="git-header-action-badge">
+                  <ArrowDown size={11} />
+                  {behindCount}
+                </span>
+              ) : null}
             </button>
-            <button type="button" className="git-header-action-btn" onClick={onPush} disabled={isActing || isLoading}>
+            <button
+              type="button"
+              className="git-header-action-btn"
+              onClick={onPush}
+              disabled={isActing || isLoading}
+              title={aheadCount > 0 ? `Push ${aheadCount} commit${aheadCount === 1 ? '' : 's'}` : 'Push'}
+            >
               Push
+              {aheadCount > 0 ? (
+                <span className="git-header-action-badge">
+                  <ArrowUp size={11} />
+                  {aheadCount}
+                </span>
+              ) : null}
             </button>
             <button
               type="button"
@@ -289,8 +316,21 @@ function GitSidebarPanel({
         <textarea
           value={commitMessage}
           onChange={(e) => onCommitMessageChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Cmd/Ctrl+Enter commits when the button would be enabled.
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              if (hasStagedFiles && commitMessage.trim() && !isActing) {
+                e.preventDefault();
+                onCommit();
+              }
+            }
+          }}
           disabled={!hasStagedFiles || isActing}
-          placeholder={hasStagedFiles ? 'Write commit message…' : 'Stage files to write a commit message'}
+          placeholder={
+            hasStagedFiles
+              ? 'Write commit message… (⌘/Ctrl+Enter to commit)'
+              : 'Stage files to write a commit message'
+          }
           className="git-sidebar-commit-input"
           rows={3}
         />
@@ -418,6 +458,8 @@ function GitSidebarPanel({
                       onClick={(event) => {
                         if (isActing) return;
                         if (event.shiftKey) {
+                          // Range select: extend selection from anchor to clicked row.
+                          // Do not change the diff preview — selection-only operation.
                           const anchor = anchorRef.current.get(section.id) ?? 0;
                           const from = Math.min(anchor, index);
                           const to = Math.max(anchor, index);
@@ -426,15 +468,17 @@ function GitSidebarPanel({
                             onSelectFiles(rangeKeys);
                           }
                         } else if (event.ctrlKey || event.metaKey) {
+                          // Toggle individual selection without touching the diff preview.
                           anchorRef.current.set(section.id, index);
                           onToggleFileSelection(section.id, file.path);
                         } else {
+                          // Plain click: replace selection and update the preview.
                           anchorRef.current.set(section.id, index);
                           if (onSelectFiles) {
                             onSelectFiles([key]);
                           }
+                          onPreviewFile(section.id, file.path);
                         }
-                        onPreviewFile(section.id, file.path);
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
@@ -505,12 +549,12 @@ function GitSidebarPanel({
               </div>
               {files.length > visibleCounts[section.id] && visibleCounts[section.id] < MAX_FILES_PER_SECTION && (
                 <button className="git-sidebar-load-more" onClick={() => handleLoadMore(section.id)}>
-                  Show more ({files.length - visibleCounts[section.id]} more files)
+                  Show {files.length - visibleCounts[section.id]} more
                 </button>
               )}
               {files.length > MAX_FILES_PER_SECTION && (
                 <div className="git-sidebar-file-limit-note">
-                  Showing up to {MAX_FILES_PER_SECTION} files. Use git status or command line to see all files.
+                  Showing first {MAX_FILES_PER_SECTION} of {files.length} files — use the command line to see the rest.
                 </div>
               )}
             </div>

@@ -47,3 +47,12 @@ export async function stopQuery(fetchFn: typeof fetch): Promise<void> {
   const response = await fetchFn('/api/query/stop', { method: 'POST' });
   if (!response.ok) throw new Error('Failed to stop query');
 }
+
+export async function recordDriftResponse(fetchFn: typeof fetch, startedNewChat: boolean): Promise<void> {
+  const response = await fetchFn('/api/drift-response', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ startedNewChat }),
+  });
+  if (!response.ok) throw new Error('Failed to record drift response');
+}

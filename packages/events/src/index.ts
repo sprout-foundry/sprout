@@ -23,6 +23,7 @@ export type {
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   AskUserRequestData,
+  DriftDetectedData,
   TerminalSessionReadyData,
   TerminalOutputData,
   TerminalPtyExitData,

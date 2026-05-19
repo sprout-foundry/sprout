@@ -117,6 +117,20 @@ type Agent struct {
 	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
 	// Used to control tool availability and prevent excessive nesting.
 	subagentDepth int
+
+	// driftDetected flag (atomic) for CLI drift notification.
+	// Set to 1 when drift is detected in the async check, cleared when
+	// the CLI reads and handles the notification.
+	driftDetected int32
+
+	// driftCheckDone is closed when the async drift check completes.
+	// Used by the CLI to wait for the check before showing a prompt.
+	//
+	// Concurrency invariant: written in finalizeConversationPostHooks
+	// (called synchronously during ProcessQuery), then read by the CLI
+	// interactive loop after ProcessQuery returns. The write always
+	// happens-before the read. Do NOT read from a different goroutine.
+	driftCheckDone <-chan struct{}
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user
@@ -127,4 +141,31 @@ type Agent struct {
 func (a *Agent) InjectWebUIManagers(approvalMgr *security.ApprovalManager, askUserMgr *tools.AskUserManager) {
 	a.security.SetApprovalMgr(approvalMgr)
 	a.security.SetAskUserMgr(askUserMgr)
+}
+
+// SetDriftDetected marks that drift was detected in the async check.
+func (a *Agent) SetDriftDetected() {
+	atomic.StoreInt32(&a.driftDetected, 1)
+}
+
+// GetAndClearDriftDetected returns true if drift was detected and clears the flag.
+func (a *Agent) GetAndClearDriftDetected() bool {
+	return atomic.SwapInt32(&a.driftDetected, 0) == 1
+}
+
+// WaitForDriftCheck waits for the async drift check to complete, up to the
+// given timeout. Returns true if the check completed (or was nil), false if
+// the timeout expired.
+func (a *Agent) WaitForDriftCheck(timeout time.Duration) bool {
+	if a.driftCheckDone == nil {
+		return true
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-a.driftCheckDone:
+		return true
+	case <-timer.C:
+		return false
+	}
 }

@@ -660,6 +660,15 @@ func (a *Agent) finalizeConversationPostHooks(result string, processedQuery stri
 	// Maybe checkpoint completed turn
 	a.maybeCheckpointCompletedTurn(processedQuery, preSeedMsgCount, len(a.state.GetMessages()))
 
+	// Non-blocking drift detection check after turn completion.
+	// Only check on turns where we recorded a checkpoint (every Nth turn
+	// per DriftConfig.CheckInterval). The async goroutine publishes a
+	// drift_detected event if drift is found.
+	if a.embeddingMgr != nil {
+		turnNumber := len(a.copyTurnCheckpoints())
+		a.driftCheckDone = a.checkDriftAsync(processedQuery, turnNumber)
+	}
+
 	// Publish query completed event
 	var finalContent string
 	messages := a.state.GetMessages()

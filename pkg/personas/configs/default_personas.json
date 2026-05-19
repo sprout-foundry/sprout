@@ -33,6 +33,7 @@
         "list_memories",
         "delete_memory"
       ],
+      "delegatable": false,
       "description": "Process-oriented planning and delegation persona: classify -> activate skills -> delegate -> verify",
       "enabled": true,
       "id": "orchestrator",
@@ -73,6 +74,7 @@
         "list_memories",
         "delete_memory"
       ],
+      "delegatable": false,
       "description": "Orchestration persona with repository management capabilities. Use the 'commit' tool for all commits (auto-generates commit messages). Can use shell_command with git for read-only operations (status, log, diff, branch, show). For branch management, staging, and other git operations, use shell_command with appropriate git commands but exercise caution.",
       "enabled": true,
       "id": "repo_orchestrator",
@@ -102,6 +104,7 @@
         "TodoWrite",
         "TodoRead"
       ],
+      "delegatable": true,
       "description": "General-purpose persona for tasks that do not require deep specialization",
       "enabled": true,
       "id": "general",
@@ -131,6 +134,7 @@
         "list_skills",
         "activate_skill"
       ],
+      "delegatable": true,
       "description": "Feature implementation and production code writing specialist",
       "enabled": true,
       "id": "coder",
@@ -154,6 +158,7 @@
         "list_skills",
         "activate_skill"
       ],
+      "delegatable": true,
       "description": "Behavior-preserving refactoring specialist focused on low-risk, incremental improvements",
       "enabled": true,
       "id": "refactor",
@@ -180,6 +185,7 @@
         "list_skills",
         "activate_skill"
       ],
+      "delegatable": true,
       "description": "Bug investigation, root cause analysis, and targeted fixes specialist",
       "enabled": true,
       "id": "debugger",
@@ -205,6 +211,7 @@
         "list_skills",
         "activate_skill"
       ],
+      "delegatable": true,
       "description": "Unit test writing and test coverage specialist",
       "enabled": true,
       "id": "tester",
@@ -232,6 +239,7 @@
         "list_skills",
         "activate_skill"
       ],
+      "delegatable": true,
       "description": "Code review, security review, and best-practices specialist",
       "enabled": true,
       "id": "code_reviewer",
@@ -253,6 +261,7 @@
         "list_skills",
         "activate_skill"
       ],
+      "delegatable": true,
       "description": "Combined local codebase analysis and external research specialist",
       "enabled": true,
       "id": "researcher",
@@ -280,6 +289,7 @@
         "TodoWrite",
         "TodoRead"
       ],
+      "delegatable": true,
       "description": "Web extraction and structured content collection specialist",
       "enabled": true,
       "id": "web_scraper",
@@ -308,6 +318,7 @@
         "TodoWrite",
         "TodoRead"
       ],
+      "delegatable": true,
       "description": "Hands-on system administration and engineering execution persona",
       "enabled": true,
       "id": "computer_user",

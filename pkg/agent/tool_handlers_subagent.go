@@ -627,6 +627,14 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			// Get persona-specific configuration
 			subagentType := config.GetSubagentType(persona)
 			if subagentType != nil {
+				// Check LocalOnly flag - reject in cloud mode
+				if subagentType.LocalOnly && !a.IsLocalMode() {
+					return "", fmt.Errorf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona)
+				}
+				// Check Delegatable flag - reject non-delegatable personas
+				if !subagentType.Delegatable {
+					return "", fmt.Errorf("persona '%s' is not designed to be used as a subagent (delegatable=false)", persona)
+				}
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
 				systemPromptPath = subagentType.SystemPrompt

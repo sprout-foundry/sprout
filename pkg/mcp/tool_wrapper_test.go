@@ -127,6 +127,132 @@ func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
 	assert.NoError(t, w.ValidateArgs(map[string]interface{}{"key": "val"}))
 }
 
+func TestMCPToolWrapper_ValidateArgs_NoSchema(t *testing.T) {
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx", AutoStart: false})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "no-schema-tool",
+		ServerName: "srv",
+		// InputSchema is nil
+	}, m)
+	assert.NoError(t, w.ValidateArgs(nil))
+	assert.NoError(t, w.ValidateArgs(map[string]interface{}{"anything": "goes"}))
+}
+
+func TestMCPToolWrapper_ValidateArgs_ValidSchema(t *testing.T) {
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx", AutoStart: false})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "schema-tool",
+		ServerName: "srv",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name":  map[string]interface{}{"type": "string"},
+				"count": map[string]interface{}{"type": "integer"},
+			},
+			"required": []interface{}{"name"},
+		},
+	}, m)
+
+	// Valid args: name present and is string
+	assert.NoError(t, w.ValidateArgs(map[string]interface{}{
+		"name":  "test",
+		"count": 42,
+	}))
+
+	// Valid args: only required field
+	assert.NoError(t, w.ValidateArgs(map[string]interface{}{
+		"name": "test",
+	}))
+}
+
+func TestMCPToolWrapper_ValidateArgs_InvalidMissingRequired(t *testing.T) {
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx", AutoStart: false})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "schema-tool",
+		ServerName: "srv",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"name"},
+		},
+	}, m)
+
+	// Missing required field
+	err := w.ValidateArgs(map[string]interface{}{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "validation failed")
+}
+
+func TestMCPToolWrapper_ValidateArgs_InvalidType(t *testing.T) {
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx", AutoStart: false})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "schema-tool",
+		ServerName: "srv",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"count": map[string]interface{}{"type": "integer"},
+			},
+		},
+	}, m)
+
+	// Wrong type: string instead of integer
+	err := w.ValidateArgs(map[string]interface{}{
+		"count": "not a number",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "validation failed")
+}
+
+func TestMCPToolWrapper_CompileSchema_LazyCache(t *testing.T) {
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx", AutoStart: false})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "schema-tool",
+		ServerName: "srv",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name": map[string]interface{}{"type": "string"},
+			},
+		},
+	}, m)
+
+	// First call compiles and caches
+	assert.NoError(t, w.compileSchema())
+	assert.NotNil(t, w.compiledSchema)
+
+	// Second call is cached (compileSchema uses sync.Once, so it returns cached error — nil)
+	assert.NoError(t, w.compileSchema())
+	assert.NotNil(t, w.compiledSchema)
+}
+
+func TestMCPToolWrapper_CompileSchema_InvalidSchemaFailOpen(t *testing.T) {
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx", AutoStart: false})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "bad-schema-tool",
+		ServerName: "srv",
+		// Invalid schema: "type" must be a string, not a number
+		InputSchema: map[string]interface{}{
+			"type": 123,
+		},
+	}, m)
+
+	// compileSchema should cache an error (not panic)
+	err := w.compileSchema()
+	assert.Error(t, err)
+
+	// ValidateArgs should fail-open (return nil, not error)
+	assert.NoError(t, w.ValidateArgs(map[string]interface{}{"foo": "bar"}))
+}
+
 func TestMCPToolWrapper_CanExecute_ServerNotFound(t *testing.T) {
 	// Wrapper points to a server name that doesn't exist in the manager
 	m := NewMCPManager(nil)

@@ -79,11 +79,12 @@ type EmbeddingIndexConfig struct {
 
 // ONNXConfig configures the local ONNX-based embedding provider.
 type ONNXConfig struct {
-	ModelURL       string `json:"model_url,omitempty"`
-	TokenizerURL   string `json:"tokenizer_url,omitempty"`
-	ModelHash      string `json:"model_hash,omitempty"`
-	TokenizerHash  string `json:"tokenizer_hash,omitempty"`
-	Dimensions     int    `json:"dimensions,omitempty"`
+	ModelURL      string `json:"model_url,omitempty"`
+	ModelDataURL  string `json:"model_data_url,omitempty"`
+	TokenizerURL  string `json:"tokenizer_url,omitempty"`
+	ModelHash     string `json:"model_hash,omitempty"`
+	TokenizerHash string `json:"tokenizer_hash,omitempty"`
+	Dimensions    int    `json:"dimensions,omitempty"`
 }
 
 // PersistentContextConfig configures persistent conversational context across sessions.

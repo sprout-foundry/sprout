@@ -415,7 +415,7 @@ func (m *EmbeddingManager) ActivateONNX(ctx context.Context) error {
 	// Determine model paths.
 	modelDir := DefaultModelDir()
 	modelName := "embeddinggemma-300m-q8"
-	modelPath := filepath.Join(modelDir, modelName, "model.onnx")
+	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
 	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
 
 	// Download if not present.
@@ -424,6 +424,7 @@ func (m *EmbeddingManager) ActivateONNX(ctx context.Context) error {
 		modelConfig := ModelConfig{
 			Name:          modelName,
 			ModelURL:      onnxCfg.ModelURL,
+			ModelDataURL:  onnxCfg.ModelDataURL,
 			TokenizerURL:  onnxCfg.TokenizerURL,
 			ModelHash:     onnxCfg.ModelHash,
 			TokenizerHash: onnxCfg.TokenizerHash,

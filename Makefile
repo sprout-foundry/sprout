@@ -104,7 +104,9 @@ clean:
 	rm -f e2e_results.csv
 	rm -f /tmp/sprout-coverage.out /tmp/sprout-unit-coverage.out /tmp/sprout-coverage-func.txt
 	rm -f /tmp/sprout-test-coverage.log /tmp/sprout-test-unit.log
-	find . -name "*.test" -delete
+	rm -f ./sprout
+	rm -f code_review_output.json
+	find . -maxdepth 1 -name "*.test" -type f -delete
 	find . -name "test_failure_*.log" -delete
 
 # Quick test for development (just unit tests)

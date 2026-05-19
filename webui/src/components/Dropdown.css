@@ -14,7 +14,7 @@
 .dropdown-container {
   background: #2a2a2a;
   border: 1px solid #444;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
@@ -44,7 +44,7 @@
   font-size: 12px;
   background: #444;
   padding: 2px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .dropdown-search {
@@ -59,7 +59,7 @@
   border: 1px solid #555;
   color: #fff;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   outline: none;
 }
@@ -138,7 +138,7 @@
 .dropdown-help span {
   background: #444;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 /* Scrollbar styling */
@@ -152,7 +152,7 @@
 
 .dropdown-items::-webkit-scrollbar-thumb {
   background: #555;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .dropdown-items::-webkit-scrollbar-thumb:hover {

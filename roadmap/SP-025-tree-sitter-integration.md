@@ -1,10 +1,24 @@
 # SP-025: Tree-Sitter Integration — Real AST for Multi-Language Symbol Extraction
 
-**Status:** 📋 Spec  
-**Date:** 2026-05-15  
-**Depends on:** SP-024  
-**Priority:** Medium  
-**Effort Estimate:** ~2 weeks
+**Status:** ✅ Phases 1–3 complete; Phase 4 partial; Phase 5 pending
+**Date:** 2026-05-15 (updated 2026-05-18)
+**Depends on:** SP-024
+**Priority:** Medium
+**Effort Estimate:** ~2 weeks (Phase 5 ≈ 3–5 days)
+
+## Current Implementation Status (audited 2026-05-18)
+
+| Phase | Status | Evidence |
+|-------|--------|----------|
+| 1. Core AST Parser | ✅ Complete | `pkg/ast/` exists — `parser.go` (551 LOC), `symbols.go` (1021 LOC), `cache.go` (293 LOC); `github.com/odvcencio/gotreesitter v0.16.0` pinned in `go.mod`; supports Go, TS, JS, Python |
+| 2. Repo Map | ✅ Complete | `pkg/agent_tools/repo_map.go` calls `ast.ParseFile()` for TS/JS/Python (lines 192–208); native `go/ast` retained for Go; simple-regex fallback on parse error |
+| 3. Symbol Index | ✅ Complete | `pkg/index/symbols.go:65` calls `ast.ExtractSymbols()` for all supported languages; no regex fallback in current code (spec's "regex fallback" line is now outdated) |
+| 4. WASM Integration | ⚠️ Partial | `pkg/ast/browser_cache.go` (290 LOC) exists; `pkg/wasmshell/` has no `pkg/ast` import or call — code intelligence not yet wired |
+| 5. Embedding Extractor Migration | ❌ Not started | `pkg/embedding/extractor_ts.go` (531 LOC, 9 regex patterns) and `extractor_py.go` (345 LOC) still use standalone regex; create symbol-coverage drift vs repo_map and index |
+
+**Consequence of the partial migration:** there are now three parallel symbol-extraction paths (repo_map, index/symbols, embedding/extractor) that disagree in edge cases (TS arrow functions, decorated Python methods, multi-line signatures). Symbols indexed for semantic search may not appear in repo_map output and vice versa.
+
+
 
 ## Problem
 
@@ -65,7 +79,7 @@ The parser is a shared dependency consumed by:
 
 ### Implementation Plan
 
-#### Phase 1: Core AST Parser
+#### Phase 1: Core AST Parser — ✅ Complete
 
 1. Add `odvcencio/gotreesitter` dependency to go.mod
 2. Create `pkg/ast/parser.go` — unified parser with `ParseFile(path, content) (*ASTResult, error)`
@@ -75,14 +89,14 @@ The parser is a shared dependency consumed by:
 6. Write tests: parse Go, TS, JS, Python files; verify symbol names, line numbers, scopes
 7. Verify WASM build still works: `GOOS=js GOARCH=wasm go build ./cmd/wasm/`
 
-#### Phase 2: Replace Regex in Repo Map
+#### Phase 2: Replace Regex in Repo Map — ✅ Complete
 
 1. Update `pkg/agent_tools/repo_map.go` to use `pkg/ast` for Go, TS, JS, Python
 2. Remove regex patterns from repo_map.go (Go AST stays as fallback for parse errors)
 3. Update tests with expected line numbers from real AST
 4. Verify build and tests pass
 
-#### Phase 3: Replace Regex in Symbol Index
+#### Phase 3: Replace Regex in Symbol Index — ✅ Complete
 
 1. Update `pkg/index/symbols.go` to use `pkg/ast` for all supported languages
 2. Remove regex patterns from symbols.go
@@ -90,7 +104,7 @@ The parser is a shared dependency consumed by:
 4. Verify `.sprout/symbols.json` output is correct
 5. Verify build and tests pass
 
-#### Phase 4: WASM Integration
+#### Phase 4: WASM Integration — ⚠️ Partial (browser cache exists, not consumed by wasmshell)
 
 1. Ensure `pkg/ast` compiles for GOOS=js GOARCH=wasm
 2. Implement grammar blob caching for WASM (load once, cache in browser storage)
@@ -98,7 +112,7 @@ The parser is a shared dependency consumed by:
 4. Verify WASM binary size impact and set acceptable threshold
 5. Test WASM build: `make build-wasm`
 
-#### Phase 5: Embedding Extractor (SP-016)
+#### Phase 5: Embedding Extractor (SP-016) — ❌ Not started (primary remaining work)
 
 1. Wire `pkg/ast` into `pkg/embedding/extractor.go` for accurate code unit extraction
 2. Extract function bodies (not just signatures) using AST scope information

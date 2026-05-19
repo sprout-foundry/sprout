@@ -226,6 +226,7 @@ type SubagentType struct {
 	Aliases          []string `json:"aliases,omitempty"`            // Optional aliases (e.g., "web-scraper")
 	Enabled          bool     `json:"enabled"`                      // Whether this subagent type is available for use
 	LocalOnly        bool     `json:"local_only,omitempty"`         // Only available in local mode (not cloud)
+	Delegatable      bool     `json:"delegatable,omitempty"`        // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
 	AutoApproveRules *AutoApproveRules `json:"auto_approve_rules,omitempty"` // Risk cascade rules for EA persona
 }
 

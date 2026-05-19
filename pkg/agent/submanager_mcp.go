@@ -1,3 +1,25 @@
+// Package agent contains the MCP submanager that isolates MCP state from the
+// main Agent struct. It owns initialization, tool caching, and the MCPManager
+// reference.
+//
+// Lock Order
+//
+// The AgentMCPManager uses a single RWMutex (initMu) to guard initialized,
+// initErr, and toolsCache. The lock is exposed via the MCPSubManager
+// interface as LockInit/UnlockInit and RLockInit/RUnlockInit so that callers
+// in the main agent package can coordinate access without importing sync.
+//
+// The established lock ordering is:
+//
+//	initMu → debugLogMutex
+//
+// initMu is never held while calling into mcp.Manager (its internal mutexes
+// are acquired outside initMu), and debugLogMutex is never acquired before
+// calling getMCPTools. This prevents lock-order inversions.
+//
+// Initialization uses sync.Once (DoInit) so the expensive initializeMCP call
+// runs outside any lock. Only the final cache write-back requires a brief
+// write lock; reads use RLock for a fast-path cache check.
 package agent
 
 import (

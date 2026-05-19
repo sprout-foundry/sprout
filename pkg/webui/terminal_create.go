@@ -1,3 +1,23 @@
+// PTY Lifecycle (terminal sessions)
+//
+// Terminal sessions are managed by TerminalManager and own a PTY file
+// descriptor, a shell process, and a ring buffer for output history.
+//
+// Session creation holds tm.mutex during the entire PTY startup sequence
+// (including the blocking pty.StartWithSize call) so that the reader
+// goroutine is never visible to ListSessions before the session is fully
+// initialized. For hidden sessions, the Hidden flag is set before the
+// session is inserted into the map.
+//
+// The PTY reader goroutine runs for the lifetime of the shell process.
+// It reads from the PTY into a ring buffer and broadcasts to WebSocket
+// subscribers. When the PTY closes (shell exits, error, or explicit
+// close), the goroutine marks the session inactive, closes all
+// subscribers, and returns — the session remains in the map until
+// cleaned up by the idle cleanup worker or an explicit delete.
+//
+// Lock ordering: tm.mutex → session.mutex → pty read lock (implicit).
+// The manager mutex is never acquired while holding a session mutex.
 package webui
 
 import (

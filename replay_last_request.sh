@@ -5,7 +5,7 @@ usage() {
   cat <<'EOF'
 Usage: replay_last_request.sh [options]
 
-Replay the last request that ledit sent to an LLM provider by re-sending
+Replay the last request that sprout sent to an LLM provider by re-sending
 the contents of lastRequest.json to the provider endpoint defined in the
 matching config file.
 
@@ -18,7 +18,8 @@ Options:
 Environment:
   <AUTH_ENV_VAR>              The provider config defines which environment variable contains the API key.
                               For example, ZAI uses ZAI_API_KEY.
-  LEDIT_COPY_LOGS_TO_CWD=1    (optional) when replaying after a run that enabled log copying.
+  SPROUT_COPY_LOGS_TO_CWD=1   (optional) when replaying after a run that enabled log copying.
+                              The legacy name LEDIT_COPY_LOGS_TO_CWD is still accepted for backwards compatibility.
 
 This script sends the request payload exactly as it appears in the log file,
 so it is useful for debugging the provider outside of the agent.

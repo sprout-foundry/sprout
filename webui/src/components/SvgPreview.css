@@ -93,7 +93,7 @@
   height: 100%;
   min-height: 240px;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 10px;
   background: white;
 }
 
@@ -125,7 +125,7 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 

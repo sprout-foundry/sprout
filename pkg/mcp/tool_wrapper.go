@@ -3,10 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
-
-	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // Local constants to avoid importing tools package and creating cycle
@@ -67,23 +64,6 @@ func (w *MCPToolWrapper) Execute(ctx context.Context, params Parameters) (*Resul
 	args := params.Kwargs
 	if args == nil {
 		args = make(map[string]interface{})
-	}
-
-	// Validate arguments against the tool's input schema before the network round-trip
-	if err := w.ValidateArgs(args); err != nil {
-		invalidErr, ok := err.(*InvalidArgsError)
-		if ok {
-			return &Result{
-				Success:       false,
-				Errors:        []string{invalidErr.FormatForLLM()},
-				ExecutionTime: time.Since(startTime),
-			}, nil
-		}
-		return &Result{
-			Success:       false,
-			Errors:        []string{"validation failed: " + err.Error()},
-			ExecutionTime: time.Since(startTime),
-		}, nil
 	}
 
 	// Call the MCP tool
@@ -188,15 +168,7 @@ func (w *MCPToolWrapper) CanExecute(ctx context.Context, params Parameters) bool
 		return false
 	}
 
-	// Validate arguments against the tool's input schema
-	args := params.Kwargs
-	if args == nil {
-		args = make(map[string]interface{})
-	}
-	if err := w.ValidateArgs(args); err != nil {
-		return false
-	}
-
+	// TODO: Could add schema validation here based on w.mcpTool.InputSchema
 	return true
 }
 
@@ -260,62 +232,10 @@ func (w *MCPToolWrapper) GetToolName() string {
 	return w.mcpTool.Name
 }
 
-// compileSchema compiles the tool's InputSchema into a jsonschema.Schema,
-// caching the result for subsequent calls. Uses sync.Once for thread safety.
-// Returns nil if no schema is present, or a cached compilation error (fail-open).
-func (w *MCPToolWrapper) compileSchema() error {
-	w.schemaOnce.Do(func() {
-		if w.mcpTool.InputSchema == nil {
-			return // no schema; nothing to compile
-		}
-
-		compiler := jsonschema.NewCompiler()
-
-		schemaURL := "schema://" + w.mcpTool.ServerName + "/" + w.mcpTool.Name
-		if err := compiler.AddResource(schemaURL, w.mcpTool.InputSchema); err != nil {
-			w.schemaErr = fmt.Errorf("failed to add schema for tool %s/%s: %w", w.mcpTool.ServerName, w.mcpTool.Name, err)
-			return
-		}
-
-		schema, err := compiler.Compile(schemaURL)
-		if err != nil {
-			w.schemaErr = fmt.Errorf("failed to compile schema for tool %s/%s: %w", w.mcpTool.ServerName, w.mcpTool.Name, err)
-			return
-		}
-
-		w.compiledSchema = schema
-	})
-	return w.schemaErr
-}
-
-// ValidateArgs validates arguments against the tool's input schema.
-// Returns nil if the schema is absent, compilation fails (fail-open on our bug),
-// or the arguments are valid. Returns *InvalidArgsError if validation fails.
+// ValidateArgs validates arguments against the tool's input schema
 func (w *MCPToolWrapper) ValidateArgs(args map[string]interface{}) error {
-	if w.mcpTool.InputSchema == nil {
-		return nil // no schema advertised; skip
-	}
-
-	if err := w.compileSchema(); err != nil {
-		// Compilation failure is our bug — fail-open, warn once
-		if !w.warnedCompileErr {
-			w.warnedCompileErr = true
-			log.Printf("WARN: schema compilation failed for tool %s/%s: %v — skipping validation", w.mcpTool.ServerName, w.mcpTool.Name, err)
-		}
-		return nil
-	}
-
-	if w.compiledSchema == nil {
-		return nil // should not happen if compileSchema succeeded
-	}
-
-	if err := w.compiledSchema.Validate(args); err != nil {
-		return &InvalidArgsError{
-			Server:  w.mcpTool.ServerName,
-			Tool:    w.mcpTool.Name,
-			Wrapped: err,
-		}
-	}
+	// TODO: Implement JSON schema validation based on w.mcpTool.InputSchema
+	// For now, just return nil (no validation)
 	return nil
 }
 

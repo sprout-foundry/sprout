@@ -4,10 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
-
-	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // MCPServerConfig represents the configuration for an MCP server
@@ -266,15 +263,11 @@ type MCPManager interface {
 
 // MCPToolWrapper wraps an MCP tool to implement the standard Tool interface
 type MCPToolWrapper struct {
-	mcpTool           MCPTool
-	manager           MCPManager
-	category          string
-	timeout           time.Duration
-	available         bool
-	compiledSchema    *jsonschema.Schema // compiled once, reused
-	schemaOnce        sync.Once          // ensures compileSchema runs once
-	schemaErr         error              // cached compilation error
-	warnedCompileErr  bool               // true once we've warned about a compile error
+	mcpTool   MCPTool
+	manager   MCPManager
+	category  string
+	timeout   time.Duration
+	available bool
 }
 
 // Standard error codes

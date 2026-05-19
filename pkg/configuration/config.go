@@ -514,6 +514,21 @@ type PersistentContextConfig struct {
 	// WorkspaceScopedRetrieval filters retrieval to turns from the same working directory when true.
 	// Default: false
 	WorkspaceScopedRetrieval bool `json:"workspace_scoped_retrieval,omitempty"`
+
+	// DriftDetectionEnabled enables session intent drift detection.
+	// When true, the agent monitors whether the conversation has drifted from
+	// the original topic every DriftCheckInterval turns. Default: true
+	DriftDetectionEnabled *bool `json:"drift_detection_enabled,omitempty"`
+
+	// DriftThreshold is the minimum cosine similarity between the session's
+	// original intent embedding and the current prompt to consider the
+	// conversation on-topic. Values below this trigger a drift notification.
+	// Range: 0.0 to 1.0. Default: 0.60
+	DriftThreshold float64 `json:"drift_threshold,omitempty"`
+
+	// DriftCheckInterval is the number of turns between drift checks.
+	// Only every Nth turn triggers a check. Default: 5
+	DriftCheckInterval int `json:"drift_check_interval,omitempty"`
 }
 
 // Optional helpers
@@ -584,6 +599,9 @@ func NewConfig() *Config {
 			MinRelevanceScore:        0.50,
 			MaxContextChars:          4000,
 			WorkspaceScopedRetrieval: false,
+			DriftDetectionEnabled:    func() *bool { b := true; return &b }(),
+			DriftThreshold:           0.60,
+			DriftCheckInterval:       5,
 		},
 	}
 }
@@ -790,6 +808,15 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if override.PersistentContext.WorkspaceScopedRetrieval {
 			result.PersistentContext.WorkspaceScopedRetrieval = override.PersistentContext.WorkspaceScopedRetrieval
+		}
+		if override.PersistentContext.DriftDetectionEnabled != nil {
+			result.PersistentContext.DriftDetectionEnabled = override.PersistentContext.DriftDetectionEnabled
+		}
+		if override.PersistentContext.DriftThreshold > 0 {
+			result.PersistentContext.DriftThreshold = override.PersistentContext.DriftThreshold
+		}
+		if override.PersistentContext.DriftCheckInterval > 0 {
+			result.PersistentContext.DriftCheckInterval = override.PersistentContext.DriftCheckInterval
 		}
 	}
 
@@ -1875,6 +1902,9 @@ func (c *Config) GetPersistentContextConfig() *PersistentContextConfig {
 			MinRelevanceScore:        0.50,
 			MaxContextChars:          4000,
 			WorkspaceScopedRetrieval: false,
+			DriftDetectionEnabled:    func() *bool { b := true; return &b }(),
+			DriftThreshold:           0.60,
+			DriftCheckInterval:       5,
 		}
 	}
 	// Fill in zero-value fields with defaults
@@ -1890,6 +1920,15 @@ func (c *Config) GetPersistentContextConfig() *PersistentContextConfig {
 	}
 	if result.ProactiveContextEnabled == nil {
 		result.ProactiveContextEnabled = func() *bool { b := true; return &b }()
+	}
+	if result.DriftDetectionEnabled == nil {
+		result.DriftDetectionEnabled = func() *bool { b := true; return &b }()
+	}
+	if result.DriftThreshold <= 0 {
+		result.DriftThreshold = 0.60
+	}
+	if result.DriftCheckInterval <= 0 {
+		result.DriftCheckInterval = 5
 	}
 	return &result
 }

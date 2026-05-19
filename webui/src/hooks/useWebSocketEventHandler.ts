@@ -17,6 +17,7 @@ import type {
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   AskUserRequestData,
+  DriftDetectedData,
 } from '@sprout/events';
 import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
@@ -749,6 +750,25 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   debugLog('[ask_user] Question:', data.question);
 };
 
+/**
+ * Handles drift_detected events: sets drift notification state so the
+ * DriftNotification component can render a banner with action buttons.
+ */
+const handleDriftDetected = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const data = (event.data ?? {}) as DriftDetectedData;
+  debugLog('[drift] Drift detected:', data);
+
+  const similarity = data.similarity ?? 0;
+  const threshold = data.threshold ?? 0;
+  const sessionId = data.sessionId ?? '';
+  const options = data.options ?? [];
+
+  setState((prev) => ({
+    driftNotification: { similarity, threshold, sessionId, options },
+  }));
+};
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -868,6 +888,8 @@ export function useWebSocketEventHandler({
           return handleSecurityPromptRequest(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
+        case 'drift_detected':
+          return handleDriftDetected(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

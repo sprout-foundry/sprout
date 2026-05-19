@@ -205,6 +205,14 @@ export interface TerminalPtyExitData {
   reason?: string;
 }
 
+export interface DriftDetectedData {
+  similarity: number;
+  threshold: number;
+  sessionId?: string;
+  timestamp?: string;
+  options?: string[];
+}
+
 // ── Discriminated Union ────────────────────────────────────────────────
 
 export type WsEvent =
@@ -235,6 +243,7 @@ export type WsEvent =
   | { type: 'output'; data?: TerminalOutputData; id?: string; timestamp?: string }
   | { type: 'error_output'; data?: TerminalOutputData; id?: string; timestamp?: string }
   | { type: 'pty_exit'; data?: TerminalPtyExitData; id?: string; timestamp?: string }
+  | { type: 'drift_detected'; data?: DriftDetectedData; id?: string; timestamp?: string }
   // Catch-all: must be last. Provides SproutEvent compatibility and handles
   // dev-server noise (liveReload, hot, ping, etc.). Note: this prevents
   // automatic narrowing in switch/case — use typed casts in handlers instead.

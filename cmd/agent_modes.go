@@ -556,11 +556,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 				}
-				continue
-			}
-
-			// Try zsh command detection first (fast path)
-			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
+			} else if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 			} else if !executed {
 				// Zsh detection didn't trigger, try LLM-based detection
@@ -571,6 +567,27 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 						fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 					}
+				}
+			}
+
+			// Drift notification: wait for async drift check to complete,
+			// then show prompt if drift was detected.
+			if chatAgent.GetEmbeddingManager() != nil {
+				chatAgent.WaitForDriftCheck(3 * time.Second)
+			}
+
+			if chatAgent.GetAndClearDriftDetected() {
+				fmt.Printf("\n\x1b[33m[!] Conversation drift detected.\x1b[0m\n")
+				fmt.Print("    Press Enter to continue, 's' for new chat: ")
+				reader := bufio.NewReader(os.Stdin)
+				input, _ := reader.ReadString('\n')
+				input = strings.TrimSpace(strings.ToLower(input))
+				if input == "s" {
+					chatAgent.RecordDriftUserResponse(true)
+					fmt.Println("\n-- Starting new chat session...")
+					chatAgent.ClearConversationHistory()
+				} else {
+					chatAgent.RecordDriftUserResponse(false)
 				}
 			}
 		}

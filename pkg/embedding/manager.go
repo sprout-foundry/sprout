@@ -36,6 +36,13 @@ type EmbeddingManager struct {
 
 	// Resolved index directory path (stored during init)
 	indexDir string
+
+	// ONNX provider (lazy-initialized)
+	onnxRuntime  *ONNXRuntime
+	onnxProvider *ONNXEmbeddingProvider
+	onnxStore    *JSONLFileStore
+	onnxReady    bool
+	onnxError    error // cached error from failed ONNX init
 }// NewEmbeddingManager creates a new manager with the given config.
 // The manager is NOT initialized until Init() or a query method is called.
 func NewEmbeddingManager(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) *EmbeddingManager {
@@ -346,7 +353,24 @@ func (m *EmbeddingManager) CheckDuplicates(ctx context.Context, filePath string,
 }
 
 // QuerySimilar searches for code similar to the given query text.
+// Routes to ONNX provider when available and provider mode is "onnx" or "auto".
 func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
+	// If ONNX provider is available and config says to use it, use ONNX store.
+	if m.config != nil && (m.config.Provider == "onnx" || m.config.Provider == "auto") {
+		onnx := m.getONNXProviderUnlocked()
+		if onnx != nil {
+			store := m.getONNXStoreUnlocked()
+			if store != nil {
+				vec, err := onnx.Embed(ctx, query)
+				if err == nil {
+					return store.Query(vec, topK, threshold)
+				}
+				// ONNX failed — fall through to static
+			}
+		}
+	}
+
+	// Fall back to static provider.
 	if err := m.Init(ctx); err != nil {
 		return nil, err
 	}
@@ -357,9 +381,115 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 	return idx.QuerySimilar(ctx, query, topK, threshold)
 }
 
+// ActivateONNX downloads and initializes the ONNX embedding provider.
+// Returns nil if already activated, error if activation fails.
+// This is a blocking operation: it downloads the model if not present,
+// then loads the tokenizer and creates an inference session.
+func (m *EmbeddingManager) ActivateONNX(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Already active or already tried and failed.
+	if m.onnxReady {
+		return nil
+	}
+	if m.onnxError != nil {
+		return m.onnxError
+	}
+
+	// Ensure config is present.
+	if m.config == nil || m.config.ONNX == nil {
+		m.onnxError = fmt.Errorf("embedding: ONNX config not set")
+		return m.onnxError
+	}
+	onnxCfg := m.config.ONNX
+
+	// Ensure base init is done (need indexDir for store).
+	if !m.initialized {
+		if err := m.initLocked(ctx); err != nil {
+			m.onnxError = fmt.Errorf("embedding: init before ONNX: %w", err)
+			return m.onnxError
+		}
+	}
+
+	// Determine model paths.
+	modelDir := DefaultModelDir()
+	modelName := "embeddinggemma-300m-q8"
+	modelPath := filepath.Join(modelDir, modelName, "model.onnx")
+	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
+
+	// Download if not present.
+	downloader := NewModelDownloaderWithDir(modelDir)
+	if !downloader.IsDownloaded(modelName) {
+		modelConfig := ModelConfig{
+			Name:          modelName,
+			ModelURL:      onnxCfg.ModelURL,
+			TokenizerURL:  onnxCfg.TokenizerURL,
+			ModelHash:     onnxCfg.ModelHash,
+			TokenizerHash: onnxCfg.TokenizerHash,
+		}
+		if err := downloader.Download(ctx, modelConfig, nil); err != nil {
+			m.onnxError = fmt.Errorf("embedding: download ONNX model: %w", err)
+			return m.onnxError
+		}
+	}
+
+	// Create runtime and provider.
+	runtime, err := NewONNXRuntimeWithDir(modelDir)
+	if err != nil {
+		m.onnxError = fmt.Errorf("embedding: create ONNX runtime: %w", err)
+		return m.onnxError
+	}
+
+	dims := onnxCfg.Dimensions
+	if dims <= 0 {
+		dims = 256 // default MRL truncation
+	}
+
+	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, dims)
+	if err != nil {
+		runtime.Close()
+		m.onnxError = fmt.Errorf("embedding: create ONNX provider: %w", err)
+		return m.onnxError
+	}
+
+	// Create separate store for ONNX vectors.
+	onnxIndexPath := filepath.Join(m.indexDir, "index_onnx.jsonl")
+	onnxStore, err := NewJSONLFileStore(onnxIndexPath, provider.ModelHash())
+	if err != nil {
+		provider.Close()
+		runtime.Close()
+		m.onnxError = fmt.Errorf("embedding: open ONNX store: %w", err)
+		return m.onnxError
+	}
+
+	m.onnxRuntime = runtime
+	m.onnxProvider = provider
+	m.onnxStore = onnxStore
+	m.onnxReady = true
+	return nil
+}
+
+// getONNXProviderUnlocked returns the ONNX provider if active. Caller must hold m.mu.
+func (m *EmbeddingManager) getONNXProviderUnlocked() *ONNXEmbeddingProvider {
+	if m.onnxReady {
+		return m.onnxProvider
+	}
+	return nil
+}
+
+// getONNXStoreUnlocked returns the ONNX store if active. Caller must hold m.mu.
+func (m *EmbeddingManager) getONNXStoreUnlocked() *JSONLFileStore {
+	if m.onnxReady {
+		return m.onnxStore
+	}
+	return nil
+}
+
 // GetConversationStore returns the conversation store, creating it lazily on first use.
-// The store is user-scoped and lives at {indexDir}/conversation_turns.jsonl.
-// Multiple calls return the same instance.
+// When ONNX provider is active and configured, uses ONNX-backed store at
+// {indexDir}/conversation_turns_onnx.jsonl. Otherwise falls back to static provider
+// at {indexDir}/conversation_turns.jsonl.
 func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*ConversationStore, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -379,7 +509,20 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 		return nil, err
 	}
 
-	// Create conversation store in the same directory as the main index
+	// Try ONNX provider first if available and configured
+	if m.config != nil && (m.config.Provider == "onnx" || m.config.Provider == "auto") {
+		if m.onnxProvider != nil {
+			convoPath := filepath.Join(m.indexDir, "conversation_turns_onnx.jsonl")
+			store, err := NewConversationStore(m.onnxProvider, convoPath, m.onnxProvider.ModelHash())
+			if err == nil {
+				m.convoStore = store
+				return store, nil
+			}
+			// ONNX store creation failed — fall through to static
+		}
+	}
+
+	// Fall back to static provider
 	convoPath := filepath.Join(m.indexDir, "conversation_turns.jsonl")
 	convoStore, err := NewConversationStore(m.provider, convoPath, m.provider.ModelHash())
 	if err != nil {
@@ -394,7 +537,7 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 func (m *EmbeddingManager) Close() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.initialized {
+	if !m.initialized && !m.onnxReady {
 		return nil
 	}
 	var firstErr error
@@ -403,6 +546,24 @@ func (m *EmbeddingManager) Close() error {
 			firstErr = err
 		}
 		m.convoStore = nil
+	}
+	if m.onnxRuntime != nil {
+		if err := m.onnxRuntime.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.onnxRuntime = nil
+	}
+	if m.onnxProvider != nil {
+		if err := m.onnxProvider.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.onnxProvider = nil
+	}
+	if m.onnxStore != nil {
+		if err := m.onnxStore.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.onnxStore = nil
 	}
 	if m.provider != nil {
 		if err := m.provider.Close(); err != nil && firstErr == nil {
@@ -418,6 +579,7 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.indexMgr = nil
 	m.initialized = false
+	m.onnxReady = false
 	m.initError = nil
 	return firstErr
 }

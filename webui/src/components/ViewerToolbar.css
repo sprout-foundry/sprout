@@ -22,7 +22,7 @@
   height: 32px;
   padding: 0;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
   cursor: pointer;

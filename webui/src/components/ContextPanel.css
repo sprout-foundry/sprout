@@ -6,7 +6,7 @@
   width: 360px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 0;
+  border-radius: var(--radius-none);
   overflow: hidden;
   transition: width 200ms var(--ease-out);
 }
@@ -22,7 +22,7 @@
 .context-panel-resizer {
   width: 6px;
   min-height: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   cursor: col-resize;
@@ -66,7 +66,7 @@
   color: var(--text-secondary, #8b949e);
   cursor: pointer;
   border-bottom: 1px solid var(--border-default, #30363d);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   user-select: none;
   transition: background 0.15s ease;
 }
@@ -154,7 +154,7 @@
 @media (max-width: 768px) {
   .context-panel {
     flex-direction: column;
-    border-radius: 0;
+    border-radius: var(--radius-none);
     border: none;
   }
 
@@ -173,7 +173,7 @@
     flex-direction: column;
     overflow: hidden;
     background: var(--bg-secondary);
-    border-radius: 0;
+    border-radius: var(--radius-none);
     border: none;
     transition: none;
     box-shadow: var(--shadow-float);
@@ -235,7 +235,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    border-radius: 0;
+    border-radius: var(--radius-none);
     border: none;
     background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
     color: var(--text-secondary);
@@ -286,14 +286,14 @@
 .status-context-bar {
   height: 4px;
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   margin-top: 8px;
   overflow: hidden;
 }
 
 .status-context-bar-fill {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   background: #58a6ff;
   transition: width 0.3s ease;
 }
@@ -314,7 +314,7 @@
   margin-left: 0;
   margin-right: 0;
   font-size: 11px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-default, #30363d);
   background: var(--bg-primary, #0d1117);
 }
@@ -340,7 +340,7 @@
   gap: 4px;
   padding: 10px 12px;
   background: var(--bg-tertiary, #161b22);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle, #21262d);
 }
 

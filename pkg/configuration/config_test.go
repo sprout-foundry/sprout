@@ -296,3 +296,66 @@ func TestGetSubagentParallelEnabled(t *testing.T) {
 		})
 	}
 }
+
+func TestPersistentContextConfigResolve_NilReturnsDefaults(t *testing.T) {
+	var cfg *PersistentContextConfig
+	result := cfg.Resolve()
+
+	assert.True(t, result.ProactiveContextEnabled)
+	assert.Equal(t, 5, result.MaxContextualResults)
+	assert.Equal(t, 0.50, result.MinRelevanceScore)
+	assert.Equal(t, 4000, result.MaxContextChars)
+	assert.False(t, result.WorkspaceScopedRetrieval)
+}
+
+func TestPersistentContextConfigResolve_ExplicitValuesPreserved(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		ProactiveContextEnabled:   false,
+		MaxContextualResults:      10,
+		MinRelevanceScore:         0.75,
+		MaxContextChars:           8000,
+		WorkspaceScopedRetrieval:  true,
+	}
+	result := cfg.Resolve()
+
+	assert.False(t, result.ProactiveContextEnabled)
+	assert.Equal(t, 10, result.MaxContextualResults)
+	assert.Equal(t, 0.75, result.MinRelevanceScore)
+	assert.Equal(t, 8000, result.MaxContextChars)
+	assert.True(t, result.WorkspaceScopedRetrieval)
+}
+
+func TestPersistentContextConfigResolve_PartialOverrides(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		ProactiveContextEnabled:  false,
+		MaxContextualResults:     0,    // zero — should get default
+		MinRelevanceScore:        0.8,  // explicit
+		MaxContextChars:          0,    // zero — should get default
+		WorkspaceScopedRetrieval: true,
+	}
+	result := cfg.Resolve()
+
+	assert.False(t, result.ProactiveContextEnabled)
+	assert.Equal(t, 5, result.MaxContextualResults)      // default
+	assert.Equal(t, 0.8, result.MinRelevanceScore)       // explicit
+	assert.Equal(t, 4000, result.MaxContextChars)        // default
+	assert.True(t, result.WorkspaceScopedRetrieval)
+}
+
+func TestPersistentContextConfigResolve_DoesNotMutateOriginal(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		ProactiveContextEnabled:  false,
+		MaxContextualResults:     0,
+		MinRelevanceScore:        0.8,
+		MaxContextChars:          0,
+		WorkspaceScopedRetrieval: true,
+	}
+
+	// Capture original state
+	orig := *cfg
+
+	_ = cfg.Resolve()
+	_ = cfg.Resolve() // call multiple times
+
+	assert.Equal(t, orig, *cfg, "original config should not be mutated by Resolve()")
+}

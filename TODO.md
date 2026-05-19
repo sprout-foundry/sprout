@@ -72,8 +72,8 @@ Spec: `roadmap/SP-028-test-suite-stabilization.md`
 
 ### Phase 2: Fix MCP init deadlock
 
-[] - SP-028-2a: Add double-checked RWMutex fast path to `getMCPTools` in `pkg/agent/mcp.go` (sites at lines 162 and 184) — `RLock` and check init flag; only acquire write lock on cache miss
-[] - SP-028-2b: Audit every transitive caller of `LockInit` (`pkg/agent/submanager_mcp.go:73`) for lock-order violations; document the lock-order invariant as a doc comment on `AgentMCPManager`
+[x] - SP-028-2a: Add double-checked RWMutex fast path to `getMCPTools` in `pkg/agent/mcp.go`
+[x] - SP-028-2b: Audit every transitive caller of `LockInit` (`pkg/agent/submanager_mcp.go:73`) for lock-order violations; document the lock-order invariant as a doc comment on `AgentMCPManager`
 [x] - SP-028-2c: Reduce `TestMCPConcurrency_StressTest` (`pkg/agent/mcp_concurrency_test.go:264`) from 200×10 to 32×50 and add `t.Cleanup(func() { agent.Shutdown() })`
 [x] - SP-028-2d: Verify with `go test -race -run TestMCPConcurrency -count=20 ./pkg/agent/` — must pass 20× in a row
 

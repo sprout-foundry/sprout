@@ -38,6 +38,7 @@ const (
 	EventTypeAgentMessage            = "agent_message"
 	EventTypeWorkspaceChanged        = "workspace_changed"
 	EventTypeSessionTerminated       = "session_terminated"
+	EventTypeDriftDetected           = "drift_detected"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -374,4 +375,15 @@ func AskUserRequestEvent(requestID, question, clientID string) map[string]interf
 		payload["client_id"] = clientID
 	}
 	return payload
+}
+
+// DriftDetectedEvent creates a drift notification event for the WebUI
+func DriftDetectedEvent(similarity float64, threshold float64, sessionID string) map[string]interface{} {
+	return map[string]interface{}{
+		"similarity":  similarity,
+		"threshold":   threshold,
+		"sessionId":   sessionID,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		"options":     []string{"continue", "new_chat"},
+	}
 }

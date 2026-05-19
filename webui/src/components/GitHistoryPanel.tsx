@@ -151,11 +151,8 @@ function GitHistoryPanel({
     return (
       <div className="git-history-panel">
         <div className="git-history-empty">
-          <GitCommitHorizontal size={24} aria-hidden="true" />
-          <p>No commits yet</p>
-          <span className="git-history-empty-hint">
-            Stage your first changes in the Changes tab and commit to get started.
-          </span>
+          <GitCommitHorizontal size={16} />
+          <span>No commits found</span>
         </div>
       </div>
     );

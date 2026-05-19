@@ -267,10 +267,6 @@ class ApiService {
     return chatApi.stopQuery(clientFetch);
   }
 
-  async recordDriftResponse(startedNewChat: boolean): Promise<void> {
-    return chatApi.recordDriftResponse(clientFetch, startedNewChat);
-  }
-
   // ── Terminal History ─────────────────────────────────────────────
 
   async getTerminalHistory(sessionId?: string): Promise<{ history: string[]; count: number }> {

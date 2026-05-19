@@ -189,13 +189,6 @@ export interface AskUserRequestData {
   status?: string;
 }
 
-export interface DriftDetectedData {
-  similarity?: number;
-  threshold?: number;
-  turn_number?: number;
-  chat_id?: string;
-}
-
 // ── Terminal Session Data Types ─────────────────────────────────────
 
 export interface TerminalSessionReadyData {
@@ -234,7 +227,6 @@ export type WsEvent =
   | { type: 'security_approval_request'; data?: SecurityApprovalRequestData; id?: string; timestamp?: string }
   | { type: 'security_prompt_request'; data?: SecurityPromptRequestData; id?: string; timestamp?: string }
   | { type: 'ask_user_request'; data?: AskUserRequestData; id?: string; timestamp?: string }
-  | { type: 'drift_detected'; data?: DriftDetectedData; id?: string; timestamp?: string }
   | { type: 'validation'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'terminal_output'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'session_terminated'; data?: Record<string, unknown>; id?: string; timestamp?: string }

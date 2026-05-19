@@ -11,7 +11,7 @@
   max-height: 300px;
   background: var(--input-bg, #252525);
   border: 1px solid var(--border-color, #444);
-  border-radius: var(--radius-md);
+  border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
@@ -188,7 +188,7 @@
 
 .find-refs-list::-webkit-scrollbar-thumb {
   background: var(--border-color, #444);
-  border-radius: var(--radius-sm);
+  border-radius: 3px;
 }
 
 .find-refs-list::-webkit-scrollbar-thumb:hover {

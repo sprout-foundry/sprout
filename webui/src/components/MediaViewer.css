@@ -30,14 +30,14 @@
   width: 100%;
   max-width: 100%;
   max-height: calc(100vh - 140px);
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   background: #000;
 }
 
 /* ── Player styling ──────────────────────────────────────────── */
 .media-viewer-player {
   width: 100%;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   background: var(--bg-code, #1e1e2e);
   outline: none;
 }

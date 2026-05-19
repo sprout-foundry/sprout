@@ -58,7 +58,7 @@ Requires Go 1.25.0+ and Node.js 22+:
 
 ```bash
 git clone https://github.com/sprout-foundry/sprout.git
-cd sprout
+cd ledit
 make deploy-ui   # Build and embed the React web UI (requires Node.js)
 go install .
 ```
@@ -69,7 +69,7 @@ go install .
 
 ```bash
 # Start interactive agent mode (Web UI opens at http://localhost:56000)
-sprout
+ledit
 
 # Run a specific task
 sprout agent "Create a python script that prints 'Hello, World!'"

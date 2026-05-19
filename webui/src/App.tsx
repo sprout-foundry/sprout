@@ -2,7 +2,6 @@ import { EventsContextProvider, useEvents } from '@sprout/events';
 import { useState, useCallback, useRef, useMemo } from 'react';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
-import DriftNotification from './components/DriftNotification';
 import ErrorBoundary from './components/ErrorBoundary';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import Notification from './components/Notification';
@@ -65,7 +64,6 @@ function App() {
       securityPromptRequest: null,
       askUserRequest: null,
       modelSelectionRequest: null,
-      driftNotification: null,
     };
   }, []);
 
@@ -336,21 +334,6 @@ function AppInner() {
                       provider={state.modelSelectionRequest.provider}
                       onClose={handleModelSelectionClose}
                       onSelectModel={handleModelSelectionResponse}
-                    />
-                  )}
-                  {state.driftNotification && (
-                    <DriftNotification
-                      similarity={state.driftNotification.similarity}
-                      threshold={state.driftNotification.threshold}
-                      onDismiss={() => {
-                        setState(prev => ({ ...prev, driftNotification: null }));
-                        apiService.recordDriftResponse(false).catch(() => { /* non-critical */ });
-                      }}
-                      onStartNewChat={() => {
-                        setState(prev => ({ ...prev, driftNotification: null }));
-                        apiService.recordDriftResponse(true).catch(() => { /* non-critical */ });
-                        chatManager.handleCreateChat();
-                      }}
                     />
                   )}
                   <OnboardingDialog

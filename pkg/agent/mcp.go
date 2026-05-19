@@ -158,35 +158,15 @@ func (a *Agent) initializeMCP() error {
 
 // RefreshMCPTools refreshes the MCP tools cache
 func (a *Agent) RefreshMCPTools() error {
-	if a.mcpSub == nil || a.mcpSub.GetManager() == nil {
-		return nil
-	}
-
-	// Rebuild from manager (no init needed — manager already initialized)
-	ctx := context.Background()
-	mcpTools, err := a.mcpSub.GetManager().GetAllTools(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get MCP tools for refresh: %w", err)
-	}
-
-	var agentTools []api.Tool
-	for _, mcpTool := range mcpTools {
-		wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpSub.GetManager())
-		agentTool := wrapper.ToAgentTool()
-		apiTool := api.Tool{
-			Type:     agentTool.Type,
-			Function: agentTool.Function,
-		}
-		agentTools = append(agentTools, apiTool)
-	}
-
-	// Update cache with mutex protection
+	// Clear cache with mutex protection to avoid race conditions
 	a.mcpSub.LockInit()
-	a.mcpSub.SetToolsCache(agentTools)
+	a.mcpSub.SetToolsCache(nil)    // Clear cache to force reload
+	a.mcpSub.SetInitialized(false) // Mark as needing reinitialization
 	a.mcpSub.UnlockInit()
 
+	tools := a.getMCPTools()
 	if a.debug {
-		a.Logger().Info("Refreshed MCP tools: %d available", len(agentTools))
+		a.Logger().Info("Refreshed MCP tools: %d available", len(tools))
 	}
 	return nil
 }
@@ -200,69 +180,76 @@ func (a *Agent) getMCPTools() []api.Tool {
 		return nil
 	}
 
-	// Fast path: RLock + check cache (most common after first init)
-	a.mcpSub.RLockInit()
-	if a.mcpSub.GetToolsCache() != nil {
-		result := a.mcpSub.GetToolsCache()
-		a.mcpSub.RUnlockInit()
-		if a.debug {
-			a.debugLog("[tool] Using cached MCP tools: %d\n", len(result))
-		}
-		return result
-	}
-	a.mcpSub.RUnlockInit()
+	// Initialize MCP on first use (lazy loading for better startup performance)
+	a.mcpSub.LockInit()
+	defer a.mcpSub.UnlockInit()
 
-	// Initialize exactly once (no lock held during slow init)
-	a.mcpSub.DoInit(func() {
+	if !a.mcpSub.IsInitialized() {
+		if a.debug {
+			a.debugLog("[cfg] Initializing MCP (first use)...\n")
+		}
 		if err := a.initializeMCP(); err != nil {
+			// Non-fatal - MCP is optional
 			a.mcpSub.SetInitError(err)
 			if a.debug {
 				a.debugLog("[WARN] MCP initialization failed: %v\n", err)
 			}
+			// Don't set mcpInitialized to allow retry
 			a.mcpSub.SetInitialized(false)
-			return
-		}
-		a.mcpSub.SetInitialized(true)
-		a.mcpSub.SetInitError(nil)
-		if a.debug {
-			a.debugLog("[OK] MCP initialized\n")
-		}
-
-		// Build tools cache (still outside initMu — safe because initOnce ensures single execution)
-		ctx := context.Background()
-		mcpTools, err := a.mcpSub.GetManager().GetAllTools(ctx)
-		if err != nil {
+		} else {
+			// Success - mark as initialized
+			a.mcpSub.SetInitialized(true)
+			a.mcpSub.SetInitError(nil)
 			if a.debug {
-				a.debugLog("[WARN] Failed to get MCP tools: %v\n", err)
+				a.debugLog("[OK] MCP initialized\n")
 			}
-			return
 		}
+	}
 
-		var agentTools []api.Tool
-		for _, mcpTool := range mcpTools {
-			wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpSub.GetManager())
-			agentTool := wrapper.ToAgentTool()
-			apiTool := api.Tool{
-				Type:     agentTool.Type,
-				Function: agentTool.Function,
-			}
-			agentTools = append(agentTools, apiTool)
-		}
+	// Return nil if not initialized
+	if !a.mcpSub.IsInitialized() {
+		return nil
+	}
 
-		// Write lock ONLY to store the final cache
-		a.mcpSub.LockInit()
-		a.mcpSub.SetToolsCache(agentTools)
-		a.mcpSub.UnlockInit()
-
+	// Return cached tools if available
+	if a.mcpSub.GetToolsCache() != nil {
 		if a.debug {
-			a.debugLog("[tool] Loaded %d MCP tools from manager\n", len(agentTools))
+			a.debugLog("[tool] Using cached MCP tools: %d\n", len(a.mcpSub.GetToolsCache()))
 		}
-	})
+		return a.mcpSub.GetToolsCache()
+	}
 
-	// Now read the cache (another goroutine may have set it)
-	a.mcpSub.RLockInit()
-	defer a.mcpSub.RUnlockInit()
-	return a.mcpSub.GetToolsCache()
+	ctx := context.Background()
+	mcpTools, err := a.mcpSub.GetManager().GetAllTools(ctx)
+	if err != nil {
+		if a.debug {
+			a.debugLog("[WARN] Warning: Failed to get MCP tools: %v\n", err)
+		}
+		return nil
+	}
+
+	if a.debug {
+		a.debugLog("[tool] Loading %d MCP tools from manager (first time)\n", len(mcpTools))
+	}
+
+	var agentTools []api.Tool
+	for _, mcpTool := range mcpTools {
+		// Create wrapper and convert to agent tool format
+		wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpSub.GetManager())
+		agentTool := wrapper.ToAgentTool()
+
+		// Convert to api.Tool format
+		apiTool := api.Tool{
+			Type:     agentTool.Type,
+			Function: agentTool.Function,
+		}
+		agentTools = append(agentTools, apiTool)
+	}
+
+	// Cache the tools
+	a.mcpSub.SetToolsCache(agentTools)
+
+	return agentTools
 }
 
 // isValidMCPTool checks if the tool name is a valid MCP tool
@@ -350,9 +337,7 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		return output.String(), nil
 
 	case "refresh":
-		if err := a.RefreshMCPTools(); err != nil {
-			return "", fmt.Errorf("failed to refresh MCP tools: %w", err)
-		}
+		a.mcpSub.SetToolsCache(nil)
 		tools := a.getMCPTools()
 		return fmt.Sprintf("Refreshed MCP tools. %d tools available.", len(tools)), nil
 

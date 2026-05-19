@@ -103,9 +103,6 @@ func (m *mockStateManager) SetCurrentIteration(int)                          {}
 func (m *mockStateManager) GetSessionIntentEmbedding() []float32             { return nil }
 func (m *mockStateManager) SetSessionIntentEmbedding([]float32)              {}
 func (m *mockStateManager) SetSessionIntentEmbeddingIfNil([]float32) bool    { return false }
-func (m *mockStateManager) GetDriftRejectionCount() int                     { return 0 }
-func (m *mockStateManager) IncrementDriftRejectionCount()                   {}
-func (m *mockStateManager) ResetDriftRejectionCount()                       {}
 
 // ---------------------------------------------------------------------------
 // Mock OutputManager — satisfies every method on OutputManager with no-ops

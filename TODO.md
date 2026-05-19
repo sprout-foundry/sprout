@@ -99,8 +99,8 @@ Spec: `roadmap/SP-029-monolith-decomposition.md`
 
 ### Phase 1: Smallest blast radius first
 
-[] - SP-029-1a: Split `pkg/agent/tool_handlers_subagent.go` (1318 LOC) — extract `handleRunParallelSubagents` to `tool_handlers_subagent_parallel.go`, batching to `tool_handlers_subagent_batch.go`, utilities to `tool_handlers_subagent_utils.go`. Pure move, no signature changes.
-[] - SP-029-1b: Split `pkg/agent_providers/generic_provider.go` (1276 LOC) — extract HTTP-error helpers to `generic_provider_errors.go`, request-building helpers to `generic_provider_request.go`, model-listing/vision to `generic_provider_models.go`, max-tokens retry to `generic_provider_retry.go`
+[x] - SP-029-1a: Split `pkg/agent/tool_handlers_subagent.go` (1318 LOC) — extract `handleRunParallelSubagents` to `tool_handlers_subagent_parallel.go`, batching to `tool_handlers_subagent_batch.go`, utilities to `tool_handlers_subagent_utils.go`. Pure move, no signature changes.
+[x] - SP-029-1b: Split `pkg/agent_providers/generic_provider.go` (1276 LOC) — extract HTTP-error helpers to `generic_provider_errors.go`, request-building helpers to `generic_provider_request.go`, model-listing/vision to `generic_provider_models.go`, max-tokens retry to `generic_provider_retry.go`
 
 ### Phase 2: Configuration and optimizer
 

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -36,6 +37,18 @@ func (a *Agent) EnableEmbeddingIndex() error {
 
 	a.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
 	go a.embeddingMgr.AutoBuildWhenReady()
+
+	// Activate ONNX provider in background if config indicates "auto" or "onnx".
+	// This downloads and loads the EmbeddingGemma model for semantic search and
+	// conversation turn embeddings. Failures are logged but don't block startup.
+	if ei.Provider == "auto" || ei.Provider == "onnx" {
+		go func() {
+			ctx := context.Background()
+			if err := a.embeddingMgr.ActivateONNX(ctx); err != nil {
+				log.Printf("embedding: ONNX activation failed: %v (falling back to static)", err)
+			}
+		}()
+	}
 
 	// Persist the preference to workspace config
 	a.persistEmbeddingIndexPreference(workspaceRoot, true)

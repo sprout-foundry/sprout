@@ -1,5 +1,15 @@
 package embedding
 
+import (
+	"context"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+)
+
+const maxSignatureLen = 2000
+
 // ConversationStore wraps a JSONLFileStore for storing and querying
 // conversation turn embeddings. It provides a user-scoped persistent
 // store that survives across workspace changes.
@@ -63,4 +73,68 @@ func (s *ConversationStore) Provider() EmbeddingProvider {
 // The embedding provider is not closed (its lifecycle is managed externally).
 func (s *ConversationStore) Close() error {
 	return s.store.Close()
+}
+
+// StoreMemory embeds and stores a memory as a VectorRecord with Type: "memory".
+// The memory name is used as the record ID, so calling StoreMemory again with
+// the same name replaces the previous record. Returns an error if the memory
+// name or content is empty, or if embedding fails.
+func (s *ConversationStore) StoreMemory(ctx context.Context, name, content string) error {
+	// Validate inputs
+	if ctx == nil {
+		log.Printf("[conversation-store] skipping memory storage: context is nil")
+		return nil
+	}
+	if name == "" {
+		return fmt.Errorf("memory name is empty")
+	}
+	if content == "" {
+		return fmt.Errorf("memory content is empty")
+	}
+
+	// Embed the content
+	emb, err := s.provider.Embed(ctx, content)
+	if err != nil {
+		return err
+	}
+
+	// Truncate content for signature at a rune boundary
+	runes := []rune(content)
+	if len(runes) > maxSignatureLen {
+		runes = runes[:maxSignatureLen]
+	}
+	signature := string(runes)
+
+	// Extract title: first non-empty line, trimmed
+	var title string
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			title = trimmed
+			break
+		}
+	}
+
+	// Create defensive copy of embedding
+	embCopy := make([]float32, len(emb))
+	copy(embCopy, emb)
+
+	// Create VectorRecord
+	record := VectorRecord{
+		ID:        name,
+		File:      name + ".md",
+		Name:      name,
+		Signature: signature,
+		Embedding: embCopy,
+		Type:      "memory",
+		IndexedAt: time.Now().UTC(),
+		Metadata: map[string]interface{}{
+			"title":         title,
+			"contentLength": len(content),
+		},
+	}
+
+	// Store the record
+	return s.Store([]VectorRecord{record})
 }

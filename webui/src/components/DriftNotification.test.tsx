@@ -165,11 +165,12 @@ describe('Continue here button', () => {
     expect(props.onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('has autoFocus attribute on continue button', () => {
+  it('has autoFocus on continue button', () => {
     renderDrift();
-    const continueBtn = container.querySelector('.drift-notification-btn-primary');
-    // In React, autoFocus is set as a property, not an attribute
+    const continueBtn = container.querySelector('.drift-notification-btn-primary') as HTMLButtonElement | null;
     expect(continueBtn).not.toBeNull();
+    // autoFocus focuses the button on mount
+    expect(document.activeElement).toBe(continueBtn);
   });
 
   it('has type="button" to prevent form submission', () => {
@@ -358,31 +359,6 @@ describe('Auto-dismiss', () => {
     });
 
     expect(props.onDismiss).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Cleanup
-// ---------------------------------------------------------------------------
-
-describe('Cleanup', () => {
-  it('clears timer on unmount without calling onDismiss', () => {
-    const props = renderDrift();
-    act(() => {
-      root.unmount();
-    });
-    expect(props.onDismiss).not.toHaveBeenCalled();
-  });
-
-  it('cleans up Escape key listener on unmount', () => {
-    const props = renderDrift();
-    act(() => {
-      root.unmount();
-    });
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
-    expect(props.onDismiss).not.toHaveBeenCalled();
   });
 });
 

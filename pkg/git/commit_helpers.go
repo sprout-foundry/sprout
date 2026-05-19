@@ -161,8 +161,8 @@ func parseStagedFileChanges(output string) []CommitFileChange {
 
 // generateCommitMessage generates a commit message using the following priority:
 // 1. User-provided message (if non-empty)
-// 2. User instructions (if non-empty) - used as direct message
-// 3. LLM-generated message (if client is available)
+// 2. LLM-generated message (always tried if client is available), passing user instructions as context
+// 3. User instructions verbatim (if no LLM client available)
 // 4. Fallback message based on file changes
 func (e *CommitExecutor) generateCommitMessage(diff, branch string, fileChanges []CommitFileChange) string {
 	// Priority 1: Use user-provided message directly
@@ -170,21 +170,22 @@ func (e *CommitExecutor) generateCommitMessage(diff, branch string, fileChanges 
 		return e.UserMessage
 	}
 
-	// Priority 2: Use user instructions as direct message
-	if e.UserInstructions != "" {
-		return e.UserInstructions
-	}
-
-	// Priority 3: Generate using LLM
+	// Priority 2: Generate using LLM (always try if client is available), passing notes as context
 	if e.Client != nil {
 		result, err := GenerateCommitMessageFromStagedDiff(e.Client, CommitMessageOptions{
-			Diff:        diff,
-			Branch:      branch,
-			FileChanges: fileChanges,
+			Diff:             diff,
+			Branch:           branch,
+			FileChanges:      fileChanges,
+			UserInstructions: e.UserInstructions,
 		})
 		if err == nil && result != nil && result.Message != "" {
 			return result.Message
 		}
+	}
+
+	// Priority 3: If no LLM client, use user instructions verbatim as last resort
+	if e.UserInstructions != "" {
+		return e.UserInstructions
 	}
 
 	// Priority 4: Fallback message

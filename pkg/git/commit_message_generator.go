@@ -54,33 +54,17 @@ func GenerateCommitMessageFromStagedDiff(client api.ClientInterface, opts Commit
 
 	primaryAction := "Updates"
 	actionCounts := make(map[string]int)
-	fileActions := make([]string, 0, len(opts.FileChanges))
 	for _, change := range opts.FileChanges {
 		action := actionFromStatus(change.Status)
 		actionCounts[action]++
-		if strings.TrimSpace(change.Path) != "" {
-			fileActions = append(fileActions, fmt.Sprintf("%s %s", action, change.Path))
-		}
 	}
 	// Use a specific action only when all files share the same change type.
-	// For mixed change types (adds + updates + deletes), fall back to "Updates".
 	if len(actionCounts) == 1 {
 		for action := range actionCounts {
 			primaryAction = action
 			break
 		}
 	}
-	fileActionsSummary := fmt.Sprintf("%s %d files", primaryAction, len(opts.FileChanges))
-	if len(fileActions) == 1 {
-		fileActionsSummary = fileActions[0]
-	}
-
-	branchPrefix := ""
-	if !isDefaultBranch(opts.Branch) && strings.TrimSpace(opts.Branch) != "" {
-		branchPrefix = fmt.Sprintf("[%s] ", strings.TrimSpace(opts.Branch))
-	}
-	prefixAndActions := branchPrefix + fileActionsSummary + " - "
-	availableSpace := 72
 
 	optimizer := utils.NewDiffOptimizer()
 	optimizedDiff := optimizer.OptimizeDiff(diffText)
@@ -97,54 +81,57 @@ func GenerateCommitMessageFromStagedDiff(client api.ClientInterface, opts Commit
 		promptContent = fmt.Sprintf("USER INSTRUCTIONS:\n%s\n\nCODE CHANGES:\n%s", strings.TrimSpace(opts.UserInstructions), promptContent)
 	}
 
-	titlePrompt := fmt.Sprintf(`Base responses on the following changes:
+	titleSystemPrompt := `You are a git commit message generator. ALWAYS generate titles following the Conventional Commits format.
+
+FORMAT: <type>(<optional scope>): <imperative description>
+
+Types: feat, fix, docs, style, refactor, perf, test, chore, ci
+
+Rules:
+- Use imperative mood: "add feature" not "added feature"
+- No period at end
+- Max 72 characters total
+- Infer scope from file paths (e.g., "api", "auth", "ui", "config")
+- Lowercase type and description
+- Return PLAIN TEXT ONLY — no markdown, no code blocks, no explanation`
+
+	titlePrompt := fmt.Sprintf(`Based on the changes below, generate a conventional commit title in format: type(scope): description
+
+The changes primarily %s the following files.
 
 %s
 
-Generate a concise git commit title starting with the word: '%s'.
-The total length MUST be under %d characters. Don't include the file name or any
-colons. The title should be a single line without any markdown formatting. Only
-return the short title and nothing else.
-
-CRITICAL: Do NOT use markdown code blocks. Return plain text only.`, promptContent, primaryAction, availableSpace)
+Return ONLY the commit title. No markdown, no code blocks, no explanation.`, primaryAction, promptContent)
 
 	titleMessages := []api.Message{
 		{
 			Role:    "system",
-			Content: "You are a git commit message generator. Generate concise, clear commit messages following conventional commit standards.",
+			Content: titleSystemPrompt,
 		},
 		{
 			Role:    "user",
 			Content: titlePrompt,
 		},
 	}
-	descPrompt := fmt.Sprintf(`Base responses on the following changes:
+	descSystemPrompt := `You are a git commit message description generator. Generate clear, concise commit bodies.
+
+RULES:
+1. Max 500 characters total
+2. Plain text only — NO markdown formatting, NO code blocks, NO lists
+3. SINGLE paragraph
+4. Explain WHAT and WHY, not how
+5. Be concise — omit details obvious from the diff`
+
+	descPrompt := fmt.Sprintf(`Based on the changes below, generate a brief commit description body.
 
 %s
 
-Generate a Git commit message summary. The message should follow these rules:
-1. The total length MUST be under 500 characters.
-2. DO NOT include a title.
-3. DO NOT include any code blocks or filenames.
-4. DO NOT include any markdown formatting. 
-5. DO NOT include any ordered lists or unordered lists.
-6. Message will be a SINGLE paragraph without any markdown formatting.
-7. The message should be clear and concise and only give reasoning for the change if provided by the user.`, promptContent)
+Return ONLY the description paragraph. No title, no markdown, no code blocks, no explanation.`, promptContent)
 
 	descMessages := []api.Message{
 		{
-			Role: "system",
-			Content: `
-					You are a git commit message generator. Generate clear, concise descriptions that follow these immutable rules.
-					RULES:
-					1. The total length MUST be under 500 characters.
-					2. DO NOT include a title.
-					3. DO NOT include any code blocks or filenames.
-					4. DO NOT include any markdown formatting. 
-					5. DO NOT include any ordered lists or unordered lists.
-					6. Message will be a SINGLE paragraph without any markdown formatting.
-					7. The message should be clear and concise and only give reasoning for the change if provided by the user.
-					`,
+			Role:    "system",
+			Content: descSystemPrompt,
 		},
 		{
 			Role:    "user",
@@ -208,10 +195,13 @@ Generate a Git commit message summary. The message should follow these rules:
 	}
 
 	shortTitle := NormalizeShortTitle(titleResp.Choices[0].Message.Content)
-	shortTitle = TruncateRunes(shortTitle, availableSpace)
+	if strings.TrimSpace(shortTitle) == "" {
+		// LLM returned empty title — generate one from file changes
+		shortTitle = generateFallbackCommitMessage([]CommitFileChange{})
+	}
 	description := strings.TrimSpace(descResp.Choices[0].Message.Content)
 	wrappedDesc := WrapText(description, 72)
-	commitMessage := strings.TrimSpace(prefixAndActions + shortTitle + "\n\n" + wrappedDesc)
+	commitMessage := strings.TrimSpace(shortTitle + "\n\n" + wrappedDesc)
 	if commitMessage == "" {
 		return nil, fmt.Errorf("generated commit message was empty")
 	}

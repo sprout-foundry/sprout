@@ -1039,3 +1039,147 @@ func TestMCPToolWrapper_Execute_ArgumentsPassedThrough(t *testing.T) {
 	assert.Equal(t, inputArgs["filters"], receivedArgs["filters"])
 	assert.Equal(t, inputArgs["nested"], receivedArgs["nested"])
 }
+
+// ---------------------------------------------------------------------------
+// Targeted ValidateArgs Tests
+// ---------------------------------------------------------------------------
+
+// testWrapper creates an MCPToolWrapper for ValidateArgs testing.
+// The manager is nil because ValidateArgs doesn't call it.
+func testWrapper(name string, server string, schema map[string]interface{}) *MCPToolWrapper {
+	return NewMCPToolWrapper(MCPTool{
+		Name:        name,
+		Description: "test tool",
+		InputSchema: schema,
+		ServerName:  server,
+	}, nil)
+}
+
+// TestValidateArgs_NilSchema_ReturnsNil confirms that when a tool has no
+// InputSchema, validation is skipped entirely.
+func TestValidateArgs_NilSchema_ReturnsNil(t *testing.T) {
+	w := testWrapper("mytool", "myserver", nil)
+
+	// Any args should pass through when schema is nil
+	assert.NoError(t, w.ValidateArgs(nil))
+	assert.NoError(t, w.ValidateArgs(map[string]interface{}{}))
+	assert.NoError(t, w.ValidateArgs(map[string]interface{}{"anything": "goes"}))
+}
+
+// TestValidateArgs_ValidArgs_ReturnsNil validates that correctly-typed args
+// against a simple schema pass without error.
+func TestValidateArgs_ValidArgs_ReturnsNil(t *testing.T) {
+	w := testWrapper("mytool", "myserver", map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+		},
+	})
+
+	err := w.ValidateArgs(map[string]interface{}{"name": "alice"})
+	assert.NoError(t, err)
+}
+
+// TestValidateArgs_InvalidArgs_ReturnsInvalidArgsError validates that wrong
+// argument types produce an *InvalidArgsError whose message contains
+// "invalid arguments".
+func TestValidateArgs_InvalidArgs_ReturnsInvalidArgsError(t *testing.T) {
+	w := testWrapper("mytool", "myserver", map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+		},
+	})
+
+	err := w.ValidateArgs(map[string]interface{}{"name": 42}) // wrong type
+
+	assert.Error(t, err)
+	invalidErr, ok := err.(*InvalidArgsError)
+	assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+	assert.Equal(t, "myserver", invalidErr.ServerName)
+	assert.Equal(t, "mytool", invalidErr.ToolName)
+	assert.NotEmpty(t, invalidErr.Causes)
+	assert.Contains(t, err.Error(), "invalid arguments")
+}
+
+// TestValidateArgs_MissingRequiredField_ReturnsInvalidArgsError validates that
+// omitting a required schema field produces an *InvalidArgsError.
+func TestValidateArgs_MissingRequiredField_ReturnsInvalidArgsError(t *testing.T) {
+	w := testWrapper("mytool", "myserver", map[string]interface{}{
+		"type": "object",
+		"required": []interface{}{"name"},
+		"properties": map[string]interface{}{
+			"name": map[string]interface{}{"type": "string"},
+		},
+	})
+
+	err := w.ValidateArgs(map[string]interface{}{}) // empty args, missing "name"
+
+	assert.Error(t, err)
+	invalidErr, ok := err.(*InvalidArgsError)
+	assert.True(t, ok, "expected *InvalidArgsError, got %T", err)
+	assert.Equal(t, "myserver", invalidErr.ServerName)
+	assert.Equal(t, "mytool", invalidErr.ToolName)
+	assert.NotEmpty(t, invalidErr.Causes)
+	assert.Contains(t, err.Error(), "invalid arguments")
+}
+
+// TestValidateArgs_CompileError_FailOpen_WarnOnce validates that when the
+// tool's InputSchema cannot be compiled:
+//   1. The first call to ValidateArgs returns nil (fail-open).
+//   2. The warnedCompileErr flag is set so a second call does NOT warn again.
+func TestValidateArgs_CompileError_FailOpen_WarnOnce(t *testing.T) {
+	w := testWrapper("bad-tool", "bad-server", map[string]interface{}{
+		"type": "invalid-junk", // not a valid JSON Schema
+	})
+
+	// First call: should fail-open (return nil) and set warnedCompileErr
+	err1 := w.ValidateArgs(map[string]interface{}{})
+	assert.NoError(t, err1, "first call should fail-open (return nil)")
+	assert.True(t, w.warnedCompileErr, "warnedCompileErr should be true after first call")
+
+	// Second call: should also fail-open, but warnedCompileErr is already set
+	// so no additional warning is printed.
+	err2 := w.ValidateArgs(map[string]interface{}{})
+	assert.NoError(t, err2, "second call should also fail-open")
+	assert.True(t, w.warnedCompileErr, "warnedCompileErr should remain true")
+}
+
+// ---------------------------------------------------------------------------
+// InvalidArgsError Error() Formatting Tests
+// ---------------------------------------------------------------------------
+
+// TestInvalidArgsError_SingleCause verifies that Error() formats a single
+// cause correctly: "invalid arguments for tool <server>/<tool>: <cause>"
+func TestInvalidArgsError_SingleCause(t *testing.T) {
+	err := &InvalidArgsError{
+		ServerName: "mysrv",
+		ToolName:   "mytool",
+		Causes:     []string{"reason A"},
+	}
+	expected := "invalid arguments for tool mysrv/mytool: reason A"
+	assert.Equal(t, expected, err.Error())
+}
+
+// TestInvalidArgsError_MultipleCauses verifies that Error() joins multiple
+// causes with "; ": "invalid arguments for tool <server>/<tool>: <cause1>; <cause2>"
+func TestInvalidArgsError_MultipleCauses(t *testing.T) {
+	err := &InvalidArgsError{
+		ServerName: "mysrv",
+		ToolName:   "mytool",
+		Causes:     []string{"reason A", "reason B", "reason C"},
+	}
+	expected := "invalid arguments for tool mysrv/mytool: reason A; reason B; reason C"
+	assert.Equal(t, expected, err.Error())
+}
+
+// TestInvalidArgsError_NoCauses verifies the fallback message when Causes is empty.
+func TestInvalidArgsError_NoCauses(t *testing.T) {
+	err := &InvalidArgsError{
+		ServerName: "mysrv",
+		ToolName:   "mytool",
+		Causes:     []string{},
+	}
+	expected := "invalid arguments for tool mysrv/mytool"
+	assert.Equal(t, expected, err.Error())
+}

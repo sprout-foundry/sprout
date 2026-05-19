@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // MCPServerConfig represents the configuration for an MCP server
@@ -263,11 +267,15 @@ type MCPManager interface {
 
 // MCPToolWrapper wraps an MCP tool to implement the standard Tool interface
 type MCPToolWrapper struct {
-	mcpTool   MCPTool
-	manager   MCPManager
-	category  string
-	timeout   time.Duration
-	available bool
+	mcpTool           MCPTool
+	manager           MCPManager
+	category          string
+	timeout           time.Duration
+	available         bool
+	compiledSchema    *jsonschema.Schema // compiled once, reused
+	schemaOnce        sync.Once          // ensures compileSchema runs once
+	schemaErr         error              // cached compilation error
+	warnedCompileErr  bool               // true once we've warned about a compile error
 }
 
 // Standard error codes
@@ -278,3 +286,17 @@ const (
 	ErrorCodeInvalidParams  = -32602
 	ErrorCodeInternalError  = -32603
 )
+
+// InvalidArgsError indicates that tool arguments failed JSON Schema validation.
+type InvalidArgsError struct {
+	ServerName string
+	ToolName   string
+	Causes     []string
+}
+
+func (e *InvalidArgsError) Error() string {
+	if len(e.Causes) == 0 {
+		return fmt.Sprintf("invalid arguments for tool %s/%s", e.ServerName, e.ToolName)
+	}
+	return fmt.Sprintf("invalid arguments for tool %s/%s: %s", e.ServerName, e.ToolName, strings.Join(e.Causes, "; "))
+}

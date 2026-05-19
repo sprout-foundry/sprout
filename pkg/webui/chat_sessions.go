@@ -42,6 +42,10 @@ type chatSession struct {
 	// from the global/workspace config. Populated when settings change during a session.
 	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
 
+	// HandoffContext stores context from a previous chat session to inject
+	// into the new session's system prompt. Set by CreateSessionWithHandoff.
+	HandoffContext string `json:"handoff_context,omitempty"`
+
 	Agent            *agent.Agent `json:"-"`
 	mu               sync.Mutex
 }
@@ -160,6 +164,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	sessionProvider := cs.Provider
 	sessionModel := cs.Model
 	sessionWorktree := cs.WorktreePath
+	sessionHandoff := cs.HandoffContext
 	cs.mu.Unlock()
 
 	// Use chat's worktree path if set, otherwise use provided workspaceRoot
@@ -211,6 +216,17 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	}
 	created.SetEventMetadata(meta)
 	created.EnableStreaming(func(string) {})
+
+	// Inject handoff context into system prompt if present (one-time injection)
+	if sessionHandoff != "" {
+		currentPrompt := created.GetSystemPrompt()
+		handoffSection := formatHandoffSystemPrompt(sessionHandoff)
+		created.SetSystemPrompt(currentPrompt + handoffSection)
+		cs.mu.Lock()
+		cs.HandoffContext = "" // Clear after injection
+		cs.mu.Unlock()
+	}
+
 	if len(snapshot) > 0 {
 		if err := created.ImportState(snapshot); err != nil {
 			log.Printf("chatSession.getOrCreateAgent: warning: failed to import state: %v", err)
@@ -631,6 +647,46 @@ func randomSuffix(n int) string {
 // this file compiles independently (the linker resolves to the single
 // definition). However, since we're in the same package, referencing
 // the existing function directly is fine — no redeclaration needed.
+
+// formatHandoffSystemPrompt formats a handoff context string into a
+// system prompt section for injection into a new session.
+func formatHandoffSystemPrompt(summary string) string {
+	if summary == "" {
+		return ""
+	}
+	return fmt.Sprintf("\n\n## Context from Previous Chat\n\nYou were working on: %s\nThe conversation has shifted to a new topic. Use the above context as background only.", summary)
+}
+
+// CreateSessionWithHandoff creates a new chat session with context handed off
+// from the source session. The handoff context is injected into the new
+// session's system prompt, providing continuity across sessions.
+//
+// Parameters:
+//   - sourceChatID: the chat ID to extract handoff context from
+//   - summary: the actionable summary from the previous session's last turn
+//
+// Returns: the new chat session's ID, or empty string on error.
+func (cc *webClientContext) CreateSessionWithHandoff(sourceChatID, summary string) string {
+	if summary == "" {
+		// No summary — just create a regular new session
+		newID := generateChatID()
+		cc.getOrCreateChatSession(newID)
+		return newID
+	}
+
+	newID := generateChatID()
+	cc.nextChatNumber++
+	name := "Chat " + strconv.Itoa(cc.nextChatNumber)
+
+	cs := newChatSession(newID, name)
+	cs.HandoffContext = summary
+	if cc.ChatSessions == nil {
+		cc.ChatSessions = make(map[string]*chatSession)
+	}
+	cc.ChatSessions[newID] = cs
+
+	return newID
+}
 
 // chatSessionSummary produces a JSON-safe map with metadata for an API response.
 func (cs *chatSession) chatSessionSummary(isDefault bool) map[string]interface{} {

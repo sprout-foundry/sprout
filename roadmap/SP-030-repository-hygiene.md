@@ -124,9 +124,11 @@ This is not a string-replace decision — it's a product decision. The audit ste
 - [ ] Per-file audit and update of `docs/*.md` `ledit` references
 - [ ] Update `README.md` where `ledit` appears outside historical sections
 
-### Phase 4: Decide-then-act on service names (Day 4)
-- [ ] Audit `cmd/service_*` code paths and decide whether service identifier stays `ledit`
-- [ ] Either keep + document, or implement a migration
+### Phase 4: Decide-then-act on service names (Day 4) — **DE-SCOPED**
+
+**Update (2026-05-18):** Daemon-mode audit confirmed the live install path already uses `sprout-daemon` / `com.sprout.daemon` and `cmd/service_linux.go` refuses to install when the binary isn't named `sprout`. Fresh installs are correct. The remaining concern — detecting and removing a pre-existing `ledit` daemon unit on systems upgraded from the predecessor tool — moves to **SP-032 B2**. The stale `ledit` strings in `cmd/service_*_test.go` test fixtures move to **SP-032 Phase 4** (fixture cleanup).
+
+This phase no longer requires action under SP-030.
 
 ### Phase 5: Test fixtures (Day 5)
 - [ ] Audit `pkg/agent/*_test.go`, `pkg/git/*_test.go`, `pkg/history/*_test.go` `ledit` references

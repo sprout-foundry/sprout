@@ -121,7 +121,7 @@
 .sidebar .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
@@ -160,7 +160,7 @@
   padding: 0 42px 0 18px;
   font-size: 12px;
   line-height: 1.1;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   font-weight: 560;
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -422,7 +422,7 @@
   padding: 0 38px 0 var(--space-4);
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
@@ -452,7 +452,7 @@
   padding: 0 var(--space-4);
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border-default) 90%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: var(--font-sans);
@@ -495,7 +495,7 @@
   min-height: 34px;
   padding: 0 14px;
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: var(--text-sm);
@@ -661,7 +661,7 @@
   padding: var(--space-4);
   background: var(--bg-elevated);
   border: none;
-  border-radius: 0;
+  border-radius: var(--radius-none);
   font-size: var(--text-xs);
   line-height: 1.5;
 }
@@ -763,7 +763,7 @@
   min-height: 30px;
   padding: 0 var(--space-3);
   border: 1px solid var(--border-default);
-  border-radius: 0;
+  border-radius: var(--radius-none);
   background: var(--bg-elevated);
   color: inherit;
   font: inherit;
@@ -803,7 +803,7 @@
 
 .sidebar .badge {
   font-size: 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 2px 7px;
   line-height: 1;
   margin-left: auto;
@@ -983,7 +983,7 @@
 .sidebar .search-file-group {
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
-  border-radius: 0;
+  border-radius: var(--radius-none);
   margin-bottom: var(--space-3);
   overflow: hidden;
 }
@@ -1026,7 +1026,7 @@
   padding: 2px 6px;
   background: var(--accent-primary-alpha, rgba(14, 165, 233, 0.15));
   color: var(--accent-primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -1087,7 +1087,7 @@
   background: var(--accent-warning-alpha, rgba(234, 179, 8, 0.25));
   color: var(--text-primary);
   padding: 1px 2px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   font-weight: 500;
 }
 
@@ -1377,7 +1377,7 @@
   height: 28px;
   padding: 0 9px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: 11px;
@@ -1408,7 +1408,7 @@
 }
 .terminal-logs::-webkit-scrollbar-thumb {
   background: var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .term-log-line {
@@ -1487,7 +1487,7 @@
 .git-sidebar-warning {
   background: transparent;
   border: none;
-  border-radius: 0;
+  border-radius: var(--radius-none);
 }
 
 .git-sidebar-header {
@@ -1535,7 +1535,7 @@
   padding: 0 30px 0 8px;
   min-height: 36px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   transition: border-color 0.15s var(--ease-out);
 }
@@ -1610,14 +1610,13 @@
   gap: 6px;
   min-height: 32px;
   border: 1px solid var(--border-default);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   color: var(--text-primary);
   cursor: pointer;
   transition:
-    background 0.12s var(--ease-out),
-    border-color 0.12s var(--ease-out),
-    color 0.12s var(--ease-out);
+    background var(--motion-quick),
+    color var(--motion-quick);
 }
 
 .git-header-icon-btn {
@@ -1634,7 +1633,6 @@
 .git-header-icon-btn:hover:not(:disabled),
 .git-header-action-btn:hover:not(:disabled) {
   background: var(--bg-tertiary);
-  border-color: var(--border-strong);
 }
 
 .git-header-icon-btn:disabled,
@@ -1676,7 +1674,7 @@
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
 }
 
@@ -1696,7 +1694,7 @@
   min-height: 72px;
   resize: vertical;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-primary);
   color: var(--text-primary);
   padding: 10px;
@@ -1800,7 +1798,7 @@
   overflow: hidden;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
-  border-radius: 0;
+  border-radius: var(--radius-none);
   background: transparent;
 }
 
@@ -1849,7 +1847,7 @@
   padding: 10px 12px;
   background: transparent;
   border: 1px dashed var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
@@ -1865,7 +1863,7 @@
 .git-sidebar-file-limit-note {
   padding: 8px 12px;
   background: var(--bg-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
   font-size: 11px;
   text-align: center;
@@ -1885,18 +1883,37 @@
   border-top: 1px solid var(--border-subtle);
   cursor: pointer;
   user-select: none;
+  /* Reserve space for the 2px left accent so selected/unselected rows
+     have identical content offset (no horizontal shift on selection). */
+  box-shadow: inset 2px 0 0 transparent;
+  transition:
+    background var(--motion-quick),
+    box-shadow var(--motion-quick);
 }
 
 .git-sidebar-file-row:hover {
   background: var(--bg-elevated);
 }
 
+/* Previewing = "this file is shown in the diff pane right now." */
 .git-sidebar-file-row.previewing {
   background: var(--sidebar-nav-btn-active-bg);
 }
 
+/* Selected = "this file is in the multi-select set."
+   Left-edge accent composes cleanly with previewing's neutral fill. */
 .git-sidebar-file-row.selected {
-  background: color-mix(in srgb, var(--accent-primary-alpha, rgba(56, 189, 248, 0.18)) 70%, transparent);
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+.git-sidebar-file-row.selected:hover {
+  background: var(--bg-elevated);
+}
+
+.git-sidebar-file-row.selected.previewing {
+  background: var(--sidebar-nav-btn-active-bg);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
 }
 
 .git-sidebar-file-path {
@@ -1923,7 +1940,7 @@
   border: none;
   background: transparent;
   color: var(--text-tertiary);
-  border-radius: 7px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: color 0.12s ease, background 0.12s ease;
 }
@@ -1946,7 +1963,7 @@
   gap: 0;
   border: none;
   border-bottom: 1px solid var(--border-subtle);
-  border-radius: 0;
+  border-radius: var(--radius-none);
   background: transparent;
   overflow: hidden;
 }

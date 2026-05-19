@@ -34,14 +34,14 @@ Spec: `roadmap/SP-027-persistent-context.md`
 [x] - SP-027-2a: Implement time-decayed similarity scoring — `ScoreWithDecay()` with 30-day half-life exponential decay combining cosine similarity and temporal weighting
 [] - SP-027-2b: Create `pkg/agent/proactive_context.go` — query `ConversationStore` with time decay, filter by `MinRelevanceScore` (0.50), cap at `MaxContextualResults` (5), format as "Previous Work" section for system prompt injection
 [x] - SP-027-2c: Hook `proactiveContext.Inject()` into `ProcessQuery()` pre-loop — only on first turn (no prior messages beyond system prompt) or cold session restore
-[] - SP-027-2d: Add `PersistentContextConfig` struct to `pkg/configuration/config.go` — `ProactiveContextEnabled` (true), `MaxContextualResults` (5), `MinRelevanceScore` (0.50), `MaxContextChars` (4000), `WorkspaceScopedRetrieval` (false)
-[] - SP-027-2e: Tests — unit test for retrieval with time decay, test for empty store (graceful no-op), test for workspace-scoped filtering
+[x] - SP-027-2d: Add `PersistentContextConfig` struct to `pkg/configuration/config.go` — `ProactiveContextEnabled` (true), `MaxContextualResults` (5), `MinRelevanceScore` (0.50), `MaxContextChars` (4000), `WorkspaceScopedRetrieval` (false)
+[x] - SP-027-2e: Tests — unit test for retrieval with time decay, test for empty store (graceful no-op), test for workspace-scoped filtering
 
 ### Phase 3: Drift Detection
 
-[] - SP-027-3a: Create `pkg/agent/drift_detection.go` — track `SessionIntentEmbedding` (from `ConversationState`), compute cosine similarity with current prompt every Nth turn, flag if below `DriftThreshold` (0.60)
-[] - SP-027-3b: Implement non-blocking drift notification — WebUI: toast-style notification with "Continue here" / "Start new chat" options (non-modal, agent continues). CLI: post-turn prompt with Enter to continue, 's' for new chat
-[] - SP-027-3c: Implement suppression logic — disable drift detection for session after 3 consecutive rejections
+[x] - SP-027-3a: Create `pkg/agent/drift_detection.go` — track `SessionIntentEmbedding` (from `ConversationState`), compute cosine similarity with current prompt every Nth turn, flag if below `DriftThreshold` (0.60)
+[x] - SP-027-3b: Implement non-blocking drift notification — WebUI: toast-style notification with "Continue here" / "Start new chat" options (non-modal, agent continues). CLI: post-turn prompt with Enter to continue, 's' for new chat
+[x] - SP-027-3c: Implement suppression logic — disable drift detection for session after 3 consecutive rejections
 [] - SP-027-3d: Add `CreateSessionWithHandoff()` to `pkg/webui/chat_sessions.go` — extract `ActionableSummary` from last turn, pre-populate new chat system prompt with "Context from Previous Chat" section
 [] - SP-027-3e: Add drift config fields to `PersistentContextConfig` — `DriftDetectionEnabled` (true), `DriftThreshold` (0.60), `DriftCheckInterval` (5 turns)
 [] - SP-027-3f: Create WebUI drift notification component in `webui/src/components/` — non-modal toast with "Continue here" / "Start new chat" buttons

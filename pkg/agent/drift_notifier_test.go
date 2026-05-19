@@ -541,8 +541,9 @@ func TestCheckDriftAsync_NilState(t *testing.T) {
 // ---------------------------------------------------------------------------
 // TestCheckDriftAsync_Suppressed
 //
-// When drift is suppressed (3+ rejections), the async goroutine should
-// return immediately without spawning a new goroutine.
+// When drift is suppressed (3+ rejections), checkDriftAsync should return
+// immediately without spawning a goroutine — the suppression check happens
+// before the goroutine is created.
 // ---------------------------------------------------------------------------
 
 func TestCheckDriftAsync_Suppressed(t *testing.T) {

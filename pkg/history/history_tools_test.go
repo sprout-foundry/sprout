@@ -14,7 +14,7 @@ import (
 // TestBase64Encoding tests that file contents are properly encoded/decoded
 func TestBase64Encoding(t *testing.T) {
 	// Setup test directory
-	testDir := filepath.Join(os.TempDir(), "sprout_test_base64_"+time.Now().Format("20060102150405"))
+	testDir := filepath.Join(os.TempDir(), "ledit_test_base64_"+time.Now().Format("20060102150405"))
 	defer os.RemoveAll(testDir)
 
 	// Create and change to test directory
@@ -113,7 +113,7 @@ func TestBase64Encoding(t *testing.T) {
 // TestHistoryFiltering tests various filtering capabilities
 func TestHistoryFiltering(t *testing.T) {
 	// Setup test directory
-	testDir := filepath.Join(os.TempDir(), "sprout_test_filtering_"+time.Now().Format("20060102150405"))
+	testDir := filepath.Join(os.TempDir(), "ledit_test_filtering_"+time.Now().Format("20060102150405"))
 	defer os.RemoveAll(testDir)
 
 	// Create and change to test directory
@@ -208,7 +208,7 @@ func TestHistoryFiltering(t *testing.T) {
 // TestRollback tests the rollback functionality
 func TestRollback(t *testing.T) {
 	// Setup test directory
-	testDir := filepath.Join(os.TempDir(), "sprout_test_rollback_"+time.Now().Format("20060102150405"))
+	testDir := filepath.Join(os.TempDir(), "ledit_test_rollback_"+time.Now().Format("20060102150405"))
 	defer os.RemoveAll(testDir)
 
 	// Create and change to test directory
@@ -319,7 +319,7 @@ func TestRollback(t *testing.T) {
 // TestBackwardCompatibility tests that the system can handle both base64 and plain text files
 func TestBackwardCompatibility(t *testing.T) {
 	// Setup test directory
-	testDir := filepath.Join(os.TempDir(), "sprout_test_compat_"+time.Now().Format("20060102150405"))
+	testDir := filepath.Join(os.TempDir(), "ledit_test_compat_"+time.Now().Format("20060102150405"))
 	defer os.RemoveAll(testDir)
 
 	// Create and change to test directory

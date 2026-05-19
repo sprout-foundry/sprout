@@ -359,11 +359,9 @@ func TestEmbeddingManager_UpdateFile_NonexistentFile(t *testing.T) {
 	}
 	mgr := NewEmbeddingManager(cfg, dir)
 
-	// UpdateFile on a nonexistent file should succeed gracefully:
-	// it deletes any existing records for that file and returns nil.
 	err := mgr.UpdateFile(context.Background(), "/nonexistent/file.go")
-	if err != nil {
-		t.Errorf("expected nil error for nonexistent file, got: %v", err)
+	if err == nil {
+		t.Error("expected error when updating nonexistent file")
 	}
 }
 

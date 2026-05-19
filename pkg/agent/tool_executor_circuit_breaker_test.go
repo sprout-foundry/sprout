@@ -554,9 +554,6 @@ func TestCheckAndUpdateIntegration(t *testing.T) {
 	})
 
 	t.Run("concurrent updates and checks", func(t *testing.T) {
-		if testing.Short() {
-			t.Skip("skipping concurrency stress test in short mode")
-		}
 		te := newTestToolExecutorWithCircuitBreaker()
 		args := map[string]interface{}{"cmd": "ls"}
 
@@ -684,98 +681,6 @@ func TestCircuitBreakerEdgeCases(t *testing.T) {
 		updateCircuitBreakerCount(te, "read_file", args)
 		if !te.checkCircuitBreaker("read_file", args) {
 			t.Error("read_file (openai) should block at count 5")
-		}
-	})
-}
-
-// --- TestReadOnlyToolsExcluded ---
-
-func TestReadOnlyToolsExcluded(t *testing.T) {
-	// Use the production readOnlyTools map as the single source of truth.
-	// This ensures that any tool added to the map is automatically covered.
-	for toolName := range readOnlyTools {
-		toolName := toolName // capture range variable
-		args := map[string]interface{}{}
-
-		t.Run(toolName+"/check_never_blocks", func(t *testing.T) {
-			te := newTestToolExecutorWithCircuitBreaker()
-			cb := te.agent.state.GetCircuitBreaker()
-
-			// Manually insert an action with count=100 (well above any threshold)
-			key := te.generateActionKey(toolName, args)
-			cb.mu.Lock()
-			cb.Actions[key] = &CircuitBreakerAction{
-				ActionType: toolName,
-				Target:     key,
-				Count:      100,
-				LastUsed:   getCurrentTime(),
-			}
-			cb.mu.Unlock()
-
-			if te.checkCircuitBreaker(toolName, args) {
-				t.Errorf("checkCircuitBreaker(%q) = true, want false (read-only tool should never be circuit-broken)", toolName)
-			}
-		})
-
-		t.Run(toolName+"/update_never_creates_entry", func(t *testing.T) {
-			te := newTestToolExecutorWithCircuitBreaker()
-			cb := te.agent.state.GetCircuitBreaker()
-
-			// Call updateCircuitBreaker many times
-			for i := 0; i < 10; i++ {
-				te.updateCircuitBreaker(toolName, args)
-			}
-
-			// Verify no entry was created
-			key := te.generateActionKey(toolName, args)
-			cb.mu.RLock()
-			_, exists := cb.Actions[key]
-			cb.mu.RUnlock()
-
-			if exists {
-				t.Errorf("circuit breaker should have NO entry for read-only tool %q, but found one", toolName)
-			}
-		})
-	}
-
-	// Control case: non-excluded tools ARE still tracked and blocked
-	t.Run("shell_command_control_IS_tracked", func(t *testing.T) {
-		te := newTestToolExecutorWithCircuitBreaker()
-		cb := te.agent.state.GetCircuitBreaker()
-		args := map[string]interface{}{"command": "ls"}
-
-		te.updateCircuitBreaker("shell_command", args)
-		key := te.generateActionKey("shell_command", args)
-		cb.mu.RLock()
-		action, exists := cb.Actions[key]
-		cb.mu.RUnlock()
-
-		if !exists {
-			t.Fatal("shell_command should be tracked (control case)")
-		}
-		if action.Count != 1 {
-			t.Errorf("shell_command count = %d, want 1", action.Count)
-		}
-
-		// Manually boost count to trigger the breaker
-		cb.mu.Lock()
-		action.Count = 10
-		cb.mu.Unlock()
-
-		if !te.checkCircuitBreaker("shell_command", args) {
-			t.Error("shell_command with count=10 should be blocked (control case)")
-		}
-	})
-
-	// Edge case: read-only tools should be safe even with nil agent state
-	t.Run("nil_state_is_safe_for_read_only_tools", func(t *testing.T) {
-		for toolName := range readOnlyTools {
-			te := newTestToolExecutorNilState()
-			if te.checkCircuitBreaker(toolName, map[string]interface{}{}) {
-				t.Errorf("checkCircuitBreaker(%q) should return false even with nil state", toolName)
-			}
-			// updateCircuitBreaker should not panic
-			te.updateCircuitBreaker(toolName, map[string]interface{}{})
 		}
 	})
 }

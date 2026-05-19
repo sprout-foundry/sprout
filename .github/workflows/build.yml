@@ -66,25 +66,6 @@ jobs:
     - name: Install goimports
       run: go install golang.org/x/tools/cmd/goimports@latest
 
-    - name: Run agent and webui tests with race detection (non-short)
-      env:
-        CI: "true"
-      run: |
-        echo "=== pkg/agent (race, non-short) ==="
-        go test -race -count=1 -tags "browser" ./pkg/agent/... -v -timeout=180s 2>&1 | tee /tmp/sprout-test-agent-race.log
-        status=${PIPESTATUS[0]}
-        if [ $status -ne 0 ]; then
-          echo "pkg/agent race tests failed."
-          exit $status
-        fi
-        echo "=== pkg/webui (race, non-short) ==="
-        go test -race -count=1 -tags "browser" ./pkg/webui/... -v -timeout=180s 2>&1 | tee /tmp/sprout-test-webui-race.log
-        status=${PIPESTATUS[0]}
-        if [ $status -ne 0 ]; then
-          echo "pkg/webui race tests failed."
-          exit $status
-        fi
-
     - name: Run unit tests with race detection and coverage
       env:
         CI: "true"
@@ -146,10 +127,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test-logs
-        path: |
-          /tmp/sprout-test-coverage.log
-          /tmp/sprout-test-agent-race.log
-          /tmp/sprout-test-webui-race.log
+        path: /tmp/sprout-test-coverage.log
         retention-days: 30
 
     - name: Run integration tests

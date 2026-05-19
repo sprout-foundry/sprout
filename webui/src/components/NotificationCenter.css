@@ -93,7 +93,7 @@
 
 .notification-center-content::-webkit-scrollbar-thumb {
   background: var(--border-subtle, var(--border-default));
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
 }
 
 .notification-center-content::-webkit-scrollbar-thumb:hover {

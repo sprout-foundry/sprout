@@ -1,4 +1,3 @@
-/// <reference types="vitest/globals" />
 import { defineConfig } from 'vite';
 import path from 'path';
 

@@ -148,7 +148,7 @@ Spec: `roadmap/SP-030-repository-hygiene.md`
 ### Phase 3: Documentation sweep
 
 [x] - SP-030-3a: Per-file audit and update of `ledit` references in `docs/ELECTRON.md`, `docs/AGENT_WORKFLOW.md`, `docs/PROVIDER_CATALOG.md`, `docs/TESTING.md`, `docs/PRODUCT_BACKLOG.md`, `docs/subagent_personas.md`
-[] - SP-030-3b: Audit `README.md` and update non-historical `ledit` references; leave `CHANGELOG.md` historical sections intact
+[x] - SP-030-3b: Audit `README.md` and update non-historical `ledit` references; leave `CHANGELOG.md` historical sections intact
 
 ### Phase 4: Decide-then-act on service names — **DE-SCOPED (moved to SP-032)**
 

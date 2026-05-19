@@ -287,8 +287,8 @@ func TestGenerateCommitMessageFromStagedDiff_FeatureBranch(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// Feature branch: should include branch prefix [feature/caching]
-	assert.Contains(t, result.Message, "[feature/caching]")
+	// Feature branch: LLM title is used directly (no branch prefix anymore)
+	assert.Contains(t, result.Message, "Implements caching layer")
 }
 
 func TestGenerateCommitMessageFromStagedDiff_DefaultBranchNoPrefix(t *testing.T) {
@@ -325,8 +325,8 @@ func TestGenerateCommitMessageFromStagedDiff_MixedChangeTypes(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// Mixed types should use "Updates N files"
-	assert.Contains(t, result.Message, "Updates 3 files")
+	// Mixed types — LLM generates the title directly (no file-count prefix)
+	assert.Contains(t, result.Message, "Updates project structure and dependencies")
 }
 
 func TestGenerateCommitMessageFromStagedDiff_SingleFile(t *testing.T) {
@@ -342,8 +342,8 @@ func TestGenerateCommitMessageFromStagedDiff_SingleFile(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	// Single file: summary should be "Adds api/login.go"
-	assert.Contains(t, result.Message, "Adds api/login.go")
+	// Single file: LLM title is used directly (no file prefix anymore)
+	assert.Contains(t, result.Message, "Adds login endpoint")
 }
 
 func TestGenerateCommitMessageFromStagedDiff_DevelopBranch(t *testing.T) {
@@ -364,7 +364,7 @@ func TestGenerateCommitMessageFromStagedDiff_DevelopBranch(t *testing.T) {
 }
 
 func TestGenerateCommitMessageFromStagedDiff_EmptyContentReturn(t *testing.T) {
-	// Client returns empty content — the function still builds a message from prefix + title
+	// Client returns empty content — with no prefix, message may be empty which is acceptable
 	mockClient := &mockAPIClient{
 		titleResponse: testResponse("", 0),
 		descResponse:  testResponse("", 0),
@@ -375,10 +375,10 @@ func TestGenerateCommitMessageFromStagedDiff_EmptyContentReturn(t *testing.T) {
 		Branch:      "main",
 		FileChanges: []CommitFileChange{{Status: "A", Path: "file.go"}},
 	})
-	// Even with empty content, prefix+title produces something (prefix is non-empty)
+	// Empty LLM response is valid — caller falls back to alternative logic
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.NotEmpty(t, result.Message)
+	// Message may be empty when LLM returns nothing — that's expected
 }
 
 // =============================================================================

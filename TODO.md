@@ -32,7 +32,7 @@ Spec: `roadmap/SP-027-persistent-context.md`
 ### Phase 2: Proactive Context Retrieval
 
 [x] - SP-027-2a: Implement time-decayed similarity scoring — `ScoreWithDecay()` with 30-day half-life exponential decay combining cosine similarity and temporal weighting
-[] - SP-027-2b: Create `pkg/agent/proactive_context.go` — query `ConversationStore` with time decay, filter by `MinRelevanceScore` (0.50), cap at `MaxContextualResults` (5), format as "Previous Work" section for system prompt injection
+[x] - SP-027-2b: Create `pkg/agent/proactive_context.go` — query `ConversationStore` with time decay, filter by `MinRelevanceScore` (0.50), cap at `MaxContextualResults` (5), format as "Previous Work" section for system prompt injection
 [x] - SP-027-2c: Hook `proactiveContext.Inject()` into `ProcessQuery()` pre-loop — only on first turn (no prior messages beyond system prompt) or cold session restore
 [x] - SP-027-2d: Add `PersistentContextConfig` struct to `pkg/configuration/config.go` — `ProactiveContextEnabled` (true), `MaxContextualResults` (5), `MinRelevanceScore` (0.50), `MaxContextChars` (4000), `WorkspaceScopedRetrieval` (false)
 [x] - SP-027-2e: Tests — unit test for retrieval with time decay, test for empty store (graceful no-op), test for workspace-scoped filtering
@@ -51,10 +51,10 @@ Spec: `roadmap/SP-027-persistent-context.md`
 
 [x] - SP-027-4a: Add `StoreMemory()` to `ConversationStore` — embed memory file content, store as `VectorRecord` with Type: "memory"
 [x] - SP-027-4b: Create `pkg/agent/memory_embedding.go` — `EmbedMemory()` function called from `SaveMemory()`, `DeleteMemory()` also removes from store
-[] - SP-027-4c: Implement one-time memory migration — on first `search_memories` call or app startup, embed all existing `~/.config/sprout/memories/*.md` files into conversation store
-[] - SP-027-4d: Add `search_memories` tool to `pkg/agent/tool_definitions.go` — `search_memories(query: string, max_results?: int) → []{name, title, relevance}`
-[] - SP-027-4e: Implement `handleSearchMemories()` in `pkg/agent/memory_handlers.go` — embed query, search conversation store for Type:"memory" records, return ranked results
-[] - SP-027-4f: Tests — unit test for memory embedding round-trip, test for search tool with semantic query, test for migration of existing memories
+[x] - SP-027-4c: Implement one-time memory migration — on first `search_memories` call or app startup, embed all existing `~/.config/sprout/memories/*.md` files into conversation store
+[x] - SP-027-4d: Add `search_memories` tool to `pkg/agent/tool_definitions.go` — `search_memories(query: string, max_results?: int) → []{name, title, relevance}`
+[x] - SP-027-4e: Implement `handleSearchMemories()` in `pkg/agent/memory_handlers.go` — embed query, search conversation store for Type:"memory" records, return ranked results
+[x] - SP-027-4f: Tests — unit test for memory embedding round-trip, test for search tool with semantic query, test for migration of existing memories
 
 ---
 
@@ -86,8 +86,8 @@ Spec: `roadmap/SP-028-test-suite-stabilization.md`
 
 ### Phase 4: Sustain
 
-[] - SP-028-4a: Create `pkg/agent/concurrency_test.go` — pin the new MCP-init invariant with a fast regression test (16 goroutines, single phase, cleanup-verified)
-[] - SP-028-4b: Add package-level doc comments to `pkg/agent/submanager_mcp.go` and `pkg/webui/terminal_create.go` documenting lock order and PTY lifecycle
+[x] - SP-028-4a: Create `pkg/agent/concurrency_test.go` — pin the new MCP-init invariant with a fast regression test (16 goroutines, single phase, cleanup-verified)
+[x] - SP-028-4b: Add package-level doc comments to `pkg/agent/submanager_mcp.go` and `pkg/webui/terminal_create.go` documenting lock order and PTY lifecycle
 
 ---
 

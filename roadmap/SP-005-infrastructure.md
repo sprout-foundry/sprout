@@ -167,7 +167,7 @@ React UI build artifacts are embedded into the Go binary at compile time via `//
 
 ### E2E Python Tests
 
-- `test_runner.py` — Main E2E test runner
+- `workspace_test_runner.py` — Workspace functionality test runner
 - `e2e_test_runner.py` — E2E-specific runner
 - Tests the full system through the CLI
 
@@ -176,7 +176,7 @@ React UI build artifacts are embedded into the Go binary at compile time via `//
 ```
 Unit tests     → pkg/**/*_test.go (fast, deterministic)
 Integration   → agent_e2e_*.go (scripted client, no real API calls)
-E2E Python    → test_runner.py (full system through CLI)
+E2E Python    → workspace_test_runner.py (full system through CLI)
 WebUI tests   → webui/src/**/*.test.tsx (Jest + React Testing Library)
 ```
 

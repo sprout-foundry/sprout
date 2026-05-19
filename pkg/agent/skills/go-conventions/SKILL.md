@@ -124,8 +124,8 @@ import (
     "github.com/stretchr/testify/require"
 
     // internal
-    "github.com/alantheprice/ledit/pkg/db"
-    "github.com/alantheprice/ledit/pkg/service"
+    "github.com/sprout-foundry/sprout/pkg/db"
+    "github.com/sprout-foundry/sprout/pkg/service"
 )
 ```
 

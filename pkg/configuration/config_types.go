@@ -74,6 +74,16 @@ type EmbeddingIndexConfig struct {
 	MaxResults          int      `json:"max_results,omitempty"`
 	AutoIndex           bool     `json:"auto_index,omitempty"`
 	ExcludePaths        []string `json:"exclude_paths,omitempty"`
+	ONNX                *ONNXConfig `json:"onnx,omitempty"`
+}
+
+// ONNXConfig configures the local ONNX-based embedding provider.
+type ONNXConfig struct {
+	ModelURL       string `json:"model_url,omitempty"`
+	TokenizerURL   string `json:"tokenizer_url,omitempty"`
+	ModelHash      string `json:"model_hash,omitempty"`
+	TokenizerHash  string `json:"tokenizer_hash,omitempty"`
+	Dimensions     int    `json:"dimensions,omitempty"`
 }
 
 // PersistentContextConfig configures persistent conversational context across sessions.

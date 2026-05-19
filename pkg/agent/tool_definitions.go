@@ -417,6 +417,17 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleDeleteMemory,
 	})
 
+	registry.RegisterTool(ToolConfig{
+		Name:        "search_memories",
+		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
+		Parameters: []ParameterConfig{
+			{"query", "string", true, []string{}, "Natural language description of what you're looking for"},
+			{"threshold", "number", false, []string{}, "Minimum similarity score 0.0-1.0 (default: 0.75)"},
+			{"top_k", "integer", false, []string{}, "Maximum results to return (default: 5)"},
+		},
+		Handler: handleSearchMemories,
+	})
+
 	// Register embedding_index tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "embedding_index",

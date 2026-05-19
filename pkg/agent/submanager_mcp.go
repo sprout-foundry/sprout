@@ -19,6 +19,8 @@ type MCPSubManager interface {
 	SetInitError(err error)
 	LockInit()
 	UnlockInit()
+	RLockInit()
+	RUnlockInit()
 }
 
 // AgentMCPManager implements MCPSubManager.
@@ -27,7 +29,7 @@ type AgentMCPManager struct {
 	toolsCache  []api.Tool
 	initialized bool
 	initErr     error
-	initMu      sync.Mutex
+	initMu      sync.RWMutex
 }
 
 // NewAgentMCPManager creates a new AgentMCPManager with default values.
@@ -76,4 +78,12 @@ func (m *AgentMCPManager) LockInit() {
 
 func (m *AgentMCPManager) UnlockInit() {
 	m.initMu.Unlock()
+}
+
+func (m *AgentMCPManager) RLockInit() {
+	m.initMu.RLock()
+}
+
+func (m *AgentMCPManager) RUnlockInit() {
+	m.initMu.RUnlock()
 }

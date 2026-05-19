@@ -180,24 +180,41 @@ func (a *Agent) getMCPTools() []api.Tool {
 		return nil
 	}
 
-	// Initialize MCP on first use (lazy loading for better startup performance)
+	// Fast path: RLock + check init flag + check cache
+	a.mcpSub.RLockInit()
+	if a.mcpSub.IsInitialized() && a.mcpSub.GetToolsCache() != nil {
+		result := a.mcpSub.GetToolsCache()
+		a.mcpSub.RUnlockInit()
+		if a.debug {
+			a.debugLog("[tool] Using cached MCP tools (fast path): %d\n", len(result))
+		}
+		return result
+	}
+	a.mcpSub.RUnlockInit()
+
+	// Slow path: Write lock (cache miss or not initialized)
 	a.mcpSub.LockInit()
 	defer a.mcpSub.UnlockInit()
+
+	// Double-check after acquiring write lock (another goroutine may have initialized)
+	if a.mcpSub.GetToolsCache() != nil {
+		if a.debug {
+			a.debugLog("[tool] Using cached MCP tools (after write lock): %d\n", len(a.mcpSub.GetToolsCache()))
+		}
+		return a.mcpSub.GetToolsCache()
+	}
 
 	if !a.mcpSub.IsInitialized() {
 		if a.debug {
 			a.debugLog("[cfg] Initializing MCP (first use)...\n")
 		}
 		if err := a.initializeMCP(); err != nil {
-			// Non-fatal - MCP is optional
 			a.mcpSub.SetInitError(err)
 			if a.debug {
 				a.debugLog("[WARN] MCP initialization failed: %v\n", err)
 			}
-			// Don't set mcpInitialized to allow retry
 			a.mcpSub.SetInitialized(false)
 		} else {
-			// Success - mark as initialized
 			a.mcpSub.SetInitialized(true)
 			a.mcpSub.SetInitError(nil)
 			if a.debug {
@@ -206,19 +223,11 @@ func (a *Agent) getMCPTools() []api.Tool {
 		}
 	}
 
-	// Return nil if not initialized
 	if !a.mcpSub.IsInitialized() {
 		return nil
 	}
 
-	// Return cached tools if available
-	if a.mcpSub.GetToolsCache() != nil {
-		if a.debug {
-			a.debugLog("[tool] Using cached MCP tools: %d\n", len(a.mcpSub.GetToolsCache()))
-		}
-		return a.mcpSub.GetToolsCache()
-	}
-
+	// Cache still nil — build from manager
 	ctx := context.Background()
 	mcpTools, err := a.mcpSub.GetManager().GetAllTools(ctx)
 	if err != nil {
@@ -234,11 +243,8 @@ func (a *Agent) getMCPTools() []api.Tool {
 
 	var agentTools []api.Tool
 	for _, mcpTool := range mcpTools {
-		// Create wrapper and convert to agent tool format
 		wrapper := mcp.NewMCPToolWrapper(mcpTool, a.mcpSub.GetManager())
 		agentTool := wrapper.ToAgentTool()
-
-		// Convert to api.Tool format
 		apiTool := api.Tool{
 			Type:     agentTool.Type,
 			Function: agentTool.Function,
@@ -246,9 +252,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 		agentTools = append(agentTools, apiTool)
 	}
 
-	// Cache the tools
 	a.mcpSub.SetToolsCache(agentTools)
-
 	return agentTools
 }
 
@@ -337,7 +341,9 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 		return output.String(), nil
 
 	case "refresh":
-		a.mcpSub.SetToolsCache(nil)
+		if err := a.RefreshMCPTools(); err != nil {
+			return "", fmt.Errorf("failed to refresh MCP tools: %w", err)
+		}
 		tools := a.getMCPTools()
 		return fmt.Sprintf("Refreshed MCP tools. %d tools available.", len(tools)), nil
 

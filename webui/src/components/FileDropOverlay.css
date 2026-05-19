@@ -19,7 +19,7 @@
   padding: 24px 32px;
   background: rgba(30, 41, 59, 0.9);
   border: 2px dashed var(--accent-primary);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   animation: drop-pulse 2s ease-in-out infinite;
 }

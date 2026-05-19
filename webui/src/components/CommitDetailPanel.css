@@ -49,7 +49,7 @@
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 4px 6px;
   font-size: 12px;
   font-weight: 600;
@@ -135,7 +135,7 @@
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -163,7 +163,7 @@
   padding: 8px 10px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--text-secondary);
   font-size: 12px;
 }
@@ -194,7 +194,7 @@
   gap: 8px;
   padding: 7px 10px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--bg-elevated);
   cursor: pointer;
   transition:
@@ -230,7 +230,7 @@
 .commit-detail-file-status {
   font-size: 11px;
   font-weight: 700;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 7px;
   line-height: 1.5;
   flex-shrink: 0;

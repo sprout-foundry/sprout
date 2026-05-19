@@ -118,7 +118,7 @@
 .review-fix-preview {
   margin-top: 12px;
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: rgba(148, 163, 184, 0.04);
   border: 1px solid var(--border-subtle);
 }
@@ -131,7 +131,7 @@
 
 .review-fix-log-item {
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: rgba(148, 163, 184, 0.04);
   color: var(--text-secondary);
@@ -153,7 +153,7 @@
   background: var(--bg-elevated);
   color: var(--text-primary);
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
 }
 
@@ -196,7 +196,7 @@
 .review-fix-select-all-btn {
   font-size: 12px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .review-fix-selection-count {
@@ -373,7 +373,7 @@
 
 .review-guidance-card {
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   border: 1px solid var(--border-subtle);
   background: rgba(148, 163, 184, 0.06);
   transition:
@@ -421,7 +421,7 @@
   max-width: 100%;
   overflow-wrap: anywhere;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-primary);
@@ -443,7 +443,7 @@
 
   .review-guidance-card {
     padding: 10px 12px;
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
   }
 
   .review-details-summary {

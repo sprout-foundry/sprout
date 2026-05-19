@@ -38,10 +38,10 @@
         "task_queue_publish",
         "task_queue_add"
       ],
-      "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority. Activated automatically when started from home directory.",
+      "delegatable": false,
+      "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
       "enabled": true,
       "id": "executive_assistant",
-      "local_only": true,
       "name": "Executive Assistant",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/executive_assistant.md"
     }

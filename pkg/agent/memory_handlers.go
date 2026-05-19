@@ -22,6 +22,9 @@ func handleAddMemory(ctx context.Context, a *Agent, args map[string]interface{})
 		return "", fmt.Errorf("failed to save memory: %w", err)
 	}
 
+	// Embed the memory into the conversation store (best-effort)
+	_ = EmbedMemory(ctx, a.GetEmbeddingManager(), name, content)
+
 	sanitized := sanitizeMemoryName(name)
 	return fmt.Sprintf("Memory '%s' saved to ~/.config/sprout/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil
 }
@@ -84,6 +87,9 @@ func handleDeleteMemory(ctx context.Context, a *Agent, args map[string]interface
 	if err := DeleteMemory(name); err != nil {
 		return "", fmt.Errorf("failed to delete memory '%s': %w", name, err)
 	}
+
+	// Remove embedding from conversation store (best-effort)
+	_ = DeleteMemoryEmbedding(a.GetEmbeddingManager(), name)
 
 	return fmt.Sprintf("Memory '%s' deleted.", name), nil
 }

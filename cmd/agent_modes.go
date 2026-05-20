@@ -262,7 +262,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Setup signal handling with buffered channel for multiple signals
 	// Note: We intentionally do NOT capture SIGTSTP (Ctrl+Z) to allow process suspension
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	// Handle shutdown gracefully
 	shutdown := make(chan struct{})
@@ -271,6 +271,19 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		for {
 			select {
 			case sig := <-sigCh:
+				// SIGHUP: reload on-disk config without shutting down.
+				if sig == syscall.SIGHUP {
+					fmt.Printf("\n[RELOAD] Received SIGHUP, reloading configuration...\n")
+					if mgr := chatAgent.GetConfigManager(); mgr != nil {
+						if err := mgr.Reload(); err != nil {
+							fmt.Printf("[RELOAD] Failed: %v\n", err)
+						} else {
+							fmt.Printf("[RELOAD] Configuration reloaded successfully.\n")
+						}
+					}
+					continue
+				}
+
 				if isInteractive && isQueryInProgress() {
 					nowUnix := time.Now().UnixNano()
 					prev := atomic.LoadInt64(&lastInterruptAt)

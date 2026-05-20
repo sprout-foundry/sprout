@@ -58,8 +58,8 @@ KillSignal=SIGTERM
 Environment=SPROUT_SERVICE=1
 Environment=HOME=%s
 EnvironmentFile=-%s
-StandardOutput=journal
-StandardError=journal
+StandardOutput=null
+StandardError=null
 
 [Install]
 WantedBy=default.target
@@ -198,8 +198,7 @@ func fallbackCommand(homeDir string) string {
 			homeDir = "$HOME"
 		}
 	}
-	logPath := filepath.Join(homeDir, ".sprout", "daemon.log")
-	return fmt.Sprintf("nohup sprout agent -d > %s 2>&1 &\nView logs with: tail -f %s", logPath, logPath)
+	return "nohup sprout agent -d &\nView logs with: tail -f ~/.sprout/logs/daemon.stdout.log"
 }
 
 // runSystemctl executes a systemctl command at user scope and returns its stdout.

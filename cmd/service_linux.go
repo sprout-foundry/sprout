@@ -52,6 +52,9 @@ ExecStart=%s agent -d --no-connection-check
 WorkingDirectory=%s
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=15
+KillMode=mixed
+KillSignal=SIGTERM
 Environment=SPROUT_SERVICE=1
 Environment=HOME=%s
 EnvironmentFile=-%s

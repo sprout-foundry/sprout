@@ -327,21 +327,32 @@ func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error
 // formatBackgroundPromotionMessage creates a formatted message for commands that
 // were promoted to background sessions due to timeout.
 func formatBackgroundPromotionMessage(sessionID, command, accumulatedOutput string) string {
-	// Truncate accumulated output preview
+	// Truncate accumulated output preview. Note: this is a SUBSET of the
+	// command's full output. Output past this point lives only in the
+	// background session and must be fetched via check_background.
 	preview := accumulatedOutput
 	const maxPreview = 2000
+	previewTruncated := false
 	if len(preview) > maxPreview {
-		preview = preview[:maxPreview] + "\n... (output truncated)"
+		preview = preview[:maxPreview] + "\n... (preview truncated)"
+		previewTruncated = true
+	}
+
+	caveat := "IMPORTANT: the output above is partial — only what arrived before the 2-minute tool deadline. The command kept running."
+	if previewTruncated {
+		caveat = "IMPORTANT: the output above is doubly partial — only what arrived before the 2-minute tool deadline, AND only the first ~2KB of that. The command kept running."
 	}
 
 	return fmt.Sprintf(
-		"Command timed out after 2 minutes. It is still running in background session %s.\n\n"+
+		"Command exceeded the 2-minute tool deadline. It is still running in background session %s.\n\n"+
 			"Command: %s\n\n"+
-			"Output so far:\n%s\n\n"+
-			"You can:\n"+
-			"- Check progress: use shell_command with check_background=\"%s\"\n"+
-			"- Stop it: use shell_command with stop_background=\"%s\"\n\n"+
-			"Decide whether to wait for it to finish or stop it and try a different approach.",
-		sessionID, command, preview, sessionID, sessionID,
+			"Output so far (partial):\n%s\n\n"+
+			"%s\n\n"+
+			"To get the rest, do NOT assume the command finished — actively poll:\n"+
+			"- Check progress (returns accumulated output since session start): shell_command check_background=\"%s\"\n"+
+			"- Stop it (kills the process): shell_command stop_background=\"%s\"\n\n"+
+			"Background sessions are kept for up to 2 hours of inactivity. Either wait and poll, "+
+			"or stop the command if you want to try a different approach.",
+		sessionID, command, preview, caveat, sessionID, sessionID,
 	)
 }

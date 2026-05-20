@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
@@ -280,7 +281,7 @@ func (w *openAIListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch OpenAI models: %w", err)
@@ -388,7 +389,7 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch OpenRouter models: %w", err)
@@ -472,7 +473,7 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch DeepInfra models: %w", err)
@@ -559,7 +560,7 @@ func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo
 
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch LM Studio models: %w", err)
@@ -621,7 +622,7 @@ func (w *mistralListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo,
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch Mistral models: %w", err)
@@ -822,7 +823,7 @@ func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint str
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch models from %s: %w", providerName, err)

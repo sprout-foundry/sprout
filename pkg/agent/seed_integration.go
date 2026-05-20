@@ -753,11 +753,15 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 	// from this query. Replace sprout's messages entirely.
 	a.state.SetMessages(seedMsgs)
 
-	// Sync token counts
-	a.state.SetTotalTokens(seedState.TotalTokens())
-
-	// Sync cost
-	a.state.SetTotalCost(seedState.TotalCost())
+	// Accumulate token and cost counters across queries. The seed agent is
+	// created fresh per query (see opts.InitialMessages earlier in this file)
+	// so seedState.TotalTokens() and seedState.TotalCost() reflect only the
+	// current query's API consumption. Without accumulation, sprout's
+	// lifetime counters would be overwritten by each query — earlier
+	// counters told a confusing story (e.g. tiny second-query delta hiding
+	// the first query's cost).
+	a.state.SetTotalTokens(a.state.GetTotalTokens() + seedState.TotalTokens())
+	a.state.SetTotalCost(a.state.GetTotalCost() + seedState.TotalCost())
 
 	// Calculate iteration count from seed's messages
 	assistantCount := 0

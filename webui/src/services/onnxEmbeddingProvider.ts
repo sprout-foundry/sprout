@@ -1,11 +1,16 @@
 /**
  * Browser-side ONNX embedding provider for EmbeddingGemma-300M.
  *
- * Uses onnxruntime-web to run the EmbeddingGemma-300M model directly
- * in the browser with WASM SIMD or WebGPU backends.
+ * Uses onnxruntime-web to run Google's EmbeddingGemma-300M model directly
+ * in the browser via the WASM or WebGPU backend.
  *
- * Port of the Go embedding pipeline (pkg/embedding/onnx_*.go) to
- * TypeScript for in-browser semantic search and embedding generation.
+ * This is the TypeScript counterpart to pkg/embedding/onnx_*.go. The two
+ * MUST produce byte-identical token IDs for the same input — the Go side
+ * has a reference fixture (pkg/embedding/testdata/embeddinggemma_tokenizer_fixture.json)
+ * that validates against the HuggingFace `tokenizers` library output, and
+ * the TS implementation here is a direct port of the Go logic in
+ * pkg/embedding/onnx_tokenizer.go. When changing the tokenization pipeline,
+ * update BOTH sides together.
  *
  * Model source: https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX
  */
@@ -82,229 +87,296 @@ const MODEL_FILES: Record<'fp32' | 'q8' | 'q4', { model: string; data?: string }
 
 const TOKENIZER_URL = `${HF_BASE}/tokenizer.json`;
 
-// ─── BPE Tokenizer ────────────────────────────────────────────────
-// Port of the Go GemmaTokenizer from pkg/embedding/onnx_tokenizer.go.
-// Implements BytePiece tokenization with metaspace pre-tokenization.
+// ─── Tokenizer schema ─────────────────────────────────────────────
+// Tightly scoped to what EmbeddingGemma actually ships. We deliberately
+// ignore decoder, post_processor, and most processor fields — the embedding
+// path doesn't need them.
 
-interface TokenizerModel {
-  type: string;
-  vocab: Record<string, number>;
-  merges: string[]; // Each entry is "token1 token2"
-}
-
-interface TokenizerConfig {
-  model: TokenizerModel;
-  pre_tokenizer?: {
+interface TokenizerJSON {
+  model: {
     type: string;
-    pattern?: string;
+    vocab: Record<string, number>;
+    /**
+     * HuggingFace ships merges in two formats:
+     *   - newer (EmbeddingGemma): [["first", "second"], ...]
+     *   - older: ["first second", ...]
+     * We accept both; the older form is preserved so hand-written test
+     * tokenizers stay readable.
+     */
+    merges: unknown;
+  };
+  added_tokens?: Array<{
+    id: number;
+    content: string;
+    special: boolean;
+  }>;
+  /**
+   * EmbeddingGemma uses { type: 'Replace', pattern: { String: ' ' }, content: '▁' }.
+   * We model the discriminated pattern union as {String?, Regex?} — only
+   * String is honored today.
+   */
+  normalizer?: {
+    type: string;
+    pattern?: { String?: string; Regex?: string };
+    content?: string;
   };
 }
 
-/**
- * Unicode codepoint for the "unknown byte" fallback encoding.
- * Bytes 1-255 that have no UTF-8 mapping are encoded as
- * U+0100 through U+02FF (i.e., 0x0100 + byte_value - 1).
- *
- * This matches Gemma's BytePiece fallback behavior.
- */
-function byteEncode(ch: string): string {
-  const cp = ch.codePointAt(0);
-  if (cp === undefined) return ch;
-
-  // Characters U+0001 through U+00FF that aren't valid ASCII
-  // get remapped to U+0100 through U+02FF
-  if (cp > 0x00 && cp <= 0xff) {
-    return String.fromCodePoint(0x0100 + cp - 1);
-  }
-  return ch;
+interface BpePair {
+  first: string;
+  second: string;
 }
 
-/**
- * Metaspace pre-tokenizer regex from EmbeddingGemma's tokenizer.json.
- * Matches either whitespace sequences or non-whitespace words,
- * excluding special whitespace chars (\n, \r, \t, \b, \v, \f).
- *
- * Pattern: (?u)\s+|[^\s\n\r\t\u0008\u000b\u000c]+
- */
-const PRE_TOKENIZER_REGEX =
-  /(?:\s+|[^\s\n\r\t\u0008\u000b\u000c]+)/gu;
+/** SentencePiece space marker used by EmbeddingGemma — replaces literal space. */
+const SP_SPACE = '▁';
 
 /**
- * Word boundary marker used by Gemma's BPE tokenizer.
- * 'Ġ' (U+0120) marks the beginning of a new word in the tokenized sequence.
- * This allows the model to distinguish word boundaries during training.
- */
-const WORD_BOUND = '\u0120';
-
-/**
- * GemmaBpeTokenizer implements the BytePiece tokenization algorithm
- * used by EmbeddingGemma / Gemma models.
+ * GemmaBpeTokenizer tokenizes text using the HuggingFace BPE pipeline as
+ * configured for Google's EmbeddingGemma-300M.
  *
- * Algorithm:
- * 1. Split text into words using the pre-tokenizer regex
- * 2. Byte-encode any non-ASCII bytes as Unicode codepoints
- * 3. Add word boundary markers
- * 4. Iteratively apply BPE merge rules until convergence
- * 5. Wrap with BOS/EOS tokens for the full sequence
+ * Pipeline (matches HuggingFace tokenizers semantics):
+ *
+ *   1. Split input around added-token strings (e.g. "\n", "\t", "<bos>").
+ *      Matched runs are emitted directly as their IDs; everything else
+ *      falls through to the BPE path.
+ *   2. Normalize each non-added segment by replacing " " (U+0020) with the
+ *      SentencePiece space marker "▁" (U+2581) per the Replace normalizer.
+ *   3. Apply rank-ordered BPE merges to the normalized text treated as a
+ *      sequence of single-codepoint symbols.
+ *   4. Map each resulting symbol to its vocab id, falling back to <unk> on miss.
+ *
+ * This is a direct port of pkg/embedding/onnx_tokenizer.go. The Go side has
+ * a reference fixture validating it against HuggingFace `tokenizers` v0.23.1
+ * for 14 representative inputs; the TS implementation here uses the same
+ * rules so cross-language tokenization stays consistent.
  */
 class GemmaBpeTokenizer {
-  private vocab: Map<string, number>;
-  private mergeOps: Map<string, number>; // "token1\ttoken2" -> rank
-  private inverseVocab: Map<number, string>;
+  private readonly vocab: Map<string, number>;
+  private readonly bpeRanks: Map<string, number>; // key = first + "\x1f" + second
 
-  constructor(config: TokenizerConfig) {
+  /** Added-token content → id, with content-length buckets sorted desc for longest-match. */
+  private readonly addedByContent: Map<string, number>;
+  private readonly addedLengths: number[];
+
+  readonly bosID: number;
+  readonly eosID: number;
+  readonly padID: number;
+  readonly unkID: number;
+  readonly vocabSize: number;
+
+  // Normalizer: replace `normalizerPattern` with `normalizerContent`. Empty
+  // pattern disables normalization.
+  private readonly normalizerPattern: string;
+  private readonly normalizerContent: string;
+
+  constructor(config: TokenizerJSON) {
     const model = config.model;
     if (model.type !== 'BPE') {
       throw new Error(`Expected BPE tokenizer, got ${model.type}`);
     }
 
-    this.vocab = new Map(Object.entries(model.vocab).map(([k, v]) => [k, v]));
-    this.inverseVocab = new Map(
-      Object.entries(model.vocab).map(([k, v]) => [v, k])
-    );
+    this.vocab = new Map(Object.entries(model.vocab));
+    this.vocabSize = this.vocab.size;
 
-    // Build merge operations with priority (lower index = higher priority)
-    this.mergeOps = new Map();
-    for (let i = 0; i < model.merges.length; i++) {
-      this.mergeOps.set(model.merges[i], i);
+    this.bpeRanks = new Map();
+    const merges = parseMerges(model.merges);
+    for (let i = 0; i < merges.length; i++) {
+      this.bpeRanks.set(mergeKey(merges[i].first, merges[i].second), i);
+    }
+
+    // Added-tokens: record every entry — special or not — because HF treats
+    // both classes as atomic during pre-processing. Literal "\n\n\n" in
+    // input must become id 109 rather than going through BPE.
+    this.addedByContent = new Map();
+    const lengthSet = new Set<number>();
+    let bos = -1, eos = -1, pad = -1, unk = -1;
+    for (const at of config.added_tokens ?? []) {
+      if (!at.content) continue;
+      this.addedByContent.set(at.content, at.id);
+      lengthSet.add(at.content.length);
+      switch (at.content) {
+        case '<bos>': bos = at.id; break;
+        case '<eos>': eos = at.id; break;
+        case '<pad>': pad = at.id; break;
+        case '<unk>': unk = at.id; break;
+      }
+    }
+    this.addedLengths = Array.from(lengthSet).sort((a, b) => b - a);
+    this.bosID = bos;
+    this.eosID = eos;
+    this.padID = pad;
+    this.unkID = unk;
+
+    // Normalizer: only the simple Replace form is recognized.
+    const n = config.normalizer;
+    if (n && n.type === 'Replace' && n.pattern?.String && n.content != null) {
+      this.normalizerPattern = n.pattern.String;
+      this.normalizerContent = n.content;
+    } else {
+      this.normalizerPattern = '';
+      this.normalizerContent = '';
     }
   }
 
   /**
-   * Tokenize text into a sequence of token IDs.
-   * Wraps the result with BOS (beginning-of-sequence) and EOS (end-of-sequence) markers.
+   * Tokenize text to a sequence of token IDs. Does NOT add BOS/EOS — use
+   * encodeWithBOSAndEOS for the wrapped form. Empty input returns [].
    */
   tokenize(text: string): number[] {
-    const tokens = this.tokenizeRaw(text);
-    return tokens;
+    if (text.length === 0) return [];
+    const out: number[] = [];
+    this.encodeSegment(text, out);
+    return out;
   }
 
   /**
-   * Internal tokenization without BOS/EOS wrapping.
+   * Encode with BOS prepended and EOS appended. Mirrors the HuggingFace
+   * `tokenizers` reference output for EmbeddingGemma — including the
+   * [BOS, EOS] pair for empty input.
    */
-  private tokenizeRaw(text: string): number[] {
-    // Split text into words using pre-tokenizer
-    const words = text.match(PRE_TOKENIZER_REGEX) || [];
+  encodeWithBOSAndEOS(text: string): number[] {
+    const bare = this.tokenize(text);
+    const out: number[] = [];
+    if (this.bosID >= 0) out.push(this.bosID);
+    for (const id of bare) out.push(id);
+    if (this.eosID >= 0) out.push(this.eosID);
+    return out;
+  }
 
-    let result: number[] = [];
-    for (const word of words) {
-      // Process the word
-      const wordTokens = this.tokenizeWord(word);
-      result.push(...wordTokens);
+  /** Walk the input left-to-right, peeling off the leftmost longest-matching added-token. */
+  private encodeSegment(text: string, out: number[]): void {
+    while (text.length > 0) {
+      const match = this.findLeftmostAddedToken(text);
+      if (!match) {
+        this.bpeEncode(text, out);
+        return;
+      }
+      if (match.start > 0) {
+        this.bpeEncode(text.slice(0, match.start), out);
+      }
+      out.push(match.id);
+      text = text.slice(match.start + match.length);
     }
-
-    return result;
   }
 
   /**
-   * Tokenize a single word using BPE algorithm.
+   * Find the earliest position in text where any added token matches.
+   * At each position the longest matching token wins (HF semantics).
    */
-  private tokenizeWord(word: string): number[] {
-    // Check if the whole word is in vocab
-    if (this.vocab.has(word)) {
-      return [this.vocab.get(word)!];
+  private findLeftmostAddedToken(text: string):
+    | { start: number; length: number; id: number }
+    | null {
+    if (this.addedByContent.size === 0) return null;
+    for (let s = 0; s < text.length; s++) {
+      for (const l of this.addedLengths) {
+        if (s + l > text.length) continue;
+        const id = this.addedByContent.get(text.slice(s, s + l));
+        if (id !== undefined) {
+          return { start: s, length: l, id };
+        }
+      }
     }
+    return null;
+  }
 
-    // Byte-encode each character and add word boundary at start
-    // For Gemma: each word gets WORD_BOUND prefix if it's a new word
-    let chars: string[] = [];
-    for (const ch of word) {
-      chars.push(byteEncode(ch));
+  private bpeEncode(segment: string, out: number[]): void {
+    if (segment.length === 0) return;
+    const normalized = this.normalize(segment);
+    const symbols = splitIntoCodepoints(normalized);
+    const merged = this.applyBPE(symbols);
+    for (const sym of merged) {
+      const id = this.vocab.get(sym);
+      if (id !== undefined) {
+        out.push(id);
+      } else if (this.unkID >= 0) {
+        out.push(this.unkID);
+      }
     }
+  }
 
-    // Add word boundary to first character
-    if (chars.length > 0) {
-      chars[0] = WORD_BOUND + chars[0];
-    }
+  /** Apply the recorded Replace normalizer. */
+  private normalize(s: string): string {
+    if (this.normalizerPattern === '') return s;
+    return s.split(this.normalizerPattern).join(this.normalizerContent);
+  }
 
-    // Initialize pairs: consecutive character pairs
-    let pairs: [string, string][] = [];
-    for (let i = 0; i < chars.length - 1; i++) {
-      pairs.push([chars[i], chars[i + 1]]);
-    }
-
-    // Iteratively apply merges
+  /**
+   * Classical BPE: repeatedly merge the pair with the lowest merge rank
+   * until no merge applies. Operates on a slice of single-codepoint symbol
+   * strings that grow as merges are applied. All occurrences of the chosen
+   * pair are merged in a single pass, matching HF's behavior so the output
+   * stays byte-identical to its reference.
+   */
+  private applyBPE(symbols: string[]): string[] {
+    if (symbols.length < 2) return symbols;
     while (true) {
-      // Find the pair with the highest priority (lowest merge index)
-      let bestPair: [string, string] | null = null;
-      let bestRank = Infinity;
-
-      for (const [a, b] of pairs) {
-        const key = `${a}\t${b}`;
-        const rank = this.mergeOps.get(key);
+      let bestRank = Number.MAX_SAFE_INTEGER;
+      let bestIdx = -1;
+      for (let i = 0; i < symbols.length - 1; i++) {
+        const rank = this.bpeRanks.get(mergeKey(symbols[i], symbols[i + 1]));
         if (rank !== undefined && rank < bestRank) {
           bestRank = rank;
-          bestPair = [a, b];
+          bestIdx = i;
         }
       }
+      if (bestIdx < 0) return symbols;
 
-      if (bestPair === null) break;
-
-      // Merge all occurrences of bestPair
-      const [first, second] = bestPair;
-      const merged = first + second;
-
-      chars = this.mergeTokens(chars, first, second, merged);
-      pairs = [];
-      for (let i = 0; i < chars.length - 1; i++) {
-        pairs.push([chars[i], chars[i + 1]]);
-      }
-    }
-
-    // Convert characters to token IDs
-    const tokens: number[] = [];
-    for (const ch of chars) {
-      const id = this.vocab.get(ch);
-      if (id !== undefined) {
-        tokens.push(id);
-      } else {
-        // Fallback: unknown token
-        const unk = this.vocab.get('<unk>');
-        if (unk !== undefined) {
-          tokens.push(unk);
+      const first = symbols[bestIdx];
+      const second = symbols[bestIdx + 1];
+      const merged: string[] = [];
+      for (let i = 0; i < symbols.length; ) {
+        if (i + 1 < symbols.length && symbols[i] === first && symbols[i + 1] === second) {
+          merged.push(symbols[i] + symbols[i + 1]);
+          i += 2;
+        } else {
+          merged.push(symbols[i]);
+          i++;
         }
       }
+      symbols = merged;
     }
-
-    return tokens;
-  }
-
-  /**
-   * Merge all adjacent occurrences of first+second into merged token.
-   */
-  private mergeTokens(
-    tokens: string[],
-    first: string,
-    second: string,
-    merged: string
-  ): string[] {
-    const result: string[] = [];
-    let i = 0;
-    while (i < tokens.length) {
-      if (
-        i + 1 < tokens.length &&
-        tokens[i] === first &&
-        tokens[i + 1] === second
-      ) {
-        result.push(merged);
-        i += 2;
-      } else {
-        result.push(tokens[i]);
-        i++;
-      }
-    }
-    return result;
   }
 }
 
-// ─── Gemma Token IDs ──────────────────────────────────────────────
-// These come from the tokenizer config and are needed for BOS/EOS wrapping.
+/** Build a merge-table key. Uses U+001F (unit separator) to avoid collisions
+ *  with any legitimate codepoint that could appear in vocabulary strings. */
+function mergeKey(a: string, b: string): string {
+  return a + '\x1f' + b;
+}
 
-const BOS_TOKEN_ID = 2;   // <bos>
-const EOS_TOKEN_ID = 1;   // <eos>
-const PAD_TOKEN_ID = 0;   // <pad>
-const EOS_TOKEN = '<eos>';
-const BOS_TOKEN = '<bos>';
+/** Accepts either pair-array (`[["a","b"]]`) or joined-string (`["a b"]`) merge formats. */
+function parseMerges(raw: unknown): BpePair[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) throw new Error('tokenizer: merges must be an array');
+  const out: BpePair[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const entry = raw[i];
+    if (Array.isArray(entry)) {
+      if (entry.length !== 2 || typeof entry[0] !== 'string' || typeof entry[1] !== 'string') {
+        throw new Error(`tokenizer: merges[${i}] must be a 2-string array`);
+      }
+      out.push({ first: entry[0], second: entry[1] });
+    } else if (typeof entry === 'string') {
+      const idx = entry.indexOf(' ');
+      if (idx < 0) throw new Error(`tokenizer: merges[${i}] "${entry}" has no space separator`);
+      out.push({ first: entry.slice(0, idx), second: entry.slice(idx + 1) });
+    } else {
+      throw new Error(`tokenizer: merges[${i}] unrecognized type`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Split a string into single-codepoint pieces. JavaScript's `for...of`
+ * iterates code points (not UTF-16 code units), which correctly handles
+ * astral-plane characters like emoji.
+ */
+function splitIntoCodepoints(s: string): string[] {
+  const out: string[] = [];
+  for (const cp of s) out.push(cp);
+  return out;
+}
 
 // ─── EmbeddingGemma-300M Browser Provider ──────────────────────────
 
@@ -320,16 +392,11 @@ const BOS_TOKEN = '<bos>';
  * console.log(result.embedding); // Float32Array[768]
  * ```
  *
- * ### Model sizing
- * | dtype | Model size | Embedding dims | Notes |
- * |-------|-----------|----------------|-------|
- * | fp32  | ~600MB    | 768           | Best quality |
- * | q8    | ~150MB    | 768           | Minimal quality loss |
- * | q4    | ~80MB     | 768           | Good for low-memory devices |
- *
- * ### MRL (Matryoshka Representation Learning)
- * The model supports truncating embeddings to 512, 256, or 128 dimensions
- * with re-normalization for downstream efficiency.
+ * The model exposes a pre-pooled `sentence_embedding` output (shape
+ * [batch, 768]), which is what this provider consumes. Earlier versions of
+ * this code did manual [CLS]-pooling on `last_hidden_state`, which produced
+ * the wrong embeddings — the model is trained to be queried via the pooled
+ * head.
  */
 export class BrowserONNXProvider {
   private session: InferenceSession | null = null;
@@ -338,9 +405,7 @@ export class BrowserONNXProvider {
   private dtype: 'fp32' | 'q8' | 'q4';
   private backend: 'webgpu' | 'wasm';
   private detectedBackend: string | null = null;
-  private maxSequenceLength = 2048; // Gemma-300M max position embeddings
-
-  /** Default prefix for queries (can be overridden per-call). */
+  private maxSequenceLength = 2048; // EmbeddingGemma-300M max position embeddings
   private defaultPrefix: string;
 
   constructor(options?: Partial<EmbeddingOptions>) {
@@ -349,137 +414,52 @@ export class BrowserONNXProvider {
     this.defaultPrefix = options?.prefix ?? 'query';
   }
 
-  /** Returns true if the provider is fully initialized and ready for inference. */
-  isReady(): boolean {
-    return this.ready;
-  }
+  isReady(): boolean { return this.ready; }
+  dimensions(): number { return 768; }
+  getBackend(): string | null { return this.detectedBackend; }
 
-  /** Returns the embedding dimensionality (768 for EmbeddingGemma-300M). */
-  dimensions(): number {
-    return 768;
-  }
-
-  /** Returns the detected backend name (e.g., 'WebGPU', 'WASM'). */
-  getBackend(): string | null {
-    return this.detectedBackend;
-  }
-
-  /**
-   * Initialize the provider: download tokenizer and model, create inference session.
-   *
-   * This is the most expensive step — model download can take several seconds
-   * depending on network speed. On subsequent page loads, consider caching
-   * the model with Service Worker or Cache API.
-   */
   async initialize(): Promise<void> {
     if (this.ready) return;
 
-    // 1. Load tokenizer
-    console.log(`[BrowserONNXProvider] Loading tokenizer...`);
     await this.loadTokenizer();
-
-    // 2. Detect backend
     const detected = this.detectBackend();
     this.detectedBackend = detected;
-    console.log(`[BrowserONNXProvider] Using backend: ${detected}`);
-
-    // 3. Load model
-    console.log(
-      `[BrowserONNXProvider] Loading ${this.dtype} model from onnx-community/embeddinggemma-300m-ONNX...`
-    );
     await this.loadModel(detected);
-
     this.ready = true;
-    console.log(`[BrowserONNXProvider] Ready (${this.dimensions()} dims, ${this.dtype}, ${detected})`);
   }
 
   /**
-   * Generate an embedding for a single text input.
-   *
-   * @param text - The text to embed
-   * @param prefix - Optional task prefix override (defaults to constructor's prefix)
-   * @returns Normalized embedding vector
+   * Generate an embedding for a single text input. Returns the pooled,
+   * L2-normalized 768-dim vector.
    */
   async embed(text: string, prefix?: string): Promise<EmbeddingResult> {
-    if (!this.ready) throw new Error('Provider not initialized. Call initialize() first.');
-    if (!this.session || !this.tokenizer) throw new Error('Session or tokenizer not loaded.');
-
-    // Extract to local to satisfy TypeScript narrowing
-    const session = this.session;
-    const tokenizer = this.tokenizer;
-
-    // Apply prefix
-    const prefixStr = EMBEDDINGGEMMA_PREFIXES[prefix ?? this.defaultPrefix] ?? '';
-    const fullText = prefixStr + text;
-
-    // Tokenize
-    const tokens = tokenizer.tokenize(fullText);
-    const tokenIds = this.wrapSequence(tokens);
-    const seqLen = tokenIds.length;
-
-    // Run inference
-    const outputs = await this.runInference([tokenIds], [seqLen]);
-
-    // Extract and pool
-    return this.poolAndNormalize(outputs[0], seqLen);
-  }
-
-  /**
-   * Generate embeddings for a batch of text inputs.
-   *
-   * Note: EmbeddingGemma-300M has a fixed-size input, so batching works
-   * by padding shorter sequences to the longest in the batch.
-   *
-   * @param texts - Array of texts to embed
-   * @param prefix - Optional task prefix override
-   * @returns Array of normalized embedding vectors
-   */
-  async embedBatch(
-    texts: string[],
-    prefix?: string
-  ): Promise<EmbeddingResult[]> {
-    if (!this.ready) throw new Error('Provider not initialized. Call initialize() first.');
-    if (!this.session || !this.tokenizer) throw new Error('Session or tokenizer not loaded.');
-    if (texts.length === 0) return [];
-
-    // Extract to local to satisfy TypeScript narrowing in closures
-    const tokenizer = this.tokenizer;
-
-    const prefixStr = EMBEDDINGGEMMA_PREFIXES[prefix ?? this.defaultPrefix] ?? '';
-
-    // Tokenize all texts
-    const allTokens = texts.map((t) => {
-      const fullText = prefixStr + t;
-      const tokens = tokenizer.tokenize(fullText);
-      return this.wrapSequence(tokens);
-    });
-
-    // Find max sequence length in batch
-    const seqLens = allTokens.map((t) => t.length);
-    const maxLen = Math.max(...seqLens);
-
-    // Pad all sequences to maxLen
-    const paddedTokens = allTokens.map((tokens) => {
-      if (tokens.length === maxLen) return tokens;
-      return [...tokens, ...new Array(maxLen - tokens.length).fill(PAD_TOKEN_ID)];
-    });
-
-    // Run inference for the batch
-    const outputs = await this.runInference(paddedTokens, seqLens);
-
-    // Pool and normalize each result
-    const results: EmbeddingResult[] = [];
-    for (let b = 0; b < texts.length; b++) {
-      results.push(this.poolAndNormalize(outputs[b], seqLens[b]));
+    if (!this.ready || !this.session || !this.tokenizer) {
+      throw new Error('Provider not initialized. Call initialize() first.');
     }
-
-    return results;
+    const fullText = (EMBEDDINGGEMMA_PREFIXES[prefix ?? this.defaultPrefix] ?? '') + text;
+    const tokenIds = this.wrapAndTruncate(this.tokenizer.encodeWithBOSAndEOS(fullText));
+    const pooled = await this.runInference([tokenIds]);
+    return this.normalize(pooled[0]);
   }
 
   /**
-   * Release all resources held by this provider.
-   * Call this when the provider is no longer needed to free GPU/CPU memory.
+   * Generate embeddings for a batch of texts. Sequences are right-padded to
+   * the longest length in the batch; the attention mask zeros out padded
+   * positions so the pooling stays correct.
    */
+  async embedBatch(texts: string[], prefix?: string): Promise<EmbeddingResult[]> {
+    if (!this.ready || !this.session || !this.tokenizer) {
+      throw new Error('Provider not initialized. Call initialize() first.');
+    }
+    if (texts.length === 0) return [];
+    const prefixStr = EMBEDDINGGEMMA_PREFIXES[prefix ?? this.defaultPrefix] ?? '';
+    const seqs = texts.map((t) =>
+      this.wrapAndTruncate(this.tokenizer!.encodeWithBOSAndEOS(prefixStr + t))
+    );
+    const pooled = await this.runInference(seqs);
+    return pooled.map((v) => this.normalize(v));
+  }
+
   async close(): Promise<void> {
     if (this.session) {
       await this.session.release();
@@ -491,121 +471,78 @@ export class BrowserONNXProvider {
 
   // ─── Internal Methods ─────────────────────────────────────────
 
-  /** Detect the best available backend. */
   private detectBackend(): 'webgpu' | 'wasm' {
     const pref = this.backend;
-
-    // Check WebGPU availability
     if (pref === 'webgpu' && typeof navigator !== 'undefined' && 'gpu' in navigator) {
       return 'webgpu';
     }
-
-    // Check WASM SIMD (generally available in modern browsers)
     if (pref === 'wasm') return 'wasm';
-
-    // Auto-detect: prefer WebGPU, fallback to WASM
-    if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
-      return 'webgpu';
-    }
-
+    if (typeof navigator !== 'undefined' && 'gpu' in navigator) return 'webgpu';
     return 'wasm';
   }
 
-  /** Load tokenizer.json and build the BPE tokenizer. */
   private async loadTokenizer(): Promise<void> {
     const resp = await fetch(TOKENIZER_URL);
     if (!resp.ok) {
-      throw new Error(
-        `Failed to download tokenizer: ${resp.status} ${resp.statusText}`
-      );
+      throw new Error(`Failed to download tokenizer: ${resp.status} ${resp.statusText}`);
     }
-
-    const config: TokenizerConfig = await resp.json();
+    const config: TokenizerJSON = await resp.json();
     this.tokenizer = new GemmaBpeTokenizer(config);
   }
 
-  /** Download model and create ONNX inference session. */
   private async loadModel(backend: 'webgpu' | 'wasm'): Promise<void> {
     const files = MODEL_FILES[this.dtype];
     const modelUrl = files.model;
+    const u = new URL(modelUrl);
+    const baseUrl = u.origin + u.pathname.substring(0, u.pathname.lastIndexOf('/'));
 
-    // Calculate the base URL for resolving companion .onnx_data files.
-    const baseUrl = new URL(modelUrl).origin +
-      new URL(modelUrl).pathname.substring(0, new URL(modelUrl).pathname.lastIndexOf('/'));
-
-    // Use a type-cast to access the resolveFspath option which may not
-    // be in the type definitions for this version but is supported at runtime.
-    const opts: InferenceSession.SessionOptions & { resolveFspath?: (path: string) => string } = {
+    const opts: InferenceSession.SessionOptions & {
+      resolveFspath?: (path: string) => string;
+    } = {
       executionProviders: backend === 'webgpu' ? ['webgpu'] : ['wasm'],
       graphOptimizationLevel: 'all',
     };
-
     if (files.data) {
-      opts.resolveFspath = (fspath: string) => {
-        return `${baseUrl}/${fspath}`;
-      };
+      opts.resolveFspath = (fspath: string) => `${baseUrl}/${fspath}`;
     }
-
     this.session = await InferenceSession.create(modelUrl, opts as InferenceSession.SessionOptions);
   }
 
-  /**
-   * Wrap token IDs with BOS and EOS markers, truncate to max sequence length.
-   */
-  private wrapSequence(tokens: number[]): number[] {
-    // Add BOS at start and EOS at end
-    let seq = [BOS_TOKEN_ID, ...tokens, EOS_TOKEN_ID];
-
-    // Truncate if too long (keep BOS and EOS)
-    if (seq.length > this.maxSequenceLength) {
-      const keep = this.maxSequenceLength - 1; // -1 for EOS
-      seq = [BOS_TOKEN_ID, ...seq.slice(1, 1 + keep), EOS_TOKEN_ID];
-    }
-
-    return seq;
+  /** Truncate a token sequence (with BOS/EOS markers) to maxSequenceLength,
+   *  preserving the BOS at the start and EOS at the end. */
+  private wrapAndTruncate(tokens: number[]): number[] {
+    if (tokens.length <= this.maxSequenceLength) return tokens;
+    const head = tokens.slice(0, this.maxSequenceLength - 1);
+    // Re-attach EOS as the final token so the model still sees the sentinel.
+    const eos = tokens[tokens.length - 1];
+    head.push(eos);
+    return head;
   }
 
   /**
-   * Run ONNX inference on the given token sequences.
-   * Returns the output tensor data for each batch element.
+   * Run ONNX inference on the given token sequences. Returns the pooled
+   * sentence_embedding vector per batch element (Float32Array of length 768).
    */
-  private async runInference(
-    tokenSequences: number[][],
-    seqLens: number[]
-  ): Promise<Float32Array[]> {
+  private async runInference(tokenSequences: number[][]): Promise<Float32Array[]> {
     if (!this.session) throw new Error('No session');
-
     const batchSize = tokenSequences.length;
-    const maxLen = Math.max(...seqLens);
+    const maxLen = tokenSequences.reduce((m, s) => Math.max(m, s.length), 0);
+    const padID = this.tokenizer?.padID ?? 0;
 
-    // Pad all sequences to maxLen (use BigInt64Array for int64 ONNX input)
-    // Note: BigInt64Array constructor doesn't accept number[], must convert manually
-    const padded = tokenSequences.map((tokens) => {
-      const arr = new BigInt64Array(maxLen);
-      for (let i = 0; i < tokens.length; i++) arr[i] = BigInt(tokens[i]);
-      for (let i = tokens.length; i < maxLen; i++) arr[i] = BigInt(PAD_TOKEN_ID);
-      return arr;
-    });
-
-    // Build attention mask (1 for real tokens, 0 for padding)
+    const inputIdsData = new BigInt64Array(batchSize * maxLen);
     const attentionData = new BigInt64Array(batchSize * maxLen);
     const ONE = BigInt(1);
     const ZERO = BigInt(0);
     for (let b = 0; b < batchSize; b++) {
+      const seq = tokenSequences[b];
       for (let i = 0; i < maxLen; i++) {
-        attentionData[b * maxLen + i] = i < seqLens[b] ? ONE : ZERO;
-      }
-    }
-
-    // Create input tensors
-    // EmbeddingGemma-300M ONNX expects int64 for input_ids and attention_mask
-    // Shape: [batch_size, sequence_length]
-
-    // We need to use BigInt64Array for int64 tensors
-    const inputIdsData = new BigInt64Array(batchSize * maxLen);
-    for (let b = 0; b < batchSize; b++) {
-      for (let i = 0; i < maxLen; i++) {
-        inputIdsData[b * maxLen + i] = BigInt(padded[b][i]);
+        if (i < seq.length) {
+          inputIdsData[b * maxLen + i] = BigInt(seq[i]);
+          attentionData[b * maxLen + i] = ONE;
+        } else {
+          inputIdsData[b * maxLen + i] = BigInt(padID);
+          attentionData[b * maxLen + i] = ZERO;
+        }
       }
     }
 
@@ -613,169 +550,108 @@ export class BrowserONNXProvider {
     const attentionTensor = new Tensor('int64', attentionData, [batchSize, maxLen]);
 
     try {
-      // Run inference
       const feeds: Record<string, Tensor> = {};
       for (const name of this.session.inputNames) {
-        if (name === 'input_ids') {
-          feeds[name] = inputIdsTensor;
-        } else if (name === 'attention_mask') {
-          feeds[name] = attentionTensor;
-        } else if (name === 'position_ids') {
-          // Some Gemma models expect position_ids
-          const posData = new BigInt64Array(batchSize * maxLen);
-          for (let b = 0; b < batchSize; b++) {
-            for (let i = 0; i < maxLen; i++) {
-              posData[b * maxLen + i] = BigInt(i);
-            }
-          }
-          feeds[name] = new Tensor('int64', posData, [batchSize, maxLen]);
-        }
+        if (name === 'input_ids') feeds[name] = inputIdsTensor;
+        else if (name === 'attention_mask') feeds[name] = attentionTensor;
       }
-
       const outputs = await this.session.run(feeds);
 
-      // Extract output data
-      const results: Float32Array[] = [];
-      const outputNames = this.session.outputNames;
-
-      // Find the main hidden state output
-      const hiddenOutputName = this.findHiddenStateOutput(outputNames);
-
-      for (let b = 0; b < batchSize; b++) {
-        const outputTensor = outputs[hiddenOutputName];
-        // Get data from tensor (may be on GPU, need to download to CPU)
-        const data = await outputTensor.getData(true);
-
-        if (!(data instanceof Float32Array)) {
-          // Some backends return raw buffer, cast to Float32Array
-          throw new Error(`Unexpected output type: ${data.constructor.name}`);
-        }
-
-        // Output shape: [batch_size, sequence_length, hidden_size]
-        // Extract batch element b's sequence
-        const hiddenSize = this.dimensions();
-        const embedding = new Float32Array(maxLen * hiddenSize);
-        for (let i = 0; i < maxLen; i++) {
-          const srcOffset = (b * maxLen + i) * hiddenSize;
-          const dstOffset = i * hiddenSize;
-          embedding.set(data.subarray(srcOffset, srcOffset + hiddenSize), dstOffset);
-        }
-
-        results.push(embedding);
+      // Prefer the model's pre-pooled sentence_embedding output when
+      // available — the Go side does the same. Fall back to manual
+      // mean-pooling over last_hidden_state if the ONNX export only
+      // exposes the raw hidden states (uncommon for the standard
+      // EmbeddingGemma export).
+      const outputName = pickEmbeddingOutput(this.session.outputNames);
+      const outputTensor = outputs[outputName];
+      const raw = await outputTensor.getData(true);
+      if (!(raw instanceof Float32Array)) {
+        throw new Error(`Unexpected output type: ${(raw as object).constructor.name}`);
       }
 
-      return results;
+      const hiddenSize = this.dimensions();
+      const out: Float32Array[] = [];
+      if (outputName === 'sentence_embedding') {
+        // Layout: [batch, hidden]
+        for (let b = 0; b < batchSize; b++) {
+          out.push(raw.slice(b * hiddenSize, (b + 1) * hiddenSize));
+        }
+      } else {
+        // Manual mean-pool over real tokens (attention_mask == 1).
+        for (let b = 0; b < batchSize; b++) {
+          const seqLen = tokenSequences[b].length;
+          const accum = new Float32Array(hiddenSize);
+          for (let i = 0; i < seqLen; i++) {
+            const srcOffset = (b * maxLen + i) * hiddenSize;
+            for (let d = 0; d < hiddenSize; d++) {
+              accum[d] += raw[srcOffset + d];
+            }
+          }
+          if (seqLen > 0) {
+            for (let d = 0; d < hiddenSize; d++) accum[d] /= seqLen;
+          }
+          out.push(accum);
+        }
+      }
+      return out;
     } finally {
-      // Clean up input tensors (safe disposal in case mocks lack dispose)
       inputIdsTensor.dispose?.();
       attentionTensor.dispose?.();
     }
   }
 
-  /**
-   * Find the output tensor name that contains the hidden state.
-   * Different ONNX exports may use different output names.
-   */
-  private findHiddenStateOutput(outputNames: readonly string[]): string {
-    const candidates = [
-      'last_hidden_state',
-      'hidden_states',
-      'output',
-      'logits',
-    ];
-    for (const name of outputNames) {
-      if (candidates.includes(name)) return name;
-    }
-    // Fallback: use the first output
-    return outputNames[0];
-  }
-
-  /**
-   * Apply [CLS] pooling (take first token embedding) and L2 normalize.
-   *
-   * EmbeddingGemma uses the [CLS] token (first position) for sentence-level
-   * embeddings. After extracting the first token's vector, we normalize
-   * it to unit length for cosine similarity comparisons.
-   *
-   * Supports MRL (Matryoshka Representation Learning) truncation to reduce
-   * dimensionality: 768 → 512 → 256 → 128 with re-normalization.
-   */
-  private poolAndNormalize(
-    hiddenStates: Float32Array,
-    seqLen: number,
-    targetDims?: number
-  ): EmbeddingResult {
-    // [CLS] pooling: take the first token's hidden state
-    // hiddenStates layout: [seqLen, hiddenSize] (for single batch element)
-    const hiddenSize = this.dimensions();
-
-    const clsEmbedding = hiddenStates.subarray(0, hiddenSize);
-
-    // MRL truncation if requested
-    const dims = targetDims ?? hiddenSize;
-    let embedding = clsEmbedding.slice(0, dims);
-
-    // L2 normalize
-    const norm = this.l2Norm(embedding);
-    if (norm > 0) {
-      for (let i = 0; i < dims; i++) {
-        embedding[i] /= norm;
-      }
-    }
-
-    return { embedding, dims };
-  }
-
-  /** Compute L2 norm of a Float32Array. */
-  private l2Norm(v: Float32Array): number {
+  /** Slice to targetDims (if provided) and L2-normalize in place. */
+  private normalize(v: Float32Array, targetDims?: number): EmbeddingResult {
+    const dims = targetDims ?? v.length;
+    const out = v.length === dims ? new Float32Array(v) : v.slice(0, dims);
     let sum = 0;
-    for (let i = 0; i < v.length; i++) {
-      sum += v[i] * v[i];
+    for (let i = 0; i < out.length; i++) sum += out[i] * out[i];
+    if (sum > 1e-9) {
+      const inv = 1 / Math.sqrt(sum);
+      for (let i = 0; i < out.length; i++) out[i] *= inv;
     }
-    return Math.sqrt(sum);
+    return { embedding: out, dims };
   }
+}
+
+/**
+ * Pick the embedding output tensor name out of the model's declared outputs.
+ * EmbeddingGemma ships both `last_hidden_state` and `sentence_embedding`;
+ * the latter is already mean-pooled and is the correct choice. Older
+ * exports may only declare `last_hidden_state`, in which case the caller
+ * has to pool manually.
+ */
+function pickEmbeddingOutput(outputNames: readonly string[]): string {
+  for (const n of outputNames) {
+    if (n === 'sentence_embedding') return n;
+  }
+  for (const n of outputNames) {
+    if (n === 'last_hidden_state' || n === 'hidden_states' || n === 'output') return n;
+  }
+  return outputNames[0];
 }
 
 // ─── Singleton / Factory Helpers ──────────────────────────────────
 
-/**
- * Create a provider instance (convenience factory).
- *
- * @example
- * ```typescript
- * const provider = createEmbeddingProvider({ dtype: 'q8' });
- * await provider.initialize();
- * const result = await provider.embed('Hello world');
- * ```
- */
-export function createEmbeddingProvider(
-  options?: Partial<EmbeddingOptions>
-): BrowserONNXProvider {
+export function createEmbeddingProvider(options?: Partial<EmbeddingOptions>): BrowserONNXProvider {
   return new BrowserONNXProvider(options);
 }
 
-/**
- * Check if the browser supports WebGPU (for faster inference).
- */
 export function hasWebGpuSupport(): boolean {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
 }
 
-/**
- * Check if the browser supports WebAssembly SIMD (for faster WASM inference).
- * Most modern browsers support this.
- */
 export function hasWasmSimdSupport(): boolean {
-  // WASM SIMD is available in all modern browsers (Chrome 91+, Firefox 104+, Safari 16+)
-  // We can do a basic check by looking at WebAssembly capabilities
   return typeof WebAssembly !== 'undefined';
 }
 
-/**
- * Estimated model download size for each dtype option.
- */
 export const MODEL_SIZES: Record<'fp32' | 'q8' | 'q4', { model: string; data: string; total: string }> = {
   fp32: { model: '~560MB', data: '~40MB', total: '~600MB' },
   q8: { model: '~140MB', data: '~10MB', total: '~150MB' },
   q4: { model: '~70MB', data: '~10MB', total: '~80MB' },
 };
+
+// Re-exported for tests that want to construct a tokenizer directly without
+// going through the full BrowserONNXProvider plumbing.
+export { GemmaBpeTokenizer };
+export type { TokenizerJSON };

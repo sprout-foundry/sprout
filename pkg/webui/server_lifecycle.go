@@ -155,6 +155,12 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	ws.shutdownSSHSessions()
 
+	// Close all terminal sessions to clean up PTY processes.
+	if err := ws.terminalManager.CloseAllSessions(); err != nil {
+		log.Printf("[web] Warning: error closing terminal sessions: %v", err)
+	}
+	log.Printf("[web] Closed all terminal sessions")
+
 	if listener != nil {
 		_ = listener.Close()
 	}

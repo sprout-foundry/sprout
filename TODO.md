@@ -275,7 +275,7 @@ Three trust boundaries to defend: the project (skills auto-load silently), the d
 [x] - SP-033-2c: Apply `redact.Apply` to `UserPrompt` and `ActionableSummary` in `pkg/agent/turn_checkpoints.go` before SP-027's `EmbedAndStoreTurn()`.
 [x] - SP-033-2d: Apply `redact.Apply` in `pkg/agent/memory_handlers.go` before writing memory files.
 [] - SP-033-2e: Conditional redaction in `pkg/history/changetracker.go:461,481` — only redact when the revision target is *outside* the workspace root (in-workspace revisions are the real file content; out-of-workspace revisions like `~/.aws/credentials` are leakable).
-[] - SP-033-2f: Change file modes `0644` → `0600` at `pkg/history/changetracker.go:461,481`. Audit all `os.WriteFile(…0644)` sites under `pkg/logging/`, `pkg/embedding/` (for `conversation_turns.jsonl`), `pkg/agent/memory*.go` — tighten where data is user-private.
+[x] - SP-033-2f: Change file modes `0644` → `0600` at `pkg/history/changetracker.go:461,481`. Audit all `os.WriteFile(…0644)` sites under `pkg/logging/`, `pkg/embedding/` (for `conversation_turns.jsonl`), `pkg/agent/memory*.go` — tighten where data is user-private.
 
 ### Phase 3: Lifecycle commands
 
@@ -347,7 +347,7 @@ Four user-visible defects: Stop button doesn't cancel the in-flight LLM HTTP cal
 [] - SP-034-5b: Annotate `chatSession` (`pkg/webui/chat_sessions.go:27-52`), event payloads (`pkg/webui/events/*.go`), and key API response shapes with the tygo emit marker.
 [] - SP-034-5c: Replace the hand-maintained TS interface in `webui/src/.../chatSessions.ts:6-21` with an import from `generated.ts`. Keep computed-only fields (`is_default`, `is_active`) in a separate wrapper type.
 [] - SP-034-5d: Extract the inbound message-type whitelist from `pkg/webui/websocket_message_types.go:42` into a shared registry; add `validateOutbound(msg)` called by every `WriteJSON` site (panic in dev builds, log+drop in prod).
-[] - SP-034-5e: Define a `WebUIError` struct `{Code, Message, Details, Retryable}` in `pkg/webui/errors.go`. Replace stringy 503 returns at `pkg/webui/api_query.go:391-396` and audit other handlers for the same anti-pattern.
+[x] - SP-034-5e: Define a `WebUIError` struct `{Code, Message, Details, Retryable}` in `pkg/webui/errors.go`. Replace stringy 503 returns at `pkg/webui/api_query.go:391-396` and audit other handlers for the same anti-pattern.
 [] - SP-034-5f: Frontend — shared error-handling util keyed on `Code`; deprecate string-matching on `Message`.
 
 ### Phase 6: Documentation

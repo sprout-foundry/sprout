@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -229,11 +230,14 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 		subAgent.output.SetOutputMutex(outputMu)
 	}
 
-	// Line buffer for accumulating stream chunks
+	// Line buffer for accumulating stream chunks. The mutex protects lineBuf
+	// across parallel subagents; stderr writes happen AFTER releasing it so a
+	// slow/full stderr pipe can't stall siblings holding lineBuf access.
+	// Per-line writes stay below PIPE_BUF, so byte-level interleaving is safe.
 	var lineBuf strings.Builder
 	subAgent.EnableStreaming(func(chunk string) {
+		var pending []string
 		outputMu.Lock()
-		defer outputMu.Unlock()
 		lineBuf.WriteString(chunk)
 		for {
 			content := lineBuf.String()
@@ -242,36 +246,42 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 				break
 			}
 			line := content[:idx]
-			// Print non-empty lines with prefix
 			if strings.TrimSpace(line) != "" {
-				_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + line + "\n"))
+				pending = append(pending, dimGray+prefix+reset+" "+line+"\n")
 			}
-			// Reset and write remaining content after the newline
 			lineBuf.Reset()
 			if idx+1 < len(content) {
 				lineBuf.WriteString(content[idx+1:])
 			}
+		}
+		outputMu.Unlock()
+
+		for _, line := range pending {
+			_, _ = os.Stderr.Write([]byte(line))
 		}
 	})
 
 	// Terminal writer for complete messages (tool logs, agent messages).
 	// These bypass the line buffer and print immediately with prefix.
 	subAgent.output.SetTerminalWriter(func(message string) {
+		var pending []string
 		outputMu.Lock()
-		defer outputMu.Unlock()
-		// Flush any pending line buffer content first
 		if lineBuf.Len() > 0 {
 			remaining := strings.TrimSpace(lineBuf.String())
 			if remaining != "" {
-				_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + remaining + "\n"))
+				pending = append(pending, dimGray+prefix+reset+" "+remaining+"\n")
 			}
 			lineBuf.Reset()
 		}
-		// Strip trailing newline since we add our own, then print with prefix
 		msg := strings.TrimRight(message, "\n")
 		msg = strings.TrimSpace(msg)
 		if msg != "" {
-			_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + msg + "\n"))
+			pending = append(pending, dimGray+prefix+reset+" "+msg+"\n")
+		}
+		outputMu.Unlock()
+
+		for _, line := range pending {
+			_, _ = os.Stderr.Write([]byte(line))
 		}
 	})
 
@@ -322,10 +332,13 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 	case <-runCtx.Done():
 		// Cancelled or timed out
 		cancel()
-		// Wait for goroutine to finish (with timeout)
+		// Wait for goroutine to finish (with timeout).
+		// If the grace expires, the goroutine has leaked — log it so the
+		// operator can see why the agent appeared to pause.
 		select {
 		case result = <-done:
 		case <-time.After(5 * time.Second):
+			log.Printf("[subagent] %s did not honor cancellation within 5s — goroutine leaked", taskID)
 			result = &SubagentResult{
 				ID:      taskID,
 				Error:   fmt.Errorf("subagent did not respond to cancellation"),

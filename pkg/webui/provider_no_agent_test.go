@@ -18,8 +18,8 @@ func TestProviderNoAgentBehavior(t *testing.T) {
 	t.Run("isProviderAvailable returns false for editor mode", func(t *testing.T) {
 		// Verify isProviderAvailable logic for "editor"
 		cfg, err := configuration.Load()
-		if err != nil {
-			t.Fatalf("Failed to load config: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
 		}
 		cfg.LastUsedProvider = "editor"
 		if err := cfg.Save(); err != nil {
@@ -28,8 +28,8 @@ func TestProviderNoAgentBehavior(t *testing.T) {
 
 		// Reload and verify
 		cfg2, err := configuration.Load()
-		if err != nil {
-			t.Fatalf("Failed to reload config: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to reload config: %v", err)
 		}
 
 		if cfg2.LastUsedProvider != "editor" {

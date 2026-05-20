@@ -10,7 +10,10 @@ import (
 )
 
 func TestHandleAPITerminalShells(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("GET returns shells array", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/terminal/shells", nil)

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -154,7 +155,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 
 		if enableWebUI {
-			webServer = webui.NewReactWebServer(chatAgent, eventBus, port, bindAddr)
+			var webErr error
+			webServer, webErr = webui.NewReactWebServer(chatAgent, eventBus, port, bindAddr)
+			if webErr != nil {
+				log.Fatalf("%v", webErr)
+			}
 
 			// Inject webui-owned managers into the agent so that security
 			// prompts and ask_user requests route through the same instances

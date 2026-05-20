@@ -1,5 +1,9 @@
 package embedding
 
+// Decision (SP-025-5c): This file uses native go/ast instead of pkg/ast (tree-sitter)
+// because the standard library parser is faster and more accurate for Go code.
+// TypeScript and Python extractors were migrated to tree-sitter for consistency
+// and to support language features regex couldn't parse; Go has no such gap.
 import (
 	"fmt"
 	"go/ast"

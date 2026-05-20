@@ -58,6 +58,10 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 		if err == nil {
 			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", path, startLine, endLine), path)
+			// SP-046 §7: record the read so the staleness rule lets a
+			// subsequent write_file through. Range-read still counts —
+			// the agent knows enough of the file to write coherently.
+			a.RecordFileReadThisTurn(path)
 		}
 
 		if err != nil {
@@ -81,6 +85,9 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 	if err == nil {
 		a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", path), path)
+		// SP-046 §7: record the read so a subsequent write_file passes
+		// the staleness check.
+		a.RecordFileReadThisTurn(path)
 	}
 
 	if err != nil {
@@ -417,6 +424,14 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		if err := disallowRawStructuredWrite(path, toolName); err != nil {
 			return "", fmt.Errorf("failed to validate structured write: %w", err)
 		}
+	}
+
+	// SP-046 §7 staleness rule: refuse the write if the agent hasn't read
+	// the file this turn, or if it was modified after the last read.
+	// Returning the error before any side effects lets the agent react
+	// (re-read, then retry write) without leaving partial state.
+	if err := a.checkWriteStaleness(path); err != nil {
+		return "", err
 	}
 
 	if warning := validateJSONContent(content, path); warning != "" {

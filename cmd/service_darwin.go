@@ -75,7 +75,13 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
-	<true/>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+		<!-- ExponentialBackoff requires macOS 12+ (Monterey) -->
+		<key>ExponentialBackoff</key>
+		<true/>
+	</dict>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
 	<key>StandardOutPath</key>

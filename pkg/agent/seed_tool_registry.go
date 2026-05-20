@@ -757,6 +757,15 @@ func (r *richEventPublisher) Publish(eventType string, data any) {
 
 	switch eventType {
 	case core.EventTypeToolStart, core.EventTypeToolEnd:
+		// Tool execution now happens entirely inside seed's ToolRegistry, which
+		// doesn't go through Agent.callTool — so the only place we can keep
+		// sprout's TotalToolCalls counter in sync is here, on tool_end.
+		// SubagentResult.ToolCalls reads this counter; without the increment,
+		// every subagent reports 0 tool calls and the orchestrator thinks
+		// nothing happened.
+		if eventType == core.EventTypeToolEnd && r.agent != nil && r.agent.state != nil {
+			r.agent.state.IncrementTotalToolCalls()
+		}
 		enriched := r.enrichEventData(data, eventType)
 		r.bus.Publish(eventType, enriched)
 	default:

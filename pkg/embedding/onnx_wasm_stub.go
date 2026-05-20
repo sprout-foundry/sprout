@@ -148,13 +148,16 @@ type ModelConfig struct {
 	TokenizerURL  string
 	ModelHash     string
 	TokenizerHash string
+	ModelDataURL  string
+	ModelDataHash string
 }
 
-// EmbeddingGemma2925MConfig returns the predefined config for the
-// EmbeddingGemma-2-925M model. On WASM this returns a zero config.
-func EmbeddingGemma2925MConfig() ModelConfig {
+// EmbeddingGemma300MConfig returns the predefined config for Google's
+// EmbeddingGemma-300M model. On WASM this returns a zero config — the ONNX
+// runtime requires CGO and is unavailable on the WASM build target.
+func EmbeddingGemma300MConfig() ModelConfig {
 	return ModelConfig{
-		Name: "embeddinggemma-2-925m",
+		Name: "embeddinggemma-300m",
 	}
 }
 

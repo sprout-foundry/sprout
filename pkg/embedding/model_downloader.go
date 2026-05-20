@@ -12,11 +12,17 @@ import (
 
 // ModelConfig describes an ONNX model to download.
 type ModelConfig struct {
-	Name          string // e.g. "embeddinggemma-300m-q8"
+	Name          string // e.g. "embeddinggemma-300m"
 	ModelURL      string // HuggingFace download URL for model.onnx
 	TokenizerURL  string // HuggingFace download URL for tokenizer.json
-	ModelHash     string // SHA256 hex of model file
+	ModelHash     string // SHA256 hex of model file (empty = skip verification)
 	TokenizerHash string // SHA256 hex of tokenizer file
+
+	// ModelDataURL is the URL for the external weights blob (e.g. model_q4.onnx_data)
+	// that ONNX Runtime loads as a sibling of the .onnx graph file. Required for
+	// models that use external data; leave empty for self-contained .onnx files.
+	ModelDataURL  string
+	ModelDataHash string
 }
 
 // ModelDownloader downloads ONNX models and tokenizers from HuggingFace.
@@ -53,35 +59,35 @@ func (d *ModelDownloader) Download(ctx context.Context, cfg ModelConfig, progres
 	}
 
 	modelPath := filepath.Join(dir, "model_q4.onnx")
+	modelDataPath := filepath.Join(dir, "model_q4.onnx_data")
 	tokenizerPath := filepath.Join(dir, "tokenizer.json")
 
-	// Determine total download phases for progress calculation.
-	var phases int
+	// Build the phase list dynamically so progress maps to whatever combination
+	// of {model graph, external weights, tokenizer} the caller asked for.
+	type phase struct {
+		path, url, hash, label string
+	}
+	var phases []phase
 	if cfg.ModelURL != "" {
-		phases++
+		phases = append(phases, phase{modelPath, cfg.ModelURL, cfg.ModelHash, cfg.Name})
+	}
+	if cfg.ModelDataURL != "" {
+		phases = append(phases, phase{modelDataPath, cfg.ModelDataURL, cfg.ModelDataHash, cfg.Name + " weights"})
 	}
 	if cfg.TokenizerURL != "" {
-		phases++
+		phases = append(phases, phase{tokenizerPath, cfg.TokenizerURL, cfg.TokenizerHash, "tokenizer"})
 	}
 
-	// Download model.
-	if cfg.ModelURL != "" {
-		phaseStart := 0.0
-		if err := d.downloadFile(ctx, modelPath, cfg.ModelURL, cfg.ModelHash,
-			func(frac float64) { progress(phaseStart + frac/float64(phases)); }); err != nil {
-			return fmt.Errorf("model: download %s: %w", cfg.Name, err)
-		}
-	}
-
-	// Download tokenizer.
-	if cfg.TokenizerURL != "" {
-		phaseStart := float64(0)
-		if phases > 1 {
-			phaseStart = 1.0 / float64(phases)
-		}
-		if err := d.downloadFile(ctx, tokenizerPath, cfg.TokenizerURL, cfg.TokenizerHash,
-			func(frac float64) { progress(phaseStart + frac/float64(phases)); }); err != nil {
-			return fmt.Errorf("model: download tokenizer: %w", err)
+	total := float64(len(phases))
+	for i, ph := range phases {
+		phaseStart := float64(i) / total
+		if err := d.downloadFile(ctx, ph.path, ph.url, ph.hash,
+			func(frac float64) {
+				if progress != nil {
+					progress(phaseStart + frac/total)
+				}
+			}); err != nil {
+			return fmt.Errorf("model: download %s: %w", ph.label, err)
 		}
 	}
 
@@ -240,14 +246,24 @@ func (d *ModelDownloader) IsDownloaded(name string) bool {
 // Predefined model configurations
 // ---------------------------------------------------------------------------
 
-// EmbeddingGemma2925MConfig returns the predefined config for the
-// EmbeddingGemma-2-925M model.
-func EmbeddingGemma2925MConfig() ModelConfig {
+// EmbeddingGemma300MConfig returns the predefined config for Google's
+// EmbeddingGemma-300M (308M parameter) model — the actual published model name.
+// The .onnx graph is small (~520 KB) but references an external weights blob
+// (~197 MB) that must be downloaded into the same directory; both URLs are set.
+//
+// Source: the community ONNX export at onnx-community/embeddinggemma-300m-ONNX,
+// since the official Google repo ships SafeTensors only.
+//
+// Hashes are intentionally empty for now: the upstream files are not pinned,
+// and the downloader will simply skip verification when the hash is empty.
+// Pin these once the team is comfortable with a specific upstream revision.
+func EmbeddingGemma300MConfig() ModelConfig {
+	const base = "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main"
 	return ModelConfig{
-		Name:         "embeddinggemma-2-925m",
-		ModelURL:     "https://huggingface.co/google/EmbeddingGemma-2-925M/resolve/main/embeddinggemma-2-925m/model_q4.onnx",
-		TokenizerURL: "https://huggingface.co/google/EmbeddingGemma-2-925M/resolve/main/embeddinggemma-2-925m/tokenizer.json",
-		ModelHash:    "d150749d0e15322e14eaff4994085e16e42fcc09f56f7a023bd3baf560441408",
+		Name:         "embeddinggemma-300m",
+		ModelURL:     base + "/onnx/model_q4.onnx",
+		ModelDataURL: base + "/onnx/model_q4.onnx_data",
+		TokenizerURL: base + "/tokenizer.json",
 	}
 }
 

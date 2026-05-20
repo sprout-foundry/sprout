@@ -147,6 +147,51 @@ Element.prototype.getBoundingClientRect = vi.fn(function () {
   return originalGetBoundingClientRect.call(this);
 });
 
+// Mock canvas.getContext (used by @sprout/ui for icon rendering)
+// jsdom doesn't implement canvas; without this mock, any component that
+// calls canvas.getContext() throws and silently kills the React render.
+const originalGetContext = HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = vi.fn(function (contextId: string) {
+  if (contextId === '2d') {
+    return {
+      fillRect: vi.fn(),
+      strokeRect: vi.fn(),
+      clearRect: vi.fn(),
+      fillText: vi.fn(),
+      strokeText: vi.fn(),
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
+      putImageData: vi.fn(),
+      createImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
+      setTransform: vi.fn(),
+      getTransform: vi.fn(() => ({ m11: 1, m12: 0, m21: 0, m22: 1, m41: 0, m42: 0, toString: () => '' })),
+      save: vi.fn(),
+      restore: vi.fn(),
+      scale: vi.fn(),
+      rotate: vi.fn(),
+      translate: vi.fn(),
+      transform: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      arc: vi.fn(),
+      closePath: vi.fn(),
+      fill: vi.fn(),
+      stroke: vi.fn(),
+      clip: vi.fn(),
+      measureText: vi.fn(() => ({ width: 0 })),
+      createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      rect: vi.fn(),
+      lineWidth: 0,
+      font: '',
+      fillStyle: '',
+      strokeStyle: '',
+    };
+  }
+  return null;
+}) as typeof originalGetContext;
+
 // Mock requestAnimationFrame
 global.requestAnimationFrame = vi.fn((callback) => {
   return setTimeout(callback, 0);
@@ -179,4 +224,5 @@ afterEach(() => {
   document.createRange = originalCreateRange;
   Element.prototype.getClientRects = originalGetClientRects;
   Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+  HTMLCanvasElement.prototype.getContext = originalGetContext;
 });

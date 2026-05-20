@@ -8,8 +8,12 @@ package embedding
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/debug"
 	"sync"
 
 	onnxruntime "github.com/yalue/onnxruntime_go"
@@ -82,12 +86,154 @@ func (r *ONNXRuntime) init() error {
 	// Initialize the global ONNX environment if not already done.
 	// onnxruntime_go uses a global singleton; this is idempotent.
 	if !onnxruntime.IsInitialized() {
+		// Resolve and set the shared library path BEFORE InitializeEnvironment.
+		// The yalue/onnxruntime_go library defaults to looking for plain
+		// "onnxruntime.so" in CWD/LD_LIBRARY_PATH, which is rarely correct on
+		// developer machines. We probe a few stable locations and bootstrap
+		// from the yalue module's bundled library when needed.
+		if libPath := r.resolveSharedLibraryPath(); libPath != "" {
+			onnxruntime.SetSharedLibraryPath(libPath)
+		}
 		if err := onnxruntime.InitializeEnvironment(onnxruntime.WithLogLevelWarning()); err != nil {
 			return fmt.Errorf("onnx: initialize environment: %w", err)
 		}
 	}
 
 	r.ready = true
+	return nil
+}
+
+// platformLibName returns the conventional ONNX Runtime shared library
+// filename for the running platform. Returns "" for unsupported platforms;
+// the caller should fall back to letting yalue try its default.
+func platformLibName() string {
+	switch runtime.GOOS {
+	case "linux":
+		if runtime.GOARCH == "arm64" {
+			return "onnxruntime_arm64.so"
+		}
+		return "onnxruntime.so"
+	case "darwin":
+		if runtime.GOARCH == "arm64" {
+			return "onnxruntime_arm64.dylib"
+		}
+		return "onnxruntime.dylib"
+	case "windows":
+		return "onnxruntime.dll"
+	default:
+		return ""
+	}
+}
+
+// resolveSharedLibraryPath locates the ONNX Runtime shared library, returning
+// an absolute path or "" if none was found. Resolution order:
+//
+//  1. SPROUT_ONNX_RUNTIME_LIB env var (absolute path; user override)
+//  2. ~/.config/sprout/models/onnxruntime/<platform-lib-name>
+//  3. Bootstrap: copy the yalue/onnxruntime_go module's bundled test_data
+//     library into (2) on first use, when the module ships one for this
+//     platform.
+//
+// Returning "" leaves SetSharedLibraryPath uncalled, so yalue falls back to
+// its compiled-in default ("onnxruntime.so" in CWD/LD_LIBRARY_PATH). That
+// default fails on most dev machines but is preserved as a final fallback so
+// custom deployments that pre-stage the library on the system loader path
+// still work.
+//
+// The yalue bundled library is intended primarily as a dev/CI convenience.
+// Production deployments should pin their own ONNX Runtime build by setting
+// SPROUT_ONNX_RUNTIME_LIB or staging the file in (2).
+func (r *ONNXRuntime) resolveSharedLibraryPath() string {
+	libName := platformLibName()
+	if libName == "" {
+		return ""
+	}
+
+	if env := os.Getenv("SPROUT_ONNX_RUNTIME_LIB"); env != "" {
+		return env
+	}
+
+	staged := filepath.Join(r.runtimeDir, libName)
+	if _, err := os.Stat(staged); err == nil {
+		return staged
+	}
+
+	if bundled := findYalueBundledLib(libName); bundled != "" {
+		if err := copyFileTo(bundled, staged); err == nil {
+			log.Printf("onnx: bootstrapped shared library to %s (from yalue/onnxruntime_go test_data)", staged)
+			return staged
+		} else {
+			log.Printf("onnx: failed to bootstrap shared library: %v", err)
+		}
+	}
+
+	return ""
+}
+
+// findYalueBundledLib returns the filesystem path of the bundled .so/.dll/.dylib
+// shipped in the yalue/onnxruntime_go module's test_data directory, or "" if
+// no match exists. We consult runtime/debug.ReadBuildInfo to find the exact
+// module version, then construct the canonical GOPATH/pkg/mod path.
+func findYalueBundledLib(libName string) string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	var version string
+	for _, dep := range info.Deps {
+		if dep == nil {
+			continue
+		}
+		if dep.Path == "github.com/yalue/onnxruntime_go" {
+			version = dep.Version
+			break
+		}
+	}
+	if version == "" {
+		return ""
+	}
+
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		home, _ := os.UserHomeDir()
+		gopath = filepath.Join(home, "go")
+	}
+
+	candidate := filepath.Join(gopath, "pkg", "mod", "github.com", "yalue",
+		"onnxruntime_go@"+version, "test_data", libName)
+	if _, err := os.Stat(candidate); err != nil {
+		return ""
+	}
+	return candidate
+}
+
+func copyFileTo(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".lib-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := io.Copy(tmp, in); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, dst); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
 	return nil
 }
 

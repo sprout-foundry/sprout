@@ -33,7 +33,7 @@ func (l *Logger) init() error {
 
 	// Open log file for writing
 	logPath := filepath.Join(sproutDir, "sprout.log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -96,7 +96,7 @@ func WriteLocalCopy(filename string, content []byte) {
 	sproutDir := filepath.Join(os.Getenv("HOME"), ".sprout")
 	logPath := filepath.Join(sproutDir, filename)
 
-	if err := os.WriteFile(logPath, content, 0644); err != nil {
+	if err := os.WriteFile(logPath, content, 0600); err != nil {
 		fmt.Printf("Failed to write local copy: %v\n", err)
 	}
 }

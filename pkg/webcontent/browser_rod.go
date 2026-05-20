@@ -1,4 +1,7 @@
-//go:build browser
+//go:build !js
+
+// browser_rod.go provides the default BrowserRenderer implementation using go-rod
+// and Chromium. The rodRenderer is used whenever the go-rod dependency is available.
 
 package webcontent
 
@@ -318,10 +321,18 @@ func probeGPUSupport(ctx context.Context, browser *rod.Browser) bool {
 }
 
 // systemBrowserPaths returns candidate paths for system-installed browsers.
+// Playwright cache paths are checked first because they are always native
+// binaries that work in containers, snaps, and restricted environments.
 func systemBrowserPaths() []string {
-	return []string{
-		"/usr/bin/chromium-browser",
+	homeDir := os.Getenv("HOME")
+	playwrightCache := filepath.Join(homeDir, ".cache", "ms-playwright")
+
+	// Discover Playwright chromium versions (prefer newest first)
+	playwrightBins := findPlaywrightChromium(playwrightCache)
+
+	return append(playwrightBins,
 		"/usr/bin/chromium",
+		"/usr/bin/chromium-browser",
 		"/usr/bin/google-chrome",
 		"/usr/bin/google-chrome-stable",
 		"/snap/bin/chromium",
@@ -329,7 +340,55 @@ func systemBrowserPaths() []string {
 		"/Applications/Chromium.app/Contents/MacOS/Chromium",
 		"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
 		"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+	)
+}
+
+// findPlaywrightChromium scans the Playwright cache directory for chromium
+// binaries and returns them sorted newest-first. Returns empty slice if none found.
+func findPlaywrightChromium(cacheDir string) []string {
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		return nil
 	}
+
+	type version struct {
+		bin  string
+		num  int
+	}
+	var versions []version
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasPrefix(name, "chromium-") {
+			continue
+		}
+		// Parse version number from "chromium-1217" etc.
+		numStr := strings.TrimPrefix(name, "chromium-")
+		var num int
+		fmt.Sscanf(numStr, "%d", &num)
+		bin := filepath.Join(cacheDir, name, "chrome-linux", "chrome")
+		if _, err := os.Stat(bin); err == nil {
+			versions = append(versions, version{bin: bin, num: num})
+		}
+	}
+
+	// Sort newest first
+	for i := 0; i < len(versions); i++ {
+		for j := i + 1; j < len(versions); j++ {
+			if versions[j].num > versions[i].num {
+				versions[i], versions[j] = versions[j], versions[i]
+			}
+		}
+	}
+
+	var bins []string
+	for _, v := range versions {
+		bins = append(bins, v.bin)
+	}
+	return bins
 }
 
 // openIncognitoPage creates an incognito browser context and opens a new page.

@@ -1,9 +1,9 @@
-//go:build !browser
+//go:build js
 
 package webcontent
 
-// NewBrowserRenderer returns a no-op renderer when the browser build tag
-// is not set. The returned renderer always returns an error from RenderPage.
+// NewBrowserRenderer returns a no-op renderer for WASM builds where a headless
+// browser is not available. The returned renderer always returns an error.
 func NewBrowserRenderer() BrowserRenderer {
 	return nop
 }

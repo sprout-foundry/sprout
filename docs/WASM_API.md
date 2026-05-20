@@ -366,6 +366,107 @@ rejection surfacing, and context cancellation.
 `webui/src/services/sproutONNXBridge.test.ts` covers the host-side
 adapter: contract shape, lifecycle, idempotent install/uninstall.
 
+## Tier 1 — Workspace sync (browser-primary model)
+
+Spec: `roadmap/SP-046-workspace-sync-model.md`.
+
+The sync transport itself (WebSocket, container lifecycle) lives in the
+sprout-foundry platform. The WASM build only exposes the agent-side hooks
+the transport plugs into. **None of these need to be called for free-tier
+WASM to work** — the agent operates as a single replica when no sync is
+configured.
+
+### `setSyncEndpoint(url): {ok: true, url: string}`
+
+Records the WebSocket URL the host page wants the sync transport to use.
+Free-tier WASM never calls this; paid-tier calls it once at session boot.
+
+### `getSyncEndpoint(): string`
+
+Returns the currently-configured endpoint (or `""` if unset).
+
+### `applyFileMetadata(path, metadataJSON): {ok: true, path: string}`
+
+The platform's WS layer calls this when it learns about a new
+`WorkspaceFileMetadata` for a file (e.g. browser-side sequence bumps after
+the user types). The Go-side agent consults this on every `write_file` to
+detect unsynced browser edits and refuse with the
+`ErrWriteHasUnsyncedEdits` sentinel — agent reasoning should ask the user
+rather than retry.
+
+```typescript
+type WorkspaceFileMetadata = {
+  browser_seq:            number;
+  container_seq:          number;
+  last_synced_browser:    number;
+  last_synced_container:  number;
+  modified_at:            string; // RFC3339
+};
+
+SproutWasm.applyFileMetadata('src/main.go', JSON.stringify({
+  browser_seq: 7, container_seq: 3,
+  last_synced_browser: 5, last_synced_container: 3,
+  modified_at: new Date().toISOString(),
+}));
+```
+
+### `onSessionMoved(handler): {ok: true}`
+
+Registers a JS function that fires when the platform's WS layer notifies
+this browser that the user took over the session on another device. The
+host page typically renders a "session moved" overlay and disables UI
+interactivity. Single-handler — calling again replaces.
+
+### `sessionMoved(): {ok: true} | {error: string}`
+
+Platform-driven counterpart: the WS layer calls this when it receives the
+server-side "moved" control message. Triggers the registered handler.
+
+### `startHeartbeat(pingFn): {ok, interval_ms} | {already_running: true}`
+
+Starts a 15s-interval ticker that invokes `pingFn` repeatedly. The
+platform's container reaps long-running jobs after 60s of missed
+heartbeats (SP-046 §4). Idempotent — calling while already running is a
+no-op; `stopHeartbeat` first to swap the ping function.
+
+### `stopHeartbeat(): {ok, was_running}`
+
+Stops the ticker. Idempotent: safe to call when nothing is running.
+
+## Free-tier degenerate mode
+
+A page can load `sprout.wasm` and use the JS API surface without any of
+the platform-side infrastructure:
+
+- **No `setStaticModel`** — `searchSemantic`/`buildSemanticIndex` reject
+  cleanly with "static model data is empty." Everything else works.
+- **No `__sproutONNX`** — ONNX-quality embeddings unavailable; the
+  manager falls back to the static provider transparently (after
+  `setStaticModel` is called).
+- **No `setSyncEndpoint` / `applyFileMetadata`** — the agent's staleness
+  rule still applies WITHIN a session (must read before write this turn),
+  but the conflict rule's "unsynced browser edits" branch is never
+  triggered. Single-replica semantics.
+- **No `startHeartbeat`** — no container to reap; no-op.
+- **No `onSessionMoved`** — no platform session; single-device by design.
+
+So the minimum viable bring-up for a free-tier host page is:
+
+```javascript
+// Boot the WASM + MEMFS
+go.run(wasmInstance.instance);
+const err = SproutWasm.init();
+if (err) throw new Error(err);
+
+// One-time: load the static embedding model from a sibling asset
+const modelBytes = new Uint8Array(
+  await (await fetch('/sprout-assets/static_model.bin')).arrayBuffer()
+);
+SproutWasm.setStaticModel(modelBytes);
+
+// Done. searchSemantic, listMemories, etc. now work.
+```
+
 ## What's still not wired
 
 Listed in priority order from `roadmap/SP-045-wasm-feature-parity.md`:

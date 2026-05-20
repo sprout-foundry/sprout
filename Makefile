@@ -2,7 +2,7 @@
 # Provides clear commands for different types of tests and builds
 
 .PHONY: help test test-unit test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
-       clean build build-all build-version build-ui deploy-ui build-wasm \
+       clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local
 
@@ -22,6 +22,7 @@ help:
 	@echo "Build Commands:"
 	@echo "  make build            - Build sprout binary only"
 	@echo "  make build-all        - Full build (UI + WASM + binary)"
+	@echo "  make install          - Build and install to ~/.local/bin/sprout"
 	@echo "  make build-fast       - Fast incremental build (skips unchanged UI)"
 	@echo "  make build-version    - Build with version information"
 	@echo "  make build-ui         - Build React web UI only"
@@ -156,13 +157,21 @@ test-coverage:
 # Optimized: uses build cache and parallel compilation
 build:
 	@echo "Building sprout..."
-	GO111MODULE=on go build -tags "browser" -o sprout .
+	GO111MODULE=on go build -o sprout .
 	@echo "Build completed"
+
+# Install sprout binary to all common locations
+install: build
+	@echo "Installing sprout..."
+	@mkdir -p ~/.local/bin ~/go/bin
+	cp sprout ~/.local/bin/sprout
+	cp sprout ~/go/bin/sprout 2>/dev/null || true
+	@echo "Install completed"
 
 # Build sprout binary with parallel compilation and cache
 build-parallel:
 	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -tags "browser" -o sprout .
+	GO111MODULE=on GOFLAGS="-p=8" go build -o sprout .
 	@echo "Build completed"
 
 # Build with version information
@@ -279,7 +288,7 @@ build-cloud: build-wasm
 	@cd webui && npm run build:cloud || exit 1
 	@cd "$(CURDIR)" && node scripts/build-webui-embed.mjs
 	@echo "Building sprout-cloud..."
-	GO111MODULE=on go build -tags "browser" -o sprout-cloud .
+	GO111MODULE=on go build -o sprout-cloud .
 	@echo "Cloud build completed: sprout-cloud"
 
 # Fast incremental build (only builds what changed)
@@ -296,7 +305,7 @@ build-fast:
 	@echo "  Building WASM..."
 	@./scripts/build-wasm.sh
 	@echo "  Building Go binary..."
-	@go build -tags "browser" -o sprout .
+	@go build -o sprout .
 	@echo "✅ Fast build completed"
 
 # Quick development workflow

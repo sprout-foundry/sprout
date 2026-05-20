@@ -51,6 +51,9 @@ func main() {
 	for name, fn := range conversationJSFuncs() {
 		apiSurface[name] = fn
 	}
+	for name, fn := range syncJSFuncs() {
+		apiSurface[name] = fn
+	}
 
 	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 

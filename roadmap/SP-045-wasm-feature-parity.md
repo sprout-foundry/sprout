@@ -110,26 +110,24 @@ Open design questions before implementation can start:
    `SproutWasm.executeCommand` JS bridge — fine, but it changes the
    tool-handler shape.
 
-### Tier 3 — Pure-Go file-extractor fallback
+### Tier 3 — File extractors (no work needed)
 
-`pkg/embedding/extractor_go.go`, `extractor_py.go`, `extractor_ts.go` use
-`github.com/odvcencio/gotreesitter` (CGO). On WASM today these silently
-fail to build for any package that imports them. If `pkg/embedding`'s
-`Walk*` paths attempt to load them, indexing produces zero units.
+**Original assumption**: `pkg/embedding/extractor_go.go`,
+`extractor_py.go`, and `extractor_ts.go` use
+`github.com/odvcencio/gotreesitter`, which I incorrectly assumed was a
+CGO binding (C-tradition naming, project naming pattern). Plan was to
+write a regex/line-based fallback for `js/wasm`.
 
-Two paths forward:
+**What's actually true**: gotreesitter is a **pure-Go** tree-sitter
+implementation. The extractors compile and run identically under
+`js/wasm`. The full `pkg/embedding` extractor test suite passes when
+executed via `GOOS=js GOARCH=wasm go test -exec go_js_wasm_exec`:
+`TestExtractGoFile`, `TestExtractPy*`, `TestExtractTS*`.
 
-1. **Pure-Go regex/line-based extractor fallback** — lower precision but
-   portable. The static provider's quality on regex-extracted units is
-   measurable; if hit-rate stays within 10pp of tree-sitter, this is the
-   cheapest fix.
-2. **tree-sitter.wasm bridge** — load tree-sitter compiled to WASM and
-   bridge from Go-WASM via `syscall/js`. Highest fidelity but adds a
-   significant runtime dependency.
-
-This spec defers between the two until measurement: build the regex
-fallback first (Tier 3a), evaluate retrieval delta against the
-14-question reference fixture, decide whether 3b is worth it.
+So there is no Tier 3 fallback to write. The original spec text would
+have flagged a non-existent gap; this section is kept to document the
+verification rather than removing it (so future readers can see that the
+verification was actually done).
 
 ### Tier 4 — Browser-side replacements for native-only systems
 
@@ -171,9 +169,9 @@ large for casual page loads. Concrete reductions in priority order:
 
 ## 6. Implementation Order
 
-1. **Phase 1**: finish Tier 1 (config + conversation persistence wiring).
-2. **Phase 2**: Tier 3a (pure-Go regex extractor fallback) — unlocks
-   meaningful semantic search on arbitrary user workspaces.
+1. **Phase 1**: finish Tier 1 (config + conversation persistence wiring). **(done)**
+2. **Phase 2**: Tier 3 — verified extractors already work on WASM via
+   pure-Go gotreesitter. No code to write. **(done as verification only)**
 3. **Phase 3**: Tier 2a (onnxruntime-web bridge) — quality parity.
 4. **Phase 4**: Tier 2b (agent/LLM) — biggest user-facing feature jump
    but largest design surface; do after the foundation is solid.

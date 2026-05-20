@@ -1012,6 +1012,12 @@ func Load() (*Config, error) {
 		config.Skills = make(map[string]Skill)
 	}
 
+	// Merge missing default subagent types and skills so that personas added
+	// to embedded defaults after the user's config was already at v2.0 are
+	// still available at runtime without requiring a migration.
+	mergeMissingDefaultSubagentTypes(&config)
+	mergeMissingDefaultSkills(&config)
+
 	// Post-unmarshal operations that truly need struct-level access
 	fileCustomProviders, err := MigrateLegacyCustomProviders(&config)
 	if err != nil {
@@ -1024,6 +1030,14 @@ func Load() (*Config, error) {
 	}
 
 	warnUnknownPersonaTools(config.SubagentTypes)
+
+	// Discover user-level skills from ~/.config/sprout/skills/
+	if os.Getenv("SPROUT_NO_USER_SKILLS") != "1" {
+		if discovered := discoverUserSkills(&config); len(discovered) > 0 {
+			log.Printf("[skills] Discovered %d user skill(s): %s",
+				len(discovered), strings.Join(discovered, ", "))
+		}
+	}
 
 	// Discover project-specific skills from .sprout/skills/
 	if os.Getenv("SPROUT_NO_PROJECT_SKILLS") != "1" {
@@ -1701,6 +1715,78 @@ func mergeMissingDefaultSkills(config *Config) {
 			config.Skills[id] = skill
 		}
 	}
+}
+
+// discoverUserSkills scans the ~/.config/sprout/skills/ directory for user-level skills
+// and adds them to the config. This allows users to create custom skills that are
+// available across all projects. User skills are discovered before project skills,
+// so project skills can override them.
+func discoverUserSkills(config *Config) []string {
+	var discovered []string
+	if config == nil {
+		return discovered
+	}
+	if config.Skills == nil {
+		config.Skills = make(map[string]Skill)
+	}
+
+	// Get user config directory
+	configDir, err := GetConfigDir()
+	if err != nil {
+		return discovered
+	}
+
+	// Check for skills directory
+	skillsDir := filepath.Join(configDir, "skills")
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return discovered // No user skills directory, that's fine
+	}
+
+	// Scan for skill directories
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		skillID := entry.Name()
+		skillFile := filepath.Join(skillsDir, skillID, "SKILL.md")
+
+		// Check if SKILL.md exists
+		if _, err := os.Stat(skillFile); err != nil {
+			continue
+		}
+
+		// Read skill file to extract metadata
+		content, err := os.ReadFile(skillFile)
+		if err != nil {
+			continue
+		}
+
+		// Parse front matter
+		name, description := parseSkillFrontMatter(string(content))
+		if name == "" {
+			name = skillID
+		}
+		if description == "" {
+			description = fmt.Sprintf("User-level skill: %s", skillID)
+		}
+
+		// Add to config (don't override if already exists)
+		if _, exists := config.Skills[skillID]; !exists {
+			config.Skills[skillID] = Skill{
+				ID:          skillID,
+				Name:        name,
+				Description: description,
+				Path:        filepath.Join("skills", skillID),
+				Enabled:     true,
+				Metadata:    map[string]string{"source": "user"},
+			}
+			discovered = append(discovered, name)
+		}
+	}
+
+	return discovered
 }
 
 // discoverProjectSkills scans the .sprout/skills/ directory for project-specific skills

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strings"
@@ -137,7 +136,15 @@ func modelsForProviderFromAPI(providerType api.ClientType) []string {
 		}
 		if len(modelIDs) > 0 {
 			if err != nil {
-				log.Printf("webui: using provider catalog fallback for %s after model discovery failure: %v", providerType, err)
+				// Repeated discovery failures for the same provider get
+				// rate-limited to avoid log spam — e.g. a misconfigured
+				// ollama-local pointing at an unreachable host that the
+				// WebUI polls periodically.
+				logRateLimitedf(
+					"model_discovery_catalog_fallback:"+string(providerType),
+					"webui: using provider catalog fallback for %s after model discovery failure: %v",
+					providerType, err,
+				)
 			}
 			return modelIDs
 		}
@@ -168,7 +175,15 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentIn
 
 	_, err := api.GetModelsForProvider(providerType)
 	if err != nil {
-		log.Printf("webui: model discovery failed for provider %s, using configured fallback model %q: %v", providerType, fallback, err)
+		// Rate-limited so a misconfigured-but-repeatedly-polled provider
+		// (e.g. ollama-local pointed at an unreachable host) logs once,
+		// stays quiet through routine polling, and re-surfaces every
+		// logRateMinInterval if the failure is still happening.
+		logRateLimitedf(
+			"model_discovery_fail_fallback:"+string(providerType),
+			"webui: model discovery failed for provider %s, using configured fallback model %q: %v",
+			providerType, fallback, err,
+		)
 	}
 	return []string{fallback}
 }
@@ -181,7 +196,11 @@ func (ws *ReactWebServer) modelsForProviderNoAgent(providerType api.ClientType) 
 	}
 
 	if _, err := api.GetModelsForProvider(providerType); err != nil {
-		log.Printf("webui: model discovery failed for provider %s: %v", providerType, err)
+		logRateLimitedf(
+			"model_discovery_fail:"+string(providerType),
+			"webui: model discovery failed for provider %s: %v",
+			providerType, err,
+		)
 	}
 	return []string{}
 }

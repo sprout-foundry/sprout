@@ -631,8 +631,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				if subagentType.LocalOnly && !a.IsLocalMode() {
 					return "", fmt.Errorf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona)
 				}
-				// Check Delegatable flag - reject non-delegatable personas
-				if !subagentType.Delegatable {
+				// Check Delegatable flag - reject non-delegatable personas.
+				// Exception: EA personas (executive_assistant) can spawn any persona
+				// as a subagent, regardless of the delegatable flag. This enables
+				// the three-level delegation chain: EA (depth 0) → orchestrator
+				// (depth 1) → coder/tester (depth 2).
+				if !subagentType.Delegatable && !a.hasEASpawnAuthority() {
 					return "", fmt.Errorf("persona '%s' is not designed to be used as a subagent (delegatable=false)", persona)
 				}
 				provider = config.GetSubagentTypeProvider(persona)

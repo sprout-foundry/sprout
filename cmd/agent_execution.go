@@ -12,14 +12,16 @@ import (
 )
 
 var (
-	disableWebUI bool
-	webPort      int
-	webBindAddr  string
-	daemonMode   bool
+	disableWebUI       bool
+	noProjectSkills    bool
+	webPort            int
+	webBindAddr        string
+	daemonMode         bool
 )
 
 func init() {
 	agentCmd.Flags().BoolVar(&disableWebUI, "no-web-ui", false, "Disable web UI")
+	agentCmd.Flags().BoolVar(&noProjectSkills, "no-project-skills", false, "Skip discovery of project-local skills from .sprout/skills/")
 	agentCmd.Flags().IntVar(&webPort, "web-port", 0, "Port for web UI (default: 56000 for daemon mode)")
 	agentCmd.Flags().IntVar(&webPort, "port", 0, "") // Hidden alias for --web-port (Docker/cloud entrypoint compat)
 	agentCmd.Flags().MarkHidden("port")

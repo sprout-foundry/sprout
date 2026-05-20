@@ -852,6 +852,22 @@ The original SP-045 assumption that tree-sitter required CGO was wrong. The pure
 [x] - SP-045-3d: Tests cover both sides — Go side (`pkg/embedding/onnx_wasm_bridge_test.go`) with mock `__sproutONNX`: round-trip, batch order, promise rejection, ctx cancellation; JS side (`webui/src/services/sproutONNXBridge.test.ts`): 6 lifecycle tests. An integrated WASM-in-browser test (real WASM module + real BrowserONNXProvider) would need a Playwright harness — deferred.
 [x] - SP-045-3e: SP-045 spec doc updated; WASM_API.md has a new "Tier 2a" section with the contract, one-line install, hand-roll install, verification recipe.
 
+---
+
+## SP-046: Browser-Primary Workspace Sync Model
+
+Spec: `roadmap/SP-046-workspace-sync-model.md`
+
+Lives mostly in `../platform` (server-side sync, WebSocket transport, container lifecycle) but a few invariants need to be enforced in this repo's agent + WASM code. Captured here so they don't drift.
+
+[] - SP-046-1a: Define a `WorkspaceFileMetadata` struct holding `(browser_seq, container_seq, last_synced_browser, last_synced_container, modified_at)` per file. Stored as a sibling `.sprout-meta.json` index or inline in the existing JSONL store, decision TBD.
+[] - SP-046-1b: Agent `write_file` tool handler enforces the staleness rule: refuse if `browser_seq > last_synced_browser` OR file modified within 30s OR agent has not called `read_file` for this path this turn. Return tool error with a clear message the agent can act on.
+[] - SP-046-1c: Agent tool wrappers learn to ask the user before overwriting a file with pending unsynced edits (`browser_seq > last_synced_browser`). New tool-result shape so the agent's reasoning can branch on the error.
+[] - SP-046-1d: WASM `cmd/wasm` exposes `setSyncEndpoint(url)` so the host page can wire up the WebSocket transport. Free-tier callers leave it unset; paid-tier callers set it at session init.
+[] - SP-046-1e: Free-tier graceful degradation — when `setSyncEndpoint` is unset, the agent operates as a single replica (no patch stream, no container, browser is the only source of truth). All the same staleness rules apply within the agent's own loop.
+[] - SP-046-1f: Multi-device single-session enforcement at the platform side (`../platform`) — when a new WebSocket arrives for a user with an existing one, close the old, surface "moved to another device" overlay in the browser via a control message. WASM side renders that overlay; the patch stream stops cleanly.
+[] - SP-046-1g: Heartbeat at 15s, 60s grace before container-side job termination. WASM side sends the heartbeat over the same WS; container monitors and reaps long-running jobs that lose their heartbeat.
+
 ### Phase 4: Tier 2b — agent / LLM commands
 
 [] - SP-045-4a: **Design decision**: API key storage for the WASM build. Decide between localStorage, IndexedDB+WebCrypto envelope, or per-session host injection. Document the trade-offs in `roadmap/SP-045-api-keys-design.md` and pick one before code lands.

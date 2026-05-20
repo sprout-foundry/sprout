@@ -22,15 +22,17 @@ import (
 // Skips if the model files are not present (not downloaded).
 func TestE2E_ONNXEmbeddingProvider(t *testing.T) {
 	modelDir := DefaultModelDir()
-	modelPath := filepath.Join(modelDir, "embeddinggemma-300m-q8", "model.onnx")
-	tokenizerPath := filepath.Join(modelDir, "embeddinggemma-300m-q8", "tokenizer.json")
+	modelName := EmbeddingGemma300MConfig().Name
+	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
+	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
 
-	// Skip if model not downloaded
+	// Skip if the model isn't staged. The bootstrap path lives in
+	// EmbeddingManager.initONNX — running sprout normally will download it.
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skip("EmbeddingGemma model not downloaded. Run: curl -L -o ~/.config/sprout/models/embeddinggemma-300m-q8/model.onnx https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/onnx/model_q4.onnx")
+		t.Skipf("EmbeddingGemma model not found at %s — run sprout once to trigger bootstrap, or invoke pkg/embedding/retrieval_eval.go directly", modelPath)
 	}
 	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
-		t.Skip("EmbeddingGemma tokenizer not downloaded. Run: curl -L -o ~/.config/sprout/models/embeddinggemma-300m-q8/tokenizer.json https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main/tokenizer.json")
+		t.Skipf("EmbeddingGemma tokenizer not found at %s", tokenizerPath)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -139,14 +141,15 @@ func TestE2E_ONNXEmbeddingProvider(t *testing.T) {
 // pipeline using ONNX provider.
 func TestE2E_ONNXMemoryWorkflow(t *testing.T) {
 	modelDir := DefaultModelDir()
-	modelPath := filepath.Join(modelDir, "embeddinggemma-300m-q8", "model.onnx")
-	tokenizerPath := filepath.Join(modelDir, "embeddinggemma-300m-q8", "tokenizer.json")
+	modelName := EmbeddingGemma300MConfig().Name
+	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
+	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
 
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skip("EmbeddingGemma model not downloaded")
+		t.Skipf("EmbeddingGemma model not found at %s", modelPath)
 	}
 	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
-		t.Skip("EmbeddingGemma tokenizer not downloaded")
+		t.Skipf("EmbeddingGemma tokenizer not found at %s", tokenizerPath)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

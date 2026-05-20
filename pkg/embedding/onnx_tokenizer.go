@@ -3,61 +3,97 @@ package embedding
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
-	"regexp"
-	"slices"
+	"sort"
 	"strings"
-	"unicode"
 )
 
-// GemmaTokenizer implements Byte-level BPE tokenization for Gemma/EmbeddingGemma models.
+// GemmaTokenizer implements the HuggingFace BPE tokenization pipeline used by
+// Google's EmbeddingGemma-300M model. It is intentionally narrow: it covers
+// the exact normalizer / pre-tokenizer / model / added-tokens combination
+// that EmbeddingGemma ships with, rather than the full HF tokenizers schema.
 //
-// It parses the HuggingFace tokenizer.json format and encodes/decodes text
-// using the BytePiece algorithm with Gemma-specific byte encoding.
+// Pipeline (matches HuggingFace tokenizers semantics):
 //
-// Gemma uses a specific byte fallback encoding where bytes 1-255 are represented
-// as ⟨0x01⟩ through ⟨0xFF⟩ (using Unicode private use area U+E000-U+EFFD).
+//  1. Split input around added-token strings (e.g. "\n", "\t", "<bos>"). The
+//     matched runs are emitted directly as their IDs; everything else falls
+//     through to the BPE path.
+//  2. Normalize each non-added segment by replacing " " (U+0020) with the
+//     SentencePiece space marker "▁" (U+2581), per the Replace normalizer.
+//  3. Apply rank-ordered BPE merges to the normalized text, treated as a
+//     sequence of single-rune symbols.
+//  4. Map each resulting symbol to its vocab id, falling back to <unk> on miss.
+//
+// Decoding is not implemented — the embedding path only needs Encode().
 type GemmaTokenizer struct {
-	vocab     map[string]int32
+	vocab    map[string]int32
+	bpeRanks map[bpePair]int
+
+	// Added-token state. addedContents is sorted by descending content length
+	// so the encode loop can perform longest-match lookups efficiently.
+	addedByContent map[string]int32
+	addedLengths   []int // unique content lengths, descending
+
+	bosID int32
+	eosID int32
+	unkID int32
+	padID int32
+
 	vocabSize int
-	merges    []string
-	bpeRanks  map[string]int // merged token → rank (position in merge list)
 
-	// Reverse mapping for decoding.
-	idToToken map[int32]string
-
-	// Special tokens.
-	bosToken string
-	eosToken string
-	unkToken string
-
-	// Pre-tokenizer regex from tokenizer.json (Gemma uses subword split).
-	preTokenizer *regexp.Regexp
+	// normalizerPattern is the literal string the normalizer replaces.
+	// normalizerContent is what it gets replaced with. For EmbeddingGemma:
+	// pattern=" " and content="▁". An empty pattern means normalization is
+	// disabled.
+	normalizerPattern string
+	normalizerContent string
 }
 
-// tokenizerJSON is a partial representation of the HuggingFace tokenizer.json.
+// bpePair is a (first, second) pair used as a key into the merge-rank table.
+// EmbeddingGemma stores merges as 2-element arrays, not joined strings, so we
+// key by the pair directly rather than encoding/decoding a separator.
+type bpePair struct {
+	first, second string
+}
+
+// tokenizerJSON is a tightly-scoped subset of the HuggingFace tokenizer.json
+// schema sufficient for EmbeddingGemma. We deliberately ignore decoder,
+// post_processor, and most processor fields because the embedding path does
+// not need them.
 type tokenizerJSON struct {
 	Model struct {
-		Type  string            `json:"type"`
-		Vocab map[string]int    `json:"vocab"`
-		Merges []string         `json:"merges"`
+		Type   string           `json:"type"`
+		Vocab  map[string]int32 `json:"vocab"`
+		Merges json.RawMessage  `json:"merges"`
 	} `json:"model"`
-	AddedTokens []struct {
-		ID          int    `json:"id"`
-		Value       string `json:"value"`
-		Special     bool   `json:"special"`
-	} `json:"added_tokens,omitempty"`
-	PreTokenizer struct {
-		Type     string `json:"type"`
-		Pattern  string `json:"pattern"`
-	} `json:"pre_tokenizer,omitempty"`
-	Decoder struct {
-		Type  string `json:"type"`
-		Piece string `json:"piece"`
-	} `json:"decoder,omitempty"`
+	AddedTokens []addedTokenJSON `json:"added_tokens,omitempty"`
+	Normalizer  json.RawMessage  `json:"normalizer,omitempty"`
 }
 
-// NewGemmaTokenizer creates a tokenizer from a tokenizer.json file.
+type addedTokenJSON struct {
+	ID      int32  `json:"id"`
+	Content string `json:"content"`
+	Special bool   `json:"special"`
+}
+
+// patternJSON models the discriminated-union pattern field used by HF tokenizers
+// (e.g. {"String": " "} or {"Regex": "..."}). EmbeddingGemma uses only the
+// String form for its normalizer; we accept Regex too as a forward-compat
+// gesture but do not currently apply it.
+type patternJSON struct {
+	String string `json:"String,omitempty"`
+	Regex  string `json:"Regex,omitempty"`
+}
+
+type normalizerJSON struct {
+	Type    string      `json:"type"`
+	Pattern patternJSON `json:"pattern"`
+	Content string      `json:"content"`
+}
+
+// NewGemmaTokenizer parses a HuggingFace tokenizer.json file produced for an
+// EmbeddingGemma-class model and returns an encoder.
 func NewGemmaTokenizer(path string) (*GemmaTokenizer, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -68,331 +104,268 @@ func NewGemmaTokenizer(path string) (*GemmaTokenizer, error) {
 	if err := json.Unmarshal(data, &tj); err != nil {
 		return nil, fmt.Errorf("tokenizer: parse json: %w", err)
 	}
-
 	if tj.Model.Type != "BPE" {
 		return nil, fmt.Errorf("tokenizer: expected BPE model, got %q", tj.Model.Type)
 	}
 
+	merges, err := parseMerges(tj.Model.Merges)
+	if err != nil {
+		return nil, fmt.Errorf("tokenizer: parse merges: %w", err)
+	}
+
 	t := &GemmaTokenizer{
-		vocab:     make(map[string]int32, len(tj.Model.Vocab)),
-		vocabSize: len(tj.Model.Vocab),
-		bpeRanks:  make(map[string]int, len(tj.Model.Merges)),
-		idToToken: make(map[int32]string, len(tj.Model.Vocab)),
+		vocab:          make(map[string]int32, len(tj.Model.Vocab)),
+		bpeRanks:       make(map[bpePair]int, len(merges)),
+		addedByContent: make(map[string]int32),
+		vocabSize:      len(tj.Model.Vocab),
+		bosID:          -1, eosID: -1, unkID: -1, padID: -1,
 	}
-
-	// Build vocab and reverse mappings.
 	for token, id := range tj.Model.Vocab {
-		t.vocab[token] = int32(id)
-		t.idToToken[int32(id)] = token
+		t.vocab[token] = id
+	}
+	for i, m := range merges {
+		t.bpeRanks[m] = i
 	}
 
-	// Build merge ranking (order matters for BPE).
-	for i, merge := range tj.Model.Merges {
-		t.merges = append(t.merges, merge)
-		t.bpeRanks[merge] = i
+	// Build added-token lookup. We record every added token, special or not —
+	// HF treats both classes as atomic during pre-processing, so a literal
+	// "\n\n\n" in the input must become token id 109 rather than going through
+	// BPE. We also pick out the canonical special-token IDs by content.
+	seenLen := make(map[int]struct{})
+	for _, at := range tj.AddedTokens {
+		if at.Content == "" {
+			continue
+		}
+		t.addedByContent[at.Content] = at.ID
+		seenLen[len(at.Content)] = struct{}{}
+		switch at.Content {
+		case "<bos>":
+			t.bosID = at.ID
+		case "<eos>":
+			t.eosID = at.ID
+		case "<unk>":
+			t.unkID = at.ID
+		case "<pad>":
+			t.padID = at.ID
+		}
 	}
+	t.addedLengths = make([]int, 0, len(seenLen))
+	for l := range seenLen {
+		t.addedLengths = append(t.addedLengths, l)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(t.addedLengths)))
 
-	// Find special tokens.
-	t.bosToken = "<bos>"
-	t.eosToken = "<eos>"
-	t.unkToken = "<unk>"
-
-	// Parse pre-tokenizer regex if present.
-	if tj.PreTokenizer.Pattern != "" {
-		t.preTokenizer = regexp.MustCompile(tj.PreTokenizer.Pattern)
+	// Parse the normalizer (only the simple Replace form is recognized).
+	if len(tj.Normalizer) > 0 && string(tj.Normalizer) != "null" {
+		var n normalizerJSON
+		if err := json.Unmarshal(tj.Normalizer, &n); err == nil && n.Type == "Replace" && n.Pattern.String != "" {
+			t.normalizerPattern = n.Pattern.String
+			t.normalizerContent = n.Content
+		}
 	}
 
 	return t, nil
 }
 
-// Encode converts text to a sequence of token IDs using Byte-level BPE.
-//
-// The algorithm:
-// 1. Byte-encode the input (Gemma byte fallback for non-ASCII)
-// 2. Split into subwords using the pre-tokenizer (or simple whitespace split)
-// 3. Apply BPE merges iteratively on each subword
-// 4. Concatenate token IDs
+// parseMerges accepts either of the two HF merge formats:
+//   - newer: [["first","second"], ...]
+//   - older: ["first second", ...]
+// EmbeddingGemma uses the newer form; the older form is kept so unit tests
+// that hand-craft tiny tokenizers can stay readable.
+func parseMerges(raw json.RawMessage) ([]bpePair, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+
+	var pairs [][]string
+	if err := json.Unmarshal(raw, &pairs); err == nil {
+		out := make([]bpePair, 0, len(pairs))
+		for i, p := range pairs {
+			if len(p) != 2 {
+				return nil, fmt.Errorf("merges[%d]: expected 2 elements, got %d", i, len(p))
+			}
+			out = append(out, bpePair{first: p[0], second: p[1]})
+		}
+		return out, nil
+	}
+
+	var joined []string
+	if err := json.Unmarshal(raw, &joined); err != nil {
+		return nil, fmt.Errorf("unrecognized merges format: %w", err)
+	}
+	out := make([]bpePair, 0, len(joined))
+	for i, s := range joined {
+		idx := strings.Index(s, " ")
+		if idx < 0 {
+			return nil, fmt.Errorf("merges[%d] %q: no space separator", i, s)
+		}
+		out = append(out, bpePair{first: s[:idx], second: s[idx+1:]})
+	}
+	return out, nil
+}
+
+// Encode tokenizes text into a sequence of token ids matching what the
+// HuggingFace `tokenizers` reference produces for the same input (modulo the
+// BOS/EOS markers, which Encode does NOT add — use EncodeWithBOSAndEOS for
+// that).
 func (t *GemmaTokenizer) Encode(text string) []int32 {
 	if text == "" {
 		return nil
 	}
-
-	// Step 1: Byte-encode input into strings suitable for BPE.
-	// Gemma uses byte fallback: each byte becomes a token string.
-	// ASCII bytes are themselves, non-ASCII bytes are ⟨0xNN⟩ format.
-	bytesStr := t.byteEncode(text)
-
-	// Step 2: Split into subwords.
-	subwords := t.splitPreTokens(bytesStr)
-
-	// Step 3: BPE merge each subword and collect token IDs.
-	var tokens []int32
-	for _, sub := range subwords {
-		subTokens := t.bpe(sub)
-		tokens = append(tokens, subTokens...)
-	}
-
-	return tokens
-}
-
-// Decode converts a sequence of token IDs back to text.
-func (t *GemmaTokenizer) Decode(tokens []int32) string {
-	var sb strings.Builder
-	for _, id := range tokens {
-		token, ok := t.idToToken[id]
-		if !ok {
-			sb.WriteString("<unk>")
-			continue
-		}
-		decoded := t.decodeToken(token)
-		sb.WriteString(decoded)
-	}
-	return sb.String()
-}
-
-// byteEncode converts UTF-8 text to the Gemma byte-encoding representation.
-//
-// In Gemma's BPE scheme:
-// - ASCII characters (0x01-0x7F) are used directly
-// - Non-ASCII bytes are encoded as ⟨0xNN⟩ using the Unicode block U+E000-U+EFFD
-//
-// This matches the encoding used in the tokenizer.json vocab.
-func (t *GemmaTokenizer) byteEncode(text string) string {
-	var sb strings.Builder
-	for _, b := range []byte(text) {
-		if b >= 0x01 && b <= 0x7F {
-			sb.WriteByte(b)
-		} else {
-			// Gemma byte fallback: ⟨0xNN⟩ → Unicode U+E000+0xNN-1
-			// The tokenizer.json uses format like ⟨0x80⟩ which maps to U+E000
-			sb.WriteRune(0xE000 + rune(b) - 1)
-		}
-	}
-	return sb.String()
-}
-
-// decodeToken converts a single token string back to its decoded text form.
-// This reverses the byte encoding and handles the leading space convention
-// used in BPE tokenization.
-func (t *GemmaTokenizer) decodeToken(token string) string {
-	// BPE tokens typically have a leading space to mark word boundaries,
-	// except for the first token in a sequence. We strip the leading space
-	// during decoding, but this is handled at a higher level. For now,
-	// just reverse the byte encoding.
-
-	var sb strings.Builder
-	for _, r := range token {
-		if r >= 0xE000 && r <= 0xEF00 {
-			// Reverse byte fallback.
-			sb.WriteByte(byte(r - 0xE000 + 1))
-		} else {
-			sb.WriteRune(r)
-		}
-	}
-	return sb.String()
-}
-
-// splitPreTokens splits the byte-encoded string into subwords for BPE processing.
-// Gemma uses a regex-based pre-tokenizer that splits on punctuation and whitespace.
-func (t *GemmaTokenizer) splitPreTokens(s string) []string {
-	if t.preTokenizer != nil {
-		return t.preTokenizer.FindAllString(s, -1)
-	}
-
-	// Fallback: simple whitespace + punctuation split.
-	// This matches the common pre-tokenizer pattern used by Gemma models.
-	var tokens []string
-	var current strings.Builder
-	for _, r := range s {
-		if unicode.IsSpace(r) {
-			if current.Len() > 0 {
-				tokens = append(tokens, current.String())
-				current.Reset()
-			}
-		} else {
-			current.WriteRune(r)
-		}
-	}
-	if current.Len() > 0 {
-		tokens = append(tokens, current.String())
-	}
-	return tokens
-}
-
-// bpe applies byte-pair encoding merges to a single subword string,
-// returning the resulting token IDs.
-func (t *GemmaTokenizer) bpe(piece string) []int32 {
-	if len(piece) == 0 {
-		return nil
-	}
-
-	// Split into individual character tokens.
-	symbols := splitStringIntoRunes(piece)
-
-	if len(symbols) == 1 {
-		id, ok := t.vocab[symbols[0]]
-		if ok {
-			return []int32{id}
-		}
-		// Unknown token — fall back to byte-level encoding.
-		return t.fallbackToBytes(piece)
-	}
-
-	// Iteratively apply merges.
-	// Each iteration finds the pair with the lowest rank and merges it.
-	for {
-		// Find the pair with the lowest merge rank.
-		pair, rank := t.bestMerge(symbols)
-		if _, ok := t.bpeRanks[pair]; !ok {
-			break // No more merges available
-		}
-
-		// Apply the merge.
-		symbols = t.applyMerge(symbols, pair, rank)
-	}
-
-	// Convert merged tokens to IDs.
 	var ids []int32
-	for _, token := range symbols {
-		id, ok := t.vocab[token]
-		if ok {
-			ids = append(ids, id)
-		} else {
-			// Token not in vocab — shouldn't happen if merges are correct,
-			// but handle gracefully.
-			ids = append(ids, t.fallbackToBytes(token)...)
-		}
-	}
-
+	t.encodeSegment(text, &ids)
 	return ids
 }
 
-// bestMerge finds the merge pair with the lowest rank (applied first).
-func (t *GemmaTokenizer) bestMerge(symbols []string) (string, int) {
-	bestRank := int(1<<31 - 1)
-	bestPair := ""
-
-	for i := 0; i < len(symbols)-1; i++ {
-		pair := symbols[i] + symbols[i+1]
-		if rank, ok := t.bpeRanks[pair]; ok && rank < bestRank {
-			bestRank = rank
-			bestPair = pair
+// encodeSegment walks `text` left-to-right, peeling off the leftmost
+// longest-matching added-token span at each step and routing the gaps
+// through the BPE path.
+func (t *GemmaTokenizer) encodeSegment(text string, out *[]int32) {
+	for len(text) > 0 {
+		start, length, id, found := t.findLeftmostAddedToken(text)
+		if !found {
+			t.bpeEncode(text, out)
+			return
 		}
+		if start > 0 {
+			t.bpeEncode(text[:start], out)
+		}
+		*out = append(*out, id)
+		text = text[start+length:]
 	}
-
-	return bestPair, bestRank
 }
 
-// applyMerge applies all instances of the best merge pair in the symbol list,
-// using the standard BPE algorithm that merges all occurrences of the best pair.
-func (t *GemmaTokenizer) applyMerge(symbols []string, pair string, rank int) []string {
-	first, second := splitMergePair(pair)
-
-	// Use the HuggingFace BPE approach: scan through the list, merging
-	// consecutive pairs that match the current best merge.
-	var newSymbols []string
-	i := 0
-	for i < len(symbols) {
-		// Try to match this pair.
-		if i+1 < len(symbols) && symbols[i] == first && symbols[i+1] == second {
-			// Found a match — but we need to check if this pair is still
-			// the best. If a better pair appeared at or before this position,
-			// we need to re-scan from the beginning.
-			pairRank, ok := t.bpeRanks[symbols[i]+symbols[i+1]]
-			if ok && pairRank == rank {
-				newSymbols = append(newSymbols, pair)
-				i += 2
+// findLeftmostAddedToken finds the earliest position in text where any added
+// token matches, returning the start offset, the matched length, and the id.
+// At each position the longest matching token wins, mirroring HuggingFace's
+// tokenizers behavior.
+func (t *GemmaTokenizer) findLeftmostAddedToken(text string) (start, length int, id int32, found bool) {
+	if len(t.addedByContent) == 0 {
+		return 0, 0, 0, false
+	}
+	for s := 0; s < len(text); s++ {
+		for _, l := range t.addedLengths {
+			if s+l > len(text) {
 				continue
 			}
+			if mid, ok := t.addedByContent[text[s:s+l]]; ok {
+				return s, l, mid, true
+			}
 		}
-		newSymbols = append(newSymbols, symbols[i])
-		i++
 	}
-
-	return newSymbols
+	return 0, 0, 0, false
 }
 
-// splitMergePair splits a merged token back into its two constituent parts.
-// The merge format is "tok1 tok2" (space-separated).
-func splitMergePair(pair string) (string, string) {
-	idx := strings.Index(pair, " ")
-	if idx < 0 {
-		return pair, ""
+// bpeEncode normalizes a segment and runs BPE, appending the resulting token
+// ids to out.
+func (t *GemmaTokenizer) bpeEncode(segment string, out *[]int32) {
+	if segment == "" {
+		return
 	}
-	return pair[:idx], pair[idx+1:]
+	normalized := t.normalize(segment)
+	symbols := splitIntoRuneStrings(normalized)
+	merged := t.applyBPE(symbols)
+	for _, sym := range merged {
+		if id, ok := t.vocab[sym]; ok {
+			*out = append(*out, id)
+		} else if t.unkID >= 0 {
+			*out = append(*out, t.unkID)
+		}
+	}
 }
 
-// splitStringIntoRunes splits a string into a slice of single-rune strings.
-func splitStringIntoRunes(s string) []string {
-	var result []string
+// normalize applies the (single) Replace normalizer recorded at load time.
+// EmbeddingGemma uses pattern=" " → content="▁"; callers without a normalizer
+// configured get the input back unchanged.
+func (t *GemmaTokenizer) normalize(s string) string {
+	if t.normalizerPattern == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, t.normalizerPattern, t.normalizerContent)
+}
+
+// applyBPE runs the classical BPE algorithm: repeatedly merge the pair with
+// the lowest merge rank until no merge applies. Operates on a slice of
+// single-character symbol strings (one rune each, initially) which grow as
+// merges are applied.
+func (t *GemmaTokenizer) applyBPE(symbols []string) []string {
+	if len(symbols) < 2 {
+		return symbols
+	}
+	for {
+		bestRank := math.MaxInt
+		bestIdx := -1
+		for i := 0; i < len(symbols)-1; i++ {
+			if rank, ok := t.bpeRanks[bpePair{symbols[i], symbols[i+1]}]; ok && rank < bestRank {
+				bestRank = rank
+				bestIdx = i
+			}
+		}
+		if bestIdx < 0 {
+			return symbols
+		}
+
+		// Merge every adjacent occurrence of the chosen pair in a single pass.
+		// HF tokenizers' BPE merges all occurrences of the best pair before
+		// rescanning — we mirror that to match its output exactly.
+		merged := make([]string, 0, len(symbols))
+		i := 0
+		for i < len(symbols) {
+			if i+1 < len(symbols) && symbols[i] == symbols[bestIdx] && symbols[i+1] == symbols[bestIdx+1] {
+				merged = append(merged, symbols[i]+symbols[i+1])
+				i += 2
+			} else {
+				merged = append(merged, symbols[i])
+				i++
+			}
+		}
+		symbols = merged
+	}
+}
+
+// splitIntoRuneStrings turns a string into a slice where each element is the
+// string-form of a single Unicode code point. Multi-byte runes stay intact.
+func splitIntoRuneStrings(s string) []string {
+	out := make([]string, 0, len(s))
 	for _, r := range s {
-		result = append(result, string(r))
+		out = append(out, string(r))
 	}
-	return result
+	return out
 }
 
-// fallbackToBytes handles tokens not found in the vocabulary by
-// falling back to individual byte encoding.
-func (t *GemmaTokenizer) fallbackToBytes(token string) []int32 {
-	var ids []int32
-	for _, r := range token {
-		if id, ok := t.vocab[string(r)]; ok {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) == 0 {
-		// Absolute fallback: use unknown token if available.
-		if unk, ok := t.vocab[t.unkToken]; ok {
-			return []int32{unk}
-		}
-	}
-	return ids
-}
-
-// EncodeWithBOS returns the encoded tokens with the BOS token prepended.
-func (t *GemmaTokenizer) EncodeWithBOS(text string) []int32 {
-	tokens := t.Encode(text)
-	if bosID, ok := t.vocab[t.bosToken]; ok {
-		tokens = append([]int32{bosID}, tokens...)
-	}
-	return tokens
-}
-
-// EncodeWithBOSAndEOS returns the encoded tokens with BOS prepended and EOS appended.
+// EncodeWithBOSAndEOS returns Encode(text) with the BOS id prepended and the
+// EOS id appended (when they were resolved from added_tokens). This matches
+// what HuggingFace's encode() returns for EmbeddingGemma with default
+// post-processing — including the [BOS, EOS] pair for empty input.
 func (t *GemmaTokenizer) EncodeWithBOSAndEOS(text string) []int32 {
 	tokens := t.Encode(text)
-	if bosID, ok := t.vocab[t.bosToken]; ok {
-		tokens = append([]int32{bosID}, tokens...)
+	out := make([]int32, 0, len(tokens)+2)
+	if t.bosID >= 0 {
+		out = append(out, t.bosID)
 	}
-	if eosID, ok := t.vocab[t.eosToken]; ok {
-		tokens = append(tokens, eosID)
+	out = append(out, tokens...)
+	if t.eosID >= 0 {
+		out = append(out, t.eosID)
 	}
-	return tokens
+	return out
 }
 
-// VocabSize returns the size of the vocabulary.
-func (t *GemmaTokenizer) VocabSize() int {
-	return t.vocabSize
-}
-
-// TokenIDs returns the token IDs for the given text (alias for Encode).
-func (t *GemmaTokenizer) TokenIDs(text string) []int32 {
-	return t.Encode(text)
-}
-
-// TokenizeWithTokens returns both the token strings and their IDs for debugging.
-func (t *GemmaTokenizer) TokenizeWithTokens(text string) ([]string, []int32) {
-	ids := t.Encode(text)
-	tokens := make([]string, len(ids))
-	for i, id := range ids {
-		tokens[i] = t.idToToken[id]
+// EncodeWithBOS prepends BOS but does not append EOS. Kept for callers that
+// only want the prefix marker.
+func (t *GemmaTokenizer) EncodeWithBOS(text string) []int32 {
+	tokens := t.Encode(text)
+	if t.bosID < 0 {
+		return tokens
 	}
-	return tokens, ids
+	out := make([]int32, 0, len(tokens)+1)
+	out = append(out, t.bosID)
+	out = append(out, tokens...)
+	return out
 }
 
-// EncodeBatch tokenizes multiple texts and returns a padded batch of token IDs.
-// The padding value is padID (typically 0). All sequences are padded to the
-// max length found in the batch.
+// EncodeBatch tokenizes multiple texts and right-pads each to the longest
+// length with padID, returning a rectangular [][]int32. Used by the ONNX
+// provider to feed batched input tensors.
 func (t *GemmaTokenizer) EncodeBatch(texts []string, padID int32) [][]int32 {
 	results := make([][]int32, len(texts))
 	maxLen := 0
@@ -402,22 +375,20 @@ func (t *GemmaTokenizer) EncodeBatch(texts []string, padID int32) [][]int32 {
 			maxLen = len(results[i])
 		}
 	}
-
-	// Pad to max length.
 	for i := range results {
 		if len(results[i]) < maxLen {
-			results[i] = slices.Grow(results[i], maxLen-len(results[i]))
-			for j := len(results[i]); j < maxLen; j++ {
-				results[i] = append(results[i], padID)
+			pad := make([]int32, maxLen-len(results[i]))
+			for j := range pad {
+				pad[j] = padID
 			}
+			results[i] = append(results[i], pad...)
 		}
 	}
-
 	return results
 }
 
-// MaskBatch creates attention masks for a batch of encoded sequences.
-// Returns a batch of int64 masks (1 = real token, 0 = padding).
+// MaskBatch produces attention masks (1 = real token, 0 = padding) for a
+// batch of encoded sequences. Length matches each sequence row in encoded.
 func (t *GemmaTokenizer) MaskBatch(encoded [][]int32, padID int32) [][]int64 {
 	masks := make([][]int64, len(encoded))
 	for i, seq := range encoded {
@@ -430,3 +401,10 @@ func (t *GemmaTokenizer) MaskBatch(encoded [][]int32, padID int32) [][]int64 {
 	}
 	return masks
 }
+
+// VocabSize returns the model vocabulary size (not counting added tokens that
+// share ids with vocab entries, which is rare).
+func (t *GemmaTokenizer) VocabSize() int { return t.vocabSize }
+
+// TokenIDs is an alias for Encode, kept for callers that prefer the name.
+func (t *GemmaTokenizer) TokenIDs(text string) []int32 { return t.Encode(text) }

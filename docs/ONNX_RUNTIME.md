@@ -31,20 +31,31 @@ locations in order, stopping at the first hit:
    | macOS, amd64       | `onnxruntime.dylib`       |
    | Windows, any       | `onnxruntime.dll`         |
 
-3. **Dev fallback (bootstrap from `yalue/onnxruntime_go` test_data)** — if
-   step 2 is empty and the `yalue/onnxruntime_go` Go module is present in
-   the local module cache, sprout copies the bundled test library from
-   `$GOPATH/pkg/mod/github.com/yalue/onnxruntime_go@<ver>/test_data/<libname>`
-   into the location from step 2 on first use.
+3. **Auto-download from the official `microsoft/onnxruntime` release** —
+   when step 2 is empty, sprout fetches the platform-appropriate archive
+   from `github.com/microsoft/onnxruntime/releases/download/v<ver>/...`,
+   extracts the shared library, and atomically writes it to the path from
+   step 2. Version is pinned in `pkg/embedding/onnx_runtime_install.go`
+   (currently 1.20.1, matching the yalue/onnxruntime_go v1.30.x ABI). This
+   is the production-grade fallback — the source is the same one Microsoft
+   distributes everywhere else, the writes are atomic, and the bytes can
+   be hash-verified by pinning `SHA256` in `onnxRuntimeReleaseConfig`.
+
+4. **Dev fallback: bootstrap from `yalue/onnxruntime_go` test_data** — if
+   step 3 also fails (e.g. no network in an air-gapped CI runner) and the
+   `yalue/onnxruntime_go` Go module is present in the local module cache,
+   sprout copies the bundled test library from
+   `$GOPATH/pkg/mod/github.com/yalue/onnxruntime_go@<ver>/test_data/<libname>`.
 
    This step exists strictly for developer convenience so that
-   `go test ./...` and `go run` work out of the box. **It is not appropriate
-   for production:** the `test_data` directory is not a public surface of
-   the upstream library, it's not pinned in any reproducible way, and the
-   `.so`/`.dylib`/`.dll` shipped there is sized for unit tests rather than
-   optimized for production inference.
+   `go test ./...` and `go run` work out of the box without network. It is
+   NOT appropriate for production — the `test_data` directory is not a
+   public surface of the upstream library and the file there isn't pinned
+   in any reproducible way. Set `SPROUT_DISABLE_YALUE_BOOTSTRAP=1` in
+   production environments to lock the resolver down to steps 1-3 and
+   fail closed if none succeed.
 
-4. **Yalue's default** — if all of the above fail, sprout doesn't call
+5. **Yalue's default** — if all of the above fail, sprout doesn't call
    `SetSharedLibraryPath` and yalue falls back to looking for plain
    `onnxruntime.so` in `LD_LIBRARY_PATH` / the current directory. This is
    the last-resort path for deployments that install ONNX Runtime via the
@@ -58,22 +69,33 @@ continues to work unaffected.
 
 Pick whichever of these fits your distribution model best:
 
-### Option A — sprout-managed install (recommended for self-contained binaries)
+### Option A — let sprout auto-download (recommended for default installs)
 
-Stage the platform-specific library at
-`~/.config/sprout/models/onnxruntime/<libname>` as part of your installer or
-provisioning script. Sprout will find it at step 2 on first launch with no
-additional configuration. Pin to a specific ONNX Runtime release version
-(e.g. v1.20.0) and verify the SHA-256 before staging.
+Do nothing. On first ONNX use, sprout downloads the pinned ONNX Runtime
+release archive from `github.com/microsoft/onnxruntime/releases`, extracts
+the shared library, and stages it at `~/.config/sprout/models/onnxruntime/<libname>`
+for all future runs. The pin is in `pkg/embedding/onnx_runtime_install.go`
+(`onnxRuntimeVersion`) and the per-archive SHA-256 lives in
+`onnxRuntimeReleaseFor()` (pin per-platform when you cut a release).
+Subsequent launches load straight from the staged file at step 2 of the
+resolution order — no network needed.
 
-### Option B — sysadmin-managed install (recommended for shared servers)
+### Option B — pre-stage manually (recommended for air-gapped / locked-down hosts)
 
-Install ONNX Runtime via the system package manager (or place the `.so` in a
-standard library path), then set `SPROUT_ONNX_RUNTIME_LIB` to the absolute
-path in the sprout process's environment. This decouples ONNX upgrades from
-sprout upgrades.
+Download the archive yourself (URL printed in the install error message or
+visible in `pkg/embedding/onnx_runtime_install.go:onnxRuntimeReleaseFor`),
+extract `libonnxruntime.so.X.Y.Z` (or `.dylib`/`.dll`) into
+`~/.config/sprout/models/onnxruntime/<platform-lib-name>`, and set
+`SPROUT_DISABLE_YALUE_BOOTSTRAP=1` to lock the resolver to your install.
 
-### Option C — Skip ONNX entirely
+### Option C — sysadmin-managed install (recommended for shared servers)
+
+Install ONNX Runtime via the system package manager (or place the `.so` in
+a standard library path), then set `SPROUT_ONNX_RUNTIME_LIB` to the
+absolute path in the sprout process's environment. This decouples ONNX
+upgrades from sprout upgrades.
+
+### Option D — Skip ONNX entirely
 
 If a deployment doesn't need ONNX-quality semantic search, no setup is
 required — sprout transparently falls back to the static embedding provider

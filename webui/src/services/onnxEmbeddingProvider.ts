@@ -87,6 +87,37 @@ const MODEL_FILES: Record<'fp32' | 'q8' | 'q4', { model: string; data?: string }
 
 const TOKENIZER_URL = `${HF_BASE}/tokenizer.json`;
 
+// ─── Persistent download cache ────────────────────────────────────
+// Model files and the tokenizer are large (80MB-600MB total) and don't
+// change between sessions — re-downloading on every page load is wasteful
+// and visibly slow. cachedFetch wraps the standard fetch and stores
+// responses in the Cache Storage API, which the browser persists across
+// reloads, tab restarts, and (depending on storage policy) browser restarts.
+//
+// The cache is named so different sprout versions can invalidate via name
+// bump if the model URLs ever change.
+const ONNX_CACHE_NAME = 'sprout-onnx-models-v1';
+
+async function cachedFetch(url: string): Promise<Response> {
+  // Cache Storage may be unavailable in some test/jsdom environments and in
+  // service-worker-less contexts. Fall back to plain fetch transparently.
+  if (typeof caches === 'undefined') {
+    return fetch(url);
+  }
+  const cache = await caches.open(ONNX_CACHE_NAME);
+  const hit = await cache.match(url);
+  if (hit) return hit;
+  const resp = await fetch(url);
+  if (resp.ok) {
+    // Clone before consuming — Response bodies are read-once streams.
+    cache.put(url, resp.clone()).catch(() => {
+      // Quota errors / storage policy denials are not fatal — we still have
+      // the live response. Swallow to keep the embedding path unblocked.
+    });
+  }
+  return resp;
+}
+
 // ─── Tokenizer schema ─────────────────────────────────────────────
 // Tightly scoped to what EmbeddingGemma actually ships. We deliberately
 // ignore decoder, post_processor, and most processor fields — the embedding
@@ -482,7 +513,7 @@ export class BrowserONNXProvider {
   }
 
   private async loadTokenizer(): Promise<void> {
-    const resp = await fetch(TOKENIZER_URL);
+    const resp = await cachedFetch(TOKENIZER_URL);
     if (!resp.ok) {
       throw new Error(`Failed to download tokenizer: ${resp.status} ${resp.statusText}`);
     }
@@ -492,20 +523,40 @@ export class BrowserONNXProvider {
 
   private async loadModel(backend: 'webgpu' | 'wasm'): Promise<void> {
     const files = MODEL_FILES[this.dtype];
-    const modelUrl = files.model;
-    const u = new URL(modelUrl);
-    const baseUrl = u.origin + u.pathname.substring(0, u.pathname.lastIndexOf('/'));
+
+    // Pre-fetch the model graph via cachedFetch so subsequent page loads hit
+    // the Cache Storage instead of the network. Passing the bytes inline to
+    // InferenceSession.create (Uint8Array form) takes the URL fetch out of
+    // onnxruntime-web's hands — otherwise its internal fetch bypasses our
+    // cache entirely.
+    const modelResp = await cachedFetch(files.model);
+    if (!modelResp.ok) {
+      throw new Error(`Failed to download model: ${modelResp.status} ${modelResp.statusText}`);
+    }
+    const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
 
     const opts: InferenceSession.SessionOptions & {
-      resolveFspath?: (path: string) => string;
+      externalData?: Array<{ path: string; data: Uint8Array }>;
     } = {
       executionProviders: backend === 'webgpu' ? ['webgpu'] : ['wasm'],
       graphOptimizationLevel: 'all',
     };
+
     if (files.data) {
-      opts.resolveFspath = (fspath: string) => `${baseUrl}/${fspath}`;
+      // External weights blob. Same caching strategy. We pass it inline via
+      // externalData so the loader doesn't issue its own (uncached) request.
+      // The `path` must match the relative reference baked into the .onnx
+      // graph — for embeddinggemma-300m that's the basename of the URL.
+      const dataResp = await cachedFetch(files.data);
+      if (!dataResp.ok) {
+        throw new Error(`Failed to download model data: ${dataResp.status} ${dataResp.statusText}`);
+      }
+      const dataBytes = new Uint8Array(await dataResp.arrayBuffer());
+      const basename = files.data.substring(files.data.lastIndexOf('/') + 1);
+      opts.externalData = [{ path: basename, data: dataBytes }];
     }
-    this.session = await InferenceSession.create(modelUrl, opts as InferenceSession.SessionOptions);
+
+    this.session = await InferenceSession.create(modelBytes, opts as InferenceSession.SessionOptions);
   }
 
   /** Truncate a token sequence (with BOS/EOS markers) to maxSequenceLength,

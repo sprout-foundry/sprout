@@ -4,12 +4,17 @@ import (
 	"crypto/md5"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
+
+// RedactedContentMarker is the marker used when file content is redacted because
+// the file is outside the workspace root (to avoid leaking sensitive data).
+const RedactedContentMarker = "[REDACTED - external file]"
 
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {
@@ -90,6 +95,12 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) erro
 		}
 	}
 
+	// Redact content if file is outside the workspace root
+	if ct.isOutsideWorkspace(filePath) {
+		originalContent = RedactedContentMarker
+		newContent = RedactedContentMarker
+	}
+
 	// Record the change
 	change := TrackedFileChange{
 		FilePath:     filePath,
@@ -108,6 +119,12 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) erro
 func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, newContent string) error {
 	if !ct.enabled {
 		return nil
+	}
+
+	// Redact content if file is outside the workspace root
+	if ct.isOutsideWorkspace(filePath) {
+		originalContent = RedactedContentMarker
+		newContent = RedactedContentMarker
 	}
 
 	change := TrackedFileChange{
@@ -245,6 +262,36 @@ func (ct *ChangeTracker) Reset(instructions string) {
 }
 
 // Helper functions
+
+// isOutsideWorkspace returns true if filePath is outside the agent's workspace root.
+// If the workspace root is empty or the agent is nil, it returns false (treats all files as in-workspace).
+func (ct *ChangeTracker) isOutsideWorkspace(filePath string) bool {
+	if ct.agent == nil {
+		return false
+	}
+	workspaceRoot := ct.agent.workspaceRoot
+	if workspaceRoot == "" {
+		return false
+	}
+
+	absFile, err := filepath.Abs(filePath)
+	if err != nil {
+		return false // If we can't resolve the path, don't redact
+	}
+
+	absWorkspace, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return false // If we can't resolve workspace, don't redact
+	}
+
+	rel, err := filepath.Rel(absWorkspace, absFile)
+	if err != nil {
+		return false
+	}
+
+	// If the relative path starts with "..", it's outside the workspace
+	return strings.HasPrefix(rel, "..")
+}
 
 func generateSessionID() string {
 	return fmt.Sprintf("agent-%d", time.Now().UnixNano())

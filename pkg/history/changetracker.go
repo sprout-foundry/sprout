@@ -15,6 +15,10 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
+// redactedContentMarker matches agent.RedactedContentMarker - files outside workspace
+// have their content replaced with this marker to avoid leaking sensitive data.
+const redactedContentMarker = "[REDACTED - external file]"
+
 // RevisionGroup represents a group of changes that belong to the same revision
 type RevisionGroup struct {
 	RevisionID   string
@@ -454,6 +458,12 @@ func handleRevisionRollback(group RevisionGroup) error {
 
 	activeChanges := getActiveChanges(group.Changes)
 	for _, change := range activeChanges {
+		// Skip files with redacted content (external files)
+		if change.OriginalCode == redactedContentMarker {
+			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
+			continue
+		}
+
 		fmt.Printf("  Rolling back %s...\n", change.Filename)
 
 		// Write content directly to avoid any encoding transformations
@@ -475,6 +485,12 @@ func handleRevisionRestore(group RevisionGroup) error {
 	fmt.Printf("Restoring all changes in revision %s...\n", group.RevisionID)
 
 	for _, change := range group.Changes {
+		// Skip files with redacted content (external files)
+		if change.NewCode == redactedContentMarker {
+			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
+			continue
+		}
+
 		fmt.Printf("  Restoring %s...\n", change.Filename)
 
 		// Write content directly to avoid any encoding transformations

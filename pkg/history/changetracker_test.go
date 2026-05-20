@@ -87,3 +87,296 @@ func TestRecordAndFetchChanges_Roundtrip(t *testing.T) {
 		t.Fatalf("metadata unexpectedly empty")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Redaction-specific rollback/restore tests
+// ---------------------------------------------------------------------------
+
+func TestRollbackRedactedFile_SkipsWrite(t *testing.T) {
+	orig, _ := os.Getwd()
+	dir := t.TempDir()
+	defer os.Chdir(orig)
+	_ = os.Chdir(dir)
+
+	// Create a revision with a redacted file
+	revID, err := RecordBaseRevision("redact-rollback", "test", "ok", []APIMessage{})
+	if err != nil {
+		t.Fatalf("RecordBaseRevision: %v", err)
+	}
+
+	// Record a change with redacted content
+	if err := RecordChangeWithDetails(revID, "/tmp/external.txt", redactedContentMarker, "new content", "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails: %v", err)
+	}
+
+	// Fetch the change and build a RevisionGroup for rollback
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(list))
+	}
+
+	groups := groupChangesByRevision(list)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+
+	// Run rollback — should skip the redacted file without error
+	if err := handleRevisionRollback(groups[0]); err != nil {
+		t.Fatalf("handleRevisionRollback should not error on redacted file: %v", err)
+	}
+
+	// Verify the file was NOT written (rollback was skipped)
+	if _, err := os.Stat("/tmp/external.txt"); err == nil {
+		// File exists — might be pre-existing, check content
+		content, _ := os.ReadFile("/tmp/external.txt")
+		if string(content) == redactedContentMarker {
+			t.Errorf("rollback should not write redacted content to disk")
+		}
+	}
+}
+
+func TestRestoreRedactedFile_SkipsWrite(t *testing.T) {
+	orig, _ := os.Getwd()
+	dir := t.TempDir()
+	defer os.Chdir(orig)
+	_ = os.Chdir(dir)
+
+	// Create a revision with a redacted file
+	revID, err := RecordBaseRevision("redact-restore", "test", "ok", []APIMessage{})
+	if err != nil {
+		t.Fatalf("RecordBaseRevision: %v", err)
+	}
+
+	// Record a change with redacted new content
+	if err := RecordChangeWithDetails(revID, "/tmp/external2.txt", "old content", redactedContentMarker, "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails: %v", err)
+	}
+
+	// Fetch the change and build a RevisionGroup for restore
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(list))
+	}
+
+	groups := groupChangesByRevision(list)
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+
+	// Run restore — should skip the redacted file without error
+	if err := handleRevisionRestore(groups[0]); err != nil {
+		t.Fatalf("handleRevisionRestore should not error on redacted file: %v", err)
+	}
+
+	// Verify the file was NOT written with redacted content
+	if _, err := os.Stat("/tmp/external2.txt"); err == nil {
+		content, _ := os.ReadFile("/tmp/external2.txt")
+		if string(content) == redactedContentMarker {
+			t.Errorf("restore should not write redacted content to disk")
+		}
+	}
+}
+
+func TestRollbackNormalFile_WritesOriginal(t *testing.T) {
+	orig, _ := os.Getwd()
+	dir := t.TempDir()
+	defer os.Chdir(orig)
+	_ = os.Chdir(dir)
+
+	// Create a revision with normal content
+	revID, err := RecordBaseRevision("normal-rollback", "test", "ok", []APIMessage{})
+	if err != nil {
+		t.Fatalf("RecordBaseRevision: %v", err)
+	}
+
+	originalContent := "func main() { println(\"hello\") }"
+	newContent := "func main() { println(\"world\") }"
+	filePath := "normal_file.go"
+
+	if err := RecordChangeWithDetails(revID, filePath, originalContent, newContent, "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails: %v", err)
+	}
+
+	// Create the file with the "new" content so rollback can restore it
+	if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Fetch and rollback
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(list))
+	}
+
+	groups := groupChangesByRevision(list)
+	if err := handleRevisionRollback(groups[0]); err != nil {
+		t.Fatalf("handleRevisionRollback: %v", err)
+	}
+
+	// Verify the file was restored to original content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("ReadFile after rollback: %v", err)
+	}
+	if string(content) != originalContent {
+		t.Errorf("file content after rollback = %q, want %q", string(content), originalContent)
+	}
+}
+
+func TestRestoreNormalFile_WritesNewContent(t *testing.T) {
+	orig, _ := os.Getwd()
+	dir := t.TempDir()
+	defer os.Chdir(orig)
+	_ = os.Chdir(dir)
+
+	// Create a revision with normal content
+	revID, err := RecordBaseRevision("normal-restore", "test", "ok", []APIMessage{})
+	if err != nil {
+		t.Fatalf("RecordBaseRevision: %v", err)
+	}
+
+	originalContent := "func main() { println(\"hello\") }"
+	newContent := "func main() { println(\"world\") }"
+	filePath := "restore_file.go"
+
+	if err := RecordChangeWithDetails(revID, filePath, originalContent, newContent, "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails: %v", err)
+	}
+
+	// Create the file with original content so restore can overwrite it
+	if err := os.WriteFile(filePath, []byte(originalContent), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Fetch and restore
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(list))
+	}
+
+	groups := groupChangesByRevision(list)
+	if err := handleRevisionRestore(groups[0]); err != nil {
+		t.Fatalf("handleRevisionRestore: %v", err)
+	}
+
+	// Verify the file was restored to new content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("ReadFile after restore: %v", err)
+	}
+	if string(content) != newContent {
+		t.Errorf("file content after restore = %q, want %q", string(content), newContent)
+	}
+}
+
+func TestRollbackMixedRedactedAndNormal(t *testing.T) {
+	orig, _ := os.Getwd()
+	dir := t.TempDir()
+	defer os.Chdir(orig)
+	_ = os.Chdir(dir)
+
+	// Create a revision with both redacted and normal changes
+	revID, err := RecordBaseRevision("mixed-rollback", "test", "ok", []APIMessage{})
+	if err != nil {
+		t.Fatalf("RecordBaseRevision: %v", err)
+	}
+
+	// Normal change
+	normalFile := "normal.go"
+	if err := RecordChangeWithDetails(revID, normalFile, "original", "updated", "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails (normal): %v", err)
+	}
+	if err := os.WriteFile(normalFile, []byte("updated"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Redacted change
+	if err := RecordChangeWithDetails(revID, "/tmp/secret.txt", redactedContentMarker, redactedContentMarker, "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails (redacted): %v", err)
+	}
+
+	// Fetch and rollback
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 changes, got %d", len(list))
+	}
+
+	groups := groupChangesByRevision(list)
+	if err := handleRevisionRollback(groups[0]); err != nil {
+		t.Fatalf("handleRevisionRollback: %v", err)
+	}
+
+	// Normal file should be restored
+	content, err := os.ReadFile(normalFile)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(content) != "original" {
+		t.Errorf("normal file after rollback = %q, want %q", string(content), "original")
+	}
+}
+
+func TestRestoreMixedRedactedAndNormal(t *testing.T) {
+	orig, _ := os.Getwd()
+	dir := t.TempDir()
+	defer os.Chdir(orig)
+	_ = os.Chdir(dir)
+
+	// Create a revision with both redacted and normal changes
+	revID, err := RecordBaseRevision("mixed-restore", "test", "ok", []APIMessage{})
+	if err != nil {
+		t.Fatalf("RecordBaseRevision: %v", err)
+	}
+
+	// Normal change
+	normalFile := "normal2.go"
+	if err := RecordChangeWithDetails(revID, normalFile, "original", "updated", "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails (normal): %v", err)
+	}
+	if err := os.WriteFile(normalFile, []byte("original"), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Redacted change
+	if err := RecordChangeWithDetails(revID, "/tmp/secret2.txt", redactedContentMarker, redactedContentMarker, "edit", "", "", "", ""); err != nil {
+		t.Fatalf("RecordChangeWithDetails (redacted): %v", err)
+	}
+
+	// Fetch and restore
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 changes, got %d", len(list))
+	}
+
+	groups := groupChangesByRevision(list)
+	if err := handleRevisionRestore(groups[0]); err != nil {
+		t.Fatalf("handleRevisionRestore: %v", err)
+	}
+
+	// Normal file should be restored to new content
+	content, err := os.ReadFile(normalFile)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(content) != "updated" {
+		t.Errorf("normal file after restore = %q, want %q", string(content), "updated")
+	}
+}

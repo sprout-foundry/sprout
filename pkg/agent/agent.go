@@ -136,7 +136,13 @@ type Agent struct {
 	// checkWriteStaleness — see workspace_sync.go. Reset at turn boundaries
 	// via ResetFileReadsForNewTurn.
 	filesReadThisTurn *turnFileTracker
-	fileReadsMu       sync.Mutex
+
+	// fileMetadata holds per-path WorkspaceFileMetadata populated by the
+	// platform-side sync layer. checkWriteStaleness consults it to refuse
+	// writes over files with pending unsynced browser edits.
+	fileMetadata *workspaceMetadataStore
+
+	fileReadsMu sync.Mutex
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

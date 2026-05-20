@@ -597,7 +597,7 @@ retryLoop:
 	if !c.allowSecrets && chatAgent != nil && chatAgent.GetElevationGate() != nil {
 		gate := chatAgent.GetElevationGate()
 		logger := utils.GetLogger(false)
-		securityResult := gitops.CheckStagedFilesForSecurityCredentials(logger)
+		securityResult := gitops.CheckStagedFilesForSecurityCredentials(logger, chatAgent.GetWorkspaceRoot())
 		if securityResult.HasConcerns && len(securityResult.Concerns) > 0 {
 			action, err := gate.Evaluate(securityResult.Concerns, "commit")
 			if err != nil {

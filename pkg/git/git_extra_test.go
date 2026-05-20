@@ -757,7 +757,7 @@ func TestGetStagedDiff_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "sd.go"), []byte("package sd\n"), 0644))
 	gitRun(t, dir, "add", "sd.go")
 
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, diff)
 	assert.Contains(t, diff, "sd.go")
@@ -780,8 +780,8 @@ var (
 	_ func(string, int) error                                 = AddAllAndCommit
 	_ func() (string, error)                                  = GetUncommittedChanges
 	_ func() (string, error)                                  = GetStagedChanges
-	_ func() error                                            = CheckStagedChanges
-	_ func() (string, error)                                  = GetStagedDiff
+	_ func(string) error                                      = CheckStagedChanges
+	_ func(string) (string, error)                            = GetStagedDiff
 	_ func(string) error                                      = PerformGitCommit
 	_ func([]CommitFileChange) string                         = generateFallbackCommitMessage
 	_ func(string) string                                     = actionFromStatus

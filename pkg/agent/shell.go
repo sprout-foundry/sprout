@@ -127,6 +127,9 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		}
 	}
 
+	// Update the tracked shell working directory for cd commands.
+	a.updateShellCwd(command)
+
 	// Store in history for potential deduplication
 	a.SetShellCommandHistoryEntry(command, &ShellCommandResult{
 		Command:         command,

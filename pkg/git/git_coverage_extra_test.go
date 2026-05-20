@@ -169,7 +169,7 @@ func TestGetStagedDiff_StagedDeletion(t *testing.T) {
 	// Stage deletion
 	gitRun(t, dir, "rm", "toDelete.go")
 
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, diff)
 	assert.Contains(t, diff, "toDelete.go")
@@ -193,7 +193,7 @@ func TestGetStagedDiff_StagedModification(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "modify.go"), []byte("package mod\nvar x = 2\nvar y = 3\n"), 0644))
 	gitRun(t, dir, "add", "modify.go")
 
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, diff)
 	assert.Contains(t, diff, "modify.go")
@@ -216,7 +216,7 @@ func TestGetStagedDiff_RenamedFile(t *testing.T) {
 	// Rename using git mv — this automatically stages the rename
 	gitRun(t, dir, "mv", "original.go", "renamed.go")
 
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, diff)
 }
@@ -380,7 +380,7 @@ func TestCheckStagedChanges_SpaceInFilename(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "file with spaces.go"), []byte("package spaces\n"), 0644))
 	gitRun(t, dir, "add", "file with spaces.go")
 
-	err = CheckStagedChanges()
+	err = CheckStagedChanges(dir)
 	assert.NoError(t, err, "staged file with spaces should be detected")
 }
 
@@ -401,7 +401,7 @@ func TestCheckStagedChanges_StagedDeletion(t *testing.T) {
 	// Stage deletion
 	gitRun(t, dir, "rm", "deleteMe.go")
 
-	err = CheckStagedChanges()
+	err = CheckStagedChanges(dir)
 	assert.NoError(t, err, "staged deletion should count as staged changes")
 }
 
@@ -426,7 +426,7 @@ func TestCheckStagedFilesForSecurityCredentials_BinaryFile(t *testing.T) {
 	logger := utils.GetLogger(true)
 
 	// Binary files may produce empty diff output or error — function should handle gracefully
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	// Binary files typically have no text diff, so no security concerns
 	assert.False(t, result.HasConcerns)
 }
@@ -450,7 +450,7 @@ func TestCheckStagedFilesForSecurityCredentials_MultipleFilesSomeClean(t *testin
 
 	logger := utils.GetLogger(true)
 
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.False(t, result.HasConcerns)
 }
 
@@ -473,7 +473,7 @@ func connect() string { return dbPassword }
 
 	logger := utils.GetLogger(true)
 
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.True(t, result.HasConcerns, "password pattern should trigger security concern")
 }
 
@@ -497,7 +497,7 @@ func TestCheckStagedFilesForSecurityCredentials_ModifiedFileWithSecret(t *testin
 
 	logger := utils.GetLogger(true)
 
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.True(t, result.HasConcerns, "adding an AWS key to a modified file should be detected")
 }
 
@@ -1042,7 +1042,7 @@ func TestFullCommitLifecycle_AddStageCommitVerify(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	// 1. Check no staged changes
-	err = CheckStagedChanges()
+	err = CheckStagedChanges(dir)
 	assert.Error(t, err, "should have no staged changes initially")
 
 	// 2. Create and stage
@@ -1050,17 +1050,17 @@ func TestFullCommitLifecycle_AddStageCommitVerify(t *testing.T) {
 	gitRun(t, dir, "add", "lifecycle.go")
 
 	// 3. Check staged changes exist
-	err = CheckStagedChanges()
+	err = CheckStagedChanges(dir)
 	assert.NoError(t, err)
 
 	// 4. Get staged diff
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	require.NoError(t, err)
 	assert.NotEmpty(t, diff)
 
 	// 5. Check security
 	logger := utils.GetLogger(true)
-	secure := CheckStagedFilesForSecurityCredentials(logger)
+	secure := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.False(t, secure.HasConcerns)
 
 	// 6. Commit
@@ -1097,7 +1097,7 @@ func TestGetStagedDiff_OutsideRepo(t *testing.T) {
 	defer os.Chdir(origDir)
 	require.NoError(t, os.Chdir(tmpDir))
 
-	_, err = GetStagedDiff()
+	_, err = GetStagedDiff(tmpDir)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get staged diff")
 }
@@ -1119,7 +1119,7 @@ func TestCheckStagedFilesForSecurityCredentials_OutsideRepo(t *testing.T) {
 	logger := utils.GetLogger(true)
 
 	// Outside git repo → git diff --cached --name-only fails
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, tmpDir)
 	// Returns false on error
 	assert.False(t, result.HasConcerns)
 }

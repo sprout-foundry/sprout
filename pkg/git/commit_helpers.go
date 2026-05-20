@@ -114,7 +114,7 @@ func (e *CommitExecutor) ExecuteCommit() (string, error) {
 	// Run secret detection if a handler is registered
 	if e.secretCheck != nil {
 		logger := utils.GetLogger(false)
-		securityResult := CheckStagedFilesForSecurityCredentials(logger)
+		securityResult := CheckStagedFilesForSecurityCredentials(logger, e.Dir)
 		if securityResult.HasConcerns && !e.secretCheck(securityResult) {
 			return "", fmt.Errorf("commit aborted: security concerns detected in staged files")
 		}

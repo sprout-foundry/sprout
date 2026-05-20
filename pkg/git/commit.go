@@ -18,9 +18,13 @@ type CommitOptions struct {
 	Model        string
 }
 
-// CheckStagedChanges verifies if there are staged changes
-func CheckStagedChanges() error {
+// CheckStagedChanges verifies if there are staged changes in the given directory.
+// If dir is empty, it runs in the process CWD.
+func CheckStagedChanges(dir string) error {
 	cmd := exec.Command("git", "diff", "--cached", "--quiet", "--exit-code")
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	if err := cmd.Run(); err != nil {
 		if _, ok := err.(*exec.ExitError); ok {
 			// ExitError means there are staged changes (exit code 1)
@@ -31,9 +35,13 @@ func CheckStagedChanges() error {
 	return fmt.Errorf("no staged changes found")
 }
 
-// GetStagedDiff returns the diff of staged changes
-func GetStagedDiff() (string, error) {
+// GetStagedDiff returns the diff of staged changes in the given directory.
+// If dir is empty, it runs in the process CWD.
+func GetStagedDiff(dir string) (string, error) {
 	cmd := exec.Command("git", "diff", "--cached")
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get staged diff: %w", err)
@@ -49,11 +57,14 @@ type CommitSecurityResult struct {
 
 // CheckStagedFilesForSecurityCredentials checks staged files for security credentials
 // and returns a detailed result with the specific concerns found.
-func CheckStagedFilesForSecurityCredentials(logger *utils.Logger) CommitSecurityResult {
+func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, dir string) CommitSecurityResult {
 	result := CommitSecurityResult{}
 
 	// Get list of staged files
 	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		logger.LogError(fmt.Errorf("failed to get staged files: %w", err))

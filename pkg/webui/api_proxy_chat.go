@@ -219,9 +219,11 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 			ws.mutex.Unlock()
 		}()
 
-		log.Printf("handleAPIProxyChat: calling ProcessQueryWithContinuity")
+		log.Printf("handleAPIProxyChat: calling ProcessQueryWithContinuity chat_id=%s provider=%s model=%s", chatID, clientAgent.GetProvider(), clientAgent.GetModel())
+		queryStart := time.Now()
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 		_, err := clientAgent.ProcessQueryWithContinuity(query)
+		queryDuration := time.Since(queryStart)
 
 		// Record cost after query completes
 		if cost := clientAgent.GetTotalCost(); cost > 0 {
@@ -238,8 +240,13 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 
 		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 		if err != nil {
-			log.Printf("handleAPIProxyChat: ProcessQueryWithContinuity error: %v", err)
+			log.Printf("handleAPIProxyChat: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
 			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))
+		} else {
+			log.Printf("handleAPIProxyChat: completed chat_id=%s duration=%s prompt_tokens=%d completion_tokens=%d total_cost=%.6f",
+				chatID, queryDuration,
+				clientAgent.GetPromptTokens(), clientAgent.GetCompletionTokens(),
+				clientAgent.GetTotalCost())
 		}
 	}()
 

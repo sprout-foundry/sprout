@@ -14,25 +14,29 @@ import (
 // Graceful failure: Errors are logged but not returned. The caller (checkpoint
 // recording) should always succeed regardless of embedding failures.
 func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, turn *ConversationTurn) error {
-	// Validate inputs
+	// Validate inputs. These are routine "feature unavailable" paths that
+	// fire on every turn when embedding is unconfigured — demoted to debug
+	// so they don't spam the default log.
 	if mgr == nil {
-		log.Printf("[turn-embedding] skipping embedding: embedding manager is nil")
+		debugLogf("[turn-embedding] skipping embedding: embedding manager is nil")
 		return nil
 	}
 	if turn == nil {
-		log.Printf("[turn-embedding] skipping embedding: turn is nil")
+		debugLogf("[turn-embedding] skipping embedding: turn is nil")
 		return nil
 	}
 	if ctx == nil {
-		log.Printf("[turn-embedding] skipping embedding: context is nil")
+		debugLogf("[turn-embedding] skipping embedding: context is nil")
 		return nil
 	}
 	if turn.UserPrompt == "" {
-		log.Printf("[turn-embedding] skipping embedding: empty user prompt")
+		debugLogf("[turn-embedding] skipping embedding: empty user prompt")
 		return nil
 	}
 
-	// Get the conversation store from the manager
+	// Get the conversation store from the manager.
+	// Errors here are real failures (disk full, permission denied, schema
+	// mismatch) and stay at info level so operators can see them.
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
 		log.Printf("[turn-embedding] failed to get conversation store: %v", err)
@@ -97,7 +101,9 @@ func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, tur
 		return nil
 	}
 
-	log.Printf("[turn-embedding] successfully stored turn %s in conversation store", turn.ID)
+	// Routine per-turn success — debug-only to avoid flooding the log on
+	// busy sessions.
+	debugLogf("[turn-embedding] successfully stored turn %s in conversation store", turn.ID)
 	return nil
 }
 

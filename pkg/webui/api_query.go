@@ -262,9 +262,11 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity")
+		log.Printf("handleAPIQuery: calling ProcessQueryWithContinuity chat_id=%s provider=%s model=%s", chatID, clientAgent.GetProvider(), clientAgent.GetModel())
+		queryStart := time.Now()
 		clientAgent.SetWorkspaceRoot(workspaceRoot)
 		_, err := clientAgent.ProcessQueryWithContinuity(query.Query)
+		queryDuration := time.Since(queryStart)
 
 		// Record cost after query completes
 		if cost := clientAgent.GetTotalCost(); cost > 0 {
@@ -281,8 +283,16 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 		if err != nil {
-			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error: %v", err)
+			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
 			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))
+		} else {
+			// Success-path log: lets operators see that the provider responded
+			// and at what cost. Without this the log goes silent after
+			// "calling ProcessQueryWithContinuity" and the server looks hung.
+			log.Printf("handleAPIQuery: completed chat_id=%s duration=%s prompt_tokens=%d completion_tokens=%d total_cost=%.6f",
+				chatID, queryDuration,
+				clientAgent.GetPromptTokens(), clientAgent.GetCompletionTokens(),
+				clientAgent.GetTotalCost())
 		}
 	}()
 

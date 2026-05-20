@@ -138,7 +138,8 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 }
 
 // SetProvider switches to a specific provider with its default or current model.
-// For webui sessions, use SetProviderForSession instead which doesn't persist to config.
+// Session-scoped: changes are not written to config. Use SetProviderPersisted
+// when the user explicitly chose the provider (e.g. CLI /provider command).
 func (a *Agent) SetProvider(provider api.ClientType) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()

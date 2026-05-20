@@ -117,8 +117,33 @@ build_wasm() {
     cp "$WASM_EXEC_SRC" "$WASM_EXEC_DST"
     echo "    ✓ wasm_exec.js"
 
+    # Stage the static embedding model alongside the .wasm so the host
+    # page can fetch it independently. We strip this from the WASM binary
+    # to keep the initial download under ~45MB; the page calls
+    # SproutWasm.setStaticModel(bytes) once on boot to populate it.
+    STATIC_MODEL_SRC="${PROJECT_ROOT}/pkg/embedding/static_model.bin"
+    STATIC_MODEL_DST="${target_dir}/static_model.bin"
+    if [ -f "$STATIC_MODEL_SRC" ]; then
+        echo "  Copying static_model.bin..."
+        cp "$STATIC_MODEL_SRC" "$STATIC_MODEL_DST"
+        MODEL_SIZE=$(ls -lh "$STATIC_MODEL_DST" | awk '{print $5}')
+        echo "    ✓ static_model.bin ($MODEL_SIZE)"
+    else
+        echo "  Warning: static_model.bin not found at $STATIC_MODEL_SRC; semantic search will fail at runtime" >&2
+    fi
+
     echo "  Compiling sprout.wasm (GOOS=js GOARCH=wasm)..."
-    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -o "$target_dir/sprout.wasm" ./cmd/wasm/)
+    # -s -w strips the symbol table and DWARF debug info from the binary.
+    # Saves ~25% of the WASM size with no runtime impact — symbols only
+    # matter for stack traces inside Go's runtime panics, which the browser
+    # surfaces via its own debugger anyway. Toggle with WASM_KEEP_SYMBOLS=1
+    # if you need a full-detail panic trace for debugging.
+    LDFLAGS="-s -w"
+    if [ "${WASM_KEEP_SYMBOLS:-}" = "1" ]; then
+        LDFLAGS=""
+        echo "    (WASM_KEEP_SYMBOLS=1: skipping symbol strip)"
+    fi
+    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -ldflags="$LDFLAGS" -o "$target_dir/sprout.wasm" ./cmd/wasm/)
 
     echo "    ✓ sprout.wasm"
 

@@ -1,3 +1,5 @@
+//go:build !js
+
 // Agent query processing: handles query execution and detection
 package cmd
 

@@ -1,3 +1,5 @@
+//go:build !js
+
 // Package webui provides history and rollback operation handlers
 package webui
 

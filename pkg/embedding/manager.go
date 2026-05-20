@@ -62,6 +62,13 @@ type EmbeddingManager struct {
 	onnxBuilding    bool
 	onnxBuildCancel context.CancelFunc
 	onnxBuildWG     sync.WaitGroup
+
+	// ONNX init is also kicked off in a goroutine from initLocked because
+	// CreateSessionFromFile blocks for hundreds of milliseconds. Tracked so
+	// Close can wait for the goroutine to finish — without that, init
+	// goroutines outlive the EmbeddingManager that started them and race
+	// inside yalue's global CGO state when other tests/instances spin up.
+	onnxInitWG sync.WaitGroup
 }
 
 // NewEmbeddingManager creates a new manager with the given config.
@@ -156,7 +163,12 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 
 	// Try to initialize ONNX provider in background (non-blocking).
 	// Errors are cached in m.onnxError and will be logged on first access.
+	// Tracked in onnxInitWG so Close can wait for completion — otherwise a
+	// long-running CreateSessionFromFile call can outlive the manager and
+	// crash inside yalue's global CGO state on shutdown.
+	m.onnxInitWG.Add(1)
 	go func() {
+		defer m.onnxInitWG.Done()
 		if err := m.initONNX(ctx); err != nil {
 			m.mu.Lock()
 			m.onnxError = err
@@ -480,7 +492,10 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 			stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
 }
 
-// UpdateFile incrementally updates the index for a single file.
+// UpdateFile incrementally updates the index for a single file. Both the
+// static and (when ready) ONNX indexes are updated so they stay aligned;
+// without this, the ONNX side would only catch new code via the full
+// background build, which never completes on large workspaces.
 func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) error {
 	if err := m.Init(ctx); err != nil {
 		return err
@@ -489,11 +504,27 @@ func (m *EmbeddingManager) UpdateFile(ctx context.Context, filePath string) erro
 	if err != nil {
 		return err
 	}
-	return idx.UpdateFile(ctx, filePath)
+	if err := idx.UpdateFile(ctx, filePath); err != nil {
+		return err
+	}
+
+	// Best-effort ONNX update. Failure here doesn't surface — the static
+	// index is the source of truth; ONNX is an enrichment layer that
+	// gracefully degrades.
+	if onnxIdx := m.snapshotONNXIndexMgr(); onnxIdx != nil {
+		if err := onnxIdx.UpdateFile(ctx, filePath); err != nil {
+			log.Printf("embedding: onnx UpdateFile failed for %s (static index OK): %v", filePath, err)
+		}
+	}
+	return nil
 }
 
 // UpdateFromGitDiff incrementally updates the index by examining git-tracked
 // files that have changed, been added, or been created since the last build.
+// Both static and ONNX indexes are updated when ONNX is ready; the ONNX pass
+// can be much slower (transformer inference per file) but is bounded by the
+// diff size and is the only way to keep the ONNX index converging on a
+// workspace too large for the full background build to finish.
 func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
@@ -502,7 +533,34 @@ func (m *EmbeddingManager) UpdateFromGitDiff(ctx context.Context) (*IndexStats, 
 	if err != nil {
 		return nil, err
 	}
-	return idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+	stats, err := idx.UpdateFromGitDiff(ctx, m.workspaceRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	if onnxIdx := m.snapshotONNXIndexMgr(); onnxIdx != nil {
+		if _, oerr := onnxIdx.UpdateFromGitDiff(ctx, m.workspaceRoot); oerr != nil {
+			log.Printf("embedding: onnx UpdateFromGitDiff failed (static stats OK): %v", oerr)
+		}
+	}
+	return stats, nil
+}
+
+// snapshotONNXIndexMgr returns an IndexManager wrapped around the ONNX
+// provider+store, or nil if ONNX isn't ready. Callers use this to issue
+// incremental updates against the ONNX index without duplicating the
+// IndexOptions wiring.
+func (m *EmbeddingManager) snapshotONNXIndexMgr() *IndexManager {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.onnxReady || m.onnxProvider == nil || m.onnxStore == nil {
+		return nil
+	}
+	return NewIndexManager(m.onnxProvider, m.onnxStore, IndexOptions{
+		BatchSize:      32,
+		MaxBodyLen:     2000,
+		IndexFileLevel: true,
+	})
 }
 
 // CheckDuplicates checks if file content duplicates existing code.
@@ -706,10 +764,13 @@ func (m *EmbeddingManager) GetONNXConversationStore(ctx context.Context) (*Conve
 
 // Close releases all resources.
 func (m *EmbeddingManager) Close() error {
-	// Cancel any in-progress ONNX background build and wait for it to drain
-	// BEFORE we acquire m.mu for the teardown — the build's terminating
-	// defer also needs the lock, so holding it across the Wait() would
-	// deadlock.
+	// Cancel any in-progress ONNX background build and wait for both the
+	// build goroutine and the lazy init goroutine to drain BEFORE we acquire
+	// m.mu for the teardown — those goroutines' terminating defers also need
+	// the lock, so holding it across the Wait() would deadlock. Draining
+	// init prevents a CreateSessionFromFile call from running concurrently
+	// with our ONNX resource teardown (the previous behavior segfaulted
+	// inside yalue's global CGO state on busy test suites).
 	m.mu.Lock()
 	if m.onnxBuildCancel != nil {
 		m.onnxBuildCancel()
@@ -717,6 +778,7 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.mu.Unlock()
 	m.onnxBuildWG.Wait()
+	m.onnxInitWG.Wait()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

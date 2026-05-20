@@ -91,11 +91,12 @@ func (r *ONNXRuntime) init() error {
 		// "onnxruntime.so" in CWD/LD_LIBRARY_PATH, which is rarely correct on
 		// developer machines. We probe a few stable locations and bootstrap
 		// from the yalue module's bundled library when needed.
-		if libPath := r.resolveSharedLibraryPath(); libPath != "" {
+		libPath := r.resolveSharedLibraryPath()
+		if libPath != "" {
 			onnxruntime.SetSharedLibraryPath(libPath)
 		}
 		if err := onnxruntime.InitializeEnvironment(onnxruntime.WithLogLevelWarning()); err != nil {
-			return fmt.Errorf("onnx: initialize environment: %w", err)
+			return r.installGuidanceError(err)
 		}
 	}
 
@@ -160,7 +161,7 @@ func (r *ONNXRuntime) resolveSharedLibraryPath() string {
 
 	if bundled := findYalueBundledLib(libName); bundled != "" {
 		if err := copyFileTo(bundled, staged); err == nil {
-			log.Printf("onnx: bootstrapped shared library to %s (from yalue/onnxruntime_go test_data)", staged)
+			log.Printf("onnx: bootstrapped shared library to %s from yalue/onnxruntime_go test_data — DEV CONVENIENCE ONLY. Production deployments should pre-stage the library or set SPROUT_ONNX_RUNTIME_LIB. See docs/ONNX_RUNTIME.md.", staged)
 			return staged
 		} else {
 			log.Printf("onnx: failed to bootstrap shared library: %v", err)
@@ -168,6 +169,23 @@ func (r *ONNXRuntime) resolveSharedLibraryPath() string {
 	}
 
 	return ""
+}
+
+// installGuidanceError wraps a raw yalue InitializeEnvironment error with
+// concrete next-steps so the user doesn't have to guess where to drop the
+// shared library. The original error is kept via %w for debugging.
+func (r *ONNXRuntime) installGuidanceError(cause error) error {
+	libName := platformLibName()
+	platform := fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH)
+	if libName == "" {
+		return fmt.Errorf("onnx: initialize environment on unsupported platform %s: %w", platform, cause)
+	}
+	return fmt.Errorf("onnx: initialize environment: %w\n"+
+		"ONNX Runtime shared library not found for %s. Resolve by either:\n"+
+		"  - setting SPROUT_ONNX_RUNTIME_LIB to an absolute path containing %s, or\n"+
+		"  - placing %s at %s\n"+
+		"See docs/ONNX_RUNTIME.md for distribution guidance.",
+		cause, platform, libName, libName, filepath.Join(r.runtimeDir, libName))
 }
 
 // findYalueBundledLib returns the filesystem path of the bundled .so/.dll/.dylib
@@ -320,8 +338,14 @@ func (r *ONNXRuntime) newSessionOptions(opts []SessionOption) (*onnxruntime.Sess
 	return so, nil
 }
 
-// Close destroys the global ONNX environment and releases all resources.
-// After calling Close, the runtime cannot be used again; create a new one.
+// Close marks this runtime instance as closed. The underlying yalue ONNX
+// environment is a PROCESS-WIDE singleton shared by every ONNXRuntime in the
+// program, so we deliberately do NOT call DestroyEnvironment here: doing so
+// invalidates in-flight sessions in OTHER managers and crashes their lingering
+// init goroutines inside CGO (observed as SIGSEGV during the test suite when
+// multiple managers were created and destroyed in quick succession).
+//
+// The environment is freed at process exit; that's enough.
 func (r *ONNXRuntime) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -331,14 +355,5 @@ func (r *ONNXRuntime) Close() error {
 	}
 	r.closed = true
 	r.ready = false
-
-	// Destroy the global ONNX environment.
-	// Note: this affects all ONNXRuntime instances sharing the same process.
-	if onnxruntime.IsInitialized() {
-		if err := onnxruntime.DestroyEnvironment(); err != nil {
-			return fmt.Errorf("onnx: destroy environment: %w", err)
-		}
-	}
-
 	return nil
 }

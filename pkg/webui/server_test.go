@@ -84,7 +84,10 @@ func TestStartFailsWhenPortAlreadyInUse(t *testing.T) {
 	defer listener.Close()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+	server, err := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -126,8 +129,14 @@ func TestMultipleServersOnDifferentPorts(t *testing.T) {
 	}
 
 	// Create two web servers
-	server1 := NewReactWebServer(agent1, eventBus1, port1, "127.0.0.1")
-	server2 := NewReactWebServer(agent2, eventBus2, port2, "127.0.0.1")
+	server1, err := NewReactWebServer(agent1, eventBus1, port1, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
+	server2, err := NewReactWebServer(agent2, eventBus2, port2, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	// Start both servers
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -220,7 +229,10 @@ func TestCustomBindAddress(t *testing.T) {
 		t.Fatalf("FindAvailablePort failed: %v", err)
 	}
 
-	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+	server, err := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -255,7 +267,10 @@ func TestBindAddrStoredCorrectly(t *testing.T) {
 		t.Fatalf("FindAvailablePort failed: %v", err)
 	}
 
-	server := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+	server, err := NewReactWebServer(&agent.Agent{}, events.NewEventBus(), port, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -15,7 +15,11 @@ import (
 // because the semantic search endpoint only needs the embedding manager (which is nil here).
 func newTestSemanticServer(t *testing.T) *ReactWebServer {
 	t.Helper()
-	return NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ws
 }
 
 // ---------------------------------------------------------------------------

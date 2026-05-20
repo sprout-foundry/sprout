@@ -22,8 +22,8 @@ func TestWritePanicError_SendsErrorEvent(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := testUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Fatalf("upgrade failed: %v", err)
+	if err != nil {
+		t.Fatalf("upgrade failed: %v", err)
 		}
 		defer conn.Close()
 
@@ -106,8 +106,8 @@ func TestWritePanicError_MarksConnectionClosed(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := testUpgrader.Upgrade(w, r, nil)
-		if err != nil {
-			t.Fatalf("upgrade failed: %v", err)
+	if err != nil {
+		t.Fatalf("upgrade failed: %v", err)
 		}
 		defer conn.Close()
 
@@ -145,7 +145,10 @@ func TestSafeConn_WriteJSON_IgnoresClosed(t *testing.T) {
 // resets the client's query state, clears cached agents, and publishes
 // a session_terminated event.
 func TestCleanupAfterPanic_ResetsClientState(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	sessionID := "ws_test123"
 
@@ -227,7 +230,10 @@ func TestCleanupAfterPanic_ResetsClientState(t *testing.T) {
 // TestCleanupAfterPanic_ClearsCachedAgents verifies cleanupAfterPanic
 // clears cached agents so the next request gets a fresh agent.
 func TestCleanupAfterPanic_ClearsCachedAgents(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 
 	// Set up client context with chat sessions
@@ -274,7 +280,10 @@ func TestSafeConn_WritePanicError_HandlesDoublePanic(t *testing.T) {
 // TestCleanupAfterPanic_EmptyClientID_DoesNotPanic verifies cleanupAfterPanic
 // with an empty clientID is a no-op.
 func TestCleanupAfterPanic_EmptyClientID_DoesNotPanic(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Should not panic
 	ws.cleanupAfterPanic("", "session-1")
 	ws.cleanupAfterPanic("  ", "session-2")
@@ -283,7 +292,10 @@ func TestCleanupAfterPanic_EmptyClientID_DoesNotPanic(t *testing.T) {
 // TestCleanupAfterPanic_UnknownClientID_DoesNotPanic verifies cleanupAfterPanic
 // with a clientID that has no context doesn't panic.
 func TestCleanupAfterPanic_UnknownClientID_DoesNotPanic(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Should not panic even though no context exists
 	ws.cleanupAfterPanic("nonexistent-client", "session-1")
 }
@@ -370,7 +382,10 @@ func TestSafeConn_WriteJSON_WithConcurrentClose(t *testing.T) {
 // TestCleanupAfterPanic_WithMultipleChatSessions verifies cleanupAfterPanic
 // resets all chat sessions, not just the default one.
 func TestCleanupAfterPanic_WithMultipleChatSessions(t *testing.T) {
-	ws := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, newTestEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	sessionID := "ws_test456"
 

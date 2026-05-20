@@ -457,6 +457,11 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 	// This enables configurable nesting: EA (0) → orchestrator (1) → coder/tester (2).
 	agent.subagentDepth = r.parentAgent.subagentDepth + 1
 
+	// Propagate rootPersonaID from parent so depth limits can vary by root persona.
+	if r.parentAgent.rootPersonaID != "" {
+		agent.rootPersonaID = r.parentAgent.rootPersonaID
+	}
+
 	return agent, nil
 }
 

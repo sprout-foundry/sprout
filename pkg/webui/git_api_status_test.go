@@ -32,7 +32,10 @@ func TestHandleAPIGitStageMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitStageMissingPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/stage", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -44,7 +47,10 @@ func TestHandleAPIGitStageMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitStageInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/stage", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
@@ -122,7 +128,10 @@ func TestHandleAPIGitCheckoutMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitCheckoutMissingBranch(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -134,7 +143,10 @@ func TestHandleAPIGitCheckoutMissingBranch(t *testing.T) {
 }
 
 func TestHandleAPIGitCheckoutInvalidBranchName(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader(`{"branch":"--bad"}`))
 	rec := httptest.NewRecorder()
@@ -146,7 +158,10 @@ func TestHandleAPIGitCheckoutInvalidBranchName(t *testing.T) {
 }
 
 func TestHandleAPIGitCheckoutInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/checkout", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
@@ -169,7 +184,10 @@ func TestHandleAPIGitCreateBranchMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitCreateBranchMissingName(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/create-branch", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -214,7 +232,10 @@ func TestHandleAPIGitCommitMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitCommitMissingMessage(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/commit", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -226,7 +247,10 @@ func TestHandleAPIGitCommitMissingMessage(t *testing.T) {
 }
 
 func TestHandleAPIGitCommitInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/commit", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
@@ -260,7 +284,10 @@ func TestHandleAPIGitRevertMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitRevertMissingCommit(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/revert", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -272,7 +299,10 @@ func TestHandleAPIGitRevertMissingCommit(t *testing.T) {
 }
 
 func TestHandleAPIGitRevertInvalidCommit(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/revert", strings.NewReader(`{"commit":"--bad"}`))
 	rec := httptest.NewRecorder()
@@ -284,7 +314,10 @@ func TestHandleAPIGitRevertInvalidCommit(t *testing.T) {
 }
 
 func TestHandleAPIGitRevertInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/revert", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()

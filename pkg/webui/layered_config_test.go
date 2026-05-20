@@ -15,7 +15,10 @@ import (
 
 func TestSanitizeClientID_Normal(t *testing.T) {
 	// Test normal IDs pass through by creating requests with headers
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	
 	// Test various normal client IDs
 	testCases := []struct {
@@ -45,7 +48,10 @@ func TestSanitizeClientID_Normal(t *testing.T) {
 
 func TestSanitizeClientID_PathTraversal(t *testing.T) {
 	// Test that .. and / are removed
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	
 	testCases := []struct {
 		name        string
@@ -75,7 +81,10 @@ func TestSanitizeClientID_PathTraversal(t *testing.T) {
 
 func TestSanitizeClientID_Empty(t *testing.T) {
 	// Test that empty ID returns default
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	
 	// Test with empty header
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -105,7 +114,10 @@ func TestSanitizeClientID_Empty(t *testing.T) {
 
 func TestSanitizeClientID_BackslashTraversal(t *testing.T) {
 	// Test that \\.. is removed
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	
 	testCases := []struct {
 		name        string
@@ -138,7 +150,10 @@ func TestGetLayeredConfigManager_CreatesPerClientDir(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	
 	// Create a client context first
 	clientID := "test-client"
@@ -173,7 +188,10 @@ func TestGetLayeredConfigManager_Isolation(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	
 	// Create two client contexts with different workspaces
 	clientA := "client-a"
@@ -228,7 +246,10 @@ func TestHandlePutSessionSettings(t *testing.T) {
 	t.Setenv("USERPROFILE", isolatedHome)
 	t.Setenv("CI", "1")
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 	chat := ctx.getOrCreateChatSession("default")
@@ -271,7 +292,10 @@ func TestHandlePutWorkspaceSettings(t *testing.T) {
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	workspaceRoot := t.TempDir()
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 	ctx.WorkspaceRoot = workspaceRoot
@@ -302,7 +326,10 @@ func TestHandlePutGlobalSettings(t *testing.T) {
 	os.Unsetenv("LEDIT_CONFIG")
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ws.getOrCreateClientContext(clientID)
 
@@ -334,7 +361,10 @@ func TestHandleAPISettingsPutDefault_NoLayer(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(isolatedHome, ".config"))
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ws.getOrCreateClientContext(clientID)
 
@@ -355,7 +385,10 @@ func TestHandlePutWorkspaceSettings_CopyFromGlobal(t *testing.T) {
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	workspaceRoot := t.TempDir()
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 	ctx.WorkspaceRoot = workspaceRoot
@@ -409,7 +442,10 @@ func TestHandlePutWorkspaceSettings_ProviderModel(t *testing.T) {
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	workspaceRoot := t.TempDir()
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 	ctx.WorkspaceRoot = workspaceRoot
@@ -458,7 +494,10 @@ func TestHandlePutGlobalSettings_ProviderModel(t *testing.T) {
 	os.Unsetenv("LEDIT_CONFIG")
 	t.Setenv("USERPROFILE", isolatedHome)
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ws.getOrCreateClientContext(clientID)
 
@@ -509,7 +548,10 @@ func TestHandlePutWorkspaceSettings_ProviderOnly(t *testing.T) {
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	workspaceRoot := t.TempDir()
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 	ctx.WorkspaceRoot = workspaceRoot
@@ -555,7 +597,10 @@ func TestHandlePutWorkspaceSettings_ModelWithoutProvider(t *testing.T) {
 	t.Setenv("USERPROFILE", isolatedHome)
 
 	workspaceRoot := t.TempDir()
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientID := "test-client"
 	ctx := ws.getOrCreateClientContext(clientID)
 	ctx.WorkspaceRoot = workspaceRoot

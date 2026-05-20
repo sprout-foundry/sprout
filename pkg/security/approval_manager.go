@@ -185,6 +185,10 @@ func (am *ApprovalManager) RequestApproval(eventBus *events.EventBus, req Approv
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
+	// Announce the wait so a silent multi-minute pause is diagnosable from
+	// the log instead of looking like the agent is wedged.
+	log.Printf("[approval] request %s (%v/%s) waiting up to %v for user response", requestID, req.Kind, req.ToolName, timeout)
+
 	select {
 	case result, ok := <-responseCh:
 		if !ok {

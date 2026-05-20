@@ -46,7 +46,10 @@ func TestHandleAPIChatSessionWorktreeGetMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeGetInvalidRoute(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/chat-session//worktree", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktreeGet(rec, req)
@@ -57,7 +60,10 @@ func TestHandleAPIChatSessionWorktreeGetInvalidRoute(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeGetSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 	req := httptest.NewRequest(http.MethodGet, "/api/chat-session/default/worktree", nil)
 	rec := httptest.NewRecorder()
@@ -80,7 +86,10 @@ func TestHandleAPIChatSessionWorktreeSetMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSetInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-session/default/worktree", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktreeSet(rec, req)
@@ -91,7 +100,10 @@ func TestHandleAPIChatSessionWorktreeSetInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSetInvalidRoute(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-session//worktree", strings.NewReader(`{"worktree_path":""}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktreeSet(rec, req)
@@ -102,7 +114,10 @@ func TestHandleAPIChatSessionWorktreeSetInvalidRoute(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSetSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-session/default/worktree", strings.NewReader(`{"worktree_path":""}`))
 	rec := httptest.NewRecorder()
@@ -125,7 +140,10 @@ func TestHandleAPIChatSessionWorktreeSwitchMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSwitchMissingPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-session/default/worktree/switch", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktreeSwitch(rec, req)
@@ -136,7 +154,10 @@ func TestHandleAPIChatSessionWorktreeSwitchMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSwitchInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-session/default/worktree/switch", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktreeSwitch(rec, req)
@@ -147,7 +168,10 @@ func TestHandleAPIChatSessionWorktreeSwitchInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSwitchInvalidRoute(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-session//worktree/switch", strings.NewReader(`{"worktree_path":"/foo"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktreeSwitch(rec, req)
@@ -169,7 +193,10 @@ func TestHandleAPIChatSessionWorktreeDispatcherMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeDispatcherInvalidRoute(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/chat-session/", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionWorktree(rec, req)
@@ -191,7 +218,10 @@ func TestHandleAPIChatSessionWorktreeListMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeListSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 	req := httptest.NewRequest(http.MethodGet, "/api/chat-sessions/worktree-mappings", nil)
 	rec := httptest.NewRecorder()
@@ -214,7 +244,10 @@ func TestHandleAPIChatSessionCreateInWorktreeMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionCreateInWorktreeMissingBranch(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/create-in-worktree", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionCreateInWorktree(rec, req)
@@ -225,7 +258,10 @@ func TestHandleAPIChatSessionCreateInWorktreeMissingBranch(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionCreateInWorktreeInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/create-in-worktree", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionCreateInWorktree(rec, req)

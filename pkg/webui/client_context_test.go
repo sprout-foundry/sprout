@@ -130,7 +130,10 @@ func TestNewWebClientContextTrimsSSHFields(t *testing.T) {
 }
 
 func TestTouchClientLastSeen(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -150,7 +153,10 @@ func TestTouchClientLastSeen(t *testing.T) {
 }
 
 func TestGetOrCreateClientContext(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/workspace"
 
 	ctx1 := ws.getOrCreateClientContext("client-1")
@@ -165,7 +171,10 @@ func TestGetOrCreateClientContext(t *testing.T) {
 }
 
 func TestGetOrCreateClientContextDefault(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/workspace"
 
 	ctx := ws.getOrCreateClientContext("")
@@ -175,7 +184,10 @@ func TestGetOrCreateClientContextDefault(t *testing.T) {
 }
 
 func TestClearClientSSHContextForSessionKey(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -201,14 +213,20 @@ func TestClearClientSSHContextForSessionKey(t *testing.T) {
 }
 
 func TestClearClientSSHContextForSessionKeyEmpty(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Should not panic with empty session key
 	ws.clearClientSSHContextForSessionKey("")
 	ws.clearClientSSHContextForSessionKey("  ")
 }
 
 func TestHasActiveQueryForClient(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -229,7 +247,10 @@ func TestHasActiveQueryForClient(t *testing.T) {
 }
 
 func TestSetClientQueryActive(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.setClientQueryActive("client-1", true)
 	ctx := ws.clientContexts["client-1"]
@@ -245,7 +266,10 @@ func TestSetClientQueryActive(t *testing.T) {
 }
 
 func TestClearCachedAgent(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -261,7 +285,10 @@ func TestClearCachedAgent(t *testing.T) {
 }
 
 func TestCleanupInactiveClientContextsZeroMaxIdle(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	removed := ws.cleanupInactiveClientContexts(0)
 	if removed != 0 {
 		t.Errorf("expected 0 removed for zero maxIdle, got %d", removed)
@@ -269,7 +296,10 @@ func TestCleanupInactiveClientContextsZeroMaxIdle(t *testing.T) {
 }
 
 func TestCleanupInactiveClientContextsPreservesDefault(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -284,7 +314,10 @@ func TestCleanupInactiveClientContextsPreservesDefault(t *testing.T) {
 }
 
 func TestCleanupInactiveClientContextsPreservesConnected(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -302,7 +335,10 @@ func TestCleanupInactiveClientContextsPreservesConnected(t *testing.T) {
 }
 
 func TestCleanupInactiveClientContextsPreservesActiveQuery(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -320,7 +356,10 @@ func TestCleanupInactiveClientContextsPreservesActiveQuery(t *testing.T) {
 }
 
 func TestResolveWorkspaceRootForChat(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -341,7 +380,10 @@ func TestResolveWorkspaceRootForChat(t *testing.T) {
 }
 
 func TestResolveWorkspaceRootForChatWithWorktree(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
@@ -362,7 +404,10 @@ func TestResolveWorkspaceRootForChatWithWorktree(t *testing.T) {
 }
 
 func TestResolveWorkspaceRootForChatMissingClient(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result := ws.resolveWorkspaceRootForChat("nonexistent", "default")
 	if result != "" {

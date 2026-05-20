@@ -22,7 +22,10 @@ func TestHandleAPIWorkspaceMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIWorkspaceGet(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspace(rec, req)
@@ -44,7 +47,10 @@ func TestHandleAPIWorkspaceGet(t *testing.T) {
 }
 
 func TestHandleAPIWorkspaceGetMethod(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspaceGet(rec, req)
@@ -68,7 +74,10 @@ func TestHandleAPIWorkspaceSetMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIWorkspaceSetInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader("not json"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspace(rec, req)
@@ -79,7 +88,10 @@ func TestHandleAPIWorkspaceSetInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIWorkspaceSetMissingPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspace(rec, req)
@@ -90,7 +102,10 @@ func TestHandleAPIWorkspaceSetMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIWorkspaceSetWhitespacePath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/workspace", strings.NewReader(`{"path":"   "}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIWorkspace(rec, req)
@@ -112,7 +127,10 @@ func TestHandleAPIWorkspaceBrowseMethodNotAllowed(t *testing.T) {
 }
 
 func TestIsSSHProxyRequestPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("SSH path returns true", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/ssh/session1/api/test", nil)
@@ -133,7 +151,10 @@ func TestIsSSHProxyRequestPath(t *testing.T) {
 }
 
 func TestGetSSHSessionForProxyRequest(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("non-SSH path returns nil", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/test", nil)

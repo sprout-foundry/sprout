@@ -11,7 +11,10 @@ import (
 )
 
 func TestHandleAPIConfirm(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("POST with invalid JSON returns 400", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/git/commit", bytes.NewReader([]byte("not json")))

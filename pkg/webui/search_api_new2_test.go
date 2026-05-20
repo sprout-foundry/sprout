@@ -460,8 +460,8 @@ func TestGetContextLines2(t *testing.T) {
 func TestCompileSearchPatternEdgeCases2(t *testing.T) {
 	t.Run("special characters in regex", func(t *testing.T) {
 		pattern, err := compileSearchPattern("test.*", false, false, true)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 		}
 		if !pattern.MatchString("test") {
 			t.Error("should match 'test'")
@@ -473,8 +473,8 @@ func TestCompileSearchPatternEdgeCases2(t *testing.T) {
 
 	t.Run("unicode characters", func(t *testing.T) {
 		pattern, err := compileSearchPattern("hello", false, false, false)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 		}
 		if !pattern.MatchString("héllo") {
 			// This might fail depending on regex engine unicode handling

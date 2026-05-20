@@ -2,6 +2,7 @@
 package webui
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -72,7 +73,7 @@ type ReactWebServer struct {
 }
 
 // NewReactWebServer creates a new React web server
-func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string) *ReactWebServer {
+func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string) (*ReactWebServer, error) {
 	if port == 0 {
 		port = DaemonPort
 	}
@@ -163,6 +164,13 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		log.Printf("[web] Auth token configured: write endpoints require authentication")
 	}
 
+	// Security: refuse to start if bound to a non-localhost address without
+	// an auth token.  Exposing the web UI on a public interface without any
+	// authentication is a serious security risk.
+	if !isLocalhostAddr(bindAddr) && authToken == "" {
+		return nil, fmt.Errorf("Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set.", bindAddr)
+	}
+
 	return &ReactWebServer{
 		agent:             agent,
 		eventBus:          eventBus,
@@ -192,7 +200,17 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		trustedUserHeader:        trustedUserHeader,
 		serviceMode:              serviceMode,
 		authToken:                authToken,
+	}, nil
+}
+
+// isLocalhostAddr returns true if the given bind address is a safe local-only
+// address that cannot be reached from external networks.
+func isLocalhostAddr(addr string) bool {
+	switch addr {
+	case "", "127.0.0.1", "localhost", "[::1]", "::1":
+		return true
 	}
+	return false
 }
 
 // IsRunning returns true if the web server is running

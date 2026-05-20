@@ -1054,9 +1054,15 @@ func TestProactiveContext_FullRoundTrip(t *testing.T) {
 		}
 	}
 
-	// Retrieve and format
+	// Retrieve and format.
+	// Use a lower MinRelevanceScore than the default 0.50 because the static
+	// embedding model produces cosine similarities in the 0.1–0.4 range for
+	// short text pairs (e.g. 0.36 for "Go generics" vs "write good Go code").
+	config := DefaultProactiveContextConfig()
+	config.MinRelevanceScore = 0.10
+
 	results, err := RetrieveProactiveContext(
-		ctx, mgr, DefaultProactiveContextConfig(),
+		ctx, mgr, config,
 		"How do I write good Go code?",
 		"/tmp/workspace", now,
 	)
@@ -1064,7 +1070,7 @@ func TestProactiveContext_FullRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
+	output := FormatProactiveContext(results, config, time.Now().UTC())
 
 	if output == "" {
 		t.Fatal("expected non-empty formatted output")

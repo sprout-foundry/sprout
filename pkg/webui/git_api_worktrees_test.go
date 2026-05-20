@@ -136,7 +136,10 @@ func TestHandleAPIGitWorktreesMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreesNotGitRepo(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp/non-git-dir"
 	req := httptest.NewRequest(http.MethodGet, "/api/git/worktrees", nil)
 	rec := httptest.NewRecorder()
@@ -159,7 +162,10 @@ func TestHandleAPIGitWorktreeCreateMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCreateMissingPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-create", strings.NewReader(`{"branch":"feature"}`))
 	rec := httptest.NewRecorder()
@@ -171,7 +177,10 @@ func TestHandleAPIGitWorktreeCreateMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCreateMissingBranch(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-create", strings.NewReader(`{"path":"/some/path"}`))
 	rec := httptest.NewRecorder()
@@ -183,7 +192,10 @@ func TestHandleAPIGitWorktreeCreateMissingBranch(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCreateInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-create", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
@@ -206,7 +218,10 @@ func TestHandleAPIGitWorktreeRemoveMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeRemoveMissingPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-remove", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -218,7 +233,10 @@ func TestHandleAPIGitWorktreeRemoveMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeRemoveInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-remove", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
@@ -241,7 +259,10 @@ func TestHandleAPIGitWorktreeCheckoutMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCheckoutMissingPath(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
@@ -253,7 +274,10 @@ func TestHandleAPIGitWorktreeCheckoutMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCheckoutInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.workspaceRoot = "/tmp"
 	req := httptest.NewRequest(http.MethodPost, "/api/git/worktree-checkout", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()

@@ -285,7 +285,7 @@ func walkFiles(ctx context.Context, root string, extensionCheck func(path string
 
 		// Emit progress log every ProgressInterval files.
 		if len(files)%ProgressInterval == 0 {
-			log.Printf("embedding: walk progress: %d files collected", len(files))
+			debugLogf("embedding: walk progress: %d files collected", len(files))
 		}
 
 		return nil

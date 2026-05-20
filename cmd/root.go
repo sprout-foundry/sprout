@@ -139,4 +139,5 @@ func init() {
 	rootCmd.AddCommand(reviewStagedCmd)
 	rootCmd.AddCommand(shellCmd)
 	rootCmd.AddCommand(planCmd)
+	rootCmd.AddCommand(historyCmd)
 }

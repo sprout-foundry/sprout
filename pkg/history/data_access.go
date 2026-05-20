@@ -431,3 +431,140 @@ func fileExists(path string) bool {
 	}
 	return !info.IsDir()
 }
+
+// resolvePaths returns the changes and revisions directory to use.
+// If workspace is non-empty, it constructs absolute paths under that workspace.
+// Otherwise it falls back to the global GetChangesDir()/GetRevisionsDir().
+func resolvePaths(workspace string) (changesDir, revisionsDir string) {
+	if workspace != "" {
+		return filepath.Join(workspace, ".sprout", "changes"),
+			filepath.Join(workspace, ".sprout", "revisions")
+	}
+	return GetChangesDir(), GetRevisionsDir()
+}
+
+// ClearOlderThan removes all change entries and revision directories where the
+// change timestamp is strictly before 'since'.
+// If workspace is non-empty, it operates on that workspace's .sprout directory.
+// If workspace is empty, it uses the globally configured paths.
+// Returns the number of changes cleared, revisions cleared, and any error.
+func ClearOlderThan(workspace string, since time.Time) (changesCleared int, revisionsCleared int, err error) {
+	changesDir, revisionsDir := resolvePaths(workspace)
+
+	// Read all change directories
+	changeEntries, err := os.ReadDir(changesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, 0, nil // No changes directory, nothing to clear
+		}
+		return 0, 0, fmt.Errorf("failed to read changes directory: %w", err)
+	}
+
+	// Track which revision IDs are still referenced by remaining changes
+	remainingRevisions := make(map[string]bool)
+
+	for _, entry := range changeEntries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		changeDir := filepath.Join(changesDir, entry.Name())
+		metadataPath := filepath.Join(changeDir, metadataFile)
+
+		metadataBytes, err := filesystem.ReadFileBytes(metadataPath)
+		if err != nil {
+			continue // Skip invalid change directories
+		}
+
+		var metadata ChangeMetadata
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			continue // Skip unparseable metadata
+		}
+
+		if metadata.Timestamp.Before(since) {
+			// Delete this change directory
+			if err := os.RemoveAll(changeDir); err != nil {
+				return changesCleared, revisionsCleared, fmt.Errorf("failed to remove change dir %s: %w", entry.Name(), err)
+			}
+			changesCleared++
+		} else {
+			// Keep track of revisions still in use
+			remainingRevisions[metadata.RequestHash] = true
+		}
+	}
+
+	// Now clean up orphaned revision directories (no remaining changes point to them)
+	revisionEntries, err := os.ReadDir(revisionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return changesCleared, 0, nil // No revisions directory, done
+		}
+		return changesCleared, 0, fmt.Errorf("failed to read revisions directory: %w", err)
+	}
+
+	for _, entry := range revisionEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		if !remainingRevisions[entry.Name()] {
+			revisionPath := filepath.Join(revisionsDir, entry.Name())
+			if err := os.RemoveAll(revisionPath); err != nil {
+				return changesCleared, revisionsCleared, fmt.Errorf("failed to remove revision dir %s: %w", entry.Name(), err)
+			}
+			revisionsCleared++
+		}
+	}
+
+	return changesCleared, revisionsCleared, nil
+}
+
+// ClearAll removes all change entries and all revision directories.
+// If workspace is non-empty, it operates on that workspace's .sprout directory.
+// If workspace is empty, it uses the globally configured paths.
+// Returns the number of changes cleared, revisions cleared, and any error.
+func ClearAll(workspace string) (changesCleared int, revisionsCleared int, err error) {
+	changesDir, revisionsDir := resolvePaths(workspace)
+
+	// Clear all change directories
+	changeEntries, err := os.ReadDir(changesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// No changes directory, try clearing revisions only
+		} else {
+			return 0, 0, fmt.Errorf("failed to read changes directory: %w", err)
+		}
+	}
+
+	for _, entry := range changeEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		changePath := filepath.Join(changesDir, entry.Name())
+		if err := os.RemoveAll(changePath); err != nil {
+			return changesCleared, revisionsCleared, fmt.Errorf("failed to remove change dir %s: %w", entry.Name(), err)
+		}
+		changesCleared++
+	}
+
+	// Clear all revision directories
+	revisionEntries, err := os.ReadDir(revisionsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return changesCleared, 0, nil
+		}
+		return changesCleared, 0, fmt.Errorf("failed to read revisions directory: %w", err)
+	}
+
+	for _, entry := range revisionEntries {
+		if !entry.IsDir() {
+			continue
+		}
+		revisionPath := filepath.Join(revisionsDir, entry.Name())
+		if err := os.RemoveAll(revisionPath); err != nil {
+			return changesCleared, revisionsCleared, fmt.Errorf("failed to remove revision dir %s: %w", entry.Name(), err)
+		}
+		revisionsCleared++
+	}
+
+	return changesCleared, revisionsCleared, nil
+}

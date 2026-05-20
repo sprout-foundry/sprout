@@ -1,3 +1,5 @@
+//go:build !js
+
 package webui
 
 // WebUIError provides a structured error response for the WebUI API.

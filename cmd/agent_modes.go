@@ -1,3 +1,5 @@
+//go:build !js
+
 // Agent modes: handles interactive and direct execution modes
 package cmd
 

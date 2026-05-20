@@ -1,3 +1,5 @@
+//go:build !js
+
 // Simple enhanced agent command with web UI support
 // Flag variables for web UI configuration (used by agent_modes.go)
 package cmd

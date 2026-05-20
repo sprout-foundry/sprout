@@ -880,8 +880,9 @@ Lives mostly in `../platform` (server-side sync, WebSocket transport, container 
 
 ### Phase 5: Build matrix + distribution
 
-[] - SP-045-5a: Sweep `pkg/` for remaining `//go:build !windows` patterns that should be `unix && !js`. List in this TODO as discovered. Known: `pkg/webui/terminal_*.go` needs `!js` (currently pulls in `creack/pty`).
-[] - SP-045-5b: `GOOS=js GOARCH=wasm go build ./...` should succeed cleanly. Add to CI as a smoke check.
-[] - SP-045-5c: Strip the binary with `-ldflags="-s -w"`. Measure size delta.
-[] - SP-045-5d: Spike: build with tinygo. Measure whether the existing dependencies (esp. tree-sitter alternatives, regexp/syntax, encoding/json) are compatible. If yes, switch the WASM build to tinygo and document the trade-offs.
-[] - SP-045-5e: If the single-WASM binary stays large after (c)/(d), split into `sprout-shell.wasm` (small, always loaded) and `sprout-embedding.wasm` (lazy-loaded on first semantic search). Update `cmd/wasm` main to support split-module loading.
+[x] - SP-045-5a: Swept the repo. Tagged the whole `pkg/webui` package with `//go:build !js` (204 files; none are imported by `cmd/wasm`). Tagged `main.go` and `cmd/*.go` with `!js` likewise. Fixed two remaining bare `!windows` patterns (`pkg/webui/pid_alive_unix.go`, `cmd/pid_alive_unix.go` → `unix && !js`) and one `!linux && !darwin` (`cmd/service_other.go` → added `&& !js`).
+[x] - SP-045-5b: `GOOS=js GOARCH=wasm go build ./...` succeeds cleanly. Native `go build ./...` also still clean. CI smoke check still to add.
+[x] - SP-045-5c: Stripped with `-ldflags="-s -w"` (added to `scripts/build-wasm.sh`, opt-out via `WASM_KEEP_SYMBOLS=1`). Saved ~0.5% (98.2MB → 97.7MB). Symbols aren't the bulk in Go-WASM; see 5f for the actual size win.
+[~] - SP-045-5d: tinygo spike deferred. Audit found the dominant size cost is the embedded `static_model.bin` (55.7MB, 57% of binary), not the Go runtime. Even a perfect tinygo swap saves at most ~10MB; 5f saved ~55MB. Re-evaluate tinygo only if there's a need to compress further after the model is already out.
+[x] - SP-045-5f: Lazy-load `pkg/embedding/static_model.bin` from a separate URL on WASM. Split `//go:embed` into `static_model_embed.go` (native only, `!js`) and a runtime-populated `staticModelData` slice that the host page fills via `SproutWasm.setStaticModel(bytes)`. `scripts/build-wasm.sh` copies the .bin into the build output. `docs/WASM_API.md` has a "One-time bootstrap" section with the boot recipe. WASM tests have a `TestMain` (build-tagged `js`) that loads the .bin from disk before tests run, mirroring the host-page path. **WASM size: 97.7MB → 42.0MB (57% reduction).** Native build self-contained as before.
+[] - SP-045-5e: Module split deferred — at 42MB the WASM is no longer "casually large" and the cost/benefit of splitting into shell+embedding modules isn't clear without real user data. Re-open if first-load metrics demand it.

@@ -1369,3 +1369,32 @@ func TestFormatForLLM(t *testing.T) {
 		assert.Contains(t, msg, "Please correct these arguments")
 	})
 }
+
+func TestGetMCPValidationFailures(t *testing.T) {
+	// Reset counter before test
+	before := GetMCPValidationFailures()
+
+	m := NewMCPManager(nil)
+	m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+	w := NewMCPToolWrapper(MCPTool{
+		Name:       "tool",
+		ServerName: "srv",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"query": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"query"},
+		},
+	}, m)
+
+	// Trigger validation failure
+	_ = w.ValidateArgs(map[string]interface{}{})
+
+	after := GetMCPValidationFailures()
+	assert.Equal(t, before+1, after, "validation failure counter should increment by 1")
+
+	// Valid args should not increment
+	_ = w.ValidateArgs(map[string]interface{}{"query": "hello"})
+	assert.Equal(t, before+1, GetMCPValidationFailures(), "counter should not change on valid args")
+}

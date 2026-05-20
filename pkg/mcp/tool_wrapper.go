@@ -320,11 +320,22 @@ func (w *MCPToolWrapper) ValidateArgs(args map[string]interface{}) error {
 	// Extract validation failures from the jsonschema result
 	failures := extractValidationFailures(err)
 
+	// Structured log entry for validation failure (cooperates with SP-008 structured logging)
+	errMsgs := make([]string, len(failures))
+	for i, f := range failures {
+		errMsgs[i] = fmt.Sprintf("%s: %s", f.Path, f.Reason)
+	}
+	slog.Warn("MCP tool arguments failed schema validation",
+		"tool", w.mcpTool.Name,
+		"server", w.mcpTool.ServerName,
+		"errors", errMsgs,
+	)
+
 	return &InvalidArgsError{
-		Tool:    w.mcpTool.Name,
-		Server:  w.mcpTool.ServerName,
+		Tool:     w.mcpTool.Name,
+		Server:   w.mcpTool.ServerName,
 		Failures: failures,
-		wrapped: err,
+		wrapped:  err,
 	}
 }
 

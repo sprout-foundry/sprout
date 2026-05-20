@@ -178,23 +178,23 @@ Spec: `roadmap/SP-031-mcp-input-validation.md`
 [x] - SP-031-2a: Call `w.ValidateArgs(args)` at the top of `MCPToolWrapper.Execute` before the network round-trip; return early on validation error
 [x] - SP-031-2b: Update `CanExecute` (`pkg/mcp/tool_wrapper.go:171`) to call `ValidateArgs` and return `false` on failure; remove the TODO comment
 [x] - SP-031-2c: Format validation errors as a concise LLM-visible message — enumerate failing field paths and reasons, not raw `jsonschema` output. Use this as the tool result so the model can self-correct on the next iteration.
-[] - SP-031-2c: Format validation errors as a concise LLM-visible message — enumerate failing field paths and reasons, not raw `jsonschema` output. Use this as the tool result so the model can self-correct on the next iteration.
+[x] - SP-031-2c: Format validation errors as a concise LLM-visible message — enumerate failing field paths and reasons, not raw `jsonschema` output. Use this as the tool result so the model can self-correct on the next iteration.
 
 ### Phase 3: Tests
 
 [x] - SP-031-3a: Replace the trivial assertions in `TestMCPToolWrapper_ValidateArgs` (`pkg/mcp/tool_wrapper_test.go:124-127`) with real cases — required fields, type mismatches, enum violations, nested objects
 [x] - SP-031-3b: Add test: `ValidateArgs` with `nil` schema → returns nil (skip path)
 [x] - SP-031-3c: Add test: `ValidateArgs` with malformed schema → warns once, returns nil (fail-open on our bug)
-[] - SP-031-3c: Add test: `ValidateArgs` with malformed schema → warns once, returns nil (fail-open on our bug)
+[x] - SP-031-3c: Add test: `ValidateArgs` with malformed schema → warns once, returns nil (fail-open on our bug)
 [x] - SP-031-3d: Add integration test in `pkg/agent/` — stub MCP wrapper that returns `InvalidArgsError`; verify agent surfaces a useful tool-result message to the LLM mock
-[] - SP-031-3d: Add integration test in `pkg/agent/` — stub MCP wrapper that returns `InvalidArgsError`; verify agent surfaces a useful tool-result message to the LLM mock
+[x] - SP-031-3d: Add integration test in `pkg/agent/` — stub MCP wrapper that returns `InvalidArgsError`; verify agent surfaces a useful tool-result message to the LLM mock
 
 ### Phase 4: Observability
 
 [x] - SP-031-4a: Add structured log entry on validation failure with `{tool, server, errors[]}` fields (cooperates with SP-008 structured logging)
-[] - SP-031-4a: Add structured log entry on validation failure with `{tool, server, errors[]}` fields (cooperates with SP-008 structured logging)
+[x] - SP-031-4a: Add structured log entry on validation failure with `{tool, server, errors[]}` fields (cooperates with SP-008 structured logging)
 [x] - SP-031-4b: Add a counter/metric for `mcp_validation_failures` so we can see if a particular server is producing bad arguments at rate
-[] - SP-031-4b: Add a counter/metric for `mcp_validation_failures` so we can see if a particular server is producing bad arguments at rate
+[x] - SP-031-4b: Add a counter/metric for `mcp_validation_failures` so we can see if a particular server is producing bad arguments at rate
 
 ---
 
@@ -208,16 +208,16 @@ Phases 1–3 are complete: `pkg/ast/` is in place (tree-sitter via `odvcencio/go
 
 [x] SP-025-4a: Add a `pkg/ast` import to `pkg/wasmshell/` and surface a basic code-intelligence entry point (e.g. a function-symbol lookup that the WASM shell can call). Today `pkg/ast/browser_cache.go` exists but no caller in `wasmshell` exercises it.
 [x] SP-025-4b: Run `make build-wasm` and record the binary-size delta from enabling `pkg/ast` in the WASM target. Document the threshold the team is willing to accept. (Baseline: 4.3M, With ast: 34M, Delta: +29.7M. See roadmap/SP-025-tree-sitter-integration.md)
-[] - SP-025-4c: Verify `pkg/ast/browser_cache.go` (290 LOC) actually persists compiled grammars to browser storage (IndexedDB / localStorage) across page loads — write a manual reproduction note or a headless test.
+[x] - SP-025-4c: Verify `pkg/ast/browser_cache.go` (290 LOC) actually persists compiled grammars to browser storage (IndexedDB / localStorage) across page loads — write a manual reproduction note or a headless test.
 
 ### Phase 5: Embedding Extractor Migration (the consistency fix)
 
-[] - SP-025-5a: Replace the body of `pkg/embedding/extractor_ts.go` (~531 LOC, 9 standalone regex patterns starting at `tsFuncRegex` line 13) with a thin adapter that calls `pkg/ast.ExtractSymbols()` and emits the existing embedding record shape. Keep the public function signature stable so callers in `pkg/embedding/index.go:106` don't change.
-[] - SP-025-5b: Replace the body of `pkg/embedding/extractor_py.go` (~345 LOC, regex + indent-level tracking starting at `pyFuncRegex` line 14) with the same adapter pattern over `pkg/ast.ExtractSymbols()`. Confirm class/method nesting comes out of the AST scope info correctly — that's the subtle case the old indent tracker handled.
-[] - SP-025-5c: Decide on `pkg/embedding/extractor_go.go` (currently uses native `go/ast` directly) — keep as-is for performance (no tree-sitter overhead) or migrate to `pkg/ast` for codebase consistency. Document the decision in a one-line comment at the top of the file.
-[] - SP-025-5d: Add a symbol-coverage parity test in `pkg/embedding/extractor_parity_test.go` — given a fixture file in each of TS, JS, Python, assert that the set of symbol names returned by `repo_map`, `pkg/index/symbols`, and `pkg/embedding/extractor` is identical. This is the regression test that would have caught today's three-way disagreement.
-[] - SP-025-5e: Delete the now-orphaned regex variables at the top of `extractor_ts.go` and `extractor_py.go` after the body migration in 5a/5b. Net code reduction target: ~700 LOC (with corresponding test simplification).
-[] - SP-025-5f: Run `make build-all && go test ./pkg/embedding/...` and exercise an embedding refresh against the repo itself — verify previously-missed symbols (TS arrow functions, decorated Python methods, multi-line signatures) now appear in `~/.config/sprout/embeddings/*.jsonl`.
+[x] - SP-025-5a: Replace the body of `pkg/embedding/extractor_ts.go` (~531 LOC, 9 standalone regex patterns starting at `tsFuncRegex` line 13) with a thin adapter that calls `pkg/ast.ExtractSymbols()` and emits the existing embedding record shape. Keep the public function signature stable so callers in `pkg/embedding/index.go:106` don't change.
+[x] - SP-025-5b: Replace the body of `pkg/embedding/extractor_py.go` (~345 LOC, regex + indent-level tracking starting at `pyFuncRegex` line 14) with the same adapter pattern over `pkg/ast.ExtractSymbols()`. Confirm class/method nesting comes out of the AST scope info correctly — that's the subtle case the old indent tracker handled.
+[x] - SP-025-5c: Decide on `pkg/embedding/extractor_go.go` (currently uses native `go/ast` directly) — keep as-is for performance (no tree-sitter overhead) or migrate to `pkg/ast` for codebase consistency. Document the decision in a one-line comment at the top of the file.
+[x] - SP-025-5d: Add a symbol-coverage parity test in `pkg/embedding/extractor_parity_test.go` — given a fixture file in each of TS, JS, Python, assert that the set of symbol names returned by `repo_map`, `pkg/index/symbols`, and `pkg/embedding/extractor` is identical. This is the regression test that would have caught today's three-way disagreement.
+[x] - SP-025-5e: Delete the now-orphaned regex variables at the top of `extractor_ts.go` and `extractor_py.go` after the body migration in 5a/5b. Net code reduction target: ~700 LOC (with corresponding test simplification).
+[x] - SP-025-5f: Run `make build-all && go test ./pkg/embedding/...` and exercise an embedding refresh against the repo itself — verify previously-missed symbols (TS arrow functions, decorated Python methods, multi-line signatures) now appear in `~/.config/sprout/embeddings/*.jsonl`.
 
 ---
 
@@ -229,16 +229,16 @@ The daemon's install/uninstall surface is solid, but `systemctl stop sprout` lea
 
 ### Phase 1: Graceful shutdown (CRITICAL)
 
-[] - SP-032-1a: Add `chatAgent.Shutdown()` call to the graceful-shutdown block at `cmd/agent_modes.go:447-460` — with a bounded context (5s) so it can't block daemon exit. `chatAgent.Shutdown()` is defined at `pkg/agent/agent_lifecycle.go:10` and is currently never invoked from the daemon path.
-[] - SP-032-1b: Wire `ws.terminalManager.CloseAllSessions()` into `pkg/webui/server_lifecycle.go:126` `Shutdown()` before `ws.server.Shutdown(ctx)`. **Blocked by SP-028 Phase 3** (cancellable PTY read loop is a prerequisite — without it, `CloseAllSessions()` will block on `pty.Read`).
-[] - SP-032-1c: Update the systemd unit template in `cmd/service_linux.go` — add `TimeoutStopSec=15`, `KillMode=mixed`, `KillSignal=SIGTERM` to the `[Service]` block.
+[x] - SP-032-1a: Add `chatAgent.Shutdown()` call to the graceful-shutdown block at `cmd/agent_modes.go:447-460` — with a bounded context (5s) so it can't block daemon exit. `chatAgent.Shutdown()` is defined at `pkg/agent/agent_lifecycle.go:10` and is currently never invoked from the daemon path.
+[x] - SP-032-1b: Wire `ws.terminalManager.CloseAllSessions()` into `pkg/webui/server_lifecycle.go:126` `Shutdown()` before `ws.server.Shutdown(ctx)`. **Blocked by SP-028 Phase 3** (cancellable PTY read loop is a prerequisite — without it, `CloseAllSessions()` will block on `pty.Read`).
+[x] - SP-032-1c: Update the systemd unit template in `cmd/service_linux.go` — add `TimeoutStopSec=15`, `KillMode=mixed`, `KillSignal=SIGTERM` to the `[Service]` block.
 [] - SP-032-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. `pgrep -f sprout` (and `pgrep -f gopls` / `pgrep -f bash` from the terminal) returns empty within 15s.
 
 ### Phase 2: Security & migration (HIGH)
 
-[] - SP-032-2a: At `pkg/webui/server.go:161`, read both `SPROUT_AUTH_TOKEN` and `SPROUT_BIND_ADDR`. If bind is non-`127.0.0.1`/`localhost` and token is empty, refuse to start with: `"Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set."` Cover this with a startup test.
-[] - SP-032-2b: Add `detectLegacyService()` helper in `cmd/service.go` (cross-platform). Darwin checks `~/Library/LaunchAgents/com.ledit.*.plist`; Linux checks `~/.config/systemd/user/ledit*.service`. On `sprout service install`: print notice, prompt for confirmation (`-y` bypasses), then `launchctl bootout` / `systemctl --user disable && rm` the old unit before installing.
-[] - SP-032-2c: Launchd crash backoff — `cmd/service_darwin.go:77`, switch `KeepAlive=true` to the dictionary form with `SuccessfulExit=false` (and `ExponentialBackoff=true` if targeting macOS 12+; document the minimum). Prevents the panic hot-loop.
+[x] - SP-032-2a: At `pkg/webui/server.go:161`, read both `SPROUT_AUTH_TOKEN` and `SPROUT_BIND_ADDR`. If bind is non-`127.0.0.1`/`localhost` and token is empty, refuse to start with: `"Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set."` Cover this with a startup test.
+[x] - SP-032-2b: Add `detectLegacyService()` helper in `cmd/service.go` (cross-platform). Darwin checks `~/Library/LaunchAgents/com.ledit.*.plist`; Linux checks `~/.config/systemd/user/ledit*.service`. On `sprout service install`: print notice, prompt for confirmation (`-y` bypasses), then `launchctl bootout` / `systemctl --user disable && rm` the old unit before installing.
+[x] - SP-032-2c: Launchd crash backoff — `cmd/service_darwin.go:77`, switch `KeepAlive=true` to the dictionary form with `SuccessfulExit=false` (and `ExponentialBackoff=true` if targeting macOS 12+; document the minimum). Prevents the panic hot-loop.
 
 ### Phase 3: Operability (MEDIUM/LOW)
 

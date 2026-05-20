@@ -264,3 +264,47 @@ func (a *Agent) hasEAGitWriteApproval() bool {
 	}
 	return false
 }
+
+// hasEASpawnAuthority returns true if the active persona has EA-level spawn
+// authority, allowing it to delegate to any persona regardless of the
+// delegatable flag. This enables the three-level nesting chain:
+// EA (depth 0) → orchestrator (depth 1) → coder/tester (depth 2).
+//
+// Authority is granted when:
+// 1. The active persona is "executive_assistant", OR
+// 2. The persona has auto-approve rules that include run_subagent
+//    (indicating it operates with similar elevated authority)
+func (a *Agent) hasEASpawnAuthority() bool {
+	personaID := a.GetActivePersona()
+
+	// Direct EA persona always has spawn authority
+	if personaID == "executive_assistant" {
+		return true
+	}
+
+	// Personas with auto-approve rules that include subagent spawning
+	// are treated as having EA-level authority
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	persona := cfg.GetSubagentType(personaID)
+	if persona == nil || persona.AutoApproveRules == nil {
+		return false
+	}
+	rules := persona.GetAutoApproveRules()
+	subagentOps := []string{"subagent_spawn"}
+	for _, op := range subagentOps {
+		for _, low := range rules.LowRiskOps {
+			if low == op {
+				return true
+			}
+		}
+		for _, med := range rules.MediumRiskOps {
+			if med == op {
+				return true
+			}
+		}
+	}
+	return false
+}

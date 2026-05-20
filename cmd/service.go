@@ -1,8 +1,12 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -30,6 +34,9 @@ const (
 	serviceURL  = "http://localhost:56000"
 )
 
+// forceConfirm skips confirmation prompts when true (set by -y flag).
+var forceConfirm bool
+
 // serviceCmd is the root command for service management.
 var serviceCmd = &cobra.Command{
 	Use:   "service",
@@ -44,6 +51,33 @@ var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install the sprout daemon as a system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Check for legacy services before installing
+		legacyPaths, err := detectLegacyService()
+		if err != nil {
+			return fmt.Errorf("failed to check for legacy services: %w", err)
+		}
+		if len(legacyPaths) > 0 {
+			fmt.Println("\nLegacy service configuration(s) detected from a previous 'ledit' installation:")
+			for _, p := range legacyPaths {
+				fmt.Printf("  %s\n", p)
+			}
+			if !forceConfirm {
+				fmt.Print("\nRemove legacy service files? (y/N): ")
+				reader := bufio.NewReader(os.Stdin)
+				resp, _ := reader.ReadString('\n')
+				resp = strings.TrimSpace(strings.ToLower(resp))
+				if resp != "y" {
+					fmt.Println("Aborting. Please remove legacy services manually or re-run with -y.")
+					return fmt.Errorf("aborted: legacy services not removed")
+				}
+			}
+
+			if err := removeLegacyServices(legacyPaths); err != nil {
+				return fmt.Errorf("failed to remove legacy services: %w", err)
+			}
+			fmt.Println("Legacy service files removed successfully.")
+		}
+
 		sm, err := getOrCreateServiceManager()
 		if err != nil {
 			return err
@@ -146,6 +180,8 @@ var serviceDiagnoseCmd = &cobra.Command{
 }
 
 func init() {
+	serviceInstallCmd.Flags().BoolVarP(&forceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
+
 	serviceCmd.AddCommand(serviceInstallCmd)
 	serviceCmd.AddCommand(serviceUninstallCmd)
 	serviceCmd.AddCommand(serviceStartCmd)
@@ -153,6 +189,29 @@ func init() {
 	serviceCmd.AddCommand(serviceStatusCmd)
 	serviceCmd.AddCommand(serviceDiagnoseCmd)
 	rootCmd.AddCommand(serviceCmd)
+}
+
+// detectLegacyService searches for legacy "ledit" service configuration files
+// that may conflict with the current "sprout" service installation.
+//
+// Darwin checks ~/Library/LaunchAgents/com.ledit.*.plist
+// Linux checks ~/.config/systemd/user/ledit*.service
+func detectLegacyService() ([]string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		pattern := filepath.Join(homeDir, "Library", "LaunchAgents", "com.ledit.*.plist")
+		return filepath.Glob(pattern)
+	case "linux":
+		pattern := filepath.Join(homeDir, ".config", "systemd", "user", "ledit*.service")
+		return filepath.Glob(pattern)
+	default:
+		return nil, nil
+	}
 }
 
 // getOrCreateServiceManager returns a platform-specific service manager.

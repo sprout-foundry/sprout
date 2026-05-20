@@ -14,27 +14,27 @@ import (
 func TestFormatBackgroundPromotionMessage_Basic(t *testing.T) {
 	result := formatBackgroundPromotionMessage("session-123", "make build", "Building...")
 
-	assert.Contains(t, result, "Command timed out after 2 minutes")
+	assert.Contains(t, result, "exceeded the 2-minute tool deadline")
 	assert.Contains(t, result, "still running in background session session-123")
 	assert.Contains(t, result, "Command: make build")
-	assert.Contains(t, result, "Output so far:")
+	assert.Contains(t, result, "Output so far (partial):")
 	assert.Contains(t, result, "Building...")
-	assert.Contains(t, result, "Check progress: use shell_command with check_background=\"session-123\"")
-	assert.Contains(t, result, "Stop it: use shell_command with stop_background=\"session-123\"")
+	assert.Contains(t, result, "IMPORTANT: the output above is partial")
+	assert.Contains(t, result, "actively poll")
+	assert.Contains(t, result, "check_background=\"session-123\"")
+	assert.Contains(t, result, "stop_background=\"session-123\"")
 }
 
 func TestFormatBackgroundPromotionMessage_OutputTruncation(t *testing.T) {
-	// Create output that exceeds the 2000 char maxPreview limit
+	// Output exceeding the 2000-char preview cap gets the doubly-partial caveat.
 	longOutput := strings.Repeat("A", 2500)
 
 	result := formatBackgroundPromotionMessage("bg-456", "npm test", longOutput)
 
-	// Should be truncated to 2000 chars + truncation message
-	assert.Contains(t, result, "... (output truncated)")
+	assert.Contains(t, result, "... (preview truncated)")
+	assert.Contains(t, result, "doubly partial")
 	assert.Contains(t, result, "still running in background session bg-456")
-
-	// The truncated preview should be exactly 2000 chars before the truncation marker
-	// Verify the output portion was truncated by checking it doesn't contain the full 2500 chars
+	// Verify the preview is bounded — well under the full 2500 As.
 	assert.Less(t, strings.Count(result, "A"), 2500)
 }
 
@@ -43,12 +43,12 @@ func TestFormatBackgroundPromotionMessage_EmptyOutput(t *testing.T) {
 
 	assert.Contains(t, result, "still running in background session empty-session")
 	assert.Contains(t, result, "Command: echo hello")
-	assert.Contains(t, result, "Output so far:")
-	assert.Contains(t, result, "Check progress: use shell_command with check_background=\"empty-session\"")
+	assert.Contains(t, result, "Output so far (partial):")
+	assert.Contains(t, result, "check_background=\"empty-session\"")
 }
 
 func TestFormatBackgroundPromotionMessage_ShortOutputNotTruncated(t *testing.T) {
-	// Output under 2000 chars should not be truncated
+	// Output under 2000 chars should not get the truncation caveat.
 	shortOutput := "line1\nline2\nline3"
 
 	result := formatBackgroundPromotionMessage("short-session", "ls -la", shortOutput)
@@ -56,7 +56,8 @@ func TestFormatBackgroundPromotionMessage_ShortOutputNotTruncated(t *testing.T) 
 	assert.Contains(t, result, "line1")
 	assert.Contains(t, result, "line2")
 	assert.Contains(t, result, "line3")
-	assert.NotContains(t, result, "output truncated")
+	assert.NotContains(t, result, "preview truncated")
+	assert.NotContains(t, result, "doubly partial")
 }
 
 func TestFormatBackgroundPromotionMessage_SpecialCharactersInCommand(t *testing.T) {

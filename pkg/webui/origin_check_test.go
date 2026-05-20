@@ -62,7 +62,10 @@ func TestAllowedOriginsParsing(t *testing.T) {
 			eventBus := events.NewEventBus()
 
 			// Create the server which should parse the allowedOrigins
-			server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 			// Verify the parsed origins match expectations
 			if len(server.normalizedAllowedOrigins) != len(tt.expectedOrigins) {
@@ -88,7 +91,10 @@ func TestCheckOrigin_AllowedOrigins(t *testing.T) {
 
 	// Create server with localhost binding (not 0.0.0.0)
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name           string
@@ -182,7 +188,10 @@ func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 
 	// Test with localhost binding
 	eventBus := events.NewEventBus()
-	serverLocalhost := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	serverLocalhost, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name           string
@@ -229,7 +238,11 @@ func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 	}
 
 	// Test with 0.0.0.0 binding - should allow any origin
-	serverAllInterfaces := NewReactWebServer(nil, eventBus, 0, "0.0.0.0")
+	t.Setenv("SPROUT_AUTH_TOKEN", "test-token-for-origin-check")
+	serverAllInterfaces, err := NewReactWebServer(nil, eventBus, 0, "0.0.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	allInterfaceTests := []struct {
 		name           string
@@ -277,10 +290,14 @@ func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 func TestCheckOrigin_AllowedOriginsWithZeroZeroZeroZero(t *testing.T) {
 	// Set allowed origins
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com")
+	t.Setenv("SPROUT_AUTH_TOKEN", "test-token-for-origin-check")
 
 	// Create server with 0.0.0.0 binding
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "0.0.0.0")
+	server, err := NewReactWebServer(nil, eventBus, 0, "0.0.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name           string
@@ -326,9 +343,13 @@ func TestCheckOrigin_AllowedOriginsWithZeroZeroZeroZero(t *testing.T) {
 func TestCheckOrigin_IPV6Binding(t *testing.T) {
 	// Ensure no allowed origins env var is set
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "")
+	t.Setenv("SPROUT_AUTH_TOKEN", "test-token-for-origin-check")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "::")
+	server, err := NewReactWebServer(nil, eventBus, 0, "::")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name           string
@@ -371,7 +392,10 @@ func TestCheckOrigin_InvalidOrigin(t *testing.T) {
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name           string
@@ -419,7 +443,10 @@ func TestCheckOrigin_CaseInsensitive(t *testing.T) {
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "HTTPS://Example.COM:3000,http://LOCALHOST:8080")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name           string
@@ -478,7 +505,10 @@ func TestCheckOrigin_IPv6Localhost(t *testing.T) {
 	t.Setenv("LEDIT_ALLOWED_ORIGINS", "")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name         string
@@ -533,7 +563,10 @@ func TestCheckOrigin_DefaultPortNormalization(t *testing.T) {
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com,http://test.com")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name         string
@@ -591,7 +624,10 @@ func TestCheckOrigin_DefaultPortNormalization_ConfigWithPort(t *testing.T) {
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com:443,http://test.com:80")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name         string
@@ -641,7 +677,10 @@ func TestCheckOrigin_TrailingSlash(t *testing.T) {
 	t.Setenv("SPROUT_ALLOWED_ORIGINS", "https://example.com/,https://test.com")
 
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	tests := []struct {
 		name         string

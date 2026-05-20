@@ -12,7 +12,10 @@ import (
 )
 
 func TestHandleLSPStatus(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	server.lspManager = lspproxy.NewManager(context.Background())
 
 	t.Run("GET returns servers array", func(t *testing.T) {

@@ -1390,6 +1390,7 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 			Aliases:              make([]string, len(defaultPersona.Aliases)),
 			Enabled:              defaultPersona.Enabled,
 			LocalOnly:            defaultPersona.LocalOnly,
+			Delegatable:          defaultPersona.Delegatable,
 		}
 		// Copy slices
 		copy(result.AllowedTools, defaultPersona.AllowedTools)
@@ -1548,6 +1549,7 @@ func defaultSubagentTypes() map[string]SubagentType {
 			Aliases:          append([]string{}, definition.Aliases...),
 			Enabled:          definition.Enabled,
 			LocalOnly:        definition.LocalOnly,
+			Delegatable:      definition.Delegatable,
 		}
 	}
 

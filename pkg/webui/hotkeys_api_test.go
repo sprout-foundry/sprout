@@ -11,7 +11,10 @@ import (
 )
 
 func TestHandleAPIHotkeys_GET(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/hotkeys", nil)
 	rec := httptest.NewRecorder()
@@ -37,7 +40,10 @@ func TestHandleAPIHotkeys_GET(t *testing.T) {
 
 func TestHandleAPIHotkeys_PUT_Valid(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	config := HotkeyConfig{
 		Version: "1.0",
@@ -66,7 +72,10 @@ func TestHandleAPIHotkeys_PUT_Valid(t *testing.T) {
 }
 
 func TestHandleAPIHotkeys_PUT_InvalidConfig(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	config := HotkeyConfig{
 		Version: "", // missing version triggers validation error
@@ -87,7 +96,10 @@ func TestHandleAPIHotkeys_PUT_InvalidConfig(t *testing.T) {
 }
 
 func TestHandleAPIHotkeys_PUT_InvalidJSON(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodPut, "/api/hotkeys", bytes.NewReader([]byte("not json")))
 	rec := httptest.NewRecorder()
@@ -100,7 +112,10 @@ func TestHandleAPIHotkeys_PUT_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIHotkeys_MethodNotAllowed(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/hotkeys", nil)
 	rec := httptest.NewRecorder()
@@ -113,7 +128,10 @@ func TestHandleAPIHotkeys_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIHotkeysValidate(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("valid config returns 200", func(t *testing.T) {
 		config := HotkeyConfig{
@@ -186,7 +204,10 @@ func TestHandleAPIHotkeysValidate(t *testing.T) {
 
 func TestHandleAPIHotkeysPreset(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("vscode preset returns 200", func(t *testing.T) {
 		reqBody := map[string]string{"preset": "vscode"}

@@ -117,6 +117,11 @@ type Agent struct {
 	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
 	// Used to control tool availability and prevent excessive nesting.
 	subagentDepth int
+
+	// rootPersonaID tracks the persona of the top-level (depth 0) agent in the spawn chain.
+	// Propagated to subagents so that depth limits and spawn restrictions can be enforced
+	// based on the root persona (e.g., EA gets 3 levels, orchestrator gets 2).
+	rootPersonaID string
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

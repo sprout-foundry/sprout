@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
 // handleAddMemory creates or overwrites a memory file
@@ -17,6 +19,9 @@ func handleAddMemory(ctx context.Context, a *Agent, args map[string]interface{})
 	if err != nil {
 		return "", fmt.Errorf("content is required: %w", err)
 	}
+
+	// Redact secrets before persisting to memory files.
+	content = redact.String(content)
 
 	if err := SaveMemory(name, content); err != nil {
 		return "", fmt.Errorf("failed to save memory: %w", err)

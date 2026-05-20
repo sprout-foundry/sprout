@@ -67,10 +67,16 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 		return nil, fmt.Errorf("onnx embedding: load tokenizer: %w", err)
 	}
 
-	// Create inference session.
-	session, err := runtime.NewDynamicSession(modelPath, nil, nil, SessionOption{
-		IntraOpNumThreads: 1, // Single thread is fast enough for embeddings.
-	})
+	// Create inference session. EmbeddingGemma's ONNX export exposes two
+	// inputs (input_ids, attention_mask) and a pre-pooled sentence_embedding
+	// output. The yalue session requires explicit names; nil would make Run()
+	// fail with "session specified 0 input names".
+	session, err := runtime.NewDynamicSession(modelPath,
+		[]string{"input_ids", "attention_mask"},
+		[]string{"sentence_embedding"},
+		SessionOption{
+			IntraOpNumThreads: 1, // Single thread is fast enough for embeddings.
+		})
 	if err != nil {
 		return nil, fmt.Errorf("onnx embedding: create session: %w", err)
 	}
@@ -303,14 +309,17 @@ func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts 
 	return results, nil
 }
 
-// runInference tokenizes, runs ONNX inference, and extracts the embedding.
+// runInference runs ONNX inference and returns the (MRL-truncated, L2-normalized)
+// sentence embedding. The model's sentence_embedding output is already
+// mean-pooled internally; we slice the first p.dims components for Matryoshka
+// representation learning truncation, then L2-normalize.
+//
 // Must be called with p.mu.RLock held.
 func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []int64) ([]float32, error) {
 	batchSize := int64(1)
 	seqLen := int64(len(inputIDs))
-	hiddenDim := int64(768) // EmbeddingGemma output dimension before MRL
+	const fullDim = int64(768) // EmbeddingGemma sentence_embedding dimension
 
-	// Create input tensors.
 	inputIDsTensor, err := onnxruntime.NewTensor(onnxruntime.NewShape(batchSize, seqLen), inputIDs)
 	if err != nil {
 		return nil, fmt.Errorf("create input_ids tensor: %w", err)
@@ -323,48 +332,37 @@ func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []i
 	}
 	defer attnMaskTensor.Destroy()
 
-	// Create output tensor (pre-allocated for reuse in a real implementation).
-	outputData := make([]float32, batchSize*seqLen*hiddenDim)
-	outputTensor, err := onnxruntime.NewEmptyTensor[float32](onnxruntime.NewShape(batchSize, seqLen, hiddenDim))
+	outputTensor, err := onnxruntime.NewEmptyTensor[float32](onnxruntime.NewShape(batchSize, fullDim))
 	if err != nil {
 		return nil, fmt.Errorf("create output tensor: %w", err)
 	}
 	defer outputTensor.Destroy()
 
-	// Run the model.
-	err = p.session.Run([]onnxruntime.Value{inputIDsTensor, attnMaskTensor}, []onnxruntime.Value{outputTensor})
-	if err != nil {
+	if err := p.session.Run(
+		[]onnxruntime.Value{inputIDsTensor, attnMaskTensor},
+		[]onnxruntime.Value{outputTensor},
+	); err != nil {
 		return nil, fmt.Errorf("run inference: %w", err)
 	}
 
-	// Extract output data.
-	outputFloats := outputTensor.GetData()
-	copy(outputData, outputFloats)
-
-	// Mean pooling over non-padded tokens.
-	// Take the mean of all token positions (all are real tokens, no padding in our case).
-	embedding := make([]float32, p.dims)
-	for d := 0; d < p.dims; d++ {
-		sum := float32(0)
-		for t := 0; t < int(seqLen); t++ {
-			idx := t*int(hiddenDim) + d
-			sum += outputData[idx]
-		}
-		embedding[d] = sum / float32(seqLen)
+	pooled := outputTensor.GetData()
+	if len(pooled) < p.dims {
+		return nil, fmt.Errorf("sentence_embedding returned %d floats, expected at least %d", len(pooled), p.dims)
 	}
 
-	// L2 normalize.
-	norm := float32(0)
-	for d := 0; d < p.dims; d++ {
-		norm += embedding[d] * embedding[d]
+	// Matryoshka truncation: keep the first p.dims components, then L2-normalize.
+	embedding := make([]float32, p.dims)
+	copy(embedding, pooled[:p.dims])
+	var norm float32
+	for _, v := range embedding {
+		norm += v * v
 	}
 	if norm > 1e-9 {
-		norm = float32(math.Sqrt(float64(norm)))
-		for d := 0; d < p.dims; d++ {
-			embedding[d] /= norm
+		inv := float32(1.0 / math.Sqrt(float64(norm)))
+		for i := range embedding {
+			embedding[i] *= inv
 		}
 	}
-
 	return embedding, nil
 }
 

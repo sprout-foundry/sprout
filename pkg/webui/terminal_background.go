@@ -34,6 +34,13 @@ func (tm *TerminalManager) ExecuteCommandInBackground(ctx context.Context, chatI
 		return "", fmt.Errorf("command too long: %d bytes (max %d)", len(command), maxCommandLength)
 	}
 
+	// Enforce the per-chat background-session cap so a runaway agent can't
+	// pile sessions up indefinitely. See maxBackgroundSessionsPerChat for
+	// the rationale.
+	if tm.countBackgroundSessionsForChat(chatID) >= maxBackgroundSessionsPerChat {
+		return "", tm.errBackgroundCapReached(chatID)
+	}
+
 	// Generate a session ID: "bg-" + sanitized command prefix (first word) + "-" + random hex (8 chars)
 	prefix := extractCommandPrefix(command)
 	if prefix == "" {

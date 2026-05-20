@@ -20,15 +20,15 @@ var migrationOnce sync.Once
 // Memory files are always saved to disk regardless of embedding success.
 func EmbedMemory(ctx context.Context, mgr *embedding.EmbeddingManager, name string, content string) error {
 	if mgr == nil {
-		log.Printf("[memory-embedding] skipping embedding: embedding manager is nil")
+		debugLogf("[memory-embedding] skipping embedding: embedding manager is nil")
 		return nil
 	}
 	if name == "" {
-		log.Printf("[memory-embedding] skipping embedding: empty name")
+		debugLogf("[memory-embedding] skipping embedding: empty name")
 		return nil
 	}
 	if content == "" {
-		log.Printf("[memory-embedding] skipping embedding: empty content for memory '%s'", name)
+		debugLogf("[memory-embedding] skipping embedding: empty content for memory '%s'", name)
 		return nil
 	}
 
@@ -43,7 +43,7 @@ func EmbedMemory(ctx context.Context, mgr *embedding.EmbeddingManager, name stri
 		return fmt.Errorf("failed to store memory embedding: %w", err)
 	}
 
-	log.Printf("[memory-embedding] successfully embedded memory '%s'", name)
+	debugLogf("[memory-embedding] successfully embedded memory '%s'", name)
 	return nil
 }
 
@@ -54,11 +54,11 @@ func EmbedMemory(ctx context.Context, mgr *embedding.EmbeddingManager, name stri
 // Memory files are always deleted from disk regardless of embedding cleanup.
 func DeleteMemoryEmbedding(mgr *embedding.EmbeddingManager, name string) error {
 	if mgr == nil {
-		log.Printf("[memory-embedding] skipping delete: embedding manager is nil")
+		debugLogf("[memory-embedding] skipping delete: embedding manager is nil")
 		return nil
 	}
 	if name == "" {
-		log.Printf("[memory-embedding] skipping delete: empty name")
+		debugLogf("[memory-embedding] skipping delete: empty name")
 		return nil
 	}
 
@@ -74,7 +74,7 @@ func DeleteMemoryEmbedding(mgr *embedding.EmbeddingManager, name string) error {
 		return fmt.Errorf("failed to delete memory embedding: %w", err)
 	}
 
-	log.Printf("[memory-embedding] successfully deleted memory embedding for '%s'", name)
+	debugLogf("[memory-embedding] successfully deleted memory embedding for '%s'", name)
 	return nil
 }
 
@@ -97,7 +97,7 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 		}
 
 		if len(memories) == 0 {
-			log.Printf("[memory-embedding] migration: no existing memories to migrate")
+			debugLogf("[memory-embedding] migration: no existing memories to migrate")
 			return
 		}
 
@@ -140,9 +140,9 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 		}
 
 		if migrated > 0 {
-			log.Printf("[memory-embedding] migration: embedded %d/%d memories", migrated, len(memories))
+			debugLogf("[memory-embedding] migration: embedded %d/%d memories", migrated, len(memories))
 		} else {
-			log.Printf("[memory-embedding] migration: all %d memories already embedded", len(memories))
+			debugLogf("[memory-embedding] migration: all %d memories already embedded", len(memories))
 		}
 	})
 }

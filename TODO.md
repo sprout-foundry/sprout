@@ -270,7 +270,7 @@ Three trust boundaries to defend: the project (skills auto-load silently), the d
 
 ### Phase 2: Redaction + file modes
 
-[] - SP-033-2a: Create `pkg/redact/redact.go` with `Apply([]byte) []byte` covering AWS keys (`AKIA...`), GitHub tokens (`gh[pousr]_...`), Slack tokens, OpenAI/Anthropic-style `sk-...`, `BEGIN ... PRIVATE KEY` blocks, `Authorization:` / `X-API-Key:` headers, `*_TOKEN|*_KEY|*_SECRET|*_PASSWORD` env-style assignments. Replacement: `[REDACTED:<kind>]`.
+[x] - SP-033-2a: Create `pkg/redact/redact.go` with `Apply([]byte) []byte` covering AWS keys (`AKIA...`), GitHub tokens (`gh[pousr]_...`), Slack tokens, OpenAI/Anthropic-style `sk-...`, `BEGIN ... PRIVATE KEY` blocks, `Authorization:` / `X-API-Key:` headers, `*_TOKEN|*_KEY|*_SECRET|*_PASSWORD` env-style assignments. Replacement: `[REDACTED:<kind>]`.
 [] - SP-033-2b: Pipe HTTP bodies through `redact.Apply` in `pkg/logging/request_logger.go` (runlog write path).
 [] - SP-033-2c: Apply `redact.Apply` to `UserPrompt` and `ActionableSummary` in `pkg/agent/turn_checkpoints.go` before SP-027's `EmbedAndStoreTurn()`.
 [] - SP-033-2d: Apply `redact.Apply` in `pkg/agent/memory_handlers.go` before writing memory files.

@@ -34,6 +34,12 @@ type EmbeddingManager struct {
 	// Conversation store (lazy-initialized)
 	convoStore *ConversationStore
 
+	// Parallel ONNX conversation store (lazy-initialized, nil until first use).
+	// Maintained alongside convoStore so proactive context retrieval can benefit
+	// from higher-quality embeddings when ONNX is available. Writes are best-effort:
+	// if ONNX isn't ready at write time, only the static store is updated.
+	onnxConvoStore *ConversationStore
+
 	// Resolved index directory path (stored during init)
 	indexDir string
 
@@ -46,6 +52,14 @@ type EmbeddingManager struct {
 	onnxStore    *JSONLFileStore
 	onnxReady    bool
 	onnxError    error // cached error from failed ONNX init
+
+	// ONNX background-build coordination. ONNX indexing is too slow for the
+	// 2-minute auto-build budget on any non-trivial workspace, so it runs
+	// in its own goroutine with a longer timeout. These fields let Close()
+	// cancel and wait for the build to drain before tearing down resources.
+	onnxBuilding    bool
+	onnxBuildCancel context.CancelFunc
+	onnxBuildWG     sync.WaitGroup
 }
 
 // NewEmbeddingManager creates a new manager with the given config.
@@ -178,8 +192,8 @@ func (m *EmbeddingManager) initONNX(ctx context.Context) error {
 		return fmt.Errorf("onnx: create runtime: %w", err)
 	}
 
-	// Load the pre-registered EmbeddingGemma-2-925M config
-	modelConfig := EmbeddingGemma2925MConfig()
+	// Load the pre-registered EmbeddingGemma-300M config
+	modelConfig := EmbeddingGemma300MConfig()
 
 	// Check if model file exists; if not, download it
 	modelName := modelConfig.Name
@@ -195,7 +209,7 @@ func (m *EmbeddingManager) initONNX(ctx context.Context) error {
 		log.Printf("embedding: ONNX model %s downloaded", modelName)
 	}
 
-	// Create ONNX embedding provider (EmbeddingGemma-2-925M outputs 768-dim vectors).
+	// Create ONNX embedding provider (EmbeddingGemma-300M outputs 768-dim vectors).
 	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, 768)
 	if err != nil {
 		runtime.Close()
@@ -222,14 +236,6 @@ func (m *EmbeddingManager) initONNX(ctx context.Context) error {
 	m.onnxReady = true
 	m.onnxError = nil
 
-	return nil
-}
-
-// ensureONNX calls initONNX and returns the cached error (nil if ready).
-func (m *EmbeddingManager) ensureONNX(ctx context.Context) error {
-	if err := m.initONNX(ctx); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -336,37 +342,67 @@ func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, e
 	}
 	stats, err := idx.BuildIndex(ctx, m.workspaceRoot)
 
-	// Also build the ONNX index if available.
-	// This uses higher-quality embeddings but is slower.
+	// Also build the ONNX index if available — but in its own background
+	// goroutine with a separate timeout. The static auto-build path has a
+	// 2-minute budget that ONNX cannot meet on non-trivial workspaces, so
+	// decoupling them lets the static index return quickly while ONNX
+	// continues building.
 	if m.isONNXReady() {
-		log.Printf("embedding: building ONNX index...")
-		if err := m.buildONNXIndex(ctx); err != nil {
-			log.Printf("embedding: ONNX index build failed (static index OK): %v", err)
-			// Don't fail the whole build for ONNX issues.
-		}
+		m.startONNXBuildBackground()
 	}
 
 	return stats, err
 }
 
-// buildONNXIndex builds the ONNX embedding index for the workspace.
-// Requires the ONNX provider to be initialized.
-func (m *EmbeddingManager) buildONNXIndex(ctx context.Context) error {
-	if err := m.ensureONNX(ctx); err != nil {
-		return fmt.Errorf("onnx: not ready: %w", err)
+// startONNXBuildBackground kicks off an ONNX index build in its own goroutine
+// with a 30-minute timeout, independent of any caller context. Concurrent
+// calls while a build is already in progress are dropped with a log message.
+// Close() cancels the build and waits for the goroutine to drain.
+func (m *EmbeddingManager) startONNXBuildBackground() {
+	m.mu.Lock()
+	if m.onnxBuilding {
+		m.mu.Unlock()
+		log.Printf("embedding: ONNX index build already in progress, skipping")
+		return
 	}
-
-	onnxMgr := NewIndexManager(m.onnxProvider, m.onnxStore, IndexOptions{
-		BatchSize:      32,
-		MaxBodyLen:     2000,
-		IndexFileLevel: true,
-	})
-
-	_, err := onnxMgr.BuildIndex(ctx, m.workspaceRoot)
-	if err != nil {
-		return fmt.Errorf("onnx: build index: %w", err)
+	if !m.onnxReady || m.onnxProvider == nil || m.onnxStore == nil {
+		m.mu.Unlock()
+		return
 	}
-	return nil
+	provider := m.onnxProvider
+	store := m.onnxStore
+	root := m.workspaceRoot
+	m.onnxBuilding = true
+	bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	m.onnxBuildCancel = cancel
+	m.onnxBuildWG.Add(1)
+	m.mu.Unlock()
+
+	go func() {
+		defer m.onnxBuildWG.Done()
+		defer func() {
+			m.mu.Lock()
+			m.onnxBuilding = false
+			if m.onnxBuildCancel != nil {
+				m.onnxBuildCancel()
+				m.onnxBuildCancel = nil
+			}
+			m.mu.Unlock()
+		}()
+
+		log.Printf("embedding: building ONNX index in background (this may take many minutes)...")
+		start := time.Now()
+		onnxMgr := NewIndexManager(provider, store, IndexOptions{
+			BatchSize:      32,
+			MaxBodyLen:     2000,
+			IndexFileLevel: true,
+		})
+		if _, err := onnxMgr.BuildIndex(bgCtx, root); err != nil {
+			log.Printf("embedding: ONNX index build failed (static index OK): %v", err)
+			return
+		}
+		log.Printf("embedding: ONNX index build complete in %s", time.Since(start))
+	}()
 }
 
 // BuildIndexBackground starts an index build in a background goroutine and
@@ -587,8 +623,55 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 	return convoStore, nil
 }
 
+// GetONNXConversationStore returns the parallel ONNX-backed conversation store,
+// creating it lazily on first use. Returns (nil, nil) if the ONNX provider is
+// not ready — callers should treat this as "feature unavailable" and continue
+// with the static store only. The file lives at
+// {indexDir}/conversation_turns_onnx.jsonl.
+//
+// Like the code-index ONNX path, this is best-effort and never required for
+// correctness: proactive context retrieval falls back to static-only when this
+// returns nil.
+func (m *EmbeddingManager) GetONNXConversationStore(ctx context.Context) (*ConversationStore, error) {
+	if !m.isONNXReady() {
+		return nil, nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.onnxConvoStore != nil {
+		return m.onnxConvoStore, nil
+	}
+
+	if m.onnxProvider == nil {
+		return nil, nil
+	}
+
+	convoPath := filepath.Join(m.indexDir, "conversation_turns_onnx.jsonl")
+	store, err := NewConversationStore(m.onnxProvider, convoPath, m.onnxProvider.ModelHash())
+	if err != nil {
+		return nil, fmt.Errorf("embedding: create onnx conversation store: %w", err)
+	}
+
+	m.onnxConvoStore = store
+	return store, nil
+}
+
 // Close releases all resources.
 func (m *EmbeddingManager) Close() error {
+	// Cancel any in-progress ONNX background build and wait for it to drain
+	// BEFORE we acquire m.mu for the teardown — the build's terminating
+	// defer also needs the lock, so holding it across the Wait() would
+	// deadlock.
+	m.mu.Lock()
+	if m.onnxBuildCancel != nil {
+		m.onnxBuildCancel()
+		m.onnxBuildCancel = nil
+	}
+	m.mu.Unlock()
+	m.onnxBuildWG.Wait()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -600,6 +683,12 @@ func (m *EmbeddingManager) Close() error {
 			firstErr = err
 		}
 		m.convoStore = nil
+	}
+	if m.onnxConvoStore != nil {
+		if err := m.onnxConvoStore.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		m.onnxConvoStore = nil
 	}
 
 	// Close static provider and store
@@ -643,4 +732,65 @@ func (m *EmbeddingManager) Close() error {
 	m.initError = nil
 
 	return firstErr
+}
+
+// ClearEmbeddingFiles removes embedding index files from the given directory.
+// fileType should be one of: "code", "conversation_turn", "memory", "all".
+// For "memory", it clears the same files as "conversation_turn" since memories
+// are stored in the conversation_turns JSONL alongside conversation turns.
+// Returns the number of files actually deleted.
+func ClearEmbeddingFiles(indexDir string, fileType string) (int, error) {
+	switch fileType {
+	case "code":
+		return clearCodeEmbeddingFiles(indexDir)
+	case "conversation_turn":
+		return clearConversationEmbeddingFiles(indexDir)
+	case "memory":
+		// Memories are stored in the same conversation_turns files
+		return clearConversationEmbeddingFiles(indexDir)
+	case "all":
+		codeCount, err := clearCodeEmbeddingFiles(indexDir)
+		if err != nil {
+			return codeCount, err
+		}
+		convCount, err := clearConversationEmbeddingFiles(indexDir)
+		if err != nil {
+			return codeCount + convCount, err
+		}
+		return codeCount + convCount, nil
+	default:
+		return 0, fmt.Errorf("invalid file type %q: valid options are code, conversation_turn, memory, all", fileType)
+	}
+}
+
+func clearCodeEmbeddingFiles(indexDir string) (int, error) {
+	files := []string{
+		filepath.Join(indexDir, "index.jsonl"),
+		filepath.Join(indexDir, ".index.jsonl.meta.json"),
+		filepath.Join(indexDir, "embedding_index_onnx.jsonl"),
+		filepath.Join(indexDir, ".embedding_index_onnx.jsonl.meta.json"),
+	}
+	return removeFilesSilently(files)
+}
+
+func clearConversationEmbeddingFiles(indexDir string) (int, error) {
+	files := []string{
+		filepath.Join(indexDir, "conversation_turns.jsonl"),
+		filepath.Join(indexDir, ".conversation_turns.jsonl.meta.json"),
+		filepath.Join(indexDir, "conversation_turns_onnx.jsonl"),
+		filepath.Join(indexDir, ".conversation_turns_onnx.jsonl.meta.json"),
+	}
+	return removeFilesSilently(files)
+}
+
+func removeFilesSilently(files []string) (int, error) {
+	deleted := 0
+	for _, f := range files {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return deleted, fmt.Errorf("failed to remove %s: %w", f, err)
+		} else if err == nil {
+			deleted++
+		}
+	}
+	return deleted, nil
 }

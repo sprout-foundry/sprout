@@ -27,7 +27,9 @@ func main() {
 	wasmshell.SetStoreWriter(store)
 
 	// Register the SproutWasm global object with all exposed functions.
-	sprout := js.ValueOf(map[string]interface{}{
+	// Start with the shell-level API; embedding/memory entries are added
+	// from embedding_funcs.go so this stays focused on the core wiring.
+	apiSurface := map[string]interface{}{
 		"init":           js.FuncOf(initFunc),
 		"executeCommand": js.FuncOf(executeCommandFunc),
 		"autoComplete":   js.FuncOf(autoCompleteFunc),
@@ -39,9 +41,12 @@ func main() {
 		"deleteFile":     js.FuncOf(deleteFileFunc),
 		"getHistory":     js.FuncOf(getHistoryFunc),
 		"getEnv":         js.FuncOf(getEnvFunc),
-	})
+	}
+	for name, fn := range embeddingJSFuncs() {
+		apiSurface[name] = fn
+	}
 
-	js.Global().Set("SproutWasm", sprout)
+	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 
 	// Block forever so the WASM module stays alive.
 	c := make(chan struct{}, 0)

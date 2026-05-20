@@ -16,10 +16,10 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 	"golang.org/x/term"
 )
@@ -89,6 +89,16 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// "no provider configured" when the webui can handle provider setup interactively.
 	if daemonMode {
 		os.Setenv("SPROUT_DAEMON", "1")
+
+		// Set up log rotation for managed daemon services (SPROUT_SERVICE=1).
+		// This must happen early, before any stdout/stderr writes, so that
+		// all subsequent output is captured by the rotating log files.
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			fmt.Fprintf(os.Stderr, "[WARN] Could not determine home directory, skipping daemon log rotation: %v\n", homeErr)
+		} else {
+			setupDaemonLogging(homeDir)
+		}
 	}
 
 	// Create event bus

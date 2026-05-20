@@ -20,6 +20,7 @@ type SkillInfo struct {
 	Description string
 	Path        string
 	Content     string
+	Source      string // "builtin", "user", or "project"
 }
 
 func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error) {
@@ -42,6 +43,7 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 		Description: skill.Description,
 		Path:        skillPath,
 		Content:     string(content),
+		Source:      skill.Metadata["source"],
 	}, nil
 }
 
@@ -185,7 +187,11 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 
 	// Fold skill instructions into the active system prompt so they persist across
 	// all subsequent turns without relying on history system-message injection.
-	skillMessage := fmt.Sprintf("[Skill Activated: %s]\n\n%s", skillInfo.Name, skillInfo.Content)
+	sourceLabel := skillInfo.Source
+	if sourceLabel == "" {
+		sourceLabel = "unknown"
+	}
+	skillMessage := fmt.Sprintf("[Skill Activated: %s (source: %s)]\n\n%s", skillInfo.Name, sourceLabel, skillInfo.Content)
 	if strings.TrimSpace(a.systemPrompt) != "" {
 		a.systemPrompt = a.systemPrompt + "\n\n---\n\n" + skillMessage
 	} else {

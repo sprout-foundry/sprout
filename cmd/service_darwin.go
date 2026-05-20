@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -215,6 +216,28 @@ func (m *launchdManager) Install() error {
 }
 
 func (m *launchdManager) Uninstall() error {
+	// Check for active sessions before uninstalling
+	count, err := checkActiveSessions()
+	if err != nil {
+		// shouldn't happen, but log and continue
+		fmt.Printf("Warning: failed to check active sessions: %v\n", err)
+	}
+	if count > 0 {
+		fmt.Printf("Warning: %d active agent session(s) detected. Uninstalling will stop the daemon and terminate these sessions.\n", count)
+		if !forceConfirm {
+			fmt.Print("Continue? [y/N] ")
+			reader := bufio.NewReader(os.Stdin)
+			resp, _ := reader.ReadString('\n')
+			resp = strings.TrimSpace(strings.ToLower(resp))
+			if resp != "y" {
+				fmt.Println("Aborted.")
+				return nil
+			}
+		} else {
+			fmt.Println("Skipping confirmation (--yes flag set).")
+		}
+	}
+
 	domain := launchdDomain()
 	servicePath := domain + "/" + launchdLabel
 

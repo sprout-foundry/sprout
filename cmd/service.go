@@ -181,6 +181,7 @@ var serviceDiagnoseCmd = &cobra.Command{
 
 func init() {
 	serviceInstallCmd.Flags().BoolVarP(&forceConfirm, "yes", "y", false, "Skip confirmation prompts and auto-remove legacy services")
+	serviceUninstallCmd.Flags().BoolVarP(&forceConfirm, "yes", "y", false, "Skip confirmation prompts")
 
 	serviceCmd.AddCommand(serviceInstallCmd)
 	serviceCmd.AddCommand(serviceUninstallCmd)

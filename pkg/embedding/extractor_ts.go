@@ -11,29 +11,6 @@ import (
 	gotreesitter "github.com/odvcencio/gotreesitter"
 )
 
-// tsFuncRegex matches function declarations (top-level and nested).
-// Captures the function name. Handles optional export/async/default.
-var tsFuncRegex = regexp.MustCompile(`(?m)^(?:[\s\f\v]*(?:\/\/.*\n|\/\*[\s\S]*?\*\/\n)*)*[\s\f\v]*(?:(?:export|import|declare)\s+)?(?:(?:default|abstract)\s+)?(?:async\s+)?function\s+(\w+)\s*\(`)
-
-// tsClassRegex matches class declarations.
-// Captures the class name. Handles optional export/default/abstract.
-var tsClassRegex = regexp.MustCompile(`(?m)^(?:[\s\f\v]*(?:\/\/.*\n|\/\*[\s\S]*?\*\/\n)*)*[\s\f\v]*(?:(?:export|import|declare)\s+)?(?:(?:default|abstract)\s+)?class\s+(\w+)`)
-
-// tsMethodRegex matches method declarations inside classes or objects.
-// Captures the method name. Handles access modifiers, static, async, get/set.
-var tsMethodRegex = regexp.MustCompile(`(?m)^\s*(?:(?:public|private|protected|readonly|abstract|override)\s+)*(?:static\s+)?(?:async\s+)?(?:get\s+|set\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*[^=]+?)?\s*\{`)
-
-// tsArrowRegex matches arrow functions assigned to const/let/var.
-// Captures the variable name. Handles optional export and params in parens.
-var tsArrowRegex = regexp.MustCompile(`(?m)^\s*(?:(?:export|declare)\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\([^)]*\)\s*(?::\s*[^=]+?)?\s*=>\s*\{`)
-
-// tsArrowParensRegex matches arrow functions with single param (no parens).
-var tsArrowParensRegex = regexp.MustCompile(`(?m)^\s*(?:(?:export|declare)\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?\w+\s*(?::\s*[^=]+?)?\s*=>\s*\{`)
-
-// tsInterfaceMethodRegex matches method signatures in interface/type declarations.
-// These have no body, so we capture only the signature.
-var tsInterfaceMethodRegex = regexp.MustCompile(`(?m)^\s+(?:(?:public|private|protected|readonly|abstract|override)\s+)*(?:(?:static|async)\s+)?(\w+)\s*\([^)]*\)\s*(?::\s*[^;{]+)?;`)
-
 // tsTestFilePattern matches common test file naming conventions.
 var tsTestFilePattern = regexp.MustCompile(`\.(test|spec)\.(ts|tsx|js|jsx|mjs)$`)
 

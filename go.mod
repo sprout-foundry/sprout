@@ -23,7 +23,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.1.1
+require github.com/sprout-foundry/seed v1.1.2
 
 require github.com/odvcencio/gotreesitter v0.16.0
 

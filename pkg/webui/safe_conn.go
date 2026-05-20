@@ -52,12 +52,25 @@ func (sc *SafeConn) WriteJSON(v interface{}) error {
 // Has its own panic recovery since it may be called from recover() paths.
 //
 // Preconditions: sc.writeMu must be held by caller.
+//
+// Race tolerance: Close() releases sc.writeMu before calling sc.conn.Close(),
+// so WritePanicError can grab the mutex after closed=true is set but while
+// the underlying TCP close is in flight. gorilla/websocket's WriteJSON may
+// then nil-deref on internal state. That race is recovered here silently
+// (the connection is going away anyway, the panic event has nowhere useful
+// to land). Panics on still-open connections — real bugs — log loudly.
 func (sc *SafeConn) writeDirectJSONLocked(v interface{}) {
+	wasClosed := sc.closed.Load()
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("WebSocket writeDirectJSONLocked panicked: %v", r)
+			if !wasClosed {
+				log.Printf("WebSocket writeDirectJSONLocked panicked: %v", r)
+			}
 		}
 	}()
+	if sc.conn == nil {
+		return
+	}
 	_ = sc.conn.WriteJSON(v)
 }
 

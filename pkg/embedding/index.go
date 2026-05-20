@@ -105,19 +105,19 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			// Use existing code extractor for code files
 			units, err = ExtractFromFile(path, WithIncludeTests(m.opts.IncludeTests))
 			if err != nil {
-				log.Printf("index: skipping %s: %v", path, err)
+				debugLogf("index: skipping %s: %v", path, err)
 				continue
 			}
 		} else if isIndexableFile {
 			// Use file extractor for non-code files
 			content, err := os.ReadFile(path)
 			if err != nil {
-				log.Printf("index: skipping %s: %v", path, err)
+				debugLogf("index: skipping %s: %v", path, err)
 				continue
 			}
 			units, err = fileExtractor.Extract(path, content)
 			if err != nil {
-				log.Printf("index: skipping %s: %v", path, err)
+				debugLogf("index: skipping %s: %v", path, err)
 				continue
 			}
 		} else {
@@ -130,7 +130,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 
 		// Log progress every ProgressInterval files processed.
 		if stats.FilesProcessed%ProgressInterval == 0 {
-			log.Printf("index: extraction progress: %d files, %d units", stats.FilesProcessed, len(allUnits))
+			debugLogf("index: extraction progress: %d files, %d units", stats.FilesProcessed, len(allUnits))
 		}
 	}
 
@@ -167,7 +167,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 	}
 	if len(baseRecords) < len(existingRecords) {
-		log.Printf("index: dropping %d records for deleted files",
+		debugLogf("index: dropping %d records for deleted files",
 			len(existingRecords)-len(baseRecords))
 	}
 
@@ -213,7 +213,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	// Embed only changed units.
 	var newRecords []VectorRecord
 	if len(unitsToEmbed) > 0 {
-		log.Printf("index: re-embedding %d units from %d changed/new files...",
+		debugLogf("index: re-embedding %d units from %d changed/new files...",
 			len(unitsToEmbed), len(filesToReembed))
 		embedStart := time.Now()
 		newRecords, err = m.embedUnits(ctx, unitsToEmbed)
@@ -221,7 +221,7 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			stats.Duration = time.Since(start)
 			return stats, fmt.Errorf("index: embed units: %w", err)
 		}
-		log.Printf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
+		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
 	}
 
 	// Store all records in a single call.
@@ -233,16 +233,16 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		allStoreRecords = append(allStoreRecords, baseRecords...)
 		allStoreRecords = append(allStoreRecords, newRecords...)
 
-		log.Printf("index: storing %d records (%d existing + %d new)...",
+		debugLogf("index: storing %d records (%d existing + %d new)...",
 			len(allStoreRecords), len(baseRecords), len(newRecords))
 		storeStart := time.Now()
 		if err := m.store.Store(allStoreRecords); err != nil {
 			return stats, fmt.Errorf("index: store: %w", err)
 		}
-		log.Printf("index: stored %d records in %s", len(allStoreRecords), time.Since(storeStart))
+		debugLogf("index: stored %d records in %s", len(allStoreRecords), time.Since(storeStart))
 		stats.UnitsEmbedded = len(newRecords)
 	} else {
-		log.Printf("index: no changes detected, skipping store")
+		debugLogf("index: no changes detected, skipping store")
 	}
 	stats.Duration = time.Since(start)
 	return stats, nil
@@ -369,7 +369,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 
 		// Log progress every ProgressInterval records embedded.
 		if len(records)%ProgressInterval == 0 {
-			log.Printf("index: embedding progress: %d/%d records", len(records), len(units))
+			debugLogf("index: embedding progress: %d/%d records", len(records), len(units))
 		}
 	}
 
@@ -470,7 +470,7 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 			return stats, fmt.Errorf("index: cancelled")
 		}
 		if err := m.store.DeleteByFile(f); err != nil {
-			log.Printf("index: skipping delete %s: %v", f, err)
+			debugLogf("index: skipping delete %s: %v", f, err)
 			continue
 		}
 		stats.FilesProcessed++
@@ -530,7 +530,7 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 		}
 
 		if err := m.UpdateFile(ctx, f); err != nil {
-			log.Printf("index: skipping %s: %v", f, err)
+			debugLogf("index: skipping %s: %v", f, err)
 			errs = append(errs, f)
 			continue
 		}

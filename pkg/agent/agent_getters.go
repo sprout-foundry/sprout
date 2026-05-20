@@ -343,12 +343,20 @@ func (a *Agent) SubagentDepth() int {
 }
 
 // MaxSubagentDepth returns the configured maximum nesting depth.
-// Falls back to config, then to default of 2.
+// EA root gets 3 levels (max depth 2), non-EA root gets 2 levels (max depth 1).
 func (a *Agent) MaxSubagentDepth() int {
-	if cfg := a.GetConfig(); cfg != nil {
-		return cfg.GetSubagentMaxDepth()
+	// Check config override first
+	if cfg := a.GetConfig(); cfg != nil && cfg.SubagentMaxDepth > 0 {
+		return cfg.SubagentMaxDepth
 	}
-	return 2 // Default
+
+	// EA root: 3 levels (EA → orchestrator → coder)
+	if a.rootPersonaID == "executive_assistant" {
+		return 2
+	}
+
+	// Non-EA root: 2 levels (orchestrator → coder)
+	return 1
 }
 
 // CanSpawnSubagents returns true if this agent is allowed to spawn subagents

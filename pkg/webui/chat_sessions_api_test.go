@@ -32,7 +32,10 @@ func TestHandleAPIChatSessionsCreateMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCreateInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/create", strings.NewReader("not json"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsCreate(rec, req)
@@ -43,7 +46,10 @@ func TestHandleAPIChatSessionsCreateInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCreateSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/create", strings.NewReader(`{"name":"New Chat"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsCreate(rec, req)
@@ -54,7 +60,10 @@ func TestHandleAPIChatSessionsCreateSuccess(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCreateEmptyName(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/create", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsCreate(rec, req)
@@ -76,7 +85,10 @@ func TestHandleAPIChatSessionsDeleteMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteMissingID(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsDelete(rec, req)
@@ -87,7 +99,10 @@ func TestHandleAPIChatSessionsDeleteMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteDefaultSession(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete", strings.NewReader(`{"id":"default"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsDelete(rec, req)
@@ -102,7 +117,10 @@ func TestHandleAPIChatSessionsDeleteDefaultSession(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteNotFound(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete", strings.NewReader(`{"id":"nonexistent"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsDelete(rec, req)
@@ -113,7 +131,10 @@ func TestHandleAPIChatSessionsDeleteNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsDelete(rec, req)
@@ -135,7 +156,10 @@ func TestHandleAPIChatSessionsRenameMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameMissingID(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/rename", strings.NewReader(`{"name":"New Name"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsRename(rec, req)
@@ -146,7 +170,10 @@ func TestHandleAPIChatSessionsRenameMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameMissingName(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/rename", strings.NewReader(`{"id":"test"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsRename(rec, req)
@@ -157,7 +184,10 @@ func TestHandleAPIChatSessionsRenameMissingName(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameNotFound(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/rename", strings.NewReader(`{"id":"nonexistent","name":"New"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsRename(rec, req)
@@ -168,7 +198,10 @@ func TestHandleAPIChatSessionsRenameNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/rename", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsRename(rec, req)
@@ -190,7 +223,10 @@ func TestHandleAPIChatSessionsPinMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinMissingID(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/pin", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsPin(rec, req)
@@ -201,7 +237,10 @@ func TestHandleAPIChatSessionsPinMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinNotFound(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/pin", strings.NewReader(`{"id":"nonexistent"}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsPin(rec, req)
@@ -213,7 +252,10 @@ func TestHandleAPIChatSessionsPinNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/pin", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsPin(rec, req)
@@ -224,7 +266,10 @@ func TestHandleAPIChatSessionsPinInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/pin", strings.NewReader(`{"id":"default"}`))
@@ -248,7 +293,10 @@ func TestHandleAPIChatSessionsUnpinMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsUnpinMissingID(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/unpin", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsUnpin(rec, req)
@@ -259,7 +307,10 @@ func TestHandleAPIChatSessionsUnpinMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsUnpinInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/unpin", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsUnpin(rec, req)
@@ -270,7 +321,10 @@ func TestHandleAPIChatSessionsUnpinInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsUnpinSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/unpin", strings.NewReader(`{"id":"default"}`))
@@ -294,7 +348,10 @@ func TestHandleAPIChatSessionsSwitchMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsSwitchMissingID(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/switch", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsSwitch(rec, req)
@@ -305,7 +362,10 @@ func TestHandleAPIChatSessionsSwitchMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsSwitchNotFound(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/switch", strings.NewReader(`{"id":"nonexistent"}`))
 	rec := httptest.NewRecorder()
@@ -317,7 +377,10 @@ func TestHandleAPIChatSessionsSwitchNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsSwitchInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/switch", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsSwitch(rec, req)
@@ -339,7 +402,10 @@ func TestHandleAPIChatSessionsCompactMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCompactInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/compact", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionsCompact(rec, req)
@@ -361,7 +427,10 @@ func TestHandleAPIChatSessionClearHistoryMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionClearHistoryInvalidJSON(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/history", strings.NewReader("bad"))
 	rec := httptest.NewRecorder()
 	ws.handleAPIChatSessionClearHistory(rec, req)
@@ -383,7 +452,10 @@ func TestHandleAPIChatSessionsDeleteAllMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteAllSuccess(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete-all", nil)
 	rec := httptest.NewRecorder()
@@ -395,7 +467,10 @@ func TestHandleAPIChatSessionsDeleteAllSuccess(t *testing.T) {
 }
 
 func TestResolveChatID(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.getOrCreateClientContext("default")
 
 	t.Run("query param chat_id", func(t *testing.T) {

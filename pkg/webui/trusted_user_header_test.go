@@ -57,7 +57,10 @@ func TestTrustedUserHeaderParsing(t *testing.T) {
 			eventBus := events.NewEventBus()
 
 			// Create the server which should parse the trusted user header
-			server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 			// Verify the parsed values match expectations
 			if server.trustedUserHeader != tt.expectedHeader {
@@ -170,7 +173,10 @@ func TestExtractUserID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventBus := events.NewEventBus()
-			server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 			server.serviceMode = tt.serviceMode
 			server.trustedUserHeader = tt.headerName
 
@@ -196,13 +202,16 @@ func TestExtractUserID(t *testing.T) {
 // TestUserIDContextFunctions verifies the context functions work correctly.
 func TestUserIDContextFunctions(t *testing.T) {
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	// Test contextWithUserID and UserIDFromContext
 	t.Run("context with user ID", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/test", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
 		}
 		req.Header.Set("X-User-ID", "test-user-123")
 		server.serviceMode = true
@@ -218,8 +227,8 @@ func TestUserIDContextFunctions(t *testing.T) {
 
 	t.Run("context without user ID", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/test", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
 		}
 
 		ctx := server.contextWithUserID(req.Context(), req)
@@ -235,13 +244,16 @@ func TestUserIDContextFunctions(t *testing.T) {
 // correctly extracts the user ID from the request context and stores it on the client context.
 func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	eventBus := events.NewEventBus()
-	server := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+		}
 
 	t.Run("UserID populated from context", func(t *testing.T) {
 		// Create a request with user ID in context
 		req, err := http.NewRequest("GET", "/test", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
 		}
 
 		// Set user ID in context
@@ -260,8 +272,8 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	t.Run("UserID not overwritten on subsequent calls", func(t *testing.T) {
 		// Create a request with a different user ID in context
 		req, err := http.NewRequest("GET", "/test", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
 		}
 
 		// First call sets UserID
@@ -283,8 +295,8 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	t.Run("UserID not set when empty in context", func(t *testing.T) {
 		// Create a request without user ID in context
 		req, err := http.NewRequest("GET", "/test", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
 		}
 		// Use a different client ID to avoid reusing cached context
 		req.Header.Set("X-Sprout-Client-ID", "different-client")

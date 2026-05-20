@@ -13,7 +13,10 @@ import (
 )
 
 func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name        string
@@ -82,7 +85,10 @@ func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
 }
 
 func TestStaticFilesServesHashedMainBundle(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	type manifest struct {
 		Files map[string]string `json:"files"`
@@ -134,7 +140,10 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 
 	for _, match := range matches {
 		assetName := path.Base(match[1])
-		server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 		if _, err := server.readRootAsset(assetName); err != nil {
 			t.Fatalf("embedded index.html references missing root asset %q: %v", assetName, err)
 		}
@@ -142,7 +151,10 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 }
 
 func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Discover hashed bundle names from embedded index.html
 	indexHTML, err := readStaticFile("index.html")
@@ -237,7 +249,10 @@ func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
 }
 
 func TestHandleAssetsReturns404ForNonExistentFile(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/assets/nonexistent.js", nil)
 	rec := httptest.NewRecorder()
@@ -250,7 +265,10 @@ func TestHandleAssetsReturns404ForNonExistentFile(t *testing.T) {
 }
 
 func TestHandleIndexDoesNotServeAPIPaths(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 	rec := httptest.NewRecorder()

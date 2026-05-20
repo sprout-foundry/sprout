@@ -639,6 +639,15 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				if !subagentType.Delegatable && !a.hasEASpawnAuthority() {
 					return "", fmt.Errorf("persona '%s' is not designed to be used as a subagent (delegatable=false)", persona)
 				}
+				// EA cannot spawn another EA — prevents infinite nesting chains.
+				if a.rootPersonaID == "executive_assistant" && persona == "executive_assistant" {
+					return "", fmt.Errorf("executive_assistant cannot spawn another executive_assistant (prevents infinite nesting)")
+				}
+				// No persona can spawn itself — prevents self-recursion.
+				currentPersona := a.GetActivePersona()
+				if currentPersona != "" && currentPersona == persona {
+					return "", fmt.Errorf("persona '%s' cannot spawn itself (prevents self-recursion)", persona)
+				}
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
 				systemPromptPath = subagentType.SystemPrompt

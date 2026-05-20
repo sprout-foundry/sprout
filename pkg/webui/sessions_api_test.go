@@ -11,7 +11,10 @@ import (
 )
 
 func TestBuildSessionList(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("empty list returns empty slice", func(t *testing.T) {
 		result := server.buildSessionList(nil)
@@ -32,7 +35,10 @@ func TestBuildSessionList(t *testing.T) {
 }
 
 func TestHandleAPISessions(t *testing.T) {
-	server := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Run("GET returns sessions array", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/sessions", nil)

@@ -31,6 +31,9 @@ func getKnownPersonaToolNames() map[string]struct{} {
 		known["self_review"] = struct{}{}
 		known["list_skills"] = struct{}{}
 		known["activate_skill"] = struct{}{}
+		known["task_queue_read"] = struct{}{}
+		known["task_queue_publish"] = struct{}{}
+		known["task_queue_add"] = struct{}{}
 
 		personaToolNames = known
 	})

@@ -116,6 +116,33 @@ Reference `make help` for the full list:
 
 ## Code Style
 
+### Daemon Context Discipline
+
+When you add a long-running goroutine (background worker, periodic ticker, event listener, etc.), **always give it a derived context from the daemon root**, never `context.Background()`. This ensures the goroutine shuts down cleanly when the daemon receives `SIGTERM` or `SIGINT`.
+
+```go
+// ✅ Good: derive from the daemon root context
+go func(ctx context.Context) {
+    ticker := time.NewTicker(30 * time.Second)
+    defer ticker.Stop()
+    for {
+        select {
+        case <-ticker.C:
+            doWork()
+        case <-ctx.Done():
+            return // clean exit
+        }
+    }
+}(daemonCtx)
+
+// ❌ Bad: unstoppable goroutine
+go func() {
+    for { doWork() } // leaks on daemon shutdown
+}()
+```
+
+The daemon root context is propagated through `cmd/agent_modes.go` and cancelled in the graceful-shutdown path. Any goroutine that ignores it will leak processes, PTYs, or MCP children on `systemctl stop sprout`.
+
 - **Go**: follow standard Go conventions, run `goimports` for formatting
 - **TypeScript/React**: Prettier + ESLint (enforced in CI via `make lint`)
 - **Build tags**: use `ollama_test` build tag when building/testing (e.g., `go test -tags ollama_test`)

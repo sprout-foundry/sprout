@@ -578,7 +578,7 @@ func TestCheckStagedChanges(t *testing.T) {
 	os.Chdir(dir)
 
 	// No staged changes → error
-	err := CheckStagedChanges()
+	err := CheckStagedChanges(dir)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no staged changes")
 }
@@ -603,7 +603,7 @@ func TestCheckStagedChanges_WithStagedFile(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "check.go"), []byte("package check\n"), 0644))
 	gitRun(t, dir, "add", "check.go")
 
-	err := CheckStagedChanges()
+	err := CheckStagedChanges(dir)
 	assert.NoError(t, err)
 }
 
@@ -626,7 +626,7 @@ func TestCheckStagedChanges_WithUnstagedFile(t *testing.T) {
 	// Modify a tracked file but don't stage
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "init.go"), []byte("package modified\n"), 0644))
 
-	err := CheckStagedChanges()
+	err := CheckStagedChanges(dir)
 	assert.Error(t, err)
 }
 
@@ -650,7 +650,7 @@ func TestGetStagedDiff(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "diff.go"), []byte("package diff\n"), 0644))
 	gitRun(t, dir, "add", "diff.go")
 
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, diff)
 	assert.Contains(t, diff, "diff.go")

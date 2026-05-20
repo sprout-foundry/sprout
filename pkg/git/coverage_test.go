@@ -50,7 +50,7 @@ func TestCheckStagedFilesForSecurityCredentials_NoStagedFiles(t *testing.T) {
 
 	// No staged changes — cmd.Output() should succeed but produce empty output,
 	// so the loop iterates over [""], skips it, and returns false.
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.False(t, result.HasConcerns)
 }
 
@@ -69,7 +69,7 @@ func TestCheckStagedFilesForSecurityCredentials_CleanStagedFile(t *testing.T) {
 
 	logger := utils.GetLogger(true)
 
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.False(t, result.HasConcerns)
 }
 
@@ -91,7 +91,7 @@ const awsSecretKey = "AKIAIOSFODNN7EXAMPLE"
 
 	logger := utils.GetLogger(true)
 
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.True(t, result.HasConcerns, "expected security issues found")
 }
 
@@ -115,7 +115,7 @@ func TestCheckStagedFilesForSecurityCredentials_MixedFiles(t *testing.T) {
 
 	logger := utils.GetLogger(true)
 
-	result := CheckStagedFilesForSecurityCredentials(logger)
+	result := CheckStagedFilesForSecurityCredentials(logger, dir)
 	assert.True(t, result.HasConcerns, "expected security issues when staging a private key")
 }
 
@@ -966,7 +966,7 @@ func TestCheckStagedChanges_MultipleStagedFiles(t *testing.T) {
 		gitRun(t, dir, "add", name)
 	}
 
-	err = CheckStagedChanges()
+	err = CheckStagedChanges(dir)
 	assert.NoError(t, err)
 }
 
@@ -988,7 +988,7 @@ func TestGetStagedDiff_MultipleFiles(t *testing.T) {
 	gitRun(t, dir, "add", "first.go")
 	gitRun(t, dir, "add", "second.go")
 
-	diff, err := GetStagedDiff()
+	diff, err := GetStagedDiff(dir)
 	require.NoError(t, err)
 	assert.Contains(t, diff, "first.go")
 	assert.Contains(t, diff, "second.go")

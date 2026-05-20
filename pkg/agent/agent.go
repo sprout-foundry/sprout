@@ -130,6 +130,13 @@ type Agent struct {
 	// Propagated to subagents so that depth limits and spawn restrictions can be enforced
 	// based on the root persona (e.g., EA gets 3 levels, orchestrator gets 2).
 	rootPersonaID string
+
+	// filesReadThisTurn tracks paths the agent called read_file on during
+	// the current turn. Used by the SP-046 staleness rule in
+	// checkWriteStaleness — see workspace_sync.go. Reset at turn boundaries
+	// via ResetFileReadsForNewTurn.
+	filesReadThisTurn *turnFileTracker
+	fileReadsMu       sync.Mutex
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

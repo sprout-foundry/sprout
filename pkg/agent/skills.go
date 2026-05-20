@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,9 @@ import (
 const (
 	SkillFileName = "SKILL.md"
 )
+
+//go:embed skills
+var skillFS embed.FS
 
 type SkillInfo struct {
 	ID          string
@@ -29,10 +34,28 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 		return nil, fmt.Errorf("skill not found or disabled: %s", skillID)
 	}
 
+	var content []byte
+	var err error
+
+	// Try embedded skills first (builtin skills are embedded in the binary)
+	embeddedPath := "skills/" + skillID + "/" + SkillFileName
+	content, err = fs.ReadFile(skillFS, embeddedPath)
+	if err == nil {
+		return &SkillInfo{
+			ID:          skill.ID,
+			Name:        skill.Name,
+			Description: skill.Description,
+			Path:        skill.Path,
+			Content:     string(content),
+			Source:      "builtin",
+		}, nil
+	}
+
+	// Fall back to filesystem for project/user skills
 	skillPath := resolveSkillPath(skill.Path)
 	skillFile := filepath.Join(skillPath, SkillFileName)
 
-	content, err := os.ReadFile(skillFile)
+	content, err = os.ReadFile(skillFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read skill file %s: %w", skillFile, err)
 	}
@@ -105,21 +128,19 @@ func GetSkillManifest(content string) (map[string]string, string, error) {
 	return manifest, body, nil
 }
 
+// resolveSkillPath resolves a skill path for filesystem-based skills (project/user).
+// Builtin skills are served from the embedded filesystem and don't use this.
 func resolveSkillPath(relativePath string) string {
 	if filepath.IsAbs(relativePath) {
 		return relativePath
 	}
 
-	exeDir := filepath.Dir(os.Args[0])
-	if exeDir == "." {
-		var err error
-		exeDir, err = os.Getwd()
-		if err != nil {
-			return relativePath
-		}
+	// Project skills (e.g., .sprout/skills/...) are relative to CWD.
+	wd, err := os.Getwd()
+	if err != nil {
+		return relativePath
 	}
-
-	return filepath.Join(exeDir, relativePath)
+	return filepath.Join(wd, relativePath)
 }
 
 func handleListSkills(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

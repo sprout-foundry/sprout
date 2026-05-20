@@ -47,6 +47,9 @@ type agentInitParams struct {
 	// subagentDepth tracks the nesting depth of this agent.
 	// 0 = primary agent (EA), 1 = orchestrator, 2 = coder/tester, etc.
 	subagentDepth int
+	// rootPersonaID tracks the persona of the top-level (depth 0) agent.
+	// Propagated to subagents so depth limits can vary by root persona.
+	rootPersonaID string
 	// isProduction indicates this is a production agent, not a test agent.
 	// Production agents have additional initialization steps (context limits,
 	// todo clearing, session cleanup, tool registry initialization).
@@ -83,6 +86,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		mcpSub:              mcpMgr,
 		todoMgr:             tools.NewTodoManager(),
 		subagentDepth:       params.subagentDepth,
+		rootPersonaID:       params.rootPersonaID,
 	}
 
 	// Set up output router

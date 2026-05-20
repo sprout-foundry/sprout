@@ -88,6 +88,13 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	}
 
 	a.state.SetActivePersona(personaID)
+
+	// When the primary agent (depth 0) sets its persona, record it as the root persona.
+	// Subagents inherit this through rootPersonaID propagation.
+	if a.subagentDepth == 0 {
+		a.rootPersonaID = personaID
+	}
+
 	return nil
 }
 

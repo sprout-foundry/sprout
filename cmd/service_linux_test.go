@@ -51,12 +51,14 @@ func TestGenerateSystemdUnit(t *testing.T) {
 			}
 
 			// Key fields in [Service]
+			// Daemon log rotation is handled in-process by lumberjack (daemon_logging.go),
+			// so systemd does not write to journal — just discard the fd.
 			for _, field := range []string{
 				"Type=simple",
 				"Restart=on-failure",
 				"RestartSec=5",
-				"StandardOutput=journal",
-				"StandardError=journal",
+				"StandardOutput=null",
+				"StandardError=null",
 				"WantedBy=default.target",
 			} {
 				if !strings.Contains(s, field) {

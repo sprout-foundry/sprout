@@ -7,6 +7,7 @@
 package embedding
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	onnxruntime "github.com/yalue/onnxruntime_go"
 )
@@ -129,21 +131,21 @@ func platformLibName() string {
 // resolveSharedLibraryPath locates the ONNX Runtime shared library, returning
 // an absolute path or "" if none was found. Resolution order:
 //
-//  1. SPROUT_ONNX_RUNTIME_LIB env var (absolute path; user override)
-//  2. ~/.config/sprout/models/onnxruntime/<platform-lib-name>
-//  3. Bootstrap: copy the yalue/onnxruntime_go module's bundled test_data
-//     library into (2) on first use, when the module ships one for this
-//     platform.
+//  1. SPROUT_ONNX_RUNTIME_LIB env var (absolute path; user override).
+//  2. ~/.config/sprout/models/onnxruntime/<platform-lib-name> (pre-staged).
+//  3. Auto-download from the official microsoft/onnxruntime release matching
+//     the yalue ABI, extract, and stage into (2). This is the production-
+//     grade fallback — files come from a known source, hashes are pinned
+//     per onnxRuntimeReleaseConfig, and the writes are atomic.
+//  4. Bootstrap from yalue/onnxruntime_go's bundled test_data shared library.
+//     Strictly a dev convenience; SPROUT_DISABLE_YALUE_BOOTSTRAP=1 turns
+//     this step off so production builds can rely on (3) alone.
 //
 // Returning "" leaves SetSharedLibraryPath uncalled, so yalue falls back to
 // its compiled-in default ("onnxruntime.so" in CWD/LD_LIBRARY_PATH). That
-// default fails on most dev machines but is preserved as a final fallback so
-// custom deployments that pre-stage the library on the system loader path
-// still work.
-//
-// The yalue bundled library is intended primarily as a dev/CI convenience.
-// Production deployments should pin their own ONNX Runtime build by setting
-// SPROUT_ONNX_RUNTIME_LIB or staging the file in (2).
+// default usually fails on dev machines but is preserved so custom
+// deployments that pre-stage the library on the system loader path still
+// work without sprout intervention.
 func (r *ONNXRuntime) resolveSharedLibraryPath() string {
 	libName := platformLibName()
 	if libName == "" {
@@ -159,9 +161,25 @@ func (r *ONNXRuntime) resolveSharedLibraryPath() string {
 		return staged
 	}
 
+	// Production-grade fallback: download from upstream. Use a bounded
+	// context so a stuck CDN can't hold up sprout startup indefinitely.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if path, err := downloadAndStageONNXRuntime(ctx, r.runtimeDir, libName); err == nil {
+		log.Printf("onnx: downloaded ONNX Runtime v%s to %s (from microsoft/onnxruntime release)", onnxRuntimeVersion, path)
+		return path
+	} else {
+		log.Printf("onnx: upstream download failed (will try dev fallback): %v", err)
+	}
+
+	if os.Getenv("SPROUT_DISABLE_YALUE_BOOTSTRAP") != "" {
+		// Production deployments lock to (1)-(3). Don't even try the yalue
+		// test_data path — fail closed so the install error surfaces.
+		return ""
+	}
 	if bundled := findYalueBundledLib(libName); bundled != "" {
 		if err := copyFileTo(bundled, staged); err == nil {
-			log.Printf("onnx: bootstrapped shared library to %s from yalue/onnxruntime_go test_data — DEV CONVENIENCE ONLY. Production deployments should pre-stage the library or set SPROUT_ONNX_RUNTIME_LIB. See docs/ONNX_RUNTIME.md.", staged)
+			log.Printf("onnx: bootstrapped shared library to %s from yalue/onnxruntime_go test_data — DEV CONVENIENCE ONLY. Production deployments should rely on the upstream download path or pre-stage the library. See docs/ONNX_RUNTIME.md.", staged)
 			return staged
 		} else {
 			log.Printf("onnx: failed to bootstrap shared library: %v", err)

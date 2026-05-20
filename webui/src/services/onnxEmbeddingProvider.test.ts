@@ -294,6 +294,56 @@ describe('BrowserONNXProvider', () => {
     await provider.close();
     expect(provider.isReady()).toBe(false);
   });
+
+  it('reuses Cache Storage on second initialize() to avoid re-downloading', async () => {
+    // Stand up a minimal Cache Storage mock so cachedFetch's cache-hit branch
+    // is exercised. jsdom does not provide one by default, so the regular
+    // tests fall back to plain fetch — this test pins the cached path.
+    const cacheStore = new Map<string, Response>();
+    const cache = {
+      match: vi.fn(async (key: string) => cacheStore.get(key)),
+      put: vi.fn(async (key: string, resp: Response) => {
+        cacheStore.set(key, resp);
+      }),
+    };
+    (globalThis as { caches?: unknown }).caches = {
+      open: vi.fn(async () => cache),
+    };
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('tokenizer.json')) {
+        return {
+          ok: true,
+          clone: () => ({ ok: true, json: () => SYNTHETIC_TOKENIZER }),
+          json: () => SYNTHETIC_TOKENIZER,
+        };
+      }
+      return {
+        ok: true,
+        clone: () => ({ ok: true, arrayBuffer: () => new ArrayBuffer(0) }),
+        arrayBuffer: () => new ArrayBuffer(0),
+      };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      const p1 = new BrowserONNXProvider({ dtype: 'q8', backend: 'wasm' });
+      await p1.initialize();
+      const fetchCallsAfterFirst = fetchMock.mock.calls.length;
+      expect(fetchCallsAfterFirst).toBeGreaterThan(0);
+
+      const p2 = new BrowserONNXProvider({ dtype: 'q8', backend: 'wasm' });
+      await p2.initialize();
+      // Second provider should have served everything from cache: no new
+      // fetch calls past what the first provider triggered.
+      expect(fetchMock.mock.calls.length).toBe(fetchCallsAfterFirst);
+
+      await p1.close();
+      await p2.close();
+    } finally {
+      delete (globalThis as { caches?: unknown }).caches;
+    }
+  });
 });
 
 describe('helper exports', () => {

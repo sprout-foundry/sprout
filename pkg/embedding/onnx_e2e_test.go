@@ -21,19 +21,11 @@ import (
 //
 // Skips if the model files are not present (not downloaded).
 func TestE2E_ONNXEmbeddingProvider(t *testing.T) {
+	requireONNXTestModel(t)
 	modelDir := DefaultModelDir()
 	modelName := EmbeddingGemma300MConfig().Name
 	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
 	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
-
-	// Skip if the model isn't staged. The bootstrap path lives in
-	// EmbeddingManager.initONNX — running sprout normally will download it.
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skipf("EmbeddingGemma model not found at %s — run sprout once to trigger bootstrap, or invoke pkg/embedding/retrieval_eval.go directly", modelPath)
-	}
-	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
-		t.Skipf("EmbeddingGemma tokenizer not found at %s", tokenizerPath)
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -140,17 +132,11 @@ func TestE2E_ONNXEmbeddingProvider(t *testing.T) {
 // TestE2E_ONNXMemoryWorkflow tests the full memory embedding + retrieval
 // pipeline using ONNX provider.
 func TestE2E_ONNXMemoryWorkflow(t *testing.T) {
+	requireONNXTestModel(t)
 	modelDir := DefaultModelDir()
 	modelName := EmbeddingGemma300MConfig().Name
 	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
 	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
-
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skipf("EmbeddingGemma model not found at %s", modelPath)
-	}
-	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
-		t.Skipf("EmbeddingGemma tokenizer not found at %s", tokenizerPath)
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -270,4 +256,31 @@ func sqrt32Approx(x float32) float32 {
 func init() {
 	// Ensure fmt is available for test logging
 	_ = fmt.Sprintf("")
+}
+
+// requireONNXTestModel gates the ONNX e2e tests on both (a) the model files
+// being present on disk and (b) an explicit opt-in environment variable.
+//
+// The opt-in lets a dedicated CI job stage the 200MB model once and run the
+// real ONNX path (SPROUT_RUN_ONNX_TESTS=1), while the everyday test command
+// (`go test ./...`) stays fast and predictable. Without the env var, even a
+// developer who happens to have the model locally won't accidentally run a
+// minute-long e2e test as part of their unit-test loop.
+func requireONNXTestModel(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SPROUT_RUN_ONNX_TESTS") == "" {
+		t.Skip("SPROUT_RUN_ONNX_TESTS is unset — skipping ONNX e2e tests. " +
+			"Set it to 1 to opt in (requires the embeddinggemma-300m model staged at " +
+			"~/.config/sprout/models/embeddinggemma-300m/).")
+	}
+	modelDir := DefaultModelDir()
+	modelName := EmbeddingGemma300MConfig().Name
+	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
+	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		t.Skipf("ONNX test opted in but model is absent at %s — run sprout once to bootstrap, or pre-stage the file in CI", modelPath)
+	}
+	if _, err := os.Stat(tokenizerPath); os.IsNotExist(err) {
+		t.Skipf("ONNX test opted in but tokenizer is absent at %s", tokenizerPath)
+	}
 }

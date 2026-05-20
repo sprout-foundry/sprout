@@ -254,16 +254,21 @@ func (d *ModelDownloader) IsDownloaded(name string) bool {
 // Source: the community ONNX export at onnx-community/embeddinggemma-300m-ONNX,
 // since the official Google repo ships SafeTensors only.
 //
-// Hashes are intentionally empty for now: the upstream files are not pinned,
-// and the downloader will simply skip verification when the hash is empty.
-// Pin these once the team is comfortable with a specific upstream revision.
+// Hashes pin the upstream files we validated end-to-end. The downloader rejects
+// mismatched files, so a poisoned mirror or MITM swap on the HuggingFace path
+// fails closed instead of silently feeding a tampered model into the embedding
+// pipeline. To update for a new upstream revision, regenerate by downloading
+// the three files and running `sha256sum` against them.
 func EmbeddingGemma300MConfig() ModelConfig {
 	const base = "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main"
 	return ModelConfig{
-		Name:         "embeddinggemma-300m",
-		ModelURL:     base + "/onnx/model_q4.onnx",
-		ModelDataURL: base + "/onnx/model_q4.onnx_data",
-		TokenizerURL: base + "/tokenizer.json",
+		Name:          "embeddinggemma-300m",
+		ModelURL:      base + "/onnx/model_q4.onnx",
+		ModelHash:     "ad1dfee81a70f7944b9b9d1cc6e48075b832881cf33fab2f2b248be78f3f0043",
+		ModelDataURL:  base + "/onnx/model_q4.onnx_data",
+		ModelDataHash: "599962c3143b040de2dd05e5975be3e9091dd067cacc6a8f7186e3203bab9e02",
+		TokenizerURL:  base + "/tokenizer.json",
+		TokenizerHash: "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",
 	}
 }
 

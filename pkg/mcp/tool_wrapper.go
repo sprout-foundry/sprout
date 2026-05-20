@@ -4,10 +4,22 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+// mcpValidationFailures tracks the total number of MCP tool argument validation
+// failures across all servers. Use GetMCPValidationFailures() to read the counter.
+var mcpValidationFailures atomic.Int64
+
+// GetMCPValidationFailures returns the total count of MCP argument validation
+// failures since process start. Useful for monitoring if a particular server
+// is producing bad arguments at rate (cross-reference with structured logs).
+func GetMCPValidationFailures() int64 {
+	return mcpValidationFailures.Load()
+}
 
 // Local constants to avoid importing tools package and creating cycle
 const (
@@ -329,6 +341,7 @@ func (w *MCPToolWrapper) ValidateArgs(args map[string]interface{}) error {
 		"tool", w.mcpTool.Name,
 		"server", w.mcpTool.ServerName,
 		"errors", errMsgs,
+		"total_failures", mcpValidationFailures.Add(1),
 	)
 
 	return &InvalidArgsError{

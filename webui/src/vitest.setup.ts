@@ -192,6 +192,55 @@ HTMLCanvasElement.prototype.getContext = vi.fn(function (contextId: string) {
   return null;
 }) as typeof originalGetContext;
 
+// Mock OffscreenCanvas (used by @replit/codemirror-minimap for rendering)
+// jsdom doesn't implement OffscreenCanvas; without this mock, minimap
+// initialization throws and can crash vitest workers under memory pressure.
+global.OffscreenCanvas = vi.fn().mockImplementation((width: number, height: number) => ({
+  width,
+  height,
+  getContext: vi.fn((contextId: string) => {
+    if (contextId === '2d') {
+      return {
+        fillRect: vi.fn(),
+        strokeRect: vi.fn(),
+        clearRect: vi.fn(),
+        fillText: vi.fn(),
+        strokeText: vi.fn(),
+        drawImage: vi.fn(),
+        getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
+        putImageData: vi.fn(),
+        createImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
+        setTransform: vi.fn(),
+        getTransform: vi.fn(() => ({ m11: 1, m12: 0, m21: 0, m22: 1, m41: 0, m42: 0, toString: () => '' })),
+        save: vi.fn(),
+        restore: vi.fn(),
+        scale: vi.fn(),
+        rotate: vi.fn(),
+        translate: vi.fn(),
+        transform: vi.fn(),
+        beginPath: vi.fn(),
+        moveTo: vi.fn(),
+        lineTo: vi.fn(),
+        arc: vi.fn(),
+        closePath: vi.fn(),
+        fill: vi.fn(),
+        stroke: vi.fn(),
+        clip: vi.fn(),
+        measureText: vi.fn(() => ({ width: 0 })),
+        createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+        rect: vi.fn(),
+        lineWidth: 0,
+        font: '',
+        fillStyle: '',
+        strokeStyle: '',
+      };
+    }
+    return null;
+  }),
+  transferToImageBitmap: vi.fn(),
+})) as unknown as typeof OffscreenCanvas;
+
 // Mock requestAnimationFrame
 global.requestAnimationFrame = vi.fn((callback) => {
   return setTimeout(callback, 0);

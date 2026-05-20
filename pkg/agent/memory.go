@@ -125,7 +125,7 @@ func SaveMemory(name string, content string) error {
 	filePath := filepath.Join(memoryDir, sanitized+".md")
 
 	// Write the file
-	err := os.WriteFile(filePath, []byte(content), 0644)
+	err := os.WriteFile(filePath, []byte(content), 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write memory file %q: %w", sanitized, err)
 	}

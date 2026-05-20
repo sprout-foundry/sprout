@@ -116,7 +116,7 @@ Spec: `roadmap/SP-029-monolith-decomposition.md`
 
 [x] - SP-029-4a: Read `pkg/agent/seed_tool_registry.go` (1223 LOC) end-to-end, define the split table, then execute. Likely 3 files (definitions / dispatcher / handler bindings).
 [x] - SP-029-4b: Read `pkg/lsp/semantic/go_adapter.go` (1188 LOC) end-to-end, define the split by LSP capability area (definitions, references, completions, diagnostics), then execute. Likely 4 files.
-[] - SP-029-4c: Read `pkg/agent/scripted_client.go` (1068 LOC) end-to-end, separate DSL parsing from playback engine from response builders, then execute. Likely 3 files.
+[x] - SP-029-4c: Read `pkg/agent/scripted_client.go` (1068 LOC) end-to-end, separate DSL parsing from playback engine from response builders, then execute. Likely 3 files.
 
 ---
 
@@ -158,7 +158,7 @@ Spec: `roadmap/SP-030-repository-hygiene.md`
 ### Phase 5: Test fixtures
 
 [x] - SP-030-5a: Per-file audit of `pkg/agent/conversation_image_test.go`, `pkg/agent/tool_handlers_search_new_test.go`, `pkg/git/commit_helpers_test.go`, `pkg/history/history_tools_test.go` — replace `ledit` where it's incidental; leave where the literal string is being asserted
-[] - SP-030-5a: Per-file audit of `pkg/agent/conversation_image_test.go`, `pkg/agent/tool_handlers_search_new_test.go`, `pkg/git/commit_helpers_test.go`, `pkg/history/history_tools_test.go` — replace `ledit` where it's incidental; leave where the literal string is being asserted
+[x] - SP-030-5a: Per-file audit of `pkg/agent/conversation_image_test.go`, `pkg/agent/tool_handlers_search_new_test.go`, `pkg/git/commit_helpers_test.go`, `pkg/history/history_tools_test.go` — replace `ledit` where it's incidental; leave where the literal string is being asserted
 
 ---
 

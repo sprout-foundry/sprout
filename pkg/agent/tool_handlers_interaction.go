@@ -29,14 +29,33 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	clientID := a.GetEventClientID()
 	userID := a.GetEventUserID()
 	chatID := a.GetEventChatID()
+	askUserMgr := a.security.GetAskUserMgr()
+
+	// Route to the WebUI only when a browser is actually listening. Sprout
+	// auto-starts a WebUI on a local port by default, so eventBus and
+	// askUserMgr are typically non-nil even in a terminal-only session — if
+	// we skipped this check the question would publish to a bus nobody is
+	// listening to and the tool would hang for the 10-minute timeout while
+	// the user sees nothing in their terminal. Mirrors the pattern used by
+	// security prompts (see tool_handlers_shell.go:297, tool_definitions.go:569,
+	// agent_getters.go:78).
+	hasActiveWebUI := eventBus != nil && askUserMgr != nil && a.HasActiveWebUIClients()
 
 	if a.debug {
 		a.debugLog("[ask_user] Prompting user: %s\n", question)
-		a.debugLog("[ask_user] eventBus=%v clientID=%q userID=%q chatID=%q\n", eventBus != nil, clientID, userID, chatID)
+		a.debugLog("[ask_user] eventBus=%v askUserMgr=%v hasActiveWebUI=%v clientID=%q userID=%q chatID=%q\n",
+			eventBus != nil, askUserMgr != nil, hasActiveWebUI, clientID, userID, chatID)
 	}
 
-	// Use event bus if available (WebUI mode), otherwise fallback to stdin
-	response, err := tools.AskUserWithEventBus(ctx, question, eventBus, clientID, userID, chatID, a.security.GetAskUserMgr())
+	var response string
+	var err error
+	if hasActiveWebUI {
+		response, err = tools.AskUserWithEventBus(ctx, question, eventBus, clientID, userID, chatID, askUserMgr)
+	} else {
+		// No active browser tab → CLI fallback. Prints the question to stdout
+		// and reads the user's answer from stdin.
+		response, err = tools.AskUser(question)
+	}
 	if err != nil {
 		if a.debug {
 			a.debugLog("[ask_user] Error: %v\n", err)

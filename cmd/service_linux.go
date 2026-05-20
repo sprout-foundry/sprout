@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -129,6 +130,27 @@ func (m *systemdManager) Uninstall() error {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Check for active sessions before uninstalling
+	count, err := checkActiveSessions()
+	if err != nil {
+		fmt.Printf("Warning: failed to check active sessions: %v\n", err)
+	}
+	if count > 0 {
+		fmt.Printf("Warning: %d active agent session(s) detected. Uninstalling will stop the daemon and terminate these sessions.\n", count)
+		if !forceConfirm {
+			fmt.Print("Continue? [y/N] ")
+			reader := bufio.NewReader(os.Stdin)
+			resp, _ := reader.ReadString('\n')
+			resp = strings.TrimSpace(strings.ToLower(resp))
+			if resp != "y" {
+				fmt.Println("Aborted.")
+				return nil
+			}
+		} else {
+			fmt.Println("Skipping confirmation (--yes flag set).")
+		}
 	}
 
 	// Stop and disable — ignore errors since the service may not be running.

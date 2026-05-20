@@ -32,9 +32,6 @@ func init() {
 // structure — in particular to avoid the double-nested <dict> that xml.Marshal produces
 // when a struct has both XMLName "dict" and a child field also tagged xml:"dict".
 func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
-	stdoutPath := filepath.Join(homeDir, ".sprout/logs/daemon.stdout.log")
-	stderrPath := filepath.Join(homeDir, ".sprout/logs/daemon.stderr.log")
-
 	// Load API keys and other environment variables from service.env.
 	envVars, err := loadServiceEnvFile(homeDir)
 	if err != nil {
@@ -84,10 +81,6 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	</dict>
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
-	<key>StandardOutPath</key>
-	<string>%s</string>
-	<key>StandardErrorPath</key>
-	<string>%s</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 %s	</dict>
@@ -96,8 +89,6 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 		xmlEscapeStr(launchdLabel),
 		xmlEscapeStr(binaryPath),
 		xmlEscapeStr(homeDir),
-		xmlEscapeStr(stdoutPath),
-		xmlEscapeStr(stderrPath),
 		envBuf.String(),
 	)
 

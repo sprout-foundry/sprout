@@ -288,13 +288,13 @@ Three trust boundaries to defend: the project (skills auto-load silently), the d
 
 [] - SP-033-4a: At `pkg/mcp/client.go:147`, replace bare `restartCount++` with a sliding-window check — after 3 failures in 60s, exponential backoff (start 1s, double, max 5min); after 10 failures in 24h, disable the server and surface a notice.
 [] - SP-033-4b: Register `webcontent.RodRenderer.Close()` in the interactive-mode signal handler; add a `runtime.SetFinalizer` backstop on the renderer struct in `pkg/webcontent/browser_rod.go:1311`. Coordinate with SP-032 A1 so the daemon path is also covered.
-[] - SP-033-4c: At `pkg/pythonruntime/runtime.go:65`, replace `exec.Command(...)` with `exec.CommandContext(ctx, ...)` carrying a 30s default deadline (configurable for longer operations).
+[x] - SP-033-4c: At `pkg/pythonruntime/runtime.go:65`, replace `exec.Command(...)` with `exec.CommandContext(ctx, ...)` carrying a 30s default deadline (configurable for longer operations).
 
 ### Phase 5: Audit log + documentation
 
 [] - SP-033-5a: Extend runlog entries in `pkg/agent/tool_executor*.go` to capture all four of: raw tool-call JSON, executed (post-substitution) command, classifier decision (`SecuritySafe`/`SecurityCaution`/`SecurityDangerous`), and approval source (auto-rule X / manual / denied).
-[] - SP-033-5b: Write `docs/SECURITY.md` — trust boundaries, classifier limitations (lift from `pkg/agent_tools/security_classifier.go:12-25` header), file layout per directory, how to clear persisted data, skill allowlist model, auth-token requirement for non-local binds (refs SP-032 B1).
-[] - SP-033-5c: Create `SECURITY.md` at repo root with vuln-reporting contact and a link to `docs/SECURITY.md`.
+[x] - SP-033-5b: Write `docs/SECURITY.md` — trust boundaries, classifier limitations (lift from `pkg/agent_tools/security_classifier.go:12-25` header), file layout per directory, how to clear persisted data, skill allowlist model, auth-token requirement for non-local binds (refs SP-032 B1).
+[x] - SP-033-5c: Create `SECURITY.md` at repo root with vuln-reporting contact and a link to `docs/SECURITY.md`.
 
 ---
 

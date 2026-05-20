@@ -814,3 +814,54 @@ Spec: `roadmap/SP-044-roadmap-triage-and-wip-limits.md`
 [] - SP-044-5a: Update `CONTRIBUTING.md` with a "Roadmap status model" subsection.
 [] - SP-044-5b: Cross-link from `docs/ONBOARDING.md` (SP-043 dependency) so a new contributor sees `roadmap/README.md` as the entry point.
 [] - SP-044-5c: Document the triage trigger conditions (a spec moves Active→Done, Proposed list grows past 30, onboarding event, …) in `roadmap/README.md`.
+
+---
+
+## SP-045: WASM Build Feature Parity
+
+Spec: `roadmap/SP-045-wasm-feature-parity.md`
+
+Native sprout has dozens of commands; the WASM build exposes 11 (shell-style only). This spec brings the WASM build to as-close-to-feature-parity as the browser sandbox allows. Items checked here are already in this branch.
+
+### Phase 1: Tier 1 — pure-Go sprout features over JS bridge
+
+[x] - SP-045-1a: Unblock WASM compilation of `pkg/embedding`. `pkg/utils/terminal_unix.go` and `pkg/console/signal_compat_unix.go` had `!windows` build tags that incorrectly included `js/wasm`. Retag to `unix && !js` and add matching `*_js.go` stubs.
+[x] - SP-045-1b: Trim `pkg/embedding/onnx_wasm_stub.go` to only stub the CGO-only types (`ONNXRuntime`, `ONNXEmbeddingProvider`). Remove duplicates of pure-Go types (`ModelConfig`, `ModelDownloader`, `GemmaTokenizer`, `EmbeddingGemma300MConfig`) — those build for WASM unchanged.
+[x] - SP-045-1c: Add `cmd/wasm/embedding_funcs.go` exposing static-only semantic search + memory CRUD as JS Promises: `searchSemantic`, `buildSemanticIndex`, `updateSemanticFile`, `getSemanticStatus`, `listMemories`, `readMemory`, `saveMemory`, `deleteMemory`, `searchMemories`. `cmd/wasm/main.go` merges these into `SproutWasm`.
+[] - SP-045-1d: Add JS bridge for configuration management: `getConfig`, `setConfigValue`, `getConfigKeys`, `resetConfig`. Use `pkg/configuration`'s existing JSON file loader against the MEMFS-backed home dir. Validate writes route through `SetStoreWriter` so changes persist to IndexedDB.
+[] - SP-045-1e: Conversation persistence over the JS bridge: `getConversationHistory(sessionID)`, `saveConversationTurn(...)`, `searchConversations(...)`. Reuse `EmbeddingManager.GetConversationStore()` — already builds for WASM.
+[] - SP-045-1f: Unit tests for the new JS bridge functions. Use vitest in `webui` calling into the WASM module with a synthetic workspace; or pure-Go tests of the underlying helpers (`saveMemoryToDisk`, `getEmbeddingManager`).
+[] - SP-045-1g: Document the `SproutWasm` JS API surface in `docs/WASM_API.md`. List every entry, args, return shape, and which Tier it belongs to.
+
+### Phase 2: Tier 3a — pure-Go file extractor fallback
+
+[] - SP-045-2a: Audit what `pkg/embedding/extractor_go.go`, `extractor_py.go`, `extractor_ts.go` extract. Build a coverage matrix: top-level funcs, methods, types, exported vs unexported, doc-comment association, etc.
+[] - SP-045-2b: Write regex/line-based fallback extractors gated behind `//go:build js` so they take over on WASM. Match the existing `CodeUnit` return shape so the IndexManager doesn't care which extractor ran.
+[] - SP-045-2c: Run the existing retrieval eval (`pkg/embedding/retrieval_eval.go`) with the fallback extractors on the `pkg/embedding` corpus. Measure hit-rate delta against tree-sitter. Decide whether Tier 3b (tree-sitter.wasm bridge) is needed based on the gap.
+[] - SP-045-2d: If the regex fallback degrades hit-rate by more than ~10pp, write a follow-up spec for the tree-sitter.wasm bridge approach.
+
+### Phase 3: Tier 2a — onnxruntime-web bridge
+
+[] - SP-045-3a: Design doc for the JS contract. Host page registers `globalThis.__sproutONNX = { embed(text), embedBatch(texts), close() }`. Document required behavior, error shape, performance expectations.
+[] - SP-045-3b: Replace `cmd/wasm`-side `ONNXEmbeddingProvider` stub with a `syscall/js` bridge that forwards `Embed`/`EmbedBatch` to `globalThis.__sproutONNX`. Tokenizer stays pure-Go. `Provider.Name()` returns `onnx-embeddinggemma-300m-web-bridge`.
+[] - SP-045-3c: Host-side adapter that wraps the existing `webui/src/services/onnxEmbeddingProvider.ts:BrowserONNXProvider` to expose the `__sproutONNX` shape, so the page can opt into bridging in 2 lines.
+[] - SP-045-3d: End-to-end test: WASM module + JS host with bridge installed runs `searchSemantic` against an indexed workspace and gets the same top-1 result as the Go side (modulo float precision).
+[] - SP-045-3e: Update SP-045 doc + WASM_API doc to mark Tier 2a complete.
+
+### Phase 4: Tier 2b — agent / LLM commands
+
+[] - SP-045-4a: **Design decision**: API key storage for the WASM build. Decide between localStorage, IndexedDB+WebCrypto envelope, or per-session host injection. Document the trade-offs in `roadmap/SP-045-api-keys-design.md` and pick one before code lands.
+[] - SP-045-4b: Provider compatibility audit: which LLM providers serve CORS-friendly endpoints? List the working set; document the rest as needing a user-supplied proxy URL.
+[] - SP-045-4c: SSE streaming over `js/wasm` net/http: spike test that streaming chat completions work end-to-end (Anthropic, OpenAI). If not, design a fetch-streaming adapter via `syscall/js`.
+[] - SP-045-4d: Expose the agent loop entry point — `runAgent(query, options)` returning a Promise that streams events back via an EventEmitter-shaped JS callback. Mirror the native `cmd agent` command.
+[] - SP-045-4e: Tool-execution wiring: agent loops invoke shell tools through the existing `SproutWasm.executeCommand` bridge rather than spawning processes. Update tool-registration so non-WASM tools (e.g. MCP) are absent on WASM.
+[] - SP-045-4f: Expose the remaining LLM-backed commands: `runQuestion`, `runCode`, `runCommit`, `runReview`, `runPlan`. Each is a thin wrapper around its native counterpart.
+[] - SP-045-4g: Tests + docs in WASM_API.md.
+
+### Phase 5: Build matrix + distribution
+
+[] - SP-045-5a: Sweep `pkg/` for remaining `//go:build !windows` patterns that should be `unix && !js`. List in this TODO as discovered. Known: `pkg/webui/terminal_*.go` needs `!js` (currently pulls in `creack/pty`).
+[] - SP-045-5b: `GOOS=js GOARCH=wasm go build ./...` should succeed cleanly. Add to CI as a smoke check.
+[] - SP-045-5c: Strip the binary with `-ldflags="-s -w"`. Measure size delta.
+[] - SP-045-5d: Spike: build with tinygo. Measure whether the existing dependencies (esp. tree-sitter alternatives, regexp/syntax, encoding/json) are compatible. If yes, switch the WASM build to tinygo and document the trade-offs.
+[] - SP-045-5e: If the single-WASM binary stays large after (c)/(d), split into `sprout-shell.wasm` (small, always loaded) and `sprout-embedding.wasm` (lazy-loaded on first semantic search). Update `cmd/wasm` main to support split-module loading.

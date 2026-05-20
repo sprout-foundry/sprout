@@ -5,68 +5,64 @@ package embedding
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 )
 
-// ---------------------------------------------------------------------------
-// This file provides stub types/functions for the ONNX embedding provider
-// when building for WASM (js/wasm) where CGO is unavailable.
+// This file provides stubs only for the types/functions whose REAL
+// implementations require CGO and therefore can't compile for js/wasm.
+// Pure-Go pieces of the embedding pipeline — ModelConfig, ModelDownloader,
+// GemmaTokenizer, the static provider, the JSONL store, the IndexManager —
+// live in their non-tagged files and build for WASM unchanged. The minimum
+// here is: ONNXRuntime, ONNXEmbeddingProvider, DefaultModelDir.
 //
-// The real implementations are in onnx_runtime.go, onnx_embedding_provider.go,
-// and model_downloader.go (all behind !wasm).
-// ---------------------------------------------------------------------------
+// The browser-side counterpart that DOES want ONNX inference uses
+// webui/src/services/onnxEmbeddingProvider.ts (onnxruntime-web in JS).
+// A future syscall/js bridge could route this stub's Embed calls into that
+// JS provider — see Tier 2a in docs/ONNX_RUNTIME.md.
 
-var errWASMNotSupported = errors.New("onnx: ONNX provider not available on WASM")
+var errWASMNotSupported = errors.New("onnx: native ONNX provider not available on WASM (CGO-only); use the static provider or wire the browser-side onnxruntime-web bridge")
 
-// ---------------------------------------------------------------------------
-// ONNXRuntime (stub)
-// ---------------------------------------------------------------------------
+// DefaultModelDir mirrors the non-wasm resolver: SPROUT_MODELS_DIR env var
+// takes precedence; otherwise we anchor under SPROUT_CONFIG or the user's
+// home directory. On WASM this points at the IndexedDB-backed MEMFS path
+// that cmd/wasm sets up.
+func DefaultModelDir() string {
+	if dir := os.Getenv("SPROUT_MODELS_DIR"); dir != "" {
+		return dir
+	}
+	configDir := os.Getenv("SPROUT_CONFIG")
+	if configDir == "" {
+		configDir = os.Getenv("LEDIT_CONFIG")
+	}
+	if configDir == "" {
+		home, _ := os.UserHomeDir()
+		configDir = filepath.Join(home, ".config", "sprout")
+	}
+	return filepath.Join(configDir, "models")
+}
 
-// ONNXRuntime is a no-op on WASM.
+// ─── ONNXRuntime (stub) ──────────────────────────────────────────
+
 type ONNXRuntime struct{}
 
-func DefaultModelDir() string {
-	return filepath.Join(".", "models")
-}
-
-func NewONNXRuntime() (*ONNXRuntime, error) {
-	return nil, errWASMNotSupported
-}
-
+func NewONNXRuntime() (*ONNXRuntime, error) { return nil, errWASMNotSupported }
 func NewONNXRuntimeWithDir(_ string) (*ONNXRuntime, error) {
 	return nil, errWASMNotSupported
 }
+func (r *ONNXRuntime) Ready() bool  { return false }
+func (r *ONNXRuntime) Close() error { return nil }
 
-func (r *ONNXRuntime) Ready() bool {
-	return false
+// SessionOption is referenced by callers that compile for both targets.
+// On WASM it carries the same shape but Apply is a no-op.
+type SessionOption struct {
+	IntraOpNumThreads int
+	InterOpNumThreads int
 }
 
-func (r *ONNXRuntime) Close() error {
-	return nil
-}
+func (o SessionOption) Apply(_ interface{}) error { return nil }
 
-// ---------------------------------------------------------------------------
-// SessionOption (stub)
-// ---------------------------------------------------------------------------
-
-type SessionOption int
-
-const (
-	WithInterOpNumThreads SessionOption = iota
-	WithIntraOpNumThreads
-)
-
-func (o SessionOption) Apply(_ interface{}) error {
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// ONNXEmbeddingProvider (stub)
-// ---------------------------------------------------------------------------
-
-type EmbedOptions struct {
-	Task string
-}
+// ─── ONNXEmbeddingProvider (stub) ────────────────────────────────
 
 type ONNXEmbeddingProvider struct{}
 
@@ -95,106 +91,10 @@ func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(_ context.Context, _ []stri
 	return nil, errWASMNotSupported
 }
 
-func (p *ONNXEmbeddingProvider) Dimensions() int {
-	return 0
-}
-
-func (p *ONNXEmbeddingProvider) Name() string {
-	return "onnx-wasm-stub"
-}
-
-func (p *ONNXEmbeddingProvider) ModelHash() string {
-	return ""
-}
-
-func (p *ONNXEmbeddingProvider) Close() error {
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// GemmaTokenizer (stub)
-// ---------------------------------------------------------------------------
-
-type GemmaTokenizer struct{}
-
-func NewGemmaTokenizer(_ string) (*GemmaTokenizer, error) {
+func (p *ONNXEmbeddingProvider) Dimensions() int    { return 0 }
+func (p *ONNXEmbeddingProvider) Name() string       { return "onnx-wasm-stub" }
+func (p *ONNXEmbeddingProvider) ModelHash() string  { return "" }
+func (p *ONNXEmbeddingProvider) Close() error       { return nil }
+func (p *ONNXEmbeddingProvider) EmbedBatchInternal(_ context.Context, _ []string) ([][]float32, error) {
 	return nil, errWASMNotSupported
-}
-
-func (t *GemmaTokenizer) EncodeWithBOSAndEOS(_ string) []uint32 {
-	return nil
-}
-
-func (t *GemmaTokenizer) VocabularySize() int {
-	return 0
-}
-
-func (t *GemmaTokenizer) Tokenize(_ string) []string {
-	return nil
-}
-
-func (t *GemmaTokenizer) TokenizeTrailingContext(_ string) []string {
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// ModelConfig (stub)
-// ---------------------------------------------------------------------------
-
-// ModelConfig describes an ONNX model to download.
-type ModelConfig struct {
-	Name          string
-	ModelURL      string
-	TokenizerURL  string
-	ModelHash     string
-	TokenizerHash string
-	ModelDataURL  string
-	ModelDataHash string
-}
-
-// EmbeddingGemma300MConfig returns the predefined config for Google's
-// EmbeddingGemma-300M model. On WASM this returns a zero config — the ONNX
-// runtime requires CGO and is unavailable on the WASM build target.
-func EmbeddingGemma300MConfig() ModelConfig {
-	return ModelConfig{
-		Name: "embeddinggemma-300m",
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ModelDownloader (stub)
-// ---------------------------------------------------------------------------
-
-type ModelDownloader struct {
-	modelDir string
-}
-
-func NewModelDownloader() *ModelDownloader {
-	return &ModelDownloader{modelDir: DefaultModelDir()}
-}
-
-func NewModelDownloaderWithDir(modelDir string) *ModelDownloader {
-	return &ModelDownloader{modelDir: modelDir}
-}
-
-func (d *ModelDownloader) Download(_ context.Context, _ ModelConfig, _ func(float64)) error {
-	return errWASMNotSupported
-}
-
-func (d *ModelDownloader) GetModelPath(name string) string {
-	return filepath.Join(d.modelDir, name, "model.onnx")
-}
-
-func (d *ModelDownloader) GetTokenizerPath(name string) string {
-	return filepath.Join(d.modelDir, name, "tokenizer.json")
-}
-
-func (d *ModelDownloader) IsDownloaded(_ string) bool {
-	return false
-}
-
-// DownloadModel ensures the model and tokenizer are available at the given
-// modelDir. On WASM this always returns an error.
-func DownloadModel(_ context.Context, _ string, _ ModelConfig) error {
-	return errWASMNotSupported
 }

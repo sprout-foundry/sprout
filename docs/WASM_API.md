@@ -467,12 +467,57 @@ SproutWasm.setStaticModel(modelBytes);
 // Done. searchSemantic, listMemories, etc. now work.
 ```
 
-## What's still not wired
+## Tier 2b — LLM proxy routing (foundation)
 
-Listed in priority order from `roadmap/SP-045-wasm-feature-parity.md`:
+The sprout-foundry platform holds per-user encrypted API keys server-side
+and proxies LLM requests so no keys ever touch the browser. The Go-WASM
+side installs an HTTP `RoundTripper` (see `pkg/llmproxy/`) at init time
+that rewrites direct calls to known LLM provider hosts to instead go
+through the platform's `/api/proxy/llm/{provider}/*` path. Browser cookies
+handle auth automatically.
 
-- **Tier 2b**: Agent / LLM commands (`runAgent`, `runQuestion`, `runCode`,
-  `runCommit`, `runReview`, `runPlan`). Blocked on the API-key storage
-  design decision (SP-045-4a).
-- **Phase 5**: Build matrix cleanup (remaining `!windows` build tags),
-  binary size reduction (102MB → strip + tinygo + module split).
+### `setPlatformEndpoint(url): {ok: true, url: string}`
+
+Configures the sprout-foundry platform base URL (e.g.
+`"https://platform.sprout-foundry.com"`). Once set, every LLM API call
+from the Go-WASM agent path is rewritten to route through the platform.
+Pass `""` to disable rewriting (returns to direct provider calls — only
+useful for tests or air-gapped configurations).
+
+### `getPlatformEndpoint(): string`
+
+Returns the currently-configured platform endpoint, or `""` when unset.
+
+### Recognized providers
+
+| Origin URL                                       | Rewritten to                                                          |
+|--------------------------------------------------|-----------------------------------------------------------------------|
+| `https://api.openai.com/...`                     | `{platform}/api/proxy/llm/openai/...`                                 |
+| `https://api.anthropic.com/...`                  | `{platform}/api/proxy/llm/anthropic/...`                              |
+| `https://openrouter.ai/api/...`                  | `{platform}/api/proxy/llm/openrouter/...` (strips the leading `/api`) |
+| `https://api.deepinfra.com/...`                  | `{platform}/api/proxy/llm/deepinfra/...`                              |
+| `https://api.mistral.ai/...`                     | `{platform}/api/proxy/llm/mistral/...`                                |
+| `https://api.cerebras.ai/...`                    | `{platform}/api/proxy/llm/cerebras/...`                               |
+| `https://api.groq.com/...`                       | `{platform}/api/proxy/llm/groq/...`                                   |
+| `https://api.together.xyz/...`                   | `{platform}/api/proxy/llm/together/...`                               |
+
+Unknown providers pass through unchanged. To add a provider, extend
+`knownProviders` in `pkg/llmproxy/providers.go`; the test suite already
+checks every registered entry round-trips correctly.
+
+### What's not here yet (Tier 2b continued)
+
+- High-level agent command entry points (`runAgent`, `runQuestion`,
+  `runCode`, `runCommit`, `runReview`, `runPlan`) — the proxy routing is
+  the foundation; exposing the full agent loop on top of it is plumbing
+  for a follow-up. Until those land, host pages can still verify the
+  proxy by issuing a plain `fetch` against an LLM URL from the host page
+  itself — the routing happens inside Go, so JS-side fetch isn't
+  affected.
+- SSE streaming through Go-WASM `net/http`: spike-test needed for each
+  provider's streaming format. The proxy routing layer is
+  transport-agnostic — it handles streaming responses naturally — but the
+  Go agent code consuming the streams needs to be exercised under WASM.
+- API-key UX (in the platform side, not this repo): user-self-serve
+  rotation, multi-provider key management, audit log of per-request key
+  attachment. See SP-045-4a in the roadmap for the design decisions.

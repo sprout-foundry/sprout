@@ -249,6 +249,40 @@ func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
 		err3 := w.ValidateArgs(map[string]interface{}{"query": "test"})
 		assert.NoError(t, err3)
 	})
+
+	t.Run("malformed schema fails open", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name:       "broken",
+			ServerName: "srv",
+			InputSchema: map[string]interface{}{
+				"$ref": "#/definitions/nonexistent",
+			},
+		}, m)
+
+		// Must not panic and must return nil (fail-open)
+		err := w.ValidateArgs(map[string]interface{}{"x": 1})
+		assert.Nil(t, err, "ValidateArgs should return nil when schema compilation fails (fail-open)")
+	})
+
+	t.Run("malformed schema fails open idempotently", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name:       "broken",
+			ServerName: "srv",
+			InputSchema: map[string]interface{}{
+				"$ref": "#/definitions/nonexistent",
+			},
+		}, m)
+
+		// Multiple calls must all return nil (idempotent fail-open)
+		for i := 0; i < 3; i++ {
+			err := w.ValidateArgs(map[string]interface{}{"x": i})
+			assert.Nil(t, err, "ValidateArgs should return nil on call %d for malformed schema", i+1)
+		}
+	})
 }
 
 func TestMCPToolWrapper_CanExecute_ServerNotFound(t *testing.T) {

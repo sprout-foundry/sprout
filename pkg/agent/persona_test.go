@@ -564,3 +564,68 @@ func TestIsOrchestratorGitWriteAllowed_NonOrchestratorNonEAPersonaReturnsFalse(t
 		t.Error("expected isOrchestratorGitWriteAllowed to return false for non-orchestrator, non-EA persona")
 	}
 }
+
+// --- hasEASpawnAuthority tests ---
+
+func TestHasEASpawnAuthority_ExecutiveAssistantReturnsTrue(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("executive_assistant")
+
+	if !agent.hasEASpawnAuthority() {
+		t.Error("expected hasEASpawnAuthority to return true for executive_assistant persona")
+	}
+}
+
+func TestHasEASpawnAuthority_CoderReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("coder")
+
+	if agent.hasEASpawnAuthority() {
+		t.Error("expected hasEASpawnAuthority to return false for coder persona")
+	}
+}
+
+func TestHasEASpawnAuthority_RepoOrchestratorWithoutSubagentRulesReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("repo_orchestrator")
+
+	// repo_orchestrator does not have auto-approve rules with subagent_spawn
+	if agent.hasEASpawnAuthority() {
+		t.Error("expected hasEASpawnAuthority to return false for repo_orchestrator without subagent rules")
+	}
+}
+
+func TestHasEASpawnAuthority_PersonaWithSubagentSpawnRuleReturnsTrue(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Register a custom persona with subagent_spawn in its auto-approve rules
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.SubagentTypes["test_ea_like"] = configuration.SubagentType{
+			ID:          "test_ea_like",
+			Name:        "Test EA-Like",
+			Description: "Test persona with subagent_spawn in auto-approve",
+			Enabled:     true,
+			Delegatable: false,
+			AutoApproveRules: &configuration.AutoApproveRules{
+				MediumRiskOps: []string{"subagent_spawn"},
+			},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_ea_like")
+
+	if !agent.hasEASpawnAuthority() {
+		t.Error("expected hasEASpawnAuthority to return true for persona with subagent_spawn in medium risk ops")
+	}
+}

@@ -279,6 +279,11 @@ Examples:
   sprout agent --no-web-ui "Analyze this code"`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Propagate --no-project-skills to env so config loading skips discovery
+		if noProjectSkills {
+			os.Setenv("SPROUT_NO_PROJECT_SKILLS", "1")
+		}
+
 		chatAgent, err := createChatAgent()
 		if err != nil {
 			return fmt.Errorf("failed to create chat agent: %w", err)

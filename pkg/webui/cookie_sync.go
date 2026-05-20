@@ -1,3 +1,5 @@
+//go:build !js
+
 // Package webui provides React web server with embedded assets
 
 package webui

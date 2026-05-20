@@ -1,3 +1,5 @@
+//go:build !js
+
 // Tests for agent_execution.go - specifically the --port hidden alias
 package cmd
 

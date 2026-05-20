@@ -3,14 +3,30 @@ package embedding
 import (
 	"context"
 	"crypto/sha256"
-	_ "embed"
 	"fmt"
 	"math"
 	"sync"
 )
 
-//go:embed static_model.bin
+// staticModelData holds the model blob.
+//   - Native builds (`static_model_embed.go`, !js) bake it in via `//go:embed`,
+//     so the binary is self-contained.
+//   - WASM builds (`static_model_js.go`, js) leave it empty and expose
+//     SetStaticModelData so the host page can load the ~55MB asset from a
+//     separate URL — keeps the initial .wasm download under ~45MB.
 var staticModelData []byte
+
+// SetStaticModelData replaces the in-memory static model bytes. Intended for
+// the WASM build where the host page loads the model from a separate asset
+// and hands the bytes to the runtime; calling it on the native build is
+// harmless but unnecessary.
+//
+// Must be called BEFORE the first NewStaticProvider() in the process. After
+// a provider has been constructed, mutating the global has no effect on that
+// provider's cached state.
+func SetStaticModelData(data []byte) {
+	staticModelData = data
+}
 
 // StaticProvider is an EmbeddingProvider backed by a static model (e.g. nomic-embed-text-v2-moe).
 // Supports int8 (v1), float32 (v2), and Unigram Viterbi (v3) embedding formats.

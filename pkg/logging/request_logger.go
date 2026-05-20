@@ -24,7 +24,7 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 	}
 
 	lastPath := filepath.Join(dir, "lastRequest.json")
-	if err := os.WriteFile(lastPath, payload, 0o644); err != nil {
+	if err := os.WriteFile(lastPath, payload, 0600); err != nil {
 		return
 	}
 	WriteLocalCopyRequest("lastRequest.json", payload)
@@ -43,7 +43,7 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 	}
 
 	filename := fmt.Sprintf("api_request_%s.json", time.Now().Format("20060102_150405.000000000"))
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, filename), data, 0600); err != nil {
 		return
 	}
 	WriteLocalCopyRequest(filename, data)
@@ -62,7 +62,7 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 
 	// Always update lastRequest.json for easy debugging
 	lastPath := filepath.Join(dir, "lastRequest.json")
-	if err := os.WriteFile(lastPath, payload, 0o644); err != nil {
+	if err := os.WriteFile(lastPath, payload, 0600); err != nil {
 		return
 	}
 	WriteLocalCopyRequest("lastRequest.json", payload)
@@ -83,7 +83,7 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 	}
 
 	filename := fmt.Sprintf("error_request_%s_%s.json", errorType, time.Now().Format("20060102_150405.000000000"))
-	if err := os.WriteFile(filepath.Join(dir, filename), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, filename), data, 0600); err != nil {
 		return
 	}
 	WriteLocalCopyRequest(filename, data)
@@ -99,7 +99,7 @@ func WriteLocalCopyRequest(filename string, data []byte) {
 		return
 	}
 	path := filepath.Join(wd, filename)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		log.Printf("[debug] failed to write request log: %v", err)
 	}
 }

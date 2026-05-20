@@ -1020,9 +1020,11 @@ func Load() (*Config, error) {
 	warnUnknownPersonaTools(config.SubagentTypes)
 
 	// Discover project-specific skills from .sprout/skills/
-	if discovered := discoverProjectSkills(&config); len(discovered) > 0 {
-		log.Printf("[skills] Discovered %d project-local skill(s): %s",
-			len(discovered), strings.Join(discovered, ", "))
+	if os.Getenv("SPROUT_NO_PROJECT_SKILLS") != "1" {
+		if discovered := discoverProjectSkills(&config); len(discovered) > 0 {
+			log.Printf("[skills] Discovered %d project-local skill(s): %s",
+				len(discovered), strings.Join(discovered, ", "))
+		}
 	}
 
 	return &config, nil

@@ -1,77 +1,51 @@
 package embedding
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
-func TestGemmaTokenizer_BasicEncode(t *testing.T) {
-	tmpDir := t.TempDir()
-	// Minimal BPE tokenizer with a small vocab (no pre_tokenizer — uses fallback split)
-	jsonContent := `{
-		"model": {
-			"type": "BPE",
-			"vocab": {
-				"<pad>": 0,
-				"<s>": 1,
-				"</s>": 2,
-				"<unk>": 3,
-				"<bos>": 4,
-				"<eos>": 5,
-				"a": 6,
-				"b": 7,
-				"c": 8,
-				"ab": 9,
-				"bc": 10,
-				"abc": 11,
-				" hello": 12,
-				"world": 13
+// TestGemmaTokenizer_SmallSynthetic covers the bare BPE path against a
+// hand-rolled tokenizer.json. It exercises both supported merges formats —
+// the older joined-string form ("a b") and the newer pair-array form
+// (["a","b"]) — without depending on any downloaded model.
+func TestGemmaTokenizer_SmallSynthetic(t *testing.T) {
+	t.Run("pair_format", func(t *testing.T) {
+		runSynthetic(t, `{
+			"model": {
+				"type": "BPE",
+				"vocab": {"<unk>": 0, "<bos>": 1, "<eos>": 2, "a": 3, "b": 4, "c": 5, "ab": 6, "abc": 7},
+				"merges": [["a","b"], ["ab","c"]]
 			},
-			"merges": ["a b ab", "b c bc", "ab c abc"]
-		}
-	}`
-	path := filepath.Join(tmpDir, "tokenizer.json")
-	if err := os.WriteFile(path, []byte(jsonContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-	tok, err := NewGemmaTokenizer(path)
-	if err != nil {
-		t.Fatalf("NewGemmaTokenizer: %v", err)
-	}
-	// Test Encode
-	ids := tok.Encode("abc")
-	if len(ids) == 0 {
-		t.Fatal("expected non-zero token IDs")
-	}
-	// Test Decode produces something non-empty
-	text := tok.Decode(ids)
-	if text == "" {
-		t.Fatal("Decode returned empty string")
-	}
-	// Test empty input
-	empty := tok.Encode("")
-	if len(empty) != 0 {
-		t.Fatalf("expected empty tokens for empty input, got %d", len(empty))
-	}
-	// Test EncodeWithBOSAndEOS
-	withMarkers := tok.EncodeWithBOSAndEOS("abc")
-	if len(withMarkers) <= len(ids) {
-		t.Fatal("expected BOS/EOS tokens to increase length")
-	}
+			"added_tokens": [
+				{"id": 0, "content": "<unk>", "special": true},
+				{"id": 1, "content": "<bos>", "special": true},
+				{"id": 2, "content": "<eos>", "special": true}
+			]
+		}`)
+	})
+	t.Run("joined_format", func(t *testing.T) {
+		runSynthetic(t, `{
+			"model": {
+				"type": "BPE",
+				"vocab": {"<unk>": 0, "<bos>": 1, "<eos>": 2, "a": 3, "b": 4, "c": 5, "ab": 6, "abc": 7},
+				"merges": ["a b", "ab c"]
+			},
+			"added_tokens": [
+				{"id": 0, "content": "<unk>", "special": true},
+				{"id": 1, "content": "<bos>", "special": true},
+				{"id": 2, "content": "<eos>", "special": true}
+			]
+		}`)
+	})
 }
 
-func TestGemmaTokenizer_ByteEncoding(t *testing.T) {
-	// Test byte encoding for non-ASCII characters
-	tmpDir := t.TempDir()
-	jsonContent := `{
-		"model": {
-			"type": "BPE",
-			"vocab": {"<unk>": 0},
-			"merges": []
-		}
-	}`
-	path := filepath.Join(tmpDir, "tokenizer.json")
+func runSynthetic(t *testing.T, jsonContent string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "tokenizer.json")
 	if err := os.WriteFile(path, []byte(jsonContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -79,31 +53,121 @@ func TestGemmaTokenizer_ByteEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGemmaTokenizer: %v", err)
 	}
-	// Non-ASCII text should be byte-encoded
-	encoded := tok.byteEncode("hello")
-	if encoded != "hello" {
-		t.Errorf("ASCII bytes should be preserved: got %q", encoded)
+
+	// "abc" must collapse to the single 'abc' merge (id 7), not a, b, c.
+	got := tok.Encode("abc")
+	if !reflect.DeepEqual(got, []int32{7}) {
+		t.Errorf("Encode(abc) = %v, want [7]", got)
+	}
+
+	// Empty input still produces empty bare ids, but EncodeWithBOSAndEOS
+	// must yield [BOS, EOS] — this is the contract the ONNX provider relies
+	// on for embedding short prompts.
+	if got := tok.Encode(""); len(got) != 0 {
+		t.Errorf("Encode(empty) = %v, want []", got)
+	}
+	if got := tok.EncodeWithBOSAndEOS(""); !reflect.DeepEqual(got, []int32{1, 2}) {
+		t.Errorf("EncodeWithBOSAndEOS(empty) = %v, want [1, 2]", got)
+	}
+
+	// BOS/EOS wrap real input.
+	if got := tok.EncodeWithBOSAndEOS("abc"); !reflect.DeepEqual(got, []int32{1, 7, 2}) {
+		t.Errorf("EncodeWithBOSAndEOS(abc) = %v, want [1, 7, 2]", got)
 	}
 }
 
 func TestGemmaTokenizer_VocabSize(t *testing.T) {
-	tmpDir := t.TempDir()
-	jsonContent := `{
-		"model": {
-			"type": "BPE",
-			"vocab": {"a": 0, "b": 1, "c": 2},
-			"merges": ["a b ab"]
-		}
-	}`
-	path := filepath.Join(tmpDir, "tokenizer.json")
-	if err := os.WriteFile(path, []byte(jsonContent), 0644); err != nil {
+	path := filepath.Join(t.TempDir(), "tokenizer.json")
+	if err := os.WriteFile(path, []byte(`{
+		"model": {"type": "BPE", "vocab": {"a": 0, "b": 1, "c": 2}, "merges": []}
+	}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	tok, err := NewGemmaTokenizer(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tok.VocabSize() != 3 {
-		t.Errorf("expected vocab size 3, got %d", tok.VocabSize())
+	if got := tok.VocabSize(); got != 3 {
+		t.Errorf("VocabSize() = %d, want 3", got)
 	}
+}
+
+// TestGemmaTokenizer_RejectsNonBPE ensures we fail fast on tokenizer.json files
+// that use a model type we don't implement, rather than silently producing
+// garbage embeddings.
+func TestGemmaTokenizer_RejectsNonBPE(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tokenizer.json")
+	if err := os.WriteFile(path, []byte(`{"model": {"type": "WordLevel", "vocab": {}, "merges": []}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewGemmaTokenizer(path); err == nil {
+		t.Fatal("expected error for non-BPE model, got nil")
+	}
+}
+
+// TestGemmaTokenizer_RealModel validates encoding against the HuggingFace
+// `tokenizers` reference output captured in testdata/. It is skipped when the
+// EmbeddingGemma-300M tokenizer.json hasn't been downloaded — see
+// pkg/embedding/manager.go for the bootstrap path.
+//
+// The fixture was generated by tools/regenerate_tokenizer_fixture.sh against
+// HuggingFace tokenizers v0.23.1; if the upstream tokenizer changes, regenerate
+// it rather than tweaking the assertions.
+func TestGemmaTokenizer_RealModel(t *testing.T) {
+	tokenizerPath := filepath.Join(DefaultModelDir(), EmbeddingGemma300MConfig().Name, "tokenizer.json")
+	if _, err := os.Stat(tokenizerPath); err != nil {
+		t.Skipf("tokenizer not present at %s — skipping reference comparison", tokenizerPath)
+	}
+
+	fixtureBytes, err := os.ReadFile("testdata/embeddinggemma_tokenizer_fixture.json")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var fixture struct {
+		Cases []struct {
+			Name   string  `json:"name"`
+			Input  string  `json:"input"`
+			IDs    []int32 `json:"ids"`
+			Tokens []string `json:"tokens"`
+		} `json:"cases"`
+		Special map[string]int32 `json:"special"`
+	}
+	if err := json.Unmarshal(fixtureBytes, &fixture); err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+
+	tok, err := NewGemmaTokenizer(tokenizerPath)
+	if err != nil {
+		t.Fatalf("NewGemmaTokenizer: %v", err)
+	}
+
+	if tok.bosID != fixture.Special["bos"] {
+		t.Errorf("bos id = %d, want %d", tok.bosID, fixture.Special["bos"])
+	}
+	if tok.eosID != fixture.Special["eos"] {
+		t.Errorf("eos id = %d, want %d", tok.eosID, fixture.Special["eos"])
+	}
+
+	for _, c := range fixture.Cases {
+		got := tok.Encode(c.Input)
+		if !equalInt32(got, c.IDs) {
+			t.Errorf("case %s: input=%q\n  got:  %v\n  want: %v", c.Name, c.Input, got, c.IDs)
+		}
+	}
+}
+
+// equalInt32 compares two int32 slices treating nil and zero-length as equal.
+// The JSON fixture decodes empty arrays to []int32{} while Encode() returns
+// nil for empty input — both correctly represent "no tokens" so we don't want
+// to flag the distinction.
+func equalInt32(a, b []int32) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

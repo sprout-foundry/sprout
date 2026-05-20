@@ -34,6 +34,14 @@ type ONNXRuntime struct {
 	closed     bool
 }
 
+// onnxRequiresModelFiles reports whether the active ONNX backend expects
+// the model + tokenizer to exist on local disk before NewONNXEmbeddingProvider
+// can succeed. Native sprout uses yalue/onnxruntime_go which loads .onnx
+// files directly, so the answer is yes; the WASM build delegates to a
+// JS-side provider that handles model loading itself, so the WASM
+// counterpart returns false.
+func onnxRequiresModelFiles() bool { return true }
+
 // DefaultModelDir returns the default model directory path.
 // Priority: SPROUT_MODELS_DIR env > SPROUT_CONFIG/LEDIT_CONFIG env > ~/.config/sprout
 func DefaultModelDir() string {

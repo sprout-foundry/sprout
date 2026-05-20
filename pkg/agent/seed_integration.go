@@ -660,8 +660,12 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	a.finalizeConversationPostHooks(result, processedQuery, preSeedMsgCount)
 
 	// If streaming was enabled and content was streamed, return empty string
-	// to avoid duplicate display in the console
-	if a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
+	// to avoid duplicate display in the top-level CLI console.
+	// Subagents are exempt: their streaming callback writes prefixed lines to
+	// stderr for the human, but the orchestrator LLM only sees what we return
+	// here via SubagentResult.Output — returning "" would make the orchestrator
+	// think the subagent did nothing and re-attempt the task.
+	if !a.IsSubagent() && a.output.IsStreamingEnabled() && len(a.output.GetStreamingBuffer().String()) > 0 {
 		return "", nil
 	}
 

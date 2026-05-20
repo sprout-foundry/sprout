@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
 // handleSearchMemories searches memory files by semantic similarity.
@@ -55,7 +57,7 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		return "", fmt.Errorf("failed to get conversation store: %w", err)
 	}
 
-	results, err := store.QueryMemories(ctx, query, topK, threshold)
+	results, err := queryMemoriesAcrossStores(ctx, em, store, query, topK, threshold)
 	if err != nil {
 		return "", fmt.Errorf("memory search failed: %w", err)
 	}
@@ -65,7 +67,7 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		MigrateMemories(ctx, em)
 
 		// Retry after migration
-		results, err = store.QueryMemories(ctx, query, topK, threshold)
+		results, err = queryMemoriesAcrossStores(ctx, em, store, query, topK, threshold)
 		if err != nil {
 			return "", fmt.Errorf("memory search retry failed: %w", err)
 		}
@@ -106,6 +108,44 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 	return sb.String(), nil
 }
 
+// queryMemoriesAcrossStores runs the memory query against both the static and
+// (when available) ONNX conversation stores, then fuses the rankings with RRF.
+//
+// The threshold is applied per-provider since cosine similarities are not
+// comparable across the two vector spaces — a memory passing 0.75 in static's
+// space says nothing about whether the same memory would pass 0.75 in ONNX's
+// space. Top-K is enforced after merge.
+//
+// ONNX absence is silent: a missing store, an init error, or a query failure
+// all degrade to static-only results without surfacing an error to the caller.
+func queryMemoriesAcrossStores(
+	ctx context.Context,
+	em *embedding.EmbeddingManager,
+	staticStore *embedding.ConversationStore,
+	query string,
+	topK int,
+	threshold float32,
+) ([]embedding.QueryResult, error) {
+	staticResults, err := staticStore.QueryMemories(ctx, query, topK, threshold)
+	if err != nil {
+		return nil, err
+	}
+
+	onnxStore, oerr := em.GetONNXConversationStore(ctx)
+	if oerr != nil || onnxStore == nil {
+		return staticResults, nil
+	}
+
+	onnxResults, err := onnxStore.QueryMemories(ctx, query, topK, threshold)
+	if err != nil {
+		// Best-effort ONNX: log nothing here (caller already has static
+		// results) and fall back silently.
+		return staticResults, nil
+	}
+
+	return embedding.RRFMergeResults(staticResults, onnxResults, topK), nil
+}
+
 // handleSearchMemoriesJSON returns structured JSON results from memory search.
 // Used internally for programmatic access.
 func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK int, threshold float32) (string, error) {
@@ -119,7 +159,7 @@ func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK 
 		return "", err
 	}
 
-	results, err := store.QueryMemories(ctx, query, topK, threshold)
+	results, err := queryMemoriesAcrossStores(ctx, em, store, query, topK, threshold)
 	if err != nil {
 		return "", err
 	}

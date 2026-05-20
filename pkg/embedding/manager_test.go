@@ -441,3 +441,119 @@ func TestEmbeddingManager_IsInitialized_Concurrent(t *testing.T) {
 		}
 	}
 }
+
+// ─── RRFMergeResults tests ───
+
+// makeResult is a small helper so the merge tests stay readable.
+func makeResult(file string, line int, sim float32) QueryResult {
+	return QueryResult{
+		Record: VectorRecord{
+			File:      file,
+			StartLine: line,
+			ID:        file + ":" + string(rune('0'+line)),
+		},
+		Similarity: sim,
+	}
+}
+
+// TestRRFMerge_DoesNotDropTopStaticHit pins the query-5 regression that
+// motivated switching from max-cosine to RRF. Scenario: the correct answer
+// is in static's top result (rank 1) with a modest absolute cosine, while
+// ONNX's top-5 contains five wrong but high-cosine matches. The merged
+// output must still surface the static top hit — under the old max-cosine
+// merge it would have been pushed off the topK list.
+func TestRRFMerge_DoesNotDropTopStaticHit(t *testing.T) {
+	correct := makeResult("delete.go", 10, 0.55) // static rank 1, low cosine
+	staticResults := []QueryResult{
+		correct,
+		makeResult("other.go", 20, 0.40),
+	}
+	onnxResults := []QueryResult{
+		makeResult("wrong1.go", 1, 0.90),
+		makeResult("wrong2.go", 2, 0.88),
+		makeResult("wrong3.go", 3, 0.86),
+		makeResult("wrong4.go", 4, 0.84),
+		makeResult("wrong5.go", 5, 0.82),
+	}
+	out := RRFMergeResults(staticResults, onnxResults, 5)
+	if len(out) == 0 {
+		t.Fatal("expected non-empty merge")
+	}
+	if out[0].Record.File != "delete.go" {
+		t.Errorf("expected static's rank-1 hit (delete.go) at position 0, got %s with sim=%.3f",
+			out[0].Record.File, out[0].Similarity)
+	}
+}
+
+// TestRRFMerge_OverlapBoostsRank verifies the fundamental RRF property:
+// a document found by both providers outranks documents found by only one,
+// even if the only-one document has higher absolute cosine.
+func TestRRFMerge_OverlapBoostsRank(t *testing.T) {
+	shared := makeResult("shared.go", 1, 0.50)
+	out := RRFMergeResults(
+		[]QueryResult{shared, makeResult("staticonly.go", 5, 0.99)},
+		[]QueryResult{shared, makeResult("onnxonly.go", 7, 0.99)},
+		5,
+	)
+	if out[0].Record.File != "shared.go" {
+		t.Errorf("expected shared.go (both providers) to rank first, got %s", out[0].Record.File)
+	}
+}
+
+// TestRRFMerge_RespectsTopK trims oversized merge unions back down.
+func TestRRFMerge_RespectsTopK(t *testing.T) {
+	a := []QueryResult{makeResult("a.go", 1, 0.9), makeResult("b.go", 2, 0.8), makeResult("c.go", 3, 0.7)}
+	b := []QueryResult{makeResult("d.go", 4, 0.6), makeResult("e.go", 5, 0.5)}
+	out := RRFMergeResults(a, b, 3)
+	if len(out) != 3 {
+		t.Errorf("topK=3 should produce 3 results, got %d", len(out))
+	}
+}
+
+// TestRRFMerge_MemoryRecordsDoNotCollapse pins the dedup-key fix that lets
+// memory records survive the merge. Memory records have File="" and
+// StartLine=0 — the older File+StartLine key collapsed every memory into a
+// single entry, silently dropping all but one from any cross-provider merge.
+// Dedupe by Record.ID is what makes the memory ONNX path work at all.
+func TestRRFMerge_MemoryRecordsDoNotCollapse(t *testing.T) {
+	mem := func(name string, sim float32) QueryResult {
+		return QueryResult{
+			Record: VectorRecord{
+				ID:   "memory:" + name,
+				Name: name,
+				Type: "memory",
+			},
+			Similarity: sim,
+		}
+	}
+	a := []QueryResult{mem("auth", 0.80), mem("migrations", 0.60), mem("tests", 0.50)}
+	out := RRFMergeResults(a, nil, 5)
+	if len(out) != 3 {
+		t.Fatalf("expected 3 distinct memory results, got %d (key collision?)", len(out))
+	}
+	seen := map[string]bool{}
+	for _, r := range out {
+		seen[r.Record.Name] = true
+	}
+	for _, name := range []string{"auth", "migrations", "tests"} {
+		if !seen[name] {
+			t.Errorf("memory %q missing from merged output", name)
+		}
+	}
+}
+
+// TestRRFMerge_KeepsHigherSimilarityCopy ensures that when both providers
+// surface the same doc, the QueryResult retained for display has the higher
+// per-provider .Similarity. This preserves meaningful percentages in UI
+// affordances like the duplicate-check display.
+func TestRRFMerge_KeepsHigherSimilarityCopy(t *testing.T) {
+	a := []QueryResult{{Record: VectorRecord{File: "x.go", StartLine: 1, ID: "x"}, Similarity: 0.40}}
+	b := []QueryResult{{Record: VectorRecord{File: "x.go", StartLine: 1, ID: "x"}, Similarity: 0.95}}
+	out := RRFMergeResults(a, b, 5)
+	if len(out) != 1 {
+		t.Fatalf("expected 1 deduped result, got %d", len(out))
+	}
+	if out[0].Similarity != 0.95 {
+		t.Errorf("expected merged copy to carry the higher .Similarity (0.95), got %.2f", out[0].Similarity)
+	}
+}

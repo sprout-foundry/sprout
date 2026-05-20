@@ -1,3 +1,5 @@
+//go:build !js
+
 // daemon_logging.go — Daemon log rotation via lumberjack.
 //
 // When sprout runs as a daemon (SPROUT_SERVICE=1), this module redirects

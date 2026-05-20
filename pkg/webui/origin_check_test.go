@@ -1,3 +1,5 @@
+//go:build !js
+
 // Package webui tests for origin checking middleware
 package webui
 

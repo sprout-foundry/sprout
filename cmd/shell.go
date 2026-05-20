@@ -1,3 +1,5 @@
+//go:build !js
+
 // Shell command for sprout
 package cmd
 

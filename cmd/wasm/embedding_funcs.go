@@ -75,7 +75,43 @@ func embeddingJSFuncs() map[string]interface{} {
 		"saveMemory":          js.FuncOf(saveMemoryFunc),
 		"deleteMemory":        js.FuncOf(deleteMemoryFunc),
 		"searchMemories":      js.FuncOf(searchMemoriesFunc),
+		"setStaticModel":      js.FuncOf(setStaticModelFunc),
 	}
+}
+
+// setStaticModelFunc accepts the bytes of pkg/embedding/static_model.bin
+// from the host page (typically loaded via fetch() against a same-origin
+// asset). MUST be called before the first searchSemantic or
+// buildSemanticIndex; otherwise the embedding manager fails to initialize
+// with "static model data is empty".
+//
+// The argument is a JS ArrayBuffer or Uint8Array. Copies through
+// js.CopyBytesToGo so we end up with a Go-owned []byte.
+//
+// Synchronous (no Promise) since it's a one-shot setup call that doesn't
+// touch disk or do real work.
+func setStaticModelFunc(_ js.Value, args []js.Value) interface{} {
+	if len(args) == 0 {
+		return map[string]interface{}{"error": "setStaticModel requires the model bytes as a Uint8Array or ArrayBuffer"}
+	}
+	src := args[0]
+	// Accept either an ArrayBuffer (wrap in Uint8Array) or a typed array.
+	if src.InstanceOf(js.Global().Get("ArrayBuffer")) {
+		src = js.Global().Get("Uint8Array").New(src)
+	}
+	length := src.Get("length").Int()
+	if length == 0 {
+		return map[string]interface{}{"error": "setStaticModel received zero-length data"}
+	}
+	buf := make([]byte, length)
+	copied := js.CopyBytesToGo(buf, src)
+	if copied != length {
+		return map[string]interface{}{
+			"error": fmt.Sprintf("setStaticModel copy short: %d of %d bytes", copied, length),
+		}
+	}
+	embedding.SetStaticModelData(buf)
+	return map[string]interface{}{"ok": true, "bytes": length}
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────

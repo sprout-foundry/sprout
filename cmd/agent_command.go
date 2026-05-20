@@ -1,3 +1,5 @@
+//go:build !js
+
 // Agent command for sprout
 package cmd
 

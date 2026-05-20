@@ -1,3 +1,5 @@
+//go:build !js
+
 // Tests for cmd/github_setup_prompt.go
 package cmd
 

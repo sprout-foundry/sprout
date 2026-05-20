@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
 func (a *Agent) shiftTurnCheckpoints(delta int) {
@@ -119,9 +120,14 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 	// Embed and store the turn *after* releasing the mutex so embedding I/O
 	// does not block concurrent checkpoint access.
 	if shouldEmbed {
-		turn, err := NewConversationTurn(sessionID, turnNumber, userPrompt, workspaceRoot)
+		// Redact secrets before embedding to avoid persisting them in the
+		// embedding store's conversation_turns.jsonl.
+		safeUserPrompt := redact.String(userPrompt)
+		safeActionableSummary := redact.String(actionableSummary)
+
+		turn, err := NewConversationTurn(sessionID, turnNumber, safeUserPrompt, workspaceRoot)
 		if err == nil {
-			turn.ActionableSummary = actionableSummary
+			turn.ActionableSummary = safeActionableSummary
 			// FilesTouched, Duration, TokenUsage are left as zero values to be enriched later
 			_ = EmbedAndStoreTurn(context.Background(), a.embeddingMgr, turn)
 

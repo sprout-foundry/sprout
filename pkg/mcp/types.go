@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -263,11 +264,13 @@ type MCPManager interface {
 
 // MCPToolWrapper wraps an MCP tool to implement the standard Tool interface
 type MCPToolWrapper struct {
-	mcpTool   MCPTool
-	manager   MCPManager
-	category  string
-	timeout   time.Duration
-	available bool
+	mcpTool           MCPTool
+	manager           MCPManager
+	category          string
+	timeout           time.Duration
+	available         bool
+	compiledSchema    any           // *jsonschema.Schema, typed in tool_wrapper.go to avoid coupling
+	schemaCompileOnce sync.Once
 }
 
 // Standard error codes

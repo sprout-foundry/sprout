@@ -1020,7 +1020,10 @@ func Load() (*Config, error) {
 	warnUnknownPersonaTools(config.SubagentTypes)
 
 	// Discover project-specific skills from .sprout/skills/
-	discoverProjectSkills(&config)
+	if discovered := discoverProjectSkills(&config); len(discovered) > 0 {
+		log.Printf("[skills] Discovered %d project-local skill(s): %s",
+			len(discovered), strings.Join(discovered, ", "))
+	}
 
 	return &config, nil
 }
@@ -1691,9 +1694,10 @@ func mergeMissingDefaultSkills(config *Config) {
 // discoverProjectSkills scans the .sprout/skills/ directory for project-specific skills
 // and adds them to the config. This allows users to create custom skills without
 // modifying the global config.
-func discoverProjectSkills(config *Config) {
+func discoverProjectSkills(config *Config) []string {
+	var discovered []string
 	if config == nil {
-		return
+		return discovered
 	}
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
@@ -1702,14 +1706,14 @@ func discoverProjectSkills(config *Config) {
 	// Get current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		return
+		return discovered
 	}
 
 	// Check for .sprout/skills directory
 	skillsDir := filepath.Join(cwd, ".sprout", "skills")
 	entries, err := os.ReadDir(skillsDir)
 	if err != nil {
-		return // No project skills directory, that's fine
+		return discovered // No project skills directory, that's fine
 	}
 
 	// Scan for skill directories
@@ -1751,8 +1755,11 @@ func discoverProjectSkills(config *Config) {
 				Enabled:     true,
 				Metadata:    map[string]string{"source": "project"},
 			}
+			discovered = append(discovered, name)
 		}
 	}
+
+	return discovered
 }
 
 // parseSkillFrontMatter extracts name and description from SKILL.md front matter

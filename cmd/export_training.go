@@ -1,3 +1,5 @@
+//go:build !js
+
 // Export training data command for sprout
 package cmd
 

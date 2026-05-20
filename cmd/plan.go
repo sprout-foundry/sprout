@@ -1,3 +1,5 @@
+//go:build !js
+
 // Plan command for sprout - Seamless planning and execution using agent framework
 package cmd
 

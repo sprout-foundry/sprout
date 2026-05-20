@@ -439,6 +439,44 @@ func (m *Manager) RefreshAPIKeys() error {
 	return nil
 }
 
+// Reload re-reads the on-disk configuration and API keys into the in-memory
+// cache.  It is intended to be called from a SIGHUP handler so that config
+// changes made externally (e.g., editing config.yaml) take effect without
+// restarting the daemon.  Running agents and tools are NOT affected — only
+// subsequent queries will see the new configuration.
+func (m *Manager) Reload() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var cfg *Config
+	var err error
+	if m.configDir != "" {
+		configPath := filepath.Join(m.configDir, ConfigFileName)
+		cfg, err = LoadConfigWithLayers(configPath, "", "", m.configDir)
+	} else {
+		cfg, err = Load()
+	}
+	if err != nil {
+		return fmt.Errorf("reload config: %w", err)
+	}
+	m.config = cfg
+
+	var keys *APIKeys
+	if m.configDir != "" {
+		keys, err = LoadAPIKeysFromDir(m.configDir)
+	} else {
+		keys, err = LoadAPIKeys()
+	}
+	if err != nil {
+		return fmt.Errorf("reload API keys: %w", err)
+	}
+	keys.PopulateFromJSONEnv()
+	keys.PopulateFromEnvironment()
+	m.apiKeys = keys
+
+	return nil
+}
+
 // GetProvider returns the currently selected provider as ClientType
 func (m *Manager) GetProvider() (api.ClientType, error) {
 	provider := m.config.LastUsedProvider

@@ -94,7 +94,10 @@ func TestSanitizeRemoteLogName(t *testing.T) {
 }
 
 func TestSetSSHLaunchStatus(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ws.setSSHLaunchStatus("test-key", "step", "status", true, "error")
 	status := ws.getSSHLaunchStatus("test-key")
@@ -116,14 +119,20 @@ func TestSetSSHLaunchStatus(t *testing.T) {
 }
 
 func TestSetSSHLaunchStatusEmptyKey(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Should not panic
 	ws.setSSHLaunchStatus("", "step", "status", true, "error")
 	ws.setSSHLaunchStatus("  ", "step", "status", true, "error")
 }
 
 func TestGetSSHLaunchStatus(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	status := ws.getSSHLaunchStatus("nonexistent")
 	if status != nil {
@@ -138,7 +147,10 @@ func TestGetSSHLaunchStatus(t *testing.T) {
 }
 
 func TestGetSSHLaunchStatusEmptyKey(t *testing.T) {
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	status := ws.getSSHLaunchStatus("")
 	if status != nil {
 		t.Fatal("expected nil for empty key")
@@ -155,22 +167,22 @@ func TestStartRemoteSSHBackendSignature(t *testing.T) {
 func TestStopRemoteSSHBackend(t *testing.T) {
 	t.Run("empty host returns nil", func(t *testing.T) {
 		err := stopRemoteSSHBackend("", 1234)
-		if err != nil {
-			t.Fatalf("expected nil, got %v", err)
+	if err != nil {
+		t.Fatalf("expected nil, got %v", err)
 		}
 	})
 
 	t.Run("invalid PID returns nil", func(t *testing.T) {
 		err := stopRemoteSSHBackend("host", 0)
-		if err != nil {
-			t.Fatalf("expected nil, got %v", err)
+	if err != nil {
+		t.Fatalf("expected nil, got %v", err)
 		}
 	})
 
 	t.Run("negative PID returns nil", func(t *testing.T) {
 		err := stopRemoteSSHBackend("host", -1)
-		if err != nil {
-			t.Fatalf("expected nil, got %v", err)
+	if err != nil {
+		t.Fatalf("expected nil, got %v", err)
 		}
 	})
 }

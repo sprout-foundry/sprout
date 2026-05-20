@@ -29,6 +29,7 @@ type Definition struct {
 	Enabled          bool     `json:"enabled"`
 	Aliases          []string `json:"aliases,omitempty"`
 	LocalOnly        bool     `json:"local_only,omitempty"`
+	Delegatable      bool     `json:"delegatable,omitempty"`
 }
 
 var (

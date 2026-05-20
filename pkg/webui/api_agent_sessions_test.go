@@ -19,7 +19,10 @@ func newTestWebServer(t *testing.T) (*ReactWebServer, *TerminalManager) {
 	t.Helper()
 	daemonRoot := t.TempDir()
 
-	ws := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	ws.daemonRoot = daemonRoot
 	ws.workspaceRoot = daemonRoot
 
@@ -347,8 +350,8 @@ func TestHandleAPIAgentSessions_MultipleBackgroundSessions(t *testing.T) {
 	// Create 3 background sessions with different properties.
 	for i, chat := range []string{"chat-1", "chat-2", "chat-3"} {
 		session, err := tm.CreateHiddenSession("bg-multi-"+chat, "agent", chat)
-		if err != nil {
-			t.Fatalf("CreateHiddenSession failed: %v", err)
+	if err != nil {
+		t.Fatalf("CreateHiddenSession failed: %v", err)
 		}
 		session.mutex.Lock()
 		session.IsBackground = true

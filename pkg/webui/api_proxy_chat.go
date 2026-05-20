@@ -172,6 +172,7 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 	if req.Provider != "" {
 		cm := ws.getConfigManager(r, w)
 		if cm != nil {
+			cm.EnrichCustomProviders()
 			if providerType, err := cm.MapStringToClientType(req.Provider); err == nil {
 				if serr := clientAgent.SetProvider(providerType); serr != nil {
 					log.Printf("handleAPIProxyChat: failed to set provider %q: %v", req.Provider, serr)

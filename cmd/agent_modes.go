@@ -460,6 +460,19 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	}
 
 	// Graceful shutdown
+	if chatAgent != nil {
+		done := make(chan struct{})
+		go func() {
+			chatAgent.Shutdown()
+			close(done)
+		}()
+		select {
+		case <-done:
+			fmt.Printf("[OK] Agent shut down successfully\n")
+		case <-time.After(5 * time.Second):
+			fmt.Fprintf(os.Stderr, "[WARN] Agent shutdown timed out after 5s\n")
+		}
+	}
 	if webUISup != nil {
 		webUISup.cleanupHostRecordIfOwned()
 	}

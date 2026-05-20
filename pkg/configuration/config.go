@@ -1716,6 +1716,9 @@ func discoverProjectSkills(config *Config) []string {
 		return discovered // No project skills directory, that's fine
 	}
 
+	// Read the allowed_skills allowlist (if present)
+	allowed := ReadAllowedSkills(cwd)
+
 	// Scan for skill directories
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -1747,12 +1750,17 @@ func discoverProjectSkills(config *Config) []string {
 
 		// Add to config (don't override if already exists)
 		if _, exists := config.Skills[skillID]; !exists {
+			// If an allowlist exists and the skill is not listed, load it disabled.
+			enabled := true
+			if allowed != nil && !allowed[skillID] {
+				enabled = false
+			}
 			config.Skills[skillID] = Skill{
 				ID:          skillID,
 				Name:        name,
 				Description: description,
 				Path:        filepath.Join(".sprout", "skills", skillID),
-				Enabled:     true,
+				Enabled:     enabled,
 				Metadata:    map[string]string{"source": "project"},
 			}
 			discovered = append(discovered, name)

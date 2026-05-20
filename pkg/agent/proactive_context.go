@@ -93,17 +93,19 @@ func RetrieveProactiveContext(
 ) ([]ProactiveContextResult, error) {
 	config = config.resolve()
 
-	// Nil-safe input validation
+	// Nil-safe input validation. Routine "feature unavailable" paths —
+	// demoted to debug so they don't fire on every query when embedding
+	// is unconfigured.
 	if mgr == nil {
-		log.Printf("[proactive-context] skipping: embedding manager is nil")
+		debugLogf("[proactive-context] skipping: embedding manager is nil")
 		return nil, nil
 	}
 	if ctx == nil {
-		log.Printf("[proactive-context] skipping: context is nil")
+		debugLogf("[proactive-context] skipping: context is nil")
 		return nil, nil
 	}
 	if query == "" {
-		log.Printf("[proactive-context] skipping: empty query")
+		debugLogf("[proactive-context] skipping: empty query")
 		return nil, nil
 	}
 	if now.IsZero() {
@@ -203,7 +205,8 @@ func RetrieveProactiveContext(
 		scored = scored[:config.MaxContextualResults]
 	}
 
-	log.Printf("[proactive-context] retrieved %d/%d candidates above threshold %.2f",
+	// Per-retrieval informational log — debug-only.
+	debugLogf("[proactive-context] retrieved %d/%d candidates above threshold %.2f",
 		len(scored), len(candidates), config.MinRelevanceScore)
 
 	return scored, nil
@@ -339,7 +342,10 @@ func (a *Agent) InjectProactiveContext(ctx context.Context, query string) error 
 	}
 	a.setPendingSystemSupplement(combined)
 
-	log.Printf("[proactive-context] injected %d results (%d chars) into system prompt",
+	// Per-injection informational log — debug-only. Fires on every cold
+	// session start or first turn; only operators debugging the proactive
+	// path actually want to see this.
+	debugLogf("[proactive-context] injected %d results (%d chars) into system prompt",
 		len(results), len(formatted))
 
 	return nil

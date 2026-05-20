@@ -9,7 +9,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 - **Coding Agent** with smart workspace context, self-correction, and multi-step orchestration
 - **10 specialized personas** (coder, debugger, reviewer, researcher, etc.)
 - **Web UI** with chat, code editor, terminal, file browser, Git UI, and more
-- **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, and custom providers
+- **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, Cerebras, Chutes, and custom providers
 - **MCP Server Integration** for external tools (GitHub repos, issues, PRs)
 - **Persistent Memory** across conversations
 - **Built-in tool suite** — file operations, web search, vision analysis, shell execution, PDF analysis, headless browser
@@ -58,7 +58,7 @@ Requires Go 1.25.0+ and Node.js 22+:
 
 ```bash
 git clone https://github.com/sprout-foundry/sprout.git
-cd ledit
+cd sprout
 make deploy-ui   # Build and embed the React web UI (requires Node.js)
 go install .
 ```
@@ -69,7 +69,7 @@ go install .
 
 ```bash
 # Start interactive agent mode (Web UI opens at http://localhost:56000)
-ledit
+sprout
 
 # Run a specific task
 sprout agent "Create a python script that prints 'Hello, World!'"

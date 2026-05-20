@@ -152,3 +152,4 @@ pkg/embedding/models/
 pkg/embedding/staticmodel/mkembed
 
 code_review_output.json
+.claude/

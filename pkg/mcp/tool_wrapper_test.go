@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -122,9 +123,132 @@ func TestMCPToolWrapper_ToAgentTool(t *testing.T) {
 }
 
 func TestMCPToolWrapper_ValidateArgs(t *testing.T) {
-	w := newTestWrapper("srv", "tool")
-	assert.NoError(t, w.ValidateArgs(nil))
-	assert.NoError(t, w.ValidateArgs(map[string]interface{}{"key": "val"}))
+	t.Run("empty schema passes", func(t *testing.T) {
+		w := newTestWrapper("srv", "tool")
+		assert.NoError(t, w.ValidateArgs(nil))
+		assert.NoError(t, w.ValidateArgs(map[string]interface{}{"key": "val"}))
+	})
+
+	t.Run("nil schema passes", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name: "tool", ServerName: "srv",
+			InputSchema: nil,
+		}, m)
+		assert.NoError(t, w.ValidateArgs(nil))
+		assert.NoError(t, w.ValidateArgs(map[string]interface{}{"x": 1}))
+	})
+
+	t.Run("required field missing returns InvalidArgsError", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name:     "search",
+			ServerName: "srv",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{"type": "string"},
+				},
+				"required": []interface{}{"query"},
+			},
+		}, m)
+
+		err := w.ValidateArgs(map[string]interface{}{})
+		assert.Error(t, err)
+		invErr, ok := err.(*InvalidArgsError)
+		assert.True(t, ok, "should return InvalidArgsError")
+		assert.Equal(t, "search", invErr.Tool)
+		assert.Equal(t, "srv", invErr.Server)
+		assert.NotEmpty(t, invErr.Failures)
+	})
+
+	t.Run("required field present passes", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name:     "search",
+			ServerName: "srv",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{"type": "string"},
+				},
+				"required": []interface{}{"query"},
+			},
+		}, m)
+
+		assert.NoError(t, w.ValidateArgs(map[string]interface{}{"query": "hello"}))
+	})
+
+	t.Run("wrong type fails", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name:     "count",
+			ServerName: "srv",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"limit": map[string]interface{}{"type": "integer"},
+				},
+			},
+		}, m)
+
+		err := w.ValidateArgs(map[string]interface{}{"limit": "not_a_number"})
+		assert.Error(t, err)
+		invErr, ok := err.(*InvalidArgsError)
+		assert.True(t, ok)
+		assert.NotEmpty(t, invErr.Failures)
+	})
+
+	t.Run("FormatForLLM produces usable output", func(t *testing.T) {
+		err := &InvalidArgsError{
+			Tool:   "search",
+			Server: "files",
+			Failures: []ValidationFailure{
+				{Path: ".query", Reason: "is required"},
+				{Path: ".limit", Reason: "must be of type integer"},
+			},
+		}
+		msg := FormatForLLM(err)
+		assert.Contains(t, msg, "search")
+		assert.Contains(t, msg, "files")
+		assert.Contains(t, msg, ".query")
+		assert.Contains(t, msg, "is required")
+		assert.Contains(t, msg, ".limit")
+		assert.Contains(t, msg, "integer")
+		assert.Contains(t, msg, "Please correct these arguments")
+	})
+
+	t.Run("lazy compilation via sync.Once", func(t *testing.T) {
+		m := NewMCPManager(nil)
+		m.AddServer(MCPServerConfig{Name: "srv", Command: "npx"})
+		w := NewMCPToolWrapper(MCPTool{
+			Name:     "search",
+			ServerName: "srv",
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{"type": "string"},
+				},
+				"required": []interface{}{"query"},
+			},
+		}, m)
+
+		// First call compiles the schema
+		err1 := w.ValidateArgs(map[string]interface{}{})
+		assert.Error(t, err1)
+
+		// Second call reuses compiled schema (should also fail consistently)
+		err2 := w.ValidateArgs(map[string]interface{}{})
+		assert.Error(t, err2)
+
+		// Third call with valid args should pass
+		err3 := w.ValidateArgs(map[string]interface{}{"query": "test"})
+		assert.NoError(t, err3)
+	})
 }
 
 func TestMCPToolWrapper_CanExecute_ServerNotFound(t *testing.T) {
@@ -133,6 +257,38 @@ func TestMCPToolWrapper_CanExecute_ServerNotFound(t *testing.T) {
 	// Don't add any server - wrapper references nonexistent "missing" server
 	w := NewMCPToolWrapper(MCPTool{Name: "tool", ServerName: "missing"}, m)
 	assert.False(t, w.CanExecute(nil, Parameters{}))
+}
+
+func TestMCPToolWrapper_CanExecute_InvalidArgs(t *testing.T) {
+	// Server exists and is running, but args fail validation
+	mockMgr := &mockMCPManager{
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+	w := NewMCPToolWrapper(MCPTool{
+		Name:     "search",
+		ServerName: "srv",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"query": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"query"},
+		},
+	}, mockMgr)
+
+	// Missing required field should return false
+	assert.False(t, w.CanExecute(nil, Parameters{
+		Kwargs: map[string]interface{}{},
+	}), "CanExecute should return false when required arg is missing")
+
+	// Present required field should return true (server is running)
+	assert.True(t, w.CanExecute(nil, Parameters{
+		Kwargs: map[string]interface{}{"query": "hello"},
+	}), "CanExecute should return true when validation passes")
 }
 
 func TestMCPToolWrapper_IsAvailable_ServerNotFound(t *testing.T) {
@@ -198,6 +354,101 @@ func (m *mockMCPManager) CallTool(ctx context.Context, serverName, toolName stri
 // ---------------------------------------------------------------------------
 // Execute Method Tests
 // ---------------------------------------------------------------------------
+
+func TestMCPToolWrapper_Execute_ValidatesArgs(t *testing.T) {
+	// Arrange
+	serverName := "test-server"
+	toolName := "search_files"
+
+	mockMgr := &mockMCPManager{
+		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
+			// This should NOT be reached due to validation failure
+			t.Fatal("CallTool should not be called when validation fails")
+			return nil, nil
+		},
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	tool := MCPTool{
+		Name:        toolName,
+		Description: "Search for files",
+		ServerName:  serverName,
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"query": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"query"},
+		},
+	}
+
+	w := NewMCPToolWrapper(tool, mockMgr)
+
+	// Act — call without required "query"
+	result, err := w.Execute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{},
+	})
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.Success, "Execute should return failure on validation error")
+	assert.NotEmpty(t, result.Errors, "Should include validation error in Errors")
+	assert.NotEmpty(t, result.Output, "Output should contain LLM-friendly message")
+	assert.Contains(t, result.Output.(string), "Please correct these arguments")
+	assert.Equal(t, true, result.Metadata["validation_error"])
+}
+
+func TestMCPToolWrapper_Execute_ValidArgsProceeds(t *testing.T) {
+	// Arrange
+	serverName := "test-server"
+	toolName := "search_files"
+
+	expectedResult := &MCPToolCallResult{
+		Content: []MCPContent{{Type: "text", Text: "OK"}},
+		IsError: false,
+	}
+
+	mockMgr := &mockMCPManager{
+		callToolFunc: func(ctx context.Context, sn, tn string, args map[string]interface{}) (*MCPToolCallResult, error) {
+			return expectedResult, nil
+		},
+		getServer: func(name string) (MCPServer, bool) {
+			mockSrv := newMockMCPServer(name)
+			mockSrv.Start(context.Background())
+			return mockSrv, true
+		},
+	}
+
+	tool := MCPTool{
+		Name:        toolName,
+		Description: "Search for files",
+		ServerName:  serverName,
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"query": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"query"},
+		},
+	}
+
+	w := NewMCPToolWrapper(tool, mockMgr)
+
+	// Act — call WITH required "query"
+	result, err := w.Execute(context.Background(), Parameters{
+		Kwargs: map[string]interface{}{"query": "test"},
+	})
+
+	// Assert
+	assert.NoError(t, err)
+	assert.True(t, result.Success)
+	assert.Equal(t, "OK", result.Output)
+}
 
 func TestMCPToolWrapper_Execute_Success_SingleTextContent(t *testing.T) {
 	// Arrange
@@ -912,4 +1163,175 @@ func TestMCPToolWrapper_Execute_ArgumentsPassedThrough(t *testing.T) {
 	assert.Equal(t, inputArgs["limit"], receivedArgs["limit"])
 	assert.Equal(t, inputArgs["filters"], receivedArgs["filters"])
 	assert.Equal(t, inputArgs["nested"], receivedArgs["nested"])
+}
+
+// ---------------------------------------------------------------------------
+// Helper function tests
+// ---------------------------------------------------------------------------
+
+func TestNormalizePath(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", "(root)"},
+		{"#", "(root)"},
+		{".", "(root)"},
+		{"/query", ".query"},
+		{"/filters/0", ".filters.0"},
+		{"/nested/deep/field", ".nested.deep.field"},
+		{"query", "query"},   // already normalized
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.expected, normalizePath(tt.input))
+		})
+	}
+}
+
+func TestExtractLocationAndReason(t *testing.T) {
+	t.Run("jsonschema/v6 at quoted format", func(t *testing.T) {
+		detail := "at '/query': got number, want string"
+		failure, ok := extractLocationAndReason(detail)
+		assert.True(t, ok)
+		assert.Equal(t, ".query", failure.Path)
+		assert.Equal(t, "got number, want string", failure.Reason)
+	})
+
+	t.Run("jsonschema/v6 root missing property", func(t *testing.T) {
+		detail := "at '': missing property 'query'"
+		failure, ok := extractLocationAndReason(detail)
+		assert.True(t, ok)
+		assert.Equal(t, "(root)", failure.Path)
+		assert.Equal(t, "missing property 'query'", failure.Reason)
+	})
+
+	t.Run("at prefix format no quotes", func(t *testing.T) {
+		detail := "at /limit: must be of type integer"
+		failure, ok := extractLocationAndReason(detail)
+		assert.True(t, ok)
+		assert.Equal(t, ".limit", failure.Path)
+		assert.Equal(t, "must be of type integer", failure.Reason)
+	})
+
+	t.Run("location error format", func(t *testing.T) {
+		detail := "location: '/query'; error: 'is required'"
+		failure, ok := extractLocationAndReason(detail)
+		assert.True(t, ok)
+		assert.Equal(t, ".query", failure.Path)
+		assert.Equal(t, "is required", failure.Reason)
+	})
+
+	t.Run("unrecognized format", func(t *testing.T) {
+		detail := "something weird happened"
+		_, ok := extractLocationAndReason(detail)
+		assert.False(t, ok)
+	})
+}
+
+func TestExtractValidationFailures(t *testing.T) {
+	t.Run("nil error", func(t *testing.T) {
+		assert.Nil(t, extractValidationFailures(nil))
+	})
+
+	t.Run("location format", func(t *testing.T) {
+		// Simulate a real jsonschema validation error
+		compiler := jsonschema.NewCompiler()
+		compiler.AddResource("schema", map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"query": map[string]interface{}{"type": "string"},
+			},
+			"required": []interface{}{"query"},
+		})
+		schema, err := compiler.Compile("schema")
+		assert.NoError(t, err)
+
+		err = schema.Validate(map[string]interface{}{})
+		assert.Error(t, err)
+
+		failures := extractValidationFailures(err)
+		assert.NotEmpty(t, failures)
+		assert.NotEmpty(t, failures[0].Reason)
+	})
+
+	t.Run("generic error fallback", func(t *testing.T) {
+		err := errors.New("some unknown error")
+		failures := extractValidationFailures(err)
+		assert.Len(t, failures, 1)
+		assert.Equal(t, "(root)", failures[0].Path)
+		assert.Equal(t, "some unknown error", failures[0].Reason)
+	})
+}
+
+func TestInvalidArgsError_Error(t *testing.T) {
+	t.Run("with failures", func(t *testing.T) {
+		err := &InvalidArgsError{
+			Tool:   "search",
+			Server: "files",
+			Failures: []ValidationFailure{
+				{Path: ".query", Reason: "is required"},
+				{Path: ".limit", Reason: "must be of type integer"},
+			},
+		}
+		msg := err.Error()
+		assert.Contains(t, msg, "search")
+		assert.Contains(t, msg, "files")
+		assert.Contains(t, msg, ".query")
+		assert.Contains(t, msg, "is required")
+		assert.Contains(t, msg, ".limit")
+	})
+
+	t.Run("with empty failures", func(t *testing.T) {
+		err := &InvalidArgsError{
+			Tool:   "search",
+			Server: "files",
+		}
+		msg := err.Error()
+		assert.Contains(t, msg, "search")
+		assert.Contains(t, msg, "files")
+	})
+}
+
+func TestInvalidArgsError_Unwrap(t *testing.T) {
+	wrapped := errors.New("inner error")
+	err := &InvalidArgsError{
+		Tool:    "search",
+		Server:  "files",
+		wrapped: wrapped,
+	}
+	assert.Equal(t, wrapped, err.Unwrap())
+	assert.ErrorIs(t, err, wrapped)
+}
+
+func TestFormatForLLM(t *testing.T) {
+	t.Run("nil error", func(t *testing.T) {
+		assert.Equal(t, "", FormatForLLM(nil))
+	})
+
+	t.Run("empty failures", func(t *testing.T) {
+		err := &InvalidArgsError{Tool: "t", Server: "s"}
+		msg := FormatForLLM(err)
+		assert.Contains(t, msg, "t")
+		assert.Contains(t, msg, "s")
+	})
+
+	t.Run("with failures", func(t *testing.T) {
+		err := &InvalidArgsError{
+			Tool:   "search",
+			Server: "files",
+			Failures: []ValidationFailure{
+				{Path: "", Reason: "root error"},
+				{Path: ".", Reason: "dot root"},
+				{Path: "#", Reason: "hash root"},
+				{Path: ".query", Reason: "is required"},
+			},
+		}
+		msg := FormatForLLM(err)
+		assert.Contains(t, msg, "(root)")
+		assert.Contains(t, msg, ".query")
+		assert.Contains(t, msg, "1. (root): root error")
+		assert.Contains(t, msg, "4. .query: is required")
+		assert.Contains(t, msg, "Please correct these arguments")
+	})
 }

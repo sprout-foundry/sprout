@@ -15,9 +15,9 @@ func TestGenerateSystemdUnit(t *testing.T) {
 		homeDir    string
 		wantErr    bool
 	}{
-		{"valid paths", "/usr/local/bin/ledit", "/home/alice", false},
+		{"valid paths", "/usr/local/bin/sprout", "/home/alice", false},
 		{"empty binary", "", "/home/alice", true},
-		{"empty home", "/usr/local/bin/ledit", "", true},
+		{"empty home", "/usr/local/bin/sprout", "", true},
 		{"both empty", "", "", true},
 	}
 
@@ -101,7 +101,7 @@ func extractLine(content, prefix string) string {
 
 func TestSystemdUnitPaths(t *testing.T) {
 	t.Run("paths are properly quoted for systemd", func(t *testing.T) {
-		binary := "/opt/ledit/bin/ledit"
+		binary := "/opt/sprout/bin/sprout"
 		home := "/home/testuser"
 		out, err := generateSystemdUnit(binary, home)
 		if err != nil {
@@ -129,7 +129,7 @@ func TestSystemdUnitPaths(t *testing.T) {
 	})
 
 	t.Run("paths with spaces are properly handled", func(t *testing.T) {
-		binary := "/usr/bin/ledit"
+		binary := "/usr/bin/sprout"
 		home := "/home/user with spaces"
 		out, err := generateSystemdUnit(binary, home)
 		if err != nil {

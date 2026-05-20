@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -470,12 +472,12 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	stats, err := m.BuildIndex(ctx)
-	if err != nil {
-		log.Printf("embedding: auto-build failed: %v", err)
-		return
-	}
-	log.Printf("embedding: auto-build complete: %d files, %d units in %s",
-		stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
+		if err != nil {
+			debugLogf("embedding: auto-build failed: %v", err)
+			return
+		}
+		debugLogf("embedding: auto-build complete: %d files, %d units in %s",
+			stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
 }
 
 // UpdateFile incrementally updates the index for a single file.
@@ -547,46 +549,90 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 			// ONNX search failed, fall back to static only.
 			return staticResults, nil
 		}
-		// Merge: return union of both, deduplicated by file path + line range.
-		return mergeQueryResults(staticResults, onnxResults), nil
+		return RRFMergeResults(staticResults, onnxResults, topK), nil
 	}
 
 	return staticResults, nil
 }
 
-// mergeQueryResults merges two result sets, deduplicating by path+line and
-// keeping the highest-scoring entry for each unique match.
-func mergeQueryResults(a, b []QueryResult) []QueryResult {
-	seen := make(map[string]*QueryResult)
-	for _, r := range a {
-		key := r.Record.File + ":" + fmt.Sprintf("%d", r.Record.StartLine)
-		if _, exists := seen[key]; !exists {
-			cp := r
-			seen[key] = &cp
-		} else if r.Similarity > seen[key].Similarity {
-			seen[key] = &r
+// RRFMergeResults combines two ranked result lists using Reciprocal Rank
+// Fusion. Each document's fused score is sum_p 1/(k + rank_p), where rank_p
+// is its 1-based position in provider p's ranked list (absent providers
+// contribute nothing). Documents are deduped by file path + start line.
+//
+// RRF replaces the older max-cosine merge because cosine similarities from
+// the static and ONNX providers live in different vector spaces and are not
+// comparable on the same scale. Rank-based fusion gives a sound combination
+// without requiring score calibration.
+//
+// Each returned QueryResult retains its source-provider .Similarity (taking
+// the higher-similarity copy when both providers found the same doc) so
+// callers that display the value as a percentage still see a meaningful
+// per-provider score. Only the result ORDER reflects fusion.
+//
+// k=60 is the value introduced in the original RRF paper (Cormack et al. 2009)
+// and is the de-facto standard.
+func RRFMergeResults(a, b []QueryResult, topK int) []QueryResult {
+	const rrfK = 60.0
+
+	type entry struct {
+		result QueryResult
+		score  float64
+		order  int // insertion order, used as deterministic tiebreaker
+	}
+	// Dedupe by Record.ID — universally unique across record types. Code units
+	// use "<file>:<symbol>", memories use "memory:<name>", turns use "turn:<id>".
+	// File+StartLine collapsed all memories together (both are zero-valued).
+	keyOf := func(r QueryResult) string {
+		if r.Record.ID != "" {
+			return r.Record.ID
+		}
+		// Defensive fallback for records that somehow lack an ID — should be
+		// vanishingly rare since extractors always set one.
+		return r.Record.File + ":" + strconv.Itoa(r.Record.StartLine)
+	}
+	by := make(map[string]*entry, len(a)+len(b))
+	next := 0
+	contribute := func(list []QueryResult) {
+		for rank, r := range list {
+			key := keyOf(r)
+			inv := 1.0 / (rrfK + float64(rank+1))
+			if e, ok := by[key]; ok {
+				e.score += inv
+				if r.Similarity > e.result.Similarity {
+					e.result = r
+				}
+			} else {
+				by[key] = &entry{result: r, score: inv, order: next}
+				next++
+			}
 		}
 	}
-	for _, r := range b {
-		key := r.Record.File + ":" + fmt.Sprintf("%d", r.Record.StartLine)
-		if existing, exists := seen[key]; !exists {
-			cp := r
-			seen[key] = &cp
-		} else if r.Similarity > existing.Similarity {
-			seen[key] = &r
+	// `a` is contributed first so its entries get lower insertion-order indices,
+	// which means ties resolve in favor of provider `a` (callers pass static
+	// first, ONNX second — see EmbeddingManager.QuerySimilar). The intent:
+	// when both providers agree on rank, the higher-precision provider wins.
+	contribute(a)
+	contribute(b)
+
+	entries := make([]*entry, 0, len(by))
+	for _, e := range by {
+		entries = append(entries, e)
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].score != entries[j].score {
+			return entries[i].score > entries[j].score
 		}
+		return entries[i].order < entries[j].order
+	})
+	if topK > 0 && len(entries) > topK {
+		entries = entries[:topK]
 	}
-	results := make([]QueryResult, 0, len(seen))
-	for _, r := range seen {
-		results = append(results, *r)
+	out := make([]QueryResult, len(entries))
+	for i, e := range entries {
+		out[i] = e.result
 	}
-	// Sort by similarity descending.
-	for i := 1; i < len(results); i++ {
-		for j := i; j > 0 && results[j].Similarity > results[j-1].Similarity; j-- {
-			results[j], results[j-1] = results[j-1], results[j]
-		}
-	}
-	return results
+	return out
 }
 
 // GetConversationStore returns the conversation store, creating it lazily on first use.

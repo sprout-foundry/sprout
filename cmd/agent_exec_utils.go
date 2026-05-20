@@ -1,3 +1,5 @@
+//go:build !js
+
 // Agent execution utilities: command execution, formatting, and helper functions
 package cmd
 

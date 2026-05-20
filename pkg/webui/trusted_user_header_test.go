@@ -1,3 +1,5 @@
+//go:build !js
+
 // Package webui tests for trusted user header extraction
 package webui
 

@@ -1,3 +1,5 @@
+//go:build !js
+
 // GitHub MCP setup prompt for interactive mode
 package cmd
 

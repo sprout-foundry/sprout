@@ -53,6 +53,33 @@ These were present before SP-045 and are unchanged.
 | `getHistory()` | — | string[] | Shell history entries. |
 | `getEnv(name)` | `string` | string | Returns env var value. |
 
+## One-time bootstrap
+
+### `setStaticModel(bytes): {ok: true, bytes: number}` (synchronous)
+
+The native sprout binary embeds the 55MB static embedding model
+(`pkg/embedding/static_model.bin`) directly via `//go:embed`. To keep the
+WASM download small (42MB instead of 97MB), the WASM build leaves the
+model out and expects the host page to load it from a separate asset and
+hand the bytes to the runtime BEFORE the first semantic-search call:
+
+```javascript
+// During boot, alongside loading sprout.wasm:
+const modelResp = await fetch('/sprout-assets/static_model.bin');
+const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
+SproutWasm.setStaticModel(modelBytes);
+// Now safe to call SproutWasm.searchSemantic / .buildSemanticIndex.
+```
+
+The model is the same bytes shipped in `pkg/embedding/static_model.bin`;
+`scripts/build-wasm.sh` copies it into the build output alongside
+`sprout.wasm` and `wasm_exec.js`. Either fetch it from your own origin
+(recommended — caches via standard HTTP) or whatever CDN you're hosting
+the WASM bundle on.
+
+If `setStaticModel` is never called, `searchSemantic` and
+`buildSemanticIndex` reject with `"static model data is empty"`.
+
 ## Tier 1 — Semantic search
 
 Static-provider only on WASM today; quality matches what native sprout

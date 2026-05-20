@@ -35,6 +35,9 @@ func (a *Agent) RecordTurnCheckpoint(startIndex, endIndex int) {
 
 	turnMessages := append([]api.Message(nil), msgs[startIndex:endIndex+1]...)
 	a.recordTurnCheckpointFromMessages(startIndex, endIndex, turnMessages)
+	// SP-046 §7: turn boundary — the next turn must call read_file again
+	// before writing the same paths.
+	a.ResetFileReadsForNewTurn()
 }
 
 func (a *Agent) RecordTurnCheckpointAsync(startIndex, endIndex int) {
@@ -50,6 +53,10 @@ func (a *Agent) RecordTurnCheckpointAsync(startIndex, endIndex int) {
 	// disruptive operations such as clear/import replace the checkpoint set.
 	turnMessages := append([]api.Message(nil), msgs[startIndex:endIndex+1]...)
 	go a.recordTurnCheckpointFromMessages(startIndex, endIndex, turnMessages)
+	// SP-046 §7: reset the read tracker synchronously even though the
+	// summary job runs in the background — the next turn's tool calls
+	// must not see the previous turn's reads.
+	a.ResetFileReadsForNewTurn()
 }
 
 func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnMessages []api.Message) {

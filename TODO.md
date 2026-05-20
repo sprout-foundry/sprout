@@ -265,8 +265,8 @@ Three trust boundaries to defend: the project (skills auto-load silently), the d
 [x] - SP-033-1b: Implement `.sprout/allowed_skills` allowlist file (one ID per line) with read/write helpers.
 [x] - SP-033-1c: In `discoverProjectSkills`, load skills not in the allowlist with `Enabled: false` so they appear but don't activate.
 [] - SP-033-1d: New CLI commands `sprout skills allow <id>...` / `sprout skills revoke <id>...` / `sprout skills list` in `cmd/skills.go`.
-[] - SP-033-1e: `--no-project-skills` flag on the agent command; default to "skip" when stdin is non-TTY (CI / non-interactive).
-[] - SP-033-1f: Set `Metadata["source"]` to `builtin` / `project:<repo-root>` / `user` on every loaded skill; surface in the agent system prompt so the model knows where instructions came from.
+[x] - SP-033-1e: `--no-project-skills` flag on the agent command; default to "skip" when stdin is non-TTY (CI / non-interactive).
+[x] - SP-033-1f: Set `Metadata["source"]` to `builtin` / `project:<repo-root>` / `user` on every loaded skill; surface in the agent system prompt so the model knows where instructions came from.
 
 ### Phase 2: Redaction + file modes
 

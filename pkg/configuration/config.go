@@ -907,6 +907,12 @@ func MergeConfig(base, override *Config) *Config {
 			result.Skills = make(map[string]Skill)
 		}
 		for k, v := range override.Skills {
+			if v.Metadata == nil {
+				v.Metadata = make(map[string]string)
+			}
+			if _, has := v.Metadata["source"]; !has {
+				v.Metadata["source"] = "user"
+			}
 			result.Skills[k] = v
 		}
 	}
@@ -1688,6 +1694,10 @@ func mergeMissingDefaultSkills(config *Config) {
 
 	for id, skill := range defaultSkills() {
 		if _, exists := config.Skills[id]; !exists {
+			if skill.Metadata == nil {
+				skill.Metadata = make(map[string]string)
+			}
+			skill.Metadata["source"] = "builtin"
 			config.Skills[id] = skill
 		}
 	}

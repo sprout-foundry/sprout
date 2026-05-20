@@ -29,6 +29,8 @@ require github.com/odvcencio/gotreesitter v0.16.0
 
 require github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 
+require github.com/yalue/onnxruntime_go v1.30.1 // indirect
+
 require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect

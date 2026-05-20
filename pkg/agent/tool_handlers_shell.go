@@ -201,7 +201,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	// Enrich context with workspace root so executeGitCommand runs in the
 	// correct directory. The seed execution path passes a bare context
 	// without workspace metadata, so we inject it from the agent's config.
-	if wsRoot := a.currentWorkspaceRoot(); wsRoot != "" {
+	if wsRoot := a.effectiveCwd(); wsRoot != "" {
 		ctx = filesystem.WithWorkspaceRoot(ctx, wsRoot)
 	}
 
@@ -261,10 +261,9 @@ func isValidGitOperation(op tools.GitOperationType) bool {
 // Note: For the full interactive commit flow, users should use the /commit slash command
 func handleGitCommitOperation(a *Agent) (string, error) {
 	// Check for staged changes first
+	dir := a.effectiveCwd()
 	cmd := exec.Command("git", "diff", "--staged", "--name-only")
-	if dir := a.currentWorkspaceRoot(); dir != "" {
-		cmd.Dir = dir
-	}
+	cmd.Dir = dir
 	stagedOutput, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to check for staged changes", err)
@@ -352,10 +351,9 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	// Check for staged changes first
+	dir := a.effectiveCwd()
 	cmd := exec.Command("git", "diff", "--staged", "--name-only")
-	if dir := a.currentWorkspaceRoot(); dir != "" {
-		cmd.Dir = dir
-	}
+	cmd.Dir = dir
 	stagedOutput, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to check for staged changes", err)
@@ -446,7 +444,7 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 	// Get workspace directory from the agent, if available.
 	workDir := ""
 	if chatAgent != nil {
-		workDir = chatAgent.currentWorkspaceRoot()
+		workDir = chatAgent.effectiveCwd()
 	}
 
 	// Wire the elevation gate into the commit executor if available.

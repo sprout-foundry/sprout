@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -179,6 +180,119 @@ func (a *Agent) currentWorkspaceRoot() string {
 		return wd
 	}
 	return "."
+}
+
+// GetShellCwd returns the current logical shell working directory.
+func (a *Agent) GetShellCwd() string {
+	a.shellCwdMu.RLock()
+	defer a.shellCwdMu.RUnlock()
+	return a.shellCwd
+}
+
+// SetShellCwd sets the logical shell working directory and records the previous.
+func (a *Agent) SetShellCwd(dir string) {
+	a.shellCwdMu.Lock()
+	defer a.shellCwdMu.Unlock()
+	a.prevShellCwd = a.shellCwd
+	a.shellCwd = dir
+}
+
+// effectiveCwd returns the directory that tools should use for file/git operations.
+// It returns shellCwd when set (updated by cd commands), falling back to the workspace root.
+func (a *Agent) effectiveCwd() string {
+	if cwd := a.GetShellCwd(); cwd != "" {
+		return cwd
+	}
+	return a.currentWorkspaceRoot()
+}
+
+// updateShellCwd parses a shell command string and updates the tracked
+// shell working directory when the command is a cd directive.
+// It handles: cd <path>, cd, cd -, cd ~, cd .., cd <path> &&/;/|| <more>.
+// It does NOT update for subshell cd (e.g., "(cd /path && ...)").
+func (a *Agent) updateShellCwd(cmd string) {
+	trimmed := strings.TrimSpace(cmd)
+
+	// Skip subshells — they don't affect the parent shell's CWD.
+	if strings.HasPrefix(trimmed, "(") {
+		return
+	}
+
+	// Only act on commands that start with "cd"
+	if !strings.HasPrefix(trimmed, "cd") {
+		return
+	}
+
+	// Must be "cd" alone or "cd " followed by arguments.
+	if len(trimmed) == 2 {
+		// Bare "cd" — goes to $HOME.
+	} else if len(trimmed) == 3 && trimmed[2] == ' ' {
+		trimmed = trimmed[:2] + strings.TrimSpace(trimmed[3:])
+	} else {
+		return // e.g., "cddir" — not a cd command.
+	}
+
+	// Extract the argument from a compound command (stop at && || ; |).
+	var arg string
+	for _, sep := range []string{" && ", " || ", ";", " |"} {
+		if idx := strings.Index(trimmed, sep); idx >= 0 {
+			arg = strings.TrimSpace(trimmed[:idx])
+			trimmed = arg
+			break
+		}
+	}
+	if arg == "" {
+		arg = strings.TrimSpace(trimmed)
+	}
+
+	a.shellCwdMu.Lock()
+	defer a.shellCwdMu.Unlock()
+
+	current := a.shellCwd
+	if current == "" {
+		current = a.currentWorkspaceRoot()
+	}
+
+	resolved := resolveShellCdArg(arg, current)
+
+	if arg == "-" {
+		// cd - swaps current and previous.
+		a.prevShellCwd, a.shellCwd = a.shellCwd, a.prevShellCwd
+		return
+	}
+
+	a.prevShellCwd = a.shellCwd
+	a.shellCwd = resolved
+}
+
+// resolveShellCdArg resolves a cd argument to an absolute path.
+func resolveShellCdArg(arg, currentCwd string) string {
+	if arg == "" {
+		// Bare cd → $HOME.
+		if home := os.Getenv("HOME"); home != "" {
+			return home
+		}
+		return currentCwd
+	}
+	if arg == "-" {
+		return "-" // Handled specially by caller.
+	}
+	if arg == "~" {
+		if home := os.Getenv("HOME"); home != "" {
+			return home
+		}
+		return currentCwd
+	}
+	if strings.HasPrefix(arg, "~/") {
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, arg[2:])
+		}
+		return arg[2:]
+	}
+	if !filepath.IsAbs(arg) {
+		return filepath.Join(currentCwd, arg)
+	}
+	return arg
 }
 
 // OutputRouter returns the current output router (nil if not initialized)

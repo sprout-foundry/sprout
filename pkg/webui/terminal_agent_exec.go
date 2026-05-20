@@ -122,86 +122,134 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	// Buffer to accumulate output from the PTY.
 	var buf bytes.Buffer
 
-	// Always cap the sentinel wait at 30 seconds, independent of the caller's
-	// context deadline. The caller may have a 2+ minute timeout for the tool
-	// execution, but if the PTY sentinel hasn't appeared in 30s, the session is
-	// stuck. The caller can fall back to os/exec with the remaining deadline.
-	// We still respect caller cancellation (context.Canceled) immediately.
-	const sentinelTimeout = 30 * time.Second
-	sentinelCtx, sentinelCancel := context.WithTimeout(context.Background(), sentinelTimeout)
-	defer sentinelCancel()
-
-	// Combine sentinel timeout with caller cancellation.
-	// If the caller cancels (user interrupt), we stop immediately.
-	// If the sentinel timer expires, the session is stuck — close it.
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			sentinelCancel() // propagate caller cancellation
-		case <-done:
+	// Two independent timers gate the wait:
+	//
+	//   1. inactivityTimer — resets on every output chunk. If no output
+	//      arrives for inactivityTimeout, the PTY is considered stuck and
+	//      we Ctrl+C + close the session so a future command can start
+	//      fresh. This distinguishes "command actively producing output"
+	//      from "command (or PTY) hung", which the previous single hardcap
+	//      conflated.
+	//
+	//   2. caller's ctx — the tool-level deadline (commonly 2 minutes for
+	//      shell_command). DeadlineExceeded means "agent budget for this
+	//      tool call is up, but the command may still be making progress".
+	//      We promote the still-running command to a background session
+	//      so the agent can poll its accumulated output via check_background.
+	//
+	// Previously a hardcoded 30 s sentinel timer ran independent of the
+	// caller's deadline; commands streaming output for >30 s were killed
+	// before the promotion branch ever became reachable.
+	const inactivityTimeout = 30 * time.Second
+	inactivityTimer := time.NewTimer(inactivityTimeout)
+	defer inactivityTimer.Stop()
+	resetInactivity := func() {
+		if !inactivityTimer.Stop() {
+			// Drain any pending tick so the next Reset starts clean.
+			select {
+			case <-inactivityTimer.C:
+			default:
+			}
 		}
-	}()
+		inactivityTimer.Reset(inactivityTimeout)
+	}
 
 	// Wait for the sentinel line to appear in the output.
 	for {
 		select {
-			case <-sentinelCtx.Done():
-			// Determine the cause: caller cancellation vs sentinel timeout
+		case <-ctx.Done():
 			callerErr := ctx.Err()
-
-			if callerErr != nil {
-				// Caller context cancelled — check if it's a timeout (not user interrupt)
-				if callerErr == context.DeadlineExceeded {
-					// Tool executor timed out — promote to background instead of killing
-					// The command is still running in this PTY session
-					accumulatedOutput := stripANSI(buf.String())
-					log.Printf("PTY session %s: tool executor timed out, promoting to background session", session.ID)
-					return accumulatedOutput, -1, fmt.Errorf("COMMAND_PROMOTED_TO_BACKGROUND:%s", session.ID)
-				}
-				// User interrupt — Ctrl+C and close the session
+			if callerErr == context.DeadlineExceeded {
+				// Tool executor's deadline expired but the command may still
+				// be running.
+				//
+				// Try to promote to a background session. If the per-chat
+				// cap is already at the limit, we can't add another — fall
+				// through to the kill-and-close path with a clear error
+				// the agent can act on (stop_background one of the existing
+				// sessions, then retry).
 				session.mutex.RLock()
-				if session.Pty != nil {
-					// Best-effort Ctrl+C to interrupt any running command
-					_, _ = session.Pty.Write([]byte{3})
-				}
+				chatID := session.ChatID
 				session.mutex.RUnlock()
-				log.Printf("PTY session %s: user cancelled, closing session for recreation", session.ID)
-				sid := session.ID
-				go func() {
-					time.Sleep(100 * time.Millisecond)
-					if err := tm.CloseSession(sid); err != nil {
-						log.Printf("PTY session %s: failed to close after user cancel: %v", sid, err)
-					}
-				}()
-				return stripANSI(buf.String()), -1, sentinelCtx.Err()
-			}
 
-			// Sentinel timeout — the command is stuck (no sentinel in 30s)
-			// Ctrl+C and close the session so it can be recreated
+				if tm.countBackgroundSessionsForChat(chatID) >= maxBackgroundSessionsPerChat {
+					// At cap — kill the runaway command rather than silently
+					// exceeding the limit. The error tells the agent how to
+					// free a slot.
+					session.mutex.RLock()
+					if session.Pty != nil {
+						_, _ = session.Pty.Write([]byte{3})
+					}
+					session.mutex.RUnlock()
+					log.Printf("PTY session %s: tool deadline exceeded but background cap reached for chat %q, killing", session.ID, chatID)
+					sid := session.ID
+					go func() {
+						time.Sleep(100 * time.Millisecond)
+						if err := tm.CloseSession(sid); err != nil {
+							log.Printf("PTY session %s: failed to close after cap hit: %v", sid, err)
+						}
+					}()
+					return stripANSI(buf.String()), -1, tm.errBackgroundCapReached(chatID)
+				}
+
+				// Mark the session IsBackground BEFORE returning so the
+				// cleanup worker uses the 2-hour background timeout (not
+				// the 30-min hidden one) — otherwise a long-running
+				// promoted command would be silently killed by cleanup
+				// within 30 minutes.
+				session.mutex.Lock()
+				session.IsBackground = true
+				session.LastUsed = time.Now()
+				session.mutex.Unlock()
+
+				accumulatedOutput := stripANSI(buf.String())
+				log.Printf("PTY session %s: tool deadline exceeded, promoting to background", session.ID)
+				return accumulatedOutput, -1, fmt.Errorf("COMMAND_PROMOTED_TO_BACKGROUND:%s", session.ID)
+			}
+			// User interrupt — Ctrl+C and close the session for recreation.
 			session.mutex.RLock()
 			if session.Pty != nil {
-				// Best-effort Ctrl+C to interrupt any running command
 				_, _ = session.Pty.Write([]byte{3})
 			}
 			session.mutex.RUnlock()
-			log.Printf("PTY session %s: sentinel not detected within %s, closing session for recreation", session.ID, sentinelTimeout)
+			log.Printf("PTY session %s: user cancelled, closing session for recreation", session.ID)
 			sid := session.ID
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				if err := tm.CloseSession(sid); err != nil {
-					log.Printf("PTY session %s: failed to close after timeout: %v", sid, err)
+					log.Printf("PTY session %s: failed to close after user cancel: %v", sid, err)
 				}
 			}()
+			return stripANSI(buf.String()), -1, callerErr
 
-			return stripANSI(buf.String()), -1, sentinelCtx.Err()
+		case <-inactivityTimer.C:
+			// No output for inactivityTimeout — assume the PTY or command
+			// is stuck. Ctrl+C and close so the next command gets a fresh
+			// session. (A command that's genuinely silent for >30 s but
+			// still healthy is rare; the trade-off favors recovery over
+			// patience.)
+			session.mutex.RLock()
+			if session.Pty != nil {
+				_, _ = session.Pty.Write([]byte{3})
+			}
+			session.mutex.RUnlock()
+			log.Printf("PTY session %s: no output for %s, closing as stuck", session.ID, inactivityTimeout)
+			sid := session.ID
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				if err := tm.CloseSession(sid); err != nil {
+					log.Printf("PTY session %s: failed to close after stuck timeout: %v", sid, err)
+				}
+			}()
+			return stripANSI(buf.String()), -1, fmt.Errorf("PTY session %s stuck (no output for %s)", session.ID, inactivityTimeout)
 
 		case chunk, ok := <-sub.ch:
 			if !ok {
 				// Channel closed — PTY session terminated unexpectedly.
 				return stripANSI(buf.String()), -1, fmt.Errorf("PTY session terminated while waiting for command completion")
 			}
+			// Output is flowing — extend the inactivity grace.
+			resetInactivity()
 			buf.Write(chunk)
 
 			// Only match when the full sentinel (with numeric exit code) appears.

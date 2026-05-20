@@ -269,16 +269,82 @@ js.FuncOf wrappers, `asPromise`, `marshalJS`, `argString`/`argInt`/
 `argFloat32`) need a full WASM-in-browser harness to test meaningfully
 and are validated by the integration tests in the host page instead.
 
-## What's not here yet
+## Tier 2a — ONNX-quality embeddings via `__sproutONNX`
+
+The WASM build's static-provider embeddings work well for many queries
+but match HuggingFace tokenizers' real EmbeddingGemma-300M output only
+loosely. For ONNX-quality semantic search, the WASM build can delegate
+inference to a JS-side `onnxruntime-web` provider via a small global
+contract.
+
+### Contract
+
+When `globalThis.__sproutONNX` is defined, the Go-WASM side detects it
+inside `NewONNXEmbeddingProvider` and routes Embed/EmbedBatch calls
+through it. When absent, the WASM build falls back to the static
+provider — no error, just lower-quality search.
+
+The contract object must expose:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `embed` | `(text: string) => Promise<Float32Array>` | yes | Returns one embedding. |
+| `embedBatch` | `(texts: string[]) => Promise<Float32Array[]>` | yes | Same, batched. Result order must match input order. |
+| `modelHash` | `string` | optional | Stable identifier; defaults to `"browser-bridge"`. Used to key the per-model JSONL store, so changing this invalidates the on-disk index. |
+| `modelName` | `string` | optional | Defaults to `onnx-embeddinggemma-300m-web-bridge`. Surfaces in logs. |
+| `dimensions` | `number` | optional | Overrides the 768 default — useful if the JS side does MRL truncation. |
+
+Promise rejection surfaces as a Go-side error in `Embed`/`EmbedBatch`.
+A hung promise is bounded by either the caller's `context.Context`
+deadline or an internal 60-second fallback timeout.
+
+### One-line install (preferred)
+
+`webui/src/services/sproutONNXBridge.ts` ships a helper that wraps the
+existing `BrowserONNXProvider` in the contract shape:
+
+```typescript
+import { installSproutONNXBridge } from './services/sproutONNXBridge';
+
+// Stand up the JS-side ONNX provider once, before the WASM module
+// starts calling into Go-side embedding code. The function is
+// idempotent — calling twice replaces the previous bridge cleanly.
+const provider = installSproutONNXBridge({ dtype: 'q8', backend: 'webgpu' });
+
+// Later, when the page is unmounting:
+await provider.close();
+```
+
+### Hand-rolled install (for testing or custom providers)
+
+```typescript
+(globalThis as any).__sproutONNX = {
+  modelHash: 'my-provider-v1',
+  modelName: 'my-onnx-provider',
+  dimensions: 768,
+  async embed(text) {
+    // ... return Float32Array of length 768
+  },
+  async embedBatch(texts) {
+    // ... return Float32Array[]
+  },
+};
+```
+
+### Verification
+
+`pkg/embedding/onnx_wasm_bridge_test.go` covers the WASM-side bridge with
+mocked JS providers: round-trip correctness, batch ordering, promise
+rejection surfacing, and context cancellation.
+`webui/src/services/sproutONNXBridge.test.ts` covers the host-side
+adapter: contract shape, lifecycle, idempotent install/uninstall.
+
+## What's still not wired
 
 Listed in priority order from `roadmap/SP-045-wasm-feature-parity.md`:
 
-- **Tier 2a**: ONNX-quality embeddings via an `onnxruntime-web` bridge
-  (host page registers `globalThis.__sproutONNX`; the WASM stub forwards
-  inference calls). Tokenizer + indexer stay pure Go.
 - **Tier 2b**: Agent / LLM commands (`runAgent`, `runQuestion`, `runCode`,
   `runCommit`, `runReview`, `runPlan`). Blocked on the API-key storage
   design decision (SP-045-4a).
-- **Tier 3**: Pure-Go file-extractor fallback so `buildSemanticIndex`
-  produces meaningful results on arbitrary workspaces (today it depends
-  on tree-sitter CGO, which doesn't ship in WASM).
+- **Phase 5**: Build matrix cleanup (remaining `!windows` build tags),
+  binary size reduction (102MB → strip + tinygo + module split).

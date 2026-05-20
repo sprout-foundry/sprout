@@ -1,10 +1,12 @@
 package pythonruntime
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Interpreter contains resolved Python interpreter metadata.
@@ -62,7 +64,10 @@ func FindPython3InterpreterAtLeast(minMinor int) (Interpreter, error) {
 }
 
 func inspectInterpreter(alias, path string) (Interpreter, error) {
-	cmd := exec.Command(
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx,
 		path,
 		"-c",
 		"import sys; print(sys.version_info.major); print(sys.version_info.minor); print(sys.version.split()[0])",

@@ -208,19 +208,23 @@ func (m *EmbeddingManager) initONNX(ctx context.Context) error {
 
 	// Load the pre-registered EmbeddingGemma-300M config
 	modelConfig := EmbeddingGemma300MConfig()
-
-	// Check if model file exists; if not, download it
 	modelName := modelConfig.Name
 	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
 	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
 
-	if _, err := os.Stat(modelPath); err != nil {
-		log.Printf("embedding: downloading ONNX model %s...", modelName)
-		if err := DownloadModel(ctx, modelDir, modelConfig); err != nil {
-			runtime.Close()
-			return fmt.Errorf("onnx: download model: %w", err)
+	// Native builds load .onnx from disk; download it if missing.
+	// The WASM build delegates to a JS-side provider that owns its own model
+	// loading, so we skip the on-disk file check there — see
+	// onnxRequiresModelFiles in onnx_runtime.go / onnx_wasm_stub.go.
+	if onnxRequiresModelFiles() {
+		if _, err := os.Stat(modelPath); err != nil {
+			log.Printf("embedding: downloading ONNX model %s...", modelName)
+			if err := DownloadModel(ctx, modelDir, modelConfig); err != nil {
+				runtime.Close()
+				return fmt.Errorf("onnx: download model: %w", err)
+			}
+			log.Printf("embedding: ONNX model %s downloaded", modelName)
 		}
-		log.Printf("embedding: ONNX model %s downloaded", modelName)
 	}
 
 	// Create ONNX embedding provider (EmbeddingGemma-300M outputs 768-dim vectors).

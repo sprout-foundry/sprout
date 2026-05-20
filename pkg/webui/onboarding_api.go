@@ -435,11 +435,6 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	}
 
 	clientID := ws.resolveClientID(r)
-	clientAgent, err := ws.getClientAgent(clientID)
-	if err != nil || clientAgent == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "Agent is not available")
-		return
-	}
 
 	cm := ws.getConfigManager(r, w)
 	if cm == nil {
@@ -541,6 +536,13 @@ func (ws *ReactWebServer) handleAPIOnboardingComplete(w http.ResponseWriter, r *
 	// Clear any cached agent so it is re-created with the updated config
 	// (real provider instead of "editor").
 	ws.clearCachedAgent(clientID)
+
+	// Now create/get the agent with the newly configured provider.
+	clientAgent, err := ws.getClientAgent(clientID)
+	if err != nil || clientAgent == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, fmt.Sprintf("Agent is not available after configuration: %v", err))
+		return
+	}
 
 	if err := clientAgent.SetProvider(providerType); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())

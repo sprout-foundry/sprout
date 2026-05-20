@@ -117,7 +117,16 @@ func (eb *EventBus) Publish(eventType string, data any) {
 			default:
 				select {
 				case <-ch:
-					ch <- event
+					// Bounded send: a concurrent non-critical publisher
+					// can refill the slot between drain and send. Without
+					// the timeout, this would block indefinitely on a slow
+					// subscriber while holding drainMu — visible as a long
+					// pause when a security prompt is pending.
+					select {
+					case ch <- event:
+					case <-time.After(1 * time.Second):
+						log.Printf("[EventBus] Dropped critical %s event: subscriber unresponsive for 1s after drain", eventType)
+					}
 					eb.drainMu.Unlock()
 				default:
 					// Channel is empty but concurrently closed; give up.

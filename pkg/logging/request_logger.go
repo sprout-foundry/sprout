@@ -1,18 +1,23 @@
 package logging
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
 // LogRequestPayload saves the exact JSON payload sent to the provider.
 // It writes both the canonical lastRequest.json and a timestamped diagnostic copy.
+// All payloads are redacted via pkg/redact to prevent credential leakage in log files.
 func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
+	payload = redact.Apply(payload)
+
 	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
@@ -46,7 +51,10 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 
 // LogRequestPayloadOnError saves the JSON payload only when an error occurs.
 // It writes to lastRequest.json and a timestamped file with error context.
+// All payloads are redacted via pkg/redact to prevent credential leakage in log files.
 func LogRequestPayloadOnError(payload []byte, provider, model string, streaming bool, errorType string, err error) {
+	payload = redact.Apply(payload)
+
 	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return

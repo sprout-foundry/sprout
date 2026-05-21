@@ -159,6 +159,32 @@ func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType
 		cs.runBuffer = newChatRunRingBuffer()
 	}
 	buf := cs.runBuffer
+
+	// SP-034-2f: manage the TTL reset timer based on run lifecycle events.
+	// A fresh query_started cancels any pending reset (we want to keep the
+	// buffer alive across the run). A query_completed schedules a reset
+	// for defaultRunBufferTTLAfterCompletion later, giving reconnecting
+	// tabs that window to grab the trailing events before we drop them.
+	switch eventType {
+	case events.EventTypeQueryStarted:
+		if cs.runBufferResetTimer != nil {
+			cs.runBufferResetTimer.Stop()
+			cs.runBufferResetTimer = nil
+		}
+	case events.EventTypeQueryCompleted:
+		if cs.runBufferResetTimer != nil {
+			cs.runBufferResetTimer.Stop()
+		}
+		cs.runBufferResetTimer = time.AfterFunc(defaultRunBufferTTLAfterCompletion, func() {
+			cs.mu.Lock()
+			b := cs.runBuffer
+			cs.runBufferResetTimer = nil
+			cs.mu.Unlock()
+			if b != nil {
+				b.Reset()
+			}
+		})
+	}
 	cs.mu.Unlock()
 
 	return buf.Append(events.UIEvent{Type: eventType, Data: data})

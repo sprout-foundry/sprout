@@ -60,7 +60,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const sessionManager = useSessionManager(chatProps, state.chatTab, chatProps?.isProcessing ?? false);
 
   const statusMetrics = useStatusMetrics(chatProps, toolExecutions, maxQueryId);
-  const subagentRuns = useSubagentRuns(chatProps);
+  const { subagentRuns, resourceCounts } = useSubagentRuns(chatProps);
 
   // ── Live duration timer ───────────────────────────────────────────
 
@@ -222,6 +222,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         return (
           <SubagentsTab
             subagentRuns={subagentRuns}
+            resourceCounts={resourceCounts}
             expandedSubagents={state.expandedSubagents}
             toolRefs={state.toolRefs}
             expandedTools={state.expandedTools}
@@ -289,6 +290,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         return (
           <SubagentsTab
             subagentRuns={subagentRuns}
+            resourceCounts={resourceCounts}
             expandedSubagents={state.expandedSubagents}
             toolRefs={state.toolRefs}
             expandedTools={state.expandedTools}

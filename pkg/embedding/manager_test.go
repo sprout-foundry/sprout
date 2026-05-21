@@ -557,3 +557,4 @@ func TestRRFMerge_KeepsHigherSimilarityCopy(t *testing.T) {
 		t.Errorf("expected merged copy to carry the higher .Similarity (0.95), got %.2f", out[0].Similarity)
 	}
 }
+

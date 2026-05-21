@@ -471,8 +471,8 @@ func TestGetConversationStore_CreatesAtCorrectPath(t *testing.T) {
 	}
 	defer store.Close()
 
-	// The store should be created at {indexDir}/conversation_turns.jsonl.
-	expectedPath := filepath.Join(dir, "conversation_turns.jsonl")
+	// The store should be created at {indexDir}/conversation_turns.hnsw.
+	expectedPath := filepath.Join(dir, "conversation_turns.hnsw")
 
 	// Store a record to materialize the file, then verify the file exists.
 	if err := store.Store([]VectorRecord{
@@ -564,7 +564,7 @@ func TestEmbeddingManager_Close_ClosesConversationStore(t *testing.T) {
 	// The data should have been flushed to disk on close.
 	// Re-open a new store at the same path to verify persistence.
 	// Use a new StaticProvider so the model hash matches what was written.
-	expectedPath := filepath.Join(dir, "conversation_turns.jsonl")
+	expectedPath := filepath.Join(dir, "conversation_turns.hnsw")
 	newProvider, err := NewStaticProvider()
 	if err != nil {
 		t.Fatalf("create new static provider: %v", err)

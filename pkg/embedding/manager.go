@@ -20,7 +20,7 @@ import (
 type EmbeddingManager struct {
 	mu            sync.Mutex
 	provider      *StaticProvider
-	store         *JSONLFileStore
+	store         VectorStore
 	indexMgr      *IndexManager
 	initialized   bool
 	building      bool // true while BuildIndex is running
@@ -51,7 +51,7 @@ type EmbeddingManager struct {
 	// nil and the manager falls back to the static provider.
 	onnxRuntime  *ONNXRuntime
 	onnxProvider *ONNXEmbeddingProvider
-	onnxStore    *JSONLFileStore
+	onnxStore    VectorStore
 	onnxReady    bool
 	onnxError    error // cached error from failed ONNX init
 
@@ -131,8 +131,8 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	m.indexDir = indexDir
 
 	// Create workspace-specific index file
-	indexFile := filepath.Join(indexDir, "index.jsonl")
-	store, err := NewJSONLFileStore(indexFile, provider.ModelHash())
+	indexPath := filepath.Join(indexDir, "index.hnsw")
+	store, err := NewHNSWStore(indexPath, provider.ModelHash())
 	if err != nil {
 		provider.Close()
 		m.initError = fmt.Errorf("embedding: open store: %w", err)
@@ -235,9 +235,9 @@ func (m *EmbeddingManager) initONNX(ctx context.Context) error {
 		return fmt.Errorf("onnx: create provider: %w", err)
 	}
 
-	// Open ONNX JSONL store
-	onnxStore, err := NewJSONLFileStore(
-		filepath.Join(m.indexDir, "embedding_index_onnx.jsonl"),
+	// Open ONNX HNSW store
+	onnxStore, err := NewHNSWStore(
+		filepath.Join(m.indexDir, "embedding_index_onnx.hnsw"),
 		provider.ModelHash(),
 	)
 	if err != nil {
@@ -702,7 +702,7 @@ func RRFMergeResults(a, b []QueryResult, topK int) []QueryResult {
 }
 
 // GetConversationStore returns the conversation store, creating it lazily on first use.
-// The store is user-scoped and lives at {indexDir}/conversation_turns.jsonl.
+// The store is user-scoped and lives at {indexDir}/conversation_turns.hnsw.
 // Multiple calls return the same instance.
 // Uses the static provider only (no ONNX conversation indexing for now).
 func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*ConversationStore, error) {
@@ -725,7 +725,7 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 	}
 
 	// Create conversation store in the same directory as the main index
-	convoPath := filepath.Join(m.indexDir, "conversation_turns.jsonl")
+	convoPath := filepath.Join(m.indexDir, "conversation_turns.hnsw")
 	convoStore, err := NewConversationStore(m.provider, convoPath, m.provider.ModelHash())
 	if err != nil {
 		return nil, fmt.Errorf("embedding: create conversation store: %w", err)
@@ -739,7 +739,7 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 // creating it lazily on first use. Returns (nil, nil) if the ONNX provider is
 // not ready — callers should treat this as "feature unavailable" and continue
 // with the static store only. The file lives at
-// {indexDir}/conversation_turns_onnx.jsonl.
+// {indexDir}/conversation_turns_onnx.hnsw.
 //
 // Like the code-index ONNX path, this is best-effort and never required for
 // correctness: proactive context retrieval falls back to static-only when this
@@ -760,7 +760,7 @@ func (m *EmbeddingManager) GetONNXConversationStore(ctx context.Context) (*Conve
 		return nil, nil
 	}
 
-	convoPath := filepath.Join(m.indexDir, "conversation_turns_onnx.jsonl")
+	convoPath := filepath.Join(m.indexDir, "conversation_turns_onnx.hnsw")
 	store, err := NewConversationStore(m.onnxProvider, convoPath, m.onnxProvider.ModelHash())
 	if err != nil {
 		return nil, fmt.Errorf("embedding: create onnx conversation store: %w", err)
@@ -881,20 +881,24 @@ func ClearEmbeddingFiles(indexDir string, fileType string) (int, error) {
 
 func clearCodeEmbeddingFiles(indexDir string) (int, error) {
 	files := []string{
-		filepath.Join(indexDir, "index.jsonl"),
-		filepath.Join(indexDir, ".index.jsonl.meta.json"),
-		filepath.Join(indexDir, "embedding_index_onnx.jsonl"),
-		filepath.Join(indexDir, ".embedding_index_onnx.jsonl.meta.json"),
+		filepath.Join(indexDir, "index.hnsw"),
+		filepath.Join(indexDir, "index.hnsw.meta"),
+		filepath.Join(indexDir, "index.hnsw.records.json"),
+		filepath.Join(indexDir, "embedding_index_onnx.hnsw"),
+		filepath.Join(indexDir, "embedding_index_onnx.hnsw.meta"),
+		filepath.Join(indexDir, "embedding_index_onnx.hnsw.records.json"),
 	}
 	return removeFilesSilently(files)
 }
 
 func clearConversationEmbeddingFiles(indexDir string) (int, error) {
 	files := []string{
-		filepath.Join(indexDir, "conversation_turns.jsonl"),
-		filepath.Join(indexDir, ".conversation_turns.jsonl.meta.json"),
-		filepath.Join(indexDir, "conversation_turns_onnx.jsonl"),
-		filepath.Join(indexDir, ".conversation_turns_onnx.jsonl.meta.json"),
+		filepath.Join(indexDir, "conversation_turns.hnsw"),
+		filepath.Join(indexDir, "conversation_turns.hnsw.meta"),
+		filepath.Join(indexDir, "conversation_turns.hnsw.records.json"),
+		filepath.Join(indexDir, "conversation_turns_onnx.hnsw"),
+		filepath.Join(indexDir, "conversation_turns_onnx.hnsw.meta"),
+		filepath.Join(indexDir, "conversation_turns_onnx.hnsw.records.json"),
 	}
 	return removeFilesSilently(files)
 }

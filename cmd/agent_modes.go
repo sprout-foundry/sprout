@@ -22,6 +22,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/webcontent"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 	"golang.org/x/term"
 )
@@ -306,6 +307,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 				// Cancel the context which will stop all operations
 				cancel()
+
+				// Close the global browser renderer to release Chromium resources
+				webcontent.CloseGlobalBrowser()
 
 				// Signal that shutdown has started
 				close(shutdown)

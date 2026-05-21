@@ -7,6 +7,8 @@ vi.mock('../utils/log', () => ({
 
 vi.mock('./clientSession', () => ({
   appendClientIdToUrl: vi.fn((url) => url + '?client=test'),
+  clientFetch: vi.fn(),
+  getProxyBase: vi.fn(() => ''),
 }));
 
 vi.mock('./notificationBus', () => ({
@@ -19,7 +21,7 @@ vi.mock('./apiAdapter', () => ({
 
 // ESM imports — vitest resolves these from the mocked modules
 import { debugLog } from '../utils/log';
-import { appendClientIdToUrl } from './clientSession';
+import { appendClientIdToUrl, clientFetch, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
 
 // Mock WebSocket
@@ -105,6 +107,19 @@ beforeEach(() => {
 
   // Default mock for appendClientId
   appendClientIdToUrl.mockImplementation((url) => url + '?client=test');
+
+  // Default mock for getProxyBase (empty = no proxy)
+  getProxyBase.mockReturnValue('');
+
+  // Default mock for clientFetch: backend is NOT processing (no reattach needed)
+  clientFetch.mockImplementation(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ active: false }),
+      headers: new Headers(),
+    } as Response),
+  );
 });
 
 afterEach(() => {
@@ -112,10 +127,22 @@ afterEach(() => {
   vi.spyOn(Math, 'random').mockRestore();
 });
 
-function triggerWebSocketOpen() {
-  if (mockOnOpen) {
-    mockOnOpen();
-  }
+function triggerWebSocketOpen(): Promise<void> {
+  // connect() is now async (reattach fetch). Await the onopen handler
+  // to ensure the WebSocket constructor has been called.
+  return new Promise((resolve) => {
+    if (mockOnOpen) {
+      const result = mockOnOpen();
+      // If onopen returns a Promise (due to async connect), wait for it
+      if (result instanceof Promise) {
+        result.then(() => resolve()).catch(() => resolve());
+      } else {
+        resolve();
+      }
+    } else {
+      resolve();
+    }
+  });
 }
 
 function triggerWebSocketClose(event = { code: 1000, reason: 'Normal closure' }) {
@@ -776,5 +803,297 @@ describe('WebSocketService - freeze() and resume() queue preservation', () => {
     // Messages should be replayed after resume → reconnect
     expect(mockSend).toHaveBeenCalled();
     expect(ws.getQueuedMessageCount()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reattach tests
+// ---------------------------------------------------------------------------
+
+describe('WebSocketService - __seq tracking', () => {
+  it('tracks __seq per chat from incoming events', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    // Set active chat
+    ws.setActiveChatId('chat-1');
+
+    // Simulate events with __seq
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' }, __seq: 5 });
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' }, __seq: 10 });
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' }, __seq: 8 }); // out of order, should be ignored
+
+    expect(ws.getLastSeq('chat-1')).toBe(10);
+    expect(ws.getActiveChatSeq()).toBe(10);
+  });
+
+  it('tracks __seq for different chats independently', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    ws.setActiveChatId('chat-1');
+
+    // Events for chat-1
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' }, __seq: 3 });
+    // Events for chat-2 (via explicit chat_id in data)
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-2' }, __seq: 7 });
+
+    expect(ws.getLastSeq('chat-1')).toBe(3);
+    expect(ws.getLastSeq('chat-2')).toBe(7);
+  });
+
+  it('falls back to activeChatId when data has no chat_id', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    ws.setActiveChatId('chat-1');
+
+    // Event without chat_id in data — should fall back to activeChatId
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { content: 'hello' }, __seq: 4 });
+
+    expect(ws.getLastSeq('chat-1')).toBe(4);
+    expect(ws.getActiveChatSeq()).toBe(4);
+  });
+
+  it('ignores non-number __seq values', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    ws.setActiveChatId('chat-1');
+
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' }, __seq: 'not-a-number' });
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' } }); // no __seq at all
+
+    expect(ws.getLastSeq('chat-1')).toBeUndefined();
+    expect(ws.getActiveChatSeq()).toBeUndefined();
+  });
+
+  it('getActiveChatSeq returns undefined when activeChatId is null', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    // Don't set activeChatId
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-1' }, __seq: 5 });
+
+    expect(ws.getLastSeq('chat-1')).toBe(5);
+    expect(ws.getActiveChatSeq()).toBeUndefined();
+  });
+});
+
+describe('WebSocketService - reattach on reconnect', () => {
+  // Disable fake timers for these tests — we need real Promise resolution
+  // for the async clientFetch() inside connect().
+  beforeEach(() => {
+    vi.useRealTimers();
+    // vi.clearAllMocks() in the outer beforeEach resets clientFetch mock.
+    // Re-establish the default mock (backend NOT processing).
+    clientFetch.mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ active: false }),
+        headers: new Headers(),
+      } as Response),
+    );
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function connectAndAwaitReconnect(ws: WebSocketService) {
+    const connectPromise = ws.connect();
+    // Flush microtasks for the clientFetch Promise to resolve, then await connect
+    await Promise.resolve();
+    await Promise.resolve();
+    await connectPromise;
+  }
+
+  it('adds reattach params when backend is processing during reconnect', async () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen(); // Initial connection
+
+    // Set active chat and simulate some events to establish seq
+    ws.setActiveChatId('chat-abc');
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 42 });
+
+    expect(ws.getLastSeq('chat-abc')).toBe(42);
+
+    // Simulate backend is still processing
+    clientFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ active: true, chat_id: 'chat-abc' }),
+        headers: new Headers(),
+      } as Response),
+    );
+
+    // Disconnect
+    mockReadyState = MockWebSocket.CLOSED;
+    triggerWebSocketClose();
+
+    // Reconnect — should add reattach params
+    // Keep readyState CLOSED so connect() doesn't early-return.
+    // Set it to OPEN only when triggering onopen below.
+    mockSend.mockClear();
+    await connectAndAwaitReconnect(ws);
+    mockReadyState = MockWebSocket.OPEN;
+    await triggerWebSocketOpen();
+
+    // Verify clientFetch was called for status check
+    expect(clientFetch).toHaveBeenCalledWith(
+      '/api/query/status?chat_id=chat-abc',
+    );
+
+    // Verify the WebSocket URL includes reattach params
+    expect(appendClientIdToUrl).toHaveBeenCalledWith(
+      expect.stringContaining('reattach=chat-abc'),
+    );
+    expect(appendClientIdToUrl).toHaveBeenCalledWith(
+      expect.stringContaining('after_seq=42'),
+    );
+  });
+
+  it('skips reattach when backend is NOT processing', async () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    ws.setActiveChatId('chat-abc');
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 15 });
+
+    // Backend reports not active (default mock)
+    // Disconnect
+    mockReadyState = MockWebSocket.CLOSED;
+    triggerWebSocketClose();
+
+    // Reconnect — keep readyState CLOSED so connect() runs
+    mockSend.mockClear();
+    await connectAndAwaitReconnect(ws);
+    mockReadyState = MockWebSocket.OPEN;
+    await triggerWebSocketOpen();
+
+    // Verify clientFetch was called
+    expect(clientFetch).toHaveBeenCalled();
+
+    // Verify reattach params are NOT in the URL
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
+      expect.stringContaining('reattach='),
+    );
+  });
+
+  it('skips reattach when activeChatId is null', async () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    // Do NOT set activeChatId (stays null)
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 10 });
+
+    // Disconnect
+    mockReadyState = MockWebSocket.CLOSED;
+    triggerWebSocketClose();
+
+    // Reconnect — keep readyState CLOSED so connect() runs
+    await connectAndAwaitReconnect(ws);
+    mockReadyState = MockWebSocket.OPEN;
+    await triggerWebSocketOpen();
+
+    // clientFetch should NOT have been called (no active chat)
+    expect(clientFetch).not.toHaveBeenCalled();
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
+      expect.stringContaining('reattach='),
+    );
+  });
+
+  it('skips reattach when no last seq is known for the chat', async () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    ws.setActiveChatId('chat-xyz');
+    // No events with __seq for this chat, so no seq is tracked
+
+    // Disconnect
+    mockReadyState = MockWebSocket.CLOSED;
+    triggerWebSocketClose();
+
+    // Reconnect — keep readyState CLOSED so connect() runs
+    await connectAndAwaitReconnect(ws);
+    mockReadyState = MockWebSocket.OPEN;
+    await triggerWebSocketOpen();
+
+    // clientFetch should NOT have been called (no last seq)
+    expect(clientFetch).not.toHaveBeenCalled();
+  });
+
+  it('handles clientFetch failure gracefully (no reattach params)', async () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+
+    ws.setActiveChatId('chat-abc');
+    triggerWebSocketMessage({ type: 'stream_chunk', data: { chat_id: 'chat-abc' }, __seq: 20 });
+
+    // Simulate clientFetch failure
+    clientFetch.mockRejectedValueOnce(new Error('network error'));
+
+    // Disconnect
+    mockReadyState = MockWebSocket.CLOSED;
+    triggerWebSocketClose();
+
+    // Reconnect — keep readyState CLOSED so connect() runs
+    await connectAndAwaitReconnect(ws);
+    mockReadyState = MockWebSocket.OPEN;
+    await triggerWebSocketOpen();
+
+    // Reattach params should NOT be in URL (fetch failed)
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
+      expect.stringContaining('reattach='),
+    );
+  });
+
+  it('does not add reattach params on initial connection (wasConnectedBefore=false)', async () => {
+    const ws = WebSocketService.getInstance();
+
+    ws.setActiveChatId('chat-abc');
+
+    // Initial connect (wasConnectedBefore is false)
+    mockReadyState = MockWebSocket.OPEN;
+    ws.connect();
+    triggerWebSocketOpen();
+
+    // clientFetch should NOT have been called on initial connect
+    expect(clientFetch).not.toHaveBeenCalled();
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
+      expect.stringContaining('reattach='),
+    );
   });
 });

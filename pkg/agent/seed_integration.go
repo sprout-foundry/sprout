@@ -145,7 +145,7 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 	messages := sp.attachPastedImages(req.Messages)
 
 	sproutReq := seedRequestToSprout(req)
-	resp, err := sp.client.SendChatRequest(messages, sproutReq.Tools, sproutReq.Reasoning, false)
+	resp, err := sp.client.SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +178,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		}
 	}
 
-	resp, err := sp.client.SendChatRequestStream(messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
+	resp, err := sp.client.SendChatRequestStream(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +284,7 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 			}
 		}
 
-		resp, err := sp.client.SendChatRequestStream(messages, tools, reasoning, false, callback)
+		resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
 		if err == nil {
 			return resp, nil
 		}

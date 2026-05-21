@@ -91,7 +91,8 @@ Generate the command/script now:`, description, envContext)
 		{Role: "user", Content: userPrompt},
 	}
 
-	response, err := clientWrapper.SendChatRequest(messages, nil, "", false) // nil tools = no tool usage
+	// TODO(SP-034-1c): thread caller ctx through shell-script generation.
+	response, err := clientWrapper.SendChatRequest(context.Background(), messages, nil, "", false) // nil tools = no tool usage
 	if err != nil {
 		return fmt.Errorf("failed to generate shell script: %v", err)
 	}
@@ -123,7 +124,7 @@ Generate the command/script now:`, description, envContext)
 Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
-		response, err = clientWrapper.SendChatRequest(retryMessages, nil, "", false)
+		response, err = clientWrapper.SendChatRequest(context.Background(), retryMessages, nil, "", false)
 		if err != nil {
 			return fmt.Errorf("failed to regenerate shell script: %v", err)
 		}

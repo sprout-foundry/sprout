@@ -53,7 +53,7 @@ func (a *ProviderAdapter) SendChatRequest(ctx context.Context, req *ProviderChat
 	}
 
 	// Call the old interface
-	return a.client.SendChatRequest(messages, tools, reasoning, disableThinking)
+	return a.client.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
 
 // CheckConnection verifies connectivity

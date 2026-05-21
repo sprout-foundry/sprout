@@ -535,6 +535,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			// so tools that stream output still produce visible results.
 			env.OutputWriter = os.Stdout
 			env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
+			env.ConfigManager = agent.GetConfigManager()
 			// TODO(SP-038): Wire ApprovalManager adapter when tools are migrated
 			// ApprovalManager: security.ApprovalManager does not implement
 			// tools.ApprovalManager (different method signatures), pass nil

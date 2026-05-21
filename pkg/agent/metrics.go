@@ -69,6 +69,14 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	a.state.AddCost(estimatedCost)
 	a.state.SetCachedTokens(a.state.GetCachedTokens() + cachedTokens)
 
+	// Fleet budget tracking: debit tokens to the shared fleet tracker.
+	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
+		newTotal := a.fleetBudgetTracker.Add(int64(totalTokens))
+		if newTotal >= a.fleetBudgetLimit && !a.fleetBudgetTrunc.Load() {
+			a.fleetBudgetTrunc.Store(true)
+		}
+	}
+
 	// Calculate cost savings from cached tokens
 	// Assuming cached tokens save approximately 90% of the cost (since they're reused)
 	if cachedTokens > 0 {

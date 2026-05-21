@@ -77,11 +77,29 @@ type SubagentTask struct {
 	WorkingDir string // optional: override workspace root
 }
 
+// SubagentMetrics tracks operational metrics for the subagent runner.
+type SubagentMetrics struct {
+	Active            int64 // Currently executing subagents
+	Queued            int64 // Waiting for semaphore slot
+	Completed         int64 // Successfully completed
+	Failed            int64 // Completed with error
+	Cancelled         int64 // Cancelled (parent ctx or budget)
+	TotalQueuedWaitMS int64 // Cumulative milliseconds spent waiting in queue
+}
+
 // SubagentRunner manages in-process subagent execution
 type SubagentRunner struct {
 	parentAgent *Agent
 	shared      *SharedState
 	active      sync.Map // taskID -> *runningSubagent
+
+	// Operational metrics (atomic for concurrent access)
+	metricActive       atomic.Int64
+	metricQueued       atomic.Int64
+	metricCompleted    atomic.Int64
+	metricFailed       atomic.Int64
+	metricCancelled    atomic.Int64
+	metricQueuedWaitMS atomic.Int64
 }
 
 // runningSubagent tracks an active subagent execution
@@ -111,6 +129,18 @@ func NewSubagentRunner(parent *Agent, shared *SharedState) *SubagentRunner {
 	return &SubagentRunner{
 		parentAgent: parent,
 		shared:      shared,
+	}
+}
+
+// Metrics returns a snapshot of the subagent runner's operational metrics.
+func (r *SubagentRunner) Metrics() SubagentMetrics {
+	return SubagentMetrics{
+		Active:            r.metricActive.Load(),
+		Queued:            r.metricQueued.Load(),
+		Completed:         r.metricCompleted.Load(),
+		Failed:            r.metricFailed.Load(),
+		Cancelled:         r.metricCancelled.Load(),
+		TotalQueuedWaitMS: r.metricQueuedWaitMS.Load(),
 	}
 }
 
@@ -149,12 +179,17 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 	for i, task := range tasks {
 		wg.Add(1)
 		go func(idx int, t SubagentTask) {
+			r.metricQueued.Add(1)
+			queueStart := time.Now()
+
 			// Acquire semaphore (if limited), respecting context cancellation
 			if sem != nil {
 				select {
 				case sem <- struct{}{}:
 					defer func() { <-sem }()
 				case <-parallelCtx.Done():
+					r.metricQueued.Add(-1)
+					r.metricCancelled.Add(1)
 					defer wg.Done()
 					results[idx] = &SubagentResult{
 						ID:        t.ID,
@@ -165,8 +200,15 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				}
 			}
 
+			// Track queue wait time and transition from queued to active
+			r.metricQueuedWaitMS.Add(int64(time.Since(queueStart).Milliseconds()))
+			r.metricQueued.Add(-1)
+			r.metricActive.Add(1)
+
 			// Budget check after acquiring semaphore, before starting work
 			if opts.FleetTokenBudget > 0 && cumulativeTokens.Load() >= int64(opts.FleetTokenBudget) {
+				r.metricActive.Add(-1)
+				r.metricCancelled.Add(1)
 				defer wg.Done()
 				results[idx] = &SubagentResult{
 					ID:             t.ID,
@@ -194,6 +236,16 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			results[idx] = result
 			if result != nil {
 				cumulativeTokens.Add(int64(result.TokensUsed))
+				if result.Cancelled {
+					r.metricActive.Add(-1)
+					r.metricCancelled.Add(1)
+				} else if result.Error != nil {
+					r.metricActive.Add(-1)
+					r.metricFailed.Add(1)
+				} else {
+					r.metricActive.Add(-1)
+					r.metricCompleted.Add(1)
+				}
 			}
 		}(i, task)
 	}

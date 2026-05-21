@@ -1,3 +1,9 @@
+//go:build !js
+
+// Background-shell tests use the mock TerminalManager which only exists
+// in native test code. The js/wasm shell path has no background-session
+// concept — see shell_js.go for the streamlined wasmshell-backed impl.
+
 package tools
 
 import (

@@ -1,3 +1,9 @@
+//go:build !js
+
+// Shell command tests exercise the native os/exec path. The js/wasm path
+// is covered by the wasmshell-backed executor in cmd/wasm, where the
+// platform integration tests run end-to-end.
+
 package tools
 
 import (

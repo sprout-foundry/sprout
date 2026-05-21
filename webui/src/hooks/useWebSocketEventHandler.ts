@@ -23,6 +23,7 @@ import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { getWebUIClientId } from '../services/clientSession';
+import { getServerErrorCode } from '../services/errorCodes';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog } from '../utils/log';
@@ -586,7 +587,7 @@ const handleError = (ctx: EventHandlerContext): void => {
   if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
   const data = (event.data ?? {}) as ErrorData;
   const errorMessage = String(data.message || 'Unknown error');
-  const errorCode = typeof data.code === 'string' ? data.code : undefined;
+  const errorCode = getServerErrorCode(data);
 
   if (errorCode === 'model_not_available') {
     setState((prev) => ({

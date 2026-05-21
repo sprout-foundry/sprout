@@ -56,6 +56,30 @@ const targets = [primaryTarget, ...extraTargets].filter((target, index, array) =
   array.findIndex((candidate) => candidate.platform === target.platform && candidate.arch === target.arch) === index
 );
 
+// Resolve repo version info from git for ldflags.
+function resolveVersionInfo() {
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+
+  let tag = '';
+  let commit = '';
+  try {
+    tag = String(spawnSync('git', ['describe', '--tags', '--abbrev=0'], { cwd: repoRoot, encoding: 'utf8' }).stdout || '').trim();
+  } catch (_) { /* no tags */ }
+  try {
+    commit = String(spawnSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).stdout || '').trim();
+  } catch (_) { /* not a git repo */ }
+
+  return { version: tag || 'dev', commit, date: now };
+}
+
+const { version: pkgVersion, commit, date } = resolveVersionInfo();
+const ldflags = [
+  `-X 'github.com/sprout-foundry/sprout/cmd.version=${pkgVersion}'`,
+  `-X 'github.com/sprout-foundry/sprout/cmd.gitCommit=${commit}'`,
+  `-X 'github.com/sprout-foundry/sprout/cmd.buildDate=${date}'`,
+  `-X 'github.com/sprout-foundry/sprout/cmd.gitTag=${pkgVersion}'`,
+].join(' ');
+
 for (const target of targets) {
   const binaryName = target.platform === 'windows' ? 'sprout.exe' : 'sprout';
   const outputDir = join(backendOutDir, `${target.platform}-${target.arch}`);
@@ -64,7 +88,7 @@ for (const target of targets) {
   rmSync(outputDir, { recursive: true, force: true });
   mkdirSync(outputDir, { recursive: true });
 
-  const result = spawnSync('go', ['build', '-o', outputPath, '.'], {
+  const result = spawnSync('go', ['build', `-ldflags=${ldflags}`, '-o', outputPath, '.'], {
     cwd: repoRoot,
     stdio: 'inherit',
     env: {

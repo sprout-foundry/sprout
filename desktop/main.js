@@ -113,14 +113,14 @@ async function restorePreviousSession() {
   }
 
   let opened = 0;
-  for (const workspacePath of restorable) {
+  for (const entry of restorable) {
     try {
-      const result = await createWorkspaceWindow({ ...workspacePath, forceNewWindow: true });
+      const result = await createWorkspaceWindow({ ...entry, forceNewWindow: true });
       if (result) {
         opened += 1;
       }
     } catch (error) {
-      console.error(`Failed to restore worktree ${workspacePath}:`, error);
+      console.error(`Failed to restore worktree ${entry.workspacePath}:`, error);
     }
   }
 
@@ -315,24 +315,30 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Guard to prevent a quit→install→quit loop when the update
+// state leaks between will-quit firings.
+let isInstallingUpdate = false;
+
 app.on('will-quit', (event) => {
-  // Install deferred update if one is pending
-  if (isUpdatePending()) {
+  // Install deferred update if one is pending (but only once).
+  if (isUpdatePending() && !isInstallingUpdate) {
     console.log('[updater] Installing pending update before quit');
-    // Prevent the quit event from proceeding immediately
+    isInstallingUpdate = true;
     event.preventDefault();
-    // Let electron-updater handle the quit and install
     autoUpdater.quitAndInstall();
     return;
   }
 
-  // Normal cleanup - kill all backend instances
+  // Normal cleanup – kill all backend / SSH-tunnel child processes.
   for (const [id, record] of ctx.instanceRegistry) {
     const child = record.child;
-    child.kill();
+    try { child.kill(); } catch (_) { /* already dead */ }
+    // Force-kill after 3 s if the process hasn't exited yet.
     const killTimer = setTimeout(() => {
       try { child.kill('SIGKILL'); } catch (_) { /* already dead */ }
     }, 3000);
+    // Prevent the timer from keeping the event loop alive.
+    if (killTimer.unref) { killTimer.unref(); }
     child.once('exit', () => clearTimeout(killTimer));
     ctx.instanceRegistry.delete(id);
   }

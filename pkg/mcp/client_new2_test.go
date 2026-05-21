@@ -91,9 +91,9 @@ func TestMCPClient_CalculateBackoff(t *testing.T) {
 		{4, 8 * time.Second},
 		{5, 16 * time.Second},
 		{6, 32 * time.Second},
-		{7, 60 * time.Second}, // capped at 60
-		{8, 60 * time.Second}, // still capped
-		{20, 60 * time.Second},
+		{7, 64 * time.Second},
+		{8, 128 * time.Second},
+		{20, 5 * time.Minute},
 	}
 	for _, tc := range tests {
 		got := client.calculateBackoff(tc.attempt)

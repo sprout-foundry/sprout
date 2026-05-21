@@ -19,6 +19,9 @@ var (
 func GetNewToolRegistry() *ToolRegistry {
 	newRegistryOnce.Do(func() {
 		defaultNewRegistry = NewToolRegistry()
+		for _, h := range AllTools() {
+			defaultNewRegistry.Register(h)
+		}
 	})
 	return defaultNewRegistry
 }

@@ -292,7 +292,7 @@ Adding a tool today requires editing four locations across two packages (definit
 
 [x] - SP-038-3a: Migrate `read_file` to `pkg/agent_tools/read_file.go`. Remove from legacy. Add `TestTool_ReadFile_Conformance`.
 [x] - SP-038-3b: Migrate `list_directory`.
-[] - SP-038-3c: Migrate `web_fetch`.
+[x] - SP-038-3c: Migrate `web_fetch`.
 [] - SP-038-3d: Migrate remaining small tools (`read_directory`, `glob`, similar) one per commit.
 
 ### Phase 4: Migrate medium tools

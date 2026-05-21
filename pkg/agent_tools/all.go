@@ -14,4 +14,5 @@ package tools
 func RegisterAllTools(registry *ToolRegistry) {
 	registry.Register(NewReadFileHandler())
 	registry.Register(NewListDirectoryHandler())
+	registry.Register(NewFetchURLHandler())
 }

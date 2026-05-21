@@ -53,6 +53,9 @@ jobs:
       run: |
         make lint || echo "::warning::make lint reported issues. See lint step above for details."
 
+    - name: Check for duplicate components (SP-039 enforcement)
+      run: bash scripts/check-no-duplicate-components.sh
+
     - name: Run full build pipeline (make build-all)
       run: make build-all
 

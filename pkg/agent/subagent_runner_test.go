@@ -8,12 +8,15 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -1171,5 +1174,248 @@ func TestSubagentRunner_publishLifecycleEvent_WritesToRunlog(t *testing.T) {
 		if evt["type"] != "subagent_activity" {
 			t.Errorf("event for %s: expected type 'subagent_activity', got %q", taskID, evt["type"])
 		}
+	}
+}
+
+// =============================================================================
+// Stress tests for concurrency, fleet budget, goroutine leaks, and cancellation
+// =============================================================================
+
+// trackingClient wraps TestClient behavior with configurable delay/tokens/concurrency tracking.
+type trackingClient struct {
+	delay         time.Duration
+	tokensPerCall int
+	peak          *atomic.Int64
+	current       *atomic.Int64
+	model         string
+	debug         bool
+}
+
+func (c *trackingClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	if c.current != nil {
+		cur := c.current.Add(1)
+		for {
+			p := c.peak.Load()
+			if cur <= p {
+				break
+			}
+			if c.peak.CompareAndSwap(p, cur) {
+				break
+			}
+		}
+		defer c.current.Add(-1)
+	}
+	if c.delay > 0 {
+		select {
+		case <-time.After(c.delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	pt := c.tokensPerCall / 2
+	ct := c.tokensPerCall - pt
+	return &api.ChatResponse{
+		ID:      "test-id",
+		Object:  "chat.completion",
+		Created: 1234567890,
+		Model:   c.GetModel(),
+		Choices: []api.Choice{{Index: 0, Message: api.Message{Role: "assistant", Content: "test response"}, FinishReason: "stop"}},
+		Usage: api.ChatUsage{
+			PromptTokens:     pt,
+			CompletionTokens: ct,
+			TotalTokens:      c.tokensPerCall,
+			EstimatedCost:    0,
+			Cost:             0,
+		},
+	}, nil
+}
+
+func (c *trackingClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	callback("test response", "assistant_text")
+	return c.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
+}
+
+func (c *trackingClient) CheckConnection() error                                          { return nil }
+func (c *trackingClient) SetDebug(d bool)                                                { c.debug = d }
+func (c *trackingClient) SetModel(m string) error                                        { c.model = m; return nil }
+func (c *trackingClient) GetModel() string                                               { if c.model == "" { return "test-model" }; return c.model }
+func (c *trackingClient) GetProvider() string                                            { return "test" }
+func (c *trackingClient) GetModelContextLimit() (int, error)                             { return 4096, nil }
+func (c *trackingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error)        { return []api.ModelInfo{{Name: "test-model", ContextLength: 4096}}, nil }
+func (c *trackingClient) SupportsVision() bool                                           { return false }
+func (c *trackingClient) GetVisionModel() string                                         { return "" }
+func (c *trackingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	return nil, fmt.Errorf("vision not supported")
+}
+func (c *trackingClient) GetLastTPS() float64            { return 100 }
+func (c *trackingClient) GetAverageTPS() float64         { return 100 }
+func (c *trackingClient) GetTPSStats() map[string]float64 { return map[string]float64{"last": 100, "average": 100} }
+func (c *trackingClient) ResetTPSStats()                 {}
+
+func TestSubagentRunner_BoundedConcurrency(t *testing.T) {
+	agent := newIsolatedTestAgent(t)
+	defer agent.Shutdown()
+
+	var peak atomic.Int64
+	var current atomic.Int64
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: agent.configManager,
+		WorkspaceRoot: agent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(agent, shared)
+	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
+		return &trackingClient{delay: 100 * time.Millisecond, tokensPerCall: 15, peak: &peak, current: &current}, nil
+	}
+
+	var tasks []SubagentTask
+	for i := 0; i < 50; i++ {
+		tasks = append(tasks, SubagentTask{ID: fmt.Sprintf("task-%d", i), Prompt: "do work"})
+	}
+
+	results := runner.RunParallel(context.Background(), tasks, SubagentOptions{MaxConcurrentSubagents: 4})
+
+	if len(results) != 50 {
+		t.Fatalf("expected 50 results, got %d", len(results))
+	}
+	if peak.Load() > 4 {
+		t.Errorf("peak concurrency %d exceeds limit 4", peak.Load())
+	}
+	if peak.Load() == 0 {
+		t.Error("peak concurrency is 0, tracking may not be working")
+	}
+}
+
+func TestSubagentRunner_FleetBudgetCancels(t *testing.T) {
+	agent := newIsolatedTestAgent(t)
+	defer agent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: agent.configManager,
+		WorkspaceRoot: agent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(agent, shared)
+	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
+		return &trackingClient{tokensPerCall: 600}, nil
+	}
+
+	var tasks []SubagentTask
+	for i := 0; i < 10; i++ {
+		tasks = append(tasks, SubagentTask{ID: fmt.Sprintf("task-%d", i), Prompt: "do work"})
+	}
+
+	results := runner.RunParallel(context.Background(), tasks, SubagentOptions{FleetTokenBudget: 5000, MaxConcurrentSubagents: 2})
+
+	if len(results) != 10 {
+		t.Fatalf("expected 10 results, got %d", len(results))
+	}
+
+	var totalTokens int
+	var budgetExceededCount int
+	for i, r := range results {
+		if r == nil {
+			t.Fatalf("result[%d] is nil", i)
+		}
+		totalTokens += r.TokensUsed
+		if r.BudgetExceeded {
+			budgetExceededCount++
+		}
+	}
+	if budgetExceededCount == 0 {
+		t.Error("expected at least one BudgetExceeded result")
+	}
+	// With MaxConcurrentSubagents=2, up to 2 tasks can complete after budget is exceeded.
+	maxAllowed := 5000 + 2*600 // budget + max concurrent tasks overrunning
+	if totalTokens > maxAllowed {
+		t.Errorf("total tokens %d exceeds max allowed %d (budget + max concurrent overdraw)", totalTokens, maxAllowed)
+	}
+}
+
+func TestSubagentRunner_NoGoroutineLeak_AfterStress(t *testing.T) {
+	agent := newIsolatedTestAgent(t)
+	defer agent.Shutdown()
+
+	before := runtime.NumGoroutine()
+
+	var peak atomic.Int64
+	var current atomic.Int64
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: agent.configManager,
+		WorkspaceRoot: agent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(agent, shared)
+	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
+		return &trackingClient{delay: 50 * time.Millisecond, tokensPerCall: 15, peak: &peak, current: &current}, nil
+	}
+
+	var tasks []SubagentTask
+	for i := 0; i < 10; i++ {
+		tasks = append(tasks, SubagentTask{ID: fmt.Sprintf("task-%d", i), Prompt: "do work"})
+	}
+
+	results := runner.RunParallel(context.Background(), tasks, SubagentOptions{MaxConcurrentSubagents: 4})
+	if len(results) != 10 {
+		t.Fatalf("expected 10 results, got %d", len(results))
+	}
+
+	time.Sleep(200 * time.Millisecond) // allow cleanup
+	after := runtime.NumGoroutine()
+	delta := after - before
+	if delta > 2 {
+		t.Errorf("goroutine leak detected: delta = %d (before=%d, after=%d)", delta, before, after)
+	}
+}
+
+func TestSubagentRunner_ParentCancelDropsQueued(t *testing.T) {
+	agent := newIsolatedTestAgent(t)
+	defer agent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: agent.configManager,
+		WorkspaceRoot: agent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(agent, shared)
+	runner.testClientFactory = func(clientType api.ClientType, model string) (api.ClientInterface, error) {
+		return &trackingClient{delay: 500 * time.Millisecond, tokensPerCall: 15}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(50 * time.Millisecond); cancel() }()
+
+	var tasks []SubagentTask
+	for i := 0; i < 20; i++ {
+		tasks = append(tasks, SubagentTask{ID: fmt.Sprintf("task-%d", i), Prompt: "do work"})
+	}
+
+	results := runner.RunParallel(ctx, tasks, SubagentOptions{MaxConcurrentSubagents: 2})
+	if len(results) != 20 {
+		t.Fatalf("expected 20 results, got %d", len(results))
+	}
+
+	var notCancelled int
+	for i, r := range results {
+		if r == nil {
+			t.Fatalf("result[%d] is nil", i)
+		}
+		if !r.Cancelled {
+			notCancelled++
+		}
+	}
+	if notCancelled > 2 {
+		t.Errorf("expected at most 2 non-cancelled results, got %d", notCancelled)
+	}
+	// Most should be cancelled
+	cancelled := 20 - notCancelled
+	if cancelled < 15 {
+		t.Errorf("expected at least 15 cancelled results, got %d", cancelled)
 	}
 }

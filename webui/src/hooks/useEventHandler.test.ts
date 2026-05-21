@@ -1566,6 +1566,148 @@ describe('subagent_activity', () => {
 
     expect(stateHolder.current.subagentActivities).toHaveLength(0);
   });
+
+  it('captures status field when present in event data', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        id: 'evt-status',
+        type: 'subagent_activity',
+        data: {
+          tool_call_id: 'tc-status',
+          tool_name: 'run_subagent',
+          phase: 'complete',
+          message: 'Subagent completed successfully',
+          task_id: 'task-1',
+          status: 'completed',
+          failures: 0,
+        },
+      });
+    });
+
+    expect(stateHolder.current.subagentActivities).toHaveLength(1);
+    const activity = stateHolder.current.subagentActivities[0];
+    expect(activity.status).toBe('completed');
+    expect(activity.failures).toBe(0);
+  });
+
+  it('handles status=started in subagent activity', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        id: 'evt-started',
+        type: 'subagent_activity',
+        data: {
+          tool_call_id: 'tc-started',
+          tool_name: 'run_subagent',
+          phase: 'spawn',
+          message: 'Subagent started',
+          task_id: 'task-2',
+          status: 'started',
+        },
+      });
+    });
+
+    expect(stateHolder.current.subagentActivities).toHaveLength(1);
+    expect(stateHolder.current.subagentActivities[0].status).toBe('started');
+  });
+
+  it('handles status=queued in subagent activity', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        id: 'evt-queued',
+        type: 'subagent_activity',
+        data: {
+          tool_call_id: 'tc-queued',
+          tool_name: 'run_subagent',
+          phase: 'spawn',
+          message: 'Subagent queued',
+          task_id: 'task-3',
+          status: 'queued',
+        },
+      });
+    });
+
+    expect(stateHolder.current.subagentActivities).toHaveLength(1);
+    expect(stateHolder.current.subagentActivities[0].status).toBe('queued');
+  });
+
+  it('handles status=cancelled in subagent activity', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        id: 'evt-cancelled',
+        type: 'subagent_activity',
+        data: {
+          tool_call_id: 'tc-cancelled',
+          tool_name: 'run_subagent',
+          phase: 'output',
+          message: 'Subagent cancelled by user',
+          task_id: 'task-4',
+          status: 'cancelled',
+        },
+      });
+    });
+
+    expect(stateHolder.current.subagentActivities).toHaveLength(1);
+    expect(stateHolder.current.subagentActivities[0].status).toBe('cancelled');
+  });
+
+  it('sets status to undefined when status field is absent from event data', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        id: 'evt-no-status',
+        type: 'subagent_activity',
+        data: {
+          tool_call_id: 'tc-nostatus',
+          tool_name: 'run_subagent',
+          phase: 'output',
+          message: 'Activity without status field',
+          task_id: 'task-5',
+        },
+      });
+    });
+
+    expect(stateHolder.current.subagentActivities).toHaveLength(1);
+    expect(stateHolder.current.subagentActivities[0].status).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

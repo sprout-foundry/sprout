@@ -315,7 +315,7 @@ Four user-visible defects: Stop button doesn't cancel the in-flight LLM HTTP cal
 
 ### Phase 2: Chat reattach (HIGH)
 
-[] - SP-034-2a: Add a `chatRunRingBuffer` to the chat session struct in `pkg/webui/chat_sessions.go` — last 5,000 stream chunks (configurable) with monotonic `seq`. Cap by chunk-count *and* total bytes.
+[x] - SP-034-2a: `pkg/webui/chat_run_buffer.go` adds a thread-safe `chatRunRingBuffer` with monotonic seq, capped by BOTH event count (5000 default) AND total bytes (4 MiB default) — whichever fills first triggers eviction. API: `Append(ev) → seq`, `After(seq) → ([]ev, gap)` returning the tail and a gap flag when the requested seq is older than retained, `LastSeq()`, `Reset()`. Reset preserves seq monotonicity across runs so subscribers don't see seq go backwards. `runBuffer *chatRunRingBuffer` field added to `chatSession` (lazy-constructed; SP-034-2b will wire it into `publishClientEventWithChat`). 9 tests in `chat_run_buffer_test.go` cover monotonic seq, tail-after, gap-after-eviction, count-cap, byte-cap, reset, concurrency, and default/fallback caps. All pass.
 [] - SP-034-2b: In `publishClientEventWithChat` (`pkg/webui/api_query.go:85`), append stream-chunk events to the ring buffer.
 [] - SP-034-2c: Extend the chat WebSocket handler to accept `?reattach=<chat-id>&after_seq=<n>`; replay buffered events with `seq > n`, then resume live stream. Mirror the shape of terminal reattach at `pkg/webui/terminal_websocket.go:48-74`.
 [] - SP-034-2d: Send a `chat_run_restored` message on reattach with `{chat_id, last_seq, missed_chunks_count}`. Register this type in the outbound list (Phase 5 E2).

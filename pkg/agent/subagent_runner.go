@@ -56,15 +56,16 @@ type SharedState struct {
 
 // SubagentResult is the structured output from a subagent
 type SubagentResult struct {
-	ID           string
-	Output       string
-	Error        error
-	TokensUsed   int
-	Cost         float64
-	ToolCalls    int
-	Elapsed      time.Duration
-	Cancelled    bool
-	BudgetExceeded bool
+	ID              string
+	Output          string
+	Error           error
+	TokensUsed      int
+	Cost            float64
+	ToolCalls       int
+	Elapsed         time.Duration
+	Cancelled       bool
+	BudgetExceeded  bool  // true if task was skipped because fleet budget was already exceeded before starting
+	Truncated       bool  // true if subagent was cut short due to fleet budget exceeded mid-run
 }
 
 // SubagentTask represents a single parallel subagent task
@@ -147,7 +148,7 @@ func (r *SubagentRunner) Metrics() SubagentMetrics {
 // Run spawns an in-process subagent and waits for completion
 func (r *SubagentRunner) Run(ctx context.Context, prompt string, opts SubagentOptions) *SubagentResult {
 	taskID := fmt.Sprintf("subagent-%d", time.Now().UnixNano())
-	return r.runTask(ctx, taskID, prompt, opts)
+	return r.runTask(ctx, taskID, prompt, opts, nil, 0)
 }
 
 // RunParallel spawns multiple subagents concurrently.
@@ -232,7 +233,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.WorkingDir != "" {
 				taskOpts.WorkingDir = t.WorkingDir
 			}
-			result := r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts)
+			result := r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts, &cumulativeTokens, int64(opts.FleetTokenBudget))
 			results[idx] = result
 			if result != nil {
 				cumulativeTokens.Add(int64(result.TokensUsed))
@@ -291,8 +292,18 @@ func (r *SubagentRunner) CancelAll() {
 	})
 }
 
-// runTask executes a single subagent task
-func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opts SubagentOptions) *SubagentResult {
+// runTask executes a single subagent task.  When cumulativeTokens is non-nil
+// and fleetBudgetLimit > 0, the subagent will debit tokens to the shared
+// fleet tracker after each LLM call and truncate gracefully when the budget
+// is exceeded mid-run.
+func (r *SubagentRunner) runTask(
+	ctx context.Context,
+	taskID string,
+	prompt string,
+	opts SubagentOptions,
+	cumulativeTokens *atomic.Int64,
+	fleetBudgetLimit int64,
+) *SubagentResult {
 	startTime := time.Now()
 
 	// Create context with optional timeout
@@ -313,6 +324,13 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 			Error:   fmt.Errorf("create subagent: %w", err),
 			Elapsed: time.Since(startTime),
 		}
+	}
+
+	// Wire up per-LLM-call fleet budget tracking (SP-037-2c).
+	// This enables the subagent to debit tokens after each LLM call and
+	// truncate gracefully when the shared budget is exceeded mid-run.
+	if cumulativeTokens != nil && fleetBudgetLimit > 0 {
+		subAgent.SetFleetBudget(cumulativeTokens, fleetBudgetLimit)
 	}
 
 	// Set up terminal output prefixing for subagent
@@ -486,6 +504,7 @@ func (r *SubagentRunner) runTask(ctx context.Context, taskID, prompt string, opt
 		result.ToolCalls = toolCalls
 		result.Cancelled = cancelled
 		result.BudgetExceeded = budgetExceeded
+		result.Truncated = subAgent.FleetBudgetExceeded()
 	}
 
 	// Clean up tracking

@@ -137,3 +137,12 @@ func TestChatJSFuncs_RegistersRunChat(t *testing.T) {
 		t.Error("chatJSFuncs() must register \"runChat\"")
 	}
 }
+
+func TestAgentJSFuncs_RegistersAgentEntries(t *testing.T) {
+	funcs := agentJSFuncs()
+	for _, name := range []string{"runAgent", "runPlan"} {
+		if _, ok := funcs[name]; !ok {
+			t.Errorf("agentJSFuncs() must register %q", name)
+		}
+	}
+}

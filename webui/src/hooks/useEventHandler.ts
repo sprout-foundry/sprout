@@ -14,6 +14,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import { getWebUIClientId } from '../services/clientSession';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import type { ChatSession } from '../services/chatSessions';
+import { getServerErrorCode } from '../services/errorCodes';
 import { toQueryProgress } from '../types/app';
 import {
   shouldSuppressAgentMessageInChat,
@@ -646,6 +647,45 @@ export function useEventHandler({
           activeRequestsRef.current -= 1;
         }
         const errorMessage = String(eventData?.message || 'Unknown error');
+        const errorCode = getServerErrorCode(eventData);
+
+        // SP-034-4d: config-conflict errors get a dedicated non-blocking
+        // toast with a Reload action — they're not "the agent broke",
+        // they're "another writer changed your settings, want to pick up
+        // their version?" Surface in the log but don't echo as an
+        // assistant message; that would be noise in the chat thread.
+        if (errorCode === 'config_conflict') {
+          setState((prev) => ({
+            isProcessing: activeRequestsRef.current > 0,
+            queryProgress: null,
+            logs: appendCappedLog(prev.logs, logEntry),
+          }));
+          logError('[FAIL] config_conflict event: ' + String(eventData));
+          const summary = (eventData?.current_summary as Record<string, unknown> | undefined) || {};
+          const provider = typeof summary.provider === 'string' ? summary.provider : '';
+          const model = typeof summary.model === 'string' ? summary.model : '';
+          const detailLine =
+            provider || model
+              ? `Current on-disk settings: provider=${provider || '?'}${model ? `, model=${model}` : ''}. `
+              : '';
+          // Sticky toast (duration=0) — user dismisses or reloads.
+          // Dispatch a DOM event so a future component (e.g. a Reload
+          // banner) can pick this up and offer the action affordance
+          // without coupling to NotificationContext's API. SP-034-4d.
+          addNotification(
+            'warning',
+            'Settings changed on disk',
+            `Another writer modified your sprout config. ${detailLine}Reload the page (Ctrl+R) to pick up the new version, or dismiss this to keep using the in-memory copy.`,
+            0,
+          );
+          window.dispatchEvent(
+            new CustomEvent('sprout:config-conflict', {
+              detail: { summary, path: typeof eventData?.path === 'string' ? eventData.path : '' },
+            }),
+          );
+          break;
+        }
+
         setState((prev) => ({
           isProcessing: activeRequestsRef.current > 0,
           queryProgress: null,

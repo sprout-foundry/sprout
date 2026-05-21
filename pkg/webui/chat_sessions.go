@@ -26,6 +26,12 @@ const (
 )
 
 // chatSession stores per-chat state within a single browser tab context.
+//
+// @ts-generated  webui/src/types/generated.ts::ChatSession
+// SP-034-5b: the JSON-tagged exported fields below are the canonical
+// wire shape mirrored on the TS side. Adding a new persisted field
+// here means updating types/generated.ts too (until SP-034-5a wires
+// up the generator).
 type chatSession struct {
 	ID               string    `json:"id"`
 	Name             string    `json:"name"`

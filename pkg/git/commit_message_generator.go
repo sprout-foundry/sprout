@@ -158,12 +158,12 @@ Return ONLY the description paragraph. No title, no markdown, no code blocks, no
 	descChan := make(chan callResult, 1)
 
 	go func() {
-		r, e := client.SendChatRequest(titleMessages, nil, "", false)
+		r, e := client.SendChatRequest(ctx, titleMessages, nil, "", false)
 		titleChan <- callResult{r, e}
 	}()
 
 	go func() {
-		r, e := client.SendChatRequest(descMessages, nil, "", false)
+		r, e := client.SendChatRequest(ctx, descMessages, nil, "", false)
 		descChan <- callResult{r, e}
 	}()
 

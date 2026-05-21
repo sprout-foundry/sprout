@@ -310,7 +310,7 @@ func getOllamaMaxPredictCap(contextLimit int) int {
 }
 
 // SendChatRequest sends a chat request to local Ollama
-func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
@@ -318,7 +318,7 @@ func (c *OllamaLocalClient) SendChatRequest(messages []Message, tools []Tool, re
 
 	req, totalTokens := c.buildChatRequest(messages, tools, reasoning, false)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
 
 	var responseContent strings.Builder
@@ -526,12 +526,12 @@ func (c *OllamaLocalClient) GetVisionModel() string {
 
 // SendVisionRequest handles vision/OCR requests for Ollama
 // Delegates to SendChatRequest since the image handling is done in buildChatRequest
-func (c *OllamaLocalClient) SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
-	return c.SendChatRequest(messages, tools, reasoning, disableThinking)
+func (c *OllamaLocalClient) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+	return c.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
 
 // SendChatRequestStream streams responses from local Ollama as they arrive
-func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
+func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
 		return nil, fmt.Errorf("could not create ollama client: %w", err)
@@ -539,7 +539,7 @@ func (c *OllamaLocalClient) SendChatRequestStream(messages []Message, tools []To
 
 	req, totalTokens := c.buildChatRequest(messages, tools, reasoning, true)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
 
 	builder := NewStreamingResponseBuilder(callback)

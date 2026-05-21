@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -937,5 +938,55 @@ func TestExecuteCommandAndWait_EmbeddedNewlines(t *testing.T) {
 	}
 	if exitCode != -1 {
 		t.Errorf("expected exit code -1, got %d", exitCode)
+	}
+}
+
+func TestExecuteCommandAndWait_NoGoroutineLeak(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping goroutine leak test in short mode")
+	}
+
+	// Stabilize goroutine count before measuring baseline.
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+
+	preCount := runtime.NumGoroutine()
+
+	dir := t.TempDir()
+	tm := NewTerminalManager(dir)
+
+	session := createAndReadySession(t, tm, "exec-leak")
+	defer tm.CloseSession("exec-leak")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	// Run many commands to surface any goroutine leaks from subscription,
+	// timer, or deferred cleanup paths.
+	for i := 0; i < 100; i++ {
+		output, exitCode, err := tm.ExecuteCommandAndWait(ctx, session, "echo hello")
+		if err != nil {
+			t.Fatalf("iteration %d: ExecuteCommandAndWait failed: %v", i, err)
+		}
+		if exitCode != 0 {
+			t.Fatalf("iteration %d: expected exit code 0, got %d", i, exitCode)
+		}
+		if !strings.Contains(output, "hello") {
+			t.Fatalf("iteration %d: output should contain 'hello', got %q", i, output)
+		}
+	}
+
+	// Force GC twice to ensure finalizers and deferred cleanup run.
+	runtime.GC()
+	runtime.GC()
+
+	postCount := runtime.NumGoroutine()
+
+	// Allow some tolerance for the PTY reader goroutine per session and
+	// minor noise from background system goroutines.
+	const tolerance = 5
+	if postCount > preCount+tolerance {
+		t.Errorf("goroutine leak suspected: pre=%d, post=%d (diff=%d, tolerance=%d)",
+			preCount, postCount, postCount-preCount, tolerance)
 	}
 }

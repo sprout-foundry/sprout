@@ -1,7 +1,7 @@
 import type { WsEvent } from '@sprout/events';
 import { debugLog } from '../utils/log';
 import { getAdapter } from './apiAdapter';
-import { appendClientIdToUrl } from './clientSession';
+import { appendClientIdToUrl, clientFetch, getProxyBase } from './clientSession';
 import { notificationBus } from './notificationBus';
 
 export type { WsEvent };
@@ -26,6 +26,8 @@ class WebSocketService {
   private pendingQueue: WsEvent[] = [];
   private maxQueueSize = 100;
   private isReplayingQueue = false;
+  private activeChatId: string | null = null;
+  private chatSeq = new Map<string, number>();
 
   private constructor() {}
 
@@ -81,7 +83,7 @@ class WebSocketService {
     }
   }
 
-  connect() {
+  async connect() {
     // Reset reconnect attempts to allow fresh reconnection cycle.
     // This ensures that calling connect() after a prior disconnect()
     // (which sets reconnectAttempts to maxReconnectAttempts to prevent
@@ -103,13 +105,40 @@ class WebSocketService {
       this.reconnectTimeout = null;
     }
 
+    // ── Reattach check on reconnect ──────────────────────────────────────
+    // If we're reconnecting during an active chat, check with the backend
+    // whether there are missed events. If so, add reattach params so the
+    // server replays events from where we left off.
+    let reattachChatId: string | null = null;
+    let reattachAfterSeq: number | undefined = undefined;
+
+    if (this.wasConnectedBefore && this.activeChatId) {
+      const chatId = this.activeChatId;
+      const lastSeq = this.chatSeq.get(chatId);
+      if (lastSeq !== undefined) {
+        try {
+          const resp = await clientFetch(
+            `/api/query/status?chat_id=${encodeURIComponent(chatId)}`,
+          );
+          const body: { active?: boolean; chat_id?: string } = await resp.json();
+          if (body.active === true) {
+            reattachChatId = body.chat_id ?? chatId;
+            reattachAfterSeq = lastSeq;
+            debugLog('[WebSocket] Reattach reconnect for chat', reattachChatId, 'after_seq', reattachAfterSeq);
+          }
+        } catch (err) {
+          debugLog('[WebSocket] Reattach status check failed:', err);
+        }
+      }
+    }
+
     // Use environment variable if provided, otherwise use relative URL.
     // When running via the SSH proxy the SPROUT_PROXY_BASE global is injected
     // into the page so WebSocket traffic routes through the same origin.
     // In cloud mode with an adapter, prefer the adapter's WebSocket URL.
     const adapter = getAdapter();
     const adapterWsUrl = adapter?.getWebSocketURL();
-    const wsUrl =
+    let wsUrl =
       import.meta.env.VITE_WS_URL ||
       adapterWsUrl ||
       (() => {
@@ -117,6 +146,20 @@ class WebSocketService {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.host}${proxyBase}/ws`;
       })();
+
+    // Append reattach query params if needed
+    if (reattachChatId) {
+      const url = new URL(wsUrl, window.location.origin);
+      url.searchParams.set('reattach', reattachChatId);
+      if (reattachAfterSeq !== undefined) {
+        url.searchParams.set('after_seq', String(reattachAfterSeq));
+      }
+      if (url.origin === window.location.origin) {
+        wsUrl = `${url.pathname}${url.search}${url.hash}`;
+      } else {
+        wsUrl = url.toString();
+      }
+    }
 
     debugLog('Connecting to WebSocket:', wsUrl);
 
@@ -220,6 +263,9 @@ class WebSocketService {
           }
           return;
         }
+
+        // Track __seq per chat for reattach support
+        this.trackSeq(data);
 
         this.notifyCallbacks(data);
       } catch (error) {
@@ -382,6 +428,33 @@ class WebSocketService {
       this.pendingQueue = [];
     }
     return count;
+  }
+
+  /** Set the current active chat ID. Used for reattach tracking on reconnect. */
+  setActiveChatId(chatId: string | null): void {
+    this.activeChatId = chatId;
+  }
+
+  /** Get the last seen __seq for a specific chat. */
+  getLastSeq(chatId: string): number | undefined {
+    return this.chatSeq.get(chatId);
+  }
+
+  /** Get the last seen __seq for the currently active chat (if any). */
+  getActiveChatSeq(): number | undefined {
+    return this.activeChatId ? this.chatSeq.get(this.activeChatId) : undefined;
+  }
+
+  /** Track __seq from incoming events for reattach support. */
+  private trackSeq(event: WsEvent): void {
+    const seq = (event as any).__seq;
+    if (typeof seq !== 'number') return;
+    const chatId = (event.data as any)?.chat_id || this.activeChatId;
+    if (!chatId) return;
+    const current = this.chatSeq.get(chatId);
+    if (current === undefined || seq > current) {
+      this.chatSeq.set(chatId, seq);
+    }
   }
 }
 

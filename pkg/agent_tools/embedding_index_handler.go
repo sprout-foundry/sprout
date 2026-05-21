@@ -1,0 +1,211 @@
+package tools
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/events"
+)
+
+type embeddingIndexHandler struct{}
+
+func (h *embeddingIndexHandler) Name() string {
+	return "embedding_index"
+}
+
+func (h *embeddingIndexHandler) Definition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "embedding_index",
+		Description: "Manage the embedding index for duplicate detection and semantic search. Use 'build' to create a full index, 'update' to incrementally update changed files, or 'status' to check index state.",
+		Parameters: []ParameterDef{
+			{Name: "operation", Type: "string", Description: "Operation to perform: 'build' (full re-index), 'update' (incremental via git diff), or 'status' (check index state)", Required: true},
+		},
+		Required: []string{"operation"},
+	}
+}
+
+func (h *embeddingIndexHandler) Validate(args map[string]any) error {
+	_, err := extractString(args, "operation")
+	return err
+}
+
+func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	toolName := h.Name()
+	if env.EventBus != nil {
+		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
+			"tool":     toolName,
+			"params":   args,
+		})
+		defer func() {
+			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
+				"tool":  toolName,
+				"error": false,
+			})
+		}()
+
+		operation, err := extractString(args, "operation")
+		if err != nil {
+			return ToolResult{
+				Output:  err.Error(),
+				IsError: true,
+			}, nil
+		}
+
+		// Get config
+		var config *configuration.Config
+		if env.ConfigManager != nil {
+			config = env.ConfigManager.GetConfig()
+		} else {
+			manager, err := configuration.NewManager()
+			if err != nil {
+				return ToolResult{
+					Output:  fmt.Sprintf("Error getting configuration: %v", err),
+					IsError: true,
+				}, nil
+			}
+			config = manager.GetConfig()
+		}
+
+		workspaceRoot := env.WorkspaceRoot
+		if workspaceRoot == "" {
+			workspaceRoot = "."
+		}
+
+		embeddingCfg := config.EmbeddingIndex
+		if embeddingCfg == nil {
+			embeddingCfg = &configuration.EmbeddingIndexConfig{}
+		}
+
+		switch operation {
+		case "status":
+			return h.handleStatus(embeddingCfg, workspaceRoot)
+		case "build":
+			return h.handleBuild(ctx, embeddingCfg, workspaceRoot)
+		case "update":
+			return h.handleUpdate(ctx, embeddingCfg, workspaceRoot)
+		default:
+			return ToolResult{
+				Output:  fmt.Sprintf("Unknown operation '%s'. Valid operations: build, update, status", operation),
+				IsError: true,
+			}, nil
+		}
+	}
+
+	return ToolResult{
+		Output:  "No results",
+		IsError: false,
+	}, nil
+}
+
+func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
+	indexDir := cfg.IndexDir
+	if indexDir == "" {
+		configDir := os.Getenv("SPROUT_CONFIG")
+		if configDir == "" {
+			configDir = os.Getenv("LEDIT_CONFIG")
+		}
+		if configDir == "" {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				home = ""
+			}
+			configDir = filepath.Join(home, ".config", "sprout")
+		}
+		indexDir = filepath.Join(configDir, "embeddings")
+	}
+
+	enabled := cfg.Enabled
+	provider := cfg.Provider
+	if provider == "" {
+		provider = "bundled"
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Embedding Index Status:\n\n"))
+	sb.WriteString(fmt.Sprintf("  Enabled: %v\n", enabled))
+	sb.WriteString(fmt.Sprintf("  Provider: %s\n", provider))
+	sb.WriteString(fmt.Sprintf("  Index Directory: %s\n", indexDir))
+
+	info, err := os.Stat(indexDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			sb.WriteString("  State: No index exists (run 'build' to create)\n")
+		} else {
+			sb.WriteString(fmt.Sprintf("  State: Error checking index: %v\n", err))
+		}
+	} else if info.IsDir() {
+		files, _ := os.ReadDir(indexDir)
+		sb.WriteString(fmt.Sprintf("  State: Index exists (%d file(s))\n", len(files)))
+		sb.WriteString("  Files:\n")
+		for _, f := range files {
+			sb.WriteString(fmt.Sprintf("    - %s\n", f.Name()))
+		}
+	}
+
+	return ToolResult{
+		Output:    sb.String(),
+		IsError:   false,
+	}, nil
+}
+
+func (h *embeddingIndexHandler) handleBuild(ctx context.Context, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
+	manager := embedding.NewEmbeddingManager(cfg, workspaceRoot)
+
+	// Use a timeout for the build
+	buildCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	stats, err := manager.BuildIndex(buildCtx)
+	if err != nil {
+		return ToolResult{
+			Output:  fmt.Sprintf("Error building embedding index: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Embedding index built successfully.\n\n")
+	sb.WriteString(fmt.Sprintf("  Files processed: %d\n", stats.FilesProcessed))
+	sb.WriteString(fmt.Sprintf("  Units extracted: %d\n", stats.UnitsExtracted))
+	sb.WriteString(fmt.Sprintf("  Units embedded: %d\n", stats.UnitsEmbedded))
+	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
+
+	return ToolResult{
+		Output:    sb.String(),
+		IsError:   false,
+	}, nil
+}
+
+func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
+	manager := embedding.NewEmbeddingManager(cfg, workspaceRoot)
+
+	// Use a timeout for the update
+	updateCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	stats, err := manager.UpdateFromGitDiff(updateCtx)
+	if err != nil {
+		return ToolResult{
+			Output:  fmt.Sprintf("Error updating embedding index: %v", err),
+			IsError: true,
+		}, nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Embedding index updated successfully.\n\n")
+	sb.WriteString(fmt.Sprintf("  Files processed: %d\n", stats.FilesProcessed))
+	sb.WriteString(fmt.Sprintf("  Units extracted: %d\n", stats.UnitsExtracted))
+	sb.WriteString(fmt.Sprintf("  Units embedded: %d\n", stats.UnitsEmbedded))
+	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
+
+	return ToolResult{
+		Output:    sb.String(),
+		IsError:   false,
+	}, nil
+}

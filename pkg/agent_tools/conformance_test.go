@@ -661,6 +661,544 @@ func TestFetchURLConformance_Execute_AttachesImageForPDF(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// search_files Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestSearchFilesConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &searchFilesHandler{}
+
+	require.Equal(t, "search_files", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "search_files", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"search_pattern"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["search_pattern"], "should have 'search_pattern' parameter")
+	require.True(t, paramNames["directory"], "should have 'directory' parameter")
+	require.True(t, paramNames["file_glob"], "should have 'file_glob' parameter")
+	require.True(t, paramNames["case_sensitive"], "should have 'case_sensitive' parameter")
+	require.True(t, paramNames["max_results"], "should have 'max_results' parameter")
+	require.True(t, paramNames["max_bytes"], "should have 'max_bytes' parameter")
+}
+
+func TestSearchFilesConformance_Validate_MissingPattern(t *testing.T) {
+	t.Parallel()
+	h := &searchFilesHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestSearchFilesConformance_Validate_EmptyPattern(t *testing.T) {
+	t.Parallel()
+	h := &searchFilesHandler{}
+
+	// extractString allows empty strings - the handler only validates presence
+	err := h.Validate(map[string]any{"search_pattern": ""})
+	require.NoError(t, err)
+}
+
+func TestSearchFilesConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &searchFilesHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"search_pattern": "func"}))
+	require.NoError(t, h.Validate(map[string]any{"search_pattern": "func", "directory": "./pkg"}))
+}
+
+func TestSearchFilesConformance_BasicSearch(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &searchFilesHandler{}
+	ctx := newTestCtx(dir)
+
+	// Create files to search
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "hello.go"), []byte("package hello\n\nfunc Greet() {}\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "world.go"), []byte("package world\n\nfunc Greet() {}\n"), 0o644))
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"search_pattern": "Greet", "directory": dir})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "Greet")
+}
+
+func TestSearchFilesConformance_NoMatches(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &searchFilesHandler{}
+	ctx := newTestCtx(dir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("hello world"), 0o644))
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"search_pattern": "NOTFOUND", "directory": dir})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "No results found")
+}
+
+func TestSearchFilesConformance_InvalidRegex(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &searchFilesHandler{}
+	ctx := newTestCtx(dir)
+
+	// Invalid regex pattern (delimited with /)
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"search_pattern": "/[invalid/", "directory": dir})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "invalid search pattern")
+}
+
+func TestSearchFilesConformance_WithFileGlob(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &searchFilesHandler{}
+	ctx := newTestCtx(dir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.go"), []byte("package main"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "test.txt"), []byte("package main"), 0o644))
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"search_pattern": "package",
+		"directory":      dir,
+		"file_glob":      "*.go",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "test.go")
+	require.NotContains(t, res.Output, "test.txt")
+}
+
+func TestSearchFilesConformance_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &searchFilesHandler{}
+	ctx := newTestCtx(dir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "file.txt"), []byte("Hello World"), 0o644))
+
+	// Case sensitive - should find "Hello"
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"search_pattern": "Hello",
+		"directory":      dir,
+		"case_sensitive": true,
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "Hello")
+}
+
+// ---------------------------------------------------------------------------
+// repo_map Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestRepoMapConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &repoMapHandler{}
+
+	require.Equal(t, "repo_map", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "repo_map", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Empty(t, def.Required, "repo_map should have no required parameters")
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["directory"], "should have 'directory' parameter")
+}
+
+func TestRepoMapConformance_Validate(t *testing.T) {
+	t.Parallel()
+	h := &repoMapHandler{}
+
+	// No required params - all inputs should be valid
+	require.NoError(t, h.Validate(nil))
+	require.NoError(t, h.Validate(map[string]any{}))
+	require.NoError(t, h.Validate(map[string]any{"directory": "."}))
+}
+
+func TestRepoMapConformance_Basic(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &repoMapHandler{}
+	ctx := newTestCtx(dir)
+
+	// Create a Go file with a top-level function
+	goCode := `package foo
+func Bar() {}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "foo.go"), []byte(goCode), 0o644))
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{"directory": dir})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	// Output should contain the directory or file reference
+	require.Contains(t, res.Output, "foo.go")
+}
+
+func TestRepoMapConformance_DefaultDirectory(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &repoMapHandler{}
+	ctx := newTestCtx(dir)
+
+	// No directory arg - should default to "."
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+}
+
+// ---------------------------------------------------------------------------
+// list_memories Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestListMemoriesConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &listMemoriesHandler{}
+
+	require.Equal(t, "list_memories", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "list_memories", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Empty(t, def.Required, "list_memories should have no required parameters")
+}
+
+func TestListMemoriesConformance_Validate(t *testing.T) {
+	t.Parallel()
+	h := &listMemoriesHandler{}
+
+	// No required params
+	require.NoError(t, h.Validate(nil))
+	require.NoError(t, h.Validate(map[string]any{}))
+}
+
+func TestListMemoriesConformance_Execute(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &listMemoriesHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	// Should return some output (empty list or "no memories")
+	require.NotEmpty(t, res.Output)
+}
+
+// ---------------------------------------------------------------------------
+// read_memory Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestReadMemoryConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &readMemoryHandler{}
+
+	require.Equal(t, "read_memory", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "read_memory", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"name"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["name"], "should have 'name' parameter")
+}
+
+func TestReadMemoryConformance_Validate_MissingName(t *testing.T) {
+	t.Parallel()
+	h := &readMemoryHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestReadMemoryConformance_Validate_EmptyName(t *testing.T) {
+	t.Parallel()
+	h := &readMemoryHandler{}
+
+	// extractString allows empty strings - the handler only validates presence
+	err := h.Validate(map[string]any{"name": ""})
+	require.NoError(t, err)
+}
+
+func TestReadMemoryConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &readMemoryHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"name": "git-safety"}))
+}
+
+func TestReadMemoryConformance_Execute_NonexistentMemory(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &readMemoryHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{"name": "nonexistent_memory"})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "Error reading memory")
+}
+
+// ---------------------------------------------------------------------------
+// rollback_changes Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestRollbackChangesConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &rollbackChangesHandler{}
+
+	require.Equal(t, "rollback_changes", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "rollback_changes", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Empty(t, def.Required, "rollback_changes should have no required parameters")
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["revision_id"], "should have 'revision_id' parameter")
+	require.True(t, paramNames["file_path"], "should have 'file_path' parameter")
+	require.True(t, paramNames["confirm"], "should have 'confirm' parameter")
+}
+
+func TestRollbackChangesConformance_Validate(t *testing.T) {
+	t.Parallel()
+	h := &rollbackChangesHandler{}
+
+	// No required params
+	require.NoError(t, h.Validate(nil))
+	require.NoError(t, h.Validate(map[string]any{}))
+	require.NoError(t, h.Validate(map[string]any{"revision_id": "abc123"}))
+}
+
+func TestRollbackChangesConformance_Execute_ListRevisions(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &rollbackChangesHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+// ---------------------------------------------------------------------------
+// view_history Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestViewHistoryConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &viewHistoryHandler{}
+
+	require.Equal(t, "view_history", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "view_history", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Empty(t, def.Required, "view_history should have no required parameters")
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["limit"], "should have 'limit' parameter")
+	require.True(t, paramNames["file_filter"], "should have 'file_filter' parameter")
+	require.True(t, paramNames["since"], "should have 'since' parameter")
+	require.True(t, paramNames["show_content"], "should have 'show_content' parameter")
+}
+
+func TestViewHistoryConformance_Validate(t *testing.T) {
+	t.Parallel()
+	h := &viewHistoryHandler{}
+
+	// No required params
+	require.NoError(t, h.Validate(nil))
+	require.NoError(t, h.Validate(map[string]any{}))
+	require.NoError(t, h.Validate(map[string]any{"limit": 10, "file_filter": "*.go"}))
+}
+
+func TestViewHistoryConformance_Execute_Default(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &viewHistoryHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+func TestViewHistoryConformance_Execute_WithLimit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &viewHistoryHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{"limit": 5})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+func TestViewHistoryConformance_Execute_InvalidSince(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &viewHistoryHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{"since": "not-a-valid-timestamp"})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "parsing 'since' timestamp")
+}
+
+// ---------------------------------------------------------------------------
+// list_skills Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestListSkillsConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &listSkillsHandler{}
+
+	require.Equal(t, "list_skills", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "list_skills", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Empty(t, def.Required, "list_skills should have no required parameters")
+	require.Empty(t, def.Parameters, "list_skills should have no parameters")
+}
+
+func TestListSkillsConformance_Validate(t *testing.T) {
+	t.Parallel()
+	h := &listSkillsHandler{}
+
+	// No required params
+	require.NoError(t, h.Validate(nil))
+	require.NoError(t, h.Validate(map[string]any{}))
+}
+
+func TestListSkillsConformance_Execute(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &listSkillsHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+// ---------------------------------------------------------------------------
+// embedding_index Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestEmbeddingIndexConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &embeddingIndexHandler{}
+
+	require.Equal(t, "embedding_index", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "embedding_index", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"operation"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["operation"], "should have 'operation' parameter")
+}
+
+func TestEmbeddingIndexConformance_Validate_MissingOperation(t *testing.T) {
+	t.Parallel()
+	h := &embeddingIndexHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestEmbeddingIndexConformance_Validate_EmptyOperation(t *testing.T) {
+	t.Parallel()
+	h := &embeddingIndexHandler{}
+
+	// extractString allows empty strings - the handler only validates presence
+	err := h.Validate(map[string]any{"operation": ""})
+	require.NoError(t, err)
+}
+
+func TestEmbeddingIndexConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &embeddingIndexHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"operation": "build"}))
+	require.NoError(t, h.Validate(map[string]any{"operation": "update"}))
+	require.NoError(t, h.Validate(map[string]any{"operation": "status"}))
+}
+
+func TestEmbeddingIndexConformance_Execute_Status(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &embeddingIndexHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{"operation": "status"})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "Embedding Index Status")
+}
+
+func TestEmbeddingIndexConformance_Execute_InvalidOperation(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &embeddingIndexHandler{}
+	ctx := newTestCtx(dir)
+
+	env := newTestEnv(t, dir)
+	res, err := h.Execute(ctx, env, map[string]any{"operation": "invalid_op"})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "Unknown operation")
+}
+
+// ---------------------------------------------------------------------------
 // Helper function conformance tests
 // ---------------------------------------------------------------------------
 
@@ -809,9 +1347,9 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// list_directory has no required params → nil args are valid
 			err := h.Validate(nil)
 			switch name {
-			case "read_file", "fetch_url":
+			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
-			case "list_directory":
+			case "list_directory", "repo_map", "list_memories", "list_skills", "rollback_changes", "view_history":
 				require.NoError(t, err, "Validate(nil) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate(nil) should return error for tool %q", name)
@@ -820,9 +1358,9 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// Validate must handle empty map
 			err = h.Validate(map[string]any{})
 			switch name {
-			case "read_file", "fetch_url":
+			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
-			case "list_directory":
+			case "list_directory", "repo_map", "list_memories", "list_skills", "rollback_changes", "view_history":
 				require.NoError(t, err, "Validate({}) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate({}) should return error for tool %q", name)

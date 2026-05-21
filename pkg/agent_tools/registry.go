@@ -6,6 +6,23 @@ import (
 	"sync"
 )
 
+// ---------------------------------------------------------------------------
+// Global singleton for new-style tool registry (SP-038-2a dual-dispatch)
+// ---------------------------------------------------------------------------
+
+var (
+	defaultNewRegistry *ToolRegistry
+	newRegistryOnce    sync.Once
+)
+
+// GetNewToolRegistry returns the global new-style tool registry singleton.
+func GetNewToolRegistry() *ToolRegistry {
+	newRegistryOnce.Do(func() {
+		defaultNewRegistry = NewToolRegistry()
+	})
+	return defaultNewRegistry
+}
+
 // ToolRegistry provides thread-safe registration and lookup of ToolHandlers.
 type ToolRegistry struct {
 	mu    sync.RWMutex

@@ -130,3 +130,53 @@ func (r *chatSubscribersRegistry) ChatCount() int {
 	defer r.mu.RUnlock()
 	return len(r.subscribers)
 }
+
+// IsSubscribed reports whether conn is in chatID's subscriber set. The
+// fast path is the in-event-loop check used by shouldForwardEventToConnection
+// to decide if a clientID-mismatched event should fan out to this tab
+// via multi-tab consistency.
+func (r *chatSubscribersRegistry) IsSubscribed(chatID string, conn *websocket.Conn) bool {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" || conn == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	set, ok := r.subscribers[chatID]
+	if !ok {
+		return false
+	}
+	_, found := set[conn]
+	return found
+}
+
+// connectionSubscribedToChat is the per-event filter helper used by
+// shouldForwardEventToConnection. Tolerates a nil registry (the test
+// fixtures don't always wire one up).
+func (ws *ReactWebServer) connectionSubscribedToChat(connInfo *ConnectionInfo, chatID string) bool {
+	if ws.chatSubscribers == nil || connInfo == nil || connInfo.Conn == nil {
+		return false
+	}
+	return ws.chatSubscribers.IsSubscribed(chatID, connInfo.Conn)
+}
+
+// isSecurityScopedEvent reports whether an event type carries a
+// per-session security context that must NOT fan out across tabs even
+// when the chatID matches. These events authenticate a specific browser
+// session (the one that initiated the action) and showing them on
+// another tab would be both wrong and a security leak.
+func isSecurityScopedEvent(eventType string) bool {
+	switch eventType {
+	case eventTypeSecurityApproval, eventTypeSecurityPrompt, eventTypeAskUser:
+		return true
+	}
+	return false
+}
+
+// Constants for security-scoped event types. Mirrored from
+// pkg/events.EventType* to avoid the import inside this hot-path filter.
+const (
+	eventTypeSecurityApproval = "security_approval_request"
+	eventTypeSecurityPrompt   = "security_prompt_request"
+	eventTypeAskUser          = "ask_user_request"
+)

@@ -8,16 +8,19 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // ConnectionInfo stores metadata about a WebSocket connection
 type ConnectionInfo struct {
-	SessionID   string    // Unique session ID for this connection
-	ClientID    string    // WebUI client/window identifier
-	ChatID      string    // Chat session identifier (optional)
-	Type        string    // "webui" or "terminal"
-	UserID      string    // User ID extracted from trusted header (service mode)
-	ConnectedAt time.Time // When the connection was established
+	SessionID   string          // Unique session ID for this connection
+	ClientID    string          // WebUI client/window identifier
+	ChatID      string          // Chat session identifier (optional)
+	Type        string          // "webui" or "terminal"
+	UserID      string          // User ID extracted from trusted header (service mode)
+	ConnectedAt time.Time       // When the connection was established
+	Conn        *websocket.Conn // Underlying conn for registry lookups (SP-034-3c). Never written to directly; SafeConn owns the write path.
 }
 
 type contextKey string

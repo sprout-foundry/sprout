@@ -84,8 +84,15 @@ func (m *WebSocketMessage) Validate() error {
 }
 
 // SubscribeData is the data payload for "subscribe" messages.
+//
+// Events is the historical event-type filter (kept for backward compat,
+// not currently enforced at the bus level). ChatIDs is the SP-034-3
+// addition: registers this connection in the server's chatSubscribers
+// list so events targeting any of those chats fan out to this connection
+// even when the originating clientID differs (multi-tab consistency).
 type SubscribeData struct {
-	Events []string `json:"events"`
+	Events  []string `json:"events"`
+	ChatIDs []string `json:"chat_ids,omitempty"`
 }
 
 // Validate performs field-level validation on SubscribeData.
@@ -103,6 +110,20 @@ func (d *SubscribeData) Validate() error {
 			return fmt.Errorf("event at index %d too long: %d characters (max %d)", i, len(event), maxEventNameLen)
 		}
 		d.Events[i] = event
+	}
+
+	if len(d.ChatIDs) > maxEventsCount {
+		return fmt.Errorf("too many chat_ids: %d (max %d)", len(d.ChatIDs), maxEventsCount)
+	}
+	for i, chatID := range d.ChatIDs {
+		chatID = strings.TrimSpace(chatID)
+		if chatID == "" {
+			return fmt.Errorf("chat_id at index %d cannot be empty", i)
+		}
+		if len(chatID) > maxEventNameLen {
+			return fmt.Errorf("chat_id at index %d too long: %d characters (max %d)", i, len(chatID), maxEventNameLen)
+		}
+		d.ChatIDs[i] = chatID
 	}
 
 	return nil

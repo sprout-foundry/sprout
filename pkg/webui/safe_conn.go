@@ -18,6 +18,14 @@ type SafeConn struct {
 	closed  atomic.Bool
 }
 
+// Conn returns the underlying *websocket.Conn. Useful when callers need
+// to register the connection in a map keyed by pointer identity (e.g.
+// the chatSubscribers registry) without losing the SafeConn write
+// serialization for the actual JSON traffic.
+func (sc *SafeConn) Conn() *websocket.Conn {
+	return sc.conn
+}
+
 // NewSafeConn creates a new safe connection wrapper
 func NewSafeConn(conn *websocket.Conn) *SafeConn {
 	return &SafeConn{

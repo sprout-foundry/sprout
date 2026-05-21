@@ -5,7 +5,12 @@ package tools
 // Currently includes: read_file, list_directory, fetch_url, search_files,
 // repo_map, list_memories, read_memory, rollback_changes, view_history,
 // list_skills, embedding_index, write_file, write_structured_file,
-// edit_file, shell_command, save_memory, and search_memories.
+// edit_file, shell_command, save_memory, search_memories,
+// run_subagent, run_parallel_subagents, task_queue_add, task_queue_publish,
+// task_queue_read, todo_write, todo_read, ask_user, patch_structured_file,
+// self_review, commit, git, activate_skill, add_memory, delete_memory,
+// browse_url, web_search, semantic_search, analyze_image_content,
+// and analyze_ui_screenshot.
 //
 // To register all tools with a registry:
 //
@@ -32,5 +37,36 @@ func AllTools() []ToolHandler {
 		&shellCommandHandler{},
 		&saveMemoryHandler{},
 		&searchMemoriesHandler{},
+		// Subagent tools (thin wrappers pending *Agent refactoring)
+		&runSubagentHandler{},
+		&runParallelSubagentsHandler{},
+		// Task queue tools
+		&taskQueueAddHandler{},
+		&taskQueuePublishHandler{},
+		&taskQueueReadHandler{},
+		// Todo tools
+		&todoWriteHandler{},
+		&todoReadHandler{},
+		// Interaction tools
+		&askUserHandler{},
+		// Structured file tools
+		&patchStructuredFileHandler{},
+		// Review tools
+		&selfReviewHandler{},
+		// Git tools
+		&commitHandler{},
+		&gitHandler{},
+		// Skill tools (thin wrapper pending *Agent refactoring)
+		&activateSkillHandler{},
+		// Memory tools
+		&addMemoryHandler{},
+		&deleteMemoryHandler{},
+		// Browser/search tools (thin wrappers pending *Agent refactoring)
+		&browseURLHandler{},
+		&webSearchHandler{},
+		&semanticSearchHandler{},
+		// Image/analysis tools (thin wrappers pending *Agent refactoring)
+		&analyzeImageContentHandler{},
+		&analyzeUIScreenshotHandler{},
 	}
 }

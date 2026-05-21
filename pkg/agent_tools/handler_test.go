@@ -557,8 +557,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 17 {
-		t.Fatalf("AllTools() returned %d tools, want 17", len(tools))
+	if len(tools) != 37 {
+		t.Fatalf("AllTools() returned %d tools, want 37", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -579,6 +579,26 @@ func TestAllToolsRegistration(t *testing.T) {
 		"shell_command":           "shell_command",
 		"save_memory":             "save_memory",
 		"search_memories":         "search_memories",
+		"run_subagent":            "run_subagent",
+		"run_parallel_subagents":  "run_parallel_subagents",
+		"task_queue_add":          "task_queue_add",
+		"task_queue_publish":      "task_queue_publish",
+		"task_queue_read":         "task_queue_read",
+		"todo_write":              "todo_write",
+		"todo_read":               "todo_read",
+		"ask_user":                "ask_user",
+		"patch_structured_file":   "patch_structured_file",
+		"self_review":             "self_review",
+		"commit":                  "commit",
+		"git":                     "git",
+		"activate_skill":          "activate_skill",
+		"add_memory":              "add_memory",
+		"delete_memory":           "delete_memory",
+		"browse_url":              "browse_url",
+		"web_search":              "web_search",
+		"semantic_search":         "semantic_search",
+		"analyze_image_content":   "analyze_image_content",
+		"analyze_ui_screenshot":   "analyze_ui_screenshot",
 	}
 
 	var foundNames []string
@@ -680,6 +700,86 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "search_memories":
 			if len(def.Required) != 1 || def.Required[0] != "query" {
 				t.Errorf("search_memories Required = %v, want [\"query\"]", def.Required)
+			}
+		case "run_subagent":
+			if len(def.Required) != 2 || def.Required[0] != "prompt" || def.Required[1] != "persona" {
+				t.Errorf("run_subagent Required = %v, want [\"prompt\" \"persona\"]", def.Required)
+			}
+		case "run_parallel_subagents":
+			if len(def.Required) != 1 || def.Required[0] != "subagents" {
+				t.Errorf("run_parallel_subagents Required = %v, want [\"subagents\"]", def.Required)
+			}
+		case "task_queue_add":
+			if len(def.Required) != 1 || def.Required[0] != "title" {
+				t.Errorf("task_queue_add Required = %v, want [\"title\"]", def.Required)
+			}
+		case "task_queue_publish":
+			if len(def.Required) != 2 || def.Required[0] != "task_id" || def.Required[1] != "status" {
+				t.Errorf("task_queue_publish Required = %v, want [\"task_id\" \"status\"]", def.Required)
+			}
+		case "task_queue_read":
+			if len(def.Required) != 0 {
+				t.Errorf("task_queue_read Required = %v, want nil/empty", def.Required)
+			}
+		case "todo_write":
+			if len(def.Required) != 1 || def.Required[0] != "todos" {
+				t.Errorf("todo_write Required = %v, want [\"todos\"]", def.Required)
+			}
+		case "todo_read":
+			if len(def.Required) != 0 {
+				t.Errorf("todo_read Required = %v, want nil/empty", def.Required)
+			}
+		case "ask_user":
+			if len(def.Required) != 1 || def.Required[0] != "question" {
+				t.Errorf("ask_user Required = %v, want [\"question\"]", def.Required)
+			}
+		case "patch_structured_file":
+			if len(def.Required) != 1 || def.Required[0] != "path" {
+				t.Errorf("patch_structured_file Required = %v, want [\"path\"]", def.Required)
+			}
+		case "self_review":
+			if len(def.Required) != 0 {
+				t.Errorf("self_review Required = %v, want nil/empty", def.Required)
+			}
+		case "commit":
+			if len(def.Required) != 0 {
+				t.Errorf("commit Required = %v, want nil/empty", def.Required)
+			}
+		case "git":
+			if len(def.Required) != 1 || def.Required[0] != "operation" {
+				t.Errorf("git Required = %v, want [\"operation\"]", def.Required)
+			}
+		case "activate_skill":
+			if len(def.Required) != 1 || def.Required[0] != "skill_id" {
+				t.Errorf("activate_skill Required = %v, want [\"skill_id\"]", def.Required)
+			}
+		case "add_memory":
+			if len(def.Required) != 2 || def.Required[0] != "name" || def.Required[1] != "content" {
+				t.Errorf("add_memory Required = %v, want [\"name\" \"content\"]", def.Required)
+			}
+		case "delete_memory":
+			if len(def.Required) != 1 || def.Required[0] != "name" {
+				t.Errorf("delete_memory Required = %v, want [\"name\"]", def.Required)
+			}
+		case "browse_url":
+			if len(def.Required) != 1 || def.Required[0] != "url" {
+				t.Errorf("browse_url Required = %v, want [\"url\"]", def.Required)
+			}
+		case "web_search":
+			if len(def.Required) != 1 || def.Required[0] != "query" {
+				t.Errorf("web_search Required = %v, want [\"query\"]", def.Required)
+			}
+		case "semantic_search":
+			if len(def.Required) != 1 || def.Required[0] != "query" {
+				t.Errorf("semantic_search Required = %v, want [\"query\"]", def.Required)
+			}
+		case "analyze_image_content":
+			if len(def.Required) != 1 || def.Required[0] != "image_path" {
+				t.Errorf("analyze_image_content Required = %v, want [\"image_path\"]", def.Required)
+			}
+		case "analyze_ui_screenshot":
+			if len(def.Required) != 1 || def.Required[0] != "image_path" {
+				t.Errorf("analyze_ui_screenshot Required = %v, want [\"image_path\"]", def.Required)
 			}
 		}
 	}

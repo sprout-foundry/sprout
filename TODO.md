@@ -362,9 +362,9 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 
 ### Phase 6: Documentation
 
-[] - SP-039-6a: Write `docs/COMPONENT_LIBRARY.md` covering the Option A/B decision and rationale, the primitive vs composite rubric with examples, import direction enforcement, how to add a new component.
-[] - SP-039-6b: Update `CONTRIBUTING.md` with a "Where does my new component go?" subsection.
-[] - SP-039-6c: Update `packages/ui/README.md` (if it exists) to point at `docs/COMPONENT_LIBRARY.md` as the source of truth.
+[x] - SP-039-6a: Write `docs/COMPONENT_LIBRARY.md` covering the Option A/B decision and rationale, the primitive vs composite rubric with examples, import direction enforcement, how to add a new component.
+[x] - SP-039-6b: Update `CONTRIBUTING.md` with a "Where does my new component go?" subsection.
+[x] - SP-039-6c: Update `packages/ui/README.md` (if it exists) to point at `docs/COMPONENT_LIBRARY.md` as the source of truth.
 
 ---
 

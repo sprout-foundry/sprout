@@ -49,6 +49,8 @@ func (h *viewHistoryHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		limit, _ := extractInt(args, "limit")
 		if limit <= 0 {
 			limit = 10
+		} else if limit > 100 {
+			limit = 100
 		}
 		fileFilter, _ := extractString(args, "file_filter")
 		sinceStr, _ := extractString(args, "since")

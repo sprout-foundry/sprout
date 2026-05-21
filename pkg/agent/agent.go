@@ -170,6 +170,7 @@ func (a *Agent) InjectWebUIManagers(approvalMgr *security.ApprovalManager, askUs
 func (a *Agent) SetFleetBudget(tracker *atomic.Int64, limit int64) {
 	a.fleetBudgetTracker = tracker
 	a.fleetBudgetLimit = limit
+	a.fleetBudgetTrunc.Store(false)
 }
 
 // FleetBudgetExceeded reports whether the fleet budget was exceeded during

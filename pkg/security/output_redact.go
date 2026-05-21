@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -156,42 +157,39 @@ func (r *OutputRedactor) redactEnvValues(content string) (string, []DetectedSecr
 	return strings.Join(lines, "\n"), secrets
 }
 
-// detectAndRedactPatterns applies regex-based credential redaction to content
-// (mutating the pointer). It returns any secrets detected by the pattern scan.
+// detectAndRedactPatterns applies gitleaks-backed secret detection to content
+// (mutating the pointer). Returns any secrets detected.
+//
+// Replacements use self-disclosing tokens of the form
+// [REDACTED:rule=<ruleID>,len=<n>,entropy=<x.x>] so a downstream LLM reader can
+// tell a display-layer redaction apart from real file content.
 func (r *OutputRedactor) detectAndRedactPatterns(content *string) []DetectedSecret {
-	original := *content
-	redacted := credentials.RedactLogLine(original)
-
-	// If nothing changed, there are no pattern-based secrets.
-	if redacted == original {
+	scanner, err := secretdetect.Default()
+	if err != nil || scanner == nil {
 		return nil
 	}
 
-	// Use DetectSecurityConcerns on the original (un-redacted) content to
-	// identify what credential types are present. We don't try to extract
-	// individual matches per line here — the concern-level report is enough.
-	concerns, snippets := DetectSecurityConcerns(original)
-
-	var secrets []DetectedSecret
-	for _, concern := range concerns {
-		// Strip the " Exposure" suffix for a friendlier display name.
-		typeName := strings.TrimSuffix(concern, " Exposure")
-
-		snippet := "[detected]"
-		if s, ok := snippets[concern]; ok {
-			snippet = s
-			if len(snippet) > 40 {
-				snippet = snippet[:37] + "..."
-			}
-		}
-
-		secrets = append(secrets, DetectedSecret{
-			Type:    typeName,
-			Snippet: snippet,
-			Line:    0, // DetectSecurityConcerns doesn't report line numbers
-		})
+	matches := scanner.Scan(*content)
+	if len(matches) == 0 {
+		return nil
 	}
 
-	*content = redacted
+	*content = secretdetect.Redact(*content, matches)
+
+	secrets := make([]DetectedSecret, 0, len(matches))
+	for _, m := range matches {
+		snippet := m.Secret
+		if snippet == "" {
+			snippet = m.Match
+		}
+		if len(snippet) > 40 {
+			snippet = snippet[:37] + "..."
+		}
+		secrets = append(secrets, DetectedSecret{
+			Type:    m.RuleID,
+			Snippet: snippet,
+			Line:    m.StartLine,
+		})
+	}
 	return secrets
 }

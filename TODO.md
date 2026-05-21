@@ -376,7 +376,7 @@ Spec: `roadmap/SP-040-deployment-configurability.md`
 
 ### Phase 1: Bootstrap endpoint + adapter rewrite
 
-[] - SP-040-1a: Define `RuntimeConfig` type (`apiBaseURL`, `wsURL`, `authMode: "none"|"bearer"`, `appMode: "local"|"cloud"`, `buildVersion`) in `pkg/webui/api_bootstrap.go` and `webui/src/types/runtimeConfig.ts`.
+[x] - SP-040-1a: Define `RuntimeConfig` type (`apiBaseURL`, `wsURL`, `authMode: "none"|"bearer"`, `appMode: "local"|"cloud"`, `buildVersion`) in `pkg/webui/api_bootstrap.go` and `webui/src/types/runtimeConfig.ts`.
 [] - SP-040-1b: Implement `GET /api/bootstrap` returning `RuntimeConfig` (unauthenticated; `authMode` set based on `SPROUT_AUTH_TOKEN` env, sharing the env read with `pkg/webui/server.go:69`).
 [] - SP-040-1c: Rewrite `webui/src/bootstrapAdapter.ts` — fetch `/api/bootstrap` first, fall back to `import.meta.env.VITE_*`, fall back to localhost defaults. Log each fallback step.
 [] - SP-040-1d: Update `webui/src/bootstrapAdapter.test.ts` with all three fallback paths.

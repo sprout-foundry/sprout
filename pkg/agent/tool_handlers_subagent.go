@@ -1091,7 +1091,15 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			Provider: pt.Provider,
 		})
 	}
-	results := runner.RunParallel(ctx, tasks, SubagentOptions{})
+	opts := SubagentOptions{}
+	if a.configManager != nil {
+		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
+		if maxParallel > 16 {
+			maxParallel = 16
+		}
+		opts.MaxConcurrentSubagents = maxParallel
+	}
+	results := runner.RunParallel(ctx, tasks, opts)
 
 	// Convert to resultMap format for backward compatibility
 	resultMap := make(map[string]map[string]string)

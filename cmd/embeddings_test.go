@@ -35,6 +35,8 @@ func setupEmbeddingTestEnv(t *testing.T) string {
 // resetEmbeddingsClearFlags resets the package-level flags to defaults between tests.
 func resetEmbeddingsClearFlags() {
 	embeddingsClearType = "all"
+	embeddingsClearYes = false
+	embeddingsClearDryRun = false
 }
 
 // =============================================================================
@@ -64,6 +66,7 @@ func TestEmbeddingsClear_DefaultAll(t *testing.T) {
 
 	// Default is "all" — should clear everything
 	embeddingsClearType = "all"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -116,6 +119,7 @@ func TestEmbeddingsClear_TypeCode(t *testing.T) {
 	}
 
 	embeddingsClearType = "code"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -170,6 +174,7 @@ func TestEmbeddingsClear_TypeConversationTurn(t *testing.T) {
 	}
 
 	embeddingsClearType = "conversation_turn"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -221,6 +226,7 @@ func TestEmbeddingsClear_TypeMemory(t *testing.T) {
 	}
 
 	embeddingsClearType = "memory"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -284,6 +290,7 @@ func TestEmbeddingsClear_NoIndexDir(t *testing.T) {
 	}
 
 	embeddingsClearType = "all"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -307,6 +314,7 @@ func TestEmbeddingsClear_EmptyIndexDir(t *testing.T) {
 	// Don't create any embedding files — leave the dir empty
 
 	embeddingsClearType = "all"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -338,6 +346,7 @@ func TestEmbeddingsClear_TypeCode_NoONNXFiles(t *testing.T) {
 	// ONNX files are NOT created
 
 	embeddingsClearType = "code"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -374,6 +383,7 @@ func TestEmbeddingsClear_FullCodeFiles(t *testing.T) {
 	}
 
 	embeddingsClearType = "code"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -416,6 +426,7 @@ func TestEmbeddingsClear_FullConversationFiles(t *testing.T) {
 	}
 
 	embeddingsClearType = "conversation_turn"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -466,6 +477,7 @@ func TestEmbeddingsClear_All_Mixed(t *testing.T) {
 	}
 
 	embeddingsClearType = "all"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -501,6 +513,7 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 	}
 
 	embeddingsClearType = "code"
+	embeddingsClearYes = true
 	out := captureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
@@ -511,5 +524,235 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 	// Should have cleared the 1 file that existed
 	if !strings.Contains(out, "Cleared 1 embedding file(s)") {
 		t.Errorf("expected output to contain 'Cleared 1 embedding file(s)', got: %q", out)
+	}
+}
+
+// =============================================================================
+// TestEmbeddingsClear_DryRun_All — dry-run with --type=all
+// =============================================================================
+
+func TestEmbeddingsClear_DryRun_All(t *testing.T) {
+	defer resetEmbeddingsClearFlags()
+
+	indexDir := setupEmbeddingTestEnv(t)
+
+	// Create some code files
+	if err := os.WriteFile(filepath.Join(indexDir, "index.jsonl"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(indexDir, ".index.jsonl.meta.json"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	// Create some conversation files
+	if err := os.WriteFile(filepath.Join(indexDir, "conversation_turns.jsonl"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(indexDir, ".conversation_turns.jsonl.meta.json"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	embeddingsClearType = "all"
+	embeddingsClearDryRun = true
+	out := captureStdout(t, func() {
+		err := runEmbeddingsClear()
+		if err != nil {
+			t.Fatalf("runEmbeddingsClear() error: %v", err)
+		}
+	})
+
+	// Should say "Would clear" not "Cleared"
+	if !strings.Contains(out, "Would clear 4 embedding file(s)") {
+		t.Errorf("expected output to contain 'Would clear 4 embedding file(s)', got: %q", out)
+	}
+
+	// Verify nothing was deleted
+	files := []string{
+		"index.jsonl",
+		".index.jsonl.meta.json",
+		"conversation_turns.jsonl",
+		".conversation_turns.jsonl.meta.json",
+	}
+	for _, f := range files {
+		if _, err := os.Stat(filepath.Join(indexDir, f)); os.IsNotExist(err) {
+			t.Errorf("expected %s to still exist after dry-run", f)
+		}
+	}
+}
+
+// =============================================================================
+// TestEmbeddingsClear_DryRun_Code — dry-run with --type=code
+// =============================================================================
+
+func TestEmbeddingsClear_DryRun_Code(t *testing.T) {
+	defer resetEmbeddingsClearFlags()
+
+	indexDir := setupEmbeddingTestEnv(t)
+
+	// Create code files
+	if err := os.WriteFile(filepath.Join(indexDir, "index.jsonl"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(indexDir, ".index.jsonl.meta.json"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	embeddingsClearType = "code"
+	embeddingsClearDryRun = true
+	out := captureStdout(t, func() {
+		err := runEmbeddingsClear()
+		if err != nil {
+			t.Fatalf("runEmbeddingsClear() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Would clear 2 embedding file(s)") {
+		t.Errorf("expected output to contain 'Would clear 2 embedding file(s)', got: %q", out)
+	}
+
+	// Verify files still exist
+	if _, err := os.Stat(filepath.Join(indexDir, "index.jsonl")); os.IsNotExist(err) {
+		t.Error("expected index.jsonl to still exist after dry-run")
+	}
+}
+
+// =============================================================================
+// TestEmbeddingsClear_DryRun_NoFiles — dry-run when no files exist
+// =============================================================================
+
+func TestEmbeddingsClear_DryRun_NoFiles(t *testing.T) {
+	defer resetEmbeddingsClearFlags()
+
+	_ = setupEmbeddingTestEnv(t)
+	// Don't create any embedding files
+
+	embeddingsClearType = "all"
+	embeddingsClearDryRun = true
+	out := captureStdout(t, func() {
+		err := runEmbeddingsClear()
+		if err != nil {
+			t.Fatalf("runEmbeddingsClear() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "No embedding files found") {
+		t.Errorf("expected output to contain 'No embedding files found', got: %q", out)
+	}
+}
+
+// =============================================================================
+// TestEmbeddingsClear_RequiresYes — aborts when --yes not provided
+// =============================================================================
+
+func TestEmbeddingsClear_RequiresYes(t *testing.T) {
+	defer resetEmbeddingsClearFlags()
+
+	indexDir := setupEmbeddingTestEnv(t)
+
+	// Create some files
+	if err := os.WriteFile(filepath.Join(indexDir, "index.jsonl"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	// StdinIsTerminal() returns false in tests (not a TTY), so it should
+	// return an error about needing --yes.
+	embeddingsClearType = "all"
+	embeddingsClearYes = false
+	err := runEmbeddingsClear()
+	if err == nil {
+		t.Fatal("expected error when --yes is not provided, got nil")
+	}
+	if !strings.Contains(err.Error(), "this command requires confirmation") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// Verify file was NOT deleted
+	if _, err := os.Stat(filepath.Join(indexDir, "index.jsonl")); os.IsNotExist(err) {
+		t.Error("index.jsonl should not have been deleted when user aborted")
+	}
+}
+
+// =============================================================================
+// TestEmbeddingsClear_YesSkipsConfirm — --yes bypasses the prompt
+// =============================================================================
+
+func TestEmbeddingsClear_YesSkipsConfirm(t *testing.T) {
+	defer resetEmbeddingsClearFlags()
+
+	indexDir := setupEmbeddingTestEnv(t)
+
+	// Create some files
+	if err := os.WriteFile(filepath.Join(indexDir, "index.jsonl"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(indexDir, ".index.jsonl.meta.json"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	// --yes should skip the confirmation prompt entirely
+	embeddingsClearType = "code"
+	embeddingsClearYes = true
+	out := captureStdout(t, func() {
+		err := runEmbeddingsClear()
+		if err != nil {
+			t.Fatalf("runEmbeddingsClear() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Cleared 2 embedding file(s)") {
+		t.Errorf("expected output to contain 'Cleared 2 embedding file(s)', got: %q", out)
+	}
+
+	// Verify files are gone
+	if _, err := os.Stat(filepath.Join(indexDir, "index.jsonl")); !os.IsNotExist(err) {
+		t.Error("expected index.jsonl to be deleted")
+	}
+}
+
+// =============================================================================
+// TestEmbeddingsClear_DryRun_NoConfirm — dry-run skips confirmation
+// =============================================================================
+
+func TestEmbeddingsClear_DryRun_NoConfirm(t *testing.T) {
+	defer resetEmbeddingsClearFlags()
+
+	indexDir := setupEmbeddingTestEnv(t)
+
+	// Create some code files
+	if err := os.WriteFile(filepath.Join(indexDir, "index.jsonl"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(indexDir, ".index.jsonl.meta.json"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	// Set dry-run WITHOUT --yes. Should NOT prompt for confirmation.
+	embeddingsClearType = "code"
+	embeddingsClearDryRun = true
+	embeddingsClearYes = false
+
+	out := captureStdout(t, func() {
+		err := runEmbeddingsClear()
+		if err != nil {
+			t.Fatalf("runEmbeddingsClear() error: %v", err)
+		}
+	})
+
+	// Should NOT contain a confirmation prompt
+	if strings.Contains(out, "[y/N]") {
+		t.Errorf("dry-run should not show confirmation prompt, got: %q", out)
+	}
+
+	// Should show "Would clear" output
+	if !strings.Contains(out, "Would clear") {
+		t.Errorf("expected output to contain 'Would clear', got: %q", out)
+	}
+
+	// Verify files still exist (nothing was deleted)
+	if _, err := os.Stat(filepath.Join(indexDir, "index.jsonl")); os.IsNotExist(err) {
+		t.Error("index.jsonl should still exist after dry-run")
+	}
+	if _, err := os.Stat(filepath.Join(indexDir, ".index.jsonl.meta.json")); os.IsNotExist(err) {
+		t.Error(".index.jsonl.meta.json should still exist after dry-run")
 	}
 }

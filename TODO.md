@@ -332,7 +332,7 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 
 [x] - SP-039-1a: Confirm Option A (delete `packages/ui`, move everything into `webui`) or Option B (keep `packages/ui` as the canonical library, webui imports from it). Document the choice and rationale in `roadmap/SP-039-DECISION.md` or inline in the spec.
 [x] - SP-039-1b: Write `scripts/ui-consolidation-diff.sh` outputting the 30+ overlaps and per-component diff status (identical / packages-leads / webui-leads / divergent).
-[] - SP-039-1c: Categorize every `packages/ui/src/components/*.tsx` as primitive (reusable, no domain types) or composite (wires primitives to app state).
+[x] - SP-039-1c: Categorize every `packages/ui/src/components/*.tsx` as primitive (reusable, no domain types) or composite (wires primitives to app state).
 
 ### Phase 2: Move misplaced composites out of `@sprout/ui`
 

@@ -25,6 +25,8 @@ Subcommands:
 }
 
 var embeddingsClearType string
+var embeddingsClearYes bool
+var embeddingsClearDryRun bool
 
 var embeddingsClearCmd = &cobra.Command{
 	Use:   "clear",
@@ -33,6 +35,8 @@ var embeddingsClearCmd = &cobra.Command{
 
 By default, clears all embedding types (code and conversation_turn/memory).
 Use --type to specify which type to clear.
+Use --yes to skip the confirmation prompt.
+Use --dry-run to see what would be cleared without deleting anything.
 
 Types:
   code              Code file embeddings (index.jsonl and related)
@@ -50,6 +54,9 @@ Types:
 func init() {
 	embeddingsClearCmd.Flags().StringVar(&embeddingsClearType, "type", "all",
 		"Type of embeddings to clear: code, conversation_turn, memory, or all (default: all)")
+	embeddingsClearCmd.Flags().BoolVarP(&embeddingsClearYes, "yes", "y", false, "Skip confirmation prompt")
+	embeddingsClearCmd.Flags().BoolVar(&embeddingsClearDryRun, "dry-run", false,
+		"Show what would be cleared without deleting anything")
 
 	embeddingsCmd.AddCommand(embeddingsClearCmd)
 	rootCmd.AddCommand(embeddingsCmd)
@@ -77,6 +84,21 @@ func runEmbeddingsClear() error {
 		return fmt.Errorf("stat embedding index directory: %w", err)
 	}
 
+	// Ask for confirmation unless --yes or --dry-run
+	if !embeddingsClearYes && !embeddingsClearDryRun {
+		if !StdinIsTerminal() {
+			return fmt.Errorf("this command requires confirmation. Pass --yes to skip confirmation or run interactively")
+		}
+		if !ConfirmPrompt("This will clear embedding files of type " + embeddingsClearType + " from " + indexDir + ". Continue? [y/N] ") {
+			return fmt.Errorf("aborted by user")
+		}
+	}
+
+	// Handle --dry-run
+	if embeddingsClearDryRun {
+		return runEmbeddingsDryRun(indexDir)
+	}
+
 	// Clear the files
 	count, err := embedding.ClearEmbeddingFiles(indexDir, embeddingsClearType)
 	if err != nil {
@@ -90,6 +112,52 @@ func runEmbeddingsClear() error {
 	}
 
 	return nil
+}
+
+// runEmbeddingsDryRun counts files that would be deleted without actually deleting them.
+func runEmbeddingsDryRun(indexDir string) error {
+	files := listEmbeddingFiles(indexDir, embeddingsClearType)
+	count := 0
+	for _, f := range files {
+		if _, err := os.Stat(f); err == nil {
+			count++
+		}
+	}
+
+	if count == 0 {
+		fmt.Println("No embedding files found, nothing to clear.")
+	} else {
+		fmt.Printf("Would clear %d embedding file(s) from %s\n", count, indexDir)
+	}
+
+	return nil
+}
+
+// listEmbeddingFiles returns the list of file paths for the given embedding type.
+func listEmbeddingFiles(indexDir string, fileType string) []string {
+	switch fileType {
+	case "code":
+		return []string{
+			filepath.Join(indexDir, "index.jsonl"),
+			filepath.Join(indexDir, ".index.jsonl.meta.json"),
+			filepath.Join(indexDir, "embedding_index_onnx.jsonl"),
+			filepath.Join(indexDir, ".embedding_index_onnx.jsonl.meta.json"),
+		}
+	case "conversation_turn", "memory":
+		return []string{
+			filepath.Join(indexDir, "conversation_turns.jsonl"),
+			filepath.Join(indexDir, ".conversation_turns.jsonl.meta.json"),
+			filepath.Join(indexDir, "conversation_turns_onnx.jsonl"),
+			filepath.Join(indexDir, ".conversation_turns_onnx.jsonl.meta.json"),
+		}
+	case "all":
+		return append(
+			listEmbeddingFiles(indexDir, "code"),
+			listEmbeddingFiles(indexDir, "conversation_turn")...,
+		)
+	default:
+		return nil
+	}
 }
 
 // resolveEmbeddingIndexDir determines the embedding index directory from config or defaults.

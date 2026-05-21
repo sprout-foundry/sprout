@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 )
 
 // RunLogger writes structured JSONL events for a single agent run.
@@ -71,7 +71,7 @@ func (r *RunLogger) LogEvent(eventType string, fields map[string]any) {
 	// covered.
 	for k, v := range payload {
 		if s, ok := v.(string); ok {
-			payload[k] = credentials.RedactLogLine(s)
+			payload[k] = secretdetect.RedactOpaque(s)
 		}
 	}
 	b, err := json.Marshal(payload)

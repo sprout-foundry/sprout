@@ -12,7 +12,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 )
 
 // ---------------------------------------------------------------------------
@@ -358,7 +358,7 @@ func flattenStandardMessages(messages []api.Message, opts ExportOptions) []api.M
 	}
 	// Apply credential redaction to all message content after cleaning
 	for i := range result {
-		result[i].Content = credentials.RedactLogLine(result[i].Content)
+		result[i].Content = secretdetect.RedactOpaque(result[i].Content)
 	}
 	return deduplicateConsecutive(result)
 }

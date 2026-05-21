@@ -481,6 +481,25 @@ When you read files, the system may append `--- Related code (semantic search) -
 
 ---
 
+## Redacted Tool Output
+
+The system runs a secret scanner over tool output (shell, read_file, search results) before you see it. When something is matched, the secret value is replaced with a token of the form:
+
+```
+[REDACTED:rule=<rule-id>,len=<n>,entropy=<x.x>]
+```
+
+For example: `value="OPENAI_API_KEY=[REDACTED:rule=openai-api-key,len=51,entropy=4.5]"`.
+
+These tokens are **display-layer artifacts**, not content of the file on disk. Treat them as:
+- **Not a sign that the file is broken.** Do NOT "fix" a file by editing the redacted region — the actual on-disk content is whatever was there before the scanner replaced it for your view.
+- **Informational, not actionable.** The `rule=`, `len=`, and `entropy=` fields describe what the scanner matched. Low entropy or a `generic-api-key` rule on a label-shaped string is often a benign false positive.
+- **Stable within a session.** If you need to verify the actual content of a redacted region, ask the user to disable redaction for that file or re-read with full visibility — do not attempt to reconstruct or regenerate the value.
+
+A separate token form `[REDACTED:<ENV_VAR_NAME>]` (e.g. `[REDACTED:OPENAI_API_KEY]`) indicates the value matched the literal value of an environment variable known to the user — those matches are essentially always real secrets.
+
+---
+
 ## Completion Criteria
 End response with a clear completion summary only after:
 - All requested work completed and verified

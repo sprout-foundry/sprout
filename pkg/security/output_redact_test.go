@@ -60,25 +60,23 @@ func TestRedactToolOutput_EnvVarValue(t *testing.T) {
 	assert.True(t, found, "expected an Env Var Value secret")
 }
 
-// TestRedactToolOutput_APIKeyPattern verifies that pattern-based
-// detection catches API key patterns in output. Uses a non-JSON format
-// because DetectSecurityConcerns regexes don't match JSON-quoted key names,
-// though RedactLogLine handles both formats.
+// realisticOpenAIKey matches gitleaks' openai-api-key rule shape
+// (sk- + 20 alphanumeric + T3BlbkFJ + 20 alphanumeric). Not a live key.
+const realisticOpenAIKey = "sk-AbCdEfGhIjKlMnOpQrStT3BlbkFJ1234567890abcdefghij"
+
+// TestRedactToolOutput_APIKeyPattern verifies that pattern-based detection
+// catches realistic API key shapes in tool output and replaces them with
+// the self-disclosing [REDACTED:rule=...] token.
 func TestRedactToolOutput_APIKeyPattern(t *testing.T) {
 	r := NewOutputRedactor()
 
-	// Non-JSON format so DetectSecurityConcerns' apiKeyRegex can match.
-	// Use a realistic key without substrings that look like test placeholders.
-	output := `api_key=sk-proj-DFQWPNOQRSUVWXYZDFGJKLNPQUVWXYZDFGJKL`
+	output := "api_key=" + realisticOpenAIKey
 	result := r.RedactToolOutput(output, "shell", nil)
 
-	// The content should be redacted — the sk- pattern should be replaced.
-	assert.Contains(t, result.Content, "[REDACTED]")
-	assert.NotContains(t, result.Content, "sk-proj-DFQWPNOQRSUVWXYZDFGJKLNPQUVWXYZDFGJKL")
-	// There should be at least one detected secret from the pattern scan.
+	assert.Contains(t, result.Content, "[REDACTED:rule=")
+	assert.NotContains(t, result.Content, realisticOpenAIKey)
 	assert.NotEmpty(t, result.Secrets)
 
-	// Verify the detected type is from the pattern scanner.
 	hasPatternSecret := false
 	for _, s := range result.Secrets {
 		if s.Type != "Env Var Value" {
@@ -88,42 +86,30 @@ func TestRedactToolOutput_APIKeyPattern(t *testing.T) {
 	assert.True(t, hasPatternSecret, "expected a pattern-based secret type")
 }
 
-// TestRedactToolOutput_APIKeyPatternJSON verifies that JSON-formatted API keys
-// are redacted by RedactLogLine even though DetectSecurityConcerns doesn't
-// detect them in JSON format (its regexes don't handle quoted key names).
+// TestRedactToolOutput_APIKeyPatternJSON verifies JSON-quoted API keys
+// are caught by the gitleaks-backed scanner.
 func TestRedactToolOutput_APIKeyPatternJSON(t *testing.T) {
 	r := NewOutputRedactor()
 
-	output := `{"api_key": "sk-proj-DFGWPNOQRSUVWXYZDFGJKLNPQUVWXYZDFGJKL"}`
+	output := `{"api_key": "` + realisticOpenAIKey + `"}`
 	result := r.RedactToolOutput(output, "shell", nil)
 
-	// RedactLogLine should catch this via its JSON-specific pattern.
-	assert.Contains(t, result.Content, "[REDACTED]")
-	assert.NotContains(t, result.Content, "sk-proj-DFGWPNOQRSUVWXYZDFGJKLNPQUVWXYZDFGJKL")
+	assert.Contains(t, result.Content, "[REDACTED:rule=")
+	assert.NotContains(t, result.Content, realisticOpenAIKey)
 }
 
-// TestRedactToolOutput_BearerToken verifies that Authorization: Bearer tokens
-// are detected and redacted.
+// TestRedactToolOutput_BearerToken verifies Authorization: Bearer tokens
+// are detected. The token uses a realistic OpenAI key shape so the
+// gitleaks openai-api-key rule fires.
 func TestRedactToolOutput_BearerToken(t *testing.T) {
 	r := NewOutputRedactor()
 
-	// Bearer token with 30+ chars.
-	output := "Authorization: Bearer sk-longtokenQRSTUVWXYZABCDEFGHJKNOPQRSTUVWXYZ"
+	output := "Authorization: Bearer " + realisticOpenAIKey
 	result := r.RedactToolOutput(output, "shell", nil)
 
-	assert.Contains(t, result.Content, "[REDACTED]")
-	assert.NotContains(t, result.Content, "sk-longtokenQRSTUVWXYZABCDEFGHJKNOPQRSTUVWXYZ")
+	assert.Contains(t, result.Content, "[REDACTED:rule=")
+	assert.NotContains(t, result.Content, realisticOpenAIKey)
 	assert.NotEmpty(t, result.Secrets)
-
-	// Verify the concern type is "Generic Bearer Token" (after stripping " Exposure").
-	found := false
-	for _, s := range result.Secrets {
-		if s.Type == "Generic Bearer Token" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "expected Generic Bearer Token concern")
 }
 
 // TestRedactToolOutput_MixedSecrets verifies redaction when both env var

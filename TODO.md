@@ -170,9 +170,9 @@ The persona system works today but several behaviors that *should be loud are si
 
 ### Phase 4: Loud warnings on silent overrides
 
-[] - SP-035-4a: At `pkg/configuration/config.go:1408-1414`, after the existing comment block, detect `len(userOverride.AllowedTools) > 0` for a built-in persona and log a warning via `pkg/logging` naming the persona and the dropped tool list — message: "AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools."
-[] - SP-035-4b: In `mergeLegacyStructuredToolsIntoPersonaAllowlists` at `pkg/configuration/config.go:1462`, iterate every persona (not just defaults). For custom personas with `write_file` but no `write_structured_file`, log a one-time warning per config-load.
-[] - SP-035-4c: Tests — `TestAllowedToolsOverride_WarnsAndDrops`, `TestLegacyCustomPersona_WarnsOnce`. Both assert the warning is emitted via the logger fixture and that the underlying behavior (drop / no-migrate) is unchanged.
+[x] - SP-035-4a: At `pkg/configuration/config.go:1408-1414`, after the existing comment block, detect `len(userOverride.AllowedTools) > 0` for a built-in persona and log a warning via `pkg/logging` naming the persona and the dropped tool list — message: "AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools."
+[x] - SP-035-4b: In `mergeLegacyStructuredToolsIntoPersonaAllowlists` at `pkg/configuration/config.go:1462`, iterate every persona (not just defaults). For custom personas with `write_file` but no `write_structured_file`, log a one-time warning per config-load.
+[x] - SP-035-4c: Tests — `TestAllowedToolsOverride_WarnsAndDrops`, `TestLegacyCustomPersona_WarnsOnce`. Both assert the warning is emitted via the logger fixture and that the underlying behavior (drop / no-migrate) is unchanged.
 
 ### Phase 5: Documentation
 

@@ -609,11 +609,42 @@ server-side. For local testing with a direct key, the configuration's
 key store (via `SproutWasm.setAPIKey`) is consulted by the provider
 client; through the proxy it's not needed.
 
+### `runPlan(provider, model, query, onEvent?): Promise<AgentResult>`
+
+Same shape as `runAgent`, but with the planning system prompt
+(`pkg/agent.GetEmbeddedPlanningPrompt(true)`) installed before
+`ProcessQuery` runs. Matches what native `sprout plan` does in
+`createPlanningAgent`, minus the readline loop (which a browser doesn't
+have).
+
+```javascript
+const result = await SproutWasm.runPlan(
+  'openai', 'gpt-5',
+  'Add OAuth login to the existing Express app',
+  (eventJSON) => { /* … */ },
+);
+// result === {response, provider, model, mode: 'plan'}
+```
+
+Multi-turn planning is driven by the host page: call `runPlan` again
+with the user's follow-up response, treating the exchange like a chat.
+Each call constructs a fresh agent — turn-to-turn continuity across
+calls lives in the conversation store
+(`SproutWasm.getConversationHistory`), not the in-process agent state.
+
 ### What's not here yet (Tier 2b continued)
 
-- The wrapper commands `runQuestion`, `runCode`, `runCommit`,
-  `runReview`, `runPlan` — each is a thin shape over `runAgent` with a
-  preset system prompt or post-processing step. SP-045-4f.
+- `runQuestion` / `runCode`: deliberately not added. Both are just
+  `runAgent` with a particular query phrasing — host pages get the same
+  behavior by prepending their own framing string. No native CLI
+  counterpart to mirror.
+- `runCommit` / `runReview`: blocked on in-WASM git. The native
+  `sprout commit` and `sprout review` commands shell out to the `git`
+  binary; under WASM there's no git binary and no `pkg/wasmgit` yet. The
+  sprout-foundry platform side will eventually run these on the
+  container, so paid-tier users get them via the WS sync transport
+  rather than in-browser. Free-tier users hit this limitation today —
+  documented but unimplemented.
 - Shell-tool wiring done (SP-045-4e): shell commands route through
   `pkg/wasmshell`. What's still missing is MCP — process-spawning tools
   fail under WASM by design.

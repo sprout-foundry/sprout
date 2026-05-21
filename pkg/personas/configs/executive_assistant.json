@@ -40,6 +40,7 @@
       ],
       "delegatable": false,
       "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
+      "fleet_token_budget": 200000,
       "enabled": true,
       "id": "executive_assistant",
       "_rules_source": "declared:executive_assistant",

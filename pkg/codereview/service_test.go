@@ -1,6 +1,7 @@
 package codereview
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -98,8 +99,8 @@ func (c *fixedLimitClient) GetModelContextLimit() (int, error) {
 	return c.limit, nil
 }
 
-func (c *fixedLimitClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	return c.TestClient.SendChatRequest(messages, tools, reasoning, disableThinking)
+func (c *fixedLimitClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+	return c.TestClient.SendChatRequest(context.Background(), messages, tools, reasoning, disableThinking)
 }
 
 func TestConvergenceDetection(t *testing.T) {

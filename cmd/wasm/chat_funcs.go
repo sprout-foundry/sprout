@@ -118,7 +118,7 @@ func runChatFunc(_ js.Value, args []js.Value) interface{} {
 				// Vision streaming isn't part of the ClientInterface today;
 				// fall back to non-streaming + final delivery via the chunk
 				// callback so callers don't have to special-case vision.
-				vr, vErr := client.SendVisionRequest(messages, nil, opts.Reasoning, opts.DisableThinking)
+				vr, vErr := client.SendVisionRequest(ctx, messages, nil, opts.Reasoning, opts.DisableThinking)
 				if vErr != nil {
 					return nil, vErr
 				}
@@ -127,16 +127,16 @@ func runChatFunc(_ js.Value, args []js.Value) interface{} {
 				}
 				resp = vr
 			} else {
-				resp, err = client.SendChatRequestStream(messages, nil, opts.Reasoning, opts.DisableThinking, cb)
+				resp, err = client.SendChatRequestStream(ctx, messages, nil, opts.Reasoning, opts.DisableThinking, cb)
 				if err != nil {
 					return nil, err
 				}
 			}
 		} else {
 			if opts.Vision {
-				resp, err = client.SendVisionRequest(messages, nil, opts.Reasoning, opts.DisableThinking)
+				resp, err = client.SendVisionRequest(ctx, messages, nil, opts.Reasoning, opts.DisableThinking)
 			} else {
-				resp, err = client.SendChatRequest(messages, nil, opts.Reasoning, opts.DisableThinking)
+				resp, err = client.SendChatRequest(ctx, messages, nil, opts.Reasoning, opts.DisableThinking)
 			}
 			if err != nil {
 				return nil, err

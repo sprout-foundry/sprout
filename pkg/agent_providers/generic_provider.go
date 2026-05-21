@@ -181,13 +181,13 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 }
 
 // SendChatRequest sends a non-streaming chat request
-func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
 
-	req, err := p.buildHTTPRequest(requestBody, false)
+	req, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
 	if err != nil {
 		// Log request on build error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "build_http_request", err)
@@ -252,13 +252,13 @@ func (p *GenericProvider) SendChatRequest(messages []api.Message, tools []api.To
 }
 
 // SendChatRequestStream sends a streaming chat request
-func (p *GenericProvider) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build chat request: %w", err)
 	}
 
-	req, err := p.buildHTTPRequest(requestBody, true)
+	req, err := p.buildHTTPRequestCtx(ctx, requestBody, true)
 	if err != nil {
 		// Log request on build error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "build_http_request", err)
@@ -334,7 +334,7 @@ func (p *GenericProvider) CheckConnection() error {
 		},
 	}
 
-	_, err := p.SendChatRequest(testMessages, nil, "", false)
+	_, err := p.SendChatRequest(context.Background(), testMessages, nil, "", false)
 	if err != nil {
 		return fmt.Errorf("check connection: test request failed: %w", err)
 	}
@@ -622,7 +622,7 @@ func (p *GenericProvider) GetVisionModel() string {
 }
 
 // SendVisionRequest sends a vision request (for providers that support it)
-func (p *GenericProvider) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (p *GenericProvider) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	if !p.SupportsVision() {
 		return nil, fmt.Errorf("provider %s does not support vision", p.config.Name)
 	}
@@ -635,7 +635,7 @@ func (p *GenericProvider) SendVisionRequest(messages []api.Message, tools []api.
 		defer func() { p.model = originalModel }()
 	}
 
-	return p.SendChatRequest(messages, tools, reasoning, disableThinking)
+	return p.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
 
 // TPS tracking methods - simplified for now
@@ -1155,9 +1155,17 @@ func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{}
 	return converted
 }
 
-// buildHTTPRequest builds the HTTP request
+// buildHTTPRequest is a context.Background convenience wrapper kept for
+// internal callers that don't carry a context (e.g. the retry path).
+// New callers should use buildHTTPRequestCtx so the user's Stop button
+// can abort in-flight LLM requests — see SP-034.
 func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.Request, error) {
-	req, err := http.NewRequest("POST", p.config.Endpoint, bytes.NewReader(body))
+	return p.buildHTTPRequestCtx(context.Background(), body, streaming)
+}
+
+// buildHTTPRequestCtx builds the HTTP request bound to ctx.
+func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, streaming bool) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("get model context limit: %w", err)
 	}

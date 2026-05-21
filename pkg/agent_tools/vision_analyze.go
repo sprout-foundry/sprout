@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -130,8 +131,10 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string, optionalPrompt ...stri
 		},
 	}
 
-	// Get vision analysis using the vision-enabled method
-	response, err := vp.visionClient.SendVisionRequest(messages, nil, "", false)
+	// Get vision analysis using the vision-enabled method.
+	// TODO(SP-034-1c): thread the parent context.Context through
+	// VisionProcessor.AnalyzeImage so the Stop button can abort vision calls.
+	response, err := vp.visionClient.SendVisionRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}

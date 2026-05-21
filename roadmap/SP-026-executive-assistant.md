@@ -17,6 +17,27 @@ The current agent architecture is repo-scoped and code-focused. Every conversati
 
 This persona is **local-only at launch** with planned cloud/dev-container support ~6 months post-launch.
 
+## Where Prompts Live
+
+System prompts for personas are stored under `pkg/agent/prompts/subagent_prompts/`. The path in persona config JSON uses this directory as the root:
+
+```
+pkg/agent/prompts/subagent_prompts/
+├── executive_assistant.md    # EA system prompt
+├── orchestrator.md           # Orchestrator prompt
+├── repo_orchestrator.md      # Repo orchestrator prompt
+├── coder.md                  # Coder subagent prompt
+├── tester.md                 # Tester subagent prompt
+├── debugger.md               # Debugger subagent prompt
+├── code_reviewer.md          # Code reviewer prompt
+└── ...
+```
+
+In persona config, the `system_prompt` field uses the full path relative to the project root:
+```json
+{ "system_prompt": "pkg/agent/prompts/subagent_prompts/executive_assistant.md" }
+```
+
 ## Proposed Solution
 
 Introduce an **Executive Assistant** (EA) persona that:
@@ -470,7 +491,7 @@ Support for local-only personas and the EA approval system.
 Define the EA with its system prompt, project discovery, and integration.
 
 **New files:**
-- `subagent_prompts/executive_assistant.md` — Full system prompt for the EA
+- `pkg/agent/prompts/subagent_prompts/executive_assistant.md` — Full system prompt for the EA
 - `pkg/agent/project_discovery.go` — Project scanning, AGENTS.md parsing, index caching
 - `pkg/agent/project_discovery_test.go` — Tests for project discovery
 - `pkg/agent/executive_assistant_test.go` — Integration tests for full EA workflow
@@ -515,7 +536,7 @@ Define the EA with its system prompt, project discovery, and integration.
 | `pkg/agent/project_discovery.go` | **New:** Project scanning and index |
 | `pkg/agent/project_discovery_test.go` | **New:** Discovery tests |
 | `pkg/agent/executive_assistant_test.go` | **New:** Integration tests |
-| `subagent_prompts/executive_assistant.md` | **New:** EA system prompt |
+| `pkg/agent/prompts/subagent_prompts/executive_assistant.md` | **New:** EA system prompt |
 | All files referencing `isSubagent` | Update to `subagentDepth` (search: `grep -rn "isSubagent\|IsSubagent" pkg/`) |
 
 ## Configuration Example
@@ -534,7 +555,7 @@ Define the EA with its system prompt, project discovery, and integration.
       "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
       "enabled": true,
       "local_only": true,
-      "system_prompt": "subagent_prompts/executive_assistant.md",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/executive_assistant.md",
       "provider": "anthropic",
       "model": "claude-sonnet-4-20250514",
       "auto_approve_rules": {

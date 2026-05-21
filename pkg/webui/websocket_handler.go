@@ -52,6 +52,17 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	// Read chat_id from query params (optional)
 	chatID := r.URL.Query().Get("chat_id")
 
+	// Read reattach params (SP-034-2c). When the client reconnects mid-query
+	// it sends ?reattach=<chat-id>&after_seq=<last-seen-seq>; we look up the
+	// chat's runBuffer and replay everything with seq > after_seq before the
+	// live event loop starts. reattachChatID takes precedence over chat_id
+	// when both are present — the spec disambiguates that case.
+	reattachChatID := strings.TrimSpace(r.URL.Query().Get("reattach"))
+	afterSeq := parseAfterSeqQuery(r.URL.Query().Get("after_seq"))
+	if reattachChatID != "" {
+		chatID = reattachChatID
+	}
+
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
 		SessionID:   sessionID,
@@ -73,6 +84,14 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		"type": "connection_status",
 		"data": map[string]interface{}{"connected": true, "session_id": sessionID, "client_id": clientID},
 	})
+
+	// Replay any missed events before we start the live loop. Subscribing
+	// AFTER the replay ensures the client sees buffered events strictly
+	// before any live events that arrive on this connection — there's no
+	// chance of seeing seq N+5 (live) before seq N+3 (replay).
+	if reattachChatID != "" {
+		ws.deliverChatRunReplay(safeConn, clientID, reattachChatID, afterSeq)
+	}
 
 	// Set up close handler to send disconnect status
 	conn.SetCloseHandler(func(code int, text string) error {

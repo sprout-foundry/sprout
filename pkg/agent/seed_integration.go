@@ -266,6 +266,7 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 		return nil
 	}
 	newTotal := tracker.Add(tokens)
+	// Budget is exceeded when cumulative tokens reach or exceed the limit.
 	if newTotal >= limit && !sp.agent.fleetBudgetTrunc.Load() {
 		sp.agent.fleetBudgetTrunc.Store(true)
 		return FleetBudgetExceededError
@@ -277,7 +278,7 @@ func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) er
 // fleet token budget has been exceeded mid-conversation.  It is caught by
 // processQueryWithSeed to truncate gracefully rather than surfacing as a
 // generic API error.
-var FleetBudgetExceededError = fmt.Errorf("fleet token budget exceeded")
+var FleetBudgetExceededError = errors.New("fleet token budget exceeded")
 
 // Chat implements core.Provider
 func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
@@ -328,7 +329,9 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
 		if err == nil {
 			// Fleet budget tracking: debit tokens after each LLM call
-			sp.trackFleetBudgetForResponse(resp)
+			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+				return nil, budgetErr
+			}
 			return resp, nil
 		}
 		lastErr = err
@@ -691,7 +694,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 				truncatedResult = result
 			}
 
-			a.state.SetLastRunTerminationReason(RunTerminationCompleted)
+			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
 			a.finalizeConversationPostHooks(truncatedResult, processedQuery, preSeedMsgCount)
 
 			return truncatedResult, nil

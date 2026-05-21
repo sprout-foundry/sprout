@@ -71,6 +71,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		Type:        "webui",
 		UserID:      userID,
 		ConnectedAt: time.Now(),
+		Conn:        conn,
 	})
 	defer ws.connections.Delete(conn)
 
@@ -272,13 +273,30 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	// Check if event has client_id targeting
 	if strings.TrimSpace(targetClientID) != "" {
 		// Event has explicit client_id - must match connection's client_id
+		// OR (SP-034-3c) the connection must be subscribed to the event's
+		// chat for multi-tab consistency. Security/interaction events still
+		// require clientID match because they're authenticating a specific
+		// browser session, not broadcasting state.
 		if strings.TrimSpace(targetClientID) != strings.TrimSpace(connInfo.ClientID) {
-			// Log mismatched security/interaction events for diagnostics
-			if event.Type == events.EventTypeSecurityApprovalRequest || event.Type == events.EventTypeSecurityPromptRequest || event.Type == events.EventTypeAskUserRequest {
+			if isSecurityScopedEvent(event.Type) {
 				log.Printf("[SECURITY] Dropping %s event: payload client_id=%q does not match connection client_id=%q (request_id=%v)",
 					event.Type, strings.TrimSpace(targetClientID), connInfo.ClientID, data["request_id"])
+				return false
 			}
-			return false
+			// Allow on multi-tab match: either this connection's primary
+			// chat_id matches the event's chat_id, or the connection has
+			// explicitly subscribed to the chat via the chatSubscribers
+			// registry. Either way, the same chat is open on this tab and
+			// the event belongs on its screen.
+			targetChat := strings.TrimSpace(targetChatID)
+			if targetChat == "" {
+				return false // clientID mismatch and no chat scope → drop
+			}
+			if strings.TrimSpace(connInfo.ChatID) != targetChat &&
+				!ws.connectionSubscribedToChat(connInfo, targetChat) {
+				return false
+			}
+			return true
 		}
 		// Client ID matches, now check chat_id if present
 		if strings.TrimSpace(targetChatID) != "" {

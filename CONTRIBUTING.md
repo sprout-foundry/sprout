@@ -149,6 +149,18 @@ The daemon root context is propagated through `cmd/agent_modes.go` and cancelled
 - **File size target**: under 500 lines per file
 - **SRP**: each type/file should have one primary responsibility
 
+## Where Does My New Component Go?
+
+**Quick answer**: Read [`docs/COMPONENT_LIBRARY.md`](docs/COMPONENT_LIBRARY.md) for the full rubric.
+
+| If your component... | Put it in... |
+|---|---|
+| Is reusable, props-driven, no app state | `packages/ui/src/components/` (exported as `@sprout/ui`) |
+| Wires to app APIs, auth, business logic | `webui/src/components/` |
+| Is a platform page (billing, teams, tasks) | `webui/src/components/platform/` |
+
+**Import direction is one-way**: `webui` → `@sprout/ui`. Never reverse.
+
 ## CI Pipeline
 
 CI runs on push/PR to `main`:

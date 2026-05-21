@@ -551,14 +551,67 @@ func (m *mockApprovalManager) RequestApproval(_, _, _, _ string, _ map[string]st
 // AllTools Tests
 // ---------------------------------------------------------------------------
 
-func TestAllToolsEmpty(t *testing.T) {
+func TestAllToolsRegistration(t *testing.T) {
 	t.Parallel()
 	tools := AllTools()
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 0 {
-		t.Fatalf("AllTools() should return empty slice, got %d tools", len(tools))
+	if len(tools) != 3 {
+		t.Fatalf("AllTools() returned %d tools, want 3", len(tools))
+	}
+
+	expectedNames := map[string]string{
+		"read_file":      "read_file",
+		"list_directory": "list_directory",
+		"fetch_url":      "fetch_url",
+	}
+
+	var foundNames []string
+	for _, h := range tools {
+		name := h.Name()
+		defName := h.Definition().Name
+		foundNames = append(foundNames, name)
+
+		if _, ok := expectedNames[name]; !ok {
+			t.Errorf("unexpected tool: %q", name)
+		}
+		if defName != name {
+			t.Errorf("tool[%q].Definition().Name = %q, want Name() = %q", name, defName, name)
+		}
+	}
+
+	// Verify all three expected names are present
+	for _, want := range expectedNames {
+		found := false
+		for _, got := range foundNames {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing expected tool: %q", want)
+		}
+	}
+
+	// Verify required parameters for each handler
+	for _, h := range tools {
+		def := h.Definition()
+		switch def.Name {
+		case "read_file":
+			if len(def.Required) != 1 || def.Required[0] != "path" {
+				t.Errorf("read_file Required = %v, want [\"path\"]", def.Required)
+			}
+		case "list_directory":
+			if len(def.Required) != 0 {
+				t.Errorf("list_directory Required = %v, want nil/empty", def.Required)
+			}
+		case "fetch_url":
+			if len(def.Required) != 1 || def.Required[0] != "url" {
+				t.Errorf("fetch_url Required = %v, want [\"url\"]", def.Required)
+			}
+		}
 	}
 }
 

@@ -383,7 +383,7 @@ Spec: `roadmap/SP-040-deployment-configurability.md`
 
 ### Phase 2: Build-time configurability
 
-[] - SP-040-2a: Define `VITE_API_BASE_URL`, `VITE_WS_URL`, `VITE_AUTH_MODE`, `VITE_APP_MODE` in `webui/vite.config.ts` with safe defaults.
+[x] - SP-040-2a: Define `VITE_API_BASE_URL`, `VITE_WS_URL`, `VITE_AUTH_MODE`, `VITE_APP_MODE` in `webui/vite.config.ts` with safe defaults.
 [] - SP-040-2b: Replace `webui/package.json:101` hardcoded proxy with a Vite plugin reading `process.env.SPROUT_DEV_BACKEND_URL` (default `http://localhost:56000`).
 [x] - SP-040-2c: Add `webui/.env.example` documenting every supported `VITE_*` var.
 

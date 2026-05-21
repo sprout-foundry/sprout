@@ -466,6 +466,13 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Reset termination reason for fresh query
 	a.state.SetLastRunTerminationReason("")
 
+	// Reset interrupt context so a Stop from the previous query doesn't
+	// instantly cancel this one. Per SP-034-1e we now plumb interruptCtx
+	// all the way into http.NewRequestWithContext, so leaving a cancelled
+	// ctx around would make the next ProcessQuery fail before the first
+	// LLM call lands.
+	a.resetInterruptForNewQuery()
+
 	// Publish query started event
 	a.publishEvent(events.EventTypeQueryStarted, events.QueryStartedEvent(userQuery, a.GetProvider(), a.GetModel()))
 
@@ -612,9 +619,17 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		return "", fmt.Errorf("failed to create seed agent: %w", err)
 	}
 
-	// Run the query through seed's conversation loop
-	// Use the processed (cleaned) query so image placeholders are replaced
-	result, err := seedAgent.Run(context.Background(), processedQuery)
+	// Run the query through seed's conversation loop.
+	// Use the processed (cleaned) query so image placeholders are replaced.
+	// ctx is the agent's interrupt context so TriggerInterrupt() — wired to
+	// the webui Stop button at pkg/webui/api_query.go::handleAPIQueryStop —
+	// actually aborts the in-flight HTTP request, not just the agent loop
+	// after the next iteration boundary. See SP-034-1e.
+	ctx := a.interruptCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	result, err := seedAgent.Run(ctx, processedQuery)
 	if err != nil {
 		// Classify the error to provide a user-friendly message.
 		// For permanent errors (auth, client error, context overflow), return

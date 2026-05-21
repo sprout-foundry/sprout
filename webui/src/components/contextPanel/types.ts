@@ -77,6 +77,14 @@ export interface ContextNormalizedActivity {
   isSpawn: boolean;
 }
 
+export interface SubagentResourceCounts {
+  active: number;
+  queued: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+}
+
 // ── Props ───────────────────────────────────────────────────────────
 
 export interface ContextPanelBaseProps {

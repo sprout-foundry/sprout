@@ -473,6 +473,10 @@ export function useEventHandler({
             model: typeof eventData?.model === 'string' ? eventData.model : undefined,
             taskCount: typeof eventData?.task_count === 'number' ? eventData.task_count : undefined,
             failures: typeof eventData?.failures === 'number' ? eventData.failures : undefined,
+            status:
+              typeof eventData?.status === 'string'
+                ? (eventData.status as 'queued' | 'started' | 'completed' | 'cancelled')
+                : undefined,
           };
 
           if (!activity.message) {

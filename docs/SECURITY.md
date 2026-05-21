@@ -4,6 +4,8 @@ This document describes Sprout's security model, trust boundaries, and data hand
 
 ## Trust Boundaries
 
+> **See also:** [Persona System](PERSONAS.md) for the two-gate risk model and depth-based delegation that enforces trust boundaries at the subagent level.
+
 ### Local-First Execution
 
 Sprout runs entirely on the user's machine. The daemon process executes under the installing user's UID with no root privileges. All file operations, command execution, and tool invocations happen within the user's security context.

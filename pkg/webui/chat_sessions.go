@@ -56,6 +56,12 @@ type chatSession struct {
 	// that never see a query don't pay the allocation. See
 	// pkg/webui/chat_run_buffer.go and SP-034-2a.
 	runBuffer *chatRunRingBuffer `json:"-"`
+
+	// runBufferResetTimer schedules a Reset of runBuffer N seconds after
+	// the last query_completed event. Cancelled and re-scheduled as new
+	// queries start/complete on this chat. nil when no reset is pending.
+	// SP-034-2f.
+	runBufferResetTimer *time.Timer `json:"-"`
 }
 
 // messageCount returns the number of messages in the chat's agent state.

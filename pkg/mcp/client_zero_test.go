@@ -50,8 +50,8 @@ func TestMCPClientCalculateBackoff_ZC(t *testing.T) {
 		{4, 8 * time.Second},
 		{5, 16 * time.Second},
 		{6, 32 * time.Second},
-		{7, 60 * time.Second}, // capped at 60s
-		{10, 60 * time.Second}, // still capped
+		{7, 64 * time.Second},
+		{10, 5 * time.Minute}, // capped at 5 minutes
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("attempt_%d", tt.attempt), func(t *testing.T) {

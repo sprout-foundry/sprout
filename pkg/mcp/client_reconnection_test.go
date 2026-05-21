@@ -32,9 +32,9 @@ func TestCalculateBackoff(t *testing.T) {
 		{"attempt_4_8s", 4, 8 * time.Second},
 		{"attempt_5_16s", 5, 16 * time.Second},
 		{"attempt_6_32s", 6, 32 * time.Second},
-		{"attempt_7_capped_60s", 7, 60 * time.Second},   // 64s capped
-		{"attempt_8_capped_60s", 8, 60 * time.Second},    // 128s capped
-		{"attempt_10_capped_60s", 10, 60 * time.Second},  // 512s capped
+		{"attempt_7", 7, 64 * time.Second},       // 64s, not capped yet
+		{"attempt_8", 8, 128 * time.Second},      // 128s, not capped yet
+		{"attempt_10_capped_5min", 10, 5 * time.Minute}, // 512s capped at 5min
 	}
 
 	for _, tt := range tests {
@@ -890,7 +890,7 @@ func TestCalculateBackoff_EdgeCases(t *testing.T) {
 	for attempt := 1; attempt <= 15; attempt++ {
 		delay := client.calculateBackoff(attempt)
 		assert.GreaterOrEqual(t, delay, prev, "backoff should not decrease at attempt %d", attempt)
-		assert.LessOrEqual(t, delay, 60*time.Second, "backoff should not exceed 60s at attempt %d", attempt)
+		assert.LessOrEqual(t, delay, 5*time.Minute, "backoff should not exceed 5 minutes at attempt %d", attempt)
 		prev = delay
 	}
 }

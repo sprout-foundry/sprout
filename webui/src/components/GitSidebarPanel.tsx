@@ -19,7 +19,7 @@ import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '.
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
 import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
 import { copyToClipboard } from '../utils/clipboard';
-import ContextMenu from './ContextMenu';
+import { ContextMenu } from '@sprout/ui';
 import { showThemedPrompt } from './ThemedDialog';
 
 // Re-export types so existing consumers (tests, Sidebar, etc.) don't break.

@@ -1,23 +1,23 @@
 import type { WorktreeInfo } from '../types/app';
+import type { ChatSession as CanonicalChatSession } from '../types/generated';
 import { clientFetch } from './clientSession';
 
 export type { WorktreeInfo };
 
-export interface ChatSession {
-  id: string;
-  name: string;
-  created_at: string;
-  last_active_at: string;
-  message_count: number;
-  current_session_id: string;
-  active_query: boolean;
-  current_query?: string;
+// Re-export the canonical wire-format shape from the generated types
+// module. Importers that want JUST the server-side fields can pull this
+// in instead of the computed-augmented version below. SP-034-5c.
+export type { CanonicalChatSession };
+
+/**
+ * Frontend-facing ChatSession: extends the canonical wire shape with
+ * computed-only fields the server doesn't persist (`is_default`,
+ * `is_active`). The canonical fields live in `types/generated.ts`;
+ * adding a wire-format field there flows through here automatically.
+ */
+export interface ChatSession extends CanonicalChatSession {
   is_default: boolean;
   is_active: boolean;
-  is_pinned: boolean;
-  provider?: string;
-  model?: string;
-  worktree_path?: string;
 }
 
 export interface ChatSessionsResponse {

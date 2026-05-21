@@ -541,6 +541,11 @@ type PersistentContextConfig struct {
 	// For example, 5 means drift is checked on turns 5, 10, 15, etc.
 	// Default: 5
 	DriftCheckInterval int `json:"driftCheckInterval,omitempty"`
+
+	// RetentionDays controls how many days to keep persistent context entries.
+	// Default: 0 (never expire). Set to a positive value to automatically clean
+	// up entries older than the specified number of days at agent startup.
+	RetentionDays int `json:"retentionDays,omitempty"`
 }
 
 // Resolve returns a copy of the config with default values filled in for any
@@ -575,6 +580,9 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 		}
 		if c.DriftCheckInterval > 0 {
 			result.DriftCheckInterval = c.DriftCheckInterval
+		}
+		if c.RetentionDays > 0 {
+			result.RetentionDays = c.RetentionDays
 		}
 	}
 	return result

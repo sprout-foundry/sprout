@@ -3,6 +3,8 @@ package configuration
 import (
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // =============================================================================
@@ -714,5 +716,266 @@ func TestSubagentTypeEvaluateOperationRisk_WhitespaceOnly(t *testing.T) {
 				t.Errorf("EvaluateOperationRisk(whitespace) = %q, want %q", got, RiskLevelMedium)
 			}
 		})
+	}
+}
+
+// =============================================================================
+// EA persona auto_approve_rules loaded from JSON config
+// =============================================================================
+
+func TestNewConfig_EA_AutoApproveRules_LoadedFromJSON(t *testing.T) {
+	cfg := NewConfig()
+
+	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	if !ok {
+		t.Fatalf("expected executive_assistant in default subagent types")
+	}
+
+	// Verify the EA has explicit auto_approve_rules (not nil)
+	if ea.AutoApproveRules == nil {
+		t.Fatal("expected executive_assistant to have AutoApproveRules loaded from JSON config, got nil")
+	}
+
+	// Verify GetAutoApproveRules returns the configured values (not defaults)
+	rules := ea.GetAutoApproveRules()
+	if len(rules.LowRiskOps) == 0 {
+		t.Fatal("GetAutoApproveRules returned empty rules")
+	}
+
+	// Verify low_risk ops
+	expectedLowRisk := []string{"git_add", "git_status", "git_log", "git_diff", "read_file"}
+	if len(rules.LowRiskOps) != len(expectedLowRisk) {
+		t.Errorf("low_risk: expected %d items, got %d: %v", len(expectedLowRisk), len(rules.LowRiskOps), rules.LowRiskOps)
+	}
+	for _, expected := range expectedLowRisk {
+		found := false
+		for _, op := range rules.LowRiskOps {
+			if op == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("low_risk: expected to contain %q, got %v", expected, rules.LowRiskOps)
+		}
+	}
+
+	// Verify medium_risk ops
+	expectedMediumRisk := []string{"git_commit", "git_push", "git_pull", "git_fetch",
+		"write_file", "edit_file", "shell_command", "rm_command", "docker",
+		"subagent_spawn", "cross_directory"}
+	if len(rules.MediumRiskOps) != len(expectedMediumRisk) {
+		t.Errorf("medium_risk: expected %d items, got %d: %v", len(expectedMediumRisk), len(rules.MediumRiskOps), rules.MediumRiskOps)
+	}
+	for _, expected := range expectedMediumRisk {
+		found := false
+		for _, op := range rules.MediumRiskOps {
+			if op == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("medium_risk: expected to contain %q, got %v", expected, rules.MediumRiskOps)
+		}
+	}
+
+	// Verify high_risk_never ops
+	expectedHighRisk := []string{"force_flag", "rm_recursive", "git_reset_hard",
+		"git_clean", "docker_prune", "git_push_force",
+		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+	if len(rules.HighRiskNever) != len(expectedHighRisk) {
+		t.Errorf("high_risk_never: expected %d items, got %d: %v", len(expectedHighRisk), len(rules.HighRiskNever), rules.HighRiskNever)
+	}
+	for _, expected := range expectedHighRisk {
+		found := false
+		for _, op := range rules.HighRiskNever {
+			if op == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("high_risk_never: expected to contain %q, got %v", expected, rules.HighRiskNever)
+		}
+	}
+}
+
+func TestNewConfig_EA_AutoApproveRules_MatchDefaults(t *testing.T) {
+	cfg := NewConfig()
+
+	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	if !ok {
+		t.Fatalf("expected executive_assistant in default subagent types")
+	}
+
+	// The JSON values were intentionally copied from DefaultAutoApproveRules()
+	// so they should match exactly.
+	rules := ea.GetAutoApproveRules()
+	defaults := DefaultAutoApproveRules()
+
+	// Compare low_risk
+	if len(rules.LowRiskOps) != len(defaults.LowRiskOps) {
+		t.Errorf("low_risk length mismatch: got %d, want %d", len(rules.LowRiskOps), len(defaults.LowRiskOps))
+	} else {
+		for _, op := range defaults.LowRiskOps {
+			found := false
+			for _, got := range rules.LowRiskOps {
+				if got == op {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("low_risk: missing %q from defaults", op)
+			}
+		}
+	}
+
+	// Compare medium_risk
+	if len(rules.MediumRiskOps) != len(defaults.MediumRiskOps) {
+		t.Errorf("medium_risk length mismatch: got %d, want %d", len(rules.MediumRiskOps), len(defaults.MediumRiskOps))
+	} else {
+		for _, op := range defaults.MediumRiskOps {
+			found := false
+			for _, got := range rules.MediumRiskOps {
+				if got == op {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("medium_risk: missing %q from defaults", op)
+			}
+		}
+	}
+
+	// Compare high_risk_never
+	if len(rules.HighRiskNever) != len(defaults.HighRiskNever) {
+		t.Errorf("high_risk_never length mismatch: got %d, want %d", len(rules.HighRiskNever), len(defaults.HighRiskNever))
+	} else {
+		for _, op := range defaults.HighRiskNever {
+			found := false
+			for _, got := range rules.HighRiskNever {
+				if got == op {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("high_risk_never: missing %q from defaults", op)
+			}
+		}
+	}
+}
+
+func TestNewConfig_EA_AutoApproveRules_EvaluateOperationRisk(t *testing.T) {
+	cfg := NewConfig()
+
+	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	if !ok {
+		t.Fatalf("expected executive_assistant in default subagent types")
+	}
+
+	tests := []struct {
+		name     string
+		command  string
+		expected RiskLevel
+	}{
+		{"git status is low risk", "git status", RiskLevelLow},
+		{"git log is low risk", "git log", RiskLevelLow},
+		{"git diff is low risk", "git diff", RiskLevelLow},
+		{"git add is low risk", "git add .", RiskLevelLow},
+		{"cat is low risk", "cat file.txt", RiskLevelLow},
+		{"git commit is medium risk", "git commit -m test", RiskLevelMedium},
+		{"git push is medium risk", "git push", RiskLevelMedium},
+		{"git pull is medium risk", "git pull", RiskLevelMedium},
+		{"write_file is medium risk", "write_file test.txt", RiskLevelMedium},
+		{"edit_file is medium risk", "edit_file test.txt", RiskLevelMedium},
+		{"shell_command is medium risk", "make build", RiskLevelMedium},
+		{"rm is medium risk", "rm file.txt", RiskLevelMedium},
+		{"git reset --hard is high risk", "git reset --hard HEAD", RiskLevelHigh},
+		{"git clean is high risk", "git clean -fd", RiskLevelHigh},
+		{"rm -rf is high risk", "rm -rf /tmp/test", RiskLevelHigh},
+		{"git push --force is high risk", "git push --force", RiskLevelHigh},
+		{"git checkout is high risk", "git checkout main", RiskLevelHigh},
+		{"git switch is high risk", "git switch main", RiskLevelHigh},
+		{"git restore is high risk", "git restore file.txt", RiskLevelHigh},
+		{"docker prune is high risk", "docker system prune", RiskLevelHigh},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ea.EvaluateOperationRisk(tt.command)
+			if got != tt.expected {
+				t.Errorf("EA.EvaluateOperationRisk(%q) = %q, want %q", tt.command, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewConfig_NonEAPersonas_NoAutoApproveRules(t *testing.T) {
+	cfg := NewConfig()
+
+	// Personas without explicit auto_approve_rules in their JSON should have nil,
+	// but GetAutoApproveRules should still return the defaults.
+	for _, id := range []string{"general", "coder", "tester", "debugger", "orchestrator", "web_scraper", "refactor"} {
+		t.Run(id, func(t *testing.T) {
+			persona, ok := cfg.SubagentTypes[id]
+			if !ok {
+				t.Fatalf("expected persona %q in default subagent types", id)
+			}
+
+			// The raw field should be nil (no JSON config)
+			if persona.AutoApproveRules != nil {
+				t.Errorf("expected persona %q to have nil AutoApproveRules (no JSON config)", id)
+			}
+
+			// But GetAutoApproveRules should fall back to defaults
+			rules := persona.GetAutoApproveRules()
+			if len(rules.LowRiskOps) == 0 {
+				t.Errorf("persona %q: GetAutoApproveRules returned empty rules", id)
+			} else {
+				defaults := DefaultAutoApproveRules()
+				if len(rules.LowRiskOps) != len(defaults.LowRiskOps) {
+					t.Errorf("persona %q: low_risk length mismatch", id)
+				}
+			}
+		})
+	}
+}
+
+func TestConvertAutoApproveRules_NilReturnsNil(t *testing.T) {
+	result := convertAutoApproveRules(nil)
+	if result != nil {
+		t.Errorf("convertAutoApproveRules(nil) = %+v, want nil", result)
+	}
+}
+
+func TestConvertAutoApproveRules_CreatesDeepCopy(t *testing.T) {
+	src := &personas.AutoApproveRules{
+		LowRiskOps:    []string{"git_status"},
+		MediumRiskOps: []string{"git_commit"},
+		HighRiskNever: []string{"force_flag"},
+	}
+
+	result := convertAutoApproveRules(src)
+	if result == nil {
+		t.Fatal("convertAutoApproveRules returned nil for non-nil input")
+	}
+	if len(result.LowRiskOps) != len(src.LowRiskOps) {
+		t.Errorf("low_risk length: got %d, want %d", len(result.LowRiskOps), len(src.LowRiskOps))
+	}
+	if len(result.MediumRiskOps) != len(src.MediumRiskOps) {
+		t.Errorf("medium_risk length: got %d, want %d", len(result.MediumRiskOps), len(src.MediumRiskOps))
+	}
+	if len(result.HighRiskNever) != len(src.HighRiskNever) {
+		t.Errorf("high_risk_never length: got %d, want %d", len(result.HighRiskNever), len(src.HighRiskNever))
+	}
+
+	// Verify deep copy — mutating result should not affect source
+	result.LowRiskOps[0] = "modified"
+	if src.LowRiskOps[0] != "git_status" {
+		t.Errorf("source was mutated: got %q, want %q", src.LowRiskOps[0], "git_status")
 	}
 }

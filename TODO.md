@@ -358,7 +358,7 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 
 [] - SP-039-5a: Add `eslint-plugin-import` `no-restricted-paths` rule to `webui/.eslintrc` and `packages/ui/.eslintrc` forbidding cross-boundary deep imports.
 [x] - SP-039-5b: Add `scripts/check-no-duplicate-components.sh` (fails CI if `comm -12` between the two component directories has any matches); wire into `.github/workflows/build.yml`.
-[] - SP-039-5c: Add a Storybook coverage check requiring every primitive in `@sprout/ui` to have a matching `.stories.tsx`.
+[x] - SP-039-5c: Add a Storybook coverage check requiring every primitive in `@sprout/ui` to have a matching `.stories.tsx`.
 
 ### Phase 6: Documentation
 

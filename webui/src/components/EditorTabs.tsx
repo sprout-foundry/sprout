@@ -34,7 +34,7 @@ import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { type EditorBuffer } from '../types/editor';
-import ContextMenu from './ContextMenu';
+import { ContextMenu } from '@sprout/ui';
 import { showThemedConfirm } from './ThemedDialog';
 import './EditorTabs.css';
 

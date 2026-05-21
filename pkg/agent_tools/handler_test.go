@@ -557,22 +557,28 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 11 {
-		t.Fatalf("AllTools() returned %d tools, want 11", len(tools))
+	if len(tools) != 17 {
+		t.Fatalf("AllTools() returned %d tools, want 17", len(tools))
 	}
 
 	expectedNames := map[string]string{
-		"read_file":            "read_file",
-		"list_directory":       "list_directory",
-		"fetch_url":            "fetch_url",
-		"search_files":         "search_files",
-		"repo_map":             "repo_map",
-		"list_memories":        "list_memories",
-		"read_memory":          "read_memory",
-		"rollback_changes":     "rollback_changes",
-		"view_history":         "view_history",
-		"list_skills":          "list_skills",
-		"embedding_index":      "embedding_index",
+		"read_file":               "read_file",
+		"list_directory":          "list_directory",
+		"fetch_url":               "fetch_url",
+		"search_files":            "search_files",
+		"repo_map":                "repo_map",
+		"list_memories":           "list_memories",
+		"read_memory":             "read_memory",
+		"rollback_changes":        "rollback_changes",
+		"view_history":            "view_history",
+		"list_skills":             "list_skills",
+		"embedding_index":         "embedding_index",
+		"write_file":              "write_file",
+		"write_structured_file":   "write_structured_file",
+		"edit_file":               "edit_file",
+		"shell_command":           "shell_command",
+		"save_memory":             "save_memory",
+		"search_memories":         "search_memories",
 	}
 
 	var foundNames []string
@@ -650,6 +656,30 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "embedding_index":
 			if len(def.Required) != 1 || def.Required[0] != "operation" {
 				t.Errorf("embedding_index Required = %v, want [\"operation\"]", def.Required)
+			}
+		case "write_file":
+			if len(def.Required) != 2 || def.Required[0] != "path" || def.Required[1] != "content" {
+				t.Errorf("write_file Required = %v, want [\"path\" \"content\"]", def.Required)
+			}
+		case "write_structured_file":
+			if len(def.Required) != 2 || def.Required[0] != "path" || def.Required[1] != "data" {
+				t.Errorf("write_structured_file Required = %v, want [\"path\" \"data\"]", def.Required)
+			}
+		case "edit_file":
+			if len(def.Required) != 3 || def.Required[0] != "path" || def.Required[1] != "old_str" || def.Required[2] != "new_str" {
+				t.Errorf("edit_file Required = %v, want [\"path\" \"old_str\" \"new_str\"]", def.Required)
+			}
+		case "shell_command":
+			if len(def.Required) != 0 {
+				t.Errorf("shell_command Required = %v, want nil/empty", def.Required)
+			}
+		case "save_memory":
+			if len(def.Required) != 2 || def.Required[0] != "name" || def.Required[1] != "content" {
+				t.Errorf("save_memory Required = %v, want [\"name\" \"content\"]", def.Required)
+			}
+		case "search_memories":
+			if len(def.Required) != 1 || def.Required[0] != "query" {
+				t.Errorf("search_memories Required = %v, want [\"query\"]", def.Required)
 			}
 		}
 	}

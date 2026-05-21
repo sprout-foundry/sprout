@@ -40,6 +40,8 @@ func (h *searchFilesHandler) Validate(args map[string]any) error {
 
 func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	toolName := h.Name()
+
+	// Event publishing (optional — runs only when EventBus is configured)
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
 			"tool":     toolName,
@@ -51,105 +53,101 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 				"error": false,
 			})
 		}()
+	}
 
-		searchPattern, err := extractString(args, "search_pattern")
-		if err != nil {
+	searchPattern, err := extractString(args, "search_pattern")
+	if err != nil {
+		return ToolResult{
+			Output:  err.Error(),
+			IsError: true,
+		}, nil
+	}
+
+	directory, _ := extractString(args, "directory")
+	fileGlob, _ := extractString(args, "file_glob")
+	caseSensitive := getBoolArg(args, "case_sensitive")
+	maxResults, _ := extractInt(args, "max_results")
+	if maxResults <= 0 {
+		maxResults = 50
+	}
+	maxBytes, _ := extractInt(args, "max_bytes")
+	if maxBytes <= 0 {
+		maxBytes = 102400
+	}
+
+	if directory == "" {
+		directory = "."
+	}
+
+	if directory != "." {
+		if strings.Contains(directory, "..") {
 			return ToolResult{
-				Output:  err.Error(),
+				Output:  fmt.Sprintf("invalid search directory: %q", directory),
 				IsError: true,
 			}, nil
 		}
+	}
 
-		directory, _ := extractString(args, "directory")
-		fileGlob, _ := extractString(args, "file_glob")
-		caseSensitive := getBoolArg(args, "case_sensitive")
-		maxResults, _ := extractInt(args, "max_results")
-		if maxResults <= 0 {
-			maxResults = 50
-		}
-		maxBytes, _ := extractInt(args, "max_bytes")
-		if maxBytes <= 0 {
-			maxBytes = 102400
-		}
+	compiled, err := compileSearchPattern(searchPattern, caseSensitive)
+	if err != nil {
+		return ToolResult{
+			Output:  fmt.Sprintf("Error: invalid search pattern '%s': %v", searchPattern, err),
+			IsError: true,
+		}, nil
+	}
 
-		if directory == "" {
-			directory = "."
-		}
+	matcher := newGlobMatcher(fileGlob)
+	results := make([]string, 0)
+	totalBytes := 0
+	matchCount := 0
 
-		if directory != "." {
-			if strings.Contains(directory, "..") {
-				return ToolResult{
-					Output:  fmt.Sprintf("invalid search directory: %q", directory),
-					IsError: true,
-				}, nil
-			}
-		}
-
-		compiled, err := compileSearchPattern(searchPattern, caseSensitive)
+	err = filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
-			return ToolResult{
-				Output:  fmt.Sprintf("Error: invalid search pattern '%s': %v", searchPattern, err),
-				IsError: true,
-			}, nil
-		}
-
-		matcher := newGlobMatcher(fileGlob)
-		results := make([]string, 0)
-		totalBytes := 0
-		matchCount := 0
-
-		err = filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
-			if err != nil {
-				return nil
-			}
-
-			if info.IsDir() {
-				if shouldSkipDir(path) {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			if info.Type()&os.ModeSymlink != 0 {
-				return nil
-			}
-
-			if !isTextFile(path) {
-				return nil
-			}
-
-			if matcher != nil && !matcher.Match(path) {
-				return nil
-			}
-
-			if matchCount >= maxResults || totalBytes >= maxBytes {
-				return nil
-			}
-
-			matches, bytesUsed, err := searchFile(path, compiled)
-			if err != nil {
-				return nil
-			}
-
-			totalBytes += bytesUsed
-			results = append(results, matches...)
-			matchCount += len(matches)
-
 			return nil
-		})
-
-		output := formatSearchResults(results, directory, searchPattern, matchCount, maxResults)
-		if err != nil && len(results) == 0 {
-			output = fmt.Sprintf("Error searching directory: %v", err)
 		}
 
-			return ToolResult{
-		Output:  output,
-		IsError: false,
-	}, nil}
+		if info.IsDir() {
+			if shouldSkipDir(path) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if info.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		if !isTextFile(path) {
+			return nil
+		}
+
+		if matcher != nil && !matcher.Match(path) {
+			return nil
+		}
+
+		if matchCount >= maxResults || totalBytes >= maxBytes {
+			return nil
+		}
+
+		matches, bytesUsed, err := searchFile(path, compiled)
+		if err != nil {
+			return nil
+		}
+
+		totalBytes += bytesUsed
+		results = append(results, matches...)
+		matchCount += len(matches)
+
+		return nil
+	})
+
+	output := formatSearchResults(results, directory, searchPattern, matchCount, maxResults)
+	if err != nil && len(results) == 0 {
+		output = fmt.Sprintf("Error searching directory: %v", err)
+	}
 
 	return ToolResult{
-		Output:  "No results",
+		Output:  output,
 		IsError: false,
 	}, nil
 }

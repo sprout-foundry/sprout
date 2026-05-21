@@ -1,3 +1,5 @@
+//go:build !js
+
 package webcontent
 
 import (
@@ -129,4 +131,30 @@ func TestTruncateContent_UTF8SafeAtBoundary(t *testing.T) {
 	// boundary was right before its last byte).
 	assert.Equal(t, prefixLen, len(originalPortion),
 		"should truncate before incomplete rune")
+}
+
+// ---------------------------------------------------------------------------
+// CloseGlobalBrowser
+// ---------------------------------------------------------------------------
+
+func TestCloseGlobalBrowser_NoBrowserInitialized(t *testing.T) {
+	// CloseGlobalBrowser must not panic when globalBrowser is nil.
+	// This is the common case during shutdown when no browser was ever opened.
+	assert.NotPanics(t, func() {
+		CloseGlobalBrowser()
+	})
+}
+
+// ---------------------------------------------------------------------------
+// NewBrowserRenderer / SetFinalizer
+// ---------------------------------------------------------------------------
+
+func TestNewBrowserRenderer_BasicCreationAndClose(t *testing.T) {
+	// Verify NewBrowserRenderer returns a non-nil renderer that satisfies
+	// the BrowserRenderer interface, even with the SetFinalizer added.
+	r := NewBrowserRenderer()
+	assert.NotNil(t, r)
+
+	// Verify it implements the BrowserRenderer interface
+	var _ BrowserRenderer = r
 }

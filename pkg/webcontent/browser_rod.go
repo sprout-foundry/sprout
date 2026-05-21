@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -166,7 +167,9 @@ var _ BrowserRenderer = (*rodRenderer)(nil)
 // NewBrowserRenderer returns a BrowserRenderer backed by go-rod.
 // The browser is launched lazily on the first call to RenderPage.
 func NewBrowserRenderer() BrowserRenderer {
-	return &rodRenderer{}
+	r := &rodRenderer{}
+	runtime.SetFinalizer(r, (*rodRenderer).Close)
+	return r
 }
 
 // connect launches Chromium (if not already connected) and returns the browser.
@@ -1390,5 +1393,6 @@ func (r *rodRenderer) Close() {
 
 	if r.browser != nil {
 		_ = r.browser.Close()
+		r.browser = nil
 	}
 }

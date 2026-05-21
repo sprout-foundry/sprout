@@ -211,7 +211,7 @@ SP-028 unblocked CI by silencing four real goroutine leaks via `goleak.IgnoreTop
 ### Phase 4: Track C — ExecuteCommandAndWait
 
 [x] - SP-036-4a: Refactor `TerminalManager.ExecuteCommandAndWait` (`pkg/webui/`) to use `exec.CommandContext` with a derived context cancelled in `defer` before `Wait()` returns. Use `io.Copy` to drain stdout/stderr in goroutines joined by `errgroup.Group` before `Wait()`.
-[] - SP-036-4b: Add `TestExecuteCommandAndWait_NoGoroutineLeak` in `pkg/webui/` that runs the helper 100 times and asserts `runtime.NumGoroutine()` stays bounded.
+[x] - SP-036-4b: Add `TestExecuteCommandAndWait_NoGoroutineLeak` in `pkg/webui/` that runs the helper 100 times and asserts `runtime.NumGoroutine()` stays bounded.
 [] - SP-036-4c: Remove the two `ExecuteCommandAndWait` entries (`pkg/webui/main_test.go:21-22`) and the corresponding `os/exec.(*Cmd).watchCtx` AnyFunction ignore at line 28 (and `pkg/agent/main_test.go:20`) if no longer needed.
 
 ### Phase 5: Track D — fsnotify shared worker

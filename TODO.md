@@ -402,7 +402,7 @@ The embedding index stores vector records in a JSONL file. Every launch parses t
 
 ### Phase 1: SQLite Store Implementation
 
-[] - SP-047-1a: Add `github.com/asg017/sqlite-vec-go-bindings/ncruces` and `github.com/ncruces/go-sqlite3` to `go.mod`. Verify `go build ./...` succeeds on linux/arm64, linux/amd64, darwin/arm64.
+[x] - SP-047-1a: Add `github.com/asg017/sqlite-vec-go-bindings/ncruces` and `github.com/ncruces/go-sqlite3` to `go.mod`. Verify `go build ./...` succeeds on linux/arm64, linux/amd64, darwin/arm64.
 [] - SP-047-1b: Create `pkg/embedding/store_sqlite.go` with `SQLiteVecStore` struct satisfying the `VectorStore` interface (`Store`, `LoadAll`, `Query`, `DeleteByFile`, `Size`, `Close`). Use a `vec0` virtual table for vector storage and a standard SQLite table for metadata fields (file, name, signature, startLine, endLine, language, hash, indexedAt, type, metadata).
 [] - SP-047-1c: Implement `Store(records []VectorRecord) error` using SQLite `INSERT OR REPLACE` (upsert by primary key). Batch inserts in a single transaction (batch size 512).
 [] - SP-047-1d: Implement `Query(vec []float32, topK int, threshold float32) ([]QueryResult, error)` using `vec0` distance search: `SELECT ... FROM vec_records WHERE embedding MATCH ? ORDER BY distance`. Filter by threshold in the WHERE clause or post-filter in Go.

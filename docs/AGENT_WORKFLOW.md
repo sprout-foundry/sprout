@@ -193,6 +193,58 @@ When a subagent is spawned during a workflow step:
 3. **Global subagent config** `subagent_provider`/`subagent_model`
 4. **Parent agent** provider/model inheritance
 
+## Subagent Resource Model
+
+The `SubagentRunner` enforces concurrency limits and token budgets to control resource usage across parallel subagent executions. These settings are configured via `SubagentOptions` on the spawning agent.
+
+### Concurrency limit
+
+- `MaxConcurrentSubagents` (`int` on `SubagentOptions`): when `> 0`, limits how many subagents can execute simultaneously.
+- Uses a buffered channel (`chan struct{}`) as a semaphore to gate execution slots.
+- Tasks that exceed the limit are queued and wait for an available slot.
+- If the parent context is cancelled while tasks are queued, those tasks are dropped immediately with `Cancelled=true`.
+
+### Fleet token budget
+
+- `FleetTokenBudget` (`int` on `SubagentOptions`): when `> 0`, sets a cumulative token budget shared across all subagents in the fleet.
+- Tracks total token usage via `atomic.Int64`, debiting after each LLM call.
+- When the budget is reached, not-yet-started tasks are skipped with `BudgetExceeded=true`.
+- Currently running tasks can be **truncated gracefully** at LLM-call boundaries when the budget is exceeded mid-run (tracked via the `Truncated` field on `SubagentResult`).
+- `BudgetExceeded=true` means the task was skipped before it started (budget was already exhausted). `Truncated=true` means the task was running but cut short at an LLM-call boundary.
+- Budget check happens **after** acquiring the semaphore slot. A budget-skipped task may have consumed a semaphore slot while waiting in queue; it releases the slot immediately upon being skipped.
+- `MaxTokens` (`int` on `SubagentOptions`): per-subagent token budget. When `> 0`, a polling goroutine (500ms ticker via `monitorBudget`) watches token usage and calls `interruptCancel()` to stop the subagent when its individual token count exceeds the limit.
+- The Executive Assistant persona sets a default of 200000 tokens via `fleet_token_budget` in `pkg/personas/configs/executive_assistant.json`. When unset (zero), the fleet budget is unlimited.
+
+### Telemetry
+
+Atomic counters track the subagent fleet lifecycle:
+
+- `Active`: currently executing subagents
+- `Queued`: waiting for a semaphore slot
+- `Completed`: successfully finished
+- `Failed`: finished with an error
+- `Cancelled`: cancelled via parent context or budget exhaustion
+- `TotalQueuedWaitMS`: cumulative milliseconds spent waiting in queue
+
+The `Metrics()` accessor returns a snapshot of these counters at any time.
+
+Lifecycle events are published via `EventBus` (`EventTypeSubagentActivity`) with the following statuses:
+
+- `queued` — task entered the queue
+- `started` — task acquired a semaphore slot and began execution
+- `completed` — task finished successfully
+- `cancelled` — task was cancelled (reason: `context_cancelled` or `budget_exceeded`)
+
+Events are also written to the runlog as JSONL entries for persistent structured logging.
+
+### WebUI Subagents tab
+
+- Located at `webui/src/components/contextPanel/SubagentsTab.tsx`.
+- Displays live resource-usage counts as metric chips: Active, Queued, Completed, Failed, Cancelled.
+- Updated in real-time from `subagent_activity` events received via WebSocket.
+
+See also: `pkg/agent/subagent_runner.go` for the full implementation.
+
 ## Triggering Semantics
 
 A step runs only when all are true:

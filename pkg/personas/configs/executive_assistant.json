@@ -42,23 +42,41 @@
       "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
       "enabled": true,
       "id": "executive_assistant",
+      "_rules_source": "declared:executive_assistant",
       "name": "Executive Assistant",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/executive_assistant.md",
       "auto_approve_rules": {
         "low_risk": [
-          "git_add", "git_status", "git_log", "git_diff",
+          "git_add",
+          "git_status",
+          "git_log",
+          "git_diff",
           "read_file"
         ],
         "medium_risk": [
-          "git_commit", "git_push", "git_pull", "git_fetch",
-          "write_file", "edit_file", "shell_command",
-          "rm_command", "docker",
-          "subagent_spawn", "cross_directory"
+          "git_commit",
+          "git_push",
+          "git_pull",
+          "git_fetch",
+          "write_file",
+          "edit_file",
+          "shell_command",
+          "rm_command",
+          "docker",
+          "subagent_spawn",
+          "cross_directory"
         ],
         "high_risk_never": [
-          "force_flag", "rm_recursive", "git_reset_hard",
-          "git_clean", "docker_prune", "git_push_force",
-          "git_checkout", "git_switch", "git_restore", "git_branch_delete"
+          "force_flag",
+          "rm_recursive",
+          "git_reset_hard",
+          "git_clean",
+          "docker_prune",
+          "git_push_force",
+          "git_checkout",
+          "git_switch",
+          "git_restore",
+          "git_branch_delete"
         ]
       }
     }

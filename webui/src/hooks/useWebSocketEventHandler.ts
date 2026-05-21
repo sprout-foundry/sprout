@@ -462,6 +462,10 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
     model: typeof data.model === 'string' ? data.model : undefined,
     taskCount: typeof data.task_count === 'number' ? data.task_count : undefined,
     failures: typeof data.failures === 'number' ? data.failures : undefined,
+    status: typeof data.status === 'string' ? data.status : undefined,
+    reason: typeof data.reason === 'string' ? data.reason : undefined,
+    tokensUsed: typeof data.tokens_used === 'number' ? data.tokens_used : undefined,
+    elapsedMs: typeof data.elapsed_ms === 'number' ? data.elapsed_ms : undefined,
   };
 
   if (!activity.message) {

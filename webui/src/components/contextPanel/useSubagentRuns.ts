@@ -1,12 +1,52 @@
 import { useMemo, useCallback } from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { isSubagentTool, getSubagentPrompt } from './helpers';
-import type { ChatContextPanelProps, ContextSubagentRun, ContextNormalizedActivity } from './types';
+import type { ChatContextPanelProps, ContextNormalizedActivity, SubagentLifecycleCounts, SubagentRunResult } from './types';
 
-export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
+export function useSubagentRuns(chatProps: ChatContextPanelProps | null): SubagentRunResult {
   const subagentToolExecutions = useMemo(() => chatProps?.toolExecutions ?? [], [chatProps]);
   const subagentLogs = useMemo(() => chatProps?.logs ?? [], [chatProps]);
   const subagentActivities = useMemo(() => chatProps?.subagentActivities ?? [], [chatProps]);
+
+  // Compute lifecycle counts from activities that have a status field.
+  // For each unique subagent (identified by taskId or toolCallId), track its
+  // latest status and aggregate into overall counts.
+  const lifecycleCounts = useMemo<SubagentLifecycleCounts>(() => {
+    const counts = { queued: 0, active: 0, completed: 0, cancelled: 0 };
+
+    // Map from subagent identifier -> latest status seen
+    const latestStatus = new Map<string, string>();
+
+    for (const activity of subagentActivities) {
+      if (!activity.status) continue;
+      const key = activity.taskId || activity.toolCallId || activity.id;
+      latestStatus.set(key, activity.status);
+    }
+
+    for (const status of latestStatus.values()) {
+      switch (status) {
+        case 'queued':
+          counts.queued++;
+          break;
+        case 'started':
+          counts.active++;
+          break;
+        case 'completed':
+          counts.completed++;
+          break;
+        case 'cancelled':
+          counts.cancelled++;
+          break;
+      }
+    }
+
+    return counts;
+  }, [subagentActivities]);
+
+  const totalLifecycle = useMemo(
+    () => lifecycleCounts.queued + lifecycleCounts.active + lifecycleCounts.completed + lifecycleCounts.cancelled,
+    [lifecycleCounts],
+  );
 
   const getSubagentLogMessage = useCallback((logEntry: (typeof subagentLogs)[number]): string | null => {
     if (logEntry.type !== 'agent_message' || !logEntry.data || typeof logEntry.data !== 'object') {
@@ -82,81 +122,86 @@ export function useSubagentRuns(chatProps: ChatContextPanelProps | null) {
     [summarizeExecutionTarget],
   );
 
-  return useMemo<ContextSubagentRun[]>(() => {
-    return subagentToolExecutions.filter(isSubagentTool).map((tool) => {
-      const structuredActivities = subagentActivities
-        .filter((activity) => {
-          if (activity.toolCallId) {
-            return activity.toolCallId === tool.id;
+  return useMemo(
+    () => ({
+      runs: subagentToolExecutions.filter(isSubagentTool).map((tool) => {
+        const structuredActivities = subagentActivities
+          .filter((activity) => {
+            if (activity.toolCallId) {
+              return activity.toolCallId === tool.id;
+            }
+            const ts =
+              activity.timestamp instanceof Date ? activity.timestamp.getTime() : new Date(activity.timestamp).getTime();
+            const startMs = tool.startTime.getTime() - 500;
+            const endMs = (tool.endTime || new Date()).getTime() + 500;
+            return ts >= startMs && ts <= endMs;
+          })
+          .map((activity) => ({
+            id: activity.id,
+            timestamp: activity.timestamp,
+            taskId: activity.taskId,
+            label: activity.message,
+            isSpawn: activity.phase === 'spawn',
+          }));
+
+        const startMs = tool.startTime.getTime() - 500;
+        const endMs = (tool.endTime || new Date()).getTime() + 500;
+        const fallbackActivities = subagentLogs
+          .filter((logEntry) => {
+            const message = getSubagentLogMessage(logEntry);
+            if (!message) {
+              return false;
+            }
+            const ts =
+              logEntry.timestamp instanceof Date ? logEntry.timestamp.getTime() : new Date(logEntry.timestamp).getTime();
+            return ts >= startMs && ts <= endMs;
+          })
+          .map((logEntry) => {
+            const message = getSubagentLogMessage(logEntry) || '';
+            const normalized = normalizeSubagentActivity(message);
+            return {
+              id: logEntry.id,
+              timestamp: logEntry.timestamp,
+              taskId: normalized.taskId,
+              label: normalized.label,
+              isSpawn: normalized.isSpawn,
+            };
+          })
+          .filter((item, index, items) => {
+            if (!item.label) {
+              return false;
+            }
+            const previous = items[index - 1];
+            return !previous || previous.label !== item.label;
+          });
+        const activities = structuredActivities.length > 0 ? structuredActivities : fallbackActivities;
+
+        const taskGroups = activities.reduce<Record<string, typeof activities>>((acc, item) => {
+          const key = item.taskId || '__main__';
+          if (!acc[key]) {
+            acc[key] = [];
           }
-          const ts =
-            activity.timestamp instanceof Date ? activity.timestamp.getTime() : new Date(activity.timestamp).getTime();
-          const startMs = tool.startTime.getTime() - 500;
-          const endMs = (tool.endTime || new Date()).getTime() + 500;
-          return ts >= startMs && ts <= endMs;
-        })
-        .map((activity) => ({
-          id: activity.id,
-          timestamp: activity.timestamp,
-          taskId: activity.taskId,
-          label: activity.message,
-          isSpawn: activity.phase === 'spawn',
+          acc[key].push(item);
+          return acc;
+        }, {});
+
+        const orderedTaskGroups = Object.entries(taskGroups).map(([taskId, items]) => ({
+          taskId: taskId === '__main__' ? null : taskId,
+          items,
+          latest: items[items.length - 1],
         }));
 
-      const startMs = tool.startTime.getTime() - 500;
-      const endMs = (tool.endTime || new Date()).getTime() + 500;
-      const fallbackActivities = subagentLogs
-        .filter((logEntry) => {
-          const message = getSubagentLogMessage(logEntry);
-          if (!message) {
-            return false;
-          }
-          const ts =
-            logEntry.timestamp instanceof Date ? logEntry.timestamp.getTime() : new Date(logEntry.timestamp).getTime();
-          return ts >= startMs && ts <= endMs;
-        })
-        .map((logEntry) => {
-          const message = getSubagentLogMessage(logEntry) || '';
-          const normalized = normalizeSubagentActivity(message);
-          return {
-            id: logEntry.id,
-            timestamp: logEntry.timestamp,
-            taskId: normalized.taskId,
-            label: normalized.label,
-            isSpawn: normalized.isSpawn,
-          };
-        })
-        .filter((item, index, items) => {
-          if (!item.label) {
-            return false;
-          }
-          const previous = items[index - 1];
-          return !previous || previous.label !== item.label;
-        });
-      const activities = structuredActivities.length > 0 ? structuredActivities : fallbackActivities;
-
-      const taskGroups = activities.reduce<Record<string, typeof activities>>((acc, item) => {
-        const key = item.taskId || '__main__';
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(item);
-        return acc;
-      }, {});
-
-      const orderedTaskGroups = Object.entries(taskGroups).map(([taskId, items]) => ({
-        taskId: taskId === '__main__' ? null : taskId,
-        items,
-        latest: items[items.length - 1],
-      }));
-
-      return {
-        tool,
-        prompt: getSubagentPrompt(tool),
-        latestActivity: activities[activities.length - 1],
-        activities,
-        orderedTaskGroups,
-      };
-    });
-  }, [subagentToolExecutions, subagentActivities, subagentLogs, getSubagentLogMessage, normalizeSubagentActivity]);
+        return {
+          tool,
+          prompt: getSubagentPrompt(tool),
+          latestActivity: activities[activities.length - 1],
+          activities,
+          orderedTaskGroups,
+        };
+      }),
+      lifecycleCounts,
+      totalLifecycle,
+    }),
+    [subagentToolExecutions, subagentActivities, subagentLogs, getSubagentLogMessage, normalizeSubagentActivity, lifecycleCounts, totalLifecycle],
+  );
 }

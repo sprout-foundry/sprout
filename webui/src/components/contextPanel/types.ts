@@ -77,6 +77,21 @@ export interface ContextNormalizedActivity {
   isSpawn: boolean;
 }
 
+/** Aggregated lifecycle counts per status bucket (derived from SubagentActivity.status). */
+export interface SubagentLifecycleCounts {
+  queued: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+}
+
+/** Return shape of useSubagentRuns: runs array plus lifecycle counts. */
+export interface SubagentRunResult {
+  runs: ContextSubagentRun[];
+  lifecycleCounts: SubagentLifecycleCounts;
+  totalLifecycle: number;
+}
+
 // ── Props ───────────────────────────────────────────────────────────
 
 export interface ContextPanelBaseProps {

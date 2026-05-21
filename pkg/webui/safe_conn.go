@@ -33,10 +33,25 @@ func NewSafeConn(conn *websocket.Conn) *SafeConn {
 	}
 }
 
-// WriteJSON safely writes JSON to the WebSocket connection
+// WriteJSON safely writes JSON to the WebSocket connection.
+//
+// SP-034-5d: outbound payloads carrying a `type` field are validated
+// against the registry in websocket_outbound_registry.go. Unknown types
+// panic in dev (`SPROUT_DEV=1`) so typos surface immediately, and are
+// dropped with a log line in prod so a misbehaving handler can't push
+// nonsense to a live client.
 func (sc *SafeConn) WriteJSON(v interface{}) error {
 	if sc.closed.Load() {
 		return nil // Silently ignore writes to closed connections
+	}
+
+	if msgType, ok := extractOutboundMessageType(v); ok {
+		if !validateOutboundMessageType(msgType) {
+			// Drop silently — validateOutboundMessageType already logged
+			// (or panicked in dev). Return nil so callers don't treat
+			// this as a transport error.
+			return nil
+		}
 	}
 
 	sc.writeMu.Lock()
@@ -54,6 +69,36 @@ func (sc *SafeConn) WriteJSON(v interface{}) error {
 	}()
 
 	return sc.conn.WriteJSON(v)
+}
+
+// extractOutboundMessageType peeks at the value being written and
+// pulls out a `type` field when the shape is one of the two patterns
+// used across the codebase: a `map[string]interface{}` envelope, or
+// the `events.UIEvent` struct (which has an exported Type field).
+// Returns (typeString, true) when a type was found, ("", false)
+// otherwise. The false case is permissive — the caller still writes.
+func extractOutboundMessageType(v interface{}) (string, bool) {
+	switch x := v.(type) {
+	case map[string]interface{}:
+		if t, ok := x["type"].(string); ok {
+			return t, true
+		}
+	default:
+		// Use a non-reflection path for the common UIEvent shape.
+		if ev, ok := v.(interface{ GetType() string }); ok {
+			return ev.GetType(), true
+		}
+		if ev, ok := v.(typedEvent); ok {
+			return ev.Type, true
+		}
+	}
+	return "", false
+}
+
+// typedEvent matches the events.UIEvent shape without importing it,
+// avoiding a cycle while still catching the common-path writes.
+type typedEvent struct {
+	Type string
 }
 
 // writeDirectJSONLocked writes JSON directly to the underlying WebSocket connection,

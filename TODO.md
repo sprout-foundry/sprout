@@ -178,7 +178,7 @@ The persona system works today but several behaviors that *should be loud are si
 
 [x] - SP-035-5a: Update `roadmap/SP-026-executive-assistant.md` Phase E — correct the prompt path from `subagent_prompts/executive_assistant.md` to `pkg/agent/prompts/subagent_prompts/executive_assistant.md`. Add a "Where prompts live" subsection near the top of the spec.
 [x] - SP-035-5b: Write `docs/PERSONAS.md` covering: the three-layer architecture (catalog → config → session), merge resolution rules (what overrides, what doesn't, why), the two-gate risk model, the depth model (0/1/2), `LocalOnly` + `IsLocalMode` semantics, how to define a custom persona, and provider/model cost considerations.
-[] - SP-035-5c: When SP-033's `docs/SECURITY.md` lands, add a cross-link from its "trust boundaries" section to `docs/PERSONAS.md`. (Tracked here as a forward-reference; do the edit in whichever order the specs land.)
+[x] - SP-035-5c: When SP-033's `docs/SECURITY.md` lands, add a cross-link from its "trust boundaries" section to `docs/PERSONAS.md`. (Tracked here as a forward-reference; do the edit in whichever order the specs land.)
 
 ---
 

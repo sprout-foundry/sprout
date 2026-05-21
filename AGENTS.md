@@ -98,6 +98,16 @@ Before **every** `git push`, you MUST:
 
 **`repo_orchestrator` privileges**: This persona can stage files, commit (via the commit tool), and push without interactive approval. However, operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona.
 
+### Active Change Set Isolation
+
+When working on a specific task (e.g., a TODO item), you MUST respect other active changes in the working tree:
+
+1. **Focus ONLY on your assigned task.** Do NOT modify, revert, or delete any other active changes that exist in the working tree or change sets.
+2. **Do NOT run destructive git commands** (`git checkout`, `git restore`, `git reset`, `git stash drop`, etc.) that would alter existing staged or unstaged changes that are not yours.
+3. **If a build or test fails** due to conflicts with OTHER unrelated changes (not caused by your current work): pause for 2 minutes, then retry. Repeat up to 3 times (total delay of up to 6 minutes).
+4. **After 3 failed retries** due to external conflicts, stop and escalate to the user. Report the conflicting changes. Do NOT attempt to resolve other people's changes yourself.
+5. **Pass these isolation rules verbatim** when delegating to subagents.
+
 ### Conflict Resolution
 
 When a merge produces conflicts:

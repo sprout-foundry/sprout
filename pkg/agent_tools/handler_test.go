@@ -557,14 +557,22 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 3 {
-		t.Fatalf("AllTools() returned %d tools, want 3", len(tools))
+	if len(tools) != 11 {
+		t.Fatalf("AllTools() returned %d tools, want 11", len(tools))
 	}
 
 	expectedNames := map[string]string{
-		"read_file":      "read_file",
-		"list_directory": "list_directory",
-		"fetch_url":      "fetch_url",
+		"read_file":            "read_file",
+		"list_directory":       "list_directory",
+		"fetch_url":            "fetch_url",
+		"search_files":         "search_files",
+		"repo_map":             "repo_map",
+		"list_memories":        "list_memories",
+		"read_memory":          "read_memory",
+		"rollback_changes":     "rollback_changes",
+		"view_history":         "view_history",
+		"list_skills":          "list_skills",
+		"embedding_index":      "embedding_index",
 	}
 
 	var foundNames []string
@@ -595,7 +603,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		}
 	}
 
-	// Verify required parameters for each handler
+			// Verify required parameters for each handler
 	for _, h := range tools {
 		def := h.Definition()
 		switch def.Name {
@@ -611,11 +619,41 @@ func TestAllToolsRegistration(t *testing.T) {
 			if len(def.Required) != 1 || def.Required[0] != "url" {
 				t.Errorf("fetch_url Required = %v, want [\"url\"]", def.Required)
 			}
+		case "search_files":
+			if len(def.Required) != 1 || def.Required[0] != "search_pattern" {
+				t.Errorf("search_files Required = %v, want [\"search_pattern\"]", def.Required)
+			}
+		case "repo_map":
+			if len(def.Required) != 0 {
+				t.Errorf("repo_map Required = %v, want nil/empty", def.Required)
+			}
+		case "list_memories":
+			if len(def.Required) != 0 {
+				t.Errorf("list_memories Required = %v, want nil/empty", def.Required)
+			}
+		case "read_memory":
+			if len(def.Required) != 1 || def.Required[0] != "name" {
+				t.Errorf("read_memory Required = %v, want [\"name\"]", def.Required)
+			}
+		case "rollback_changes":
+			if len(def.Required) != 0 {
+				t.Errorf("rollback_changes Required = %v, want nil/empty", def.Required)
+			}
+		case "view_history":
+			if len(def.Required) != 0 {
+				t.Errorf("view_history Required = %v, want nil/empty", def.Required)
+			}
+		case "list_skills":
+			if len(def.Required) != 0 {
+				t.Errorf("list_skills Required = %v, want nil/empty", def.Required)
+			}
+		case "embedding_index":
+			if len(def.Required) != 1 || def.Required[0] != "operation" {
+				t.Errorf("embedding_index Required = %v, want [\"operation\"]", def.Required)
+			}
 		}
 	}
-}
-
-// ---------------------------------------------------------------------------
+}// ---------------------------------------------------------------------------
 // Unregister Tests
 // ---------------------------------------------------------------------------
 

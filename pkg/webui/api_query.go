@@ -84,6 +84,13 @@ func (ws *ReactWebServer) publishClientEvent(clientID, eventType string, data ma
 // publishClientEventWithChat publishes an event to the event bus with client_id and optional chat_id.
 // The chat_id is included in the event data so that WebSocket connections can filter events by chat session.
 // In service mode, the user_id from the client context is also added for user isolation.
+//
+// For reattach-relevant event types (stream chunks, tool start/end, query
+// frame events, errors), the event is also appended to the chat's
+// runBuffer (SP-034-2a) so a browser tab that loses its WebSocket can
+// reconnect with `?reattach=<chat-id>&after_seq=<n>` and replay anything
+// it missed. The seq assigned by Append is stamped onto the event data as
+// `__seq` so the WS subscriber forwards it to the client.
 func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType string, data map[string]interface{}) {
 	if ws.eventBus == nil {
 		return
@@ -101,7 +108,60 @@ func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType
 	if userID := ws.userIDForClient(clientID); userID != "" {
 		data["user_id"] = userID
 	}
+
+	if seq := ws.appendChatEventToRunBuffer(clientID, chatID, eventType, data); seq > 0 {
+		data["__seq"] = seq
+	}
+
 	ws.eventBus.Publish(eventType, data)
+}
+
+// reattachBufferedEventTypes lists the event types that get persisted in
+// the per-chat ring buffer for replay on reconnect. Picked deliberately:
+// stream chunks and tool activity are the user-visible events a reconnect
+// needs to recover; per-file changes and metrics are not.
+var reattachBufferedEventTypes = map[string]struct{}{
+	events.EventTypeQueryStarted:   {},
+	events.EventTypeQueryProgress:  {},
+	events.EventTypeQueryCompleted: {},
+	events.EventTypeStreamChunk:    {},
+	events.EventTypeToolStart:      {},
+	events.EventTypeToolEnd:        {},
+	events.EventTypeAgentMessage:   {},
+	events.EventTypeError:          {},
+}
+
+// appendChatEventToRunBuffer pushes the event into the chat's run buffer
+// if the type is reattach-relevant and the chatID resolves. Returns the
+// assigned seq, or 0 when not buffered. Lazy-creates the buffer on the
+// chat session.
+func (ws *ReactWebServer) appendChatEventToRunBuffer(clientID, chatID, eventType string, data map[string]interface{}) int64 {
+	if strings.TrimSpace(chatID) == "" {
+		return 0
+	}
+	if _, ok := reattachBufferedEventTypes[eventType]; !ok {
+		return 0
+	}
+
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	ws.mutex.RUnlock()
+	if ctx == nil {
+		return 0
+	}
+	cs := ctx.getChatSession(chatID)
+	if cs == nil {
+		return 0
+	}
+
+	cs.mu.Lock()
+	if cs.runBuffer == nil {
+		cs.runBuffer = newChatRunRingBuffer()
+	}
+	buf := cs.runBuffer
+	cs.mu.Unlock()
+
+	return buf.Append(events.UIEvent{Type: eventType, Data: data})
 }
 
 // handleAPIQuery handles API queries to the agent

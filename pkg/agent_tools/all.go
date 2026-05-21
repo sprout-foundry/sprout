@@ -8,3 +8,9 @@
 // migrated tools will be imported here so that a single import of this package
 // ensures all new-style tools are registered.
 package tools
+
+// RegisterAllTools registers all migrated tool handlers into the given registry.
+// Call this once at startup to populate the registry with all new-style tools.
+func RegisterAllTools(registry *ToolRegistry) {
+	registry.Register(NewReadFileHandler())
+}

@@ -1,3 +1,51 @@
+// Package tools provides the interface-based tool system for the Sprout AI agent.
+//
+// Tools are capabilities the LLM can invoke — reading files, executing shell commands,
+// searching code, delegating to subagents, automating browsers, and more. Each tool
+// implements the ToolHandler interface and is registered with the ToolRegistry.
+//
+//
+// ToolHandler interface
+//
+// The ToolHandler interface replaced the legacy `type ToolHandler func(ctx, args,
+// agent) (images, output, error)` func type. The old func-based system tightly coupled
+// every tool to the *Agent type, making tools hard to test in isolation and difficult
+// to share across different execution contexts. The new interface-based system provides
+// explicit dependencies through ToolEnv, enabling clean separation of concerns:
+//
+//	type ToolHandler interface {
+//	    Name() string
+//	    Definition() ToolDefinition
+//	    Validate(args map[string]any) error
+//	    Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error)
+//	}
+//
+//
+// Adding a new tool
+//
+// 1. Create a new file in this package (e.g., `my_tool_handler.go`).
+// 2. Define a struct and implement the four ToolHandler methods.
+// 3. Register it in `AllTools()` in `all.go`.
+//
+// See docs/TOOLS.md for a complete guide with examples.
+//
+//
+// Migration from legacy func-style handlers
+//
+// The legacy tool system used function types directly coupled to *Agent. The new
+// interface-based system decouples tools from the agent via ToolEnv, which provides
+// explicit dependencies (EventBus, WorkspaceRoot, OutputWriter, etc.).
+//
+// During the migration period, a dual-dispatch shim in pkg/agent/tool_definitions.go
+// bridges both systems: when ExecuteTool() is called, it first checks the new registry
+// via tools.GetNewToolRegistry().Lookup(name). If a handler is found there, it builds
+// a ToolEnv from the agent context and dispatches through the new interface. If no
+// handler exists in the new registry, it falls back to the legacy func-style handlers.
+// This allows incremental migration without breaking existing functionality.
+//
+// Some current tools (e.g., browseURLHandler, runSubagentHandler) are thin wrappers
+// around legacy agent methods, pending full refactoring. These are marked with comments
+// in all.go.
 package tools
 
 import (

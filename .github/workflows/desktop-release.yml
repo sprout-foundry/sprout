@@ -118,24 +118,33 @@ jobs:
         CSC_LINK_B64: ${{ secrets.CSC_LINK }}
       run: |
         if [ -z "$CSC_LINK_B64" ]; then
-          echo "No CSC_LINK secret configured; skipping macOS signing certificate setup."
+          echo "::warning::No Apple Developer certificate (CSC_LINK) configured; building with ad-hoc signing."
+          echo "MAC_SIGNING_MODE=ad-hoc" >> "$GITHUB_ENV"
           exit 0
         fi
-        CERT_PATH="$RUNNER_TEMP/ledit-signing-cert.p12"
+        CERT_PATH="$RUNNER_TEMP/sprout-signing-cert.p12"
         printf '%s' "$CSC_LINK_B64" | base64 --decode > "$CERT_PATH"
         echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
+        echo "MAC_SIGNING_MODE=developer-id" >> "$GITHUB_ENV"
         echo "Prepared signing certificate at $CERT_PATH"
 
     - name: Build embedded web UI
       run: npm run build:webui:embed
 
     - name: Build desktop installers
+      shell: bash
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         npm_config_arch: ${{ matrix.arch }}
         CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         SKIP_BACKEND_BUILD: '1'
-      run: npm run desktop:dist
+      run: |
+        if [ "${MAC_SIGNING_MODE:-none}" = "ad-hoc" ]; then
+          echo "Building with ad-hoc macOS signing (no Apple Developer certificate)"
+          npm run desktop:dist -- -c.mac.identity=-
+        else
+          npm run desktop:dist
+        fi
 
     - name: Verify packaged desktop bundle
       env:

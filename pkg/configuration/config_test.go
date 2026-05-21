@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -372,4 +373,66 @@ func TestPersistentContextConfigResolve_DoesNotMutateOriginal(t *testing.T) {
 	_ = cfg.Resolve() // call multiple times
 
 	assert.Equal(t, orig, *cfg, "original config should not be mutated by Resolve()")
+}
+
+// =============================================================================
+// PersistentContextConfig RetentionDays tests (SP-033-3c)
+// =============================================================================
+
+func TestPersistentContextConfig_Resolve_RetentionDays_Default(t *testing.T) {
+	cfg := &PersistentContextConfig{}
+	result := cfg.Resolve()
+
+	assert.Equal(t, 0, result.RetentionDays, "RetentionDays should default to 0 (never expire)")
+}
+
+func TestPersistentContextConfig_Resolve_RetentionDays_Explicit(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		RetentionDays: 30,
+	}
+	result := cfg.Resolve()
+
+	assert.Equal(t, 30, result.RetentionDays, "RetentionDays should preserve explicit value")
+}
+
+func TestPersistentContextConfig_Resolve_RetentionDays_Negative(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		RetentionDays: -1,
+	}
+	result := cfg.Resolve()
+
+	assert.Equal(t, 0, result.RetentionDays, "Negative RetentionDays should be treated as 0 (never expire)")
+}
+
+func TestPersistentContextConfig_JSON_Marshal_Unmarshal_RetentionDays(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		ProactiveContextEnabled: true,
+		RetentionDays:           30,
+	}
+
+	data, err := json.Marshal(cfg)
+	assert.NoError(t, err)
+
+	// Verify the JSON contains the retentionDays key
+	assert.Contains(t, string(data), "retentionDays")
+	assert.Contains(t, string(data), "30")
+
+	var decoded PersistentContextConfig
+	err = json.Unmarshal(data, &decoded)
+	assert.NoError(t, err)
+	assert.Equal(t, 30, decoded.RetentionDays, "RetentionDays should survive JSON round-trip")
+}
+
+func TestPersistentContextConfig_JSON_OmitsRetentionDaysWhenZero(t *testing.T) {
+	cfg := &PersistentContextConfig{
+		ProactiveContextEnabled: true,
+		RetentionDays:           0,
+	}
+
+	data, err := json.Marshal(cfg)
+	assert.NoError(t, err)
+
+	// With omitempty, zero RetentionDays should not appear in JSON
+	assert.NotContains(t, string(data), "retentionDays",
+		"zero RetentionDays should be omitted from JSON due to omitempty tag")
 }

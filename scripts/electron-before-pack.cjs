@@ -88,9 +88,11 @@ module.exports = async function beforePack(context) {
   run('node', ['scripts/build-webui-embed.mjs']);
 
   if (!process.env.SKIP_BACKEND_BUILD) {
+    // Electron uses 'win32' but Go expects GOOS=windows.
+    const goPlatform = platform === 'win32' ? 'windows' : platform;
     run('node', ['scripts/build-electron-backend.mjs'], {
       env: {
-        SPROUT_GOOS: platform,
+        SPROUT_GOOS: goPlatform,
         SPROUT_GOARCH: arch,
         SPROUT_EXTRA_TARGETS: extraTargets.join(','),
       },

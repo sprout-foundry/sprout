@@ -8,7 +8,13 @@ import (
 	"time"
 )
 
-// UIEvent represents an event that can be forwarded between CLI and Web UI
+// UIEvent represents an event that can be forwarded between CLI and Web UI.
+//
+// @ts-generated  webui/src/types/generated.ts::UIEvent
+// SP-034-5b: the EventType* constants below are mirrored as the
+// ServerEventType string-literal union in generated.ts. The outbound
+// registry in pkg/webui/websocket_outbound_registry.go covers the
+// same surface (a test asserts they stay in sync).
 type UIEvent struct {
 	ID        string    `json:"id"`
 	Type      string    `json:"type"`

@@ -245,7 +245,7 @@ Spec: `roadmap/SP-037-subagent-resource-budgeting.md`
 
 [x] - SP-037-2a: Add `FleetTokenBudget int` to `SubagentOptions`; zero means unlimited.
 [x] - SP-037-2b: Implement a `fleetBudget` struct with atomic debit; on overdraw, mark failed and cancel the shared context.
-[] - SP-037-2c: Hook budget debit into the per-subagent LLM-call wrapper in `pkg/agent/conversation.go` (or a new helper); subagents over individual quota at exhaustion return `Result{Truncated: true}`.
+[x] - SP-037-2c: Hook budget debit into the per-subagent LLM-call wrapper in `pkg/agent/conversation.go` (or a new helper); subagents over individual quota at exhaustion return `Result{Truncated: true}`.
 [] - SP-037-2d: Add `fleet_token_budget: 200000` default to `pkg/personas/configs/executive_assistant.json` (follow SP-035 Track A's explicit-policy approach).
 
 ### Phase 3: Telemetry

@@ -39,8 +39,8 @@ If no allowlist exists yet, one will be created. Skills that are already
 allowed will be reported but not cause an error.
 
 Examples:
-  sprout skills allow go-conventions
-  sprout skills allow go-conventions test-writing python-conventions`,
+  sprout skills allow project-planning
+  sprout skills allow project-planning browse-debugging`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runSkillsAllow(args); err != nil {
@@ -58,8 +58,8 @@ var skillsRevokeCmd = &cobra.Command{
 If no allowlist is configured, an error will be shown.
 
 Examples:
-  sprout skills revoke go-conventions
-  sprout skills revoke test-writing commit-msg`,
+  sprout skills revoke project-planning
+  sprout skills revoke browse-debugging`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := runSkillsRevoke(args); err != nil {

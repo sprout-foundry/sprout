@@ -31,7 +31,7 @@ func TestRunSkillsAllow_CreatesNewAllowlist(t *testing.T) {
 	dir := testWorkingDir(t)
 
 	// No allowlist exists yet
-	err := runSkillsAllow([]string{"go-conventions"})
+	err := runSkillsAllow([]string{"project-planning"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -40,8 +40,8 @@ func TestRunSkillsAllow_CreatesNewAllowlist(t *testing.T) {
 	if allowed == nil {
 		t.Fatal("expected allowlist to be created, got nil")
 	}
-	if !allowed["go-conventions"] {
-		t.Errorf("expected go-conventions in allowlist, got %v", allowed)
+	if !allowed["project-planning"] {
+		t.Errorf("expected project-planning in allowlist, got %v", allowed)
 	}
 	if len(allowed) != 1 {
 		t.Errorf("expected exactly 1 skill, got %d: %v", len(allowed), allowed)
@@ -51,7 +51,7 @@ func TestRunSkillsAllow_CreatesNewAllowlist(t *testing.T) {
 func TestRunSkillsAllow_AddMultipleSkills(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	err := runSkillsAllow([]string{"go-conventions", "test-writing", "python-conventions"})
+	err := runSkillsAllow([]string{"project-planning", "browse-debugging", "repo-onboarding"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestRunSkillsAllow_AddMultipleSkills(t *testing.T) {
 	if allowed == nil {
 		t.Fatal("expected allowlist to be created, got nil")
 	}
-	expected := []string{"go-conventions", "test-writing", "python-conventions"}
+	expected := []string{"project-planning", "browse-debugging", "repo-onboarding"}
 	for _, id := range expected {
 		if !allowed[id] {
 			t.Errorf("expected %s in allowlist, got %v", id, allowed)
@@ -75,12 +75,12 @@ func TestRunSkillsAllow_IdempotentForExistingSkill(t *testing.T) {
 	dir := testWorkingDir(t)
 
 	// Pre-seed the allowlist
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
 	// Adding the same skill again should not error
-	err := runSkillsAllow([]string{"go-conventions"})
+	err := runSkillsAllow([]string{"project-planning"})
 	if err != nil {
 		t.Fatalf("unexpected error when adding existing skill: %v", err)
 	}
@@ -89,8 +89,8 @@ func TestRunSkillsAllow_IdempotentForExistingSkill(t *testing.T) {
 	if len(allowed) != 1 {
 		t.Errorf("expected 1 skill after idempotent add, got %d: %v", len(allowed), allowed)
 	}
-	if !allowed["go-conventions"] {
-		t.Error("expected go-conventions to still be in allowlist")
+	if !allowed["project-planning"] {
+		t.Error("expected project-planning to still be in allowlist")
 	}
 }
 
@@ -98,12 +98,12 @@ func TestRunSkillsAllow_AddToExistingAllowlist(t *testing.T) {
 	dir := testWorkingDir(t)
 
 	// Pre-seed with existing skills
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
 	// Add new skills alongside existing ones
-	err := runSkillsAllow([]string{"test-writing", "python-conventions"})
+	err := runSkillsAllow([]string{"browse-debugging", "repo-onboarding"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -112,14 +112,14 @@ func TestRunSkillsAllow_AddToExistingAllowlist(t *testing.T) {
 	if len(allowed) != 3 {
 		t.Errorf("expected 3 skills, got %d: %v", len(allowed), allowed)
 	}
-	if !allowed["go-conventions"] {
-		t.Error("expected go-conventions to still be present")
+	if !allowed["project-planning"] {
+		t.Error("expected project-planning to still be present")
 	}
-	if !allowed["test-writing"] {
-		t.Error("expected test-writing to be present")
+	if !allowed["browse-debugging"] {
+		t.Error("expected browse-debugging to be present")
 	}
-	if !allowed["python-conventions"] {
-		t.Error("expected python-conventions to be present")
+	if !allowed["repo-onboarding"] {
+		t.Error("expected repo-onboarding to be present")
 	}
 }
 
@@ -127,12 +127,12 @@ func TestRunSkillsAllow_MixedNewAndExisting(t *testing.T) {
 	dir := testWorkingDir(t)
 
 	// Pre-seed with one skill
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
 	// Add one new and one existing
-	err := runSkillsAllow([]string{"go-conventions", "test-writing"})
+	err := runSkillsAllow([]string{"project-planning", "browse-debugging"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestRunSkillsAllow_MixedNewAndExisting(t *testing.T) {
 func TestRunSkillsAllow_SkipsEmptyAndWhitespaceIDs(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	err := runSkillsAllow([]string{"  ", "", "go-conventions", "  test-writing  "})
+	err := runSkillsAllow([]string{"  ", "", "project-planning", "  browse-debugging  "})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,12 +155,12 @@ func TestRunSkillsAllow_SkipsEmptyAndWhitespaceIDs(t *testing.T) {
 	if len(allowed) != 2 {
 		t.Errorf("expected 2 skills (empty/whitespace skipped), got %d: %v", len(allowed), allowed)
 	}
-	// "  test-writing  " should be trimmed to "test-writing"
-	if !allowed["test-writing"] {
-		t.Error("expected trimmed test-writing in allowlist")
+	// "  browse-debugging  " should be trimmed to "browse-debugging"
+	if !allowed["browse-debugging"] {
+		t.Error("expected trimmed browse-debugging in allowlist")
 	}
-	if !allowed["go-conventions"] {
-		t.Error("expected go-conventions in allowlist")
+	if !allowed["project-planning"] {
+		t.Error("expected project-planning in allowlist")
 	}
 }
 
@@ -186,7 +186,7 @@ func TestRunSkillsAllow_AllEmptyIDsProducesMessage(t *testing.T) {
 func TestRunSkillsAllow_MixOfEmptyAndRealIDs(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	err := runSkillsAllow([]string{"", "go-conventions", "  ", "test-writing"})
+	err := runSkillsAllow([]string{"", "project-planning", "  ", "browse-debugging"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -204,11 +204,11 @@ func TestRunSkillsAllow_MixOfEmptyAndRealIDs(t *testing.T) {
 func TestRunSkillsRevoke_RemovesExistingSkill(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions", "test-writing"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning", "browse-debugging"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	err := runSkillsRevoke([]string{"go-conventions"})
+	err := runSkillsRevoke([]string{"project-planning"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -217,22 +217,22 @@ func TestRunSkillsRevoke_RemovesExistingSkill(t *testing.T) {
 	if allowed == nil {
 		t.Fatal("expected allowlist to still exist")
 	}
-	if allowed["go-conventions"] {
-		t.Error("expected go-conventions to be removed")
+	if allowed["project-planning"] {
+		t.Error("expected project-planning to be removed")
 	}
-	if !allowed["test-writing"] {
-		t.Error("expected test-writing to still be present")
+	if !allowed["browse-debugging"] {
+		t.Error("expected browse-debugging to still be present")
 	}
 }
 
 func TestRunSkillsRevoke_RemoveMultipleSkills(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions", "test-writing", "python-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning", "browse-debugging", "repo-onboarding"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	err := runSkillsRevoke([]string{"go-conventions", "python-conventions"})
+	err := runSkillsRevoke([]string{"project-planning", "repo-onboarding"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -244,15 +244,15 @@ func TestRunSkillsRevoke_RemoveMultipleSkills(t *testing.T) {
 	if len(allowed) != 1 {
 		t.Errorf("expected 1 remaining skill, got %d: %v", len(allowed), allowed)
 	}
-	if !allowed["test-writing"] {
-		t.Error("expected test-writing to still be present")
+	if !allowed["browse-debugging"] {
+		t.Error("expected browse-debugging to still be present")
 	}
 }
 
 func TestRunSkillsRevoke_SkillNotFound(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
@@ -266,19 +266,19 @@ func TestRunSkillsRevoke_SkillNotFound(t *testing.T) {
 	if len(allowed) != 1 {
 		t.Errorf("expected 1 skill unchanged, got %d: %v", len(allowed), allowed)
 	}
-	if !allowed["go-conventions"] {
-		t.Error("expected go-conventions to still be present")
+	if !allowed["project-planning"] {
+		t.Error("expected project-planning to still be present")
 	}
 }
 
 func TestRunSkillsRevoke_MixedFoundAndNotFound(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions", "test-writing"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning", "browse-debugging"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	err := runSkillsRevoke([]string{"go-conventions", "nonexistent"})
+	err := runSkillsRevoke([]string{"project-planning", "nonexistent"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -287,8 +287,8 @@ func TestRunSkillsRevoke_MixedFoundAndNotFound(t *testing.T) {
 	if len(allowed) != 1 {
 		t.Errorf("expected 1 remaining skill, got %d: %v", len(allowed), allowed)
 	}
-	if !allowed["test-writing"] {
-		t.Error("expected test-writing to still be present")
+	if !allowed["browse-debugging"] {
+		t.Error("expected browse-debugging to still be present")
 	}
 }
 
@@ -296,7 +296,7 @@ func TestRunSkillsRevoke_NoAllowlistExists(t *testing.T) {
 	testWorkingDir(t)
 
 	// No allowlist file — should return error
-	err := runSkillsRevoke([]string{"go-conventions"})
+	err := runSkillsRevoke([]string{"project-planning"})
 	if err == nil {
 		t.Fatal("expected error when no allowlist exists")
 	}
@@ -308,11 +308,11 @@ func TestRunSkillsRevoke_NoAllowlistExists(t *testing.T) {
 func TestRunSkillsRevoke_SkipsEmptyAndWhitespaceIDs(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions", "test-writing"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning", "browse-debugging"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	err := runSkillsRevoke([]string{"", "  ", "go-conventions"})
+	err := runSkillsRevoke([]string{"", "  ", "project-planning"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -321,15 +321,15 @@ func TestRunSkillsRevoke_SkipsEmptyAndWhitespaceIDs(t *testing.T) {
 	if len(allowed) != 1 {
 		t.Errorf("expected 1 remaining skill, got %d: %v", len(allowed), allowed)
 	}
-	if !allowed["test-writing"] {
-		t.Error("expected test-writing to still be present")
+	if !allowed["browse-debugging"] {
+		t.Error("expected browse-debugging to still be present")
 	}
 }
 
 func TestRunSkillsRevoke_AllEmptyIDs(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
@@ -348,11 +348,11 @@ func TestRunSkillsRevoke_AllEmptyIDs(t *testing.T) {
 func TestRunSkillsRevoke_RemoveAllSkills(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	err := runSkillsRevoke([]string{"go-conventions"})
+	err := runSkillsRevoke([]string{"project-planning"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestRunSkillsList_NoAllowlist(t *testing.T) {
 func TestRunSkillsList_WithEntries(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions", "test-writing"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning", "browse-debugging"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
@@ -399,7 +399,7 @@ func TestRunSkillsList_WithEntries(t *testing.T) {
 func TestRunSkillsList_SingleEntry(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
@@ -440,7 +440,7 @@ func TestRunSkillsAllow_Revoke_RoundTrip(t *testing.T) {
 	dir := testWorkingDir(t)
 
 	// Add skills
-	if err := runSkillsAllow([]string{"go-conventions", "test-writing"}); err != nil {
+	if err := runSkillsAllow([]string{"project-planning", "browse-debugging"}); err != nil {
 		t.Fatalf("allow failed: %v", err)
 	}
 
@@ -451,17 +451,17 @@ func TestRunSkillsAllow_Revoke_RoundTrip(t *testing.T) {
 	}
 
 	// Revoke one
-	if err := runSkillsRevoke([]string{"go-conventions"}); err != nil {
+	if err := runSkillsRevoke([]string{"project-planning"}); err != nil {
 		t.Fatalf("revoke failed: %v", err)
 	}
 
-	// Verify only test-writing remains
+	// Verify only browse-debugging remains
 	allowed = configuration.ReadAllowedSkills(dir)
 	if len(allowed) != 1 {
 		t.Fatalf("after revoke: expected 1 skill, got %d", len(allowed))
 	}
-	if !allowed["test-writing"] {
-		t.Error("expected test-writing to remain")
+	if !allowed["browse-debugging"] {
+		t.Error("expected browse-debugging to remain")
 	}
 }
 
@@ -469,12 +469,12 @@ func TestRunSkillsAllow_AllowList_Sequential(t *testing.T) {
 	dir := testWorkingDir(t)
 
 	// Add first batch
-	if err := runSkillsAllow([]string{"go-conventions"}); err != nil {
+	if err := runSkillsAllow([]string{"project-planning"}); err != nil {
 		t.Fatalf("first allow failed: %v", err)
 	}
 
 	// Add second batch
-	if err := runSkillsAllow([]string{"test-writing"}); err != nil {
+	if err := runSkillsAllow([]string{"browse-debugging"}); err != nil {
 		t.Fatalf("second allow failed: %v", err)
 	}
 
@@ -515,11 +515,11 @@ func TestRunSkillsAllow_WritesSortedOutput(t *testing.T) {
 func TestRunSkillsRevoke_EmptyAllowlistFileAfterRemoveAll(t *testing.T) {
 	dir := testWorkingDir(t)
 
-	if err := configuration.WriteAllowedSkills(dir, []string{"go-conventions"}); err != nil {
+	if err := configuration.WriteAllowedSkills(dir, []string{"project-planning"}); err != nil {
 		t.Fatalf("setup failed: %v", err)
 	}
 
-	err := runSkillsRevoke([]string{"go-conventions"})
+	err := runSkillsRevoke([]string{"project-planning"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -37,6 +37,7 @@
       "description": "Process-oriented planning and delegation persona: classify -> activate skills -> delegate -> verify",
       "enabled": true,
       "id": "orchestrator",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Orchestrator"
     },
     {
@@ -78,8 +79,9 @@
       "description": "Orchestration persona with repository management capabilities. Use the 'commit' tool for all commits (auto-generates commit messages). Can use shell_command with git for read-only operations (status, log, diff, branch, show). For branch management, staging, and other git operations, use shell_command with appropriate git commands but exercise caution.",
       "enabled": true,
       "id": "repo_orchestrator",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Repo Orchestrator",
-      "system_prompt_append": "## Git Operations Policy\n\n### Committing\n\n- ALWAYS use the 'commit' tool for all commits — do NOT use shell_command with 'git commit'\n- The commit tool auto-generates a commit message based on the staged diff using the LLM\n- The generated message follows this format:\n\n    ```\n    <Action> N files - <title>\n\n    <description paragraph>\n    ```\n\n    Where `<Action>` is `Adds`, `Updates`, `Deletes`, or `Renames` (determined from git status codes; mixed actions use `Updates`). `<title>` and `<description>` are LLM-generated from the staged diff.\n\n- You can provide an optional 'notes' parameter with context about why the changes were made, what task they relate to, or any other information that should be captured. These notes are included in the LLM prompt used to generate the message — be concise and describe the intent, not the diff (e.g., \"Fix undo history corruption on buffer switch\" not \"changed 3 files\").\n- You can provide an optional 'message' parameter if you want to specify an explicit commit message instead of auto-generating one\n- ALWAYS carefully review that the staged files match your intent before using the commit tool\n\n### Staging Files\n- Stage files individually using shell_command with 'git add <path>' rather than 'git add .'\n- Review each file before staging to ensure it matches the intent\n- NEVER use 'git add .', 'git add -A', or 'git add --all' — always stage specific file paths\n\n### Read-Only Git Operations\n- Use shell_command for read-only git operations: status, log, diff, branch (listing), show, remote -v, etc.\n\n### Destructive Git Operations (BLOCKED)\n\nThe following operations are NEVER allowed via shell_command regardless of context:\n- `git checkout` / `git switch`\n- `git restore`\n- `git reset`\n\n### Pushing\n- You do NOT have push capability — commit your changes and let the user handle pushing\n\n### Skills — Activate Before Work\n- **First time in a repository or starting a new project?** → activate `project-planning` immediately to map structure, plan phases, and scaffold properly\n- **Language-specific work?** → activate matching conventions skill (`go-conventions`, `python-conventions`, `typescript-conventions`, `rust-conventions`)\n- Writing tests? → activate `test-writing`\n- Refactoring? → activate `safe-refactor`\n- Bug fix? → activate `bug-triage`\n\n### Workflow\n1. Understand the task requirements\n2. Activate relevant skills if needed\n3. Delegate subtasks to specialized subagents (coder, tester, etc.)\n4. Verify the results\n5. Stage relevant files individually with 'git add <path>'\n6. Use the 'commit' tool with 'notes' describing the intent of the changes (concise, no diff descriptions)"
+      "system_prompt_append": "## Git Operations Policy\n\n### Committing\n\n- ALWAYS use the 'commit' tool for all commits \u2014 do NOT use shell_command with 'git commit'\n- The commit tool auto-generates a commit message based on the staged diff using the LLM\n- The generated message follows this format:\n\n    ```\n    <Action> N files - <title>\n\n    <description paragraph>\n    ```\n\n    Where `<Action>` is `Adds`, `Updates`, `Deletes`, or `Renames` (determined from git status codes; mixed actions use `Updates`). `<title>` and `<description>` are LLM-generated from the staged diff.\n\n- You can provide an optional 'notes' parameter with context about why the changes were made, what task they relate to, or any other information that should be captured. These notes are included in the LLM prompt used to generate the message \u2014 be concise and describe the intent, not the diff (e.g., \"Fix undo history corruption on buffer switch\" not \"changed 3 files\").\n- You can provide an optional 'message' parameter if you want to specify an explicit commit message instead of auto-generating one\n- ALWAYS carefully review that the staged files match your intent before using the commit tool\n\n### Staging Files\n- Stage files individually using shell_command with 'git add <path>' rather than 'git add .'\n- Review each file before staging to ensure it matches the intent\n- NEVER use 'git add .', 'git add -A', or 'git add --all' \u2014 always stage specific file paths\n\n### Read-Only Git Operations\n- Use shell_command for read-only git operations: status, log, diff, branch (listing), show, remote -v, etc.\n\n### Destructive Git Operations (BLOCKED)\n\nThe following operations are NEVER allowed via shell_command regardless of context:\n- `git checkout` / `git switch`\n- `git restore`\n- `git reset`\n\n### Pushing\n- You do NOT have push capability \u2014 commit your changes and let the user handle pushing\n\n### Skills \u2014 Activate Before Work\n- **First time in a repository or starting a new project?** \u2192 activate `project-planning` immediately to map structure, plan phases, and scaffold properly\n- **Language-specific work?** \u2192 activate matching conventions skill (`go-conventions`, `python-conventions`, `typescript-conventions`, `rust-conventions`)\n- Writing tests? \u2192 activate `test-writing`\n- Refactoring? \u2192 activate `safe-refactor`\n- Bug fix? \u2192 activate `bug-triage`\n\n### Workflow\n1. Understand the task requirements\n2. Activate relevant skills if needed\n3. Delegate subtasks to specialized subagents (coder, tester, etc.)\n4. Verify the results\n5. Stage relevant files individually with 'git add <path>'\n6. Use the 'commit' tool with 'notes' describing the intent of the changes (concise, no diff descriptions)"
     },
     {
       "aliases": [
@@ -108,6 +110,7 @@
       "description": "General-purpose persona for tasks that do not require deep specialization",
       "enabled": true,
       "id": "general",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "General",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/general.md"
     },
@@ -138,6 +141,7 @@
       "description": "Feature implementation and production code writing specialist",
       "enabled": true,
       "id": "coder",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Coder",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/coder.md"
     },
@@ -162,6 +166,7 @@
       "description": "Behavior-preserving refactoring specialist focused on low-risk, incremental improvements",
       "enabled": true,
       "id": "refactor",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Refactor",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/refactor.md"
     },
@@ -189,6 +194,7 @@
       "description": "Bug investigation, root cause analysis, and targeted fixes specialist",
       "enabled": true,
       "id": "debugger",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Debugger",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/debugger.md"
     },
@@ -215,6 +221,7 @@
       "description": "Unit test writing and test coverage specialist",
       "enabled": true,
       "id": "tester",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Tester",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/tester.md"
     },
@@ -243,6 +250,7 @@
       "description": "Code review, security review, and best-practices specialist",
       "enabled": true,
       "id": "code_reviewer",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Code Reviewer",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/code_reviewer.md"
     },
@@ -265,6 +273,7 @@
       "description": "Combined local codebase analysis and external research specialist",
       "enabled": true,
       "id": "researcher",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Researcher",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/researcher.md"
     },
@@ -293,6 +302,7 @@
       "description": "Web extraction and structured content collection specialist",
       "enabled": true,
       "id": "web_scraper",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Web Scraper",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/web_scraper.md"
     },
@@ -322,6 +332,7 @@
       "description": "Hands-on system administration and engineering execution persona",
       "enabled": true,
       "id": "computer_user",
+      "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Computer User",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/computer_user.md"
     }

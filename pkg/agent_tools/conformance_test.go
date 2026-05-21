@@ -1347,7 +1347,8 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// list_directory has no required params → nil args are valid
 			err := h.Validate(nil)
 			switch name {
-			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index":
+			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index",
+				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_memories", "list_skills", "rollback_changes", "view_history":
 				require.NoError(t, err, "Validate(nil) should succeed for tools with no required params")
@@ -1358,7 +1359,8 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// Validate must handle empty map
 			err = h.Validate(map[string]any{})
 			switch name {
-			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index":
+			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index",
+				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
 			case "list_directory", "repo_map", "list_memories", "list_skills", "rollback_changes", "view_history":
 				require.NoError(t, err, "Validate({}) should succeed for tools with no required params")
@@ -1454,4 +1456,428 @@ func TestListDirConformance_SortedOutput(t *testing.T) {
 
 	require.True(t, alphaIdx < middleIdx, "alpha.txt should appear before middle.txt")
 	require.True(t, middleIdx < zebraIdx, "middle.txt should appear before zebra.txt")
+}
+
+// ---------------------------------------------------------------------------
+// write_file Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestWriteFileHandlerConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &writeFileHandler{}
+
+	require.Equal(t, "write_file", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "write_file", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"path", "content"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["path"], "should have 'path' parameter")
+	require.True(t, paramNames["content"], "should have 'content' parameter")
+}
+
+func TestWriteFileHandlerConformance_Validate_MissingPath(t *testing.T) {
+	t.Parallel()
+	h := &writeFileHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestWriteFileHandlerConformance_Validate_EmptyPath(t *testing.T) {
+	t.Parallel()
+	h := &writeFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "", "content": "data"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestWriteFileHandlerConformance_Validate_MissingContent(t *testing.T) {
+	t.Parallel()
+	h := &writeFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "file.txt"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestWriteFileHandlerConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &writeFileHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"path": "file.txt", "content": "data"}))
+	require.NoError(t, h.Validate(map[string]any{"path": "/abs/path.txt", "content": ""}))
+}
+
+// ---------------------------------------------------------------------------
+// write_structured_file Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestWriteStructuredFileHandlerConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+
+	require.Equal(t, "write_structured_file", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "write_structured_file", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"path", "data"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["path"], "should have 'path' parameter")
+	require.True(t, paramNames["data"], "should have 'data' parameter")
+	require.True(t, paramNames["format"], "should have 'format' parameter")
+	require.True(t, paramNames["schema"], "should have 'schema' parameter")
+}
+
+func TestWriteStructuredFileHandlerConformance_Validate_MissingPath(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestWriteStructuredFileHandlerConformance_Validate_EmptyPath(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "", "data": map[string]any{}})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestWriteStructuredFileHandlerConformance_Validate_MissingData(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "file.json"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestWriteStructuredFileHandlerConformance_Validate_EmptyFormat(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "file.json", "data": map[string]any{}, "format": "  "})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestWriteStructuredFileHandlerConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"path": "file.json", "data": map[string]any{"key": "value"}}))
+	require.NoError(t, h.Validate(map[string]any{"path": "file.json", "data": map[string]any{}, "format": "json"}))
+}
+
+// ---------------------------------------------------------------------------
+// edit_file Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestEditFileHandlerConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	require.Equal(t, "edit_file", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "edit_file", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"path", "old_str", "new_str"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["path"], "should have 'path' parameter")
+	require.True(t, paramNames["old_str"], "should have 'old_str' parameter")
+	require.True(t, paramNames["new_str"], "should have 'new_str' parameter")
+}
+
+func TestEditFileHandlerConformance_Validate_MissingPath(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestEditFileHandlerConformance_Validate_EmptyPath(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "", "old_str": "a", "new_str": "b"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestEditFileHandlerConformance_Validate_MissingOldStr(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "file.txt", "new_str": "replacement"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestEditFileHandlerConformance_Validate_EmptyOldStr(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "file.txt", "old_str": "", "new_str": "replacement"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestEditFileHandlerConformance_Validate_MissingNewStr(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	err := h.Validate(map[string]any{"path": "file.txt", "old_str": "original"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestEditFileHandlerConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &editFileHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"path": "file.txt", "old_str": "a", "new_str": "b"}))
+	// new_str can be empty (replacing with nothing)
+	require.NoError(t, h.Validate(map[string]any{"path": "file.txt", "old_str": "a", "new_str": ""}))
+}
+
+// ---------------------------------------------------------------------------
+// shell_command Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestShellCommandHandlerConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	require.Equal(t, "shell_command", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "shell_command", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Empty(t, def.Required, "shell_command should have no required params in definition (command is required unless check/stop_background is set)")
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["command"], "should have 'command' parameter")
+	require.True(t, paramNames["background"], "should have 'background' parameter")
+	require.True(t, paramNames["check_background"], "should have 'check_background' parameter")
+	require.True(t, paramNames["stop_background"], "should have 'stop_background' parameter")
+}
+
+func TestShellCommandHandlerConformance_Validate_NilArgs(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	err := h.Validate(nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be nil")
+}
+
+func TestShellCommandHandlerConformance_Validate_EmptyArgs(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestShellCommandHandlerConformance_Validate_InvalidBackground(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	err := h.Validate(map[string]any{"command": "echo hi", "background": 42})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be a boolean")
+}
+
+func TestShellCommandHandlerConformance_Validate_ConflictingParams(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	// check_background + background=true
+	err := h.Validate(map[string]any{"command": "echo hi", "check_background": "sess1", "background": true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot be used together")
+
+	// stop_background + check_background
+	err = h.Validate(map[string]any{"command": "echo hi", "stop_background": "sess1", "check_background": "sess2"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot be used together")
+}
+
+func TestShellCommandHandlerConformance_Validate_ValidCommand(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"command": "echo hello"}))
+	require.NoError(t, h.Validate(map[string]any{"command": "echo hello", "background": true}))
+	require.NoError(t, h.Validate(map[string]any{"check_background": "sess1"}))
+	require.NoError(t, h.Validate(map[string]any{"stop_background": "sess1"}))
+}
+
+// ---------------------------------------------------------------------------
+// save_memory Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestSaveMemoryHandlerConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &saveMemoryHandler{}
+
+	require.Equal(t, "save_memory", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "save_memory", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"name", "content"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["name"], "should have 'name' parameter")
+	require.True(t, paramNames["content"], "should have 'content' parameter")
+}
+
+func TestSaveMemoryHandlerConformance_Validate_MissingName(t *testing.T) {
+	t.Parallel()
+	h := &saveMemoryHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestSaveMemoryHandlerConformance_Validate_EmptyName(t *testing.T) {
+	t.Parallel()
+	h := &saveMemoryHandler{}
+
+	err := h.Validate(map[string]any{"name": "", "content": "data"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestSaveMemoryHandlerConformance_Validate_MissingContent(t *testing.T) {
+	t.Parallel()
+	h := &saveMemoryHandler{}
+
+	err := h.Validate(map[string]any{"name": "my-memory"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestSaveMemoryHandlerConformance_Validate_EmptyContent(t *testing.T) {
+	t.Parallel()
+	h := &saveMemoryHandler{}
+
+	err := h.Validate(map[string]any{"name": "my-memory", "content": "  "})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestSaveMemoryHandlerConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &saveMemoryHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"name": "my-memory", "content": "# Some content"}))
+}
+
+// ---------------------------------------------------------------------------
+// search_memories Conformance Tests
+// ---------------------------------------------------------------------------
+
+func TestSearchMemoriesHandlerConformance_Definition(t *testing.T) {
+	t.Parallel()
+	h := &searchMemoriesHandler{}
+
+	require.Equal(t, "search_memories", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "search_memories", def.Name)
+	require.NotEmpty(t, def.Description)
+	require.Equal(t, []string{"query"}, def.Required)
+
+	// Check parameter schema
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["query"], "should have 'query' parameter")
+	require.True(t, paramNames["top_k"], "should have 'top_k' parameter")
+	require.True(t, paramNames["threshold"], "should have 'threshold' parameter")
+}
+
+func TestSearchMemoriesHandlerConformance_Validate_MissingQuery(t *testing.T) {
+	t.Parallel()
+	h := &searchMemoriesHandler{}
+
+	err := h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+}
+
+func TestSearchMemoriesHandlerConformance_Validate_EmptyQuery(t *testing.T) {
+	t.Parallel()
+	h := &searchMemoriesHandler{}
+
+	err := h.Validate(map[string]any{"query": ""})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be empty")
+}
+
+func TestSearchMemoriesHandlerConformance_Validate_InvalidTopK(t *testing.T) {
+	t.Parallel()
+	h := &searchMemoriesHandler{}
+
+	err := h.Validate(map[string]any{"query": "test", "top_k": "not a number"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be an integer")
+}
+
+func TestSearchMemoriesHandlerConformance_Validate_InvalidThreshold(t *testing.T) {
+	t.Parallel()
+	h := &searchMemoriesHandler{}
+
+	err := h.Validate(map[string]any{"query": "test", "threshold": "not a number"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be a number")
+}
+
+func TestSearchMemoriesHandlerConformance_Validate_Valid(t *testing.T) {
+	t.Parallel()
+	h := &searchMemoriesHandler{}
+
+	require.NoError(t, h.Validate(map[string]any{"query": "test"}))
+	require.NoError(t, h.Validate(map[string]any{"query": "test", "top_k": 10}))
+	require.NoError(t, h.Validate(map[string]any{"query": "test", "threshold": 0.5}))
+	require.NoError(t, h.Validate(map[string]any{"query": "test", "top_k": 10, "threshold": 0.5}))
 }

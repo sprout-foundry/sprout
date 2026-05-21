@@ -76,6 +76,15 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 			directory = "."
 		}
 
+		if directory != "." {
+			if strings.Contains(directory, "..") {
+				return ToolResult{
+					Output:  fmt.Sprintf("invalid search directory: %q", directory),
+					IsError: true,
+				}, nil
+			}
+		}
+
 		compiled, err := compileSearchPattern(searchPattern, caseSensitive)
 		if err != nil {
 			return ToolResult{
@@ -255,42 +264,4 @@ func (m *simpleGlobMatcher) Match(path string) bool {
 		return true
 	}
 	return matched
-}
-
-func getBoolArg(args map[string]any, key string) bool {
-	val, exists := args[key]
-	if !exists || val == nil {
-		return false
-	}
-	if b, ok := val.(bool); ok {
-		return b
-	}
-	if s, ok := val.(string); ok {
-		return s == "true" || s == "1" || s == "yes"
-	}
-	if f, ok := val.(float64); ok {
-		return f == 1
-	}
-	if i, ok := val.(int); ok {
-		return i == 1
-	}
-	if i, ok := val.(int64); ok {
-		return i == 1
-	}
-	return false
-}
-
-func extractInt(args map[string]any, key string) (int, error) {
-	val, exists := args[key]
-	if !exists || val == nil {
-		return 0, nil
-	}
-	switch v := val.(type) {
-	case int:
-		return v, nil
-	case float64:
-		return int(v), nil
-	default:
-		return 0, fmt.Errorf("parameter '%s' must be an integer, got %T", key, val)
-	}
 }

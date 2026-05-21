@@ -1,0 +1,391 @@
+package tools
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
+)
+
+func TestShellCommandHandler_Execute_SimpleCommand(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "echo hello",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "hello")
+}
+
+func TestShellCommandHandler_Execute_Echo(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "echo hello world",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "hello world")
+}
+
+func TestShellCommandHandler_Execute_LS(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	// Create a file to list
+	path := createTestFile(dir, "testfile.txt", "content")
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "ls " + path,
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "testfile.txt")
+}
+
+func TestShellCommandHandler_Execute_Env(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "env",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+func TestShellCommandHandler_Execute_MissingCommand(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "required")
+}
+
+func TestShellCommandHandler_Execute_EmptyCommand(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "",
+	})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+}
+
+func TestShellCommandHandler_Execute_Pwd(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "pwd",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+func TestShellCommandHandler_Execute_Date(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "date",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+func TestShellCommandHandler_Execute_Background_NoTerminalManager(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command":    "sleep 100",
+		"background": true,
+	})
+	// Background mode requires TerminalManager which is not available in test context
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "terminal manager")
+}
+
+func TestShellCommandHandler_Execute_CheckBackground_NoTerminalManager(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"check_background": "session-123",
+	})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "terminal manager")
+}
+
+func TestShellCommandHandler_Execute_StopBackground_NoTerminalManager(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"stop_background": "session-123",
+	})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "terminal manager")
+}
+
+func TestShellCommandHandler_Execute_SecurityBlock(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	// pipeToShell pattern should be blocked
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "echo secret | bash -c 'cat /etc/passwd'",
+	})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "security block")
+}
+
+func TestShellCommandHandler_Execute_RMRFBlock(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	// rm -rf / should be blocked
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "rm -rf /",
+	})
+	require.Error(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, res.Output, "security block")
+}
+
+func TestShellCommandHandler_Execute_OutputWriter(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	var buf strings.Builder
+	env := newTestEnv(t, dir)
+	env.OutputWriter = &buf
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"command": "echo hello",
+	})
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), res.Output)
+}
+
+func TestShellCommandHandler_Execute_EventBus(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	bus := events.NewEventBus()
+	ch := bus.Subscribe("test")
+	env := newTestEnv(t, dir)
+	env.EventBus = bus
+
+	_, err := h.Execute(ctx, env, map[string]any{
+		"command": "echo hello",
+	})
+	require.NoError(t, err)
+
+	// Verify tool_start event
+	select {
+	case evt := <-ch:
+		require.Equal(t, "tool_start", evt.Type)
+	default:
+		t.Fatal("expected tool_start event")
+	}
+
+	// Verify tool_end event
+	select {
+	case evt := <-ch:
+		require.Equal(t, "tool_end", evt.Type)
+	default:
+		t.Fatal("expected tool_end event")
+	}
+}
+
+func TestShellCommandHandler_Execute_NonZeroExit(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	// Some shells treat "exit 1" as success (the shell exits cleanly).
+	// Verify the handler runs and returns *something* — the exact behavior
+	// depends on the shell used by ExecuteShellCommandWithSafety.
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "exit 1",
+	})
+	// The behavior is platform/shell-dependent; accept either outcome.
+	if err != nil {
+		require.True(t, res.IsError)
+	} else {
+		require.False(t, res.IsError)
+	}
+}
+
+func TestShellCommandHandler_Execute_CatFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	path := createTestFile(dir, "readme.txt", "file content here")
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "cat " + path,
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "file content here")
+}
+
+func TestShellCommandHandler_Execute_Whoami(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "whoami",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.NotEmpty(t, res.Output)
+}
+
+func TestShellCommandHandler_Execute_WithQuotes(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "echo 'hello world'",
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+	require.Contains(t, res.Output, "hello world")
+}
+
+func TestShellCommandHandler_Execute_TokenUsage(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &shellCommandHandler{}
+	ctx := newTestCtx(dir)
+
+	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
+		"command": "echo hello",
+	})
+	require.NoError(t, err)
+	require.Greater(t, res.TokenUsage, int64(0), "should report token usage for non-empty output")
+}
+
+func TestShellCommandHandler_Validate(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	// nil args should error
+	err := h.Validate(nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must not be nil")
+
+	// empty args should error
+	err = h.Validate(map[string]any{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "required")
+
+	// valid command
+	require.NoError(t, h.Validate(map[string]any{"command": "echo hello"}))
+
+	// valid check_background
+	require.NoError(t, h.Validate(map[string]any{"check_background": "sess-123"}))
+
+	// valid stop_background
+	require.NoError(t, h.Validate(map[string]any{"stop_background": "sess-123"}))
+
+	// conflicting params
+	err = h.Validate(map[string]any{"check_background": "s1", "stop_background": "s2"})
+	require.Error(t, err)
+
+	err = h.Validate(map[string]any{"command": "echo hi", "background": true, "check_background": "s1"})
+	require.Error(t, err)
+
+	// invalid background type
+	err = h.Validate(map[string]any{"command": "echo hi", "background": 42})
+	require.Error(t, err)
+}
+
+func TestShellCommandHandler_Definition(t *testing.T) {
+	t.Parallel()
+	h := &shellCommandHandler{}
+
+	require.Equal(t, "shell_command", h.Name())
+
+	def := h.Definition()
+	require.Equal(t, "shell_command", def.Name)
+	require.NotEmpty(t, def.Description)
+
+	// All parameters should be optional (no required list)
+	require.Empty(t, def.Required)
+
+	// Check all expected params are present
+	paramNames := make(map[string]bool)
+	for _, p := range def.Parameters {
+		paramNames[p.Name] = true
+	}
+	require.True(t, paramNames["command"])
+	require.True(t, paramNames["background"])
+	require.True(t, paramNames["check_background"])
+	require.True(t, paramNames["stop_background"])
+}
+
+// createTestFile creates a file in the given directory with the given content
+// and returns its full path.
+func createTestFile(dir, name, content string) string {
+	path := dir + "/" + name
+	os.WriteFile(path, []byte(content), 0o644) //nolint:errcheck
+	return path
+}

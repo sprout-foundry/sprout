@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -28,6 +27,21 @@ func (h *rollbackChangesHandler) Definition() ToolDefinition {
 }
 
 func (h *rollbackChangesHandler) Validate(args map[string]any) error {
+	if confirmVal, exists := args["confirm"]; exists && confirmVal != nil {
+		if _, ok := confirmVal.(bool); !ok {
+			return fmt.Errorf("parameter 'confirm' must be a boolean, got %T", confirmVal)
+		}
+	}
+	if rid, exists := args["revision_id"]; exists && rid != nil {
+		if _, ok := rid.(string); !ok {
+			return fmt.Errorf("parameter 'revision_id' must be a string, got %T", rid)
+		}
+	}
+	if fp, exists := args["file_path"]; exists && fp != nil {
+		if _, ok := fp.(string); !ok {
+			return fmt.Errorf("parameter 'file_path' must be a string, got %T", fp)
+		}
+	}
 	return nil
 }
 
@@ -57,20 +71,8 @@ func (h *rollbackChangesHandler) Execute(ctx context.Context, env ToolEnv, args 
 			}, nil
 		}
 
-		output := result.Output
-		// Append metadata if available
-		if result.Metadata != nil {
-			var metaParts []string
-			for k, v := range result.Metadata {
-				metaParts = append(metaParts, fmt.Sprintf("%s: %v", k, v))
-			}
-			if len(metaParts) > 0 {
-				output += "\n" + strings.Join(metaParts, ", ")
-			}
-		}
-
 		return ToolResult{
-			Output:        output,
+			Output:        result.Output,
 			IsError:       false,
 			StructuredOut: result.Metadata,
 		}, nil

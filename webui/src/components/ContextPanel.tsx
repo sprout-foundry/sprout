@@ -158,7 +158,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const activeToolCount = toolExecutions.filter((t) => t.status === 'started' || t.status === 'running').length;
 
-  const activeSubagentCount = subagentRuns.filter(
+  const activeSubagentCount = subagentRuns.runs.filter(
     ({ tool }) => tool.status === 'started' || tool.status === 'running',
   ).length;
 
@@ -172,7 +172,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         id: 'subagents',
         label: 'Subagents',
         icon: <Bot size={14} />,
-        count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total`,
+        count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.runs.length} total`,
       },
       {
         id: 'tools',
@@ -202,7 +202,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     ],
     [
       activeSubagentCount,
-      subagentRuns.length,
+      subagentRuns.runs.length,
       activeToolCount,
       toolExecutions.length,
       historyCounts,
@@ -221,7 +221,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       case 'subagents':
         return (
           <SubagentsTab
-            subagentRuns={subagentRuns}
+            subagentRuns={subagentRuns.runs}
+            lifecycleCounts={subagentRuns.lifecycleCounts}
+            totalLifecycle={subagentRuns.totalLifecycle}
             expandedSubagents={state.expandedSubagents}
             toolRefs={state.toolRefs}
             expandedTools={state.expandedTools}
@@ -288,7 +290,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       default:
         return (
           <SubagentsTab
-            subagentRuns={subagentRuns}
+            subagentRuns={subagentRuns.runs}
+            lifecycleCounts={subagentRuns.lifecycleCounts}
+            totalLifecycle={subagentRuns.totalLifecycle}
             expandedSubagents={state.expandedSubagents}
             toolRefs={state.toolRefs}
             expandedTools={state.expandedTools}

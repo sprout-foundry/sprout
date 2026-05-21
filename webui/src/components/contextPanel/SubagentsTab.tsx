@@ -4,10 +4,12 @@ import React from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
 import { getPersonaColor, getStatusIcon, formatDuration, formatTime } from './helpers';
-import type { ContextSubagentRun, LiveLogLine } from './types';
+import type { ContextSubagentRun, LiveLogLine, SubagentLifecycleCounts } from './types';
 
 interface SubagentsTabProps {
   subagentRuns: ContextSubagentRun[];
+  lifecycleCounts?: SubagentLifecycleCounts;
+  totalLifecycle?: number;
   expandedSubagents: Set<string>;
   toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   expandedTools: Set<string>;
@@ -21,6 +23,8 @@ interface SubagentsTabProps {
 
 export function SubagentsTab({
   subagentRuns,
+  lifecycleCounts,
+  totalLifecycle,
   expandedSubagents,
   toolRefs,
   expandedTools: _expandedTools,
@@ -53,6 +57,43 @@ export function SubagentsTab({
 
   return (
     <div className="context-panel-tools-list">
+      {totalLifecycle != null && totalLifecycle > 0 && lifecycleCounts && (
+        <div
+          className="subagent-lifecycle-summary"
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            marginBottom: '12px',
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.6)',
+            display: 'flex',
+            gap: '12px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {lifecycleCounts.active > 0 && (
+            <span style={{ color: '#4ade80' }}>
+              ▶ {lifecycleCounts.active} active
+            </span>
+          )}
+          {lifecycleCounts.queued > 0 && (
+            <span style={{ color: '#fbbf24' }}>
+              ⏳ {lifecycleCounts.queued} queued
+            </span>
+          )}
+          {lifecycleCounts.completed > 0 && (
+            <span style={{ color: '#4ade80' }}>
+              ✓ {lifecycleCounts.completed} completed
+            </span>
+          )}
+          {lifecycleCounts.cancelled > 0 && (
+            <span style={{ color: '#f87171' }}>
+              ✕ {lifecycleCounts.cancelled} cancelled
+            </span>
+          )}
+        </div>
+      )}
       {subagentRuns.length === 0 ? (
         <div className="context-panel-empty">
           Delegated work will appear here when the orchestrator runs <code>run_subagent</code> or{' '}

@@ -1,3 +1,14 @@
+// Package agent provides the shell command handler with a two-gate security model.
+//
+// Gate 1 (Global Static Classifier): pkg/agent_tools/security_classifier.go:ClassifyToolCall()
+// Inspects tool name + arguments using string-based heuristics. Always runs regardless of persona.
+// Can block (ShouldBlock) or prompt (ShouldPrompt) for dangerous operations.
+//
+// Gate 2 (Persona Risk Cascade): pkg/agent/agent_getters.go:EvaluateOperationRisk()
+// Evaluates commands against the active persona's auto_approve_rules. Returns Low/Medium/High.
+//
+// INVARIANT: Neither gate may suppress or bypass the other. Both evaluate independently.
+// The more restrictive result always wins.
 package agent
 
 import (

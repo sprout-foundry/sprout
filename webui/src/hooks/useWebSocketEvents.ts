@@ -9,7 +9,7 @@
 
 import type { WsEvent } from '@sprout/events';
 import type { Message } from '@sprout/ui';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
@@ -17,6 +17,7 @@ import { switchChatSession, listChatSessions } from '../services/chatSessions';
 import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { trimMessages } from '../utils/messageWindow';
+import { WebSocketService } from '../services/websocket';
 import { useEventHandler } from './useEventHandler';
 
 export interface UseWebSocketEventsOptions {
@@ -51,6 +52,11 @@ export default function useWebSocketEvents({
   // Keep the chat ID ref in sync with the derived state value (same pattern
   // as the original inline code — synchronous assignment, not in useEffect).
   activeChatIdRef.current = state.activeChatId;
+
+  // ── Sync activeChatId with WebSocketService for reattach support ────────
+  useEffect(() => {
+    WebSocketService.getInstance().setActiveChatId(state.activeChatId);
+  }, [state.activeChatId]);
 
   // ── Use the extracted event handler ────────────────────────────────────
   const { handleEvent } = useEventHandler({

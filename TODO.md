@@ -79,7 +79,7 @@ Three trust boundaries to defend: the project (skills auto-load silently), the d
 
 ### Phase 4: Subprocess hardening
 
-[] - SP-033-4a: At `pkg/mcp/client.go:147`, replace bare `restartCount++` with a sliding-window check — after 3 failures in 60s, exponential backoff (start 1s, double, max 5min); after 10 failures in 24h, disable the server and surface a notice.
+[x] - SP-033-4a: At `pkg/mcp/client.go:147`, replace bare `restartCount++` with a sliding-window check — after 3 failures in 60s, exponential backoff (start 1s, double, max 5min); after 10 failures in 24h, disable the server and surface a notice.
 [] - SP-033-4b: Register `webcontent.RodRenderer.Close()` in the interactive-mode signal handler; add a `runtime.SetFinalizer` backstop on the renderer struct in `pkg/webcontent/browser_rod.go:1311`. Coordinate with SP-032 A1 so the daemon path is also covered.
 [x] - SP-033-4c: At `pkg/pythonruntime/runtime.go:65`, replace `exec.Command(...)` with `exec.CommandContext(ctx, ...)` carrying a 30s default deadline (configurable for longer operations).
 

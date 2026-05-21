@@ -25,11 +25,20 @@ type Definition struct {
 	SystemPrompt     string   `json:"system_prompt,omitempty"`
 	SystemPromptText string   `json:"system_prompt_text,omitempty"`
 	SystemPromptAppend string `json:"system_prompt_append,omitempty"`
-	AllowedTools     []string `json:"allowed_tools,omitempty"`
-	Enabled          bool     `json:"enabled"`
-	Aliases          []string `json:"aliases,omitempty"`
-	LocalOnly        bool     `json:"local_only,omitempty"`
-	Delegatable      bool     `json:"delegatable,omitempty"`
+	AllowedTools     []string         `json:"allowed_tools,omitempty"`
+	Enabled          bool             `json:"enabled"`
+	Aliases          []string         `json:"aliases,omitempty"`
+	LocalOnly        bool             `json:"local_only,omitempty"`
+	Delegatable      bool             `json:"delegatable,omitempty"`
+	AutoApproveRules *AutoApproveRules `json:"auto_approve_rules,omitempty"`
+}
+
+// AutoApproveRules mirrors the configuration package's AutoApproveRules
+// for JSON deserialization from persona catalog files.
+type AutoApproveRules struct {
+	LowRiskOps    []string `json:"low_risk,omitempty"`
+	MediumRiskOps []string `json:"medium_risk,omitempty"`
+	HighRiskNever []string `json:"high_risk_never,omitempty"`
 }
 
 var (

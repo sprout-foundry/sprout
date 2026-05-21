@@ -154,6 +154,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		BatchSize:      32,
 		MaxBodyLen:     2000,
 		IndexFileLevel: true, // Enable file-level indexing by default
+		ManifestPath:   filepath.Join(indexDir, ".index.jsonl.manifest.json"),
 	})
 
 	m.provider = provider
@@ -414,6 +415,7 @@ func (m *EmbeddingManager) startONNXBuildBackground() {
 			BatchSize:      32,
 			MaxBodyLen:     2000,
 			IndexFileLevel: true,
+			ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.jsonl.manifest.json"),
 		})
 		if _, err := onnxMgr.BuildIndex(bgCtx, root); err != nil {
 			log.Printf("embedding: ONNX index build failed (static index OK): %v", err)
@@ -564,6 +566,7 @@ func (m *EmbeddingManager) snapshotONNXIndexMgr() *IndexManager {
 		BatchSize:      32,
 		MaxBodyLen:     2000,
 		IndexFileLevel: true,
+		ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.jsonl.manifest.json"),
 	})
 }
 
@@ -605,6 +608,7 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 			BatchSize:      32,
 			MaxBodyLen:     2000,
 			IndexFileLevel: true,
+			ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.jsonl.manifest.json"),
 		})
 		onnxResults, err := onnxMgr.QuerySimilar(ctx, query, topK, threshold)
 		if err != nil {

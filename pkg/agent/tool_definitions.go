@@ -523,73 +523,13 @@ func (r *ToolRegistry) GetAllToolConfigs() map[string]ToolConfig {
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
 func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
-	// SP-038-2a: Dual-dispatch — check new registry first, then fall through to legacy
-	if handler, found := tools.GetNewToolRegistry().Lookup(toolName); found {
-		// Build ToolEnv from agent context
-		var env tools.ToolEnv
-		if agent != nil {
-			env.EventBus = agent.GetEventBus()
-			env.WorkspaceRoot = agent.GetWorkspaceRoot()
-			// TODO(SP-038): Agent has no Stdout/Writer accessor; it routes output
-			// via PrintLine/PrintLineAsync → OutputRouter. For now, use os.Stdout
-			// so tools that stream output still produce visible results.
-			env.OutputWriter = os.Stdout
-			env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
-			env.ConfigManager = agent.GetConfigManager()
-			// TODO(SP-038): Wire ApprovalManager adapter when tools are migrated
-			// ApprovalManager: security.ApprovalManager does not implement
-			// tools.ApprovalManager (different method signatures), pass nil
-		} else {
-			env.OutputWriter = os.Stdout
-			env.MaxTokensFunc = func() int { return 0 }
-		}
-
-		if err := handler.Validate(args); err != nil {
-			return nil, "", fmt.Errorf("validation failed for tool %q: %w", toolName, err)
-		}
-		res, err := handler.Execute(ctx, env, args)
-		if err != nil {
-			return nil, "", err
-		}
-
-		// Convert tools.ImageData [] → []api.ImageData
-		var images []api.ImageData
-		if len(res.Images) > 0 {
-			images = make([]api.ImageData, len(res.Images))
-			for i, img := range res.Images {
-				images[i] = api.ImageData{
-					URL:    img.URI,
-					Type:   img.MIMEType,
-				}
-			}
-		}
-
-		output := res.Output
-		if res.IsError {
-			errMsg := output
-			if errMsg == "" {
-				errMsg = fmt.Sprintf("tool %q returned error state", toolName)
-			}
-			if agent != nil && agent.debug {
-				agent.debugLog("[tool] tool dispatched via new registry (error): %s\n", toolName)
-			}
-			return images, "", fmt.Errorf("%s", errMsg)
-		}
-		// NOTE: New-registry tools handle their own security via Validate()/Execute().
-		// Legacy security classification (ClassifyToolCall) applies only to the legacy dispatch path.
-		if agent != nil && agent.debug {
-			agent.debugLog("[tool] tool dispatched via new registry: %s\n", toolName)
-		}
-		return images, output, nil
-	}
-
-	tool, exists := r.tools[toolName]
-	if !exists {
+	handler, found := tools.GetNewToolRegistry().Lookup(toolName)
+	if !found {
 		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
 	if agent != nil && agent.debug {
-		agent.debugLog("[tool] tool dispatched via legacy path: %s\n", toolName)
+		agent.debugLog("[tool] tool dispatched via new registry: %s\n", toolName)
 	}
 
 	// CRITICAL: Depth-based subagent nesting prevention
@@ -681,45 +621,70 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		}
 	}
 
-	// Validate and extract parameters
-	validatedArgs, err := r.validateParameters(tool, args, agent)
-	if err != nil {
-		return nil, "", fmt.Errorf("parameter validation failed for tool '%s': %w", toolName, err)
+	// Build ToolEnv from agent context
+	var env tools.ToolEnv
+	if agent != nil {
+		env.EventBus = agent.GetEventBus()
+		env.WorkspaceRoot = agent.GetWorkspaceRoot()
+		// TODO(SP-038): Agent has no Stdout/Writer accessor; it routes output
+		// via PrintLine/PrintLineAsync → OutputRouter. For now, use os.Stdout
+		// so tools that stream output still produce visible results.
+		env.OutputWriter = os.Stdout
+		env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
+		env.ConfigManager = agent.GetConfigManager()
+		// TODO(SP-038): Wire ApprovalManager adapter when tools are migrated
+		// ApprovalManager: security.ApprovalManager does not implement
+		// tools.ApprovalManager (different method signatures), pass nil
+	} else {
+		env.OutputWriter = os.Stdout
+		env.MaxTokensFunc = func() int { return 0 }
 	}
 
-	// Execute the tool handler — prefer the image-capable handler when set.
-	// Filesystem security errors (ErrOutsideWorkingDirectory) are caught and
-	// retried with user approval inside each handler (see tool_handlers_file.go,
-	// tool_handlers_structured.go) so there's no need for a second catch here.
-	var imgs []api.ImageData
-	var result string
-	var execErr error
+	if err := handler.Validate(args); err != nil {
+		return nil, "", fmt.Errorf("validation failed for tool %q: %w", toolName, err)
+	}
+	res, err := handler.Execute(ctx, env, args)
+	if err != nil {
+		return nil, "", err
+	}
 
-	if tool.HandlerImages != nil {
-		imgs, result, execErr = tool.HandlerImages(ctx, agent, validatedArgs)
-		if execErr != nil {
-			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
+	// Convert tools.ImageData [] → []api.ImageData
+	var images []api.ImageData
+	if len(res.Images) > 0 {
+		images = make([]api.ImageData, len(res.Images))
+		for i, img := range res.Images {
+			images[i] = api.ImageData{
+				URL:    img.URI,
+				Type:   img.MIMEType,
+			}
 		}
-	} else {
-		result, execErr = tool.Handler(ctx, agent, validatedArgs)
-		if execErr != nil {
-			return nil, result, fmt.Errorf("execute tool %q: %w", toolName, execErr)
+	}
+
+	output := res.Output
+	if res.IsError {
+		errMsg := output
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("tool %q returned error state", toolName)
 		}
+		if agent != nil && agent.debug {
+			agent.debugLog("[tool] tool dispatched via new registry (error): %s\n", toolName)
+		}
+		return images, "", fmt.Errorf("%s", errMsg)
 	}
 
 	// After successful tool execution, run embedding duplicate check for write tools.
-	if result != "" {
+	if output != "" {
 		if shouldCheckDuplicates(toolName, agent) {
 			if path, ok := args["path"].(string); ok && path != "" {
 				note := runDuplicateCheck(ctx, agent, path)
 				if note != "" {
-					result = result + note
+					output = output + note
 				}
 			}
 		}
 	}
 
-	return imgs, result, nil
+	return images, output, nil
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user

@@ -337,7 +337,7 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 ### Phase 2: Move misplaced composites out of `@sprout/ui`
 
 [x] - SP-039-2a: Move `BillingPage*`, `TeamPage*`, `AdminBillingPage*`, `TasksPage*` from `packages/ui/src/components/` to `webui/src/components/`. One commit per move.
-[] - SP-039-2b: Audit `packages/ui` for any other domain-coupled components (importing from `@sprout/events` for app-specific events, using `useSproutAdapter()` against a specific endpoint set); move them.
+[x] - SP-039-2b: Audit `packages/ui` for any other domain-coupled components (importing from `@sprout/events` for app-specific events, using `useSproutAdapter()` against a specific endpoint set); move them.
 [] - SP-039-2c: Verify `grep -rn "chatSession\|persona\|adapter" packages/ui/src/components/` returns no domain-specific hits.
 
 ### Phase 3: Consolidate primitives — small first

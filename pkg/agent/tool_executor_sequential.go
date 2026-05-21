@@ -137,6 +137,44 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	// Execute the tool in a goroutine
 	go func() {
+		// SP-038: Check new handler registry first for dual dispatch.
+		if te.handlerRegistry != nil {
+			if handler := te.handlerRegistry.Lookup(normalizedToolName); handler != nil {
+				te.agent.debugLog("[tool] registry dispatch: %s\n", normalizedToolName)
+				env := &tools.ToolEnv{
+					WorkingDir:    te.agent.GetWorkspaceRoot(),
+					ClientID:      te.agent.GetEventClientID(),
+					ConfigManager: te.agent.GetConfigManager(),
+					EventBus:      te.agent.GetEventBus(),
+				}
+				res, err := handler.Execute(ctx, env, args)
+				if err != nil {
+					resultChan <- struct {
+						images []api.ImageData
+						result string
+						err    error
+					}{nil, "", err}
+					return
+				}
+				// ToolResult.Error is a secondary error field; check it even when Execute returns nil
+				if res != nil && res.Error != nil {
+					resultChan <- struct {
+						images []api.ImageData
+						result string
+						err    error
+					}{nil, res.Output, res.Error}
+					return
+				}
+				resultChan <- struct {
+					images []api.ImageData
+					result string
+					err    error
+				}{nil, res.Output, nil}
+				return
+			}
+		}
+		te.agent.debugLog("[tool] legacy dispatch: %s\n", normalizedToolName)
+
 		if normalizedToolName == "mcp_tools" {
 			result, err := te.agent.handleMCPToolsCommand(args)
 			resultChan <- struct {

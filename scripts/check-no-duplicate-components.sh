@@ -7,9 +7,8 @@ set -euo pipefail
 # Known exemptions: components intentionally duplicated during migration.
 # Remove entries from this list as duplicates are resolved.
 ALLOWED_DUPLICATES=(
-    # SP-039-3a: Notification dedup (pending)
+    # SP-039-3a: Notification dedup (partially done - NotificationItem resolved)
     "Notification.css"
-    "NotificationItem.tsx"
     "NotificationStack.tsx"
     # SP-039-3c: Sidebar/StatusBar dedup (pending)
     "Sidebar.tsx"

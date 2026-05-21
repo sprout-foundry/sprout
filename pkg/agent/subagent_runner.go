@@ -26,6 +26,7 @@ import (
 	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -102,6 +103,11 @@ type SubagentRunner struct {
 	metricFailed       atomic.Int64
 	metricCancelled    atomic.Int64
 	metricQueuedWaitMS atomic.Int64
+
+	// testClientFactory overrides client creation for testing only.
+	// When non-nil, it is called instead of factory.CreateProviderClient.
+	// This field is never set in production code.
+	testClientFactory func(clientType agent_api.ClientType, model string) (agent_api.ClientInterface, error)
 }
 
 // runningSubagent tracks an active subagent execution
@@ -599,8 +605,13 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		return nil, fmt.Errorf("resolve provider/model: %w", err)
 	}
 
-	// Create client via factory
-	client, err := factory.CreateProviderClient(clientType, finalModel)
+	// Create client via factory (or test hook for testing)
+	var client agent_api.ClientInterface
+	if r.testClientFactory != nil {
+		client, err = r.testClientFactory(clientType, finalModel)
+	} else {
+		client, err = factory.CreateProviderClient(clientType, finalModel)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("create client: %w", err)
 	}

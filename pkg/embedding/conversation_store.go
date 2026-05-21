@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// ConversationStore wraps a JSONLFileStore for storing and querying
+// ConversationStore wraps a VectorStore for storing and querying
 // conversation turn embeddings. It provides a user-scoped persistent
 // store that survives across workspace changes.
 //
 // The store uses the same static embedding provider as the code index,
 // and maintains its own in-memory cache of records for fast queries.
 type ConversationStore struct {
-	store    *JSONLFileStore   // underlying store for conversation turns
+	store    VectorStore // underlying store for conversation turns
 	provider EmbeddingProvider // shared static embedding provider
 }
 
@@ -26,7 +26,7 @@ type ConversationStore struct {
 // the store is closed (the provider's lifecycle is managed externally).
 // The modelHash is used to detect model changes and invalidate stale records.
 func NewConversationStore(provider EmbeddingProvider, filePath string, modelHash string) (*ConversationStore, error) {
-	store, err := NewJSONLFileStore(filePath, modelHash)
+	store, err := NewHNSWStore(filePath, modelHash)
 	if err != nil {
 		return nil, err
 	}

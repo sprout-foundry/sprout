@@ -142,7 +142,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 					}
 					convoStoreDir = filepath.Join(configDir, "embeddings")
 				}
-				convoStorePath := filepath.Join(convoStoreDir, "conversation_turns.jsonl")
+				convoStorePath := filepath.Join(convoStoreDir, "conversation_turns.hnsw")
 				swept, sweepErr := SweepExpiredEntries(cfg.PersistentContext.RetentionDays, convoStorePath)
 				if sweepErr != nil && agent.debug {
 					_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to sweep expired context entries: %v\n", sweepErr)))

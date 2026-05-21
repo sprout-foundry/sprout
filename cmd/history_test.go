@@ -126,17 +126,15 @@ func TestParseDuration_ExactMinutes(t *testing.T) {
 	}
 }
 
-// TestParseDuration_NegativeDuration verifies that time.ParseDuration accepts
-// negative durations (e.g. "-1h" is a valid Go duration). The parseDuration
-// wrapper delegates to time.ParseDuration for non-day suffixes, so this
-// behavior is expected.
+// TestParseDuration_NegativeDuration verifies that parseDuration rejects
+// negative durations (e.g. "-1h").
 func TestParseDuration_NegativeDuration(t *testing.T) {
-	got, err := parseDuration("-1h")
-	if err != nil {
-		t.Fatalf("parseDuration(\"-1h\") unexpected error: %v", err)
+	_, err := parseDuration("-1h")
+	if err == nil {
+		t.Fatal("parseDuration(\"-1h\") expected error, got nil")
 	}
-	if got != -1*time.Hour {
-		t.Errorf("parseDuration(\"-1h\") = %v, want -1h", got)
+	if !strings.Contains(err.Error(), "duration must be non-negative") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
@@ -270,7 +268,32 @@ func countFiles(t *testing.T, dir string) int {
 func resetClearFlags() {
 	clearOlderThan = ""
 	clearWorkspace = ""
-	clearForce = false
+	clearYes = false
+	clearDryRun = false
+}
+
+// ---------------------------------------------------------------------------
+// pipeStdin — redirect stdin to a pipe with the given input
+// ---------------------------------------------------------------------------
+
+// pipeStdin replaces os.Stdin with a pipe that sends the given input.
+// It restores the original stdin when the returned cleanup function is called.
+func pipeStdin(t *testing.T, input string) func() {
+	t.Helper()
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdin = r
+	go func() {
+		defer w.Close()
+		w.WriteString(input)
+	}()
+	return func() {
+		os.Stdin = oldStdin
+		r.Close()
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -419,7 +442,7 @@ func TestRunHistoryClear_ClearAll(t *testing.T) {
 	// Set flags and run
 	clearOlderThan = ""
 	clearWorkspace = workspace
-	clearForce = true
+	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
 		t.Fatalf("runHistoryClear() error = %v", err)
@@ -497,21 +520,22 @@ func TestRunHistoryClear_OlderThan(t *testing.T) {
 	}
 }
 
-func TestRunHistoryClear_RequiresForce(t *testing.T) {
+func TestRunHistoryClear_RequiresYes(t *testing.T) {
 	workspace := setupTestWorkspace(t)
 
 	defer resetClearFlags()
 
-	// No --force and no --older-than should return an error
+	// No --yes and no --older-than should fail because stdin is not a TTY
+	// (StdinIsTerminal() returns false in tests).
 	clearOlderThan = ""
 	clearWorkspace = workspace
-	clearForce = false
+	clearYes = false
 
 	err := runHistoryClear()
 	if err == nil {
-		t.Fatal("expected error when --force is not provided and --older-than is not set, got nil")
+		t.Fatal("expected error when --yes is not provided and --older-than is not set, got nil")
 	}
-	if !strings.Contains(err.Error(), "use --force") {
+	if !strings.Contains(err.Error(), "this command requires confirmation") {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -526,7 +550,7 @@ func TestRunHistoryClear_NoHistory(t *testing.T) {
 	// Directories exist but are empty
 	clearOlderThan = ""
 	clearWorkspace = workspace
-	clearForce = true
+	clearYes = true
 
 	// Should not error, just print "No history to clear."
 	if err := runHistoryClear(); err != nil {
@@ -539,7 +563,7 @@ func TestRunHistoryClear_NonExistentWorkspace(t *testing.T) {
 
 	clearOlderThan = ""
 	clearWorkspace = "/tmp/nonexistent-workspace-" + filepath.Base(os.TempDir())
-	clearForce = true
+	clearYes = true
 
 	// Non-existent workspace is handled gracefully (no .sprout dirs exist)
 	if err := runHistoryClear(); err != nil {
@@ -574,7 +598,7 @@ func TestRunHistoryClear_NonExistentHistoryDirs(t *testing.T) {
 	// Don't create any .sprout dirs — runHistoryClear should handle this gracefully
 	clearOlderThan = ""
 	clearWorkspace = workspace
-	clearForce = true
+	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
 		t.Fatalf("runHistoryClear() should not error on non-existent history dirs: %v", err)
@@ -601,7 +625,7 @@ func TestRunHistoryClear_UsingCurrentDir(t *testing.T) {
 	// Run without --workspace (should use current dir)
 	clearOlderThan = ""
 	clearWorkspace = ""
-	clearForce = true
+	clearYes = true
 
 	if err := runHistoryClear(); err != nil {
 		t.Fatalf("runHistoryClear() error = %v", err)
@@ -727,5 +751,299 @@ func TestHistoryCmd_Subcommands(t *testing.T) {
 	}
 	if !found {
 		t.Error("historyCmd should have a 'clear' subcommand")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dry-run tests
+// ---------------------------------------------------------------------------
+
+func TestClearDryRun_ClearAll(t *testing.T) {
+	workspace := setupTestWorkspace(t)
+
+	oldWd, _ := os.Getwd()
+	defer os.Chdir(oldWd)
+	defer resetClearFlags()
+
+	// Create test data
+	createRevision(t, workspace, "rev-1")
+	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
+	createChange(t, workspace, "rev-1", "file2.go", time.Now(), "old", "new")
+	createRunlog(t, workspace, "run1.jsonl", time.Now())
+	createRunlog(t, workspace, "run2.jsonl", time.Now())
+
+	// Set dry-run flags
+	clearOlderThan = ""
+	clearWorkspace = workspace
+	clearDryRun = true
+
+	out := captureStdout(t, func() {
+		if err := runHistoryClear(); err != nil {
+			t.Fatalf("runHistoryClear() error = %v", err)
+		}
+	})
+
+	// Should say "Would clear" not "Cleared"
+	if !strings.Contains(out, "Would clear") {
+		t.Errorf("expected output to contain 'Would clear', got: %q", out)
+	}
+	if strings.Contains(out, "Cleared") {
+		t.Errorf("output should not contain 'Cleared' in dry-run mode, got: %q", out)
+	}
+
+	// Verify nothing was actually deleted
+	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+
+	if changesAfter != 2 {
+		t.Errorf("expected 2 change dirs after dry-run, got %d", changesAfter)
+	}
+	if revisionsAfter != 1 {
+		t.Errorf("expected 1 revision dir after dry-run, got %d", revisionsAfter)
+	}
+	if runlogsAfter != 2 {
+		t.Errorf("expected 2 runlogs after dry-run, got %d", runlogsAfter)
+	}
+}
+
+func TestClearDryRun_OlderThan(t *testing.T) {
+	workspace := setupTestWorkspace(t)
+
+	oldWd, _ := os.Getwd()
+	defer os.Chdir(oldWd)
+	defer resetClearFlags()
+
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	oldTime := cutoff.Add(-24 * time.Hour)
+	recentTime := cutoff.Add(24 * time.Hour)
+
+	// Create old and recent data
+	createRevision(t, workspace, "old-rev")
+	createChange(t, workspace, "old-rev", "old.go", oldTime, "old", "new")
+	createRunlog(t, workspace, "old-run.jsonl", oldTime)
+
+	createRevision(t, workspace, "recent-rev")
+	createChange(t, workspace, "recent-rev", "recent.go", recentTime, "old", "new")
+	createRunlog(t, workspace, "recent-run.jsonl", recentTime)
+
+	// Set dry-run with --older-than
+	clearOlderThan = "7d"
+	clearWorkspace = workspace
+	clearDryRun = true
+
+	out := captureStdout(t, func() {
+		if err := runHistoryClear(); err != nil {
+			t.Fatalf("runHistoryClear() error = %v", err)
+		}
+	})
+
+	// Should say "Would clear" with older-than message
+	if !strings.Contains(out, "Would clear") {
+		t.Errorf("expected output to contain 'Would clear', got: %q", out)
+	}
+	if !strings.Contains(out, "older than 7d") {
+		t.Errorf("expected output to contain 'older than 7d', got: %q", out)
+	}
+
+	// Verify nothing was actually deleted
+	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+
+	// Everything should still be there
+	if changesAfter != 2 {
+		t.Errorf("expected 2 change dirs after dry-run, got %d", changesAfter)
+	}
+	if revisionsAfter != 2 {
+		t.Errorf("expected 2 revision dirs after dry-run, got %d", revisionsAfter)
+	}
+	if runlogsAfter != 2 {
+		t.Errorf("expected 2 runlogs after dry-run, got %d", runlogsAfter)
+	}
+}
+
+func TestClearDryRun_NoHistory(t *testing.T) {
+	workspace := setupTestWorkspace(t)
+
+	oldWd, _ := os.Getwd()
+	defer os.Chdir(oldWd)
+	defer resetClearFlags()
+
+	clearOlderThan = ""
+	clearWorkspace = workspace
+	clearDryRun = true
+
+	out := captureStdout(t, func() {
+		if err := runHistoryClear(); err != nil {
+			t.Fatalf("runHistoryClear() error = %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Would clear 0 revision(s)") {
+		t.Errorf("expected output to contain 'Would clear 0 revision(s)', got: %q", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ConfirmPrompt tests
+// ---------------------------------------------------------------------------
+
+func TestConfirmPrompt_AcceptsY(t *testing.T) {
+	cleanup := pipeStdin(t, "y\n")
+	defer cleanup()
+
+	if !ConfirmPrompt("Continue? [y/N] ") {
+		t.Error("ConfirmPrompt should return true for 'y'")
+	}
+}
+
+func TestConfirmPrompt_AcceptsYes(t *testing.T) {
+	cleanup := pipeStdin(t, "yes\n")
+	defer cleanup()
+
+	if !ConfirmPrompt("Continue? [y/N] ") {
+		t.Error("ConfirmPrompt should return true for 'yes'")
+	}
+}
+
+func TestConfirmPrompt_RejectsN(t *testing.T) {
+	cleanup := pipeStdin(t, "n\n")
+	defer cleanup()
+
+	if ConfirmPrompt("Continue? [y/N] ") {
+		t.Error("ConfirmPrompt should return false for 'n'")
+	}
+}
+
+func TestConfirmPrompt_RejectsNo(t *testing.T) {
+	cleanup := pipeStdin(t, "no\n")
+	defer cleanup()
+
+	if ConfirmPrompt("Continue? [y/N] ") {
+		t.Error("ConfirmPrompt should return false for 'no'")
+	}
+}
+
+func TestConfirmPrompt_RejectsEmpty(t *testing.T) {
+	cleanup := pipeStdin(t, "\n")
+	defer cleanup()
+
+	if ConfirmPrompt("Continue? [y/N] ") {
+		t.Error("ConfirmPrompt should return false for empty input")
+	}
+}
+
+func TestConfirmPrompt_RejectsRandom(t *testing.T) {
+	cleanup := pipeStdin(t, "abc\n")
+	defer cleanup()
+
+	if ConfirmPrompt("Continue? [y/N] ") {
+		t.Error("ConfirmPrompt should return false for random input")
+	}
+}
+
+func TestConfirmPrompt_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		input  string
+		expect bool
+	}{
+		{"Y\n", true},
+		{"YEs\n", true},
+		{"YES\n", true},
+		{"yES\n", true},
+		{"N\n", false},
+		{"NO\n", false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			cleanup := pipeStdin(t, tc.input)
+			defer cleanup()
+
+			got := ConfirmPrompt("Continue? [y/N] ")
+			if got != tc.expect {
+				t.Errorf("ConfirmPrompt(%q) = %v, want %v", tc.input, got, tc.expect)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Dry-run skips confirmation
+// ---------------------------------------------------------------------------
+
+func TestRunHistoryClear_DryRun_NoConfirm(t *testing.T) {
+	workspace := setupTestWorkspace(t)
+
+	oldWd, _ := os.Getwd()
+	defer os.Chdir(oldWd)
+	defer resetClearFlags()
+
+	// Create test data
+	createRevision(t, workspace, "rev-1")
+	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
+	createRunlog(t, workspace, "run.jsonl", time.Now())
+
+	// Set dry-run WITHOUT --yes. Should NOT prompt for confirmation.
+	clearOlderThan = ""
+	clearWorkspace = workspace
+	clearDryRun = true
+	clearYes = false
+
+	out := captureStdout(t, func() {
+		if err := runHistoryClear(); err != nil {
+			t.Fatalf("runHistoryClear() error = %v", err)
+		}
+	})
+
+	// Should NOT contain a confirmation prompt
+	if strings.Contains(out, "[y/N]") {
+		t.Errorf("dry-run should not show confirmation prompt, got: %q", out)
+	}
+
+	// Should show "Would clear" output
+	if !strings.Contains(out, "Would clear") {
+		t.Errorf("expected output to contain 'Would clear', got: %q", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// --force alias for --yes
+// ---------------------------------------------------------------------------
+
+func TestRunHistoryClear_ForceAlias(t *testing.T) {
+	workspace := setupTestWorkspace(t)
+
+	oldWd, _ := os.Getwd()
+	defer os.Chdir(oldWd)
+	defer resetClearFlags()
+
+	// Create test data
+	createRevision(t, workspace, "rev-1")
+	createChange(t, workspace, "rev-1", "file1.go", time.Now(), "old", "new")
+	createRunlog(t, workspace, "run.jsonl", time.Now())
+
+	// Setting clearYes=true is how the --force flag works (both bound to the same var)
+	clearOlderThan = ""
+	clearWorkspace = workspace
+	clearYes = true
+
+	if err := runHistoryClear(); err != nil {
+		t.Fatalf("runHistoryClear() error = %v", err)
+	}
+
+	// Verify everything was cleared (same behavior as --yes)
+	changesAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "changes"))
+	revisionsAfter := countDirEntries(t, filepath.Join(workspace, ".sprout", "revisions"))
+	runlogsAfter := countFiles(t, filepath.Join(workspace, ".sprout", "runlogs"))
+
+	if changesAfter != 0 {
+		t.Errorf("expected 0 changes after clear, got %d", changesAfter)
+	}
+	if revisionsAfter != 0 {
+		t.Errorf("expected 0 revisions after clear, got %d", revisionsAfter)
+	}
+	if runlogsAfter != 0 {
+		t.Errorf("expected 0 runlogs after clear, got %d", runlogsAfter)
 	}
 }

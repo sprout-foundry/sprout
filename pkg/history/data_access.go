@@ -568,3 +568,18 @@ func ClearAll(workspace string) (changesCleared int, revisionsCleared int, err e
 
 	return changesCleared, revisionsCleared, nil
 }
+
+// IsChangeOlderThan reads a change's metadata.json and returns true if the
+// change's timestamp is strictly before 'since'. Returns false if the file
+// cannot be read or parsed.
+func IsChangeOlderThan(metadataPath string, since time.Time) bool {
+	metadataBytes, err := os.ReadFile(metadataPath)
+	if err != nil {
+		return false
+	}
+	var metadata ChangeMetadata
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return false
+	}
+	return metadata.Timestamp.Before(since)
+}

@@ -57,6 +57,10 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 			}
 			if saveErr := cm.SaveConfig(); saveErr != nil {
 				log.Printf("webui: failed to save provider change config: %v", saveErr)
+				if envelope, ok := configConflictEnvelope(saveErr, cm); ok {
+					_ = safeConn.WriteJSON(envelope)
+					return
+				}
 			}
 			ws.clearCachedAgent(clientID)
 			clientAgent, err = ws.getChatAgent(clientID, activeChatID)
@@ -118,6 +122,9 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 		log.Printf("webui: skipping persistence for test provider")
 	} else if err := persistProviderModelToConfig(clientAgent, providerType); err != nil {
 		log.Printf("webui: failed to persist provider/model to config: %v", err)
+		if envelope, ok := configConflictEnvelope(err, clientAgent.GetConfigManager()); ok {
+			_ = safeConn.WriteJSON(envelope)
+		}
 	}
 
 	// Store provider on the chat session for per-session tracking.
@@ -214,6 +221,9 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *Mod
 		log.Printf("webui: skipping persistence for test provider")
 	} else if err := persistProviderModelToConfig(clientAgent, clientAgent.GetProviderType()); err != nil {
 		log.Printf("webui: failed to persist provider/model to config: %v", err)
+		if envelope, ok := configConflictEnvelope(err, clientAgent.GetConfigManager()); ok {
+			_ = safeConn.WriteJSON(envelope)
+		}
 	}
 
 	// Store model on the chat session for per-session tracking.

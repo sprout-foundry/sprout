@@ -2,7 +2,7 @@ import { Plus, X, Pencil, Trash2, GitBranch, Link2, Unlink2, Pin } from 'lucide-
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import type { ChatSession } from '../services/chatSessions';
-import ContextMenu from './ContextMenu';
+import { ContextMenu } from '@sprout/ui';
 import { showThemedConfirm } from './ThemedDialog';
 import './ChatTabBar.css';
 

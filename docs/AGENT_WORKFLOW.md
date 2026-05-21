@@ -308,6 +308,65 @@ Note: hard termination (for example `SIGKILL`) can prevent restoration.
 }
 ```
 
+## Subagent Resource Model
+
+When the agent dispatches work via `RunParallel`, two shared limits govern how many subagents run and how much they cost.
+
+### Concurrency Limit (`MaxConcurrentSubagents`)
+
+`SubagentOptions.MaxConcurrentSubagents` caps how many subagents execute simultaneously.
+
+- **Default**: `0` (unlimited — all tasks launch immediately)
+- **When > 0**: a buffered channel acts as a counting semaphore. Each goroutine blocks on the channel until a slot is free, respecting context cancellation via `select`. After acquiring a slot, the task runs; when it finishes, the slot is released back to the channel.
+- Tasks that cannot acquire a slot remain in the **queued** state and transition to **active** once they get one.
+
+### Fleet Token Budget (`FleetTokenBudget`)
+
+`SubagentOptions.FleetTokenBudget` defines a shared token ceiling for the entire parallel batch.
+
+- Tokens are debited to a shared `cumulativeTokens` counter **after each LLM API call** inside a subagent (not just after the subagent finishes). This is wired via `SetFleetBudget(cumulativeTokens, fleetBudgetLimit)` on each spawned subagent (SP-037-2c).
+- A budget check occurs **after acquiring the semaphore but before starting work**. If the budget is already exhausted, the task is cancelled immediately with `BudgetExceeded=true` — it never launches.
+- If a subagent is **mid-run** when the budget is exceeded during one of its LLM calls, the subagent truncates gracefully with `Truncated=true`.
+- The **Executive Assistant** persona sets a default `fleet_token_budget` of **200,000** tokens (`pkg/personas/configs/executive_assistant.json`).
+
+Result fields:
+- `SubagentResult.BudgetExceeded` — task was skipped because the budget was already exceeded before it started
+- `SubagentResult.Truncated` — subagent was cut short mid-run due to budget exhaustion
+
+### Telemetry
+
+Every lifecycle transition emits a structured event via both the `EventBus` (for real-time WebUI) and the persistent runlog (JSONL).
+
+| Lifecycle State | EventBus Event (`status`) | Runlog Event |
+|-----------------|--------------------------|--------------|
+| Task queued     | `subagent_activity` / `status: "queued"` | `subagent.queued` |
+| Task started    | `subagent_activity` / `status: "started"` | `subagent.started` |
+| Task completed  | `subagent_activity` / `status: "completed"` | `subagent.completed` |
+| Task cancelled  | `subagent_activity` / `status: "cancelled"` | `subagent.cancelled` |
+
+Each event contains:
+
+**Fields present on ALL events:**
+- `task_id` — unique identifier for the subagent task
+- `persona` — the persona used (e.g. `"coder"`, `"tester"`)
+- `status` — one of `"queued"`, `"started"`, `"completed"`, `"cancelled"`
+
+**Fields present only on `completed`/`cancelled` events:**
+- `tokens_used` — token count for this subagent
+- `elapsed_ms` — wall-clock duration in milliseconds
+
+**Fields present only on `cancelled` events:**
+- `reason` — cancellation reason: `"context_cancelled"` or `"budget_exceeded"`
+
+### WebUI Subagents Tab
+
+The **Subagents** tab in the context panel displays a resource-usage row showing live counts: **active**, **queued**, **completed**, and **cancelled**.
+
+The data flows through these layers:
+1. **Backend** — `publishLifecycleEvent()` emits `EventTypeSubagentActivity` to the `EventBus`, which broadcasts over the WebSocket connection
+2. **Hook** — `useSubagentRuns` (`webui/src/components/contextPanel/useSubagentRuns.ts`) subscribes to `subagent_activity` events via WebSocket, maintaining a local state of current and historical runs
+3. **Component** — `SubagentsTab` (`webui/src/components/contextPanel/SubagentsTab.tsx`) reads from the hook and renders each run as a status row with persona, prompt excerpt, token usage, and elapsed time
+
 ## Current Example File
 
 See: `examples/agent_workflow.json`

@@ -8,7 +8,7 @@
 
 import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
 import type { FC } from 'react';
-import ContextMenu from './ContextMenu';
+import { ContextMenu } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Types

@@ -312,11 +312,24 @@ func containsForceFlag(cmdLower string) bool {
 
 	// Check for -f as a standalone flag (not part of a word)
 	// Only treat -f as force for commands that commonly use it as a force flag
-	for _, segment := range strings.Fields(cmdLower) {
+	for idx, segment := range fields {
 		if segment == "-f" {
 			// Only -f for force-capable commands
 			switch firstCmd {
-			case "git", "rm", "mv", "cp", "docker":
+			case "git":
+				// For git, -f must appear AFTER the subcommand (not at position 1).
+				// Position 1 is between git and the subcommand — that's a malformed
+				// global flag position, not a force flag.
+				// Exception: if -f is the last token (e.g. "git -f" with no subcommand),
+				// treat it as force — bare git -f is unusual but should be flagged.
+				if idx > 1 {
+					return true
+				}
+				if idx == 1 && idx == len(fields)-1 {
+					return true // "git -f" with nothing after — bare force flag
+				}
+				// idx == 1 and there are more tokens → malformed global flag, skip
+			case "rm", "mv", "cp", "docker":
 				return true
 			}
 		}
@@ -324,7 +337,25 @@ func containsForceFlag(cmdLower string) bool {
 		// Only treat combined flags with 'f' as force for force-capable commands
 		if len(segment) > 2 && segment[0] == '-' && segment[1] != '-' && strings.Contains(segment, "f") {
 			switch firstCmd {
-			case "git", "rm", "mv", "cp", "docker":
+			case "git":
+				// Same rule: for git, combined flags with 'f' at position 1 are
+				// skipped if there's a subcommand after them.
+				if idx == 1 && idx < len(fields)-1 {
+					continue
+				}
+				// But not things like "diff" or "conf" that happen to contain f
+				// Only flag combinations that include f
+				isAllFlags := true
+				for _, ch := range segment[1:] {
+					if ch >= '0' && ch <= '9' {
+						isAllFlags = false
+						break
+					}
+				}
+				if isAllFlags {
+					return true
+				}
+			case "rm", "mv", "cp", "docker":
 				// But not things like "diff" or "conf" that happen to contain f
 				// Only flag combinations that include f
 				isAllFlags := true

@@ -304,9 +304,9 @@ Adding a tool today requires editing four locations across two packages (definit
 
 ### Phase 5: Migrate large/complex tools
 
-[] - SP-038-5a: Migrate the subagent family (`run_subagent`, `run_subagent_parallel`, task queue tools); likely a `pkg/agent_tools/subagent/` subdirectory due to size.
-[] - SP-038-5b: Migrate `task_queue_*` and `todo_*` tools.
-[] - SP-038-5c: Migrate remaining tools (image/vision, PDF, browser, web search).
+[x] - SP-038-5a: Migrate the subagent family (`run_subagent`, `run_subagent_parallel`, task queue tools); likely a `pkg/agent_tools/subagent/` subdirectory due to size.
+[x] - SP-038-5b: Migrate `task_queue_*` and `todo_*` tools.
+[x] - SP-038-5c: Migrate remaining tools (image/vision, PDF, browser, web search).
 
 ### Phase 6: Cleanup + tests
 

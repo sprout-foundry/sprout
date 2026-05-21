@@ -143,6 +143,14 @@ type Agent struct {
 	fileMetadata *workspaceMetadataStore
 
 	fileReadsMu sync.Mutex
+
+	// Fleet budget tracking (set by SubagentRunner for parallel subagents).
+	// When non-nil/nonzero, each LLM call debits tokens to the shared fleet
+	// budget tracker. If the budget is exceeded mid-run, fleetBudgetTrunc
+	// is set and the conversation loop truncates gracefully.
+	fleetBudgetTracker *atomic.Int64
+	fleetBudgetLimit   int64
+	fleetBudgetTrunc   atomic.Bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user
@@ -153,4 +161,19 @@ type Agent struct {
 func (a *Agent) InjectWebUIManagers(approvalMgr *security.ApprovalManager, askUserMgr *tools.AskUserManager) {
 	a.security.SetApprovalMgr(approvalMgr)
 	a.security.SetAskUserMgr(askUserMgr)
+}
+
+// SetFleetBudget enables per-LLM-call fleet budget tracking for this agent.
+// When tracker is non-nil and limit > 0, each LLM call will debit its token
+// usage to the shared tracker. If the budget is exceeded, fleetBudgetTrunc
+// is set and the conversation loop will truncate gracefully.
+func (a *Agent) SetFleetBudget(tracker *atomic.Int64, limit int64) {
+	a.fleetBudgetTracker = tracker
+	a.fleetBudgetLimit = limit
+}
+
+// FleetBudgetExceeded reports whether the fleet budget was exceeded during
+// this agent's execution (mid-run truncation).
+func (a *Agent) FleetBudgetExceeded() bool {
+	return a.fleetBudgetTrunc.Load()
 }

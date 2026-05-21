@@ -265,7 +265,7 @@ Spec: `roadmap/SP-037-subagent-resource-budgeting.md`
 
 ### Phase 5: Documentation
 
-[] - SP-037-5a: Add a "Subagent resource model" section to `docs/AGENT_WORKFLOW.md` covering concurrency limit, fleet budget, telemetry, and how to read the WebUI Subagents tab.
+[x] - SP-037-5a: Add a "Subagent resource model" section to `docs/AGENT_WORKFLOW.md` covering concurrency limit, fleet budget, telemetry, and how to read the WebUI Subagents tab.
 [x] - SP-037-5b: Add a package-level doc comment to `pkg/agent/subagent_runner.go` documenting the semaphore + budget invariants.
 
 ---

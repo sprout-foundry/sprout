@@ -353,10 +353,13 @@ func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *
 
 	log.Printf("handleAPIChatSessionsRename: renamed chat session %s to %q for client %s", chatID, name, clientID)
 
+	summary := cs.chatSessionSummary(false)
+	ws.publishSessionChanged(clientID, chatID, "rename", summary)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":      "Chat session renamed",
-		"chat_session": cs.chatSessionSummary(false),
+		"chat_session": summary,
 	})
 }
 
@@ -422,10 +425,13 @@ func (ws *ReactWebServer) handleAPIChatSessionsPin(w http.ResponseWriter, r *htt
 
 	log.Printf("handleAPIChatSessionsPin: pinned chat session %s for client %s", chatID, clientID)
 
+	summary := cs.chatSessionSummary(false)
+	ws.publishSessionChanged(clientID, chatID, "pin", summary)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":      "Chat session pinned",
-		"chat_session": cs.chatSessionSummary(false),
+		"chat_session": summary,
 		"is_pinned":    pinned,
 	})
 }
@@ -492,10 +498,13 @@ func (ws *ReactWebServer) handleAPIChatSessionsUnpin(w http.ResponseWriter, r *h
 
 	log.Printf("handleAPIChatSessionsUnpin: unpinned chat session %s for client %s", chatID, clientID)
 
+	summary := cs.chatSessionSummary(false)
+	ws.publishSessionChanged(clientID, chatID, "unpin", summary)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":      "Chat session unpinned",
-		"chat_session": cs.chatSessionSummary(false),
+		"chat_session": summary,
 		"is_pinned":    pinned,
 	})
 }
@@ -582,6 +591,8 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 	ws.mutex.Unlock()
 
 	log.Printf("handleAPIChatSessionsSwitch: switched to chat session %s for client %s", chatID, clientID)
+
+	ws.publishSessionChanged(clientID, chatID, "switch", cs.chatSessionSummary(false))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

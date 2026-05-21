@@ -48,8 +48,16 @@ type chatSession struct {
 	// into the new session's system prompt. Set by CreateSessionWithHandoff.
 	HandoffContext string `json:"handoff_context,omitempty"`
 
-	Agent            *agent.Agent `json:"-"`
-	mu               sync.Mutex
+	Agent *agent.Agent `json:"-"`
+
+	// mu serializes ALL field access on this chatSession. Promoted from
+	// sync.Mutex to sync.RWMutex in SP-034-3d: pure-read paths
+	// (messageCount, agentSessionID, snapshot-style readers used by the
+	// multi-tab fan-out path) take RLock so concurrent readers don't
+	// queue behind each other. Writes still take the full Lock — every
+	// existing callsite that called `cs.mu.Lock()` keeps working
+	// unchanged because RWMutex.Lock is the exclusive (writer) variant.
+	mu sync.RWMutex
 
 	// runBuffer holds the last N stream events for reattach replay when
 	// a browser tab reconnects mid-query. Constructed lazily so chats
@@ -65,10 +73,10 @@ type chatSession struct {
 }
 
 // messageCount returns the number of messages in the chat's agent state.
-// The caller must hold cs.mu or this method will acquire it.
+// Read-only: takes RLock so concurrent readers don't serialize.
 func (cs *chatSession) messageCount() int {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
 	return cs.messageCountLocked()
 }
 
@@ -85,10 +93,10 @@ func (cs *chatSession) messageCountLocked() int {
 }
 
 // agentSessionID parses the session ID from the serialized agent state.
-// The caller must hold cs.mu or this method will acquire it.
+// Read-only: takes RLock.
 func (cs *chatSession) agentSessionID() string {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
 	return cs.agentSessionIDLocked()
 }
 
@@ -133,9 +141,10 @@ func (cs *chatSession) setWorktreePath(path string) {
 }
 
 // getWorktreePath returns the worktree path for this chat session.
+// Read-only: takes RLock.
 func (cs *chatSession) getWorktreePath() string {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
 	return cs.WorktreePath
 }
 

@@ -523,9 +523,72 @@ func (r *ToolRegistry) GetAllToolConfigs() map[string]ToolConfig {
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
 func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
+	// SP-038-2a: Dual-dispatch — check new registry first, then fall through to legacy
+	if handler, found := tools.GetNewToolRegistry().Lookup(toolName); found {
+		// Build ToolEnv from agent context
+		var env tools.ToolEnv
+		if agent != nil {
+			env.EventBus = agent.GetEventBus()
+			env.WorkspaceRoot = agent.GetWorkspaceRoot()
+			// TODO(SP-038): Agent has no Stdout/Writer accessor; it routes output
+			// via PrintLine/PrintLineAsync → OutputRouter. For now, use os.Stdout
+			// so tools that stream output still produce visible results.
+			env.OutputWriter = os.Stdout
+			env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
+			// TODO(SP-038): Wire ApprovalManager adapter when tools are migrated
+			// ApprovalManager: security.ApprovalManager does not implement
+			// tools.ApprovalManager (different method signatures), pass nil
+		} else {
+			env.OutputWriter = os.Stdout
+			env.MaxTokensFunc = func() int { return 0 }
+		}
+
+		if err := handler.Validate(args); err != nil {
+			return nil, "", fmt.Errorf("validation failed for tool %q: %w", toolName, err)
+		}
+		res, err := handler.Execute(ctx, env, args)
+		if err != nil {
+			return nil, "", err
+		}
+
+		// Convert tools.ImageData [] → []api.ImageData
+		var images []api.ImageData
+		if len(res.Images) > 0 {
+			images = make([]api.ImageData, len(res.Images))
+			for i, img := range res.Images {
+				images[i] = api.ImageData{
+					URL:    img.URI,
+					Type:   img.MIMEType,
+				}
+			}
+		}
+
+		output := res.Output
+		if res.IsError {
+			errMsg := output
+			if errMsg == "" {
+				errMsg = fmt.Sprintf("tool %q returned error state", toolName)
+			}
+			if agent != nil && agent.debug {
+				agent.debugLog("[tool] tool dispatched via new registry (error): %s\n", toolName)
+			}
+			return images, "", fmt.Errorf("%s", errMsg)
+		}
+		// NOTE: New-registry tools handle their own security via Validate()/Execute().
+		// Legacy security classification (ClassifyToolCall) applies only to the legacy dispatch path.
+		if agent != nil && agent.debug {
+			agent.debugLog("[tool] tool dispatched via new registry: %s\n", toolName)
+		}
+		return images, output, nil
+	}
+
 	tool, exists := r.tools[toolName]
 	if !exists {
 		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
+	}
+
+	if agent != nil && agent.debug {
+		agent.debugLog("[tool] tool dispatched via legacy path: %s\n", toolName)
 	}
 
 	// CRITICAL: Depth-based subagent nesting prevention

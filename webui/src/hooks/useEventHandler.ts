@@ -13,6 +13,7 @@ import type { AppStoreSetState } from '../contexts/AppStore';
 import { useNotifications } from '../contexts/NotificationContext';
 import { getWebUIClientId } from '../services/clientSession';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
+import type { ChatSession } from '../services/chatSessions';
 import { toQueryProgress } from '../types/app';
 import {
   shouldSuppressAgentMessageInChat,
@@ -678,6 +679,34 @@ export function useEventHandler({
           logs: appendCappedLog(prev.logs, logEntry),
         }));
         break;
+
+      case 'session_changed': {
+        // SP-034-3f: a chat session's metadata (name, pin state, active)
+        // changed somewhere — could be this tab, could be another tab on
+        // the same chat, could be a multi-tab session switch. Reconcile
+        // by replacing the matching entry in chatSessions with the
+        // broadcast summary. "Canonical wins over optimistic" — the
+        // server-side state is authoritative.
+        const changedChatID = String(eventData?.chat_id || '');
+        const summary = eventData?.summary as Partial<ChatSession> | undefined;
+        if (changedChatID && summary && typeof summary === 'object') {
+          setState((prev) => {
+            const list = Array.isArray(prev.chatSessions) ? prev.chatSessions : [];
+            const next = list.map((cs) => {
+              if (cs && cs.id === changedChatID) {
+                // Shallow merge — preserves any client-side-only fields
+                // we might add later (e.g. UI flags) while pulling the
+                // canonical server fields onto this entry.
+                return { ...cs, ...summary };
+              }
+              return cs;
+            });
+            return { chatSessions: next, logs: appendCappedLog(prev.logs, logEntry) };
+          });
+          debugLog('[session] Reconciled session_changed for chat', changedChatID, '(change:', eventData?.change, ')');
+        }
+        break;
+      }
 
       case 'workspace_changed':
         logEntry.category = 'system';

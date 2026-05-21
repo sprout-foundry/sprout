@@ -116,6 +116,21 @@ func (ws *ReactWebServer) publishClientEventWithChat(clientID, chatID, eventType
 	ws.eventBus.Publish(eventType, data)
 }
 
+// publishSessionChanged broadcasts a session_changed event for the given
+// chat. The event reaches every connection subscribed to chatID (via the
+// chatSubscribers registry — SP-034-3a/3c), so multi-tab views reconcile
+// their local session state with the canonical server payload.
+//
+// SP-034-3e: emitted from rename / pin / unpin / switch handlers. The
+// `change` field tags which mutation occurred so the client can react
+// appropriately (e.g. visually flash a renamed tab title).
+func (ws *ReactWebServer) publishSessionChanged(clientID, chatID, change string, summary map[string]interface{}) {
+	ws.publishClientEventWithChat(clientID, chatID, events.EventTypeSessionChanged, map[string]interface{}{
+		"change":  change,
+		"summary": summary,
+	})
+}
+
 // reattachBufferedEventTypes lists the event types that get persisted in
 // the per-chat ring buffer for replay on reconnect. Picked deliberately:
 // stream chunks and tool activity are the user-visible events a reconnect

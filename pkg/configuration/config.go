@@ -134,6 +134,14 @@ type Config struct {
 
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
+
+	// Conflict-detection metadata (SP-034-4a). Populated by Load() from
+	// the on-disk file's stat. Save() compares the file's current stat
+	// against these and returns ConfigConflictError when they differ —
+	// catches the case where another agent process or another webui tab
+	// modified the file while this Config was in memory. NOT serialized.
+	loadedModTime time.Time
+	loadedSize    int64
 }
 
 // APITimeoutConfig represents timeout settings for API calls
@@ -967,6 +975,19 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	// Snapshot the file's stat for SP-034-4b conflict detection. Stat
+	// AFTER the read so a concurrent writer that landed in between sees
+	// us as having the older view (we'll detect the conflict on next
+	// Save). Using ModTime + Size — both must match on save or we treat
+	// it as a divergence.
+	loadStat, statErr := os.Stat(configPath)
+	var loadedMod time.Time
+	var loadedSize int64
+	if statErr == nil {
+		loadedMod = loadStat.ModTime()
+		loadedSize = loadStat.Size()
+	}
+
 	// Run version-based migrations on the raw JSON before struct unmarshaling.
 	var rawConfig map[string]interface{}
 	if err := json.Unmarshal(data, &rawConfig); err != nil {
@@ -1029,6 +1050,12 @@ func Load() (*Config, error) {
 		log.Printf("[config] warning: credential migration failed: %v", err)
 	}
 
+	// Stamp the on-disk metadata BEFORE the discovery passes below so
+	// that conflict detection only ever compares the canonical file
+	// (skill discovery adds in-memory entries that aren't persisted).
+	config.loadedModTime = loadedMod
+	config.loadedSize = loadedSize
+
 	warnUnknownPersonaTools(config.SubagentTypes)
 
 	// Discover user-level skills from ~/.config/sprout/skills/
@@ -1071,6 +1098,25 @@ func (c *Config) Save() error {
 		return fmt.Errorf("get config path for save: %w", err)
 	}
 
+	// SP-034-4b: detect concurrent writers. Only enforce the check when
+	// this Config was actually loaded from a file (loadedModTime set);
+	// fresh-from-NewConfig() saves bypass the check by design — they're
+	// either the first ever save, or an explicit "reset to defaults"
+	// that should overwrite whatever's there.
+	if !c.loadedModTime.IsZero() {
+		if stat, statErr := os.Stat(configPath); statErr == nil {
+			if !stat.ModTime().Equal(c.loadedModTime) || stat.Size() != c.loadedSize {
+				return &ConfigConflictError{
+					Path:           configPath,
+					LoadedModTime:  c.loadedModTime,
+					LoadedSize:     c.loadedSize,
+					CurrentModTime: stat.ModTime(),
+					CurrentSize:    stat.Size(),
+				}
+			}
+		}
+	}
+
 	c.Version = ConfigVersion
 	persisted := *c
 	persisted.Version = ConfigVersion
@@ -1083,6 +1129,15 @@ func (c *Config) Save() error {
 	// Write with explicit 0600 permissions (owner read/write only)
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	// Refresh the loaded-stat snapshot so the NEXT Save's conflict
+	// check compares against the file we just wrote, not the stale
+	// pre-write state. Failure to re-stat is non-fatal — it just means
+	// the next save's conflict check might false-positive once.
+	if stat, statErr := os.Stat(configPath); statErr == nil {
+		c.loadedModTime = stat.ModTime()
+		c.loadedSize = stat.Size()
 	}
 
 	return nil

@@ -2,12 +2,16 @@ package agent
 
 import (
 	"context"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // ========================================================================
@@ -1223,4 +1227,216 @@ func TestInjectProactiveContext_WithResults(t *testing.T) {
 	if !strings.Contains(supplement, "Previous Work (Contextual Memory)") {
 		t.Error("supplement should contain the Previous Work header")
 	}
+}
+
+// ========================================================================
+// SweepExpiredEntries tests (SP-033-3c)
+// ========================================================================
+
+func TestSweepExpiredEntries_NoOp_WhenRetentionZero(t *testing.T) {
+	// retentionDays=0 means never expire — should be a no-op
+	swept, err := SweepExpiredEntries(0, "/tmp/nonexistent")
+	if err != nil {
+		t.Errorf("expected no error for retentionDays=0, got: %v", err)
+	}
+	if swept != 0 {
+		t.Errorf("expected 0 swept for retentionDays=0, got %d", swept)
+	}
+}
+
+func TestSweepExpiredEntries_NoOp_WhenRetentionNegative(t *testing.T) {
+	// retentionDays < 0 means never expire — should be a no-op
+	swept, err := SweepExpiredEntries(-1, "/tmp/nonexistent")
+	if err != nil {
+		t.Errorf("expected no error for retentionDays=-1, got: %v", err)
+	}
+	if swept != 0 {
+		t.Errorf("expected 0 swept for retentionDays=-1, got %d", swept)
+	}
+}
+
+func TestSweepExpiredEntries_RemovesOldEntries(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+
+	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	records := []embedding.VectorRecord{
+		// 3 days old — within 7-day cutoff, should be kept
+		{ID: "recent:1", Signature: "Recent entry 1", IndexedAt: now.Add(-3 * 24 * time.Hour)},
+		// 5 days old — within 7-day cutoff, should be kept
+		{ID: "recent:2", Signature: "Recent entry 2", IndexedAt: now.Add(-5 * 24 * time.Hour)},
+		// 10 days old — exceeds 7-day cutoff, should be removed
+		{ID: "old:1", Signature: "Old entry 1", IndexedAt: now.Add(-10 * 24 * time.Hour)},
+		// 30 days old — exceeds 7-day cutoff, should be removed
+		{ID: "old:2", Signature: "Old entry 2", IndexedAt: now.Add(-30 * 24 * time.Hour)},
+	}
+	require.NoError(t, store.Store(records))
+	store.Close()
+
+	swept, err := SweepExpiredEntries(7, indexPath)
+	require.NoError(t, err)
+	assert.Equal(t, 2, swept, "expected 2 old entries to be swept")
+
+	// Verify only recent entries remain
+	store2, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+	defer store2.Close()
+	remaining, err := store2.LoadAll()
+	require.NoError(t, err)
+	assert.Len(t, remaining, 2)
+	ids := make(map[string]bool)
+	for _, r := range remaining {
+		ids[r.ID] = true
+	}
+	assert.True(t, ids["recent:1"], "recent:1 should remain")
+	assert.True(t, ids["recent:2"], "recent:2 should remain")
+	assert.False(t, ids["old:1"], "old:1 should have been swept")
+	assert.False(t, ids["old:2"], "old:2 should have been swept")
+}
+
+func TestSweepExpiredEntries_KeepsRecentEntries(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+
+	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	records := []embedding.VectorRecord{
+		{ID: "recent:1", IndexedAt: now.Add(-1 * time.Hour)},
+		{ID: "recent:2", IndexedAt: now.Add(-3 * 24 * time.Hour)},
+	}
+	require.NoError(t, store.Store(records))
+	store.Close()
+
+	swept, err := SweepExpiredEntries(30, indexPath)
+	require.NoError(t, err)
+	assert.Equal(t, 0, swept, "expected no entries to be swept")
+
+	// Verify all entries remain
+	store2, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+	defer store2.Close()
+	remaining, err := store2.LoadAll()
+	require.NoError(t, err)
+	assert.Len(t, remaining, 2)
+}
+
+func TestSweepExpiredEntries_RemovesAll(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+
+	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	records := []embedding.VectorRecord{
+		{ID: "old:1", IndexedAt: now.Add(-30 * 24 * time.Hour)},
+		{ID: "old:2", IndexedAt: now.Add(-60 * 24 * time.Hour)},
+		{ID: "old:3", IndexedAt: now.Add(-90 * 24 * time.Hour)},
+	}
+	require.NoError(t, store.Store(records))
+	store.Close()
+
+	swept, err := SweepExpiredEntries(7, indexPath)
+	require.NoError(t, err)
+	assert.Equal(t, 3, swept, "expected all 3 old entries to be swept")
+
+	// Verify store is now empty
+	store2, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+	defer store2.Close()
+	remaining, err := store2.LoadAll()
+	require.NoError(t, err)
+	assert.Len(t, remaining, 0)
+}
+
+func TestSweepExpiredEntries_EmptyStore(t *testing.T) {
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+
+	// Don't create any records — the file won't exist yet
+	swept, err := SweepExpiredEntries(7, indexPath)
+	require.NoError(t, err)
+	assert.Equal(t, 0, swept, "expected 0 swept from non-existent/empty store")
+}
+
+func TestSweepExpiredEntries_NonExistentDir(t *testing.T) {
+	// Point to a directory that doesn't exist
+	indexPath := "/tmp/sprout-test-nonexistent-dir-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "/conversation_turns.jsonl"
+
+	// The function creates the directory via NewJSONLFileStore, so this
+	// should not error — it will create the directory and find no records.
+	swept, err := SweepExpiredEntries(7, indexPath)
+	require.NoError(t, err)
+	assert.Equal(t, 0, swept)
+}
+
+func TestSweepExpiredEntries_Boundary(t *testing.T) {
+	// Entries exactly on the cutoff boundary should be KEPT (not Before)
+	dir := t.TempDir()
+	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+
+	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	require.NoError(t, err)
+
+	// Use a fixed cutoff by constructing a known time. SweepExpiredEntries
+	// uses time.Now().UTC(), so we compute the cutoff and place entries
+	// precisely at/around it.
+	cutoff := time.Now().UTC().AddDate(0, 0, -7)
+
+	records := []embedding.VectorRecord{
+		// Exactly at cutoff — NOT before, so should be kept
+		{ID: "exact:cutoff", IndexedAt: cutoff},
+		// One second after cutoff — should be kept
+		{ID: "after:cutoff", IndexedAt: cutoff.Add(1 * time.Second)},
+		// One second before cutoff — should be swept
+		{ID: "before:cutoff", IndexedAt: cutoff.Add(-1 * time.Second)},
+	}
+	require.NoError(t, store.Store(records))
+	store.Close()
+
+	swept, err := SweepExpiredEntries(7, indexPath)
+	require.NoError(t, err)
+	// Note: due to time resolution in SweepExpiredEntries (time.Now().UTC()),
+	// the exact cutoff may shift by a few seconds. We verify at least the
+	// "before:cutoff" entry is removed.
+	assert.GreaterOrEqual(t, swept, 1, "at least the before-cutoff entry should be swept")
+}
+
+// ========================================================================
+// ProactiveContextConfig resolve() RetentionDays tests (SP-033-3c)
+// ========================================================================
+
+func TestProactiveContextConfig_Resolve_PropagatesRetentionDays(t *testing.T) {
+	cfg := ProactiveContextConfig{
+		RetentionDays: 30,
+	}
+	resolved := cfg.resolve()
+
+	assert.Equal(t, 30, resolved.RetentionDays, "RetentionDays should be propagated through resolve()")
+}
+
+func TestProactiveContextConfig_Resolve_RetentionDays_Zero_DefaultsToZero(t *testing.T) {
+	cfg := ProactiveContextConfig{}
+	resolved := cfg.resolve()
+
+	assert.Equal(t, 0, resolved.RetentionDays, "RetentionDays defaults to 0 (never expire)")
+}
+
+func TestProactiveContextConfig_Resolve_RetentionDays_PartialConfig(t *testing.T) {
+	// RetentionDays should be preserved even when other fields get defaults
+	cfg := ProactiveContextConfig{
+		RetentionDays: 14,
+		// MinRelevanceScore, MaxContextualResults, MaxContextChars all zero
+	}
+	resolved := cfg.resolve()
+
+	assert.Equal(t, 14, resolved.RetentionDays, "RetentionDays should be preserved")
+	assert.Equal(t, 0.50, resolved.MinRelevanceScore, "MinRelevanceScore should get default")
+	assert.Equal(t, 5, resolved.MaxContextualResults, "MaxContextualResults should get default")
+	assert.Equal(t, 4000, resolved.MaxContextChars, "MaxContextChars should get default")
 }

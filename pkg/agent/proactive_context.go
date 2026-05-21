@@ -29,6 +29,10 @@ type ProactiveContextConfig struct {
 	// WorkspaceScoped, if true, filters to turns from the same workingDir.
 	// Default: false.
 	WorkspaceScoped bool
+
+	// RetentionDays controls how many days to keep persistent context entries.
+	// Default: 0 (forever, never expire).
+	RetentionDays int
 }
 
 // DefaultProactiveContextConfig returns a ProactiveContextConfig with the
@@ -46,11 +50,17 @@ func DefaultProactiveContextConfig() ProactiveContextConfig {
 // Only zero/negative values are replaced — any positive override is preserved.
 func (c ProactiveContextConfig) resolve() ProactiveContextConfig {
 	d := DefaultProactiveContextConfig()
+	// Normalize negative RetentionDays to 0 (never expire) for API consistency
+	retentionDays := c.RetentionDays
+	if retentionDays < 0 {
+		retentionDays = 0
+	}
 	resolved := ProactiveContextConfig{
 		MinRelevanceScore:    c.MinRelevanceScore,
 		MaxContextualResults: c.MaxContextualResults,
 		MaxContextChars:      c.MaxContextChars,
 		WorkspaceScoped:      c.WorkspaceScoped,
+		RetentionDays:        retentionDays,
 	}
 	if resolved.MinRelevanceScore <= 0 {
 		resolved.MinRelevanceScore = d.MinRelevanceScore
@@ -292,6 +302,52 @@ func FormatProactiveContext(results []ProactiveContextResult, config ProactiveCo
 	}
 
 	return b.String()
+}
+
+// SweepExpiredEntries removes persistent context entries older than retentionDays
+// from the conversation store at storePath. If retentionDays <= 0, this is a no-op.
+// Returns the number of entries removed.
+func SweepExpiredEntries(retentionDays int, storePath string) (int, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+
+	store, err := embedding.NewJSONLFileStore(storePath, "")
+	if err != nil {
+		return 0, fmt.Errorf("sweep: open store %s: %w", storePath, err)
+	}
+	defer store.Close()
+
+	// NOTE: LoadAll() and ReplaceAll() are separate operations. Any concurrent
+	// writes between them would be lost. This is safe at startup (no concurrent
+	// access) but should not be called during active embedding operations.
+	allRecords, err := store.LoadAll()
+	if err != nil {
+		return 0, fmt.Errorf("sweep: load records: %w", err)
+	}
+
+	if len(allRecords) == 0 {
+		return 0, nil
+	}
+
+	kept := make([]embedding.VectorRecord, 0, len(allRecords))
+	for i := range allRecords {
+		if !allRecords[i].IndexedAt.Before(cutoff) {
+			kept = append(kept, allRecords[i])
+		}
+	}
+
+	swept := len(allRecords) - len(kept)
+	if swept > 0 {
+		err = store.ReplaceAll(kept)
+		if err != nil {
+			return 0, fmt.Errorf("sweep: write back records: %w", err)
+		}
+	}
+
+	return swept, nil
 }
 
 // InjectProactiveContext retrieves semantically relevant past turns and

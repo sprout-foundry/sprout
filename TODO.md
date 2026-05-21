@@ -195,18 +195,18 @@ SP-028 unblocked CI by silencing four real goroutine leaks via `goleak.IgnoreTop
 
 ### Phase 2: Track A — fileWatcher
 
-[] - SP-036-2a: Add `done chan struct{}` + `sync.Once`-guarded `Stop()` to the `fileWatcher` struct in `pkg/webui/`. Locate via `grep -n "type fileWatcher" pkg/webui/`.
-[] - SP-036-2b: Convert the `start()` event loop to `select` on `done` + fsnotify events; `.Close()` the underlying `*fsnotify.Watcher` in the done arm.
-[] - SP-036-2c: Audit every `fileWatcher{…}` instantiation site for `Stop()` call in its shutdown path. `grep -rn "fileWatcher{" pkg/webui/`.
-[] - SP-036-2d: Add `t.Cleanup(func() { fw.Stop() })` to any test that directly instantiates a `fileWatcher`.
-[] - SP-036-2e: Remove `goleak.IgnoreTopFunction("…fileWatcher.start.func1")` from `pkg/webui/main_test.go:19`. Verify with `go test -race -count=5 ./pkg/webui/`.
+[x] - SP-036-2a: Add `done chan struct{}` + `sync.Once`-guarded `Stop()` to the `fileWatcher` struct in `pkg/webui/`. Locate via `grep -n "type fileWatcher" pkg/webui/`.
+[x] - SP-036-2b: Convert the `start()` event loop to `select` on `done` + fsnotify events; `.Close()` the underlying `*fsnotify.Watcher` in the done arm.
+[x] - SP-036-2c: Audit every `fileWatcher{…}` instantiation site for `Stop()` call in its shutdown path. `grep -rn "fileWatcher{" pkg/webui/`.
+[x] - SP-036-2d: Add `t.Cleanup(func() { fw.Stop() })` to any test that directly instantiates a `fileWatcher`.
+[x] - SP-036-2e: Remove `goleak.IgnoreTopFunction("…fileWatcher.start.func1")` from `pkg/webui/main_test.go:19`. Verify with `go test -race -count=5 ./pkg/webui/`.
 
 ### Phase 3: Track B — LSP proxy cleanup loop
 
-[] - SP-036-3a: Plumb `context.Context` into `pkg/lsp/proxy.NewManager` (use existing field if present). Locate `cleanupLoop` via `grep -n "cleanupLoop" pkg/lsp/proxy/`.
-[] - SP-036-3b: Add `select` on `ctx.Done()` in `cleanupLoop` alongside the existing `time.Ticker` case.
-[] - SP-036-3c: Add idempotent `Shutdown(ctx context.Context) error` method; wire into `pkg/webui/server_lifecycle.go` alongside the existing `terminalManager` shutdown.
-[] - SP-036-3d: Remove `goleak.IgnoreTopFunction("…/pkg/lsp/proxy.(*Manager).cleanupLoop")` from `pkg/webui/main_test.go:20`.
+[x] - SP-036-3a: Plumb `context.Context` into `pkg/lsp/proxy.NewManager` (use existing field if present). Locate `cleanupLoop` via `grep -n "cleanupLoop" pkg/lsp/proxy/`.
+[x] - SP-036-3b: Add `select` on `ctx.Done()` in `cleanupLoop` alongside the existing `time.Ticker` case.
+[x] - SP-036-3c: Add idempotent `Shutdown(ctx context.Context) error` method; wire into `pkg/webui/server_lifecycle.go` alongside the existing `terminalManager` shutdown.
+[x] - SP-036-3d: Remove `goleak.IgnoreTopFunction("…/pkg/lsp/proxy.(*Manager).cleanupLoop")` from `pkg/webui/main_test.go:20`.
 
 ### Phase 4: Track C — ExecuteCommandAndWait
 

@@ -14,6 +14,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -116,6 +117,11 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 
 		resp, err := sp.doChatOnce(ctx, req)
 		if err == nil {
+			// Fleet budget tracking: debit tokens after each LLM call.
+			// If budget is exceeded, propagate the error so the conversation loop stops.
+			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+				return nil, budgetErr
+			}
 			return resp, nil
 		}
 		lastErr = err
@@ -239,6 +245,41 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 	return out
 }
 
+// trackFleetBudgetForResponse debits the tokens from this LLM response to
+// the shared fleet budget tracker, if one is configured on the agent.  If
+// the budget is exceeded, it sets the truncation flag so the conversation
+// loop can stop gracefully.
+//
+// Returns FleetBudgetExceededError if the budget was just exceeded by this
+// call (i.e. the cumulative total went from under-limit to at/over-limit).
+func (sp *sproutProvider) trackFleetBudgetForResponse(resp *api.ChatResponse) error {
+	if sp.agent == nil {
+		return nil
+	}
+	tracker := sp.agent.fleetBudgetTracker
+	limit := sp.agent.fleetBudgetLimit
+	if tracker == nil || limit <= 0 {
+		return nil
+	}
+	tokens := int64(resp.Usage.TotalTokens)
+	if tokens <= 0 {
+		return nil
+	}
+	newTotal := tracker.Add(tokens)
+	if newTotal >= limit && !sp.agent.fleetBudgetTrunc.Load() {
+		sp.agent.fleetBudgetTrunc.Store(true)
+		return FleetBudgetExceededError
+	}
+	return nil
+}
+
+// FleetBudgetExceededError is returned by the seed provider when the shared
+// fleet token budget has been exceeded mid-conversation.  It is caught by
+// processQueryWithSeed to truncate gracefully rather than surfacing as a
+// generic API error.
+var FleetBudgetExceededError = fmt.Errorf("fleet token budget exceeded")
+
+// Chat implements core.Provider
 func (sp *sproutProvider) Chat(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	return sp.doChatWithRetry(ctx, req)
 }
@@ -286,6 +327,8 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 
 		resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
 		if err == nil {
+			// Fleet budget tracking: debit tokens after each LLM call
+			sp.trackFleetBudgetForResponse(resp)
 			return resp, nil
 		}
 		lastErr = err
@@ -631,6 +674,29 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 	result, err := seedAgent.Run(ctx, processedQuery)
 	if err != nil {
+		// Check if the fleet budget was exceeded mid-run
+		if errors.Is(err, FleetBudgetExceededError) {
+			// Extract the last assistant response as the truncated result
+			a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+
+			var truncatedResult string
+			messages := a.state.GetMessages()
+			for i := len(messages) - 1; i >= 0; i-- {
+				if messages[i].Role == "assistant" && messages[i].Content != "" {
+					truncatedResult = messages[i].Content
+					break
+				}
+			}
+			if truncatedResult == "" {
+				truncatedResult = result
+			}
+
+			a.state.SetLastRunTerminationReason(RunTerminationCompleted)
+			a.finalizeConversationPostHooks(truncatedResult, processedQuery, preSeedMsgCount)
+
+			return truncatedResult, nil
+		}
+
 		// Classify the error to provide a user-friendly message.
 		// For permanent errors (auth, client error, context overflow), return
 		// the error directly so both CLI and webui display it properly.

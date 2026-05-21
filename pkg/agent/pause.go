@@ -74,3 +74,23 @@ func (a *Agent) ClearInterrupt() {
 	a.interruptCtx = interruptCtx
 	a.interruptCancel = interruptCancel
 }
+
+// resetInterruptForNewQuery ensures the interruptCtx is fresh at the start
+// of a new ProcessQuery. If the previous query was stopped via TriggerInterrupt,
+// the cancelled ctx would otherwise persist and instantly abort the next
+// HTTP request (now that SP-034-1e wires interruptCtx into the request body).
+// Idempotent — if the ctx is already non-cancelled, this is essentially a no-op.
+func (a *Agent) resetInterruptForNewQuery() {
+	if a.interruptCtx != nil {
+		select {
+		case <-a.interruptCtx.Done():
+			// Previous query was cancelled — make a fresh ctx.
+		default:
+			// Still live; leave it alone.
+			return
+		}
+	}
+	interruptCtx, interruptCancel := context.WithCancel(context.Background())
+	a.interruptCtx = interruptCtx
+	a.interruptCancel = interruptCancel
+}

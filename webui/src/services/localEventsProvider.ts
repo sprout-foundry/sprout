@@ -12,7 +12,7 @@ export class LocalEventsProvider implements EventsProvider {
   }
 
   connect(): void {
-    this.ws().connect();
+    this.ws().connect().catch(() => {});
   }
 
   disconnect(): void {

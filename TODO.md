@@ -216,8 +216,8 @@ SP-028 unblocked CI by silencing four real goroutine leaks via `goleak.IgnoreTop
 
 ### Phase 5: Track D — fsnotify shared worker
 
-[] - SP-036-5a: Trace `fsnotify.(*shared).sendEvent` in fsnotify v1.9 source; confirm whether it is per-`Watcher` or per-process.
-[] - SP-036-5b: If per-`Watcher`, remove the AnyFunction allowlist (Track A's fileWatcher.Close fix already handles it). If per-process, replace with a `// REASON: fsnotify v1.9 maintains a process-lifetime worker — see <upstream link>` comment.
+[x] - SP-036-5a: Trace `fsnotify.(*shared).sendEvent` in fsnotify v1.9 source; confirm whether it is per-`Watcher` or per-process. — CONFIRMED per-Watcher: `shared` is embedded in each `*watcher` (backend_inotify.go:22), created via `newShared(ev, errs)` per watcher. `Close()` calls `shared.close()` which closes `done` chan, causing `sendEvent` to return false.
+[x] - SP-036-5b: If per-`Watcher`, remove the AnyFunction allowlist (Track A's fileWatcher.Close fix already handles it). If per-process, replace with a `// REASON: fsnotify v1.9 maintains a process-lifetime worker — see <upstream link>` comment. — N/A: Per-Watcher confirmed. The fileWatcher.Stop() → fsWatcher.Close() properly stops sendEvent. No allowlist entry exists in current codebase to remove.
 
 ### Phase 6: Regression pinning + documentation
 

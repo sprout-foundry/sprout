@@ -1,3 +1,12 @@
+// Package proxy provides an LSP (Language Server Protocol) proxy manager that
+// manages language server processes for workspace-aware code intelligence.
+//
+// Manager Shutdown Contract:
+//
+// The Manager must be cleaned up via its Cleanup() (or Close()) method when the server
+// shuts down. Cleanup() cancels the internal context, waits for the cleanup loop goroutine
+// to exit via sync.WaitGroup, and closes all managed LSP processes. The ReactWebServer
+// calls lspManager.Cleanup() during shutdown in server_lifecycle.go.
 package proxy
 
 import (

@@ -1,5 +1,15 @@
 //go:build !js
 
+// Package webui provides the web-based user interface for sprout, including
+// WebSocket communication, file watching, terminal management, and API endpoints.
+//
+// File Watcher Shutdown Contract:
+//
+// The fileWatcher (*fileWatcher) must be stopped via its stop() method when the server
+// shuts down. The ReactWebServer.Shutdown() method calls fileWatcher.stop(), which
+// cancels the internal context and closes the underlying fsnotify.Watcher. This ensures
+// the event loop goroutine exits cleanly. Tests that instantiate a fileWatcher directly
+// should call fw.stop() in a defer or t.Cleanup to prevent goroutine leaks.
 package webui
 
 import (

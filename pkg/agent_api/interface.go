@@ -10,10 +10,14 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
-// ClientInterface defines the common interface for all API clients
+// ClientInterface defines the common interface for all API clients.
+//
+// The ctx on Send* methods is forwarded to the underlying HTTP request
+// (via http.NewRequestWithContext) so callers can abort in-flight LLM
+// calls when the user clicks Stop. See SP-034 for the design.
 type ClientInterface interface {
-	SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
-	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error)
+	SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
+	SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error)
 	CheckConnection() error
 	SetDebug(debug bool)
 	SetModel(model string) error
@@ -23,7 +27,7 @@ type ClientInterface interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
 	GetVisionModel() string
-	SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
+	SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 	// TPS (Tokens Per Second) tracking methods
 	GetLastTPS() float64
 	GetAverageTPS() float64

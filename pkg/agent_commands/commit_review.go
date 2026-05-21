@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -85,7 +86,8 @@ IMPORTANT RULES:
 		},
 	}
 
-	resp, err := client.SendChatRequest(messages, nil, "", false)
+	// TODO(SP-034-1c): thread caller ctx through commit review pipeline.
+	resp, err := client.SendChatRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		// Fall back to heuristic review ifLLM fails
 		return doHeuristicReview(diff, stagedFiles), nil

@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -61,7 +62,8 @@ func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (
 		{Role: "user", Content: fullPrompt},
 	}
 
-	chatResponse, err := e.agentClient.SendChatRequest(messages, nil, "", false)
+	// TODO(SP-034-1c): thread caller ctx through SpecExtractor so Stop aborts.
+	chatResponse, err := e.agentClient.SendChatRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()

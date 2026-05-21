@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -285,8 +286,9 @@ func processOCRImages(images [][]byte, client api.ClientInterface, sectionLabel 
 			},
 		}
 
-		// Send request
-		response, err := client.SendVisionRequest(messages, nil, "", false)
+		// Send request.
+		// TODO(SP-034-1c): thread ctx through the PDF OCR pipeline so Stop aborts.
+		response, err := client.SendVisionRequest(context.Background(), messages, nil, "", false)
 		if err != nil {
 			failures++
 			if failures >= 2 {
@@ -440,8 +442,9 @@ func processPDFWithVisionModel(pdfPath string, client api.ClientInterface) (stri
 		},
 	}
 
-	// Send request to Ollama
-	response, err := client.SendVisionRequest(messages, nil, "", false)
+	// Send request to Ollama.
+	// TODO(SP-034-1c): see sibling note in the page-by-page OCR loop above.
+	response, err := client.SendVisionRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		return "", fmt.Errorf("OCR request: %w", err)
 	}

@@ -1,6 +1,7 @@
 package codereview
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -32,8 +33,10 @@ func (s *CodeReviewService) performAgentBasedCodeReview(ctx *ReviewContext, stru
 		},
 	}
 
-	// Make agent API call
-	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "", false)
+	// Make agent API call.
+	// TODO(SP-034-1c): thread the parent context.Context through ReviewContext
+	// so the user's Stop button aborts in-flight code-review LLM calls.
+	response, err := ctx.AgentClient.SendChatRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		return nil, fmt.Errorf("agent API call failed: %w", err)
 	}
@@ -60,7 +63,8 @@ func (s *CodeReviewService) performDeepAgentBasedCodeReview(ctx *ReviewContext) 
 		},
 	}
 
-	response, err := ctx.AgentClient.SendChatRequest(messages, nil, "", false)
+	// TODO(SP-034-1c): see sibling note above.
+	response, err := ctx.AgentClient.SendChatRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		return nil, fmt.Errorf("agent API call failed: %w", err)
 	}

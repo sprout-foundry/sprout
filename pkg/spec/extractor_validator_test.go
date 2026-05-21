@@ -25,7 +25,7 @@ type mockAgentClient struct {
 	provider     string
 }
 
-func (m *mockAgentClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (m *mockAgentClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	if m.sendChatFunc != nil {
 		return m.sendChatFunc(messages, tools, reasoning, disableThinking)
 	}
@@ -36,8 +36,8 @@ func (m *mockAgentClient) SendChatRequest(messages []api.Message, tools []api.To
 	}, nil
 }
 
-func (m *mockAgentClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
-	return m.SendChatRequest(messages, tools, reasoning, disableThinking)
+func (m *mockAgentClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+	return m.SendChatRequest(context.Background(), messages, tools, reasoning, disableThinking)
 }
 func (m *mockAgentClient) CheckConnection() error                                      { return nil }
 func (m *mockAgentClient) SetDebug(debug bool)                                         {}
@@ -48,7 +48,7 @@ func (m *mockAgentClient) GetModelContextLimit() (int, error)                   
 func (m *mockAgentClient) ListModels(ctx context.Context) ([]api.ModelInfo, error)      { return nil, nil }
 func (m *mockAgentClient) SupportsVision() bool                                         { return false }
 func (m *mockAgentClient) GetVisionModel() string                                       { return "" }
-func (m *mockAgentClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (m *mockAgentClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
 func (m *mockAgentClient) GetLastTPS() float64             { return 0 }

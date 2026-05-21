@@ -3,7 +3,10 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +16,7 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // stripANSI removes ANSI escape codes from a string for easy comparison.
@@ -1007,6 +1011,165 @@ func TestSubagentRunner_OrderPreservedUnderBatching(t *testing.T) {
 		expectedID := strconv.Itoa(i)
 		if r.ID != expectedID {
 			t.Fatalf("results[%d].ID = %q, want %q", i, r.ID, expectedID)
+		}
+	}
+}
+
+// =============================================================================
+// Tests for runlog integration (publishLifecycleEvent writes to RunLogger)
+// =============================================================================
+
+func TestSubagentRunner_publishLifecycleEvent_WritesToRunlog(t *testing.T) {
+	// Ensure the RunLogger singleton is initialized (lazy-init via sync.Once).
+	logger := utils.GetRunLogger()
+	if logger == nil {
+		t.Fatal("GetRunLogger returned nil")
+	}
+
+	// The RunLogger creates a file in .sprout/runlogs/run-<timestamp>.jsonl.
+	// Since the `path` field is unexported, discover it by scanning the directory
+	// for the most recently modified file.
+	runlogDir := ".sprout/runlogs"
+	entries, err := os.ReadDir(runlogDir)
+	if err != nil {
+		t.Fatalf("failed to read runlog dir %s: %v", runlogDir, err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("no runlog files found in directory")
+	}
+
+	// Find the most recently modified .jsonl file
+	var runlogPath string
+	var latestMod time.Time
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestMod) {
+			latestMod = info.ModTime()
+			runlogPath = filepath.Join(runlogDir, e.Name())
+		}
+	}
+	if runlogPath == "" {
+		t.Fatal("no .jsonl runlog files found")
+	}
+
+	// Set up a SubagentRunner with a real EventBus so publishLifecycleEvent
+	// is invoked during RunParallel. We use nil ConfigManager so subagents
+	// fail fast (no LLM needed) but lifecycle events are still emitted.
+	agent := newIsolatedTestAgent(t)
+	defer agent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: nil, // causes createSubagent to fail quickly
+		WorkspaceRoot: agent.workspaceRoot,
+	}
+
+	runner := NewSubagentRunner(agent, shared)
+
+	// Pre-event baseline: read the runlog BEFORE emitting lifecycle events
+	// to establish how many subagent_activity lines already exist. This
+	// guards against pre-existing events from other tests or prior runs.
+	preContent, err := os.ReadFile(runlogPath)
+	if err != nil {
+		t.Fatalf("failed to read runlog file before events: %v", err)
+	}
+	baselineCount := 0
+	for _, line := range strings.Split(string(preContent), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var entry map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+		if entryType, ok := entry["type"].(string); ok && entryType == "subagent_activity" {
+			baselineCount++
+		}
+	}
+
+	// Run a parallel task — this triggers publishLifecycleEvent("queued", ...)
+	// and publishLifecycleEvent("cancelled"/"completed", ...) in each goroutine.
+	tasks := []SubagentTask{
+		{ID: "runlog-test-task-1", Prompt: "test prompt", Persona: "coder"},
+		{ID: "runlog-test-task-2", Prompt: "another test", Persona: "tester"},
+	}
+	results := runner.RunParallel(context.Background(), tasks, SubagentOptions{})
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	// Small delay to ensure the file write has flushed to disk.
+	time.Sleep(100 * time.Millisecond)
+
+	// Read the runlog content AFTER the lifecycle events.
+	postContent, err := os.ReadFile(runlogPath)
+	if err != nil {
+		t.Fatalf("failed to read runlog file after events: %v", err)
+	}
+
+	// The file should contain subagent_activity JSONL lines now.
+	// Parse each line and check for the expected fields.
+	foundEvents := map[string]map[string]interface{}{}
+	postCount := 0
+	for _, line := range strings.Split(string(postContent), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var entry map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+		if entryType, ok := entry["type"].(string); ok && entryType == "subagent_activity" {
+			postCount++
+			if taskID, ok := entry["task_id"].(string); ok {
+				foundEvents[taskID] = entry
+			}
+		}
+	}
+
+	// Assert that we have more events than the baseline — proves this test
+	// actually wrote new events rather than relying on pre-existing data.
+	if postCount <= baselineCount {
+		t.Fatalf("expected >%d subagent_activity events, got %d (baseline was %d)", baselineCount, postCount, baselineCount)
+	}
+	newEventCount := postCount - baselineCount
+	t.Logf("found %d new subagent_activity events (post=%d, baseline=%d)", newEventCount, postCount, baselineCount)
+
+	// Verify that both task IDs appear as NEW subagent_activity events
+	// (i.e., not just pre-existing ones from baseline).
+	if _, ok := foundEvents["runlog-test-task-1"]; !ok {
+		t.Errorf("expected new subagent_activity event for 'runlog-test-task-1' in runlog")
+	}
+	if _, ok := foundEvents["runlog-test-task-2"]; !ok {
+		t.Errorf("expected new subagent_activity event for 'runlog-test-task-2' in runlog")
+	}
+
+	// Verify that the events contain the expected persona field.
+	if evt, ok := foundEvents["runlog-test-task-1"]; ok {
+		if persona, ok := evt["persona"].(string); !ok || persona != "coder" {
+			t.Errorf("task-1 persona: expected 'coder', got %q", evt["persona"])
+		}
+	}
+	if evt, ok := foundEvents["runlog-test-task-2"]; ok {
+		if persona, ok := evt["persona"].(string); !ok || persona != "tester" {
+			t.Errorf("task-2 persona: expected 'tester', got %q", evt["persona"])
+		}
+	}
+
+	// Verify the event type field is "subagent_activity".
+	for taskID, evt := range foundEvents {
+		if evt["type"] != "subagent_activity" {
+			t.Errorf("event for %s: expected type 'subagent_activity', got %q", taskID, evt["type"])
 		}
 	}
 }

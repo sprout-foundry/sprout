@@ -39,6 +39,10 @@ const (
 	EventTypeWorkspaceChanged        = "workspace_changed"
 	EventTypeSessionTerminated       = "session_terminated"
 	EventTypeDriftDetected           = "drift_detected"
+	// EventTypeSessionChanged signals that a chat session's metadata
+	// (name, pin state, active state) changed and tabs viewing that chat
+	// should reconcile. SP-034-3e.
+	EventTypeSessionChanged          = "session_changed"
 )
 
 // EventBus manages event distribution between CLI and Web UI

@@ -554,6 +554,44 @@ describe('reattach on reconnect', () => {
     expect(reconnectMock!.url).not.toContain('reattach');
   });
 
+  it('sends after_seq=0 when last tracked seq is 0', async () => {
+    const { MockWebSocket, instances } = createMockWebSocket();
+    vi.stubGlobal('WebSocket', MockWebSocket);
+
+    const service = resetSingleton();
+
+    // First connection
+    await service.connect();
+    const firstMock = instances[0];
+    firstMock.onopen?.(new Event('open'));
+
+    service.setActiveChatId('chat-zero');
+    // Track seq=0 (the first event from the server)
+    firstMock.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'stream_chunk', __seq: 0, data: { chat_id: 'chat-zero' } }),
+      }),
+    );
+    expect(service.getLastSeq('chat-zero')).toBe(0);
+
+    simulateDisconnect(firstMock);
+
+    // Mock clientFetch — query is active
+    (clientFetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+      new Response(JSON.stringify({ active: true, chat_id: 'chat-zero' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await service.connect();
+
+    const reconnectMock = instances[1];
+    expect(reconnectMock).toBeDefined();
+    expect(reconnectMock!.url).toContain('reattach=chat-zero');
+    expect(reconnectMock!.url).toContain('after_seq=0');
+  });
+
   it('retries reattach on subsequent reconnects after query becomes active again', async () => {
     const { MockWebSocket, instances } = createMockWebSocket();
     vi.stubGlobal('WebSocket', MockWebSocket);

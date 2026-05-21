@@ -1,8 +1,12 @@
 package configuration
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
+	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -435,4 +439,122 @@ func TestPersistentContextConfig_JSON_OmitsRetentionDaysWhenZero(t *testing.T) {
 	// With omitempty, zero RetentionDays should not appear in JSON
 	assert.NotContains(t, string(data), "retentionDays",
 		"zero RetentionDays should be omitted from JSON due to omitempty tag")
+}
+
+// TestAllowedToolsOverride_WarnsAndDrops verifies that when a user config overrides
+// AllowedTools for a built-in persona (SP-035-4a), the override is dropped and
+// a warning is logged.
+func TestAllowedToolsOverride_WarnsAndDrops(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	// Reset the warning once so it fires in this test
+	personaDefaultsWarningOnce = sync.Once{}
+
+	// Create a config that starts with defaults, then has a user override for "general"
+	cfg := NewConfig()
+
+	// User overrides AllowedTools for the built-in "general" persona
+	cfg.SubagentTypes["general"] = SubagentType{
+		ID:           "general",
+		Name:         "General",
+		Description:  "User override",
+		Enabled:      true,
+		AllowedTools: []string{"read_file", "shell_command"}, // user wants only these
+	}
+
+	// Call GetSubagentType — it should return the DEFAULT tools, not the user override
+	result := cfg.GetSubagentType("general")
+	assert.NotNil(t, result, "GetSubagentType should return a non-nil result for built-in persona")
+
+	// The returned AllowedTools should be the DEFAULT, not the user's override
+	// The default for "general" contains more tools than just read_file and shell_command
+	hasUserOverride := func(tools []string) bool {
+		if len(tools) == 2 {
+			for _, t := range tools {
+				if t != "read_file" && t != "shell_command" {
+					return false
+				}
+			}
+			return true
+		}
+		return false
+	}
+	assert.False(t, hasUserOverride(result.AllowedTools),
+		"AllowedTools should NOT be the user override; it should be the default tools")
+
+	// Verify a warning was logged about the override being dropped
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "AllowedTools override ignored",
+		"Expected warning about AllowedTools override being dropped for built-in persona")
+}
+
+// TestLegacyCustomPersona_WarnsOnce verifies that for a custom (non-default) persona
+// with write_file but missing write_structured_file/patch_structured_file,
+// those tools are auto-added and a one-time warning is logged (SP-035-4b).
+func TestLegacyCustomPersona_WarnsOnce(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	// Reset the warning once so it fires in this test
+	legacyCustomPersonaWarningOnce = sync.Once{}
+
+	cfg := &Config{
+		SubagentTypes: map[string]SubagentType{
+			"my-custom-persona": {
+				ID:           "my-custom-persona",
+				Name:         "My Custom Persona",
+				Description:  "A custom persona with write_file",
+				Enabled:      true,
+				AllowedTools: []string{"write_file"}, // has write_file but not structured tools
+			},
+		},
+	}
+
+	// Call the merge function — it should auto-add the structured file tools
+	mergeLegacyStructuredToolsIntoPersonaAllowlists(cfg)
+
+	persona := cfg.SubagentTypes["my-custom-persona"]
+
+	// Verify the structured tools were added
+	assert.Contains(t, persona.AllowedTools, "write_structured_file",
+		"write_structured_file should be auto-added for custom persona with write_file")
+	assert.Contains(t, persona.AllowedTools, "patch_structured_file",
+		"patch_structured_file should be auto-added for custom persona with write_file")
+	assert.Contains(t, persona.AllowedTools, "write_file",
+		"original write_file should still be present")
+
+	// Verify a warning was logged
+	logOutput := buf.String()
+	assert.Contains(t, logOutput, "my-custom-persona",
+		"Warning should mention the custom persona name")
+	assert.Contains(t, logOutput, "auto-adding structured file tools",
+		"Warning should mention auto-adding structured file tools")
+
+	// Verify sync.Once behavior: calling again should NOT produce another warning
+	buf.Reset()
+	// Add another custom persona to trigger the condition again
+	cfg.SubagentTypes["another-custom-persona"] = SubagentType{
+		ID:           "another-custom-persona",
+		Name:         "Another Custom Persona",
+		Description:  "Another custom persona",
+		Enabled:      true,
+		AllowedTools: []string{"write_file"},
+	}
+
+	mergeLegacyStructuredToolsIntoPersonaAllowlists(cfg)
+
+	// The second call should NOT produce another warning (sync.Once behavior)
+	logOutput = buf.String()
+	assert.Empty(t, logOutput,
+		"Warning should only be logged once (sync.Once behavior)")
+
+	// But the tools should still be added for the new persona
+	another := cfg.SubagentTypes["another-custom-persona"]
+	assert.Contains(t, another.AllowedTools, "write_structured_file",
+		"write_structured_file should still be auto-added for new custom persona")
+	assert.Contains(t, another.AllowedTools, "patch_structured_file",
+		"patch_structured_file should still be auto-added for new custom persona")
 }

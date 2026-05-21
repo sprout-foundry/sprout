@@ -1,3 +1,9 @@
+//go:build !js
+
+// Terminal-manager tests exercise the native shell fallback path. The
+// js/wasm build has no terminal manager and routes shell through
+// wasmshell instead — see shell_js.go / cmd/wasm/shell_executor.go.
+
 package tools
 
 import (

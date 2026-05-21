@@ -121,6 +121,14 @@ func setStaticModelFunc(_ js.Value, args []js.Value) interface{} {
 // Errors are surfaced as rejected promises; success results are passed to
 // resolve() as native JS values (after running through marshalJS).
 func asPromise(do func(ctx context.Context) (interface{}, error)) interface{} {
+	return asPromiseWithTimeout(60*time.Second, do)
+}
+
+// asPromiseWithTimeout is asPromise with an explicit timeout — use for
+// long-running calls (chat completions, agent loops) that the default
+// 60s ceiling on asPromise would prematurely cancel. Pass 0 to disable
+// the timeout entirely (caller is responsible for cancellation).
+func asPromiseWithTimeout(timeout time.Duration, do func(ctx context.Context) (interface{}, error)) interface{} {
 	promiseCtor := js.Global().Get("Promise")
 	if promiseCtor.IsUndefined() {
 		// No Promise constructor available — fall through to a synchronous
@@ -134,7 +142,13 @@ func asPromise(do func(ctx context.Context) (interface{}, error)) interface{} {
 	return promiseCtor.New(js.FuncOf(func(_ js.Value, pargs []js.Value) interface{} {
 		resolve, reject := pargs[0], pargs[1]
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			var ctx context.Context
+			var cancel context.CancelFunc
+			if timeout > 0 {
+				ctx, cancel = context.WithTimeout(context.Background(), timeout)
+			} else {
+				ctx, cancel = context.WithCancel(context.Background())
+			}
 			defer cancel()
 			result, err := do(ctx)
 			if err != nil {

@@ -165,8 +165,8 @@ The persona system works today but several behaviors that *should be loud are si
 
 ### Phase 3: Force-flag fuzz tests
 
-[] - SP-035-3a: Extend `pkg/configuration/config_risk_test.go:119,143` tables with: `tar -xzf`, `tar -fvz`, `grep -f patterns`, `git -f commit` (malformed position), `rsync --force`, `rsync --force-with-lease`, `cp -rf`, `mv -f`, `git push --force-with-lease`, `docker rm -f`, `docker rm --force`. Each entry carries a one-line `why:` comment.
-[] - SP-035-3b: Add `TestContainsForceFlag_Property` using `testing/quick` with iteration count 1000 — generates random {command, flags, args} combos and asserts the function's verdict matches a documented reference for the curated cases.
+[x] - SP-035-3a: Extend `pkg/configuration/config_risk_test.go:119,143` tables with: `tar -xzf`, `tar -fvz`, `grep -f patterns`, `git -f commit` (malformed position), `rsync --force`, `rsync --force-with-lease`, `cp -rf`, `mv -f`, `git push --force-with-lease`, `docker rm -f`, `docker rm --force`. Each entry carries a one-line `why:` comment.
+[x] - SP-035-3b: Add `TestContainsForceFlag_Property` using `testing/quick` with iteration count 1000 — generates random {command, flags, args} combos and asserts the function's verdict matches a documented reference for the curated cases.
 
 ### Phase 4: Loud warnings on silent overrides
 

@@ -74,6 +74,19 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	})
 	defer ws.connections.Delete(conn)
 
+	// Auto-subscribe to the connected chat (SP-034-3b). When the client
+	// switches chats over its lifetime, it'll send a subscribe message
+	// with the new chatID; we unsubscribe from the prior one on
+	// disconnect (UnsubscribeAll covers it).
+	if chatID != "" && ws.chatSubscribers != nil {
+		ws.chatSubscribers.Subscribe(chatID, conn)
+	}
+	defer func() {
+		if ws.chatSubscribers != nil {
+			ws.chatSubscribers.UnsubscribeAll(conn)
+		}
+	}()
+
 	log.Printf("WebSocket client connected: %s", sessionID)
 	if userID != "" {
 		log.Printf("[web] WebSocket user: %s (session %s)", userID, sessionID)
@@ -317,7 +330,8 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// The read goroutine updates lastMessage on any successful read
 
 	case AllowedMessageTypeSubscribe:
-		// Handle subscription requests for specific event types
+		// Handle subscription requests for specific event types AND
+		// (SP-034-3b) chat-id subscriptions for multi-tab consistency.
 		data, err := parseAndValidateData[SubscribeData](msg.Data, func(d *SubscribeData) error {
 			return d.Validate()
 		})
@@ -329,7 +343,16 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		log.Printf("WebSocket client subscribed to events: %v", data.Events)
+		log.Printf("WebSocket client subscribed to events: %v chat_ids: %v", data.Events, data.ChatIDs)
+
+		// Register chat subscriptions so events for these chats fan out
+		// to this connection even when the originating clientID differs
+		// (e.g. same chat open in two browser tabs).
+		if ws.chatSubscribers != nil {
+			for _, chatID := range data.ChatIDs {
+				ws.chatSubscribers.Subscribe(chatID, safeConn.Conn())
+			}
+		}
 
 	case AllowedMessageTypeRequestStats:
 		// Send current stats immediately

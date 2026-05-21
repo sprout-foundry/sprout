@@ -4,6 +4,7 @@ package webui
 
 import (
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -15,6 +16,16 @@ const (
 	defaultRunBufferMaxEvents = 5000
 	defaultRunBufferMaxBytes  = 4 * 1024 * 1024 // 4 MiB per chat
 )
+
+// defaultRunBufferTTLAfterCompletion is how long the runBuffer is kept
+// after the last query_completed event for a chat. A reconnecting tab
+// has this much time to reattach with after_seq and pick up the missed
+// events; afterwards the buffer is dropped to reclaim memory. SP-034-2f.
+//
+// Picked at 60s to comfortably exceed typical browser reconnect windows
+// (Chrome's tab-throttling, WS sleep/wake) while not letting completed
+// runs sit indefinitely in memory.
+var defaultRunBufferTTLAfterCompletion = 60 * time.Second
 
 // chatRunRingBuffer holds the last N stream events for a chat so a
 // reconnecting client can replay anything it missed during the

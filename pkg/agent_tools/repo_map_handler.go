@@ -16,8 +16,7 @@ func (h *repoMapHandler) Name() string {
 func (h *repoMapHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "repo_map",
-		Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes) with line numbers.",
-		Parameters: []ParameterDef{
+					Description: "Generate a lightweight overview of the codebase showing file paths and top-level symbols (functions, types, interfaces, classes) with line numbers. Use this before reading files to identify which files and functions are relevant to your task. Output is limited to ~1024 tokens. Supports Go, TypeScript, JavaScript, Python, Rust, Java, and C files.",Parameters: []ParameterDef{
 			{Name: "directory", Type: "string", Description: "Directory to scan (default: .)"},
 		},
 		Required: []string{},

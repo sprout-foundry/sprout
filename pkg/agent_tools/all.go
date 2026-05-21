@@ -4,7 +4,8 @@ package tools
 // This is the central registration point for the new interface-based tool system.
 // Currently includes: read_file, list_directory, fetch_url, search_files,
 // repo_map, list_memories, read_memory, rollback_changes, view_history,
-// list_skills, and embedding_index.
+// list_skills, embedding_index, write_file, write_structured_file,
+// edit_file, shell_command, save_memory, and search_memories.
 //
 // To register all tools with a registry:
 //
@@ -25,5 +26,11 @@ func AllTools() []ToolHandler {
 		&viewHistoryHandler{},
 		&listSkillsHandler{},
 		&embeddingIndexHandler{},
+		&writeFileHandler{},
+		&writeStructuredFileHandler{},
+		&editFileHandler{},
+		&shellCommandHandler{},
+		&saveMemoryHandler{},
+		&searchMemoriesHandler{},
 	}
 }

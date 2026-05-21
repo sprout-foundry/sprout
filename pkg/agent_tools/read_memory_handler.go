@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -28,8 +29,14 @@ func (h *readMemoryHandler) Definition() ToolDefinition {
 }
 
 func (h *readMemoryHandler) Validate(args map[string]any) error {
-	_, err := extractString(args, "name")
-	return err
+	name, err := extractString(args, "name")
+	if err != nil {
+		return err
+	}
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return fmt.Errorf("parameter 'name' must not contain path separators")
+	}
+	return nil
 }
 
 func (h *readMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
@@ -79,6 +86,12 @@ func readMemoryFile(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get config directory: %w", err)
 	}
+
+	// Prevent path traversal
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return "", fmt.Errorf("invalid memory name: %q", name)
+	}
+	name = filepath.Clean(name)
 
 	memoryDir := filepath.Join(configDir, "memories")
 	filePath := filepath.Join(memoryDir, name+".md")

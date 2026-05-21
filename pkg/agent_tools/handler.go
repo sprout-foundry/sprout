@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -47,6 +48,8 @@ type ToolEnv struct {
 	ApprovalManager ApprovalManager
 	// MaxTokensFunc returns the current token budget limit
 	MaxTokensFunc func() int
+	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
+	ConfigManager *configuration.Manager
 }
 
 // ApprovalResult contains the outcome of an approval request.

@@ -27,6 +27,7 @@ type SubagentOptions struct {
 	Timeout      time.Duration   // execution timeout (0 = unlimited)
 	WorkingDir             string          // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int             // max parallel subagents (0 = unlimited, default unlimited)
+	FleetTokenBudget       int             // shared token budget across all parallel subagents (0 = unlimited)
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -127,6 +128,9 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 		sem = make(chan struct{}, opts.MaxConcurrentSubagents)
 	}
 
+	// Fleet token budget tracking
+	var cumulativeTokens atomic.Int64
+
 	for i, task := range tasks {
 		wg.Add(1)
 		go func(idx int, t SubagentTask) {
@@ -146,6 +150,17 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				}
 			}
 
+			// Budget check after acquiring semaphore, before starting work
+			if opts.FleetTokenBudget > 0 && cumulativeTokens.Load() >= int64(opts.FleetTokenBudget) {
+				defer wg.Done()
+				results[idx] = &SubagentResult{
+					ID:             t.ID,
+					Error:          fmt.Errorf("fleet token budget exceeded"),
+					BudgetExceeded: true,
+				}
+				return
+			}
+
 			defer wg.Done()
 			taskOpts := opts
 			if t.Model != "" {
@@ -160,7 +175,11 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.WorkingDir != "" {
 				taskOpts.WorkingDir = t.WorkingDir
 			}
-			results[idx] = r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts)
+			result := r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts)
+			results[idx] = result
+			if result != nil {
+				cumulativeTokens.Add(int64(result.TokensUsed))
+			}
 		}(i, task)
 	}
 

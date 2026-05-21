@@ -3,6 +3,7 @@ package configuration
 import (
 	"strings"
 	"testing"
+	"testing/quick"
 
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
@@ -131,6 +132,14 @@ func TestContainsForceFlag_ExactFlags(t *testing.T) {
 		{"no force flag", "git status", false},
 		{"empty string", "", false},
 		{"-f for non-force command python3", "python3 -f script.py", false},
+		{"tar -f is not force", "tar -xzf archive.tar.gz", false},  // tar's -f specifies filename, not force; tar not in force-capable list
+		{"grep -f is not force", "grep -f patterns.txt file", false}, // grep's -f means "read patterns from file"; grep not in force-capable list
+		{"git -f between git and subcommand", "git -f commit", false}, // -f between git and subcommand is malformed; not a valid git flag position
+		{"rsync --force is always force", "rsync --force src/ dst/", true}, // --force is always treated as force regardless of command
+		{"cp -rf combined flag", "cp -rf /a /b", true}, // cp's -rf is combined flag with f; cp is in force-capable list
+		{"mv -f force overwrite", "mv -f old new", true}, // mv's -f is force overwrite; mv is in force-capable list
+		{"docker rm -f", "docker rm -f container", true}, // docker's -f is force remove; docker is in force-capable list
+		{"docker rm --force", "docker rm --force container", true}, // --force is always treated as force
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1071,5 +1080,108 @@ func TestPersona_EA_RiskCascadeBaseline(t *testing.T) {
 	if failed {
 		t.Errorf("EA risk cascade baseline mismatch — got LowRiskOps=%v MediumRiskOps=%v HighRiskNever=%v",
 			rules.LowRiskOps, rules.MediumRiskOps, rules.HighRiskNever)
+	}
+}
+
+// =============================================================================
+// Property-based tests for containsForceFlag
+// =============================================================================
+
+func TestContainsForceFlag_Property(t *testing.T) {
+	commands := []string{"git", "rm", "mv", "cp", "docker", "grep", "tar", "python3", "node"}
+	flags := []string{"-f", "--force", "-rf", "-fr", "-af", "--force-with-lease", "-n", "-v", "--help"}
+	args := []string{"file.txt", "src", "dst", "main", "origin", "patterns.txt", "archive.tar.gz", "/tmp/test"}
+
+	config := &quick.Config{MaxCount: 1000}
+	err := quick.Check(func(i int) bool {
+		// Use i to generate deterministic randomness (handle negatives from quick.Check)
+		r := i
+		if r < 0 {
+			r = -r
+		}
+		cmdIdx := r % len(commands)
+		r /= len(commands)
+
+		numFlags := (r % 4) // 0 to 3 flags
+		r /= 4
+
+		numArgs := (r % 3) // 0 to 2 args
+		r /= 3
+
+		parts := []string{commands[cmdIdx]}
+
+		for j := 0; j < numFlags; j++ {
+			flagIdx := r % len(flags)
+			r /= len(flags)
+			parts = append(parts, flags[flagIdx])
+		}
+
+		for j := 0; j < numArgs; j++ {
+			argIdx := r % len(args)
+			r /= len(args)
+			parts = append(parts, args[argIdx])
+		}
+
+		cmd := strings.Join(parts, " ")
+		hasForceExact := false
+		hasForceExactRaw := false // tracks --force presence regardless of --force-with-lease cancellation
+		hasNoForceVariants := true
+		cmdIsForceCapable := false
+
+		for _, seg := range parts[1:] { // skip command name
+			if seg == "--force" {
+				hasForceExact = true
+				hasForceExactRaw = true
+			}
+			if seg == "-f" || seg == "--force" || seg == "-rf" || seg == "-fr" || seg == "-af" {
+				hasNoForceVariants = false
+			}
+			if seg == "--force-with-lease" {
+				hasForceExact = false // --force-with-lease cancels --force
+			}
+		}
+
+		for _, fc := range []string{"git", "rm", "mv", "cp", "docker"} {
+			if commands[cmdIdx] == fc {
+				cmdIsForceCapable = true
+				break
+			}
+		}
+
+		result := containsForceFlag(cmd)
+
+		// Invariant 1: if command has --force as exact token and it's not --force-with-lease, must be true
+		if hasForceExact {
+			if !result {
+				t.Errorf("property test FAILED: %q should be true (--force present, not cancelled)", cmd)
+				return false
+			}
+		}
+
+		// Invariant 2: if command has NO -f or --force variants at all, must be false
+		if hasNoForceVariants {
+			if result {
+				t.Errorf("property test FAILED: %q should be false (no force variants present)", cmd)
+				return false
+			}
+		}
+
+		// Invariant 3: if command is non-force-capable and has -f standalone, must be false
+		// (unless --force was also present — containsForceFlag returns true for --force regardless of command)
+		if !cmdIsForceCapable && !hasForceExactRaw {
+			for _, seg := range parts[1:] {
+				if seg == "-f" {
+					if result {
+						t.Errorf("property test FAILED: %q should be false (non-force-capable cmd with -f)", cmd)
+						return false
+					}
+				}
+			}
+		}
+
+		return true
+	}, config)
+	if err != nil {
+		t.Fatalf("property test error: %v", err)
 	}
 }

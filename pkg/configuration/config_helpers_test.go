@@ -295,27 +295,27 @@ func TestGetSkill(t *testing.T) {
 			name: "returns enabled skill",
 			config: &Config{
 				Skills: map[string]Skill{
-					"go-conventions": {ID: "go-conventions", Name: "Go", Enabled: true},
+					"project-planning": {ID: "project-planning", Name: "Project Planning", Enabled: true},
 				},
 			},
-			id: "go-conventions",
-			expected: &Skill{ID: "go-conventions", Name: "Go", Enabled: true},
+			id: "project-planning",
+			expected: &Skill{ID: "project-planning", Name: "Project Planning", Enabled: true},
 		},
 		{
 			name: "returns nil for disabled skill",
 			config: &Config{
 				Skills: map[string]Skill{
-					"test-writing": {ID: "test-writing", Name: "Tests", Enabled: false},
+					"browse-debugging": {ID: "browse-debugging", Name: "Browse Debugging", Enabled: false},
 				},
 			},
-			id:       "test-writing",
+			id:       "browse-debugging",
 			expected: nil,
 		},
 		{
 			name: "returns nil for missing skill",
 			config: &Config{
 				Skills: map[string]Skill{
-					"go-conventions": {ID: "go-conventions", Name: "Go", Enabled: true},
+					"project-planning": {ID: "project-planning", Name: "Project Planning", Enabled: true},
 				},
 			},
 			id:       "nonexistent",
@@ -345,27 +345,27 @@ func TestGetSkillPath(t *testing.T) {
 	t.Run("returns path from enabled skill", func(t *testing.T) {
 		cfg := &Config{
 			Skills: map[string]Skill{
-				"go-conventions": {
-					ID:      "go-conventions",
-					Path:    "pkg/agent/skills/go-conventions",
+				"project-planning": {
+					ID:      "project-planning",
+					Path:    "pkg/agent/skills/project-planning",
 					Enabled: true,
 				},
 			},
 		}
-		assert.Equal(t, "pkg/agent/skills/go-conventions", cfg.GetSkillPath("go-conventions"))
+		assert.Equal(t, "pkg/agent/skills/project-planning", cfg.GetSkillPath("project-planning"))
 	})
 
 	t.Run("returns empty string for disabled skill", func(t *testing.T) {
 		cfg := &Config{
 			Skills: map[string]Skill{
-				"test-writing": {
-					ID:      "test-writing",
-					Path:    "pkg/agent/skills/test-writing",
+				"browse-debugging": {
+					ID:      "browse-debugging",
+					Path:    "pkg/agent/skills/browse-debugging",
 					Enabled: false,
 				},
 			},
 		}
-		assert.Empty(t, cfg.GetSkillPath("test-writing"))
+		assert.Empty(t, cfg.GetSkillPath("browse-debugging"))
 	})
 
 	t.Run("returns empty string for missing skill", func(t *testing.T) {
@@ -393,16 +393,16 @@ func TestGetAllEnabledSkills(t *testing.T) {
 	t.Run("returns only enabled skills", func(t *testing.T) {
 		cfg := &Config{
 			Skills: map[string]Skill{
-				"go-conventions": {ID: "go-conventions", Name: "Go", Enabled: true},
-				"test-writing":   {ID: "test-writing", Name: "Tests", Enabled: false},
-				"commit-msg":     {ID: "commit-msg", Name: "Commits", Enabled: true},
+				"project-planning": {ID: "project-planning", Name: "Project Planning", Enabled: true},
+				"browse-debugging": {ID: "browse-debugging", Name: "Browse Debugging", Enabled: false},
+				"repo-onboarding":  {ID: "repo-onboarding", Name: "Repo Onboarding", Enabled: true},
 			},
 		}
 		result := cfg.GetAllEnabledSkills()
 		assert.Len(t, result, 2)
-		assert.Contains(t, result, "go-conventions")
-		assert.Contains(t, result, "commit-msg")
-		assert.NotContains(t, result, "test-writing")
+		assert.Contains(t, result, "project-planning")
+		assert.Contains(t, result, "repo-onboarding")
+		assert.NotContains(t, result, "browse-debugging")
 	})
 
 	t.Run("returns nil when Skills is nil", func(t *testing.T) {
@@ -481,10 +481,10 @@ func TestMergeMissingDefaultSkills(t *testing.T) {
 		mergeMissingDefaultSkills(cfg)
 
 		// Default skills should now be present
-		_, hasGo := cfg.Skills["go-conventions"]
-		assert.True(t, hasGo, "go-conventions should be merged in")
-		_, hasTest := cfg.Skills["test-writing"]
-		assert.True(t, hasTest, "test-writing should be merged in")
+		_, hasGo := cfg.Skills["project-planning"]
+		assert.True(t, hasGo, "project-planning should be merged in")
+		_, hasTest := cfg.Skills["browse-debugging"]
+		assert.True(t, hasTest, "browse-debugging should be merged in")
 		// Custom skill should still be present
 		_, hasCustom := cfg.Skills["custom-skill"]
 		assert.True(t, hasCustom, "custom skill should remain")
@@ -493,11 +493,11 @@ func TestMergeMissingDefaultSkills(t *testing.T) {
 	t.Run("does not overwrite existing entries", func(t *testing.T) {
 		cfg := &Config{
 			Skills: map[string]Skill{
-				"go-conventions": {ID: "go-conventions", Name: "Custom Go", Enabled: true},
+				"project-planning": {ID: "project-planning", Name: "Custom Go", Enabled: true},
 			},
 		}
 		mergeMissingDefaultSkills(cfg)
-		assert.Equal(t, "Custom Go", cfg.Skills["go-conventions"].Name)
+		assert.Equal(t, "Custom Go", cfg.Skills["project-planning"].Name)
 	})
 
 	t.Run("initializes Skills when nil", func(t *testing.T) {

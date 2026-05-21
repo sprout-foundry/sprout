@@ -376,7 +376,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Name:        "activate_skill",
 		Description: "Activate a skill to load its instructions into your context. Use this when you need the skill's expertise for the current task.",
 		Parameters: []ParameterConfig{
-			{"skill_id", "string", true, []string{"skill", "id"}, "The ID of the skill to activate (e.g., 'go-conventions', 'test-writing')"},
+			{"skill_id", "string", true, []string{"skill", "id"}, "The ID of the skill to activate (e.g., 'project-planning', 'browse-debugging')"},
 		},
 		Handler: handleActivateSkill,
 	})

@@ -286,7 +286,7 @@ Adding a tool today requires editing four locations across two packages (definit
 ### Phase 2: Dual-dispatch shim
 
 [x] - SP-038-2a: In `pkg/agent/tool_executor*.go`, check the registry first; fall back to legacy switch on miss. Add a debug log line per dispatch path so migration progress is observable.
-[] - SP-038-2b: Add `TestDualDispatch_RegistryWins` confirming a registered tool takes precedence over a legacy entry of the same name.
+[x] - SP-038-2b: Add `TestDualDispatch_RegistryWins` confirming a registered tool takes precedence over a legacy entry of the same name.
 
 ### Phase 3: Migrate small tools
 

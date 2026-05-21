@@ -40,6 +40,14 @@ func GetGlobalBrowser() BrowserRenderer {
 	return globalBrowser
 }
 
+// CloseGlobalBrowser closes the global browser renderer, releasing Chromium resources.
+// This should be called during graceful shutdown.
+func CloseGlobalBrowser() {
+	if globalBrowser != nil {
+		globalBrowser.Close()
+	}
+}
+
 // WebContentFetcher handles fetching content from URLs.
 type WebContentFetcher struct {
 	httpClient  *http.Client

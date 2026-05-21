@@ -261,7 +261,7 @@ Spec: `roadmap/SP-037-subagent-resource-budgeting.md`
 [x] - SP-037-4b: Add `TestSubagentRunner_FleetBudgetCancels` — 10 tasks, fleet budget 5000 tokens, 600 tokens per call; assert at least one cancellation and overdraw bounded by one subagent's individual `MaxTokens`.
 [x] - SP-037-4c: Add `TestSubagentRunner_NoGoroutineLeak_AfterStress` — runs the bounded stress test and asserts `goleak.VerifyNone(t)` plus `runtime.NumGoroutine()` delta ≤ 2.
 [x] - SP-037-4d: Add `TestSubagentRunner_ParentCancelDropsQueued` — 20 tasks, limit=2, cancel parent ctx after 50ms; assert remaining 18 return `Cancelled` without starting.
-[] - SP-037-4e: Run `go test -race -run TestSubagentRunner -count=20 ./pkg/agent/` to verify stability.
+[x] - SP-037-4e: Run `go test -race -run TestSubagentRunner -count=20 ./pkg/agent/` to verify stability.
 
 ### Phase 5: Documentation
 

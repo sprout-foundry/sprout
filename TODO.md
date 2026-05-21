@@ -159,9 +159,9 @@ The persona system works today but several behaviors that *should be loud are si
 
 ### Phase 2: Two-gate invariant tests
 
-[] - SP-035-2a: Add `TestRiskGates_GlobalClassifierIsNotBypassedByPersona` — synthetic persona with `rm_command` in `LowRiskOps`; submit `rm -rf /`; assert the global `ClassifyToolCall` at `pkg/agent/tool_definitions.go:541` still blocks.
-[] - SP-035-2b: Add `TestRiskGates_BothGatesEvaluate` with counter wrappers around `EvaluateOperationRisk` (`pkg/agent/tool_handlers_shell.go:90,195,381`) and `ClassifyToolCall` — assert both run for each command in a dangerous-commands fixture.
-[] - SP-035-2c: Add a package-level doc comment to `pkg/agent/tool_handlers_shell.go` describing the two-gate model and the invariant "neither gate may suppress the other."
+[x] - SP-035-2a: Add `TestRiskGates_GlobalClassifierIsNotBypassedByPersona` — synthetic persona with `rm_command` in `LowRiskOps`; submit `rm -rf /`; assert the global `ClassifyToolCall` at `pkg/agent/tool_definitions.go:541` still blocks.
+[x] - SP-035-2b: Add `TestRiskGates_BothGatesEvaluate` with counter wrappers around `EvaluateOperationRisk` (`pkg/agent/tool_handlers_shell.go:90,195,381`) and `ClassifyToolCall` — assert both run for each command in a dangerous-commands fixture.
+[x] - SP-035-2c: Add a package-level doc comment to `pkg/agent/tool_handlers_shell.go` describing the two-gate model and the invariant "neither gate may suppress the other."
 
 ### Phase 3: Force-flag fuzz tests
 

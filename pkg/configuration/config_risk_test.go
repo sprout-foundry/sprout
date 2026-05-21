@@ -979,3 +979,97 @@ func TestConvertAutoApproveRules_CreatesDeepCopy(t *testing.T) {
 		t.Errorf("source was mutated: got %q, want %q", src.LowRiskOps[0], "git_status")
 	}
 }
+
+// =============================================================================
+// sliceDiff helper
+// =============================================================================
+
+// sliceDiff returns items in want but not in have, and items in have but not in want.
+func sliceDiff(have, want []string) (missing, extra []string) {
+	haveSet := make(map[string]bool, len(have))
+	for _, v := range have {
+		haveSet[v] = true
+	}
+	wantSet := make(map[string]bool, len(want))
+	for _, v := range want {
+		wantSet[v] = true
+	}
+
+	for _, v := range want {
+		if !haveSet[v] {
+			missing = append(missing, v)
+		}
+	}
+	for _, v := range have {
+		if !wantSet[v] {
+			extra = append(extra, v)
+		}
+	}
+	return missing, extra
+}
+
+// =============================================================================
+// EA persona risk cascade baseline (exact set match)
+// =============================================================================
+
+func TestPersona_EA_RiskCascadeBaseline(t *testing.T) {
+	cfg := NewConfig()
+
+	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	if !ok {
+		t.Fatalf("expected executive_assistant in default subagent types")
+	}
+
+	rules := ea.GetAutoApproveRules()
+
+	wantedLow := []string{"git_add", "git_status", "git_log", "git_diff", "read_file"}
+	wantedMedium := []string{"git_commit", "git_push", "git_pull", "git_fetch",
+		"write_file", "edit_file", "shell_command", "rm_command", "docker",
+		"subagent_spawn", "cross_directory"}
+	wantedHigh := []string{"force_flag", "rm_recursive", "git_reset_hard",
+		"git_clean", "docker_prune", "git_push_force",
+		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+
+	var failed bool
+
+	// LowRiskOps
+	missingLow, extraLow := sliceDiff(rules.LowRiskOps, wantedLow)
+	if len(missingLow) > 0 || len(extraLow) > 0 {
+		failed = true
+		if len(missingLow) > 0 {
+			t.Errorf("LowRiskOps missing: %v", missingLow)
+		}
+		if len(extraLow) > 0 {
+			t.Errorf("LowRiskOps extra: %v", extraLow)
+		}
+	}
+
+	// MediumRiskOps
+	missingMed, extraMed := sliceDiff(rules.MediumRiskOps, wantedMedium)
+	if len(missingMed) > 0 || len(extraMed) > 0 {
+		failed = true
+		if len(missingMed) > 0 {
+			t.Errorf("MediumRiskOps missing: %v", missingMed)
+		}
+		if len(extraMed) > 0 {
+			t.Errorf("MediumRiskOps extra: %v", extraMed)
+		}
+	}
+
+	// HighRiskNever
+	missingHigh, extraHigh := sliceDiff(rules.HighRiskNever, wantedHigh)
+	if len(missingHigh) > 0 || len(extraHigh) > 0 {
+		failed = true
+		if len(missingHigh) > 0 {
+			t.Errorf("HighRiskNever missing: %v", missingHigh)
+		}
+		if len(extraHigh) > 0 {
+			t.Errorf("HighRiskNever extra: %v", extraHigh)
+		}
+	}
+
+	if failed {
+		t.Errorf("EA risk cascade baseline mismatch — got LowRiskOps=%v MediumRiskOps=%v HighRiskNever=%v",
+			rules.LowRiskOps, rules.MediumRiskOps, rules.HighRiskNever)
+	}
+}

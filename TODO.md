@@ -235,11 +235,11 @@ Spec: `roadmap/SP-037-subagent-resource-budgeting.md`
 
 ### Phase 1: Bounded execution
 
-[] - SP-037-1a: Add `MaxConcurrentSubagents int` field to `SubagentOptions` in `pkg/agent/subagent_runner.go:20-30`.
-[] - SP-037-1b: Add `MaxConcurrentSubagents` to `SubagentConfig` in `pkg/configuration/config.go`. Default 4. Cap at 16 unless `unsafe_unbounded_subagents: true`.
-[] - SP-037-1c: Replace the unbounded `go func` at `pkg/agent/subagent_runner.go:124` with a `chan struct{}` semaphore acquire-before-spawn, release in defer.
-[] - SP-037-1d: Verify `RunParallel(N>limit)` still returns `len(results) == len(tasks)` in original order. Add `TestSubagentRunner_OrderPreservedUnderBatching`.
-[] - SP-037-1e: On parent `ctx` cancellation, drop queued (not-yet-started) tasks immediately with `Result{Cancelled: true}`.
+[x] - SP-037-1a: Add `MaxConcurrentSubagents int` field to `SubagentOptions` in `pkg/agent/subagent_runner.go:20-30`.
+[x] - SP-037-1b: Add `MaxConcurrentSubagents` to `SubagentConfig` in `pkg/configuration/config.go`. Default 4. Cap at 16 unless `unsafe_unbounded_subagents: true`.
+[x] - SP-037-1c: Replace the unbounded `go func` at `pkg/agent/subagent_runner.go:124` with a `chan struct{}` semaphore acquire-before-spawn, release in defer.
+[x] - SP-037-1d: Verify `RunParallel(N>limit)` still returns `len(results) == len(tasks)` in original order. Add `TestSubagentRunner_OrderPreservedUnderBatching`.
+[x] - SP-037-1e: On parent `ctx` cancellation, drop queued (not-yet-started) tasks immediately with `Result{Cancelled: true}`.
 
 ### Phase 2: Fleet token budget
 

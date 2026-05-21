@@ -5,9 +5,10 @@ import (
 )
 
 const (
-	RunTerminationCompleted     = "completed"
-	RunTerminationMaxIterations = "max_iterations"
-	RunTerminationInterrupted   = "interrupted"
+	RunTerminationCompleted            = "completed"
+	RunTerminationMaxIterations        = "max_iterations"
+	RunTerminationInterrupted          = "interrupted"
+	RunTerminationFleetBudgetExceeded  = "fleet_budget_exceeded"
 )
 
 // GetTotalTokens returns the total tokens used across all requests
@@ -72,6 +73,7 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 	// Fleet budget tracking: debit tokens to the shared fleet tracker.
 	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
 		newTotal := a.fleetBudgetTracker.Add(int64(totalTokens))
+		// Budget is exceeded when cumulative tokens reach or exceed the limit.
 		if newTotal >= a.fleetBudgetLimit && !a.fleetBudgetTrunc.Load() {
 			a.fleetBudgetTrunc.Store(true)
 		}

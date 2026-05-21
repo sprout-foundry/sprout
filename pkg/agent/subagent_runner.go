@@ -145,6 +145,30 @@ func (r *SubagentRunner) Metrics() SubagentMetrics {
 	}
 }
 
+// publishLifecycleEvent emits a subagent_activity event with a status field
+// describing the lifecycle transition. The event is only published when
+// the shared EventBus is available.
+func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason string, tokensUsed int, elapsedMs int64) {
+	if r.shared == nil || r.shared.EventBus == nil {
+		return
+	}
+	data := map[string]interface{}{
+		"task_id": taskID,
+		"persona": persona,
+		"status":  status, // "queued", "started", "completed", "cancelled"
+	}
+	if reason != "" {
+		data["reason"] = reason
+	}
+	if tokensUsed > 0 {
+		data["tokens_used"] = tokensUsed
+	}
+	if elapsedMs > 0 {
+		data["elapsed_ms"] = elapsedMs
+	}
+	r.shared.EventBus.Publish(events.EventTypeSubagentActivity, data)
+}
+
 // Run spawns an in-process subagent and waits for completion
 func (r *SubagentRunner) Run(ctx context.Context, prompt string, opts SubagentOptions) *SubagentResult {
 	taskID := fmt.Sprintf("subagent-%d", time.Now().UnixNano())
@@ -180,8 +204,17 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 	for i, task := range tasks {
 		wg.Add(1)
 		go func(idx int, t SubagentTask) {
+			// Resolve persona early so all lifecycle events use the same value
+			persona := opts.Persona
+			if t.Persona != "" {
+				persona = t.Persona
+			}
+
 			r.metricQueued.Add(1)
 			queueStart := time.Now()
+
+			// Emit: queued
+			r.publishLifecycleEvent(t.ID, persona, "queued", "", 0, 0)
 
 			// Acquire semaphore (if limited), respecting context cancellation
 			if sem != nil {
@@ -191,6 +224,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				case <-parallelCtx.Done():
 					r.metricQueued.Add(-1)
 					r.metricCancelled.Add(1)
+					r.publishLifecycleEvent(t.ID, persona, "cancelled", "context_cancelled", 0, 0)
 					defer wg.Done()
 					results[idx] = &SubagentResult{
 						ID:        t.ID,
@@ -210,6 +244,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if opts.FleetTokenBudget > 0 && cumulativeTokens.Load() >= int64(opts.FleetTokenBudget) {
 				r.metricActive.Add(-1)
 				r.metricCancelled.Add(1)
+				r.publishLifecycleEvent(t.ID, persona, "cancelled", "budget_exceeded", 0, 0)
 				defer wg.Done()
 				results[idx] = &SubagentResult{
 					ID:             t.ID,
@@ -218,6 +253,9 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				}
 				return
 			}
+
+			// Emit: started
+			r.publishLifecycleEvent(t.ID, persona, "started", "", 0, 0)
 
 			defer wg.Done()
 			taskOpts := opts
@@ -247,6 +285,18 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 					r.metricActive.Add(-1)
 					r.metricCompleted.Add(1)
 				}
+
+				// Emit: completed / cancelled after runTask returns
+				completedStatus := "completed"
+				completedReason := ""
+				if result.Cancelled {
+					completedStatus = "cancelled"
+					completedReason = "context_cancelled"
+				} else if result.BudgetExceeded {
+					completedStatus = "cancelled"
+					completedReason = "budget_exceeded"
+				}
+				r.publishLifecycleEvent(t.ID, persona, completedStatus, completedReason, result.TokensUsed, result.Elapsed.Milliseconds())
 			}
 		}(i, task)
 	}
@@ -425,7 +475,7 @@ func (r *SubagentRunner) runTask(
 	r.active.Store(taskID, running)
 
 	// Token budget monitoring
-	var budgetExceeded bool
+	var budgetExceeded atomic.Bool
 	if opts.MaxTokens > 0 {
 		go r.monitorBudget(runCtx, subAgent, opts.MaxTokens, &budgetExceeded)
 	}
@@ -494,7 +544,7 @@ func (r *SubagentRunner) runTask(
 	toolCalls := subAgent.state.GetTotalToolCalls()
 
 	// Determine cancellation status
-	cancelled := runCtx.Err() != nil && !budgetExceeded
+	cancelled := runCtx.Err() != nil && !budgetExceeded.Load()
 
 	// Merge metrics into result
 	if result != nil {
@@ -503,7 +553,7 @@ func (r *SubagentRunner) runTask(
 		result.Cost = cost
 		result.ToolCalls = toolCalls
 		result.Cancelled = cancelled
-		result.BudgetExceeded = budgetExceeded
+		result.BudgetExceeded = budgetExceeded.Load()
 		result.Truncated = subAgent.FleetBudgetExceeded()
 	}
 
@@ -620,7 +670,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 }
 
 // monitorBudget watches token usage and cancels if budget exceeded
-func (r *SubagentRunner) monitorBudget(ctx context.Context, agent *Agent, maxTokens int, budgetExceeded *bool) {
+func (r *SubagentRunner) monitorBudget(ctx context.Context, agent *Agent, maxTokens int, budgetExceeded *atomic.Bool) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -631,7 +681,7 @@ func (r *SubagentRunner) monitorBudget(ctx context.Context, agent *Agent, maxTok
 		case <-ticker.C:
 			tokens := agent.state.GetTotalTokens()
 			if tokens >= maxTokens {
-				*budgetExceeded = true
+				budgetExceeded.Store(true)
 				agent.interruptCancel()
 				return
 			}

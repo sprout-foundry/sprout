@@ -2,20 +2,14 @@
 
 Skills are instruction bundles that can be loaded into agent context to provide domain expertise.
 
+A good skill contains knowledge that models **cannot infer from training data** — tool-specific gotchas, project-specific conventions, or non-obvious workflow patterns.
+
 ## Available Skills
 
 | Skill | When to Use |
 |-------|-------------|
-| `go-conventions` | Writing/reviewing Go code |
-| `python-conventions` | Writing/reviewing Python code |
-| `typescript-conventions` | Writing/reviewing TypeScript/JavaScript |
-| `rust-conventions` | Writing/reviewing Rust code |
-| `test-writing` | Creating tests |
-| `commit-msg` | Writing commit messages |
-| `project-planning` | Starting new projects or onboarding to existing ones |
-| `bug-triage` | Debugging workflow |
-| `safe-refactor` | Refactoring with low risk |
-| `review-workflow` | Code review process |
+| `project-planning` | Starting a new project or onboarding to an existing repo |
+| `browse-debugging` | Multi-step interactive browser debugging with `browse_url` |
 
 ## Creating Custom Skills
 
@@ -32,10 +26,9 @@ description: When and why to use this skill. Shown in list_skills output.
 # Skill Title
 
 Concise instructions for the agent. Focus on:
-- Project-specific patterns
-- Tool preferences (formatters, linters)
-- Key decisions not in general docs
-- Common pitfalls in this codebase
+- Tool-specific behaviors not obvious from the schema
+- Project-specific patterns that override general conventions
+- Common pitfalls discovered through usage
 ```
 
 ### Example: Project-Specific Skill
@@ -53,42 +46,13 @@ description: Conventions specific to the myproject codebase.
 - Use `Uuid` for all IDs, never integers
 - Pagination via cursor, not offset
 
-## Database
-- Use sqlx with compile-time checked queries
-- Migrations in `migrations/` directory
-
-## Testing
-- Integration tests use testcontainers
-- Run with `cargo test-all` (includes db tests)
-
 ## Common Mistakes
 - Don't use `unwrap()` in handlers - use `?`
 - Don't skip auth middleware even on public routes
 ```
 
-### Registering the Skill
-
-Add to your `~/.config/sprout/config.json`:
-
-```json
-{
-  "Skills": {
-    "myproject-conventions": {
-      "id": "myproject-conventions",
-      "name": "MyProject Conventions",
-      "description": "Conventions specific to the myproject codebase",
-      "path": "pkg/agent/skills/myproject-conventions",
-      "enabled": true
-    }
-  }
-}
-```
-
-Or place in project's `.sprout/skills/` directory (project-specific skills).
-
 ## Tips
 
-1. **Keep skills small** - 1-2KB max. Focus on what's NOT in training data.
-2. **Be specific** - Project-specific patterns > generic best practices
-3. **Show examples** - Code snippets > explanations
-4. **List tools** - Which formatters, linters, test runners to use
+1. **Keep skills small** — Focus on what's NOT in training data. If a model already knows it, it's not a skill.
+2. **Be specific** — Project-specific patterns > generic best practices
+3. **Tool gotchas** — Non-obvious tool behaviors (quirks, ordering requirements, side effects) are the highest-value content

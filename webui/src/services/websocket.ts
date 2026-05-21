@@ -28,6 +28,7 @@ class WebSocketService {
   private isReplayingQueue = false;
   private activeChatId: string | null = null;
   private chatSeq = new Map<string, number>();
+  private connecting = false;
 
   private constructor() {}
 
@@ -84,6 +85,15 @@ class WebSocketService {
   }
 
   async connect() {
+    // Guard against concurrent connect() calls — if we're already in the
+    // middle of connecting (e.g., the clientFetch reattach check is still
+    // in-flight), skip to avoid creating a second WebSocket.
+    if (this.connecting) {
+      debugLog('[WebSocket] connect() already in progress, skipping');
+      return;
+    }
+    this.connecting = true;
+
     // Reset reconnect attempts to allow fresh reconnection cycle.
     // This ensures that calling connect() after a prior disconnect()
     // (which sets reconnectAttempts to maxReconnectAttempts to prevent
@@ -97,6 +107,7 @@ class WebSocketService {
     this.lastPongTime = Date.now();
 
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      this.connecting = false;
       return;
     }
 
@@ -166,6 +177,7 @@ class WebSocketService {
     this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
 
     this.ws.onopen = () => {
+      this.connecting = false;
       const isReconnect = this.wasConnectedBefore;
       this.wasConnectedBefore = true;
       debugLog('WebSocket connected', isReconnect ? '(reconnect)' : '(initial)');
@@ -235,6 +247,7 @@ class WebSocketService {
     };
 
     this.ws.onerror = (error) => {
+      this.connecting = false;
       // Only notify on the very first connection error. Don't spam toasts during
       // reconnect cycles — onerror can fire transiently and up to 30 times.
       if (!this.wasConnectedBefore) {
@@ -349,8 +362,9 @@ class WebSocketService {
     // Reset state for fresh reconnection
     this.reconnectAttempts = 0;
     this.intentionalClose = false;
-    // Connect immediately
-    this.connect();
+    // Connect immediately (fire-and-forget — errors are handled by connect()
+    // itself and by the reconnect loop)
+    this.connect().catch(() => {});
   }
 
   onEvent(callback: EventCallback) {

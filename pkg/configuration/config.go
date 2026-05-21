@@ -18,6 +18,7 @@ import (
 )
 
 var personaDefaultsWarningOnce sync.Once
+var legacyCustomPersonaWarningOnce sync.Once
 
 const (
 	ConfigVersion   = "2.0"
@@ -1531,6 +1532,11 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 			// because default persona tool configurations are carefully curated for
 			// safety and correctness. Users who need different tools should create
 			// a custom persona with a new ID.
+			// Warn if user tried to override AllowedTools for a built-in persona
+			if len(userOverride.AllowedTools) > 0 {
+				log.Printf("[WARN] AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools. Dropped tools: %v",
+					defaultPersona.ID, userOverride.AllowedTools)
+			}
 			if userOverride.Provider != "" {
 				result.Provider = userOverride.Provider
 			}
@@ -1624,6 +1630,37 @@ func mergeLegacyStructuredToolsIntoPersonaAllowlists(config *Config) {
 		}
 		persona.AllowedTools = append(persona.AllowedTools, "shell_command")
 		config.SubagentTypes[id] = persona
+	}
+
+	// Handle custom (non-default) personas: auto-add structured file tools with a one-time warning
+	for id, persona := range config.SubagentTypes {
+		normalizedID := normalizePersonaID(id)
+		if _, exists := defaults[normalizedID]; exists {
+			continue // Skip built-in personas, already handled above
+		}
+		if len(persona.AllowedTools) == 0 {
+			continue
+		}
+		if !hasAnyTool(persona.AllowedTools, "write_file", "edit_file") {
+			continue
+		}
+
+		changed := false
+		if !hasTool(persona.AllowedTools, "write_structured_file") {
+			persona.AllowedTools = append(persona.AllowedTools, "write_structured_file")
+			changed = true
+		}
+		if !hasTool(persona.AllowedTools, "patch_structured_file") {
+			persona.AllowedTools = append(persona.AllowedTools, "patch_structured_file")
+			changed = true
+		}
+
+		if changed {
+			legacyCustomPersonaWarningOnce.Do(func() {
+				log.Printf("[WARN] Custom persona '%s' has write_file but not write_structured_file; auto-adding structured file tools. Consider explicitly listing them in your config.", persona.ID)
+			})
+			config.SubagentTypes[id] = persona
+		}
 	}
 }
 

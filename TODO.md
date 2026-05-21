@@ -223,7 +223,7 @@ SP-028 unblocked CI by silencing four real goroutine leaks via `goleak.IgnoreTop
 
 [] - SP-036-6a: Add `TestNoNewGoroutineLeaks_Webui` and `TestNoNewGoroutineLeaks_Agent` that snapshot goroutines, run a representative workload (create+close fileWatcher, start+stop LSP manager, exec via TerminalManager), and assert delta ≤ 2.
 [] - SP-036-6b: Add `make test-leak` target running `go test -race -count=10` on `pkg/webui` and `pkg/agent` with verbose goleak output.
-[] - SP-036-6c: Add package-level doc comments to `pkg/webui/file_watcher.go` (or wherever `fileWatcher` lives) and `pkg/lsp/proxy/manager.go` documenting the shutdown contract.
+[x] - SP-036-6c: Add package-level doc comments to `pkg/webui/file_watcher.go` (or wherever `fileWatcher` lives) and `pkg/lsp/proxy/manager.go` documenting the shutdown contract.
 
 ---
 

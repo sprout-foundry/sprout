@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -16,7 +17,7 @@ func (a *secretPrompterAdapter) PromptSecretAction(secrets []security.DetectedSe
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Secrets detected in %s:\n", source)
 	for i, s := range secrets {
-		fmt.Fprintf(&sb, "  %d. [%s] %s", i+1, s.Type, s.Snippet)
+		fmt.Fprintf(&sb, "  %d. [%s] %s", i+1, secretdetect.DisplayName(s.Type), s.Snippet)
 		if s.Line > 0 {
 			fmt.Fprintf(&sb, " (line %d)", s.Line)
 		}

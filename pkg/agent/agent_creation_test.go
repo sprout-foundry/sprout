@@ -6,6 +6,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
 // newTestAgent creates a minimal agent for unit tests using the test client path.
@@ -68,6 +69,61 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 	// Replace the real-user-config manager with the isolated one.
 	agent.configManager = mgr
 	return agent
+}
+
+// TestNewAgentWithClient pins the public constructor that WASM/SDK
+// consumers use to bypass the interactive provider-resolution dance in
+// newAgentWithConfigManager. The contract is: caller hands us an
+// already-built client + configManager, we wire up the rest of the
+// agent without prompting for API keys or running connection checks.
+func TestNewAgentWithClient(t *testing.T) {
+	configDir := t.TempDir() + "/.sprout"
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	mgr, err := configuration.NewManagerWithDir(configDir)
+	if err != nil {
+		t.Fatalf("NewManagerWithDir failed: %v", err)
+	}
+
+	client, err := factory.CreateProviderClient(api.TestClientType, "")
+	if err != nil {
+		t.Fatalf("CreateProviderClient(TestClientType) failed: %v", err)
+	}
+
+	ag, err := NewAgentWithClient(client, api.TestClientType, mgr)
+	if err != nil {
+		t.Fatalf("NewAgentWithClient failed: %v", err)
+	}
+	defer ag.Shutdown()
+
+	if ag.GetProviderType() != api.TestClientType {
+		t.Errorf("GetProviderType = %q, want %q", ag.GetProviderType(), api.TestClientType)
+	}
+	if ag.GetSystemPrompt() == "" {
+		t.Error("system prompt should be populated from the embedded default")
+	}
+	if ag.configManager != mgr {
+		t.Error("agent should hold the passed-in configManager")
+	}
+}
+
+func TestNewAgentWithClient_NilGuards(t *testing.T) {
+	mgr, err := configuration.NewManagerWithDir(t.TempDir() + "/.sprout")
+	if err != nil {
+		t.Fatalf("NewManagerWithDir failed: %v", err)
+	}
+	client, err := factory.CreateProviderClient(api.TestClientType, "")
+	if err != nil {
+		t.Fatalf("CreateProviderClient failed: %v", err)
+	}
+
+	if _, err := NewAgentWithClient(nil, api.TestClientType, mgr); err == nil {
+		t.Error("expected error when client is nil")
+	}
+	if _, err := NewAgentWithClient(client, api.TestClientType, nil); err == nil {
+		t.Error("expected error when configManager is nil")
+	}
 }
 
 func TestNewAgentWithModelCreation(t *testing.T) {

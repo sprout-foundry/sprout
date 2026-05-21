@@ -317,8 +317,8 @@ Adding a tool today requires editing four locations across two packages (definit
 
 ### Phase 7: Documentation
 
-[] - SP-038-7a: Write `docs/TOOLS.md` covering: how to add a tool (one-file recipe), the `ToolHandler` interface, the `ToolEnv` contract, the registry init order, the persona filter, and the relationship between tools and `pkg/agent_commands/`.
-[] - SP-038-7b: Add a package-level doc comment to `pkg/agent_tools/handler.go`.
+[x] - SP-038-7a: Write `docs/TOOLS.md` covering: how to add a tool (one-file recipe), the `ToolHandler` interface, the `ToolEnv` contract, the registry init order, the persona filter, and the relationship between tools and `pkg/agent_commands/`.
+[x] - SP-038-7b: Add a package-level doc comment to `pkg/agent_tools/handler.go`.
 
 ---
 

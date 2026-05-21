@@ -14,6 +14,7 @@ package agent
 
 import (
 	"sync"
+	"sync/atomic"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -22,9 +23,9 @@ import (
 // ToolExecutor handles tool execution logic
 type ToolExecutor struct {
 	agent           *Agent
-	handlerRegistry *tools.ToolRegistry // SP-038: new handler registry (nil = backward compat)
-	toolIndex       int                 // Counter for tool execution order within each turn
-	idCounter       int64               // Atomic counter for unique tool call ID generation
+	handlerRegistry atomic.Pointer[tools.ToolRegistry] // SP-038: new handler registry (nil = backward compat)
+	toolIndex       int                                 // Counter for tool execution order within each turn
+	idCounter       int64                               // Atomic counter for unique tool call ID generation
 	idCounterMu     sync.Mutex
 }
 
@@ -38,8 +39,14 @@ func NewToolExecutor(agent *Agent) *ToolExecutor {
 // SetHandlerRegistry sets the new tool handler registry for dual dispatch.
 // When set, the executor checks this registry first before falling back to
 // the legacy dispatch path. This enables gradual migration of tools.
+// Thread-safe: may be called concurrently with tool execution.
 func (te *ToolExecutor) SetHandlerRegistry(r *tools.ToolRegistry) {
-	te.handlerRegistry = r
+	te.handlerRegistry.Store(r)
+}
+
+// getHandlerRegistry returns the current handler registry (nil if not set).
+func (te *ToolExecutor) getHandlerRegistry() *tools.ToolRegistry {
+	return te.handlerRegistry.Load()
 }
 
 // ExecuteTools executes a list of tool calls and returns the results

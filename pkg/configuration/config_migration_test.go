@@ -642,11 +642,9 @@ func TestApplyDefaultSkills_MergesDefaults(t *testing.T) {
 
 	// Verify expected default skills exist
 	expectedSkills := []string{
-		"go-conventions",
-		"test-writing",
-		"commit-msg",
-		"python-conventions",
-		"typescript-conventions",
+		"project-planning",
+		"repo-onboarding",
+		"browse-debugging",
 	}
 
 	for _, skillID := range expectedSkills {
@@ -654,10 +652,10 @@ func TestApplyDefaultSkills_MergesDefaults(t *testing.T) {
 	}
 
 	// Verify skill structure
-	goConventions := skills["go-conventions"].(map[string]interface{})
-	assert.Equal(t, "go-conventions", goConventions["id"])
-	assert.Equal(t, "Go Conventions", goConventions["name"])
-	assert.Equal(t, true, goConventions["enabled"])
+	projectPlanning := skills["project-planning"].(map[string]interface{})
+	assert.Equal(t, "project-planning", projectPlanning["id"])
+	assert.Equal(t, "Project Planning", projectPlanning["name"])
+	assert.Equal(t, true, projectPlanning["enabled"])
 }
 
 // TestApplyDefaultSkills_PreservesExisting verifies existing skills aren't overwritten
@@ -665,9 +663,9 @@ func TestApplyDefaultSkills_PreservesExisting(t *testing.T) {
 	raw := map[string]interface{}{
 		"version": "2.0",
 		"skills": map[string]interface{}{
-			"go-conventions": map[string]interface{}{
-				"id":          "go-conventions",
-				"name":        "My Go Rules",
+			"project-planning": map[string]interface{}{
+				"id":          "project-planning",
+				"name":        "My Planning Rules",
 				"description": "Custom description",
 				"enabled":     false,
 			},
@@ -677,15 +675,15 @@ func TestApplyDefaultSkills_PreservesExisting(t *testing.T) {
 	applyDefaultSkills(raw)
 
 	skills := raw["skills"].(map[string]interface{})
-	goConventions := skills["go-conventions"].(map[string]interface{})
+	projectPlanning := skills["project-planning"].(map[string]interface{})
 
 	// Verify existing custom values are preserved
-	assert.Equal(t, "My Go Rules", goConventions["name"])
-	assert.Equal(t, "Custom description", goConventions["description"])
-	assert.Equal(t, false, goConventions["enabled"])
+	assert.Equal(t, "My Planning Rules", projectPlanning["name"])
+	assert.Equal(t, "Custom description", projectPlanning["description"])
+	assert.Equal(t, false, projectPlanning["enabled"])
 
 	// Other default skills should be added
-	assert.Contains(t, skills, "test-writing")
+	assert.Contains(t, skills, "browse-debugging")
 }
 
 // TestApplyLegacyToolAllowlistMigration_AddsStructuredTools verifies write_structured_file/patch_structured_file are added
@@ -862,9 +860,9 @@ func TestMigration_0_0_to_2_0_FullDefaults(t *testing.T) {
 	skills, ok := migrated["skills"].(map[string]interface{})
 	require.True(t, ok)
 	assert.NotEmpty(t, skills)
-	assert.Contains(t, skills, "go-conventions")
-	assert.Contains(t, skills, "test-writing")
-	assert.Contains(t, skills, "commit-msg")
+	assert.Contains(t, skills, "project-planning")
+	assert.Contains(t, skills, "browse-debugging")
+	assert.Contains(t, skills, "repo-onboarding")
 
 	// Verify the result can be marshaled to JSON
 	_, err = json.Marshal(migrated)

@@ -135,15 +135,8 @@ var skillListCmd = &cobra.Command{
 		builtins := []struct {
 			id, name, desc string
 		}{
-			{"go-conventions", "Go Conventions", "Go coding conventions and best practices"},
-			{"python-conventions", "Python Conventions", "Python 3.11+ coding patterns"},
-			{"typescript-conventions", "TypeScript Conventions", "TypeScript/JavaScript ES2022+ patterns"},
-			{"rust-conventions", "Rust Conventions", "Rust 2021 edition patterns"},
-			{"test-writing", "Test Writing", "Guidelines for writing effective tests"},
-			{"commit-msg", "Commit Message", "Conventional commits format"},
-			{"bug-triage", "Bug Triage", "Debugging workflow"},
-			{"safe-refactor", "Safe Refactor", "Behavior-preserving refactoring"},
-			{"review-workflow", "Review Workflow", "Code review process"},
+			{"project-planning", "Project Planning", "Project onboarding, planning, and initialization"},
+			{"browse-debugging", "Browse Debugging", "Multi-step interactive browser debugging"},
 		}
 		for _, s := range builtins {
 			fmt.Printf("  %-25s %s\n", s.id, s.desc)

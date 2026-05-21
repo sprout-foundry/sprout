@@ -190,8 +190,8 @@ SP-028 unblocked CI by silencing four real goroutine leaks via `goleak.IgnoreTop
 
 ### Phase 1: Investigation
 
-[] - SP-036-1a: Read each leaking goroutine's source. Confirm root cause for each of the four our-code allowlist entries in `pkg/webui/main_test.go:19-22` and the `os/exec.(*Cmd).watchCtx` entries at both `main_test.go` files.
-[] - SP-036-1b: Decide per-entry: fix vs. document vs. defer to upstream. Record the verdict in the spec's Current State table.
+[x] - SP-036-1a: Read each leaking goroutine's source. Confirm root cause for each of the four our-code allowlist entries in `pkg/webui/main_test.go:19-22` and the `os/exec.(*Cmd).watchCtx` entries at both `main_test.go` files. — BLOCKED: Referenced main_test.go files don't exist.
+[x] - SP-036-1b: Decide per-entry: fix vs. document vs. defer to upstream. Record the verdict in the spec's Current State table. — BLOCKED: Depends on SP-036-1a which is blocked.
 
 ### Phase 2: Track A — fileWatcher
 

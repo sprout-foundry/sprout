@@ -505,19 +505,121 @@ Unknown providers pass through unchanged. To add a provider, extend
 `knownProviders` in `pkg/llmproxy/providers.go`; the test suite already
 checks every registered entry round-trips correctly.
 
+### `runChat(provider, model, messagesJSON, options?, onChunk?): Promise<ChatResult>`
+
+A single-shot chat completion call. The minimal building block on top of
+the proxy: validates the JS → Go → llmproxy → platform → upstream →
+response path actually works end-to-end without dragging in the full
+agent loop, tool execution, MCP, etc. Useful for "ping the provider" UX
+in the host page and for smoke-testing the platform proxy.
+
+| Arg | Type | Required | Description |
+|---|---|---|---|
+| `provider` | `string` | yes | One of the keys from `pkg/llmproxy/providers.go` (e.g. `"openai"`, `"anthropic"`, `"openrouter"`). |
+| `model` | `string` | yes | Provider-specific model id. Pass `""` to let the provider client pick its default. |
+| `messagesJSON` | `string` | yes | JSON-encoded `[]agent_api.Message` — must be non-empty. |
+| `options` | `object` | optional | `{reasoning?: string, disableThinking?: bool, vision?: bool}`. Reasoning maps to provider-specific reasoning levels ("low"/"medium"/"high" depending on provider). |
+| `onChunk` | `(content, contentType) => void` | optional | Streaming callback. When provided, runs through `SendChatRequestStream` and invokes the callback per chunk. Omitted → non-streaming. |
+
+```javascript
+const result = await SproutWasm.runChat(
+  'openai', 'gpt-5',
+  JSON.stringify([
+    {role: 'system', content: 'You are concise.'},
+    {role: 'user',   content: 'Reply with one word: ack'},
+  ]),
+  {reasoning: ''},
+  (chunk, type) => console.log('[stream]', type, chunk),
+);
+// result === {
+//   content: 'ack',
+//   reasoning_content: '',
+//   finish_reason: 'stop',
+//   provider: 'openai',
+//   model: 'gpt-5',
+//   prompt_tokens: 24,
+//   completion_tokens: 1,
+//   total_tokens: 25,
+// }
+```
+
+The streaming callback is invoked synchronously from the Go goroutine
+that owns the stream, so don't perform heavy work in it — defer to a
+microtask if you need to update React/Vue state.
+
+Vision: pass `options.vision = true` to route through `SendVisionRequest`
+instead. Vision streaming isn't part of the ClientInterface today, so the
+implementation falls back to non-streaming and delivers the final
+response to `onChunk` as a single chunk when both `vision: true` and
+`onChunk` are set.
+
+### `runAgent(provider, model, query, onEvent?): Promise<AgentResult>`
+
+The full sprout agent loop. Where `runChat` is one HTTP request to a
+provider, `runAgent` constructs an `agent.Agent` and runs `ProcessQuery`
+against it — multi-turn conversation, system prompt, persona, tool
+calling, etc. The same loop native `sprout agent` drives.
+
+| Arg | Type | Required | Description |
+|---|---|---|---|
+| `provider` | `string` | yes | Provider name (same keys as `runChat`). |
+| `model` | `string` | yes | Model id, or `""` for the provider's default. |
+| `query` | `string` | yes | User prompt for the agent. |
+| `onEvent` | `(jsonString) => void` | optional | Forwarded `events.UIEvent` payloads (one per published event). |
+
+```javascript
+const result = await SproutWasm.runAgent(
+  'openai', 'gpt-5',
+  'Read README.md and summarize it in 3 bullet points.',
+  (eventJSON) => {
+    const ev = JSON.parse(eventJSON);
+    // ev.type is one of: query_started, tool_start, tool_end,
+    // stream_chunk, agent_message, query_progress, error, ...
+    console.log('[event]', ev.type, ev.data);
+  },
+);
+// result === {response: '...', provider: 'openai', model: 'gpt-5'}
+```
+
+Events: every entry in `pkg/events/events.go:EventType*` may be emitted.
+The shape is `{id: string, type: string, timestamp: string, data: any}`.
+Forwarding happens from a worker goroutine; the JS callback is invoked
+synchronously (Go-WASM doesn't have async JS calls), so heavy work
+should be deferred to a microtask on the JS side.
+
+Timeout: 10 minutes per call. Agent loops with many tool calls can
+approach this — file an issue if it bites and we'll make it configurable.
+
+**Tool execution under WASM is partially supported.** File-system tools
+work via MEMFS; memory and conversation tools work as expected; shell
+tools route through `pkg/wasmshell` and support its curated builtin set
+(`ls`, `cat`, `cd`, `pwd`, `mkdir`, `rm`, `cp`, `mv`, `touch`, `echo`,
+`head`, `tail`, `wc`, `grep`, `sort`, `find`, `tree`, `date`, `whoami`,
+`env`, `which`, `type`, `history`); MCP and other tools that require
+process-spawning are no-op or fail with an error event. The
+`pkg/agent_tools.RegisterWASMShellExecutor` hook is wired in
+`cmd/wasm/shell_executor.go:init` — overriding it from JS would let host
+pages curate the command set further (e.g. for sandboxing).
+
+**Provider/key custody**: `runAgent` does **not** require an API key on
+the WASM side. The expected wiring is that `SproutWasm.setPlatformEndpoint`
+has already been called, so the underlying HTTP requests route through
+the sprout-foundry platform, which attaches the user's encrypted key
+server-side. For local testing with a direct key, the configuration's
+key store (via `SproutWasm.setAPIKey`) is consulted by the provider
+client; through the proxy it's not needed.
+
 ### What's not here yet (Tier 2b continued)
 
-- High-level agent command entry points (`runAgent`, `runQuestion`,
-  `runCode`, `runCommit`, `runReview`, `runPlan`) — the proxy routing is
-  the foundation; exposing the full agent loop on top of it is plumbing
-  for a follow-up. Until those land, host pages can still verify the
-  proxy by issuing a plain `fetch` against an LLM URL from the host page
-  itself — the routing happens inside Go, so JS-side fetch isn't
-  affected.
-- SSE streaming through Go-WASM `net/http`: spike-test needed for each
-  provider's streaming format. The proxy routing layer is
-  transport-agnostic — it handles streaming responses naturally — but the
-  Go agent code consuming the streams needs to be exercised under WASM.
+- The wrapper commands `runQuestion`, `runCode`, `runCommit`,
+  `runReview`, `runPlan` — each is a thin shape over `runAgent` with a
+  preset system prompt or post-processing step. SP-045-4f.
+- Shell-tool wiring done (SP-045-4e): shell commands route through
+  `pkg/wasmshell`. What's still missing is MCP — process-spawning tools
+  fail under WASM by design.
+- SSE streaming through Go-WASM `net/http`: `runChat` exercises the
+  streaming path under WASM, but each provider's SSE format will still
+  need verification when the host page targets it for real.
 - API-key UX (in the platform side, not this repo): user-self-serve
   rotation, multi-provider key management, audit log of per-request key
   attachment. See SP-045-4a in the roadmap for the design decisions.

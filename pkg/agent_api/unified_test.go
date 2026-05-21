@@ -31,7 +31,7 @@ type mockProvider struct {
 	resetTPSFn      func()
 }
 
-func (m *mockProvider) SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+func (m *mockProvider) SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	if m.sendChatFunc != nil {
 		return m.sendChatFunc(messages, tools, reasoning, disableThinking)
 	}
@@ -45,7 +45,7 @@ func (m *mockProvider) SendChatRequest(messages []Message, tools []Tool, reasoni
 	}, nil
 }
 
-func (m *mockProvider) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
+func (m *mockProvider) SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
 	if m.sendStreamFunc != nil {
 		return m.sendStreamFunc(messages, tools, reasoning, disableThinking, callback)
 	}
@@ -76,7 +76,7 @@ func (m *mockProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return m.models, m.modelsErr
 }
 func (m *mockProvider) SupportsVision() bool    { return m.supportsVision }
-func (m *mockProvider) SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+func (m *mockProvider) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	if m.sendVisionFunc != nil {
 		return m.sendVisionFunc(messages, tools, reasoning, disableThinking)
 	}
@@ -347,7 +347,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_Basic(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest(
+	resp, err := wrapper.SendChatRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "Hello"}},
 		nil,
 		"high",
@@ -373,7 +373,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_Error(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	_, err := wrapper.SendChatRequest(
+	_, err := wrapper.SendChatRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "Hello"}},
 		nil,
 		"",
@@ -402,7 +402,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_WithImages(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest(
+	resp, err := wrapper.SendChatRequest(context.Background(), 
 		[]Message{{
 			Role:    "user",
 			Content: "What is in this image?",
@@ -441,7 +441,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_WithTools(t *testing.T) {
 			},
 		},
 	}
-	_, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "run ls"}}, tools, "", false)
+	_, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "run ls"}}, tools, "", false)
 	require.NoError(t, err)
 	require.Len(t, receivedTools, 1)
 	assert.Equal(t, "shell_command", receivedTools[0].Function.Name)
@@ -479,7 +479,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_ResponseWithToolCalls(t *testing
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "run ls"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "run ls"}}, nil, "", false)
 	require.NoError(t, err)
 	require.Len(t, resp.Choices, 1)
 	require.Len(t, resp.Choices[0].Message.ToolCalls, 1)
@@ -511,7 +511,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_ResponseWithImages(t *testing.T)
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "generate image"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "generate image"}}, nil, "", false)
 	require.NoError(t, err)
 	require.Len(t, resp.Choices[0].Message.Images, 1)
 	assert.Equal(t, "http://example.com/gen.png", resp.Choices[0].Message.Images[0].URL)
@@ -538,7 +538,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_ResponseWithReasoningContent(t *
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "What is 6*7?"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "What is 6*7?"}}, nil, "", false)
 	require.NoError(t, err)
 	assert.Equal(t, "The answer is 42", resp.Choices[0].Message.Content)
 	assert.Equal(t, "Let me think about this...", resp.Choices[0].Message.ReasoningContent)
@@ -553,7 +553,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_EmptyMessages(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{}, nil, "", false)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 }
@@ -572,7 +572,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_MultipleChoices(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	require.NoError(t, err)
 	assert.Len(t, resp.Choices, 2)
 	assert.Equal(t, "response 1", resp.Choices[0].Message.Content)
@@ -599,7 +599,7 @@ func TestUnifiedProviderWrapper_SendVisionRequest_Basic(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendVisionRequest(
+	resp, err := wrapper.SendVisionRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "describe this image", Images: []ImageData{{URL: "http://img.com/pic.png"}}}},
 		nil, "", false,
 	)
@@ -617,7 +617,7 @@ func TestUnifiedProviderWrapper_SendVisionRequest_Error(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	_, err := wrapper.SendVisionRequest(
+	_, err := wrapper.SendVisionRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}}, nil, "", false,
 	)
 	require.Error(t, err)
@@ -638,7 +638,7 @@ func TestUnifiedProviderWrapper_SendVisionRequest_WithImages(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendVisionRequest(
+	resp, err := wrapper.SendVisionRequest(context.Background(), 
 		[]Message{{
 			Role:    "user",
 			Content: "compare these",
@@ -675,7 +675,7 @@ func TestUnifiedProviderWrapper_SendVisionRequest_ResponseWithImages(t *testing.
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendVisionRequest(
+	resp, err := wrapper.SendVisionRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "generate"}}, nil, "", false,
 	)
 	require.NoError(t, err)
@@ -708,7 +708,7 @@ func TestUnifiedProviderWrapper_SendChatRequestStream_Basic(t *testing.T) {
 	wrapper := NewUnifiedProviderWrapper(mock)
 
 	var receivedContent string
-	resp, err := wrapper.SendChatRequestStream(
+	resp, err := wrapper.SendChatRequestStream(context.Background(), 
 		[]Message{{Role: "user", Content: "hello"}},
 		nil, "", false,
 		func(content string, contentType string) {
@@ -737,7 +737,7 @@ func TestUnifiedProviderWrapper_SendChatRequestStream_NilCallback(t *testing.T) 
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequestStream(
+	resp, err := wrapper.SendChatRequestStream(context.Background(), 
 		[]Message{{Role: "user", Content: "hello"}},
 		nil, "", false,
 		nil, // nil callback
@@ -755,7 +755,7 @@ func TestUnifiedProviderWrapper_SendChatRequestStream_Error(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	_, err := wrapper.SendChatRequestStream(
+	_, err := wrapper.SendChatRequestStream(context.Background(), 
 		[]Message{{Role: "user", Content: "hello"}},
 		nil, "", false,
 		func(content string, contentType string) {},
@@ -800,7 +800,7 @@ func TestUnifiedProviderWrapper_SendChatRequestStream_ResponseWithToolCallsAndIm
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequestStream(
+	resp, err := wrapper.SendChatRequestStream(context.Background(), 
 		[]Message{{Role: "user", Content: "hello"}},
 		nil, "", false,
 		func(content string, contentType string) {},
@@ -841,7 +841,7 @@ func TestUnifiedProviderWrapper_SendChatRequestStream_ResponseWithMultipleToolCa
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequestStream(
+	resp, err := wrapper.SendChatRequestStream(context.Background(), 
 		[]Message{{Role: "user", Content: "do both"}},
 		nil, "", false,
 		nil,
@@ -867,7 +867,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_TracksTPS(t *testing.T) {
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	// TPS should have been tracked since CompletionTokens > 0
@@ -886,7 +886,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_NoTPSTracking_ZeroTokens(t *test
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	require.NoError(t, err)
 	// TPS should NOT have been tracked since CompletionTokens == 0
 	assert.Equal(t, 0, resp.Usage.CompletionTokens)
@@ -931,7 +931,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_FullImageRoundtrip(t *testing.T)
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest(
+	resp, err := wrapper.SendChatRequest(context.Background(), 
 		[]Message{{
 			Role:    "user",
 			Content: "process this",
@@ -988,7 +988,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_ResponseWithMultipleToolCallsAnd
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendChatRequest([]Message{{Role: "user", Content: "test"}}, nil, "", false)
+	resp, err := wrapper.SendChatRequest(context.Background(), []Message{{Role: "user", Content: "test"}}, nil, "", false)
 	require.NoError(t, err)
 
 	// Verify all fields are correctly propagated
@@ -1036,7 +1036,7 @@ func TestUnifiedProviderWrapper_SendVisionRequest_ResponseWithToolCalls(t *testi
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	resp, err := wrapper.SendVisionRequest(
+	resp, err := wrapper.SendVisionRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "analyze"}}, nil, "", false,
 	)
 	require.NoError(t, err)
@@ -1063,7 +1063,7 @@ func TestUnifiedProviderWrapper_SendChatRequest_PassesReasoningAndDisableThinkin
 	}
 	wrapper := NewUnifiedProviderWrapper(mock)
 
-	_, err := wrapper.SendChatRequest(
+	_, err := wrapper.SendChatRequest(context.Background(), 
 		[]Message{{Role: "user", Content: "hello"}},
 		nil,
 		"high",

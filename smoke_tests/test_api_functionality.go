@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -170,7 +171,7 @@ func main() {
 			failed++
 		} else {
 			// Test non-streaming (should have token data)
-			nonStreamResp, err := client.SendChatRequest([]api.Message{
+			nonStreamResp, err := client.SendChatRequest(context.Background(), []api.Message{
 				{Role: "user", Content: "Say hello"},
 			}, nil, "", false)
 
@@ -187,7 +188,7 @@ func main() {
 			} else {
 				// Test streaming (tokens may or may not be available depending on API behavior)
 				var streamContent string
-				streamResp, err := client.SendChatRequestStream([]api.Message{
+				streamResp, err := client.SendChatRequestStream(context.Background(), []api.Message{
 					{Role: "user", Content: "Say hello"},
 				}, nil, "", false, func(content string, contentType string) {
 					streamContent += content

@@ -1257,9 +1257,9 @@ func TestSweepExpiredEntries_NoOp_WhenRetentionNegative(t *testing.T) {
 
 func TestSweepExpiredEntries_RemovesOldEntries(t *testing.T) {
 	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+	indexPath := filepath.Join(dir, "conversation_turns.hnsw")
 
-	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	store, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 
 	now := time.Now().UTC()
@@ -1281,7 +1281,7 @@ func TestSweepExpiredEntries_RemovesOldEntries(t *testing.T) {
 	assert.Equal(t, 2, swept, "expected 2 old entries to be swept")
 
 	// Verify only recent entries remain
-	store2, err := embedding.NewJSONLFileStore(indexPath, "")
+	store2, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 	defer store2.Close()
 	remaining, err := store2.LoadAll()
@@ -1299,9 +1299,9 @@ func TestSweepExpiredEntries_RemovesOldEntries(t *testing.T) {
 
 func TestSweepExpiredEntries_KeepsRecentEntries(t *testing.T) {
 	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+	indexPath := filepath.Join(dir, "conversation_turns.hnsw")
 
-	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	store, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 
 	now := time.Now().UTC()
@@ -1317,7 +1317,7 @@ func TestSweepExpiredEntries_KeepsRecentEntries(t *testing.T) {
 	assert.Equal(t, 0, swept, "expected no entries to be swept")
 
 	// Verify all entries remain
-	store2, err := embedding.NewJSONLFileStore(indexPath, "")
+	store2, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 	defer store2.Close()
 	remaining, err := store2.LoadAll()
@@ -1327,9 +1327,9 @@ func TestSweepExpiredEntries_KeepsRecentEntries(t *testing.T) {
 
 func TestSweepExpiredEntries_RemovesAll(t *testing.T) {
 	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+	indexPath := filepath.Join(dir, "conversation_turns.hnsw")
 
-	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	store, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 
 	now := time.Now().UTC()
@@ -1346,7 +1346,7 @@ func TestSweepExpiredEntries_RemovesAll(t *testing.T) {
 	assert.Equal(t, 3, swept, "expected all 3 old entries to be swept")
 
 	// Verify store is now empty
-	store2, err := embedding.NewJSONLFileStore(indexPath, "")
+	store2, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 	defer store2.Close()
 	remaining, err := store2.LoadAll()
@@ -1356,7 +1356,7 @@ func TestSweepExpiredEntries_RemovesAll(t *testing.T) {
 
 func TestSweepExpiredEntries_EmptyStore(t *testing.T) {
 	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+	indexPath := filepath.Join(dir, "conversation_turns.hnsw")
 
 	// Don't create any records — the file won't exist yet
 	swept, err := SweepExpiredEntries(7, indexPath)
@@ -1366,9 +1366,9 @@ func TestSweepExpiredEntries_EmptyStore(t *testing.T) {
 
 func TestSweepExpiredEntries_NonExistentDir(t *testing.T) {
 	// Point to a directory that doesn't exist
-	indexPath := "/tmp/sprout-test-nonexistent-dir-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "/conversation_turns.jsonl"
+	indexPath := "/tmp/sprout-test-nonexistent-dir-" + strconv.FormatInt(time.Now().UnixNano(), 10) + "/conversation_turns.hnsw"
 
-	// The function creates the directory via NewJSONLFileStore, so this
+	// The function creates the directory via NewHNSWStore, so this
 	// should not error — it will create the directory and find no records.
 	swept, err := SweepExpiredEntries(7, indexPath)
 	require.NoError(t, err)
@@ -1378,9 +1378,9 @@ func TestSweepExpiredEntries_NonExistentDir(t *testing.T) {
 func TestSweepExpiredEntries_Boundary(t *testing.T) {
 	// Entries exactly on the cutoff boundary should be KEPT (not Before)
 	dir := t.TempDir()
-	indexPath := filepath.Join(dir, "conversation_turns.jsonl")
+	indexPath := filepath.Join(dir, "conversation_turns.hnsw")
 
-	store, err := embedding.NewJSONLFileStore(indexPath, "")
+	store, err := embedding.NewHNSWStore(indexPath, "")
 	require.NoError(t, err)
 
 	// Use a fixed cutoff by constructing a known time. SweepExpiredEntries

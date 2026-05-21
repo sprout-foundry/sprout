@@ -292,19 +292,12 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	// When manifest is invalidated (model change), replace all records —
 	// old records have stale embeddings from the previous model.
 	if manifestInvalidated && len(newRecords) > 0 {
-		if jsonl, ok := m.store.(*JSONLFileStore); ok {
-			debugLogf("index: replacing all records with %d re-embedded records (model changed)", len(newRecords))
-			storeStart := time.Now()
-			if err := jsonl.ReplaceAll(newRecords); err != nil {
-				return stats, fmt.Errorf("index: store: %w", err)
-			}
-			debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
-		} else {
-			// Fallback: Store() merges, so old records for same IDs get replaced.
-			if err := m.store.Store(newRecords); err != nil {
-				return stats, fmt.Errorf("index: store: %w", err)
-			}
+		debugLogf("index: replacing all records with %d re-embedded records (model changed)", len(newRecords))
+		storeStart := time.Now()
+		if err := m.store.ReplaceAll(newRecords); err != nil {
+			return stats, fmt.Errorf("index: store: %w", err)
 		}
+		debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
 		stats.UnitsEmbedded = len(newRecords)
 	} else if len(newRecords) > 0 || len(baseRecords) < len(existingRecords) {
 		allStoreRecords := make([]VectorRecord, 0, len(baseRecords)+len(newRecords))

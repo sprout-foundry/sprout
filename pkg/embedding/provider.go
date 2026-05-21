@@ -47,6 +47,10 @@ type VectorStore interface {
 	// Size returns the total number of records in the store.
 	Size() int
 
+	// ReplaceAll replaces all records in the store with the given slice.
+	// Use this when you need to perform a full replacement rather than a merge.
+	ReplaceAll(records []VectorRecord) error
+
 	// Close releases any resources held by the store.
 	Close() error
 }

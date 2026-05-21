@@ -40,6 +40,11 @@ type MCPClient struct {
 	connectedAt        time.Time
 	healthCheckCancel  context.CancelFunc
 	healthCheckCtx     context.Context
+
+	// Sliding-window failure tracking
+	failureTimestamps []time.Time
+	disabled          bool
+	disabledReason    string
 }
 
 // NewMCPClient creates a new MCP client for a server
@@ -64,6 +69,11 @@ func NewMCPClient(config MCPServerConfig, logger *utils.Logger) *MCPClient {
 // concurrent process creation races. Use startInternal() for reconnection.
 func (c *MCPClient) Start(ctx context.Context) error {
 	c.mutex.Lock()
+	if c.disabled {
+		reason := c.disabledReason
+		c.mutex.Unlock()
+		return fmt.Errorf("MCP server %s is disabled: %s", c.config.Name, reason)
+	}
 	if c.reconnecting {
 		c.mutex.Unlock()
 		return fmt.Errorf("server %s is reconnecting, cannot start", c.config.Name)
@@ -84,6 +94,11 @@ func (c *MCPClient) startInternal(ctx context.Context) error {
 	if c.stopping {
 		return fmt.Errorf("server %s is stopping, cannot start", c.config.Name)
 	}
+
+	// Reset disabled state on clean start
+	c.disabled = false
+	c.disabledReason = ""
+	c.failureTimestamps = nil
 
 	// Cancel any previous context to prevent goroutine leaks on retry
 	if c.cancel != nil {
@@ -255,6 +270,20 @@ func (c *MCPClient) IsRunning() bool {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.running
+}
+
+// IsDisabled checks if the server has been disabled due to excessive failures
+func (c *MCPClient) IsDisabled() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.disabled
+}
+
+// isEnabled returns true if the client is not disabled and not stopping
+func (c *MCPClient) isEnabled() bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return !c.disabled && !c.stopping
 }
 
 // GetName returns the server name
@@ -798,11 +827,12 @@ func (c *MCPClient) startHealthCheck() {
 					// Health check passed, check if we should reset backoff
 					c.mutex.Lock()
 					if c.reconnectAttempt > 0 && time.Since(c.connectedAt) > 2*time.Minute {
-						// Connection has been stable for 2 minutes, reset backoff
+						// Connection has been stable for 2 minutes, reset backoff and failure history
 						if c.logger != nil {
-							c.logger.LogProcessStep(fmt.Sprintf("[OK] Connection stable for MCP server %s, resetting backoff", c.config.Name))
+							c.logger.LogProcessStep(fmt.Sprintf("[OK] Connection stable for MCP server %s, resetting backoff and failure history", c.config.Name))
 						}
 						c.reconnectAttempt = 0
+						c.failureTimestamps = nil
 					}
 					c.mutex.Unlock()
 				}
@@ -813,7 +843,43 @@ func (c *MCPClient) startHealthCheck() {
 
 // reconnect attempts to reconnect to the MCP server with exponential backoff
 func (c *MCPClient) reconnect(ctx context.Context) {
+	// Track failures in 60s window for adaptive backoff (set inside lock, used after unlock)
+	var failuresIn60s int
+
 	c.mutex.Lock()
+
+	// Record this failure and check sliding windows
+	c.failureTimestamps = append(c.failureTimestamps, time.Now())
+	now := time.Now()
+	var pruned []time.Time
+	for _, t := range c.failureTimestamps {
+		if now.Sub(t) <= 24*time.Hour {
+			pruned = append(pruned, t)
+		}
+	}
+	c.failureTimestamps = pruned
+
+	// Check 24-hour window: if >= 10 failures, disable the server
+	failuresIn24h := len(c.failureTimestamps)
+	if failuresIn24h >= 10 {
+		c.disabled = true
+		c.disabledReason = "10 failures in 24 hours"
+		c.reconnecting = false
+		c.mutex.Unlock()
+		if c.logger != nil {
+			c.logger.LogProcessStep(fmt.Sprintf("[DISABLED] MCP server %s disabled after %d failures in 24 hours", c.config.Name, failuresIn24h))
+		}
+		return
+	}
+
+	// Count 60-second window failures for adaptive backoff
+	failuresIn60s = 0
+	for _, t := range c.failureTimestamps {
+		if now.Sub(t) <= 60*time.Second {
+			failuresIn60s++
+		}
+	}
+
 	if c.stopping || c.reconnecting || c.reconnectAttempt >= c.getMaxRestarts() {
 		c.mutex.Unlock()
 		if c.logger != nil {
@@ -840,6 +906,10 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 
 	// Calculate backoff delay
 	delay := c.calculateBackoff(attempt)
+	// Boost backoff for rapid failure patterns (>3 failures in 60s)
+	if failuresIn60s > 3 {
+		delay = delay * 2
+	}
 	if c.logger != nil {
 		c.logger.LogProcessStep(fmt.Sprintf("[RECONNECT] Attempting reconnect %d/%d for MCP server %s in %v", attempt, c.getMaxRestarts(), c.config.Name, delay))
 	}
@@ -906,6 +976,8 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// startInternal() sets connectedAt = time.Now(), which the health check
+	// uses for the 2-minute stability reset of failureTimestamps.
 	if err := c.startInternal(ctx); err != nil {
 		c.mutex.Lock()
 		c.running = false
@@ -945,10 +1017,10 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 
 // calculateBackoff calculates exponential backoff delay
 func (c *MCPClient) calculateBackoff(attempt int) time.Duration {
-	// Start with 1 second, double each attempt up to max 60 seconds
+	// Start with 1 second, double each attempt up to max 5 minutes
 	backoff := time.Duration(1<<uint(attempt-1)) * time.Second
-	if backoff > 60*time.Second {
-		backoff = 60 * time.Second
+	if backoff > 5*time.Minute {
+		backoff = 5 * time.Minute
 	}
 	return backoff
 }

@@ -57,6 +57,14 @@ export interface SubagentActivity {
   taskCount?: number;
   failures?: number;
   tool?: string;
+  /** Lifecycle status: "queued", "started", "completed", "cancelled" */
+  status?: string;
+  /** Reason for cancellation (e.g. "budget exceeded") */
+  reason?: string;
+  /** Tokens consumed by this subagent task */
+  tokensUsed?: number;
+  /** Duration in milliseconds */
+  elapsedMs?: number;
 }
 
 export interface LogEntry {

@@ -25,7 +25,8 @@ type SubagentOptions struct {
 	SystemPrompt string          // optional system prompt override
 	MaxTokens    int             // token budget (0 = unlimited)
 	Timeout      time.Duration   // execution timeout (0 = unlimited)
-	WorkingDir   string          // optional: override workspace root (must be within $HOME)
+	WorkingDir             string          // optional: override workspace root (must be within $HOME)
+	MaxConcurrentSubagents int             // max parallel subagents (0 = unlimited, default unlimited)
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -120,9 +121,31 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 	parallelCtx, parallelCancel := context.WithCancel(ctx)
 	defer parallelCancel()
 
+	// Semaphore for limiting concurrent subagents
+	var sem chan struct{}
+	if opts.MaxConcurrentSubagents > 0 {
+		sem = make(chan struct{}, opts.MaxConcurrentSubagents)
+	}
+
 	for i, task := range tasks {
 		wg.Add(1)
 		go func(idx int, t SubagentTask) {
+			// Acquire semaphore (if limited), respecting context cancellation
+			if sem != nil {
+				select {
+				case sem <- struct{}{}:
+					defer func() { <-sem }()
+				case <-parallelCtx.Done():
+					defer wg.Done()
+					results[idx] = &SubagentResult{
+						ID:        t.ID,
+						Error:     parallelCtx.Err(),
+						Cancelled: true,
+					}
+					return
+				}
+			}
+
 			defer wg.Done()
 			taskOpts := opts
 			if t.Model != "" {

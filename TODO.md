@@ -297,10 +297,10 @@ Adding a tool today requires editing four locations across two packages (definit
 
 ### Phase 4: Migrate medium tools
 
-[] - SP-038-4a: Migrate `write_file` and `write_structured_file` together (preserve the SP-035 Phase 4 migration warning behavior).
-[] - SP-038-4b: Migrate `edit_file`.
-[] - SP-038-4c: Migrate `shell_command` — careful interaction with the SP-035 two-gate risk model; the `EvaluateOperationRisk` and `ClassifyToolCall` callouts must remain on the path.
-[] - SP-038-4d: Migrate `search_memories` / `save_memory` (touches SP-027 conversation-store paths).
+[x] - SP-038-4a: Migrate `write_file` and `write_structured_file` together (preserve the SP-035 Phase 4 migration warning behavior).
+[x] - SP-038-4b: Migrate `edit_file`.
+[x] - SP-038-4c: Migrate `shell_command` — careful interaction with the SP-035 two-gate risk model; the `EvaluateOperationRisk` and `ClassifyToolCall` callouts must remain on the path.
+[x] - SP-038-4d: Migrate `search_memories` / `save_memory` (touches SP-027 conversation-store paths).
 
 ### Phase 5: Migrate large/complex tools
 

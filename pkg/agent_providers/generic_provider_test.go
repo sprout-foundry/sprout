@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -413,7 +414,7 @@ func TestGenericProviderAllowsEmptyDefaultModelAndDiscoversModelOnDemand(t *test
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	_, err = provider.SendChatRequest(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err != nil {
 		t.Fatalf("expected provider to discover model and send request, got error: %v", err)
 	}
@@ -449,7 +450,7 @@ func TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable(t *testing.T) 
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	_, err = provider.SendChatRequest(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err == nil {
 		t.Fatal("expected error when no model can be discovered")
 	}
@@ -559,7 +560,7 @@ func TestGenericProviderSummarizesCloudflareHTMLTimeouts(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	_, err = provider.SendChatRequest(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}
@@ -595,7 +596,7 @@ func TestGenericProviderExtractsJSONErrorMessage(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	_, err = provider.SendChatRequest(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err == nil {
 		t.Fatal("expected JSON error")
 	}
@@ -631,7 +632,7 @@ func TestGenericProviderTruncatesLargePlainTextErrors(t *testing.T) {
 		t.Fatalf("failed to create provider: %v", err)
 	}
 
-	_, err = provider.SendChatRequest([]api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	_, err = provider.SendChatRequest(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
 	if err == nil {
 		t.Fatal("expected plain text error")
 	}

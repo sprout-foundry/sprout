@@ -4,10 +4,11 @@ import React from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
 import { getPersonaColor, getStatusIcon, formatDuration, formatTime } from './helpers';
-import type { ContextSubagentRun, LiveLogLine } from './types';
+import type { ContextSubagentRun, LiveLogLine, SubagentResourceCounts } from './types';
 
 interface SubagentsTabProps {
   subagentRuns: ContextSubagentRun[];
+  resourceCounts: SubagentResourceCounts;
   expandedSubagents: Set<string>;
   toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   expandedTools: Set<string>;
@@ -21,6 +22,7 @@ interface SubagentsTabProps {
 
 export function SubagentsTab({
   subagentRuns,
+  resourceCounts,
   expandedSubagents,
   toolRefs,
   expandedTools: _expandedTools,
@@ -53,6 +55,31 @@ export function SubagentsTab({
 
   return (
     <div className="context-panel-tools-list">
+      {subagentRuns.length > 0 && (
+        <div className="subagent-resource-summary">
+          <span className="subagent-stat-chip subagent-stat-active">
+            {resourceCounts.active} active
+          </span>
+          {resourceCounts.queued > 0 && (
+            <span className="subagent-stat-chip subagent-stat-queued">
+              {resourceCounts.queued} queued
+            </span>
+          )}
+          <span className="subagent-stat-chip subagent-stat-completed">
+            {resourceCounts.completed} completed
+          </span>
+          {resourceCounts.failed > 0 && (
+            <span className="subagent-stat-chip subagent-stat-failed">
+              {resourceCounts.failed} failed
+            </span>
+          )}
+          {resourceCounts.cancelled > 0 && (
+            <span className="subagent-stat-chip subagent-stat-cancelled">
+              {resourceCounts.cancelled} cancelled
+            </span>
+          )}
+        </div>
+      )}
       {subagentRuns.length === 0 ? (
         <div className="context-panel-empty">
           Delegated work will appear here when the orchestrator runs <code>run_subagent</code> or{' '}

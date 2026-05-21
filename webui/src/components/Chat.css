@@ -1196,6 +1196,45 @@
   letter-spacing: 0.03em;
 }
 
+/* ── Subagent resource summary row ─────────────────────────────── */
+
+.subagent-resource-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 0;
+}
+
+.subagent-stat-active {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: rgb(99, 102, 241);
+}
+
+.subagent-stat-queued {
+  background: rgba(234, 179, 8, 0.1);
+  border-color: rgba(234, 179, 8, 0.3);
+  color: rgb(181, 132, 4);
+}
+
+.subagent-stat-completed {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: rgb(100, 116, 139);
+}
+
+.subagent-stat-failed {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: rgb(220, 38, 38);
+}
+
+.subagent-stat-cancelled {
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.3);
+  color: rgb(234, 88, 12);
+}
+
 .subagent-current-step {
   display: flex;
   align-items: center;

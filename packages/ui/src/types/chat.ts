@@ -57,6 +57,7 @@ export interface SubagentActivity {
   taskCount?: number;
   failures?: number;
   tool?: string;
+  status?: 'queued' | 'started' | 'completed' | 'cancelled';
 }
 
 export interface LogEntry {

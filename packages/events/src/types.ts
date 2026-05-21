@@ -108,6 +108,7 @@ export interface SubagentActivityData {
   model?: string;
   task_count?: number;
   failures?: number;
+  status?: string;
   chat_id?: string;
 }
 

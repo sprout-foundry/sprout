@@ -278,10 +278,10 @@ Adding a tool today requires editing four locations across two packages (definit
 
 ### Phase 1: Interface + registry
 
-[] - SP-038-1a: Create `pkg/agent_tools/handler.go` with `ToolHandler` interface (`Name`, `Definition`, `Validate`, `Execute`), `ToolEnv` (explicit deps, no `*Agent`), `ToolResult` (Output, StructuredOut, TokenUsage for SP-037).
-[] - SP-038-1b: Create `pkg/agent_tools/registry.go` with thread-safe `ToolRegistry` (`Register`, `Lookup`, `All`, `ForPersona`).
-[] - SP-038-1c: Move `ClassifyToolCall` from `pkg/agent/tool_definitions.go` (current location around line 541 per SP-035 references) to `pkg/agent_tools/security_classifier.go`. Update all callers.
-[] - SP-038-1d: Create `pkg/agent_tools/all.go` as the central tools-init file (initially empty — tools migrate in over time).
+[x] - SP-038-1a: Create `pkg/agent_tools/handler.go` with `ToolHandler` interface (`Name`, `Definition`, `Validate`, `Execute`), `ToolEnv` (explicit deps, no `*Agent`), `ToolResult` (Output, StructuredOut, TokenUsage for SP-037).
+[x] - SP-038-1b: Create `pkg/agent_tools/registry.go` with thread-safe `ToolRegistry` (`Register`, `Lookup`, `All`, `ForPersona`).
+[x] - SP-038-1c: Move `ClassifyToolCall` from `pkg/agent/tool_definitions.go` (current location around line 541 per SP-035 references) to `pkg/agent_tools/security_classifier.go`. Update all callers.
+[x] - SP-038-1d: Create `pkg/agent_tools/all.go` as the central tools-init file (initially empty — tools migrate in over time).
 
 ### Phase 2: Dual-dispatch shim
 

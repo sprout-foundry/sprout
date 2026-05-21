@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -964,5 +965,48 @@ func TestSubagentRunner_OutputRouterSet(t *testing.T) {
 	// Verify the error mentions the expected issue
 	if !strings.Contains(result.Error.Error(), "config") && !strings.Contains(result.Error.Error(), "subagent") {
 		t.Errorf("unexpected error message: %v", result.Error)
+	}
+}
+
+func TestSubagentRunner_OrderPreservedUnderBatching(t *testing.T) {
+	agent := newIsolatedTestAgent(t)
+	defer agent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: nil, // causes subagent creation to fail, so all results will have errors
+		WorkspaceRoot: agent.workspaceRoot,
+	}
+
+	runner := NewSubagentRunner(agent, shared)
+
+	// Create 5 tasks, each with ID equal to its index
+	var tasks []SubagentTask
+	for i := 0; i < 5; i++ {
+		tasks = append(tasks, SubagentTask{
+			ID:     strconv.Itoa(i),
+			Prompt: fmt.Sprintf("task %d", i),
+		})
+	}
+
+	// Use MaxConcurrentSubagents=2 so at most 2 run at a time
+	results := runner.RunParallel(context.Background(), tasks, SubagentOptions{
+		MaxConcurrentSubagents: 2,
+	})
+
+	if len(results) != 5 {
+		t.Fatalf("expected 5 results, got %d", len(results))
+	}
+
+	// Verify order is preserved: results[i].ID should equal "i"
+	for i, r := range results {
+		if r == nil {
+			t.Fatalf("result[%d] is nil", i)
+		}
+		expectedID := strconv.Itoa(i)
+		if r.ID != expectedID {
+			t.Fatalf("results[%d].ID = %q, want %q", i, r.ID, expectedID)
+		}
 	}
 }

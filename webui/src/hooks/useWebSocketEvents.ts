@@ -9,7 +9,7 @@
 
 import type { WsEvent } from '@sprout/events';
 import type { Message } from '@sprout/ui';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
@@ -54,7 +54,7 @@ export default function useWebSocketEvents({
   activeChatIdRef.current = state.activeChatId;
 
   // ── Sync activeChatId with WebSocketService for reattach support ────────
-  useEffect(() => {
+  useLayoutEffect(() => {
     WebSocketService.getInstance().setActiveChatId(state.activeChatId);
   }, [state.activeChatId]);
 

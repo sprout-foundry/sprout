@@ -50,6 +50,12 @@ type chatSession struct {
 
 	Agent            *agent.Agent `json:"-"`
 	mu               sync.Mutex
+
+	// runBuffer holds the last N stream events for reattach replay when
+	// a browser tab reconnects mid-query. Constructed lazily so chats
+	// that never see a query don't pay the allocation. See
+	// pkg/webui/chat_run_buffer.go and SP-034-2a.
+	runBuffer *chatRunRingBuffer `json:"-"`
 }
 
 // messageCount returns the number of messages in the chat's agent state.

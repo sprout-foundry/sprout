@@ -18,6 +18,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - NEVER use `git checkout`, `git switch`, `git restore`, or `git reset` via shell_command
 - If you're about to type `git commit`, STOP immediately
 
+### Active Change Set Isolation
+
+When working on a specific task, you MUST respect other active changes in the working tree:
+
+1. **Focus ONLY on your assigned task.** Do NOT modify, revert, or delete any other active changes that exist in the working tree or change sets.
+2. **Do NOT run destructive git commands** (`git checkout`, `git restore`, `git reset`, `git stash drop`, etc.) that would alter existing staged or unstaged changes that are not yours.
+3. **If a build or test fails** due to conflicts with OTHER unrelated changes (not caused by your current work): pause for 2 minutes, then retry. Repeat up to 3 times (total delay of up to 6 minutes).
+4. **After 3 failed retries** due to external conflicts, stop and escalate to the user. Report the conflicting changes. Do NOT attempt to resolve other people's changes yourself.
+5. **Pass these isolation rules verbatim** when delegating to subagents.
+
 ## Build and Development Commands
 
 ### Building

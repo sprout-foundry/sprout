@@ -281,6 +281,21 @@ export-endpoint-manifest:
 build-all: deploy-ui build-wasm build
 	@echo "Full build completed: React UI + WASM shell + Go binary"
 
+# Generate the shared Go→TS type contract at webui/src/types/generated.ts.
+#
+# SP-034-5a (the actual generator wiring) is deferred — until that
+# lands, this target is a verification-only no-op. It looks for the
+# `@ts-generated` marker comments on the canonical Go types and warns
+# if any are missing or if the TS file is out of sync (lexical hint
+# only; not a full schema check). When tygo or an equivalent generator
+# is wired up, replace the body below with the actual emit command.
+generate-ts-types:
+	@echo "[gen-ts] Verifying @ts-generated markers on canonical Go types..."
+	@grep -lr "@ts-generated" pkg/webui pkg/events 2>/dev/null | sed 's/^/[gen-ts]   marked: /' || echo "[gen-ts]   (no @ts-generated markers found yet)"
+	@test -f webui/src/types/generated.ts || { echo "[gen-ts] webui/src/types/generated.ts missing — hand-author it from the marked Go types" >&2; exit 1; }
+	@echo "[gen-ts] OK. SP-034-5a will replace this with a real generator run."
+.PHONY: generate-ts-types
+
 # Build cloud-mode binary (sprout-cloud) — embeds cloud-mode WebUI
 # Produces a separate binary so it doesn't overwrite the local-mode 'sprout'
 build-cloud: build-wasm

@@ -122,6 +122,36 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			}
 		})
 
+		// Sweep expired persistent context entries based on retention policy
+		if agent.configManager != nil {
+			cfg := agent.configManager.GetConfig()
+			if cfg != nil && cfg.PersistentContext != nil && cfg.PersistentContext.RetentionDays > 0 {
+				// Resolve storePath using the same logic as EmbeddingManager.initLocked()
+				convoStoreDir := ""
+				if cfg.EmbeddingIndex != nil {
+					convoStoreDir = cfg.EmbeddingIndex.IndexDir
+				}
+				if convoStoreDir == "" {
+					configDir := os.Getenv("SPROUT_CONFIG")
+					if configDir == "" {
+						configDir = os.Getenv("LEDIT_CONFIG")
+					}
+					if configDir == "" {
+						home, _ := os.UserHomeDir() // Unlikely to fail; fallback below handles it gracefully
+						configDir = filepath.Join(home, ".config", "sprout")
+					}
+					convoStoreDir = filepath.Join(configDir, "embeddings")
+				}
+				convoStorePath := filepath.Join(convoStoreDir, "conversation_turns.jsonl")
+				swept, sweepErr := SweepExpiredEntries(cfg.PersistentContext.RetentionDays, convoStorePath)
+				if sweepErr != nil && agent.debug {
+					_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to sweep expired context entries: %v\n", sweepErr)))
+				} else if swept > 0 && agent.debug {
+					_, _ = os.Stderr.Write([]byte(fmt.Sprintf("Swept %d expired context entries\n", swept)))
+				}
+			}
+		}
+
 		// Pre-initialize tool registry to avoid first-use overhead (safe: sync.Once)
 		if agent.debug {
 			agent.Logger().Info("Pre-initializing tool registry...")

@@ -186,7 +186,7 @@ jobs:
         fi
         echo "os_name=${OS_NAME}" >> $GITHUB_OUTPUT
         echo "ext=${EXT}" >> $GITHUB_OUTPUT
-        echo "binary_name=ledit-${OS_NAME}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+        echo "binary_name=sprout-${OS_NAME}-${{ matrix.arch }}" >> $GITHUB_OUTPUT
 
     - name: Build
       env:

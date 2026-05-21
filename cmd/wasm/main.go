@@ -57,6 +57,12 @@ func main() {
 	for name, fn := range proxyJSFuncs() {
 		apiSurface[name] = fn
 	}
+	for name, fn := range chatJSFuncs() {
+		apiSurface[name] = fn
+	}
+	for name, fn := range agentJSFuncs() {
+		apiSurface[name] = fn
+	}
 
 	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 

@@ -160,6 +160,55 @@ func NewAgent() (*Agent, error) {
 	return NewAgentWithModel("")
 }
 
+// NewAgentWithClient builds an agent around a pre-constructed provider
+// client. The interactive provider-resolution path in newAgentWithConfigManager
+// (API-key prompts, connection checks, recovery loops) is skipped — useful
+// for WASM/SDK callers where the caller already knows which provider and
+// model to use, and where API keys live elsewhere (e.g. attached server-side
+// by the sprout-foundry platform proxy).
+//
+// The configManager must already be initialized; pass one from
+// configuration.NewManagerSilent() or similar. The returned agent is a
+// production agent (full lifecycle: context limits, session cleanup, tool
+// registry, persona auto-activation).
+func NewAgentWithClient(client api.ClientInterface, clientType api.ClientType, configManager *configuration.Manager) (*Agent, error) {
+	if client == nil {
+		return nil, agenterrors.NewPermanentError("client is required", nil)
+	}
+	if configManager == nil {
+		return nil, agenterrors.NewPermanentError("configManager is required", nil)
+	}
+
+	workspaceRoot, err := os.Getwd()
+	if err != nil {
+		workspaceRoot = "."
+	}
+	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
+		workspaceRoot = absWorkspaceRoot
+	}
+
+	providerName := api.GetProviderName(clientType)
+	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
+	if err != nil {
+		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
+	}
+	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
+
+	interruptCtx, interruptCancel := context.WithCancel(context.Background())
+
+	return initAgentFromResolvedProvider(agentInitParams{
+		client:          client,
+		clientType:      clientType,
+		systemPrompt:    systemPrompt,
+		configManager:   configManager,
+		workspaceRoot:   workspaceRoot,
+		debug:           isDebugEnvEnabled(),
+		interruptCtx:    interruptCtx,
+		interruptCancel: interruptCancel,
+		isProduction:    true,
+	})
+}
+
 // NewAgentWithModel creates a new agent with optional model override
 func NewAgentWithModel(model string) (*Agent, error) {
 	// Initialize configuration manager (silent mode for faster startup)

@@ -47,6 +47,12 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 	session.execMu.Lock()
 	defer session.execMu.Unlock()
 
+	// Derive a cancellable context so that derived resources are
+	// released when this function returns, following Go context best
+	// practices.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Validate session state.
 	session.mutex.RLock()
 	if !session.Active {

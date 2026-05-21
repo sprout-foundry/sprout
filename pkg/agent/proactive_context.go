@@ -314,7 +314,7 @@ func SweepExpiredEntries(retentionDays int, storePath string) (int, error) {
 
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 
-	store, err := embedding.NewJSONLFileStore(storePath, "")
+	store, err := embedding.NewHNSWStore(storePath, "")
 	if err != nil {
 		return 0, fmt.Errorf("sweep: open store %s: %w", storePath, err)
 	}

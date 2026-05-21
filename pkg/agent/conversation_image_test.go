@@ -209,10 +209,10 @@ type visionSupportingClient struct {
 
 func (v *visionSupportingClient) SupportsVision() bool { return v.supportsVision }
 
-func (v *visionSupportingClient) SendChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (v *visionSupportingClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
-func (v *visionSupportingClient) SendChatRequestStream(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (v *visionSupportingClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return nil, nil
 }
 func (v *visionSupportingClient) CheckConnection() error      { return nil }
@@ -236,7 +236,7 @@ func (v *visionSupportingClient) GetVisionModel() string {
 	}
 	return "test-vision-model"
 }
-func (v *visionSupportingClient) SendVisionRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+func (v *visionSupportingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
 func (v *visionSupportingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {

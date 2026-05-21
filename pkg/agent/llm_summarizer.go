@@ -32,7 +32,6 @@ func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMS
 		if len(messages) == 0 {
 			return "", nil
 		}
-		_ = ctx // SendChatRequest does not currently accept context; future-proof.
 		_ = providerName
 
 		systemContent := buildSummarizerSystemPrompt(hint)
@@ -45,7 +44,7 @@ func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMS
 			{Role: "system", Content: systemContent},
 			{Role: "user", Content: userContent},
 		}
-		resp, err := client.SendChatRequest(req, nil, "", false)
+		resp, err := client.SendChatRequest(ctx, req, nil, "", false)
 		if err != nil {
 			return "", fmt.Errorf("llm summary call failed: %w", err)
 		}

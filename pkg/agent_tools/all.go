@@ -13,4 +13,5 @@ package tools
 // Call this once at startup to populate the registry with all new-style tools.
 func RegisterAllTools(registry *ToolRegistry) {
 	registry.Register(NewReadFileHandler())
+	registry.Register(NewListDirectoryHandler())
 }

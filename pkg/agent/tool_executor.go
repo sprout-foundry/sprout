@@ -16,14 +16,16 @@ import (
 	"sync"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
 // ToolExecutor handles tool execution logic
 type ToolExecutor struct {
-	agent       *Agent
-	toolIndex   int   // Counter for tool execution order within each turn
-	idCounter   int64 // Atomic counter for unique tool call ID generation
-	idCounterMu sync.Mutex
+	agent           *Agent
+	handlerRegistry *tools.ToolRegistry // SP-038: new handler registry (nil = backward compat)
+	toolIndex       int                 // Counter for tool execution order within each turn
+	idCounter       int64               // Atomic counter for unique tool call ID generation
+	idCounterMu     sync.Mutex
 }
 
 // NewToolExecutor creates a new tool executor
@@ -31,6 +33,13 @@ func NewToolExecutor(agent *Agent) *ToolExecutor {
 	return &ToolExecutor{
 		agent: agent,
 	}
+}
+
+// SetHandlerRegistry sets the new tool handler registry for dual dispatch.
+// When set, the executor checks this registry first before falling back to
+// the legacy dispatch path. This enables gradual migration of tools.
+func (te *ToolExecutor) SetHandlerRegistry(r *tools.ToolRegistry) {
+	te.handlerRegistry = r
 }
 
 // ExecuteTools executes a list of tool calls and returns the results

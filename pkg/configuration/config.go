@@ -1624,6 +1624,7 @@ func defaultSubagentTypes() map[string]SubagentType {
 
 	types := make(map[string]SubagentType, len(definitions))
 	for id, definition := range definitions {
+		autoApprove := convertAutoApproveRules(definition.AutoApproveRules)
 		types[normalizePersonaID(id)] = SubagentType{
 			ID:               normalizePersonaID(definition.ID),
 			Name:             definition.Name,
@@ -1638,38 +1639,29 @@ func defaultSubagentTypes() map[string]SubagentType {
 			Enabled:          definition.Enabled,
 			LocalOnly:        definition.LocalOnly,
 			Delegatable:      definition.Delegatable,
+			AutoApproveRules: autoApprove,
 		}
 	}
 
 	return types
 }
 
+// convertAutoApproveRules converts the persona catalog's AutoApproveRules to
+// the configuration package's AutoApproveRules type, returning nil if the
+// source is nil.
+func convertAutoApproveRules(src *personas.AutoApproveRules) *AutoApproveRules {
+	if src == nil {
+		return nil
+	}
+	return &AutoApproveRules{
+		LowRiskOps:    append([]string{}, src.LowRiskOps...),
+		MediumRiskOps: append([]string{}, src.MediumRiskOps...),
+		HighRiskNever: append([]string{}, src.HighRiskNever...),
+	}
+}
+
 func defaultSkills() map[string]Skill {
 	return map[string]Skill{
-		"go-conventions": {
-			ID:          "go-conventions",
-			Name:        "Go Conventions",
-			Description: "Go coding conventions, best practices, and style guidelines. Use when writing or reviewing Go code.",
-			Path:        "pkg/agent/skills/go-conventions",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"test-writing": {
-			ID:          "test-writing",
-			Name:        "Test Writing",
-			Description: "Guidelines for writing effective unit tests, integration tests, and test coverage. Use when creating tests.",
-			Path:        "pkg/agent/skills/test-writing",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"commit-msg": {
-			ID:          "commit-msg",
-			Name:        "Commit Message",
-			Description: "Conventional commits format and best practices for writing clear commit messages.",
-			Path:        "pkg/agent/skills/commit-msg",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
 		"repo-onboarding": {
 			ID:          "repo-onboarding",
 			Name:        "Project Planning",
@@ -1678,83 +1670,19 @@ func defaultSkills() map[string]Skill {
 			Enabled:     true,
 			Metadata:    map[string]string{"version": "2.0"},
 		},
-		"bug-triage": {
-			ID:          "bug-triage",
-			Name:        "Bug Triage",
-			Description: "Repro-first debugging workflow with root-cause validation and minimal-risk fix planning.",
-			Path:        "pkg/agent/skills/bug-triage",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"safe-refactor": {
-			ID:          "safe-refactor",
-			Name:        "Safe Refactor",
-			Description: "Behavior-preserving refactor workflow focused on small steps, verification gates, and low regression risk.",
-			Path:        "pkg/agent/skills/safe-refactor",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"test-author": {
-			ID:          "test-author",
-			Name:        "Test Author",
-			Description: "Process for adding targeted tests, edge cases, and regressions for changed behavior.",
-			Path:        "pkg/agent/skills/test-author",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"release-preflight": {
-			ID:          "release-preflight",
-			Name:        "Release Preflight",
-			Description: "Pre-release checklist for build, test, and risk validation with clear go/no-go output.",
-			Path:        "pkg/agent/skills/release-preflight",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"docs-sync": {
-			ID:          "docs-sync",
-			Name:        "Docs Sync",
-			Description: "Process to keep docs aligned with shipped behavior and command surface.",
-			Path:        "pkg/agent/skills/docs-sync",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"review-workflow": {
-			ID:          "review-workflow",
-			Name:        "Review Workflow",
-			Description: "Evidence-first review process for triaging findings, reducing false positives, and prioritizing must-fix risks.",
-			Path:        "pkg/agent/skills/review-workflow",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"python-conventions": {
-			ID:          "python-conventions",
-			Name:        "Python Conventions",
-			Description: "Python 3.11+ coding conventions, best practices, and style guidelines. Use when writing or reviewing Python code.",
-			Path:        "pkg/agent/skills/python-conventions",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"typescript-conventions": {
-			ID:          "typescript-conventions",
-			Name:        "TypeScript Conventions",
-			Description: "TypeScript 5.x and JavaScript ES2022+ coding conventions, best practices, and style guidelines. Use when writing or reviewing TypeScript/JavaScript code.",
-			Path:        "pkg/agent/skills/typescript-conventions",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"rust-conventions": {
-			ID:          "rust-conventions",
-			Name:        "Rust Conventions",
-			Description: "Rust 2021 edition coding conventions, best practices, and style guidelines. Use when writing or reviewing Rust code.",
-			Path:        "pkg/agent/skills/rust-conventions",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
 		"project-planning": {
 			ID:          "project-planning",
 			Name:        "Project Planning",
 			Description: "Structured planning and project initialization workflow. Use when starting a new project, setting up a new codebase, or creating a project plan.",
 			Path:        "pkg/agent/skills/project-planning",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
+		"browse-debugging": {
+			ID:          "browse-debugging",
+			Name:        "Browse Debugging",
+			Description: "Multi-step interactive browser debugging with persistent sessions for web UI investigation.",
+			Path:        "pkg/agent/skills/browse-debugging",
 			Enabled:     true,
 			Metadata:    map[string]string{"version": "1.0"},
 		},

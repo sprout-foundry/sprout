@@ -19,7 +19,7 @@ func TestReadAllowedSkills_WithFile(t *testing.T) {
 	sproutDir := filepath.Join(tmpDir, ".sprout")
 	os.MkdirAll(sproutDir, 0755)
 
-	content := "go-conventions\ntest-writing\n# comment line\n\npython-conventions\n"
+	content := "project-planning\nbrowse-debugging\n# comment line\n\nrepo-onboarding\n"
 	os.WriteFile(filepath.Join(sproutDir, "allowed_skills"), []byte(content), 0644)
 
 	allowed := ReadAllowedSkills(tmpDir)
@@ -27,7 +27,7 @@ func TestReadAllowedSkills_WithFile(t *testing.T) {
 	if len(allowed) != 3 {
 		t.Fatalf("expected 3 allowed skills, got %d", len(allowed))
 	}
-	for _, id := range []string{"go-conventions", "test-writing", "python-conventions"} {
+	for _, id := range []string{"project-planning", "browse-debugging", "repo-onboarding"} {
 		if !allowed[id] {
 			t.Errorf("expected %q to be allowed", id)
 		}

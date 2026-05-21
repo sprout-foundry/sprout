@@ -550,7 +550,7 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		Name:        "activate_skill",
 		Description: "Activate a skill to load its instructions into your context. Use this when you need the skill's expertise for the current task.",
 		Parameters: []core.ParameterConfig{
-			{Name: "skill_id", Type: "string", Required: true, Alternatives: []string{"skill", "id"}, Description: "The ID of the skill to activate (e.g., 'go-conventions', 'test-writing')"},
+			{Name: "skill_id", Type: "string", Required: true, Alternatives: []string{"skill", "id"}, Description: "The ID of the skill to activate (e.g., 'project-planning', 'browse-debugging')"},
 		},
 		Handler: func(ctx context.Context, args map[string]interface{}) (string, error) {
 			logToolExecution(agent, "activate_skill")

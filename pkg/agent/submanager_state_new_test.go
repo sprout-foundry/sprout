@@ -302,7 +302,7 @@ func TestAgentStateManager_CacheStats(t *testing.T) {
 func TestAgentStateManager_SkillsAndPersona(t *testing.T) {
 	sm := NewAgentStateManager(false)
 
-	sm.SetActiveSkills([]string{"go-conventions", "test-writing"})
+	sm.SetActiveSkills([]string{"project-planning", "browse-debugging"})
 	skills := sm.GetActiveSkills()
 	if len(skills) != 2 {
 		t.Errorf("GetActiveSkills = %d, want 2", len(skills))

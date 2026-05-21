@@ -30,6 +30,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // SubagentOptions configures an in-process subagent
@@ -152,7 +153,7 @@ func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason s
 	if r.shared == nil || r.shared.EventBus == nil {
 		return
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"task_id": taskID,
 		"persona": persona,
 		"status":  status, // "queued", "started", "completed", "cancelled"
@@ -167,6 +168,12 @@ func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason s
 		data["elapsed_ms"] = elapsedMs
 	}
 	r.shared.EventBus.Publish(events.EventTypeSubagentActivity, data)
+
+	// Also write to the runlog for persistent structured logging.
+	logger := utils.GetRunLogger()
+	if logger != nil {
+		logger.LogEvent("subagent_activity", data)
+	}
 }
 
 // Run spawns an in-process subagent and waits for completion

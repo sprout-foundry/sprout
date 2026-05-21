@@ -253,7 +253,7 @@ Spec: `roadmap/SP-037-subagent-resource-budgeting.md`
 [x] - SP-037-3a: Add atomic counters (`Active`, `Queued`, `Completed`, `Failed`, `Cancelled`, `TotalQueuedWaitMS`) to `SubagentRunner`; expose via `Metrics()` accessor.
 [x] - SP-037-3b: Emit `subagent.queued / started / completed / cancelled` events through `pkg/events/`.
 [] - SP-037-3c: Add a Subagents resource-usage row to `webui/src/components/.../SubagentsTab.tsx` (or `packages/ui/.../SubagentsPanel` per SP-039 outcome) showing live counts.
-[] - SP-037-3d: Write the same events to runlog via `pkg/logging/`.
+[x] - SP-037-3d: Write the same events to runlog via `pkg/logging/`.
 
 ### Phase 4: Stress + regression
 

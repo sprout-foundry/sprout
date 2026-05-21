@@ -33,10 +33,11 @@ type Choice       = ChatChoice
 // Provider and client interfaces — sprout-specific, not part of seed.
 // ---------------------------------------------------------------------------
 
-// ProviderInterface defines the interface that all providers must implement
+// ProviderInterface defines the interface that all providers must implement.
+// Mirrors ClientInterface's ctx-bearing send methods — see SP-034.
 type ProviderInterface interface {
-	SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
-	SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error)
+	SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
+	SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error)
 	CheckConnection() error
 	SetDebug(debug bool)
 	SetModel(model string) error
@@ -45,7 +46,7 @@ type ProviderInterface interface {
 	GetModelContextLimit() (int, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
-	SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
+	SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 }
 
 // Note: StreamCallback and ModelInfo are defined in streaming.go and models.go

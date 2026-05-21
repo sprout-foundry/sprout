@@ -512,9 +512,13 @@ func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
 	return persona.EvaluateOperationRisk(command)
 }
 
-// GenerateResponse generates a simple response using the current model without tool calls
+// GenerateResponse generates a simple response using the current model without tool calls.
+//
+// TODO(SP-034-1c): accept a ctx parameter and forward it so callers can abort
+// in-flight calls. The interruptCtx on the agent is the natural source, but
+// changing this signature ripples into many callsites — handle in 1c.
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
-	resp, err := a.client.SendChatRequest(messages, nil, "", false) // No tools, no reasoning, no disableThinking
+	resp, err := a.client.SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {
 		return "", agenterrors.NewProviderError("failed to generate response", err, a.GetProvider(), a.GetModel())
 	}

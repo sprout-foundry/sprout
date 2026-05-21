@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -64,7 +65,8 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 	promptSize := len(fullPrompt)
 	v.logger.LogProcessStep(fmt.Sprintf("Scope validation prompt size: %d bytes", promptSize))
 
-	chatResponse, err := v.agentClient.SendChatRequest(messages, nil, "", false)
+	// TODO(SP-034-1c): thread caller ctx through ScopeValidator so Stop aborts.
+	chatResponse, err := v.agentClient.SendChatRequest(context.Background(), messages, nil, "", false)
 	if err != nil {
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()

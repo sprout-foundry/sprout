@@ -18,7 +18,7 @@ type mockClient struct {
 	model               string
 }
 
-func (m *mockClient) SendChatRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+func (m *mockClient) SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	if m.sendChatRequestFunc != nil {
 		return m.sendChatRequestFunc(messages, tools, reasoning, disableThinking)
 	}
@@ -31,8 +31,8 @@ func (m *mockClient) SendChatRequest(messages []Message, tools []Tool, reasoning
 	}, nil
 }
 
-func (m *mockClient) SendChatRequestStream(messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
-	return m.SendChatRequest(messages, tools, reasoning, disableThinking)
+func (m *mockClient) SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
+	return m.SendChatRequest(context.Background(), messages, tools, reasoning, disableThinking)
 }
 
 func (m *mockClient) CheckConnection() error                                      { return nil }
@@ -44,7 +44,7 @@ func (m *mockClient) GetModelContextLimit() (int, error)                        
 func (m *mockClient) ListModels(ctx context.Context) ([]ModelInfo, error)          { return nil, nil }
 func (m *mockClient) SupportsVision() bool                                         { return false }
 func (m *mockClient) GetVisionModel() string                                       { return "" }
-func (m *mockClient) SendVisionRequest(messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
+func (m *mockClient) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	return &ChatResponse{
 		Choices: []Choice{{
 			Message: Message{

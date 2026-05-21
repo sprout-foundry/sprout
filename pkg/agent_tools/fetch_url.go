@@ -14,6 +14,14 @@ func FetchURL(url string, cfg *configuration.Manager) (string, error) {
 		return "", fmt.Errorf("URL cannot be empty")
 	}
 
+	if cfg == nil {
+		newCfg, err := configuration.NewManagerSilent()
+		if err != nil {
+			newCfg = configuration.NewManagerWithConfig(nil, nil)
+		}
+		cfg = newCfg
+	}
+
 	fetcher := webcontent.NewWebContentFetcher()
 	content, err := fetcher.FetchWebContent(url, cfg)
 	if err != nil {

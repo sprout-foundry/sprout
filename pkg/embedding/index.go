@@ -31,6 +31,10 @@ type IndexOptions struct {
 	// are indexed at the file level. When true, files like README.md, package.json,
 	// Dockerfile, etc. are indexed as single records with Type="file".
 	IndexFileLevel bool
+	// ManifestPath is the path to the build manifest file that tracks file
+	// modification times from the last successful build. When set, BuildIndex
+	// uses the manifest to skip parsing unchanged files.
+	ManifestPath string
 }
 
 // IndexManager orchestrates code extraction, embedding, and storage.
@@ -60,6 +64,9 @@ func NewIndexManager(provider EmbeddingProvider, store VectorStore, opts IndexOp
 // Uses incremental rebuild: loads existing records, compares content hashes,
 // and only re-embeds changed or new files. Deleted files have their records
 // removed from the store.
+// When ManifestPath is set, uses an mtime-based manifest to skip parsing
+// unchanged files entirely, turning a multi-minute full parse into a
+// ~2-second stat sweep on warm indexes.
 // When IndexFileLevel is enabled, also indexes non-code files at the file level.
 func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexStats, error) {
 	start := time.Now()
@@ -83,33 +90,82 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		return nil, fmt.Errorf("index: walk %s: %w", rootDir, err)
 	}
 
+	// Attempt mtime-based manifest optimization to skip parsing unchanged files.
+	var (
+		changedFiles        []string
+		unchangedFiles      []string
+		manifest            *BuildManifest
+		manifestInvalidated bool // true when model hash changed, forces full re-embed
+	)
+
+	if m.opts.ManifestPath != "" {
+		manifest, err = LoadManifest(m.opts.ManifestPath)
+		if err != nil {
+			debugLogf("index: manifest load failed (falling back): %v", err)
+		}
+	}
+
+	if manifest != nil {
+		diff, err := DiffManifest(ctx, manifest, m.provider.ModelHash(), rootDir, m.opts.IndexFileLevel)
+		if err != nil {
+			debugLogf("index: manifest diff failed (falling back): %v", err)
+		} else {
+			changedFiles = diff.ChangedFiles
+			unchangedFiles = diff.UnchangedFiles
+			manifestInvalidated = diff.ManifestInvalidated
+
+			// Remove records for deleted files.
+			if len(diff.DeletedFiles) > 0 {
+				deleteSet := make(map[string]bool, len(diff.DeletedFiles))
+				for _, f := range diff.DeletedFiles {
+					deleteSet[f] = true
+				}
+				var kept []VectorRecord
+				for _, rec := range existingRecords {
+					if !deleteSet[rec.File] {
+						kept = append(kept, rec)
+					}
+				}
+				if len(kept) < len(existingRecords) {
+					debugLogf("index: manifest: dropping %d records for deleted files",
+						len(existingRecords)-len(kept))
+					existingRecords = kept
+				}
+			}
+
+			debugLogf("index: manifest: %d changed, %d unchanged, %d deleted (out of %d walked)",
+				len(changedFiles), len(unchangedFiles), len(diff.DeletedFiles), len(files))
+		}
+	}
+
+	// If manifest didn't provide a filtered list, parse all files.
+	if changedFiles == nil && unchangedFiles == nil {
+		changedFiles = files
+	}
+
 	var allUnits []CodeUnit
 	var fileExtractor *FileExtractor
 	if m.opts.IndexFileLevel {
-		// Initialize file extractor for non-code files
 		fileExtractor = NewFileExtractor(8000)
 	}
 
-	for _, path := range files {
+	for _, path := range changedFiles {
 		if err := ctx.Err(); err != nil {
 			stats.Duration = time.Since(start)
 			return stats, fmt.Errorf("index: cancelled during file extraction")
 		}
 
-		// Determine if this is a code file or non-code file
 		isCodeFile := hasCodeExtension(path)
 		isIndexableFile := IsSupportedIndexableFile(path)
 
 		var units []CodeUnit
 		if isCodeFile {
-			// Use existing code extractor for code files
 			units, err = ExtractFromFile(path, WithIncludeTests(m.opts.IncludeTests))
 			if err != nil {
 				debugLogf("index: skipping %s: %v", path, err)
 				continue
 			}
 		} else if isIndexableFile {
-			// Use file extractor for non-code files
 			content, err := os.ReadFile(path)
 			if err != nil {
 				debugLogf("index: skipping %s: %v", path, err)
@@ -121,20 +177,27 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 				continue
 			}
 		} else {
-			// Should not happen if walk functions are correct, but skip anyway
 			continue
 		}
 
 		stats.FilesProcessed++
 		allUnits = append(allUnits, units...)
 
-		// Log progress every ProgressInterval files processed.
 		if stats.FilesProcessed%ProgressInterval == 0 {
 			debugLogf("index: extraction progress: %d files, %d units", stats.FilesProcessed, len(allUnits))
 		}
 	}
 
 	stats.UnitsExtracted = len(allUnits)
+
+	// If manifest optimization is active and no units were extracted (all unchanged),
+	// we can skip the incremental comparison and store write entirely.
+	if len(allUnits) == 0 && len(unchangedFiles) > 0 {
+		debugLogf("index: all %d files unchanged (manifest), nothing to do", len(unchangedFiles))
+		stats.Duration = time.Since(start)
+		return stats, nil
+	}
+
 	if len(allUnits) == 0 {
 		stats.Duration = time.Since(start)
 		return stats, nil
@@ -158,8 +221,6 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	}
 
 	// Filter existing records to only include files that still exist.
-	// This handles the case where files were deleted since the last index build.
-	// Defer all disk writes to a single Store call at the end.
 	var baseRecords []VectorRecord
 	for _, rec := range existingRecords {
 		if currentFiles[rec.File] {
@@ -181,40 +242,43 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	}
 
 	// Determine which files have changed by comparing hashes.
-	var filesToReembed []string
-	for file, unitHashes := range currentFileUnits {
-		existingHashes := existingFileUnits[file]
-		// File is new or has different unit count → re-embed.
-		if len(existingHashes) != len(unitHashes) {
-			filesToReembed = append(filesToReembed, file)
-			continue
-		}
-		// Compare hashes unit-by-unit.
-		for id, hash := range unitHashes {
-			if existingHashes[id] != hash {
+	// When the manifest is invalidated (model hash changed), skip hash comparison
+	// and re-embed everything with the new model.
+	var unitsToEmbed []CodeUnit
+	if manifestInvalidated {
+		debugLogf("index: model hash changed (manifest invalidated), re-embedding all %d units", len(allUnits))
+		unitsToEmbed = allUnits
+	} else {
+		var filesToReembed []string
+		for file, unitHashes := range currentFileUnits {
+			existingHashes := existingFileUnits[file]
+			if len(existingHashes) != len(unitHashes) {
 				filesToReembed = append(filesToReembed, file)
-				break
+				continue
+			}
+			for id, hash := range unitHashes {
+				if existingHashes[id] != hash {
+					filesToReembed = append(filesToReembed, file)
+					break
+				}
 			}
 		}
-	}
 
-	// Collect units from changed/new files for embedding.
-	var unitsToEmbed []CodeUnit
-	reembedSet := make(map[string]bool)
-	for _, f := range filesToReembed {
-		reembedSet[f] = true
-	}
-	for _, unit := range allUnits {
-		if reembedSet[unit.File] {
-			unitsToEmbed = append(unitsToEmbed, unit)
+		reembedSet := make(map[string]bool)
+		for _, f := range filesToReembed {
+			reembedSet[f] = true
+		}
+		for _, unit := range allUnits {
+			if reembedSet[unit.File] {
+				unitsToEmbed = append(unitsToEmbed, unit)
+			}
 		}
 	}
 
 	// Embed only changed units.
 	var newRecords []VectorRecord
 	if len(unitsToEmbed) > 0 {
-		debugLogf("index: re-embedding %d units from %d changed/new files...",
-			len(unitsToEmbed), len(filesToReembed))
+		debugLogf("index: re-embedding %d units...", len(unitsToEmbed))
 		embedStart := time.Now()
 		newRecords, err = m.embedUnits(ctx, unitsToEmbed)
 		if err != nil {
@@ -224,11 +288,25 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
 	}
 
-	// Store all records in a single call.
-	// Store() merges by ID: existing records that weren't re-embedded are preserved,
-	// and re-embedded records replace their old versions.
-	if len(newRecords) > 0 || len(baseRecords) < len(existingRecords) {
-		// Combine filtered existing records with new records.
+	// Store all records.
+	// When manifest is invalidated (model change), replace all records —
+	// old records have stale embeddings from the previous model.
+	if manifestInvalidated && len(newRecords) > 0 {
+		if jsonl, ok := m.store.(*JSONLFileStore); ok {
+			debugLogf("index: replacing all records with %d re-embedded records (model changed)", len(newRecords))
+			storeStart := time.Now()
+			if err := jsonl.ReplaceAll(newRecords); err != nil {
+				return stats, fmt.Errorf("index: store: %w", err)
+			}
+			debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
+		} else {
+			// Fallback: Store() merges, so old records for same IDs get replaced.
+			if err := m.store.Store(newRecords); err != nil {
+				return stats, fmt.Errorf("index: store: %w", err)
+			}
+		}
+		stats.UnitsEmbedded = len(newRecords)
+	} else if len(newRecords) > 0 || len(baseRecords) < len(existingRecords) {
 		allStoreRecords := make([]VectorRecord, 0, len(baseRecords)+len(newRecords))
 		allStoreRecords = append(allStoreRecords, baseRecords...)
 		allStoreRecords = append(allStoreRecords, newRecords...)
@@ -244,6 +322,20 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 	} else {
 		debugLogf("index: no changes detected, skipping store")
 	}
+
+	// Save manifest after successful store (always, when ManifestPath is set,
+	// so the manifest covers the full workspace including unchanged files).
+	if m.opts.ManifestPath != "" {
+		// Build manifest from all files in the workspace (changed + unchanged).
+		allFiles := make([]string, 0, len(changedFiles)+len(unchangedFiles))
+		allFiles = append(allFiles, changedFiles...)
+		allFiles = append(allFiles, unchangedFiles...)
+		manifest = BuildManifestFromFiles(allFiles, m.provider.ModelHash())
+		if err := SaveManifest(m.opts.ManifestPath, manifest); err != nil {
+			debugLogf("index: manifest save failed (non-fatal): %v", err)
+		}
+	}
+
 	stats.Duration = time.Since(start)
 	return stats, nil
 }
@@ -541,8 +633,40 @@ func (m *IndexManager) UpdateFromGitDiff(ctx context.Context, repoRoot string) (
 		return stats, fmt.Errorf("index: failed to update %d files: %v", len(errs), errs)
 	}
 
+	// Update manifest for changed/deleted files.
+	if m.opts.ManifestPath != "" {
+		m.updateManifestForDiff(fileSet, toDelete)
+	}
+
 	stats.Duration = time.Since(start)
 	return stats, nil
+}
+
+// updateManifestForDiff updates the manifest entries for files that changed
+// in a git diff update. It updates mtimes for changed files and removes
+// entries for deleted files.
+func (m *IndexManager) updateManifestForDiff(updatedFiles map[string]bool, deletedFiles map[string]bool) {
+	manifest, err := LoadManifest(m.opts.ManifestPath)
+	if err != nil || manifest == nil {
+		manifest = &BuildManifest{
+			Files:     make(map[string]int64),
+			ModelHash: m.provider.ModelHash(),
+		}
+	}
+
+	for f := range updatedFiles {
+		mtime, e := fileModTime(f)
+		if e == nil {
+			manifest.Files[f] = mtime
+		}
+	}
+	for f := range deletedFiles {
+		delete(manifest.Files, f)
+	}
+
+	if err := SaveManifest(m.opts.ManifestPath, manifest); err != nil {
+		debugLogf("index: update manifest after diff failed (non-fatal): %v", err)
+	}
 }
 
 // runGit executes a git command in the given directory and returns the output

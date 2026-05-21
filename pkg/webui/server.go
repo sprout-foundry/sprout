@@ -37,6 +37,7 @@ type ReactWebServer struct {
 	sshHomePath                     string
 	fileConsents                    *fileConsentManager
 	clientContexts                  map[string]*webClientContext
+	chatSubscribers                 *chatSubscribersRegistry
 	port                            int
 	bindAddr                        string
 	server                          *http.Server
@@ -187,6 +188,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		securityPromptMgr: securityPromptMgr,
 		askUserMgr:        askUserMgr,
 		clientContexts:    make(map[string]*webClientContext),
+		chatSubscribers:   newChatSubscribersRegistry(),
 		port:              port,
 		bindAddr:          bindAddr,
 		upgrader: websocket.Upgrader{

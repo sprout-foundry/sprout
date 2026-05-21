@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -138,8 +139,8 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	// Execute the tool in a goroutine
 	go func() {
 		// SP-038: Check new handler registry first for dual dispatch.
-		if te.handlerRegistry != nil {
-			if handler := te.handlerRegistry.Lookup(normalizedToolName); handler != nil {
+		if registry := te.getHandlerRegistry(); registry != nil {
+			if handler := registry.Lookup(normalizedToolName); handler != nil {
 				te.agent.debugLog("[tool] registry dispatch: %s\n", normalizedToolName)
 				env := &tools.ToolEnv{
 					WorkingDir:    te.agent.GetWorkspaceRoot(),
@@ -147,22 +148,53 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 					ConfigManager: te.agent.GetConfigManager(),
 					EventBus:      te.agent.GetEventBus(),
 				}
-				res, err := handler.Execute(ctx, env, args)
-				if err != nil {
+				// Validate arguments before execution.
+				if err := handler.Validate(args); err != nil {
 					resultChan <- struct {
 						images []api.ImageData
 						result string
 						err    error
-					}{nil, "", err}
+					}{nil, fmt.Sprintf("Validation failed: %v", err), err}
 					return
 				}
-				// ToolResult.Error is a secondary error field; check it even when Execute returns nil
-				if res != nil && res.Error != nil {
+				// Propagate execution metadata for tracing/observability.
+				execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
+				res, err := handler.Execute(execCtx, env, args)
+				if err != nil {
+					output := ""
+					if res != nil {
+						output = res.Output
+					}
+					resultChan <- struct {
+						images []api.ImageData
+						result string
+						err    error
+					}{nil, output, err}
+					return
+				}
+				if res == nil {
+					resultChan <- struct {
+						images []api.ImageData
+						result string
+						err    error
+					}{nil, "", nil}
+					return
+				}
+				// Check both Error and ErrorMessage for handler-level errors.
+				if res.Error != nil {
 					resultChan <- struct {
 						images []api.ImageData
 						result string
 						err    error
 					}{nil, res.Output, res.Error}
+					return
+				}
+				if res.ErrorMessage != "" {
+					resultChan <- struct {
+						images []api.ImageData
+						result string
+						err    error
+					}{nil, res.Output, errors.New(res.ErrorMessage)}
 					return
 				}
 				resultChan <- struct {

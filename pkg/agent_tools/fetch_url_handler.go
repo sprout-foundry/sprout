@@ -1,75 +1,134 @@
-// FetchURLHandler implements ToolHandler for the fetch_url tool.
-//
-// This is the new-style, registry-based handler that replaces the legacy
-// switch-based dispatch in pkg/agent/tool_executor*.go.
 package tools
 
 import (
 	"context"
 	"fmt"
-
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"mime"
+	"net/url"
+	"strings"
 )
 
-// FetchURLHandler implements ToolHandler for fetching and extracting content from URLs.
-type FetchURLHandler struct{}
+// fetchURLHandler implements ToolHandler for the fetch_url tool.
+type fetchURLHandler struct{}
 
-// NewFetchURLHandler returns a ready-to-use FetchURLHandler.
-func NewFetchURLHandler() *FetchURLHandler {
-	return &FetchURLHandler{}
-}
-
-// Name returns the tool name "fetch_url".
-func (h *FetchURLHandler) Name() string {
+func (h *fetchURLHandler) Name() string {
 	return "fetch_url"
 }
 
-// Definition returns the LLM-facing tool definition.
-func (h *FetchURLHandler) Definition() api.Tool {
-	return api.Tool{
-		Type: "function",
-		Function: struct {
-			Name        string      `json:"name"`
-			Description string      `json:"description"`
-			Parameters  interface{} `json:"parameters"`
-		}{
-			Name:        "fetch_url",
-			Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly.",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"url": map[string]interface{}{
-						"type":        "string",
-						"description": "URL to fetch content from",
-					},
-				},
-				"required":             []string{"url"},
-				"additionalProperties": false,
+func (h *fetchURLHandler) Definition() ToolDefinition {
+	return ToolDefinition{
+		Name:        "fetch_url",
+		Description: "Fetch and extract content from a URL. For HTML/text content, extracts readable text. For images and PDFs (when the model supports vision), returns visual content directly.",
+		Parameters: []ParameterDef{
+			{
+				Name:        "url",
+				Type:        "string",
+				Required:    true,
+				Description: "URL to fetch content from.",
 			},
 		},
+		Required: []string{"url"},
 	}
 }
 
-// Validate checks that the arguments are suitable for the fetch_url tool.
-func (h *FetchURLHandler) Validate(args map[string]any) error {
-	url, err := toString(args["url"], "url")
+func (h *fetchURLHandler) Validate(args map[string]any) error {
+	raw, err := extractString(args, "url")
 	if err != nil {
 		return err
 	}
-	if url == "" {
-		return fmt.Errorf("parameter 'url' is required")
+
+	u := strings.TrimSpace(raw)
+	if u == "" {
+		return fmt.Errorf("parameter 'url' must not be empty")
 	}
+
+	// Must be an absolute HTTP(S) URL.
+	parsed, perr := url.ParseRequestURI(u)
+	if perr != nil {
+		return fmt.Errorf("parameter 'url' must be an absolute HTTP(S) URL")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("parameter 'url' must be an absolute HTTP(S) URL")
+	}
+
 	return nil
 }
 
-// Execute fetches and extracts content from the specified URL.
-func (h *FetchURLHandler) Execute(ctx context.Context, env *ToolEnv, args map[string]any) (*ToolResult, error) {
-	url, _ := args["url"].(string)
-
-	content, err := FetchURL(url, env.ConfigManager)
+func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	urlVal, err := extractString(args, "url")
 	if err != nil {
-		return &ToolResult{ErrorMessage: err.Error()}, err
+		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	return &ToolResult{Output: content}, nil
+	content, err := FetchURL(urlVal, env.ConfigManager)
+	if err != nil {
+		return ToolResult{
+			Output:  "",
+			IsError: true,
+		}, err
+	}
+
+	result := ToolResult{
+		Output:     content,
+		TokenUsage: int64(estimateTokenUsage(content)),
+	}
+
+	// Detect image / PDF URLs and attach an ImageData entry so vision-capable
+	// models can render the resource directly.
+	if imageData := classifyURL(urlVal); imageData != nil {
+		result.Images = []ImageData{*imageData}
+	}
+
+	return result, nil
+}
+
+// classifyURL checks whether a URL points to an image or PDF resource and, if
+// so, returns a populated ImageData.  Returns nil for non-media URLs.
+func classifyURL(rawURL string) *ImageData {
+	_, path := splitURLScheme(rawURL)
+	ext := strings.ToLower(fileURLExtension(path))
+
+	switch ext {
+	case ".png":
+		return &ImageData{URI: rawURL, MIMEType: "image/png"}
+	case ".jpg", ".jpeg":
+		return &ImageData{URI: rawURL, MIMEType: "image/jpeg"}
+	case ".gif":
+		return &ImageData{URI: rawURL, MIMEType: "image/gif"}
+	case ".webp":
+		return &ImageData{URI: rawURL, MIMEType: "image/webp"}
+	case ".pdf":
+		return &ImageData{URI: rawURL, MIMEType: "application/pdf"}
+	}
+
+	// Fallback: use the mime package for uncommon extensions.
+	if mime := mime.TypeByExtension(ext); mime != "" && strings.HasPrefix(mime, "image/") {
+		return &ImageData{URI: rawURL, MIMEType: mime}
+	}
+
+	return nil
+}
+
+// splitURLScheme returns the scheme and the remainder of the URL (after
+// scheme://).  Handles both absolute and relative paths gracefully.
+func splitURLScheme(rawURL string) (string, string) {
+	if u, err := url.Parse(rawURL); err == nil {
+		return u.Scheme, u.Path
+	}
+	// Best-effort fallback for malformed URLs.
+	idx := strings.Index(rawURL, "://")
+	if idx == -1 {
+		return "", rawURL
+	}
+	return rawURL[:idx], rawURL[idx+3:]
+}
+
+// fileURLExtension returns the file extension from a URL path.
+// Returns an empty string if there is no extension.
+func fileURLExtension(path string) string {
+	idx := strings.LastIndex(path, ".")
+	if idx == -1 {
+		return ""
+	}
+	return path[idx:]
 }

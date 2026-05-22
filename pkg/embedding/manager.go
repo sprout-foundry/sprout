@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -409,7 +410,10 @@ func (m *EmbeddingManager) startONNXBuildBackground() {
 			m.mu.Unlock()
 		}()
 
-		log.Printf("embedding: building ONNX index in background (this may take many minutes)...")
+		debug := isDebugEnabled()
+		if debug {
+			log.Printf("embedding: building ONNX index in background (this may take many minutes)...")
+		}
 		start := time.Now()
 		onnxMgr := NewIndexManager(provider, store, IndexOptions{
 			BatchSize:      32,
@@ -913,4 +917,18 @@ func removeFilesSilently(files []string) (int, error) {
 		}
 	}
 	return deleted, nil
+}
+
+func isDebugEnabled() bool {
+	value := configuration.GetEnvSimple("DEBUG")
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }

@@ -134,7 +134,7 @@
   }
 }
 
-/* ── Reduced Motion ────────────────────────────────────────────────── */
+/* ── Reduced Motion ──────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   .menu-bar-dropdown {

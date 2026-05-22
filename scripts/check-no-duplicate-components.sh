@@ -10,11 +10,14 @@ ALLOWED_DUPLICATES=(
     # SP-039-3a: Notification dedup (partially done - NotificationItem resolved)
     "Notification.css"
     "NotificationStack.tsx"
-    # SP-039-3c: Sidebar/StatusBar dedup (pending)
+    # SP-039-3c: Sidebar/StatusBar/MenuBar dedup (in progress)
     "Sidebar.tsx"
     "Sidebar.css"
     "StatusBar.tsx"
     "StatusBar.css"
+    # SP-039-3c: MenuBar dedup (created in packages/ui, webui wrapper)
+    "MenuBar.tsx"
+    "MenuBar.css"
     # SP-039-3d: CommandPalette/CommandInput dedup (pending)
     "CommandPalette.tsx"
     "CommandPalette.css"

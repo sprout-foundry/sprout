@@ -3,12 +3,16 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"golang.org/x/term"
 )
 
 // recentSessionsWindow is how far back we look when surfacing the
@@ -19,23 +23,26 @@ const recentSessionsWindow = 7 * 24 * time.Hour
 // drown the welcome screen.
 const maxRecentSessionsShown = 3
 
-// maybeShowRecentSessions prints up to maxRecentSessionsShown recent
-// sessions for the current workspace if any exist within the
-// recentSessionsWindow lookback. SP-048-5a.
+// maybeOfferSessionResume prints up to maxRecentSessionsShown recent
+// sessions for the current workspace (last recentSessionsWindow), then
+// offers inline numeric selection. If the user picks a valid number, the
+// corresponding session is loaded into chatAgent (state + session ID)
+// and the user proceeds in that session. SP-048-5a.
 //
-// We surface the continuation command rather than implementing inline
-// "press 1 to resume" because resuming a session requires re-initializing
-// the agent before its first query — clean to do via the existing
-// `--session-id` flag path at startup, awkward to splice in mid-process.
-// Users get a copy-pasteable command and can rerun sprout.
+// Behavior:
+//   - Empty result: silent, no prompt, no state change.
+//   - Non-TTY stdin (piped input): list is still printed for visibility,
+//     but no selection prompt is shown — the agent starts a fresh session.
+//   - Invalid number / non-numeric / blank input: starts a fresh session.
+//   - Valid number: LoadStateScoped + ApplyState + SetSessionID inline.
 //
-// Silent on:
-//   - errors enumerating sessions (best-effort feature)
-//   - empty result (don't clutter on first run)
-//   - current session being the only/most-recent entry (no useful context)
+// Best-effort throughout: any failure during state load is surfaced as a
+// [FAIL] line but the function returns so the user gets a working REPL
+// instead of a wedged startup.
 //
-// Output goes to stderr so piped stdout stays clean.
-func maybeShowRecentSessions(chatAgent *agent.Agent) {
+// Up/down arrows are NOT used for selection — those stay reserved for
+// command history. Selection is by number, intentionally simple.
+func maybeOfferSessionResume(chatAgent *agent.Agent) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return
@@ -57,7 +64,7 @@ func maybeShowRecentSessions(chatAgent *agent.Agent) {
 		if s.LastUpdated.Before(cutoff) {
 			continue
 		}
-		// Don't show the session we just created.
+		// Don't offer the session we just created (it's empty).
 		if current != "" && s.SessionID == current {
 			continue
 		}
@@ -72,25 +79,62 @@ func maybeShowRecentSessions(chatAgent *agent.Agent) {
 	sort.SliceStable(recent, func(i, j int) bool {
 		return recent[i].LastUpdated.After(recent[j].LastUpdated)
 	})
-
 	if len(recent) > maxRecentSessionsShown {
 		recent = recent[:maxRecentSessionsShown]
 	}
 
 	fmt.Fprintln(os.Stderr, "[chart] Recent sessions in this workspace:")
-	for _, s := range recent {
+	for i, s := range recent {
 		label := s.Name
 		if label == "" {
 			label = s.SessionID
 		}
-		fmt.Fprintf(os.Stderr, "  %-7s  %s  %s\n",
+		fmt.Fprintf(os.Stderr, "  %d) %-9s  %s\n",
+			i+1,
 			humanizeAge(time.Since(s.LastUpdated)),
-			s.SessionID,
-			truncateLabel(label, 48),
+			truncateLabel(label, 56),
 		)
 	}
-	fmt.Fprintln(os.Stderr, "  Resume any with: sprout agent --session-id <id>")
-	fmt.Fprintln(os.Stderr)
+
+	// Skip the interactive prompt when stdin isn't a TTY (e.g. `sprout < script`).
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+
+	fmt.Fprintf(os.Stderr, "  Resume one? [1-%d or Enter to start fresh]: ", len(recent))
+
+	reader := bufio.NewReader(os.Stdin)
+	raw, readErr := reader.ReadString('\n')
+	if readErr != nil {
+		// Stdin closed / interrupted — proceed with fresh session.
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+	choice := strings.TrimSpace(raw)
+	if choice == "" {
+		return
+	}
+	idx, parseErr := strconv.Atoi(choice)
+	if parseErr != nil || idx < 1 || idx > len(recent) {
+		fmt.Fprintf(os.Stderr, "  [skip] %q is not a valid choice, starting fresh\n", choice)
+		return
+	}
+
+	chosen := recent[idx-1]
+	state, err := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  [FAIL] could not load session %s: %v\n", chosen.SessionID, err)
+		return
+	}
+	chatAgent.ApplyState(state)
+	chatAgent.SetSessionID(state.SessionID)
+
+	label := chosen.Name
+	if label == "" {
+		label = chosen.SessionID
+	}
+	fmt.Fprintf(os.Stderr, "[OK] Resumed: %s\n", truncateLabel(label, 64))
 }
 
 // humanizeAge renders a duration as a short, friendly relative time

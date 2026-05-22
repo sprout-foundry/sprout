@@ -150,8 +150,13 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3
 
+	// SP-048-4c: render the prompt with the default option in bold so the
+	// user can hit Enter for the safe choice. Honors NO_COLOR / FORCE_COLOR
+	// via the shared color-preference resolver in pkg/console.
+	hint := defaultChoiceHint(default_response)
+
 	for {
-		w.LogUserInteraction(fmt.Sprintf("%s (yes/no): ", prompt))
+		w.LogUserInteraction(fmt.Sprintf("%s %s: ", prompt, hint))
 		response, err := reader.ReadString('\n')
 
 		// Handle EOF or read errors - these indicate stdin is closed/unavailable
@@ -187,4 +192,27 @@ func (w *Logger) IsInteractive() bool {
 	loggerMu.RLock()
 	defer loggerMu.RUnlock()
 	return w.userInteractionEnabled
+}
+
+// defaultChoiceHint builds the "[Y/n]" or "[y/N]" tail for a confirmation
+// prompt, with the default letter rendered in bold ANSI when color output
+// is allowed (honors NO_COLOR / FORCE_COLOR via console.ResolveColorPreference).
+// Hitting Enter on an empty response is currently rejected by the loop, so
+// the visual hint also communicates to the user that the capitalized
+// letter is the safe choice to type explicitly.
+func defaultChoiceHint(defaultYes bool) string {
+	yes, no := "y", "n"
+	if defaultYes {
+		yes = "Y"
+	} else {
+		no = "N"
+	}
+	if envutil.ResolveColorPreference(true) {
+		if defaultYes {
+			yes = "\033[1m" + yes + "\033[0m"
+		} else {
+			no = "\033[1m" + no + "\033[0m"
+		}
+	}
+	return "[" + yes + "/" + no + "]"
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // ANSI color codes
@@ -50,8 +52,20 @@ type MarkdownFormatter struct {
 	enableInline bool
 }
 
-// NewMarkdownFormatter creates a new markdown formatter
+// NewMarkdownFormatter creates a new markdown formatter.
+//
+// The caller's enableColors preference is overridden by the environment
+// per the no-color.org convention (SP-048-4a):
+//   - NO_COLOR set to any non-empty value → colors OFF (always wins)
+//   - FORCE_COLOR set to any non-empty value → colors ON (unless NO_COLOR)
+//
+// This lets users opt out of ANSI escapes globally (`NO_COLOR=1 sprout`)
+// and CI pipelines opt in (`FORCE_COLOR=1 sprout > log.txt`) without
+// individual call sites needing to know. The resolver lives in
+// pkg/envutil (a zero-dep leaf) to avoid the import cycle pkg/utils →
+// pkg/console.
 func NewMarkdownFormatter(enableColors, enableInline bool) *MarkdownFormatter {
+	enableColors = envutil.ResolveColorPreference(enableColors)
 	return &MarkdownFormatter{
 		enableColors: enableColors,
 		enableInline: enableInline,

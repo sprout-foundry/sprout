@@ -22,6 +22,7 @@ import (
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 	"github.com/sprout-foundry/sprout/pkg/webui"
@@ -68,6 +69,17 @@ func printContinuationHint(chatAgent *agent.Agent) {
 
 // RunAgent runs the agent in interactive or direct mode
 func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err error) {
+	// SP-048-5e: when stdout is being piped/redirected (i.e. not a TTY),
+	// auto-set NO_COLOR so every color-aware writer in the process
+	// (markdown formatter, default-choice hint, future renderers) emits
+	// plain text. The user can override with FORCE_COLOR if they really
+	// want ANSI in a log file.
+	if !term.IsTerminal(int(os.Stdout.Fd())) &&
+		os.Getenv("NO_COLOR") == "" &&
+		os.Getenv("FORCE_COLOR") == "" {
+		os.Setenv("NO_COLOR", "1")
+	}
+
 	ensureContinuationSessionID(chatAgent)
 	workflowConfig, workflowLoadErr := loadAgentWorkflowConfig(agentWorkflowConfig)
 	if workflowLoadErr != nil {
@@ -734,8 +746,19 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
-	// Create enhanced input reader with completion support
-	inputReader := console.NewInputReader("sprout> ")
+	// SP-048-5a: surface up to 3 recent sessions for this workspace (last
+	// 7 days) with copy-pasteable continuation commands.
+	maybeShowRecentSessions(chatAgent)
+
+	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
+	// per workspace in ~/.sprout/state.json so it never repeats.
+	maybeShowFirstRunHint()
+
+	// Create enhanced input reader with completion support.
+	// SP-048-5d: prompt includes the current model so users always know
+	// what they're talking to. Falls back to "sprout> " when the model
+	// name is empty (e.g. provider failed to resolve at startup).
+	inputReader := console.NewInputReader(buildPromptPrefix(chatAgent.GetModel()))
 
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
@@ -812,6 +835,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				return nil
 			}
 
+			// SP-048-5c: snapshot per-turn metrics before submit so we can
+			// emit a "this turn" cost / tokens / elapsed line after the
+			// model finishes. Skipped for slash/bang commands and zsh fast
+			// paths since they don't consume LLM tokens.
+			turnStart := time.Now()
+			turnPromptStart := chatAgent.GetPromptTokens()
+			turnCompletionStart := chatAgent.GetCompletionTokens()
+			turnCostStart := chatAgent.GetTotalCost()
+
 			// SP-048-1b: spinner during the gap between submit and first
 			// stream chunk (or first tool event). The streaming callback
 			// registered in SetupAgentEvents stops it on first chunk; we
@@ -852,8 +884,85 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
+			// SP-048-5c: print the per-turn summary line if any LLM tokens
+			// were actually consumed. Suppressed for zero-cost turns (slash
+			// commands, zsh fast paths, empty responses).
+			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart, turnCostStart)
 		}
 	}
+}
+
+// printPerTurnSummary emits a dim single-line summary of what just happened
+// in the LLM round-trip: input/output tokens consumed, $ spent, elapsed
+// wall time. Silent when no tokens were used (e.g. the turn was a slash
+// command or zsh fast path). SP-048-5c.
+func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
+	promptDelta := chatAgent.GetPromptTokens() - promptBefore
+	completionDelta := chatAgent.GetCompletionTokens() - completionBefore
+	if promptDelta <= 0 && completionDelta <= 0 {
+		return
+	}
+	costDelta := chatAgent.GetTotalCost() - costBefore
+	elapsed := time.Since(start)
+
+	dimOn, dimOff := "\033[2m", "\033[0m"
+	if !envutil.ResolveColorPreference(true) {
+		dimOn, dimOff = "", ""
+	}
+	fmt.Fprintf(os.Stderr, "%s⎯ this turn: %s in / %s out · %s · %s ⎯%s\n",
+		dimOn,
+		compactTokens(promptDelta),
+		compactTokens(completionDelta),
+		compactCost(costDelta),
+		compactDuration(elapsed),
+		dimOff,
+	)
+}
+
+func compactTokens(n int) string {
+	if n < 0 {
+		n = 0
+	}
+	if n >= 1000 {
+		return fmt.Sprintf("%.1fk", float64(n)/1000)
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+func compactCost(c float64) string {
+	switch {
+	case c < 0:
+		return "$0.00"
+	case c < 0.01:
+		return fmt.Sprintf("$%.4f", c)
+	case c < 1.0:
+		return fmt.Sprintf("$%.3f", c)
+	default:
+		return fmt.Sprintf("$%.2f", c)
+	}
+}
+
+func compactDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	mins := int(d / time.Minute)
+	secs := int((d % time.Minute) / time.Second)
+	return fmt.Sprintf("%dm%ds", mins, secs)
+}
+
+// buildPromptPrefix returns the interactive REPL prompt for the given
+// model. SP-048-5d. Format: "<model> ▸ " when a model name is available,
+// "sprout> " as the legacy fallback when it isn't.
+func buildPromptPrefix(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "sprout> "
+	}
+	return model + " ▸ "
 }
 
 // agentFooterSource adapts *agent.Agent to the console.ContentSource

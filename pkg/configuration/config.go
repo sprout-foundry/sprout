@@ -18,6 +18,19 @@ import (
 )
 
 var personaDefaultsWarningOnce sync.Once
+
+func isDebugEnabled() bool {
+	value := strings.TrimSpace(GetEnvSimple("DEBUG"))
+	if value == "" {
+		return false
+	}
+	switch strings.ToLower(value) {
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
+}
 var legacyCustomPersonaWarningOnce sync.Once
 
 const (
@@ -1534,7 +1547,7 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 			// a custom persona with a new ID.
 			// Warn if user tried to override AllowedTools for a built-in persona,
 			// but only when the list actually differs from the defaults.
-			if len(userOverride.AllowedTools) > 0 && !toolSetsEqual(userOverride.AllowedTools, defaultPersona.AllowedTools) {
+			if len(userOverride.AllowedTools) > 0 && !toolSetsEqual(userOverride.AllowedTools, defaultPersona.AllowedTools) && isDebugEnabled() {
 				log.Printf("[WARN] AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools. Dropped tools: %v",
 					defaultPersona.ID, userOverride.AllowedTools)
 			}

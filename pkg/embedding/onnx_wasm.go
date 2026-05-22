@@ -203,7 +203,7 @@ func (p *ONNXEmbeddingProvider) Dimensions() int {
 
 func (p *ONNXEmbeddingProvider) Name() string {
 	if p == nil || p.modelName == "" {
-		return "onnx-wasm-stub"
+		return "onnx-wasm-bridge"
 	}
 	return p.modelName
 }

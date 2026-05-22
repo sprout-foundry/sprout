@@ -390,7 +390,7 @@ Spec: `roadmap/SP-040-deployment-configurability.md`
 ### Phase 3: Auth context + LoginPage
 
 [x] - SP-040-3a: Create `webui/src/contexts/AuthContext.tsx` exposing `{token, setToken, clearToken, isAuthenticated}` backed by `sessionStorage` key `sprout_auth_token`.
-[] - SP-040-3b: Create `webui/src/components/LoginPage.tsx` — single token input + submit; route
+[x] - SP-040-3b: Create `webui/src/components/LoginPage.tsx` — single token input + submit; route
 
 ---
 

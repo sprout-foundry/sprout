@@ -3,11 +3,17 @@
  *
  * Must be the first import in index.tsx so that config/mode.ts feature flags
  * read the correct adapter state when they are first evaluated.
+ *
+ * Three-tier config fallback:
+ *   1. fetch('/api/bootstrap')  →  server-provided RuntimeConfig
+ *   2. import.meta.env.VITE_*   →  build-time env vars
+ *   3. localhost defaults       →  hardcoded dev defaults
  */
 
 import { installAdapter } from './services/apiAdapter';
 import type { PlatformNavItem } from './services/apiAdapter';
 import { CloudAdapter } from './services/cloudAdapter';
+import type { RuntimeConfig } from './types/runtimeConfig';
 
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
@@ -15,15 +21,115 @@ const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'team', label: 'Team', href: '/team', icon: 'users', order: 3 },
 ];
 
-// Use Vite's import.meta.env instead of process.env for browser compatibility
-const mode = import.meta.env.VITE_SPROUT_MODE;
-const apiBase = import.meta.env.VITE_FOUNDRY_API_URL;
-const wsUrl = import.meta.env.VITE_FOUNDRY_WS_URL;
+const LOCALHOST_DEFAULTS: RuntimeConfig = {
+  apiBaseURL: 'http://localhost:56000',
+  wsURL: 'ws://localhost:56000/ws',
+  authMode: 'none',
+  appMode: 'local',
+  buildVersion: 'dev',
+};
 
-if (mode === 'cloud') {
-  const resolvedApiBase = apiBase || window.location.origin;
-  const resolvedWsUrl =
-    wsUrl || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+let lastConfig: RuntimeConfig = LOCALHOST_DEFAULTS;
 
-  installAdapter(new CloudAdapter({ apiBase: resolvedApiBase, wsUrl: resolvedWsUrl, navItems: CLOUD_NAV_ITEMS }));
+/**
+ * Build a RuntimeConfig from Vite env vars, using per-field defaults.
+ * Returns null when ALL env vars are unset (caller should fall to localhost defaults).
+ */
+function fromEnvVars(): RuntimeConfig | null {
+  const apiBaseURL = import.meta.env.VITE_API_BASE_URL;
+  const wsURL = import.meta.env.VITE_WS_URL;
+  const authMode = (import.meta.env.VITE_AUTH_MODE as 'none' | 'bearer' | undefined) ?? undefined;
+  const appMode = (import.meta.env.VITE_APP_MODE as 'local' | 'cloud' | undefined) ?? undefined;
+  const buildVersion = import.meta.env.VITE_BUILD_VERSION;
+
+  if (!apiBaseURL && !wsURL && !authMode && !appMode && !buildVersion) {
+    return null;
+  }
+
+  return {
+    apiBaseURL: apiBaseURL || LOCALHOST_DEFAULTS.apiBaseURL,
+    wsURL: wsURL || LOCALHOST_DEFAULTS.wsURL,
+    authMode: authMode ?? 'none',
+    appMode: appMode ?? 'local',
+    buildVersion: buildVersion ?? 'dev',
+  };
 }
+
+/**
+ * Fetch runtime configuration using a three-tier fallback:
+ *   1. Server endpoint  /api/bootstrap
+ *   2. Vite env vars    (import.meta.env.VITE_*)
+ *   3. Localhost defaults
+ *
+ * The resolved config is cached and also used to install the adapter.
+ */
+export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
+  let fetchError: string | null = null;
+
+  // — Tier 1: fetch from server —
+  try {
+    const resp = await fetch('/api/bootstrap');
+    const json = await resp.json();
+    if (json && typeof json === 'object' && typeof (json as any).apiBaseURL === 'string') {
+      const config: RuntimeConfig = {
+        apiBaseURL: (json as any).apiBaseURL,
+        wsURL: (json as any).wsURL,
+        authMode: (json as any).authMode ?? 'none',
+        appMode: (json as any).appMode ?? 'local',
+        buildVersion: (json as any).buildVersion ?? 'dev',
+      };
+      lastConfig = config;
+      console.log('bootstrap: fetched config from /api/bootstrap');
+      installAdapterForConfig(config);
+      return config;
+    }
+  } catch (err: any) {
+    // fetch failed or response was invalid — fall through to tier 2
+    fetchError = err?.message || String(err);
+  }
+
+  // — Tier 2: Vite env vars —
+  const fromEnv = fromEnvVars();
+  if (fromEnv) {
+    lastConfig = fromEnv;
+    console.warn('bootstrap: using VITE env vars (fetch failed: %s)', fetchError);
+    installAdapterForConfig(fromEnv);
+    return fromEnv;
+  }
+
+  // — Tier 3: localhost defaults —
+  lastConfig = LOCALHOST_DEFAULTS;
+  console.log('bootstrap: using localhost defaults');
+  installAdapterForConfig(LOCALHOST_DEFAULTS);
+  return LOCALHOST_DEFAULTS;
+}
+
+/**
+ * Return the last successfully resolved bootstrap config.
+ * Safe to call even before fetchRuntimeConfig has run (returns localhost defaults).
+ */
+export function getBootstrapConfig(): RuntimeConfig {
+  return lastConfig;
+}
+
+/**
+ * Install the appropriate adapter based on the resolved config's appMode.
+ */
+function installAdapterForConfig(config: RuntimeConfig): void {
+  if (config.appMode === 'cloud') {
+    console.log('bootstrap: active mode = cloud, installing CloudAdapter');
+    installAdapter(
+      new CloudAdapter({
+        apiBase: config.apiBaseURL,
+        wsUrl: config.wsURL,
+        navItems: CLOUD_NAV_ITEMS,
+      })
+    );
+  } else {
+    console.log('bootstrap: active mode = local, no adapter installed');
+  }
+}
+
+// Auto-run on import so the adapter is ready before the React tree loads.
+// This is a fire-and-forget call — callers can also await fetchRuntimeConfig() explicitly.
+fetchRuntimeConfig();

@@ -825,13 +825,19 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// cost/context after each tool. Runs until ctx is cancelled.
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
-	startTerminalToolSubscriber(subCtx, eventBus, indicator, footer)
+	startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+			// SP-048-5d follow-up: refresh the prompt prefix each loop so
+			// it tracks model changes (e.g. an LLM-driven /model switch
+			// from inside a previous turn, or interactive provider/model
+			// selection during recovery).
+			inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
+
 			query, err := inputReader.ReadLine()
 
 			if err != nil {
@@ -860,10 +866,29 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				return nil
 			}
 
+			// Slash/bang commands run locally — they don't talk to the LLM
+			// and often own the terminal themselves (interactive `/commit`,
+			// `/persona`, etc.). They MUST NOT have the activity-indicator
+			// spinner active during execution: the spinner's stderr writes
+			// would interleave with the command's own stdout prompts and
+			// produce the input-mangling bug we caught in `/commit` and
+			// friends. Slash commands also skip the per-turn cost summary
+			// since they don't consume LLM tokens.
+			registry := agent_commands.NewCommandRegistry()
+			if registry.IsSlashCommand(query) {
+				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
+				}
+				// `/model` and friends may have changed the active model;
+				// rebuild the prompt prefix so the next prompt reflects it.
+				inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
+				footer.Refresh()
+				continue
+			}
+
 			// SP-048-5c: snapshot per-turn metrics before submit so we can
 			// emit a "this turn" cost / tokens / elapsed line after the
-			// model finishes. Skipped for slash/bang commands and zsh fast
-			// paths since they don't consume LLM tokens.
+			// model finishes.
 			turnStart := time.Now()
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
@@ -874,17 +899,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// registered in SetupAgentEvents stops it on first chunk; we
 			// also Stop() defensively after ProcessQuery returns.
 			indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
-
-			// Slash/bang commands should bypass command-detection fast paths.
-			registry := agent_commands.NewCommandRegistry()
-			if registry.IsSlashCommand(query) {
-				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-					indicator.Stop()
-					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
-				}
-				indicator.Stop()
-				continue
-			}
 
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
@@ -1033,7 +1047,12 @@ func (s *agentFooterSource) WorkingDir() string {
 // clean rendering with no spinner frames overwriting the prompt text. When
 // footer is non-nil, it is refreshed on each ToolEnd so cost / context
 // stay current as tools consume tokens.
-func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+//
+// The chatAgent reference is used to resolve subagent personas to their
+// effective provider/model so `run_subagent` lines can show which model
+// will actually run the delegated task (subagents often use cheaper or
+// faster models than the parent, and visibility into that matters).
+func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
 	if eventBus == nil || indicator == nil {
 		return
 	}
@@ -1065,7 +1084,7 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 					// overwrites partial streamed text. Stdout for parity
 					// with how stream chunks were just printed.
 					fmt.Fprintln(os.Stdout)
-					indicator.Start(fmt.Sprintf("  %s%s", name, formatToolArgPreview(name, args)))
+					indicator.Start(fmt.Sprintf("  %s%s", name, formatToolPreview(chatAgent, name, args)))
 				case events.EventTypeToolEnd:
 					name, _ := data["tool_name"].(string)
 					if agent.IsInteractiveTool(name) {
@@ -1084,7 +1103,10 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 					if status != "completed" {
 						icon = "[FAIL]"
 					}
-					indicator.Replace(fmt.Sprintf("  %s %s · %.1fs", icon, name, float64(durationMs)/1000.0))
+					args, _ := data["arguments"].(string)
+					indicator.Replace(fmt.Sprintf("  %s %s%s · %.1fs", icon, name,
+						formatToolPreview(chatAgent, name, args),
+						float64(durationMs)/1000.0))
 					footer.Refresh()
 				case events.EventTypeSecurityApprovalRequest,
 					events.EventTypeSecurityPromptRequest,
@@ -1097,6 +1119,67 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 			}
 		}
 	}()
+}
+
+// formatToolPreview produces a short, single-line preview of a tool call
+// for the activity-indicator timeline. For subagent tools (run_subagent,
+// run_parallel_subagents) it surfaces the persona and the resolved
+// provider/model so users can see which subagent — and which underlying
+// model, often a cheaper/faster one than the parent's — is doing the
+// work. For everything else it falls through to formatToolArgPreview.
+func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string) string {
+	switch toolName {
+	case "run_subagent":
+		return formatRunSubagentPreview(chatAgent, arguments)
+	case "run_parallel_subagents":
+		return formatRunParallelSubagentsPreview(arguments)
+	default:
+		return formatToolArgPreview(toolName, arguments)
+	}
+}
+
+// formatRunSubagentPreview extracts the persona from args and looks up its
+// effective provider/model via the agent's persona resolver. Format:
+//
+//	 (coder · anthropic/claude-haiku-4-5)
+//
+// Falls back to just persona name (or empty) when the lookup fails.
+func formatRunSubagentPreview(chatAgent *agent.Agent, arguments string) string {
+	if arguments == "" || chatAgent == nil {
+		return ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return ""
+	}
+	persona, _ := args["persona"].(string)
+	persona = strings.TrimSpace(persona)
+	if persona == "" {
+		return ""
+	}
+	provider, model, err := chatAgent.GetPersonaProviderModel(persona)
+	if err != nil || (provider == "" && model == "") {
+		return fmt.Sprintf(" (%s)", persona)
+	}
+	return fmt.Sprintf(" (%s · %s/%s)", persona, provider, model)
+}
+
+// formatRunParallelSubagentsPreview shows the task count so the user
+// knows how many subagents fanned out. No per-task persona since the
+// parallel form doesn't accept per-task persona overrides today; users
+// see the count and infer fan-out from the line.
+func formatRunParallelSubagentsPreview(arguments string) string {
+	if arguments == "" {
+		return ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return ""
+	}
+	if tasks, ok := args["subagents"].([]interface{}); ok && len(tasks) > 0 {
+		return fmt.Sprintf(" (%d tasks)", len(tasks))
+	}
+	return ""
 }
 
 // formatToolArgPreview produces a short, single-line preview of a tool's

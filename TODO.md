@@ -350,7 +350,7 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 ### Phase 4: Consolidate primitives — large
 
 [x] - SP-039-4a: `FileTree` — highest-impact primitive; verify behavior parity with at least manual smoke test in WebUI plus existing component tests passing.
-[] - SP-039-4b: `Terminal` — uses xterm.js; verify keybinding parity, reattach behavior, search bar.
+[x] - SP-039-4b: `Terminal` — uses xterm.js; verify keybinding parity, reattach behavior, search bar.
 [x] - SP-039-4c: `GitSidebarPanel` — confirm whether primitive or composite (recent edits in commit `b46bcada` suggest composite); place accordingly.
 [x] - SP-039-4d: `MessageBubble`, `MessageSegments`, `MessageContent`, `LiveLog`, `QueuedMessagesPanel`, `SelectionActionBar`, `ChatMessageContextMenu`.
 

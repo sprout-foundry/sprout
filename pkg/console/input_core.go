@@ -95,6 +95,10 @@ type InputReader struct {
 	// that differs from the last applied completion (i.e. the user typed
 	// something between Tab presses).
 	completionCycle *completionCycle
+
+	// SP-048-4f: tracks the half-typed Ctrl-X prefix of the Ctrl-X Ctrl-E
+	// editor-escape sequence. Reset on any keystroke that isn't Ctrl-E.
+	pendingCtrlX bool
 }
 
 // CompletionProvider returns candidate completions for the current input
@@ -274,6 +278,27 @@ func (ir *InputReader) ReadLine() (string, error) {
 				fmt.Printf("\r%s", ClearToEndOfLineSeq()) // Clear line
 				fmt.Println("^C")
 				return "", fmt.Errorf("interrupted")
+			}
+
+			// SP-048-4f: Ctrl-X Ctrl-E opens $EDITOR with the current buffer
+			// pre-filled. Two-keystroke sequence: first byte 24 (Ctrl-X)
+			// arms pendingCtrlX; the next byte either triggers the editor
+			// escape (Ctrl-E = 5) or aborts the sequence and falls through
+			// to normal processing.
+			if ir.pendingCtrlX {
+				ir.pendingCtrlX = false
+				if b == 5 { // Ctrl-E
+					if newState := ir.runExternalEditor(oldState, nonBlocking); newState != nil {
+						oldState = newState
+					}
+					ir.Refresh()
+					continue
+				}
+				// Not Ctrl-E — fall through and process `b` normally below.
+			}
+			if b == 24 { // Ctrl-X (start of Ctrl-X Ctrl-E sequence)
+				ir.pendingCtrlX = true
+				continue
 			}
 
 			if b == 26 { // Ctrl+Z

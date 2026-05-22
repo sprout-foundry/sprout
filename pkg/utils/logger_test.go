@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -109,4 +110,41 @@ func TestAskForConfirmation_RequiredExits(t *testing.T) {
 	//
 	// This test documents that behavior.
 	t.Log("When required=true and userInteractionEnabled=false, function calls os.Exit(1)")
+}
+
+func TestDefaultChoiceHint(t *testing.T) {
+	// Force a known color state for determinism. NO_COLOR=1 ensures the
+	// bold ANSI escapes are stripped so we can assert the visible chars.
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "")
+
+	if got := defaultChoiceHint(true); got != "[Y/n]" {
+		t.Errorf("defaultChoiceHint(true) without color = %q, want %q", got, "[Y/n]")
+	}
+	if got := defaultChoiceHint(false); got != "[y/N]" {
+		t.Errorf("defaultChoiceHint(false) without color = %q, want %q", got, "[y/N]")
+	}
+}
+
+func TestDefaultChoiceHint_BoldsDefaultWhenColorAllowed(t *testing.T) {
+	// FORCE_COLOR overrides any TTY detection; the hint should wrap the
+	// capitalized default letter in bold ANSI escapes.
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+
+	gotYes := defaultChoiceHint(true)
+	if !strings.Contains(gotYes, "\033[1mY\033[0m") {
+		t.Errorf("default=yes should bold Y, got %q", gotYes)
+	}
+	if strings.Contains(gotYes, "\033[1mn\033[0m") {
+		t.Errorf("default=yes should not bold n, got %q", gotYes)
+	}
+
+	gotNo := defaultChoiceHint(false)
+	if !strings.Contains(gotNo, "\033[1mN\033[0m") {
+		t.Errorf("default=no should bold N, got %q", gotNo)
+	}
+	if strings.Contains(gotNo, "\033[1my\033[0m") {
+		t.Errorf("default=no should not bold y, got %q", gotNo)
+	}
 }

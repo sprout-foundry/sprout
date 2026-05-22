@@ -97,6 +97,41 @@ func (ir *InputReader) finalizePaste() bool {
 		return true
 	}
 
+	// SP-048-4d: Smart paste — if the paste is large (>100 lines OR >5KB),
+	// auto-save it to .sprout/pastes/ and insert a "@path" reference at
+	// the cursor instead of dumping the raw blob into the input buffer.
+	// Mirrors the image-paste pattern (no prompt, just notify). Falls back
+	// to inline insertion if the save fails so the user doesn't lose
+	// content.
+	if ShouldSmartSavePaste(pastedContent) {
+		if savedPath, err := SavePastedText(pastedContent, ""); err == nil {
+			lineCount := strings.Count(pastedContent, "\n") + 1
+			fmt.Fprintf(os.Stderr, "\n[paste] %d lines · %d bytes saved to %s\n",
+				lineCount, len(pastedContent), savedPath)
+			placeholder := "@" + savedPath + " "
+			start := ir.cursorPos
+			before := ir.line[:ir.cursorPos]
+			after := ir.line[ir.cursorPos:]
+			ir.line = before + placeholder + after
+			ir.cursorPos += len(placeholder)
+			ir.shiftPasteSpans(start, len(placeholder))
+			ir.addCollapsedPaste(start, ir.cursorPos)
+			ir.hasEditedLine = true
+			ir.historyIndex = -1
+			ir.Refresh()
+			promptWidth := visibleRuneWidth(ir.prompt)
+			lineWidth := len([]rune(ir.line))
+			newLength := promptWidth + lineWidth
+			ir.lastLineLength = newLength
+			cursorPos := promptWidth + ir.cursorPos
+			ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
+			return true
+		} else {
+			fmt.Fprintf(os.Stderr, "[FAIL] smart-paste save failed: %v (falling back to inline insert)\n", err)
+			// fall through to inline insertion below
+		}
+	}
+
 	ir.hasEditedLine = true
 	ir.historyIndex = -1
 

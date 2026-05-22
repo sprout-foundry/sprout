@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/term"
+
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 )
 
 // spinnerFrames is the braille animation cycle used by ActivityIndicator.
@@ -201,4 +203,41 @@ func sanitizeLine(s string) string {
 		out = append(out, r)
 	}
 	return string(out)
+}
+
+// Global indicator registration so far-flung CLI prompt sites can suspend
+// the active spinner without taking a direct dependency on whatever owns
+// the indicator. Use RegisterGlobalIndicator from the CLI entry point.
+// Code that cannot import pkg/console (e.g. pkg/utils, pkg/agent_tools)
+// suspends via the leaf-only bridge in pkg/clihooks.
+var (
+	globalIndicator   *ActivityIndicator
+	globalIndicatorMu sync.RWMutex
+)
+
+// RegisterGlobalIndicator installs ind as the process-wide indicator that
+// SuspendIndicator and clihooks.SuspendIndicator both target. Pass nil to
+// clear. Safe to call multiple times.
+func RegisterGlobalIndicator(ind *ActivityIndicator) {
+	globalIndicatorMu.Lock()
+	defer globalIndicatorMu.Unlock()
+	globalIndicator = ind
+	if ind != nil {
+		clihooks.SetSuspendIndicator(ind.Stop)
+	} else {
+		clihooks.SetSuspendIndicator(nil)
+	}
+}
+
+// SuspendIndicator stops the registered global activity indicator if one is
+// active. Safe to call when no indicator is registered (no-op) or when the
+// indicator is already stopped (idempotent). Use this immediately before
+// rendering an interactive CLI prompt to keep the spinner from overwriting
+// the prompt text. Mirrored by clihooks.SuspendIndicator for callers that
+// can't import pkg/console.
+func SuspendIndicator() {
+	globalIndicatorMu.RLock()
+	a := globalIndicator
+	globalIndicatorMu.RUnlock()
+	a.Stop()
 }

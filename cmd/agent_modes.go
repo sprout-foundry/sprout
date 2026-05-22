@@ -345,6 +345,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// progress lines via tool events. Suppressed automatically on non-TTY.
 	indicator := console.NewActivityIndicator(os.Stderr)
 
+	// Register globally so CLI prompt sites that can't import pkg/console
+	// (logger.AskForConfirmation, AskUser stdin reads, provider-recovery
+	// prompts) can call clihooks.SuspendIndicator() to clear the spinner
+	// before rendering. Without this, the spinner would overwrite the
+	// prompt text on stderr while the prompt is on stdout.
+	console.RegisterGlobalIndicator(indicator)
+
 	// Set up event publishing for agent
 	SetupAgentEvents(chatAgent, eventBus, indicator)
 
@@ -836,6 +843,13 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // startTerminalToolSubscriber subscribes a goroutine to the event bus that
 // translates PublishToolStart / PublishToolEnd events into terminal spinner
 // updates and ✓/✗ result lines. Runs until ctx is cancelled.
+//
+// Tools whose ToolConfig declares Interactive=true (e.g. ask_user) bypass
+// the spinner entirely so their own prompt rendering isn't clobbered.
+//
+// Also stops the spinner on any prompt-request event (security approval,
+// security prompt, ask_user) so prompts routed through the event bus get
+// clean rendering with no spinner frames overwriting the prompt text.
 func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus, indicator *console.ActivityIndicator) {
 	if eventBus == nil || indicator == nil {
 		return
@@ -857,6 +871,12 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 				switch evt.Type {
 				case events.EventTypeToolStart:
 					name, _ := data["tool_name"].(string)
+					if agent.IsInteractiveTool(name) {
+						// Tool renders its own prompt — make sure any active
+						// spinner is gone before the prompt lands.
+						indicator.Stop()
+						continue
+					}
 					args, _ := data["arguments"].(string)
 					// Ensure the spinner lands on a fresh line so it never
 					// overwrites partial streamed text. Stdout for parity
@@ -865,6 +885,10 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 					indicator.Start(fmt.Sprintf("  %s%s", name, formatToolArgPreview(name, args)))
 				case events.EventTypeToolEnd:
 					name, _ := data["tool_name"].(string)
+					if agent.IsInteractiveTool(name) {
+						// No spinner was started; emit no result chrome.
+						continue
+					}
 					status, _ := data["status"].(string)
 					var durationMs int64
 					switch v := data["duration_ms"].(type) {
@@ -878,6 +902,13 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 						icon = "[FAIL]"
 					}
 					indicator.Replace(fmt.Sprintf("  %s %s · %.1fs", icon, name, float64(durationMs)/1000.0))
+				case events.EventTypeSecurityApprovalRequest,
+					events.EventTypeSecurityPromptRequest,
+					events.EventTypeAskUserRequest:
+					// A prompt is about to render — stop any spinner so it
+					// doesn't overwrite the prompt text. Subsequent activity
+					// (next tool event, stream chunks) re-starts naturally.
+					indicator.Stop()
 				}
 			}
 		}

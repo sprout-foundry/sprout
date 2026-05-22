@@ -1548,7 +1548,7 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 			// a custom persona with a new ID.
 			// Warn if user tried to override AllowedTools for a built-in persona,
 			// but only when the list actually differs from the defaults.
-			if len(userOverride.AllowedTools) > 0 && !toolSetsEqual(userOverride.AllowedTools, defaultPersona.AllowedTools) && isDebugEnabled() {
+			if len(userOverride.AllowedTools) > 0 && !toolSetsEqual(userOverride.AllowedTools, defaultPersona.AllowedTools) {
 				log.Printf("[WARN] AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools. Dropped tools: %v",
 					defaultPersona.ID, userOverride.AllowedTools)
 			}

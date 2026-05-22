@@ -138,7 +138,7 @@ func TestCheckFileForDuplicates_NoMatches(t *testing.T) {
 	dir := t.TempDir()
 
 	// Create a store with one record that has an orthogonal embedding.
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -190,7 +190,7 @@ func BrandNewFunction(x int) string {
 func TestCheckFileForDuplicates_DefaultThreshold(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -220,7 +220,7 @@ func MyFunc() {
 func TestCheckFileForDuplicates_SelfMatchFiltered(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -275,7 +275,7 @@ func ReadConfig(path string) string {
 func TestCheckFileForDuplicates_SimilarFunction(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -348,7 +348,7 @@ func LoadConfig(path string) string {
 func TestCheckFileForDuplicates_DeduplicatesByID(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -411,7 +411,7 @@ func FuncB() int {
 func TestCheckFileForDuplicates_SortedBySimilarityDesc(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -474,7 +474,7 @@ func NewFunc() {
 func TestCheckFileForDuplicates_TopKLimit(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -519,7 +519,7 @@ func NewFunc() {
 func TestCheckFileForDuplicates_EmptyContent(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -872,7 +872,7 @@ func TestDeduplicateMatches_AllSameID(t *testing.T) {
 func TestCheckFileForDuplicates_ParseError(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -899,7 +899,7 @@ func TestCheckFileForDuplicates_ParseError(t *testing.T) {
 func TestCheckFileForDuplicates_WarningTextConsistent(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -948,7 +948,7 @@ func NewFunc() {}
 func TestCheckFileForDuplicates_DifferentLengthEmbeddings(t *testing.T) {
 	dir := t.TempDir()
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

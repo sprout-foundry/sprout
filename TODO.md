@@ -439,5 +439,5 @@ Spec: `roadmap/SP-047-sqlite-vec-store.md` (amended: uses `coder/hnsw` instead o
 ### Phase 6: Verification + Benchmarks
 
 [x] - SP-047-6a: Benchmark tests comparing JSONL vs HNSW query latency.
-[] - SP-047-6b: Measure binary size delta.
+[x] - SP-047-6b: Measure binary size delta.
 [x] - SP-047-6c: Success criteria: all tests pass, migration is non-destructive, WASM builds work.

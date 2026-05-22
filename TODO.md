@@ -293,32 +293,32 @@ Adding a tool today requires editing four locations across two packages (definit
 [x] - SP-038-3a: Migrate `read_file` to `pkg/agent_tools/read_file.go`. Remove from legacy. Add `TestTool_ReadFile_Conformance`.
 [x] - SP-038-3b: Migrate `list_directory`.
 [x] - SP-038-3c: Migrate `web_fetch`.
-[] - SP-038-3d: Migrate remaining small tools (`read_directory`, `glob`, similar) one per commit.
+[x] - SP-038-3d: Migrate remaining small tools (`read_directory`, `glob`, similar) one per commit.
 
 ### Phase 4: Migrate medium tools
 
-[] - SP-038-4a: Migrate `write_file` and `write_structured_file` together (preserve the SP-035 Phase 4 migration warning behavior).
-[] - SP-038-4b: Migrate `edit_file`.
-[] - SP-038-4c: Migrate `shell_command` — careful interaction with the SP-035 two-gate risk model; the `EvaluateOperationRisk` and `ClassifyToolCall` callouts must remain on the path.
-[] - SP-038-4d: Migrate `search_memories` / `save_memory` (touches SP-027 conversation-store paths).
+[x] - SP-038-4a: Migrate `write_file` and `write_structured_file` together (preserve the SP-035 Phase 4 migration warning behavior).
+[x] - SP-038-4b: Migrate `edit_file`.
+[x] - SP-038-4c: Migrate `shell_command` — careful interaction with the SP-035 two-gate risk model; the `EvaluateOperationRisk` and `ClassifyToolCall` callouts must remain on the path.
+[x] - SP-038-4d: Migrate `search_memories` / `save_memory` (touches SP-027 conversation-store paths).
 
 ### Phase 5: Migrate large/complex tools
 
-[] - SP-038-5a: Migrate the subagent family (`run_subagent`, `run_subagent_parallel`, task queue tools); likely a `pkg/agent_tools/subagent/` subdirectory due to size.
-[] - SP-038-5b: Migrate `task_queue_*` and `todo_*` tools.
-[] - SP-038-5c: Migrate remaining tools (image/vision, PDF, browser, web search).
+[x] - SP-038-5a: Migrate the subagent family (`run_subagent`, `run_subagent_parallel`, task queue tools); likely a `pkg/agent_tools/subagent/` subdirectory due to size.
+[x] - SP-038-5b: Migrate `task_queue_*` and `todo_*` tools.
+[x] - SP-038-5c: Migrate remaining tools (image/vision, PDF, browser, web search).
 
 ### Phase 6: Cleanup + tests
 
-[] - SP-038-6a: Remove the legacy switch from `pkg/agent/tool_executor*.go` once every tool is registered.
+[x] - SP-038-6a: Remove the legacy switch from `pkg/agent/tool_executor*.go` once every tool is registered.
 [] - SP-038-6b: Verify `pkg/agent/tool_definitions.go` is ≤ 150 lines.
-[] - SP-038-6c: Add `TestRegistry_AllToolsHaveValidDefinitions`, `TestRegistry_AllToolsRespectPersonaFilter`, `TestRegistry_AllToolsValidate`, `TestRegistry_NoOrphanHandlers` in `pkg/agent_tools/registry_test.go`.
-[] - SP-038-6d: Run `go test -race ./pkg/agent/ ./pkg/agent_tools/` 10× clean.
+[x] - SP-038-6c: Add `TestRegistry_AllToolsHaveValidDefinitions`, `TestRegistry_AllToolsRespectPersonaFilter`, `TestRegistry_AllToolsValidate`, `TestRegistry_NoOrphanHandlers` in `pkg/agent_tools/registry_test.go`.
+[x] - SP-038-6d: Run `go test -race ./pkg/agent/ ./pkg/agent_tools/` 10× clean.
 
 ### Phase 7: Documentation
 
-[] - SP-038-7a: Write `docs/TOOLS.md` covering: how to add a tool (one-file recipe), the `ToolHandler` interface, the `ToolEnv` contract, the registry init order, the persona filter, and the relationship between tools and `pkg/agent_commands/`.
-[] - SP-038-7b: Add a package-level doc comment to `pkg/agent_tools/handler.go`.
+[x] - SP-038-7a: Write `docs/TOOLS.md` covering: how to add a tool (one-file recipe), the `ToolHandler` interface, the `ToolEnv` contract, the registry init order, the persona filter, and the relationship between tools and `pkg/agent_commands/`.
+[x] - SP-038-7b: Add a package-level doc comment to `pkg/agent_tools/handler.go`.
 
 ---
 
@@ -330,20 +330,20 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 
 ### Phase 1: Decision + audit
 
-[] - SP-039-1a: Confirm Option A (delete `packages/ui`, move everything into `webui`) or Option B (keep `packages/ui` as the canonical library, webui imports from it). Document the choice and rationale in `roadmap/SP-039-DECISION.md` or inline in the spec.
-[] - SP-039-1b: Write `scripts/ui-consolidation-diff.sh` outputting the 30+ overlaps and per-component diff status (identical / packages-leads / webui-leads / divergent).
-[] - SP-039-1c: Categorize every `packages/ui/src/components/*.tsx` as primitive (reusable, no domain types) or composite (wires primitives to app state).
+[x] - SP-039-1a: Confirm Option A (delete `packages/ui`, move everything into `webui`) or Option B (keep `packages/ui` as the canonical library, webui imports from it). Document the choice and rationale in `roadmap/SP-039-DECISION.md` or inline in the spec.
+[x] - SP-039-1b: Write `scripts/ui-consolidation-diff.sh` outputting the 30+ overlaps and per-component diff status (identical / packages-leads / webui-leads / divergent).
+[x] - SP-039-1c: Categorize every `packages/ui/src/components/*.tsx` as primitive (reusable, no domain types) or composite (wires primitives to app state).
 
 ### Phase 2: Move misplaced composites out of `@sprout/ui`
 
-[] - SP-039-2a: Move `BillingPage*`, `TeamPage*`, `AdminBillingPage*`, `TasksPage*` from `packages/ui/src/components/` to `webui/src/components/`. One commit per move.
-[] - SP-039-2b: Audit `packages/ui` for any other domain-coupled components (importing from `@sprout/events` for app-specific events, using `useSproutAdapter()` against a specific endpoint set); move them.
-[] - SP-039-2c: Verify `grep -rn "chatSession\|persona\|adapter" packages/ui/src/components/` returns no domain-specific hits.
+[x] - SP-039-2a: Move `BillingPage*`, `TeamPage*`, `AdminBillingPage*`, `TasksPage*` from `packages/ui/src/components/` to `webui/src/components/`. One commit per move.
+[x] - SP-039-2b: Audit `packages/ui` for any other domain-coupled components (importing from `@sprout/events` for app-specific events, using `useSproutAdapter()` against a specific endpoint set); move them.
+[x] - SP-039-2c: Verify `grep -rn "chatSession\|persona\|adapter" packages/ui/src/components/` returns no domain-specific hits.
 
 ### Phase 3: Consolidate primitives — small first
 
-[] - SP-039-3a: `Notification`, `NotificationItem`, `Notification.css` → canonical in `packages/ui`; delete webui copy; update imports.
-[] - SP-039-3b: `Dropdown`, `Modal` (base), `ContextMenu` → same.
+[x] - SP-039-3a: `Notification`, `NotificationItem`, `Notification.css` → canonical in `packages/ui`; delete webui copy; update imports.
+[x] - SP-039-3b: `Dropdown`, `Modal` (base), `ContextMenu` → same.
 [] - SP-039-3c: `Sidebar`, `StatusBar`, `MenuBar` → same.
 [] - SP-039-3d: `CommandPalette`, `CommandInput` → same.
 
@@ -351,20 +351,20 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 
 [] - SP-039-4a: `FileTree` — highest-impact primitive; verify behavior parity with at least manual smoke test in WebUI plus existing component tests passing.
 [] - SP-039-4b: `Terminal` — uses xterm.js; verify keybinding parity, reattach behavior, search bar.
-[] - SP-039-4c: `GitSidebarPanel` — confirm whether primitive or composite (recent edits in commit `b46bcada` suggest composite); place accordingly.
+[x] - SP-039-4c: `GitSidebarPanel` — confirm whether primitive or composite (recent edits in commit `b46bcada` suggest composite); place accordingly.
 [] - SP-039-4d: `MessageBubble`, `MessageSegments`, `MessageContent`, `LiveLog`, `QueuedMessagesPanel`, `SelectionActionBar`, `ChatMessageContextMenu`.
 
 ### Phase 5: Enforce boundary
 
-[] - SP-039-5a: Add `eslint-plugin-import` `no-restricted-paths` rule to `webui/.eslintrc` and `packages/ui/.eslintrc` forbidding cross-boundary deep imports.
-[] - SP-039-5b: Add `scripts/check-no-duplicate-components.sh` (fails CI if `comm -12` between the two component directories has any matches); wire into `.github/workflows/build.yml`.
-[] - SP-039-5c: Add a Storybook coverage check requiring every primitive in `@sprout/ui` to have a matching `.stories.tsx`.
+[x] - SP-039-5a: Add `eslint-plugin-import` `no-restricted-paths` rule to `webui/.eslintrc` and `packages/ui/.eslintrc` forbidding cross-boundary deep imports.
+[x] - SP-039-5b: Add `scripts/check-no-duplicate-components.sh` (fails CI if `comm -12` between the two component directories has any matches); wire into `.github/workflows/build.yml`.
+[x] - SP-039-5c: Add a Storybook coverage check requiring every primitive in `@sprout/ui` to have a matching `.stories.tsx`.
 
 ### Phase 6: Documentation
 
-[] - SP-039-6a: Write `docs/COMPONENT_LIBRARY.md` covering the Option A/B decision and rationale, the primitive vs composite rubric with examples, import direction enforcement, how to add a new component.
-[] - SP-039-6b: Update `CONTRIBUTING.md` with a "Where does my new component go?" subsection.
-[] - SP-039-6c: Update `packages/ui/README.md` (if it exists) to point at `docs/COMPONENT_LIBRARY.md` as the source of truth.
+[x] - SP-039-6a: Write `docs/COMPONENT_LIBRARY.md` covering the Option A/B decision and rationale, the primitive vs composite rubric with examples, import direction enforcement, how to add a new component.
+[x] - SP-039-6b: Update `CONTRIBUTING.md` with a "Where does my new component go?" subsection.
+[x] - SP-039-6c: Update `packages/ui/README.md` (if it exists) to point at `docs/COMPONENT_LIBRARY.md` as the source of truth.
 
 ---
 
@@ -376,16 +376,16 @@ Spec: `roadmap/SP-040-deployment-configurability.md`
 
 ### Phase 1: Bootstrap endpoint + adapter rewrite
 
-[] - SP-040-1a: Define `RuntimeConfig` type (`apiBaseURL`, `wsURL`, `authMode: "none"|"bearer"`, `appMode: "local"|"cloud"`, `buildVersion`) in `pkg/webui/api_bootstrap.go` and `webui/src/types/runtimeConfig.ts`.
+[x] - SP-040-1a: Define `RuntimeConfig` type (`apiBaseURL`, `wsURL`, `authMode: "none"|"bearer"`, `appMode: "local"|"cloud"`, `buildVersion`) in `pkg/webui/api_bootstrap.go` and `webui/src/types/runtimeConfig.ts`.
 [] - SP-040-1b: Implement `GET /api/bootstrap` returning `RuntimeConfig` (unauthenticated; `authMode` set based on `SPROUT_AUTH_TOKEN` env, sharing the env read with `pkg/webui/server.go:69`).
 [] - SP-040-1c: Rewrite `webui/src/bootstrapAdapter.ts` — fetch `/api/bootstrap` first, fall back to `import.meta.env.VITE_*`, fall back to localhost defaults. Log each fallback step.
 [] - SP-040-1d: Update `webui/src/bootstrapAdapter.test.ts` with all three fallback paths.
 
 ### Phase 2: Build-time configurability
 
-[] - SP-040-2a: Define `VITE_API_BASE_URL`, `VITE_WS_URL`, `VITE_AUTH_MODE`, `VITE_APP_MODE` in `webui/vite.config.ts` with safe defaults.
+[x] - SP-040-2a: Define `VITE_API_BASE_URL`, `VITE_WS_URL`, `VITE_AUTH_MODE`, `VITE_APP_MODE` in `webui/vite.config.ts` with safe defaults.
 [] - SP-040-2b: Replace `webui/package.json:101` hardcoded proxy with a Vite plugin reading `process.env.SPROUT_DEV_BACKEND_URL` (default `http://localhost:56000`).
-[] - SP-040-2c: Add `webui/.env.example` documenting every supported `VITE_*` var.
+[x] - SP-040-2c: Add `webui/.env.example` documenting every supported `VITE_*` var.
 
 ### Phase 3: Auth context + LoginPage
 

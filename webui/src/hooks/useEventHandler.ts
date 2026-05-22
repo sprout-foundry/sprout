@@ -473,7 +473,10 @@ export function useEventHandler({
             model: typeof eventData?.model === 'string' ? eventData.model : undefined,
             taskCount: typeof eventData?.task_count === 'number' ? eventData.task_count : undefined,
             failures: typeof eventData?.failures === 'number' ? eventData.failures : undefined,
-            status: typeof eventData?.status === 'string' ? eventData.status : undefined,
+            status:
+              typeof eventData?.status === 'string'
+                ? (eventData.status as 'queued' | 'started' | 'completed' | 'cancelled')
+                : undefined,
             reason: typeof eventData?.reason === 'string' ? eventData.reason : undefined,
             tokensUsed: typeof eventData?.tokens_used === 'number' ? eventData.tokens_used : undefined,
             elapsedMs: typeof eventData?.elapsed_ms === 'number' ? eventData.elapsed_ms : undefined,

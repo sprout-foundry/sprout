@@ -108,9 +108,9 @@ export interface SubagentActivityData {
   model?: string;
   task_count?: number;
   failures?: number;
-  chat_id?: string;
   /** Lifecycle status for subagent events: "queued", "started", "completed", "cancelled" */
   status?: string;
+  chat_id?: string;
   /** Reason for cancellation (e.g. "budget exceeded") */
   reason?: string;
   /** Tokens consumed by this subagent task */

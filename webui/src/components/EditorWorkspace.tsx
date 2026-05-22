@@ -5,9 +5,7 @@ import type { PerChatState } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
-import { TasksPage, TeamPage } from '@sprout/ui';
-import { BillingPage } from './platform';
-import { useSproutFetch } from '../contexts/SproutAdapterContext';
+import { TasksPage, TeamPage, BillingPage } from './platform';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
 
@@ -129,8 +127,6 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const activePaneIdRef = useRef(activePaneId);
   activePaneIdRef.current = activePaneId;
 
-  // Pass the webui's sproutFetch (cloud + local fallback) to TasksPage.
-  const sproutFetch = useSproutFetch();
   const panesRef = useRef(panes);
   panesRef.current = panes;
   const perChatCacheRef = useRef(perChatCache);
@@ -500,7 +496,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }, [handleFocusPaneIndex]);
 
   if (currentView === 'tasks') {
-    return <TasksPage sproutFetch={sproutFetch} />;
+    return <TasksPage />;
   }
 
   if (currentView === 'billing') {
@@ -508,7 +504,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }
 
   if (currentView === 'team') {
-    return <TeamPage sproutFetch={sproutFetch} />;
+    return <TeamPage />;
   }
 
   return (

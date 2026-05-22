@@ -85,11 +85,17 @@ export interface SubagentLifecycleCounts {
   cancelled: number;
 }
 
-/** Return shape of useSubagentRuns: runs array plus lifecycle counts. */
+export interface SubagentResourceCounts {
+  active: number;
+  queued: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+}
+
 export interface SubagentRunResult {
-  runs: ContextSubagentRun[];
-  lifecycleCounts: SubagentLifecycleCounts;
-  totalLifecycle: number;
+  subagentRuns: ContextSubagentRun[];
+  resourceCounts: SubagentResourceCounts;
 }
 
 // ── Props ───────────────────────────────────────────────────────────

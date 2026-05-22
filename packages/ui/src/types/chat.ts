@@ -58,7 +58,7 @@ export interface SubagentActivity {
   failures?: number;
   tool?: string;
   /** Lifecycle status: "queued", "started", "completed", "cancelled" */
-  status?: string;
+  status?: 'queued' | 'started' | 'completed' | 'cancelled';
   /** Reason for cancellation (e.g. "budget exceeded") */
   reason?: string;
   /** Tokens consumed by this subagent task */

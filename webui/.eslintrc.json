@@ -121,6 +121,19 @@
     ],
     "import/group-exports": "off",
     "import/no-cycle": "off",
+    "import/no-restricted-paths": [
+      "error",
+      {
+        "basePath": ".",
+        "zones": [
+          {
+            "target": "src/**",
+            "from": "packages/ui/src/**",
+            "message": "Import from @sprout/ui barrel instead of deep-importing into packages/ui/src/. Use: import { Component } from '@sprout/ui'"
+          }
+        ]
+      }
+    ],
     "import/no-duplicates": "warn",
     "import/no-self-import": "error",
     "import/no-useless-path-segments": "warn",

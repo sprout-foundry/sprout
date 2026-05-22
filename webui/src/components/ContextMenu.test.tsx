@@ -2,7 +2,7 @@
 import { Fragment, act } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import ContextMenu from './ContextMenu';
+import { ContextMenu } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Mocks

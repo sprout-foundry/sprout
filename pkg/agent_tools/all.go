@@ -1,18 +1,72 @@
-// Package tools provides the ToolHandler interface, ToolRegistry, and individual
-// tool implementations for the Sprout agent. As tools are migrated from the
-// legacy switch-based dispatch (pkg/agent/tool_executor*.go) to the registry
-// pattern, they register themselves via an init function in this file or in
-// their own source files.
-//
-// SP-038: This file serves as the central tools-init entry point. Over time,
-// migrated tools will be imported here so that a single import of this package
-// ensures all new-style tools are registered.
 package tools
 
-// RegisterAllTools registers all migrated tool handlers into the given registry.
-// Call this once at startup to populate the registry with all new-style tools.
-func RegisterAllTools(registry *ToolRegistry) {
-	registry.Register(NewReadFileHandler())
-	registry.Register(NewListDirectoryHandler())
-	registry.Register(NewFetchURLHandler())
+// AllTools returns all available tool handlers for registration.
+// This is the central registration point for the new interface-based tool system.
+// Currently includes: read_file, list_directory, fetch_url, search_files,
+// repo_map, list_memories, read_memory, rollback_changes, view_history,
+// list_skills, embedding_index, write_file, write_structured_file,
+// edit_file, shell_command, save_memory, search_memories,
+// run_subagent, run_parallel_subagents, task_queue_add, task_queue_publish,
+// task_queue_read, todo_write, todo_read, ask_user, patch_structured_file,
+// self_review, commit, git, activate_skill, add_memory, delete_memory,
+// browse_url, web_search, semantic_search, analyze_image_content,
+// and analyze_ui_screenshot.
+//
+// To register all tools with a registry:
+//
+//	registry := tools.NewToolRegistry()
+//	for _, h := range tools.AllTools() {
+//	    registry.Register(h)
+//	}
+func AllTools() []ToolHandler {
+	return []ToolHandler{
+		&readFileHandler{},
+		&listDirHandler{},
+		&fetchURLHandler{},
+		&searchFilesHandler{},
+		&repoMapHandler{},
+		&listMemoriesHandler{},
+		&readMemoryHandler{},
+		&rollbackChangesHandler{},
+		&viewHistoryHandler{},
+		&listSkillsHandler{},
+		&embeddingIndexHandler{},
+		&writeFileHandler{},
+		&writeStructuredFileHandler{},
+		&editFileHandler{},
+		&shellCommandHandler{},
+		&saveMemoryHandler{},
+		&searchMemoriesHandler{},
+		// Subagent tools (thin wrappers pending *Agent refactoring)
+		&runSubagentHandler{},
+		&runParallelSubagentsHandler{},
+		// Task queue tools
+		&taskQueueAddHandler{},
+		&taskQueuePublishHandler{},
+		&taskQueueReadHandler{},
+		// Todo tools
+		&todoWriteHandler{},
+		&todoReadHandler{},
+		// Interaction tools
+		&askUserHandler{},
+		// Structured file tools
+		&patchStructuredFileHandler{},
+		// Review tools
+		&selfReviewHandler{},
+		// Git tools
+		&commitHandler{},
+		&gitHandler{},
+		// Skill tools (thin wrapper pending *Agent refactoring)
+		&activateSkillHandler{},
+		// Memory tools
+		&addMemoryHandler{},
+		&deleteMemoryHandler{},
+		// Browser/search tools (thin wrappers pending *Agent refactoring)
+		&browseURLHandler{},
+		&webSearchHandler{},
+		&semanticSearchHandler{},
+		// Image/analysis tools (thin wrappers pending *Agent refactoring)
+		&analyzeImageContentHandler{},
+		&analyzeUIScreenshotHandler{},
+	}
 }

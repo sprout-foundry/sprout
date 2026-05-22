@@ -741,14 +741,49 @@ func buildQueueTaskQuery(task tools.Task) string {
 
 // runInteractiveMode handles interactive REPL mode
 func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator) error {
+	// SP-048 follow-up: Go's default logger writes to stderr — and so does
+	// the activity-indicator spinner. Without redirection, any log.Printf
+	// fired during a tool run (e.g. the [WARN] in pkg/configuration/config.go
+	// when an AllowedTools override is dropped) interleaves with spinner
+	// frames and produces the cursor-thrash bug we caught in real sessions.
+	// Route Go's log to .sprout/workspace.log instead so internal noise
+	// stops fighting the spinner; user-facing output still goes through
+	// fmt.Print which is properly synchronized by the indicator.
+	if restoreLog, err := redirectGoLogToWorkspace(); err == nil {
+		defer restoreLog()
+	}
+
+	// SP-048-3: Persistent status footer pinned at the bottom row of the
+	// terminal. Suppressed automatically on non-TTY (e.g., piped output).
+	// MUST be Stopped before exit or the user's terminal is left with a
+	// broken scroll region — both the defer here AND the signal handler's
+	// force-quit path call Stop via the global registration.
+	//
+	// Started BEFORE the welcome/recent-sessions prints so that intro
+	// output lands inside the scroll region (1..N-2) and scrolls naturally
+	// as the session grows. Reverse order (prints first, then footer)
+	// leaves the cursor inside already-printed content at row N-2, and
+	// the input prompt then renders on top of it.
+	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
+	console.RegisterGlobalStatusFooter(footer)
+	footer.Start()
+	defer footer.Stop()
+
 	fmt.Printf("\n[bot] Welcome to sprout! Enhanced CLI with Web UI\n")
 	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
-	// SP-048-5a: surface up to 3 recent sessions for this workspace (last
-	// 7 days) with copy-pasteable continuation commands.
-	maybeShowRecentSessions(chatAgent)
+	// SP-048-5a: surface recent sessions (last 7d) with inline numeric
+	// selection. Up/down arrows stay reserved for command history; a
+	// fresh number on its own line is the affordance. If the user picks
+	// a session, this loads its state in-place via LoadStateScoped +
+	// ApplyState + SetSessionID — same mechanism as `--session-id`,
+	// just triggered interactively.
+	//
+	// Runs BEFORE the InputReader is constructed so a resumed session's
+	// model is reflected in the prompt prefix.
+	maybeOfferSessionResume(chatAgent)
 
 	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
 	// per workspace in ~/.sprout/state.json so it never repeats.
@@ -784,16 +819,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		}
 		return matches
 	})
-
-	// SP-048-3: Persistent status footer pinned at the bottom row of the
-	// terminal. Suppressed automatically on non-TTY (e.g., piped output).
-	// MUST be Stopped before exit or the user's terminal is left with a
-	// broken scroll region — both the defer here AND the signal handler's
-	// force-quit path call Stop via the global registration.
-	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
-	console.RegisterGlobalStatusFooter(footer)
-	footer.Start()
-	defer footer.Stop()
 
 	// SP-048-1c + 3: Subscribe to tool start/end events so the activity
 	// indicator can render a per-tool timeline AND the footer can refresh

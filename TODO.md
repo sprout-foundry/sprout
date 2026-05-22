@@ -441,3 +441,52 @@ Spec: `roadmap/SP-047-sqlite-vec-store.md` (amended: uses `coder/hnsw` instead o
 [x] - SP-047-6a: Benchmark tests comparing JSONL vs HNSW query latency.
 [x] - SP-047-6b: Measure binary size delta.
 [x] - SP-047-6c: Success criteria: all tests pass, migration is non-destructive, WASM builds work.
+
+---
+
+## SP-048: CLI Delight — Terminal UX Polish
+
+Spec: `roadmap/SP-048-cli-delight.md`
+
+The interactive `sprout agent` CLI is capable but quiet — silent between submit and first stream chunk, no tool execution timeline, slash commands invisible until you `/help`, no persistent sense of "where am I in this session." Existing plumbing (events, history, markdown renderer) supports most of what's needed; the gaps are in *legibility* during real-time interaction.
+
+### Phase 1: Spinner + tool execution timeline
+
+[x] - SP-048-1a: Add `pkg/console/activity_indicator.go` — braille-spinner ticker with start/stop/transition primitives. Uses `\r\033[K` to erase, frames `⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏`, 80ms cadence. Suppressed when stdout is not a TTY. Goroutine-safe.
+[x] - SP-048-1b: In `cmd/agent_modes.go` (around the `streamFn` callback at line ~563), start the spinner immediately after submit with text `Thinking (<elapsed> · <model>)`. Stop it on the first stream chunk arrival. Also moved `chatAgent.SetEventBus(eventBus)` to be unconditional so tool events publish even when WebUI is disabled.
+[x] - SP-048-1c: Subscribe to `PublishToolStart` / `PublishToolEnd` events via `startTerminalToolSubscriber` in `cmd/agent_modes.go`. Renders per-tool spinner line on start, replaces with `[OK]` / `[FAIL]` result line on end. Stays within the cmd/ package because the subscriber's lifetime is tied to interactive mode's ctx.
+[x] - SP-048-1d: `formatToolArgPreview` helper — for `read_file`/`write_file`/`edit_file` show path; for `shell_command`/`exec` show command; for `search_files`/`grep` show pattern; for `fetch_url` show url. Generic fallback to first short string field for unknown tools. Newlines collapsed, truncated to 60 chars with `…`.
+[x] - SP-048-1e: Tests in `pkg/console/activity_indicator_test.go` (NoOp on non-TTY, Replace works on non-TTY, nil-safe, idempotent Stop, sanitizeLine) and `cmd/agent_modes_test.go` (`TestFormatToolArgPreview` with 10 cases including unknown-tool fallback, JSON failure modes, newline collapsing, truncation).
+
+### Phase 2: Slash command discoverability
+
+[x] - SP-048-2a: Tab completion in `pkg/console/input_core.go` — `CompletionProvider` callback type, `SetCompleter` method, cycle-state tracking (`completionCycle` struct), `handleTabCompletion` cycles candidates on repeated Tab, automatically resets when buffer differs from last applied completion. Wired in `cmd/agent_modes.go` `runInteractiveMode` to filter `registry.CompletionCandidates()` by prefix.
+[x] - SP-048-2b: "Did you mean" — `pkg/agent_commands/suggestions.go` with `levenshtein()` helper and `(*CommandRegistry).SuggestCommands(name, max)`. Modified `Execute` in `commands.go` to append `— did you mean /X or /Y?` to the unknown-command error when candidates within edit distance 3 (or prefix match) exist.
+[x] - SP-048-2c: `/help <command>` — `UsageProvider` interface for richer per-command help, `printCommandHelp(name)` resolves aliases via `GetCommand`, shows description + aliases + usage (or "(no additional details)" fallback for commands that don't implement `UsageProvider`).
+[x] - SP-048-2d: Short aliases registered in `NewCommandRegistry`: `/m → /model`, `/p → /provider`, `/x → /exit`, `/q → /exit`, `/? → /help`, `/h → /help`. `RegisterAlias`, `AliasesOf`, `CompletionCandidates`, and alias-aware `GetCommand`/`Execute` added. Aliases appear inline in `/help` output (e.g. `/exit (/q, /x) - ...`).
+
+### Phase 3: Persistent status footer
+
+[] - SP-048-3a: `pkg/console/status_footer.go` — render a single bottom line using terminal scrolling region (`\033[1;<rows-1>r`). Format: `─ <model> · <ctx-used>/<ctx-limit> · $<cost> · <cwd> (<branch>) ──────`. Update on PublishToolEnd and after each assistant turn.
+[] - SP-048-3b: Handle SIGWINCH — recompute terminal size, redraw footer, reset scroll region.
+[] - SP-048-3c: Clean restoration on exit (`\033[r`) — register in signal/exit handler so even Ctrl-C unwinds the scroll region.
+[] - SP-048-3d: Cost color thresholds — yellow >$1, red >$5. Configurable via `cli.footer.cost_warn` and `cli.footer.cost_alert` in config.
+[] - SP-048-3e: Suppress entirely on non-TTY output and in `--pipe` / `--no-interactive` modes.
+
+### Phase 4: Input ergonomics
+
+[] - SP-048-4a: Honor `NO_COLOR` and `FORCE_COLOR` env vars in `pkg/console/markdown_formatter.go` `NewMarkdownFormatter`. Per [no-color.org](https://no-color.org): if `NO_COLOR` is non-empty, force colors off; if `FORCE_COLOR` is set, force on; default to TTY auto-detection.
+[] - SP-048-4b: Remove the `NO_COLOR` unset and `FORCE_COLOR=1` set in `pkg/agent/agent_exec_utils.go:50-53`. Only force colors in spawned subshells if the user explicitly opted in.
+[] - SP-048-4c: Default-choice highlighting — `pkg/ui/prompt.go` `PromptForConfirmation` renders the default letter in bold (`[Y/n]` or `[y/N]` with bold cap). `pkg/agent/secret_prompter.go` 4-choice prompt renders the safe default (Redact) in bold.
+[] - SP-048-4d: Smart paste — in `pkg/console/input_core.go` bracketed-paste handler, if pasted content has >100 newlines or >5KB, surface a 3-choice prompt: `[Use as-is] [Save to .sprout/pastes/ and reference] [Cancel]`. Save path mirrors `pkg/console/image_paste.go` (which already does this for images).
+[] - SP-048-4e: Ctrl-R reverse history search — in `pkg/console/input_core.go`, on Ctrl-R, enter search mode: render `(reverse-i-search): ` prefix, typed chars filter history by substring, Ctrl-R cycles older matches, Enter submits the match, Esc/Ctrl-G cancels back to original buffer.
+[] - SP-048-4f: `$EDITOR` escape — Ctrl-X Ctrl-E in `pkg/console/input_core.go`: write current buffer to a temp file, exec `$EDITOR` (fallback `vi`), block until exit, read back, submit. Also add a `/edit` slash command alias for the same flow.
+
+### Phase 5: Onboarding + per-turn polish
+
+[] - SP-048-5a: Recent-session greeting — on startup of `sprout agent` (in `cmd/agent_modes.go`), if `~/.sprout/sessions/` has entries from the last 7 days, display up to 3 with index numbers, first user message (truncated), turn count, cost. Numeric input on the first prompt resumes the corresponding session.
+[] - SP-048-5b: First-run hint — only the first time `sprout agent` is run for a workspace, print `Press Tab for slash commands, Ctrl-D to exit, or just start typing.` Track via `~/.sprout/state.json`.
+[] - SP-048-5c: Per-turn cost line — after each assistant turn completes (in `agent_modes.go` post-stream callback), print a single dim line: `⎯ this turn: <in>k in / <out>k out · $<cost> · <elapsed> ⎯`.
+[] - SP-048-5d: Model in prompt — change the hardcoded `"sprout> "` at `cmd/agent_modes.go:717` to a templated `<model> ▸ ` (configurable via `cli.prompt.format`).
+[] - SP-048-5e: Strip ANSI on non-TTY stdout — wrap top-level output writes to detect `!isatty.IsTerminal(os.Stdout.Fd())` and strip ANSI escapes via a simple filter writer.
+

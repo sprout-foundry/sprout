@@ -16,10 +16,16 @@ type secretPrompterAdapter struct {
 func (a *secretPrompterAdapter) PromptSecretAction(secrets []security.DetectedSecret, source string) (security.SecretAction, error) {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Secrets detected in %s:\n", source)
+
 	for i, s := range secrets {
 		fmt.Fprintf(&sb, "  %d. [%s] %s", i+1, secretdetect.DisplayName(s.Type), s.Snippet)
 		if s.Line > 0 {
 			fmt.Fprintf(&sb, " (line %d)", s.Line)
+		}
+		// Hint when the match is from gitleaks' generic catch-all rule, which
+		// has the highest false-positive rate of any rule.
+		if s.Type == "generic-api-key" {
+			sb.WriteString("  (heuristic match — likely false-positive on placeholder/example content)")
 		}
 		sb.WriteString("\n")
 	}
@@ -30,9 +36,11 @@ func (a *secretPrompterAdapter) PromptSecretAction(secrets []security.DetectedSe
 	if source == "commit" {
 		redactLabel = "Allow with Warning"
 	}
+
 	choices := []ChoiceOption{
 		{Label: redactLabel, Value: "redact"},
-		{Label: "Allow as-is", Value: "allow"},
+		{Label: "Allow this batch only", Value: "allow"},
+		{Label: allowSourceLabel(source), Value: "allow_source"},
 		{Label: "Block", Value: "block"},
 	}
 
@@ -44,10 +52,29 @@ func (a *secretPrompterAdapter) PromptSecretAction(secrets []security.DetectedSe
 	switch choice {
 	case "allow":
 		return security.SecretAllow, nil
+	case "allow_source":
+		return security.SecretAllowSource, nil
 	case "block":
 		return security.SecretBlock, nil
 	default:
 		return security.SecretRedact, nil
+	}
+}
+
+// allowSourceLabel returns a context-sensitive label for the "whitelist this
+// source for the session" choice, based on the tool name embedded in source.
+func allowSourceLabel(source string) string {
+	switch {
+	case strings.HasPrefix(source, "read_file:"):
+		return "Allow all secrets in this file (rest of session)"
+	case strings.HasPrefix(source, "shell_command:"):
+		return "Allow all secrets from this command (rest of session)"
+	case strings.HasPrefix(source, "search_files:"):
+		return "Allow all secrets from this search (rest of session)"
+	case source == "commit":
+		return "Allow all secrets in this commit (rest of session)"
+	default:
+		return "Allow all secrets from this source (rest of session)"
 	}
 }
 

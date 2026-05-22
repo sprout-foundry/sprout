@@ -30,8 +30,7 @@ A **persona** is a named specialization that configures how the AI agent behaves
 | Computer User | `computer_user` | Hands-on system administration and engineering execution | Yes |
 | Executive Assistant | `executive_assistant` | Cross-project orchestration and task queue | No |
 | Project Planner | `project_planner` | Strategic Planning & Alignment Architect | No |
-| Orchestrator | `orchestrator` | Process-oriented planning and delegation | No |
-| Repo Orchestrator | `repo_orchestrator` | Repository-level orchestration with git write access | No (EA exception) |
+| Orchestrator | `orchestrator` | Planning and delegation; git-write (commit/stage/push) is gated by `AllowOrchestratorGitWrite`. Aliases: `repo_orchestrator`, `repo_operator`, `git_orchestrator`, `orchestration` | No (EA exception) |
 
 **Source**: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/executive_assistant.json`, `pkg/personas/configs/project_planner.json`
 
@@ -142,7 +141,7 @@ At runtime, a persona can be **activated** for the current session via `ApplyPer
 - Else if `system_prompt` is set → **loads** the markdown file and replaces the current prompt
 - If `system_prompt_append` is set → **appends** to the result (separated by `---`)
 
-**Real-world example of `system_prompt_append`**: The `repo_orchestrator` persona uses `system_prompt_append` to add a comprehensive Git Operations Policy section to its system prompt. Rather than embedding all git rules in a single monolithic prompt file, the append approach keeps the policy declarative in the JSON config, making it easier to iterate on without touching embedded prompt files.
+**Real-world example of conditional append**: The `orchestrator` persona conditionally appends a Git Operations Policy section to its system prompt when `AllowOrchestratorGitWrite=true`. The policy lives as a `go:embed`'d markdown file (`pkg/agent/prompts/persona_appends/orchestrator_git_policy.md`) and is concatenated by `ApplyPersona` only when the flag is on — so the same persona ID covers both the read-only and git-write variants without two catalog entries.
 
 **Clearing a persona**: `ClearActivePersona()` removes the active persona and restores the `baseSystemPrompt`.
 
@@ -339,10 +338,10 @@ The depth model controls how deeply personas can delegate work to subagents. Thi
 | Depth | Role | Examples | Tool Constraints |
 |-------|------|----------|-----------------|
 | **0** | Primary agent | Executive Assistant, Project Planner (when activated as root) | Full tool access, can spawn subagents |
-| **1** | Orchestrator subagent | Orchestrator, Repo Orchestrator | Can spawn subagents, inherits parent provider/model |
+| **1** | Orchestrator subagent | Orchestrator | Can spawn subagents, inherits parent provider/model |
 | **2** | Specialist subagent | Coder, Tester, Debugger, Code Reviewer | **Cannot** spawn subagents, focused tool set |
 
-**Note on non-delegatable personas**: Both `orchestrator` and `repo_orchestrator` are marked `delegatable: false` in their catalog definitions. This means they cannot be spawned as subagents by regular personas. However, the `executive_assistant` bypasses this restriction via `hasEASpawnAuthority()` — when the EA spawns a subagent, it can delegate to any persona regardless of the `delegatable` flag. This is what enables the canonical three-level nesting chain (EA → orchestrator → specialist).
+**Note on non-delegatable personas**: The `orchestrator` is marked `delegatable: false` in its catalog definition, so it cannot be spawned as a subagent by regular personas. However, the `executive_assistant` bypasses this restriction via `hasEASpawnAuthority()` — when the EA spawns a subagent, it can delegate to any persona regardless of the `delegatable` flag. This is what enables the canonical three-level nesting chain (EA → orchestrator → specialist).
 
 ### How Depth Works
 

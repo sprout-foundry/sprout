@@ -214,7 +214,7 @@ func NewAgentStateManager(debug bool) *AgentStateManager {
 		conversationPruner:      NewConversationPruner(debug),
 		commandHistory:          []string{},
 		historyIndex:            -1,
-		activePersona:           "repo_orchestrator",
+		activePersona:           "orchestrator",
 		circuitBreaker:          &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)},
 		falseStopDetectionEnabled: true,
 	}

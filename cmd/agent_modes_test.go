@@ -246,3 +246,60 @@ func TestFormatToolArgPreview(t *testing.T) {
 		})
 	}
 }
+
+// SP-048 follow-up: subagent preview should show task count for
+// run_parallel_subagents so the user can see fan-out.
+func TestFormatRunParallelSubagentsPreview(t *testing.T) {
+	cases := []struct {
+		name string
+		args string
+		want string
+	}{
+		{"three tasks", `{"subagents":["a","b","c"]}`, " (3 tasks)"},
+		{"one task", `{"subagents":["only-one"]}`, " (1 tasks)"},
+		{"empty array", `{"subagents":[]}`, ""},
+		{"missing field", `{}`, ""},
+		{"invalid json", `not json`, ""},
+		{"empty args", ``, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatRunParallelSubagentsPreview(c.args)
+			if got != c.want {
+				t.Errorf("formatRunParallelSubagentsPreview(%q) = %q, want %q", c.args, got, c.want)
+			}
+		})
+	}
+}
+
+// formatToolPreview dispatches on tool name; the default branch should
+// behave identically to formatToolArgPreview for unrelated tools.
+func TestFormatToolPreview_DispatchToDefault(t *testing.T) {
+	cases := []struct {
+		tool string
+		args string
+		want string
+	}{
+		{"read_file", `{"path":"foo.go"}`, " (foo.go)"},
+		{"shell_command", `{"command":"ls"}`, " (ls)"},
+		{"unknown_tool", `{"thing":"value"}`, " (value)"},
+	}
+	for _, c := range cases {
+		t.Run(c.tool, func(t *testing.T) {
+			got := formatToolPreview(nil, c.tool, c.args)
+			if got != c.want {
+				t.Errorf("formatToolPreview(nil, %q, %q) = %q, want %q",
+					c.tool, c.args, got, c.want)
+			}
+		})
+	}
+}
+
+// run_subagent without an agent reference should degrade gracefully —
+// no panic, returns empty (or just persona if available without lookup).
+func TestFormatRunSubagentPreview_NilAgent(t *testing.T) {
+	got := formatRunSubagentPreview(nil, `{"persona":"coder"}`)
+	if got != "" {
+		t.Errorf("nil agent should yield empty preview, got %q", got)
+	}
+}

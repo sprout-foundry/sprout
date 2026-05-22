@@ -335,8 +335,28 @@ func (m *Manager) GetConfigDir() string {
 // saveConfigLocked persists the in-memory config to disk.
 // If m.configDir is set, it uses SaveToDir (bypassing env vars).
 // Otherwise it falls back to Config.Save() (which reads env vars).
-// Caller must hold m.mu.
+//
+// On ConfigConflictError (another process modified the file since we loaded),
+// it reloads the on-disk config, merges pending in-memory changes on top,
+// and retries once. Caller must hold m.mu.
 func (m *Manager) saveConfigLocked() error {
+	err := m.saveConfigDirectLocked()
+	if err == nil || !IsConfigConflict(err) {
+		return err
+	}
+
+	// Conflict detected: reload from disk and merge our pending changes.
+	log.Printf("[config] conflict detected, reloading from disk and retrying: %v", err)
+	if mergeErr := m.reloadAndMergeLocked(); mergeErr != nil {
+		return fmt.Errorf("config conflict, reload-merge failed: %w (original: %v)", mergeErr, err)
+	}
+
+	// Retry save with the merged config.
+	return m.saveConfigDirectLocked()
+}
+
+// saveConfigDirectLocked performs the actual config write without retry logic.
+func (m *Manager) saveConfigDirectLocked() error {
 	if m.configDir != "" {
 		if err := m.config.SaveToDir(m.configDir); err != nil {
 			return fmt.Errorf("save config: %w", err)
@@ -347,6 +367,73 @@ func (m *Manager) saveConfigLocked() error {
 		}
 	}
 	return nil
+}
+
+// reloadAndMergeLocked reloads the config from disk, then overlays the
+// in-memory changes that haven't been persisted yet (diff of m.config vs
+// m.lastSaved). Caller must hold m.mu.
+func (m *Manager) reloadAndMergeLocked() error {
+	// Capture pending changes (what m.config has that m.lastSaved doesn't).
+	pending := m.pendingChangesLocked()
+
+	// Reload from disk.
+	var reloaded *Config
+	var err error
+	if m.configDir != "" {
+		configPath := filepath.Join(m.configDir, ConfigFileName)
+		reloaded, err = LoadConfigWithLayers(configPath, "", "", m.configDir)
+	} else {
+		reloaded, err = Load()
+	}
+	if err != nil {
+		return fmt.Errorf("reload: %w", err)
+	}
+
+	// Apply pending changes on top of the reloaded config.
+	pending.applyTo(reloaded)
+
+	// Swap in the merged config.
+	m.config = reloaded
+	return nil
+}
+
+// pendingConfigChanges captures the full in-memory config state that
+// differs from the last-saved snapshot, so it can be re-applied after
+// a reload from disk.
+type pendingConfigChanges struct {
+	// The entire in-memory config at the time of the conflict. We'll
+	// do a JSON-level merge with the reloaded config to preserve
+	// external changes while re-applying our pending mutations.
+	current *Config
+	last    *Config
+}
+
+// pendingChangesLocked captures the current and last-saved config state.
+// Caller must hold m.mu.
+func (m *Manager) pendingChangesLocked() pendingConfigChanges {
+	return pendingConfigChanges{
+		current: m.config,
+		last:    m.lastSaved,
+	}
+}
+
+// applyTo overlays the pending changes onto a target config using a
+// JSON-level merge. Fields that changed between lastSaved and current
+// are applied to target; fields that didn't change are left at the
+// target's (reloaded) value.
+func (ch *pendingConfigChanges) applyTo(target *Config) {
+	if ch.current == nil || ch.last == nil {
+		return
+	}
+	merged, err := mergeConfigChanges(ch.last, ch.current, target)
+	if err != nil {
+		log.Printf("[config] merge failed during conflict retry: %v", err)
+		return
+	}
+	// Preserve loadedModTime/loadedSize from target (which was freshly loaded).
+	merged.loadedModTime = target.loadedModTime
+	merged.loadedSize = target.loadedSize
+	*target = *merged
 }
 
 // SaveConfig saves the configuration to disk

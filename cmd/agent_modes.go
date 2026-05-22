@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -825,7 +826,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// cost/context after each tool. Runs until ctx is cancelled.
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
-	startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+	resetSpawnTracking := startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 
 	for {
 		select {
@@ -893,6 +894,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
 			turnCostStart := chatAgent.GetTotalCost()
+
+			// SP-051-2c: clear per-turn spawn dedupe so the next batch of
+			// subagents announces fresh "↳ persona spawned" lines instead of
+			// silently joining whatever ran in the prior turn.
+			resetSpawnTracking()
 
 			// SP-048-1b: spinner during the gap between submit and first
 			// stream chunk (or first tool event). The streaming callback
@@ -1035,6 +1041,13 @@ func (s *agentFooterSource) WorkingDir() string {
 	return wd
 }
 
+// ActiveSubagents satisfies the optional activeSubagentsSource interface in
+// pkg/console so the footer can render " · N sub" while subagents are
+// in flight. SP-051-2d.
+func (s *agentFooterSource) ActiveSubagents() int {
+	return agent.GetActiveSubagents()
+}
+
 // startTerminalToolSubscriber subscribes a goroutine to the event bus that
 // translates PublishToolStart / PublishToolEnd events into terminal spinner
 // updates and ✓/✗ result lines. Runs until ctx is cancelled.
@@ -1052,12 +1065,25 @@ func (s *agentFooterSource) WorkingDir() string {
 // effective provider/model so `run_subagent` lines can show which model
 // will actually run the delegated task (subagents often use cheaper or
 // faster models than the parent, and visibility into that matters).
-func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator, footer *console.StatusFooter) func() {
 	if eventBus == nil || indicator == nil {
-		return
+		return func() {}
 	}
 	subName := fmt.Sprintf("cli_tool_indicator_%d", time.Now().UnixNano())
 	ch := eventBus.Subscribe(subName)
+
+	// SP-051-2c: per-turn dedupe of "↳ persona spawned" announcement lines.
+	// We track which (depth, persona) pairs have already been announced for
+	// the current turn; the returned reset func is invoked by the REPL loop
+	// at the start of each user turn so the next batch of subagents gets
+	// fresh announcements.
+	var spawnMu sync.Mutex
+	seenSpawn := make(map[string]bool)
+	resetSpawn := func() {
+		spawnMu.Lock()
+		seenSpawn = make(map[string]bool)
+		spawnMu.Unlock()
+	}
 
 	go func() {
 		defer eventBus.Unsubscribe(subName)
@@ -1080,11 +1106,29 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						continue
 					}
 					args, _ := data["arguments"].(string)
+					depth := readEventDepth(data)
+					persona := readEventPersona(data)
+					// SP-051-2c: announce subagent spawn once per (depth,
+					// persona) pair per turn, with provider/model so the user
+					// can see which cheaper/faster model is doing the work.
+					if depth > 0 && persona != "" {
+						key := fmt.Sprintf("%d:%s", depth, persona)
+						spawnMu.Lock()
+						announce := !seenSpawn[key]
+						if announce {
+							seenSpawn[key] = true
+						}
+						spawnMu.Unlock()
+						if announce {
+							indicator.Stop()
+							fmt.Fprintln(os.Stderr, formatSpawnLine(chatAgent, depth, persona))
+						}
+					}
 					// Ensure the spinner lands on a fresh line so it never
 					// overwrites partial streamed text. Stdout for parity
 					// with how stream chunks were just printed.
 					fmt.Fprintln(os.Stdout)
-					indicator.Start(fmt.Sprintf("  %s%s", name, formatToolPreview(chatAgent, name, args)))
+					indicator.Start(formatToolStartLine(depth, persona, name, formatToolPreview(chatAgent, name, args)))
 				case events.EventTypeToolEnd:
 					name, _ := data["tool_name"].(string)
 					if agent.IsInteractiveTool(name) {
@@ -1104,7 +1148,9 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						icon = "[FAIL]"
 					}
 					args, _ := data["arguments"].(string)
-					indicator.Replace(fmt.Sprintf("  %s %s%s · %.1fs", icon, name,
+					depth := readEventDepth(data)
+					persona := readEventPersona(data)
+					indicator.Replace(formatToolEndLine(depth, persona, icon, name,
 						formatToolPreview(chatAgent, name, args),
 						float64(durationMs)/1000.0))
 					footer.Refresh()
@@ -1119,6 +1165,73 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 			}
 		}
 	}()
+
+	return resetSpawn
+}
+
+// formatSpawnLine renders the one-shot "↳ persona spawned (provider · model)"
+// line emitted the first time the CLI sees a new (depth, persona) pair in a
+// turn. Indent matches the corresponding tool-line depth so it visually
+// nests under the parent that spawned it.
+func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string) string {
+	indent := console.PersonaIndent(depth)
+	badge := console.PersonaBadge(depth, persona)
+	suffix := ""
+	if chatAgent != nil {
+		if provider, model, err := chatAgent.GetPersonaProviderModel(persona); err == nil && (provider != "" || model != "") {
+			suffix = fmt.Sprintf(" (%s · %s)", provider, model)
+		}
+	}
+	return fmt.Sprintf("%s  ↳ %sspawned%s", indent, badge, suffix)
+}
+
+// readEventDepth reads the subagent_depth from an event payload. Returns 0
+// for missing or malformed values — matches today's "primary agent" rendering
+// when older events that pre-date SP-051 metadata land in the bus.
+func readEventDepth(data map[string]interface{}) int {
+	if data == nil {
+		return 0
+	}
+	switch v := data["subagent_depth"].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+// readEventPersona reads the active_persona from an event payload, trimmed.
+// Returns "" when absent — which suppresses the persona badge.
+func readEventPersona(data map[string]interface{}) string {
+	if data == nil {
+		return ""
+	}
+	if s, ok := data["active_persona"].(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+// formatToolStartLine builds the activity-indicator line for a ToolStart
+// event. At depth 0 it's byte-identical to the pre-SP-051 format
+// ("  tool_name(preview)") so primary-agent tool calls render unchanged.
+// At depth >= 1 it adds a depth indent and a colored "[persona]" badge.
+func formatToolStartLine(depth int, persona, toolName, preview string) string {
+	indent := console.PersonaIndent(depth)
+	badge := console.PersonaBadge(depth, persona)
+	return fmt.Sprintf("%s  %s%s%s", indent, badge, toolName, preview)
+}
+
+// formatToolEndLine builds the activity-indicator replacement line for a
+// ToolEnd event. Same depth/badge logic as formatToolStartLine.
+func formatToolEndLine(depth int, persona, icon, toolName, preview string, durationSec float64) string {
+	indent := console.PersonaIndent(depth)
+	badge := console.PersonaBadge(depth, persona)
+	return fmt.Sprintf("%s  %s %s%s%s · %.1fs", indent, icon, badge, toolName, preview, durationSec)
 }
 
 // formatToolPreview produces a short, single-line preview of a tool call

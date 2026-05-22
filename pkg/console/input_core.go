@@ -184,7 +184,12 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.collapsedPastes = ir.collapsedPastes[:0]
 	ir.rawPasteBuffer = nil
 	ir.lastCharTime = time.Now()
-	fmt.Printf("%s", ir.prompt) // Simple initial prompt
+	// SP-048 follow-up: defensively clear the current line before printing
+	// the prompt. Otherwise, if the cursor was left mid-line by prior
+	// output (e.g. partial content under the status footer's scroll region
+	// after a redraw), the prompt would render *on top of* that content
+	// and produce the prompt-overlap-on-startup bug we caught in real use.
+	fmt.Printf("\r\033[K%s", ir.prompt)
 
 	parser := NewEscapeParser()
 	buf := make([]byte, 32)

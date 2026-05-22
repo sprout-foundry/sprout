@@ -13,10 +13,22 @@ func TestToolRegistry_IsInteractive_AskUserFlagged(t *testing.T) {
 	}
 }
 
+// shell_command also owns the terminal during execution (streams
+// subprocess output via io.MultiWriter). The activity-indicator spinner
+// would interleave with that stream and produce the cursor-thrash bug we
+// hit in real interactive sessions.
+func TestToolRegistry_IsInteractive_ShellCommandFlagged(t *testing.T) {
+	r := GetToolRegistry()
+	if !r.IsInteractive("shell_command") {
+		t.Errorf("shell_command should be registered with Interactive=true (streams live stdout)")
+	}
+}
+
 func TestToolRegistry_IsInteractive_NonInteractiveToolsReturnFalse(t *testing.T) {
 	r := GetToolRegistry()
-	// Sample of tools that definitely should NOT be interactive.
-	for _, name := range []string{"read_file", "shell_command", "TodoRead"} {
+	// Sample of tools that definitely should NOT be interactive — they
+	// return a result to the agent without owning the terminal.
+	for _, name := range []string{"read_file", "TodoRead", "search_files"} {
 		if r.IsInteractive(name) {
 			t.Errorf("%s should not be Interactive", name)
 		}

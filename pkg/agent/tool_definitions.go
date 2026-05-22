@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
@@ -31,6 +32,15 @@ type ToolConfig struct {
 	// emit no result chrome on ToolEnd — the tool's natural output is the
 	// feedback the user expects.
 	Interactive bool `json:"interactive,omitempty"`
+
+	// Per-tool execution config consumed by the seed core.ToolRegistry
+	// transformer in pkg/agent/seed_tool_registry.go. Zero values fall
+	// through to the seed registry's defaults (5min timeout, 50KB result
+	// cap, no aliases, not safe for parallel execution).
+	Aliases         []string      `json:"aliases,omitempty"`
+	Timeout         time.Duration `json:"timeout,omitempty"`
+	MaxResultSize   int           `json:"max_result_size,omitempty"`
+	SafeForParallel bool          `json:"safe_for_parallel,omitempty"`
 }
 
 // ToolHandler represents a function that can handle a tool execution

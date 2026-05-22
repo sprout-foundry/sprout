@@ -51,6 +51,7 @@ export type { TerminalThemePack, CreateTerminalConnection } from './components/T
 export type { TerminalSession, AttachableSession } from './components/TerminalTabBar';
 export type { EditorProps, EditorTheme, CursorPosition as EditorCursorPosition } from './components/Editor';
 export type { SidebarProps } from './components/Sidebar';
+export type { MenuBarProps, MenuDefinition, MenuBarItem } from './components/MenuBar';
 export type { APIAdapter, PlatformNavItem } from './types/adapter';
 export type { SproutEvent, SproutEventCallback, EventsProvider } from './types/events';
 export type {
@@ -97,6 +98,8 @@ export { default as QueuedMessagesPanel } from './components/QueuedMessagesPanel
 export { default as Terminal } from './components/Terminal';
 export { default as TerminalPane } from './components/TerminalPane';
 export { default as TerminalTabBar } from './components/TerminalTabBar';
+// Menu bar
+export { default as MenuBar } from './components/MenuBar';
 export { default as Sidebar } from './components/Sidebar';
 export { default as CommandPalette } from './components/CommandPalette';
 export { default as Editor } from './components/Editor';

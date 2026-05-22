@@ -28,7 +28,7 @@ import (
 //     back to the static provider. Everything else continues working.
 //
 // Pure-Go pieces of the embedding pipeline — `ModelConfig`, `ModelDownloader`,
-// `GemmaTokenizer`, the static provider, the JSONL store, the IndexManager —
+// `GemmaTokenizer`, the static provider, the HNSW store, the IndexManager —
 // live in their non-tagged files and build for WASM unchanged.
 
 var errWASMNotSupported = errors.New("onnx: native ONNX runtime not available on WASM; install a JS-side onnxruntime-web provider on globalThis.__sproutONNX to enable ONNX-quality embeddings")

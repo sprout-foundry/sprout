@@ -71,7 +71,7 @@ func TestHandleEmbeddingIndex_UnknownOperation(t *testing.T) {
 
 	// Set up a real embedding manager so we get past the nil check.
 	dir := t.TempDir()
-	store, err := embedding.NewJSONLFileStore(dir + "/index.jsonl", "test-model-hash")
+	store, err := embedding.NewHNSWStore(dir + "/index.hnsw", "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestRunDuplicateCheck_FileNotFound(t *testing.T) {
 	defer agent.Shutdown()
 
 	dir := t.TempDir()
-	store, err := embedding.NewJSONLFileStore(dir + "/index.jsonl", "test-model-hash")
+	store, err := embedding.NewHNSWStore(dir + "/index.hnsw", "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

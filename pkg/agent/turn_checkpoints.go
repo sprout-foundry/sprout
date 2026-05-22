@@ -128,7 +128,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 	// does not block concurrent checkpoint access.
 	if shouldEmbed {
 		// Redact secrets before embedding to avoid persisting them in the
-		// embedding store's conversation_turns.jsonl.
+		// embedding store's conversation_turns index.
 		safeUserPrompt := redact.String(userPrompt)
 		safeActionableSummary := redact.String(actionableSummary)
 

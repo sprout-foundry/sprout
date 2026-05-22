@@ -351,13 +351,13 @@ func Func%s() string {
 	}
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "mock-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
 	defer store.Close()
 
-	manifestPath := filepath.Join(dir, ".index.jsonl.manifest.json")
+	manifestPath := filepath.Join(dir, ".index.hnsw.manifest.json")
 	opts := IndexOptions{
 		BatchSize:      16,
 		MaxBodyLen:     500,
@@ -428,13 +428,13 @@ func Hello() string {
 	}
 
 	provider := newMockProvider(3)
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "mock-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "mock-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
 	defer store.Close()
 
-	manifestPath := filepath.Join(dir, ".index.jsonl.manifest.json")
+	manifestPath := filepath.Join(dir, ".index.hnsw.manifest.json")
 	opts := IndexOptions{
 		BatchSize:      16,
 		MaxBodyLen:     500,

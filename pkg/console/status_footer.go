@@ -32,6 +32,12 @@ type StatusFooter struct {
 	active bool
 	source ContentSource
 
+	// lastRows remembers the terminal height at the most recent draw so
+	// that a resize handler can clear the OLD footer rows (which would
+	// otherwise be orphaned mid-screen after a grow) before applying a
+	// fresh scroll region for the new dimensions.
+	lastRows int
+
 	winchStop chan struct{}
 	winchDone chan struct{}
 
@@ -115,18 +121,34 @@ func (f *StatusFooter) Refresh() {
 	f.draw()
 }
 
-// Resize handles a terminal-size change (SIGWINCH). The scroll region is
-// re-applied for the new height and the footer is redrawn.
+// Resize handles a terminal-size change (SIGWINCH). The OLD footer rows
+// (tracked via lastRows) are cleared first so a grow doesn't leave the
+// previous footer stranded mid-screen, then the scroll region is
+// re-applied for the new height and the footer is redrawn at the new
+// bottom.
 func (f *StatusFooter) Resize() {
 	if f == nil || !f.isTTY {
 		return
 	}
 	f.mu.Lock()
 	active := f.active
+	oldRows := f.lastRows
 	f.mu.Unlock()
 	if !active {
 		return
 	}
+
+	// Reset the scroll region temporarily so we can address rows by
+	// absolute number without the terminal clamping us inside the OLD
+	// (now-stale) scroll area. Then clear the previous footer rows.
+	if oldRows > 1 {
+		fmt.Fprint(f.w, "\033[r")
+		fmt.Fprint(f.w, "\0337")
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows)
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-1)
+		fmt.Fprint(f.w, "\0338")
+	}
+
 	f.applyScrollRegion()
 	f.draw()
 }
@@ -244,6 +266,12 @@ func (f *StatusFooter) draw() {
 	fmt.Fprint(f.w, "\0337")
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s\0338", rows, footerBaseColor, line, footerResetAll)
+
+	// Track the row count so the next Resize knows which OLD rows to
+	// clear before re-applying a region for the new size.
+	f.mu.Lock()
+	f.lastRows = rows
+	f.mu.Unlock()
 }
 
 // composeLine builds the content row of the footer, padded/truncated to

@@ -532,3 +532,13 @@ Tag every event a subagent publishes with `subagent_depth` and `active_persona`,
 [x] - SP-051-2d: Status-footer subagent count. Add optional `ActiveSubagents() int` to the `ContentSource` interface in `pkg/console/status_footer.go` (interface-assertion check so the existing stub `ContentSource` implementations keep compiling). When non-zero, append ` · N sub` to `composeLine`. Counter source: a new atomic counter on `*Agent` incremented at subagent start and decremented at subagent end; the existing `agentFooterSource` adapter in `cmd/agent_modes.go` adds the `ActiveSubagents()` method that reads it.
 [x] - SP-051-2e: Tests in `cmd/agent_modes_test.go`. Extract a pure helper (e.g. `formatDepthedToolLine(depth, persona, name, preview, status, duration)`) from the subscriber goroutine so it's testable, then unit-test depth-0 (no badge, no indent), depth-1 (2-space indent + badge), depth-2 (4-space indent + badge), NO_COLOR mode (no ANSI), and the `↳ spawned` dedupe (two events from the same depth+persona produce exactly one spawn line). Status-footer test in `pkg/console/status_footer_test.go` for the `· N sub` suffix.
 
+---
+
+## SP-052: Multi-line Error Block Formatter
+
+Five `fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)` sites in `cmd/agent_modes.go` flatten multi-line errors via `%v`, losing context exactly when readability matters. Survey originally proposed three items; verified that the "stale prompt after slash command" and "mid-turn model change visibility" claims didn't reflect real code paths, so SP-052 ships only the confirmed bug.
+
+[x] - SP-052: New `pkg/console/error_block.go` with `FormatErrorBlock(header string, err error) string`. Nil err → "". Single-line err → byte-identical to legacy `"<header>: <err>\n"` format. Multi-line err → header line, then each line indented two spaces and red-colored (respects `NO_COLOR`/`FORCE_COLOR` via `envutil.ResolveColorPreference`). Trailing newlines stripped to avoid double-blank-line artifacts.
+[x] - SP-052: Route all 5 `[FAIL] Error: %v` sites through the helper: `cmd/agent_modes.go:673` (EA task processing), `:881` (slash command), `:912/917/922` (zsh fast-path, direct execution, normal ProcessQuery). All `[WARN]` sites left unchanged — they're benign single-line messages that already render fine.
+[x] - SP-052: Tests in `pkg/console/error_block_test.go` covering nil/single-line/multi-line, NO_COLOR vs FORCE_COLOR, trailing-newline trim, and single-line-stays-plain even with colors enabled. Pin the legacy single-line format so log scrapers and screenshots don't see a regression.
+

@@ -10,6 +10,7 @@ import (
 	"sync" // For thread-safe initialization
 
 	"gopkg.in/natefinch/lumberjack.v2"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
@@ -142,6 +143,9 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 		w.Log("Skipping user confirmation in non-interactive mode.")
 		return default_response
 	}
+	// SP-048 follow-up: stop any active CLI spinner so the prompt isn't
+	// overwritten by spinner frames on stderr.
+	clihooks.SuspendIndicator()
 	reader := bufio.NewReader(os.Stdin)
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3

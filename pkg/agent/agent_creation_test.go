@@ -216,9 +216,9 @@ func TestGetActivePersonaDefault(t *testing.T) {
 	defer agent.Shutdown()
 
 	persona := agent.GetActivePersona()
-	// Under go test the default is "repo_orchestrator" unless LEDIT_PERSONA is set.
-	if persona != "repo_orchestrator" {
-		t.Errorf("GetActivePersona = %q, want %q", persona, "repo_orchestrator")
+	// Under go test the default is "orchestrator" unless LEDIT_PERSONA is set.
+	if persona != "orchestrator" {
+		t.Errorf("GetActivePersona = %q, want %q", persona, "orchestrator")
 	}
 }
 

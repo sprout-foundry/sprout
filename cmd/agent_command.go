@@ -201,8 +201,8 @@ func availablePersonaCompletions(cfg *configuration.Config, toComplete string) [
 		if !persona.Enabled {
 			continue
 		}
-		// Exclude orchestrator and repo_orchestrator from subagent options (they are primary chat personas)
-		if id == "orchestrator" || id == "repo_orchestrator" {
+		// Exclude orchestrator from subagent options (it's the primary chat persona)
+		if id == "orchestrator" {
 			continue
 		}
 		if prefix != "" && !strings.HasPrefix(strings.ToLower(id), prefix) {

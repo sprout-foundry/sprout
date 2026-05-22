@@ -1251,3 +1251,115 @@ func (c *trackingClient) GetAverageTPS() float64         { return 100 }
 func (c *trackingClient) GetTPSStats() map[string]float64 { return map[string]float64{"last": 100, "average": 100} }
 func (c *trackingClient) ResetTPSStats()                 {}
 
+// =============================================================================
+// SP-051: depth + active_persona event metadata on subagent creation
+// =============================================================================
+
+// TestCreateSubagent_StampsDepthAndPersonaIntoEventMetadata pins the contract
+// that every event a subagent publishes is tagged with `subagent_depth` and
+// `active_persona`. The CLI tool-timeline depends on these fields to indent
+// and color-badge tool calls by who actually ran them; without them the EA →
+// orchestrator → coder chain reads as a flat wall of [OK] lines.
+func TestCreateSubagent_StampsDepthAndPersonaIntoEventMetadata(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(parent, shared)
+
+	subAgent, err := runner.createSubagent(SubagentOptions{Persona: "coder"})
+	if err != nil {
+		t.Fatalf("createSubagent failed: %v", err)
+	}
+
+	if subAgent.subagentDepth != 1 {
+		t.Errorf("subagentDepth = %d, want 1 (parent at 0)", subAgent.subagentDepth)
+	}
+
+	meta := subAgent.output.GetEventMetadata()
+	if got := meta["subagent_depth"]; got != 1 {
+		t.Errorf("subagent_depth in event metadata = %v, want 1", got)
+	}
+	if got := meta["active_persona"]; got != "coder" {
+		t.Errorf("active_persona in event metadata = %v, want \"coder\"", got)
+	}
+}
+
+// TestCreateSubagent_GrandchildDepthIsTwo covers the EA(0) → orchestrator(1)
+// → specialist(2) chain. A subagent spawned from another subagent should
+// land at depth 2, and its metadata should reflect that.
+func TestCreateSubagent_GrandchildDepthIsTwo(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+
+	// Spawn child (depth 1)
+	child, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "orchestrator"})
+	if err != nil {
+		t.Fatalf("createSubagent(child) failed: %v", err)
+	}
+
+	// Spawn grandchild from child (depth 2)
+	grand, err := NewSubagentRunner(child, shared).createSubagent(SubagentOptions{Persona: "coder"})
+	if err != nil {
+		t.Fatalf("createSubagent(grandchild) failed: %v", err)
+	}
+
+	if grand.subagentDepth != 2 {
+		t.Errorf("grandchild subagentDepth = %d, want 2", grand.subagentDepth)
+	}
+	if got := grand.output.GetEventMetadata()["subagent_depth"]; got != 2 {
+		t.Errorf("grandchild subagent_depth in metadata = %v, want 2", got)
+	}
+	if got := grand.output.GetEventMetadata()["active_persona"]; got != "coder" {
+		t.Errorf("grandchild active_persona = %v, want \"coder\"", got)
+	}
+}
+
+// TestCreateSubagent_PreservesParentMetadata pins the additive-merge contract:
+// per-spawn keys (subagent_depth, active_persona) must NOT clobber parent-set
+// routing keys (client_id, chat_id, user_id) — otherwise WebUI events from
+// subagents would lose their chat-routing target.
+func TestCreateSubagent_PreservesParentMetadata(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+	parent.SetEventMetadata(map[string]interface{}{
+		"client_id": "client-abc",
+		"chat_id":   "chat-xyz",
+	})
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+
+	subAgent, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "coder"})
+	if err != nil {
+		t.Fatalf("createSubagent failed: %v", err)
+	}
+
+	meta := subAgent.output.GetEventMetadata()
+	if meta["client_id"] != "client-abc" {
+		t.Errorf("client_id should be inherited from parent, got %v", meta["client_id"])
+	}
+	if meta["chat_id"] != "chat-xyz" {
+		t.Errorf("chat_id should be inherited from parent, got %v", meta["chat_id"])
+	}
+	if meta["subagent_depth"] != 1 {
+		t.Errorf("subagent_depth should be 1, got %v", meta["subagent_depth"])
+	}
+}
+

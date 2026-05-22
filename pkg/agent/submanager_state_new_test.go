@@ -20,8 +20,8 @@ func TestNewAgentStateManager_Defaults(t *testing.T) {
 	}
 
 	// Default persona
-	if sm.GetActivePersona() != "repo_orchestrator" {
-		t.Errorf("default persona = %q, want repo_orchestrator", sm.GetActivePersona())
+	if sm.GetActivePersona() != "orchestrator" {
+		t.Errorf("default persona = %q, want orchestrator", sm.GetActivePersona())
 	}
 
 	// Default history index

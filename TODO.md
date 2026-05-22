@@ -490,3 +490,23 @@ The interactive `sprout agent` CLI is capable but quiet — silent between submi
 [x] - SP-048-5d: Model in prompt — `buildPromptPrefix(model)` in `cmd/agent_modes.go` returns `<model> ▸ ` when a model is known, `sprout> ` as the fallback when empty/whitespace. Used at `runInteractiveMode`'s `console.NewInputReader(...)` call. Config wiring (cli.prompt.format) deferred — current format is sensible enough for v1.
 [x] - SP-048-5e: Auto-NO_COLOR on non-TTY stdout in `cmd/agent_modes.go` `RunAgent`. When `term.IsTerminal(os.Stdout.Fd())` returns false and the user hasn't explicitly set `NO_COLOR`/`FORCE_COLOR`, sprout sets `NO_COLOR=1` early in startup. Every color-aware writer (markdown formatter, `defaultChoiceHint`, per-turn summary, status footer) consults `envutil.ResolveColorPreference` and emits plain text automatically. Cleaner than a stdout filter writer — single env-var gate at the top of the program.
 
+---
+
+## SP-050: Orchestrator Persona Collapse
+
+Spec: `roadmap/SP-050-orchestrator-persona-collapse.md`
+
+Collapse `orchestrator` and `repo_orchestrator` into a single `orchestrator` persona. Git-write capability becomes a function of the existing `AllowOrchestratorGitWrite` config flag rather than the persona ID. Removes the OR'd persona checks at 6+ sites, moves the git-policy markdown out of escaped JSON into a `go:embed`'d file, and flips the default active persona + flag to `orchestrator` + `true` for fresh installs. Per scoping: no backwards-compat migration required; legacy session history that names `repo_orchestrator` resolves via alias.
+
+### Phase 1: Collapse to a single persona (one PR)
+
+[x] - SP-050-1a: Move git-policy markdown out of JSON. Create `pkg/agent/prompts/persona_appends/orchestrator_git_policy.md` with the current `repo_orchestrator.system_prompt_append` content (Committing / Staging / Read-Only / Destructive Blocked / Pushing / Skills / Workflow sections). Embed it via a new `go:embed` directive co-located with the existing prompt embeds.
+[x] - SP-050-1b: Conditional prompt assembly. In `pkg/agent/persona.go` `SetPersona` path (around `:80-88`), after the persona's own `system_prompt_append` is applied, append the embedded git-policy markdown when `activePersona == "orchestrator"` AND `config.AllowOrchestratorGitWrite == true`. Use the same `"\n\n---\n\n"` separator as the existing append path.
+[x] - SP-050-1c: Remove `repo_orchestrator` from the catalog. Delete the entry from `pkg/personas/configs/default_personas.json` and add `repo_orchestrator` + `git_orchestrator` to the `orchestrator` entry's `aliases` array. Alias resolution routes through the existing `normalizeAgentPersonaID` (`persona.go:127-131`) — no new code. Alias path does NOT imply git-write was on; the flag decides.
+[x] - SP-050-1d: Strip OR'd persona checks at 7 sites. `pkg/agent/persona.go:226`, `pkg/agent/tool_handlers_shell.go:134` `:225` `:403`, `pkg/agent/seed_integration.go:997`, `pkg/webui/settings_api_general.go:88`, `cmd/agent_command.go:205`. The two auto-approve sites in `tool_handlers_shell.go` (`:225`, `:403`) move from "persona is repo_orchestrator" to "persona is orchestrator AND `AllowOrchestratorGitWrite`".
+[x] - SP-050-1e: Flip default active persona and default config flag. Change `pkg/agent/submanager_state.go:217` from `activePersona: "repo_orchestrator"` to `activePersona: "orchestrator"`. Set the default seed for `AllowOrchestratorGitWrite` to `true` for fresh installs in `pkg/configuration/config.go`. No migration for existing configs (per scoping).
+[x] - SP-050-1f: Update Executive Assistant prompt. Replace 13 `repo_orchestrator` refs in `pkg/agent/prompts/subagent_prompts/executive_assistant.md` with `orchestrator`. Alias from 1c covers any persisted state that still names the old ID.
+[x] - SP-050-1g: Update parameter-description strings. `pkg/agent_tools/task_queue_add_handler.go:22` and `pkg/agent/tool_registrations.go:434` — change `"e.g., repo_orchestrator"` to `"e.g., orchestrator"`.
+[x] - SP-050-1h: Update tests. `pkg/agent/persona_test.go`, `pkg/agent/submanager_state_new_test.go`, `pkg/agent/submanagers_test.go`, `pkg/agent/agent_creation_test.go`. Add: alias resolution (`repo_orchestrator` → `orchestrator`), git-policy append present/absent based on flag, auto-approve gating fires only when persona==orchestrator AND flag==true (test both flag states), catalog no longer has `repo_orchestrator` as a top-level ID but `GetSubagentType("repo_orchestrator")` still resolves via alias.
+[x] - SP-050-1i: Update human-facing docs. Collapse `docs/PERSONAS.md` to a single orchestrator entry with a "Git Operations" subsection explaining what the flag gates. Update one `repo_orchestrator` ref in top-level `AGENTS.md`.
+

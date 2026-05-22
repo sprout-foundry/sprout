@@ -154,7 +154,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		BatchSize:      32,
 		MaxBodyLen:     2000,
 		IndexFileLevel: true, // Enable file-level indexing by default
-		ManifestPath:   filepath.Join(indexDir, ".index.jsonl.manifest.json"),
+		ManifestPath:   filepath.Join(indexDir, ".index.hnsw.manifest.json"),
 	})
 
 	m.provider = provider
@@ -415,7 +415,7 @@ func (m *EmbeddingManager) startONNXBuildBackground() {
 			BatchSize:      32,
 			MaxBodyLen:     2000,
 			IndexFileLevel: true,
-			ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.jsonl.manifest.json"),
+			ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.hnsw.manifest.json"),
 		})
 		if _, err := onnxMgr.BuildIndex(bgCtx, root); err != nil {
 			log.Printf("embedding: ONNX index build failed (static index OK): %v", err)
@@ -566,7 +566,7 @@ func (m *EmbeddingManager) snapshotONNXIndexMgr() *IndexManager {
 		BatchSize:      32,
 		MaxBodyLen:     2000,
 		IndexFileLevel: true,
-		ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.jsonl.manifest.json"),
+		ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.hnsw.manifest.json"),
 	})
 }
 
@@ -608,7 +608,7 @@ func (m *EmbeddingManager) QuerySimilar(ctx context.Context, query string, topK 
 			BatchSize:      32,
 			MaxBodyLen:     2000,
 			IndexFileLevel: true,
-			ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.jsonl.manifest.json"),
+			ManifestPath:   filepath.Join(m.indexDir, ".embedding_index_onnx.hnsw.manifest.json"),
 		})
 		onnxResults, err := onnxMgr.QuerySimilar(ctx, query, topK, threshold)
 		if err != nil {
@@ -853,7 +853,7 @@ func (m *EmbeddingManager) Close() error {
 // ClearEmbeddingFiles removes embedding index files from the given directory.
 // fileType should be one of: "code", "conversation_turn", "memory", "all".
 // For "memory", it clears the same files as "conversation_turn" since memories
-// are stored in the conversation_turns JSONL alongside conversation turns.
+// are stored in the conversation_turns index alongside conversation turns.
 // Returns the number of files actually deleted.
 func ClearEmbeddingFiles(indexDir string, fileType string) (int, error) {
 	switch fileType {

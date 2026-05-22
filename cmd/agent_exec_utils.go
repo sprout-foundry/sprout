@@ -45,12 +45,15 @@ func ExecuteCommand(cmd string) (string, error) {
 		command.Dir = wd
 	}
 
-	// Set environment to force color output
+	// SP-048-4b: Inherit the user's color env vars. Previously this code
+	// forced FORCE_COLOR=1, CLICOLOR_FORCE=1 and unset NO_COLOR so that
+	// piped subcommands always emitted ANSI. That made sprout hostile to
+	// no-color.org-aware users and broke CI logs that strip-escape the
+	// output. We now defer to the parent env: if the user invoked sprout
+	// with NO_COLOR=1, the subcommand sees NO_COLOR=1 too; if they want
+	// forced colors, they set FORCE_COLOR before launching sprout.
 	command.Env = append(os.Environ(),
-		"FORCE_COLOR=1",
 		"TERM=xterm-256color",
-		"CLICOLOR_FORCE=1",
-		"NO_COLOR=", // Unset NO_COLOR if it exists
 	)
 
 	// Create pipes for stdout and stderr

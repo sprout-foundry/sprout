@@ -529,28 +529,82 @@ func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigDisabled(t *
 
 	agent.state.SetActivePersona("orchestrator")
 
-	// Default: AllowOrchestratorGitWrite is false
-	if agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected isOrchestratorGitWriteAllowed to return false for orchestrator with default config")
-	}
-}
-
-func TestIsOrchestratorGitWriteAllowed_RepoOrchestratorPersonaWithConfigEnabled(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	agent.state.SetActivePersona("repo_orchestrator")
-
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = true
+	// Explicitly disable git-write (SP-050 flipped the default seed to true).
+	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.AllowOrchestratorGitWrite = false
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("UpdateConfigNoSave failed: %v", err)
 	}
 
-	if !agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected isOrchestratorGitWriteAllowed to return true for repo_orchestrator with config enabled")
+	if agent.isOrchestratorGitWriteAllowed() {
+		t.Error("expected isOrchestratorGitWriteAllowed to return false for orchestrator with config disabled")
+	}
+}
+
+// SP-050: legacy "repo_orchestrator" ID is an alias for "orchestrator";
+// ApplyPersona must canonicalize it so downstream gates see one name.
+func TestApplyPersona_RepoOrchestratorAliasResolvesToOrchestrator(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	if err := agent.ApplyPersona("repo_orchestrator"); err != nil {
+		t.Fatalf("ApplyPersona(repo_orchestrator) failed: %v", err)
+	}
+
+	if got := agent.GetActivePersona(); got != "orchestrator" {
+		t.Errorf("activePersona after alias apply = %q, want %q", got, "orchestrator")
+	}
+}
+
+// SP-050: when AllowOrchestratorGitWrite=true, ApplyPersona("orchestrator")
+// appends the git-policy markdown so the model knows about the commit tool,
+// staging rules, and blocked shell-side git ops.
+func TestApplyPersona_OrchestratorGitPolicyAppended_WhenFlagEnabled(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.AllowOrchestratorGitWrite = true
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	if err := agent.ApplyPersona("orchestrator"); err != nil {
+		t.Fatalf("ApplyPersona(orchestrator) failed: %v", err)
+	}
+
+	prompt := agent.GetSystemPrompt()
+	// Use a marker phrase unique to the embedded persona-append file so we
+	// distinguish it from any "git" content that already lives in the base
+	// system prompt.
+	if !strings.Contains(prompt, "ALWAYS use the 'commit' tool for all commits") {
+		t.Error("expected orchestrator git policy append in system prompt when AllowOrchestratorGitWrite=true")
+	}
+}
+
+// SP-050: when AllowOrchestratorGitWrite=false, the git-policy markdown
+// must NOT be appended — the shell-side gate blocks the commands anyway,
+// and the prompt should reflect what the persona is actually allowed to do.
+func TestApplyPersona_OrchestratorGitPolicyAbsent_WhenFlagDisabled(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.AllowOrchestratorGitWrite = false
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	if err := agent.ApplyPersona("orchestrator"); err != nil {
+		t.Fatalf("ApplyPersona(orchestrator) failed: %v", err)
+	}
+
+	prompt := agent.GetSystemPrompt()
+	if strings.Contains(prompt, "ALWAYS use the 'commit' tool for all commits") {
+		t.Error("expected git policy NOT to be appended when AllowOrchestratorGitWrite=false")
 	}
 }
 
@@ -589,15 +643,15 @@ func TestHasEASpawnAuthority_CoderReturnsFalse(t *testing.T) {
 	}
 }
 
-func TestHasEASpawnAuthority_RepoOrchestratorWithoutSubagentRulesReturnsFalse(t *testing.T) {
+func TestHasEASpawnAuthority_OrchestratorWithoutSubagentRulesReturnsFalse(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	agent.state.SetActivePersona("repo_orchestrator")
+	agent.state.SetActivePersona("orchestrator")
 
-	// repo_orchestrator does not have auto-approve rules with subagent_spawn
+	// orchestrator does not have auto-approve rules with subagent_spawn
 	if agent.hasEASpawnAuthority() {
-		t.Error("expected hasEASpawnAuthority to return false for repo_orchestrator without subagent rules")
+		t.Error("expected hasEASpawnAuthority to return false for orchestrator without subagent rules")
 	}
 }
 

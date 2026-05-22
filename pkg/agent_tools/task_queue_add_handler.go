@@ -19,7 +19,7 @@ func (h *taskQueueAddHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "title", Type: "string", Required: true, Description: "Task title (required)"},
 			{Name: "description", Type: "string", Description: "Detailed task description"},
-			{Name: "persona", Type: "string", Description: "Persona to use when executing this task (e.g., repo_orchestrator)"},
+			{Name: "persona", Type: "string", Description: "Persona to use when executing this task (e.g., orchestrator)"},
 			{Name: "priority", Type: "string", Description: "Priority: high, medium, or low (default: medium)"},
 			{Name: "working_dir", Type: "string", Description: "Working directory for the task (e.g., ~/projects/my-repo)"},
 		},

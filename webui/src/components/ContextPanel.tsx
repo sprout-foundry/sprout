@@ -60,7 +60,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const sessionManager = useSessionManager(chatProps, state.chatTab, chatProps?.isProcessing ?? false);
 
   const statusMetrics = useStatusMetrics(chatProps, toolExecutions, maxQueryId);
-  const subagentRuns = useSubagentRuns(chatProps);
+  const { subagentRuns, resourceCounts } = useSubagentRuns(chatProps);
 
   // ── Live duration timer ───────────────────────────────────────────
 
@@ -158,7 +158,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
 
   const activeToolCount = toolExecutions.filter((t) => t.status === 'started' || t.status === 'running').length;
 
-  const activeSubagentCount = subagentRuns.runs.filter(
+  const activeSubagentCount = subagentRuns.filter(
     ({ tool }) => tool.status === 'started' || tool.status === 'running',
   ).length;
 
@@ -172,7 +172,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         id: 'subagents',
         label: 'Subagents',
         icon: <Bot size={14} />,
-        count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.runs.length} total`,
+        count: activeSubagentCount > 0 ? `${activeSubagentCount} active` : `${subagentRuns.length} total`,
       },
       {
         id: 'tools',
@@ -202,7 +202,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     ],
     [
       activeSubagentCount,
-      subagentRuns.runs.length,
+      subagentRuns.length,
       activeToolCount,
       toolExecutions.length,
       historyCounts,
@@ -221,9 +221,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       case 'subagents':
         return (
           <SubagentsTab
-            subagentRuns={subagentRuns.runs}
-            lifecycleCounts={subagentRuns.lifecycleCounts}
-            totalLifecycle={subagentRuns.totalLifecycle}
+            subagentRuns={subagentRuns}
+            resourceCounts={resourceCounts}
             expandedSubagents={state.expandedSubagents}
             toolRefs={state.toolRefs}
             expandedTools={state.expandedTools}
@@ -290,9 +289,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       default:
         return (
           <SubagentsTab
-            subagentRuns={subagentRuns.runs}
-            lifecycleCounts={subagentRuns.lifecycleCounts}
-            totalLifecycle={subagentRuns.totalLifecycle}
+            subagentRuns={subagentRuns}
+            resourceCounts={resourceCounts}
             expandedSubagents={state.expandedSubagents}
             toolRefs={state.toolRefs}
             expandedTools={state.expandedTools}

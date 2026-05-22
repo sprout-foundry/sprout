@@ -7,6 +7,10 @@ interface ImportMetaEnv {
   readonly VITE_FOUNDRY_WS_URL: string | undefined;
   readonly VITE_TERMINAL_WS_URL: string | undefined;
   readonly VITE_WS_URL: string | undefined;
+  // SP-040-2a: Runtime config vars with defaults in vite.config.ts
+  readonly VITE_API_BASE_URL: string | undefined;
+  readonly VITE_AUTH_MODE: 'none' | 'bearer' | undefined;
+  readonly VITE_APP_MODE: 'local' | 'cloud' | undefined;
 }
 
 interface ImportMeta {

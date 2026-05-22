@@ -12,7 +12,26 @@ const reactPlugin = useSwc
 
 // https://vite.dev/config/
 export default defineConfig(({ mode: _mode }) => {
+  // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
+  // These are overridden at build time by .env files or CI environment vars.
+  const runtimeDefaults: Record<string, string> = {
+    VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || 'http://localhost:56000',
+    VITE_WS_URL: process.env.VITE_WS_URL || 'ws://localhost:56000/ws',
+    VITE_AUTH_MODE: process.env.VITE_AUTH_MODE || 'none',
+    VITE_APP_MODE: process.env.VITE_APP_MODE || 'local',
+  };
+
+  // Convert to define format for Vite (only set if not already defined by .env)
+  const defineEntries: Record<string, string> = {};
+  for (const [key, value] of Object.entries(runtimeDefaults)) {
+    const envKey = `import.meta.env.${key}`;
+    if (!process.env[key]) {
+      defineEntries[envKey] = JSON.stringify(value);
+    }
+  }
+
   return {
+    define: defineEntries,
     plugins: [reactPlugin()],
     
     // Base URL for production builds

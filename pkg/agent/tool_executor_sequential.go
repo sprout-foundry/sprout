@@ -140,11 +140,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	go func() {
 		// SP-038: Check new handler registry first for dual dispatch.
 		if registry := te.getHandlerRegistry(); registry != nil {
-			if handler := registry.Lookup(normalizedToolName); handler != nil {
+			if handler, found := registry.Lookup(normalizedToolName); found {
 				te.agent.debugLog("[tool] registry dispatch: %s\n", normalizedToolName)
-				env := &tools.ToolEnv{
-					WorkingDir:    te.agent.GetWorkspaceRoot(),
-					ClientID:      te.agent.GetEventClientID(),
+				env := tools.ToolEnv{
+					WorkspaceRoot: te.agent.GetWorkspaceRoot(),
 					ConfigManager: te.agent.GetConfigManager(),
 					EventBus:      te.agent.GetEventBus(),
 				}
@@ -161,10 +160,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 				execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
 				res, err := handler.Execute(execCtx, env, args)
 				if err != nil {
-					output := ""
-					if res != nil {
-						output = res.Output
-					}
+					output := res.Output
 					resultChan <- struct {
 						images []api.ImageData
 						result string
@@ -172,36 +168,26 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 					}{nil, output, err}
 					return
 				}
-				if res == nil {
+				// Map ToolResult.IsError to legacy error path.
+				if res.IsError {
 					resultChan <- struct {
 						images []api.ImageData
 						result string
 						err    error
-					}{nil, "", nil}
+					}{nil, res.Output, errors.New(res.Output)}
 					return
 				}
-				// Check both Error and ErrorMessage for handler-level errors.
-				if res.Error != nil {
-					resultChan <- struct {
-						images []api.ImageData
-						result string
-						err    error
-					}{nil, res.Output, res.Error}
-					return
-				}
-				if res.ErrorMessage != "" {
-					resultChan <- struct {
-						images []api.ImageData
-						result string
-						err    error
-					}{nil, res.Output, errors.New(res.ErrorMessage)}
-					return
+
+				// Convert new-style ImageData to legacy api.ImageData if present.
+				var images []api.ImageData
+				for _, img := range res.Images {
+					images = append(images, api.ImageData{URL: img.URI, Type: img.MIMEType})
 				}
 				resultChan <- struct {
 					images []api.ImageData
 					result string
 					err    error
-				}{nil, res.Output, nil}
+				}{images, res.Output, nil}
 				return
 			}
 		}

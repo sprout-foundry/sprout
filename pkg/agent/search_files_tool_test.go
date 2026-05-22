@@ -28,7 +28,7 @@ func TestSearchFiles_SubstringCaseInsensitive(t *testing.T) {
 	writeTestFile(t, root, "sub/b.txt", "nothing here\nHELLO again")
 
 	args := map[string]interface{}{
-		"pattern":        "hello", // should match both lines (case-insensitive)
+		"search_pattern": "hello", // should match both lines (case-insensitive)
 		"directory":      root,
 		"case_sensitive": false,
 		"max_results":    10,
@@ -57,7 +57,7 @@ func TestSearchFiles_RegexCaseSensitive(t *testing.T) {
 
 	// Case sensitive regex should only match "World" (capital W)
 	args := map[string]interface{}{
-		"pattern":        "^World$",
+		"search_pattern": "^World$",
 		"directory":      root,
 		"case_sensitive": true,
 		"max_results":    10,
@@ -84,9 +84,9 @@ func TestSearchFiles_GlobFilterAndMaxResults(t *testing.T) {
 	writeTestFile(t, root, "skip/file.txt", "needle but should be excluded by glob\n")
 
 	args := map[string]interface{}{
-		"pattern":      "needle",
-		"directory":    root,
-		"file_pattern": "*.go",
+		"search_pattern": "needle",
+		"directory":      root,
+		"file_glob":      "*.go",
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
@@ -106,8 +106,8 @@ func TestSearchFiles_ExcludeDotLedit(t *testing.T) {
 	writeTestFile(t, root, "visible.txt", "needle\n")
 
 	args := map[string]interface{}{
-		"pattern":   "needle",
-		"directory": root,
+		"search_pattern": "needle",
+		"directory":      root,
 	}
 	reg := GetToolRegistry()
 	ctx := context.Background()
@@ -136,9 +136,9 @@ func TestSearchFiles_DefaultMaxResultsAndLineTruncation(t *testing.T) {
 	// Use a max_bytes limit that allows ~40 results to test max_results=50
 	// Each result is ~80 chars, 40 results = 3200 bytes. 50 = 4000 bytes.
 	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
-		"pattern":   "needle",
-		"directory": root,
-		"max_bytes": 5000,
+		"search_pattern": "needle",
+		"directory":      root,
+		"max_bytes":      5000,
 	}, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
@@ -160,9 +160,9 @@ func TestSearchFiles_MaxBytesLimit(t *testing.T) {
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
 	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
-		"pattern":   "needle",
-		"directory": root,
-		"max_bytes": 60,
+		"search_pattern": "needle",
+		"directory":      root,
+		"max_bytes":      60,
 	}, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)

@@ -1532,8 +1532,9 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 			// because default persona tool configurations are carefully curated for
 			// safety and correctness. Users who need different tools should create
 			// a custom persona with a new ID.
-			// Warn if user tried to override AllowedTools for a built-in persona
-			if len(userOverride.AllowedTools) > 0 {
+			// Warn if user tried to override AllowedTools for a built-in persona,
+			// but only when the list actually differs from the defaults.
+			if len(userOverride.AllowedTools) > 0 && !toolSetsEqual(userOverride.AllowedTools, defaultPersona.AllowedTools) {
 				log.Printf("[WARN] AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools. Dropped tools: %v",
 					defaultPersona.ID, userOverride.AllowedTools)
 			}
@@ -1680,6 +1681,24 @@ func hasTool(tools []string, candidate string) bool {
 		}
 	}
 	return false
+}
+
+// toolSetsEqual returns true if two tool lists contain the same set of tools,
+// regardless of ordering. Whitespace is trimmed from each entry before comparison.
+func toolSetsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[string]struct{}, len(a))
+	for _, t := range a {
+		set[strings.TrimSpace(t)] = struct{}{}
+	}
+	for _, t := range b {
+		if _, ok := set[strings.TrimSpace(t)]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func defaultSubagentTypes() map[string]SubagentType {

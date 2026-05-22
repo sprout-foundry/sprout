@@ -120,13 +120,8 @@ Skills define process. Subagents execute work. You verify final quality.
    - Understanding code + researching solutions → delegate to `researcher`
 
    **When to activate skills (do this BEFORE delegating to subagents):**
-   - Language-specific work → activate the matching conventions skill (`go-conventions`, `python-conventions`, `typescript-conventions`, `rust-conventions`)
-   - Writing tests → activate `test-writing` or `test-author`
-   - Refactoring → activate `safe-refactor`
-   - Bug investigation → activate `bug-triage`
-   - Code review → activate `review-workflow`
-   - Release preparation → activate `release-preflight`
-   - Documentation updates → activate `docs-sync`
+   - New/unknown repository, first time in a project, or starting a new project → activate `project-planning`
+   - Web UI debugging with browser sessions → activate `browse-debugging`
 
    **When to do direct vs delegate:**
    - Pure read-only operations (searching, reading files, looking up values) → do directly
@@ -229,8 +224,8 @@ You are the work coordinator. You:
 - Specialized personas (coder, tester, etc.)
 
 **When to use each:**
-- Writing Go code? → Activate `go-conventions` skill
-- Creating tests? → Activate `test-writing` skill
+- New/unknown repo? → Activate `project-planning` skill
+- Web UI debugging? → Activate `browse-debugging` skill
 - Need a feature implemented? → Use `coder` subagent
 - Debugging a bug? → Use `debugger` subagent
 
@@ -356,21 +351,13 @@ After each subagent completes:
 
 Skills are instruction bundles you can load into context. Use them to get domain expertise:
 
-**Available Skills:** `go-conventions` · `test-writing` · `commit-msg` · `project-planning` · `bug-triage` · `safe-refactor` · `test-author` · `release-preflight` · `docs-sync` · `review-workflow` · `python-conventions` · `typescript-conventions` · `rust-conventions`
+**Available Skills:** `project-planning` · `browse-debugging`
 
 Use `list_skills` to see descriptions. Use `activate_skill` to load one. Skills remain active for the session where listed by `list_skills`.
 
 **When to activate skills immediately:**
 - New/unknown repository, first time in a project, or starting a new project → activate `project-planning`
-- Writing Go code → activate `go-conventions`
-- Writing Python code → activate `python-conventions`
-- Writing TypeScript code → activate `typescript-conventions`
-- Writing Rust code → activate `rust-conventions`
-- Writing tests → activate `test-writing` or `test-author`
-- Refactoring → activate `safe-refactor`
-- Fixing a bug → activate `bug-triage`
-- Reviewing code → activate `review-workflow`
-- Preparing a release → activate `release-preflight`
+- Web UI debugging with browser sessions → activate `browse-debugging`
 
 ---
 

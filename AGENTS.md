@@ -50,6 +50,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-020** Trace/Dataset Mode (implemented)
 - **SP-021** Self-Review Tool (implemented)
 - **SP-024** Context Management — File Read Optimization (proposed)
+- **SP-049** Shell Permission Overhaul — Tiered Allow-Lists & User Policy (proposed)
 
 ## Testing
 
@@ -96,7 +97,7 @@ Before **every** `git push`, you MUST:
 
 ### Committing and Pushing
 
-**`repo_orchestrator` privileges**: This persona can stage files, commit (via the commit tool), and push without interactive approval. However, operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona.
+**`orchestrator` git-write privileges**: When `AllowOrchestratorGitWrite=true` (the default for fresh installs), the `orchestrator` persona can stage files, commit (via the commit tool), and push without interactive approval. When the flag is `false`, all git-write operations require the git tool with explicit user approval. Operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona or flag.
 
 ### Active Change Set Isolation
 
@@ -124,8 +125,8 @@ When a merge produces conflicts:
 |-----------|------|----------|
 | `git status`, `git diff`, `git log`, `git show`, `git fetch` | `shell_command` | Always allowed |
 | `git add <specific-file>` | `shell_command` | Always allowed |
-| `git commit -m "..."` | `shell_command` (repo_orchestrator) or commit tool | Per `repo_orchestrator` rules |
-| `git push` | `shell_command` (after pre-push safety check) | Per `repo_orchestrator` rules |
+| `git commit -m "..."` | `shell_command` (orchestrator + git-write flag) or commit tool | Per orchestrator git-write rules |
+| `git push` | `shell_command` (after pre-push safety check) | Per orchestrator git-write rules |
 | `git checkout`, `git switch`, `git restore`, `git reset` | Git tool only | Requires explicit user approval |
 | `git push --force` (any variant) | **FORBIDDEN** | Never allowed |
 | `git rebase` (onto remote) | **FORBIDDEN** | Use merge instead |

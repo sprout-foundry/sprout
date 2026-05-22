@@ -85,7 +85,7 @@ func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
 	for _, agentInst := range agents {
 		agentInst.SetBaseSystemPrompt(systemPrompt)
 		activePersona := strings.TrimSpace(agentInst.GetActivePersona())
-		if activePersona == "" || activePersona == "orchestrator" || activePersona == "repo_orchestrator" {
+		if activePersona == "" || activePersona == "orchestrator" {
 			agentInst.SetSystemPrompt(systemPrompt)
 		}
 	}

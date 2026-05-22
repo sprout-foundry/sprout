@@ -415,8 +415,8 @@ func TestNewAgentStateManagerDefaults(t *testing.T) {
 	}
 
 	// Active persona
-	if s.GetActivePersona() != "repo_orchestrator" {
-		t.Errorf("activePersona should be 'repo_orchestrator'; got %q", s.GetActivePersona())
+	if s.GetActivePersona() != "orchestrator" {
+		t.Errorf("activePersona should be 'orchestrator'; got %q", s.GetActivePersona())
 	}
 
 	// Optimizer/pruner/circuitBreaker should be non-nil

@@ -431,7 +431,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"description", "string", false, []string{}, "Detailed task description"},
 			{"priority", "string", false, []string{}, "Priority: high, medium, or low (default: medium)"},
 			{"working_dir", "string", false, []string{}, "Working directory for the task (e.g., ~/projects/my-repo)"},
-			{"persona", "string", false, []string{}, "Persona to use when executing this task (e.g., repo_orchestrator)"},
+			{"persona", "string", false, []string{}, "Persona to use when executing this task (e.g., orchestrator)"},
 		},
 		Handler: handleTaskQueueAdd,
 	})

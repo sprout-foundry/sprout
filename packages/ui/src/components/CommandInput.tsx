@@ -40,6 +40,12 @@ export interface CommandInputProps {
   onUploadImage?: (file: File) => Promise<{ path: string }>;
   /** API adapter for loading command history from server */
   historyApi?: CommandHistoryApi;
+  /** Whether the code index is enabled */
+  isIndexEnabled?: boolean;
+  /** Whether the code index is currently building */
+  isIndexBuilding?: boolean;
+  /** Toggle the code index on/off */
+  onToggleIndex?: (enabled: boolean) => Promise<void>;
 }
 
 function CommandInput({

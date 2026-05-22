@@ -1,5 +1,7 @@
 package agent
 
+import "time"
+
 // newDefaultToolRegistry creates the registry with all tool configurations
 func newDefaultToolRegistry() *ToolRegistry {
 	registry := &ToolRegistry{
@@ -17,6 +19,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"stop_background", "string", false, []string{}, "Session ID of a background session to stop/terminate"},
 		},
 		Handler: handleShellCommand,
+		Timeout: 2 * time.Minute,
 	})
 
 	// Register git tool - handles operations that modify repository state or require network access
@@ -50,8 +53,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"path", "string", true, []string{"file_path"}, "Path to the file to read"},
 			{"view_range", "array", false, []string{}, "Line range as [start, end] array (1-based)"},
 		},
-		Handler:       handleReadFile,
-		HandlerImages: handleReadFileWithImages,
+		Handler:         handleReadFile,
+		HandlerImages:   handleReadFileWithImages,
+		SafeForParallel: true,
 	})
 
 	// Register write_file tool
@@ -129,7 +133,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"question", "string", true, []string{}, "The question to ask the user (required)"},
 		},
-		Handler: handleAskUser,
+		Handler:     handleAskUser,
+		Timeout:     10 * time.Minute, // Match AskUserManager.DefaultAskUserTimeout
+		Interactive: true,
 	})
 
 	// Register run_subagent tool - for multi-agent collaboration
@@ -144,6 +150,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"working_dir", "string", false, []string{}, "Optional: directory to use as the subagent's working directory (must be within $HOME). Use this to spawn subagents operating in a different project directory."},
 		},
 		Handler: handleRunSubagent,
+		Timeout: 30 * time.Minute,
 	})
 
 	// Register run_parallel_subagents tool - for concurrent multi-agent execution
@@ -154,6 +161,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"subagents", "array", true, []string{}, "Array of task descriptions as strings: [\"task 1\", \"task 2\", \"task 3\"]. Auto-generates IDs like task-1, task-2, etc. Example: [\"Research X\", \"Implement Y\", \"Write tests for Z\"]"},
 		},
 		Handler: handleRunParallelSubagents,
+		Timeout: 30 * time.Minute,
 	})
 
 	// Register search_files tool (cross-platform file content search)
@@ -168,7 +176,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"max_results", "integer", false, []string{}, "Maximum results to return (default: 50)"},
 			{"max_bytes", "integer", false, []string{}, "Maximum total bytes of matches to return (default: 102400)"},
 		},
-		Handler: handleSearchFiles,
+		Handler:         handleSearchFiles,
+		SafeForParallel: true,
 	})
 
 	// Register repo_map tool
@@ -178,7 +187,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"directory", "string", false, []string{}, "Directory to scan (default: workspace root)"},
 		},
-		Handler: handleRepoMap,
+		Handler:         handleRepoMap,
+		SafeForParallel: true,
 	})
 
 	// Register web_search tool
@@ -266,7 +276,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"since", "string", false, []string{}, "Only include changes after this ISO 8601 timestamp"},
 			{"show_content", "boolean", false, []string{}, "Include content summaries for each change"},
 		},
-		Handler: handleViewHistory,
+		Handler:         handleViewHistory,
+		SafeForParallel: true,
 	})
 
 	registry.RegisterTool(ToolConfig{

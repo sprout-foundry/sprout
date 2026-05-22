@@ -345,7 +345,7 @@ Spec: `roadmap/SP-039-ui-package-consolidation.md`
 [x] - SP-039-3a: `Notification`, `NotificationItem`, `Notification.css` → canonical in `packages/ui`; delete webui copy; update imports.
 [x] - SP-039-3b: `Dropdown`, `Modal` (base), `ContextMenu` → same.
 [] - SP-039-3c: `Sidebar`, `StatusBar`, `MenuBar` → same.
-[] - SP-039-3d: `CommandPalette`, `CommandInput` → same.
+[x] - SP-039-3d: `CommandPalette`, `CommandInput` → same.
 
 ### Phase 4: Consolidate primitives — large
 

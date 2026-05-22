@@ -294,6 +294,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					nowUnix := time.Now().UnixNano()
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
+						console.StopGlobalStatusFooter()
 						fmt.Printf("\n[!] Force quitting immediately...\n")
 						os.Exit(1)
 					}
@@ -320,6 +321,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// Start a timeout goroutine for force quit
 				go func() {
 					time.Sleep(5 * time.Second)
+					console.StopGlobalStatusFooter()
 					fmt.Printf("\n[!] Force quitting...\n")
 					os.Exit(1)
 				}()
@@ -760,11 +762,22 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		return matches
 	})
 
-	// SP-048-1c: Subscribe to tool start/end events so the activity indicator
-	// can render a per-tool timeline. Runs until ctx is cancelled.
+	// SP-048-3: Persistent status footer pinned at the bottom row of the
+	// terminal. Suppressed automatically on non-TTY (e.g., piped output).
+	// MUST be Stopped before exit or the user's terminal is left with a
+	// broken scroll region — both the defer here AND the signal handler's
+	// force-quit path call Stop via the global registration.
+	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
+	console.RegisterGlobalStatusFooter(footer)
+	footer.Start()
+	defer footer.Stop()
+
+	// SP-048-1c + 3: Subscribe to tool start/end events so the activity
+	// indicator can render a per-tool timeline AND the footer can refresh
+	// cost/context after each tool. Runs until ctx is cancelled.
 	subCtx, cancelSub := context.WithCancel(ctx)
 	defer cancelSub()
-	startTerminalToolSubscriber(subCtx, eventBus, indicator)
+	startTerminalToolSubscriber(subCtx, eventBus, indicator, footer)
 
 	for {
 		select {
@@ -836,8 +849,42 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()
+			// SP-048-3: refresh the footer at turn-end so cost / context /
+			// model changes (e.g. /model switch) land immediately.
+			footer.Refresh()
 		}
 	}
+}
+
+// agentFooterSource adapts *agent.Agent to the console.ContentSource
+// interface, exposing model / context tokens / cost / cwd to the status
+// footer renderer.
+type agentFooterSource struct{ agent *agent.Agent }
+
+func (s *agentFooterSource) Model() string {
+	if s == nil || s.agent == nil {
+		return ""
+	}
+	return s.agent.GetModel()
+}
+
+func (s *agentFooterSource) ContextTokens() (used, limit int) {
+	if s == nil || s.agent == nil {
+		return 0, 0
+	}
+	return s.agent.GetContextTokens()
+}
+
+func (s *agentFooterSource) TotalCost() float64 {
+	if s == nil || s.agent == nil {
+		return 0
+	}
+	return s.agent.GetTotalCost()
+}
+
+func (s *agentFooterSource) WorkingDir() string {
+	wd, _ := os.Getwd()
+	return wd
 }
 
 // startTerminalToolSubscriber subscribes a goroutine to the event bus that
@@ -849,8 +896,10 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 //
 // Also stops the spinner on any prompt-request event (security approval,
 // security prompt, ask_user) so prompts routed through the event bus get
-// clean rendering with no spinner frames overwriting the prompt text.
-func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus, indicator *console.ActivityIndicator) {
+// clean rendering with no spinner frames overwriting the prompt text. When
+// footer is non-nil, it is refreshed on each ToolEnd so cost / context
+// stay current as tools consume tokens.
+func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
 	if eventBus == nil || indicator == nil {
 		return
 	}
@@ -902,6 +951,7 @@ func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus,
 						icon = "[FAIL]"
 					}
 					indicator.Replace(fmt.Sprintf("  %s %s · %.1fs", icon, name, float64(durationMs)/1000.0))
+					footer.Refresh()
 				case events.EventTypeSecurityApprovalRequest,
 					events.EventTypeSecurityPromptRequest,
 					events.EventTypeAskUserRequest:

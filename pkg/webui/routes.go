@@ -54,6 +54,7 @@ func (ws *ReactWebServer) registerCoreRoutes(mux *http.ServeMux) {
 			"uptime": time.Since(ws.startTime).String(),
 		})
 	})
+	mux.HandleFunc("/api/bootstrap", ws.handleAPIBootstrap)
 }
 
 func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {

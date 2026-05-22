@@ -216,7 +216,7 @@ func (m *EmbeddingManager) initONNX(ctx context.Context) error {
 	// Native builds load .onnx from disk; download it if missing.
 	// The WASM build delegates to a JS-side provider that owns its own model
 	// loading, so we skip the on-disk file check there — see
-	// onnxRequiresModelFiles in onnx_runtime.go / onnx_wasm_stub.go.
+	// onnxRequiresModelFiles in onnx_runtime.go / onnx_wasm.go.
 	if onnxRequiresModelFiles() {
 		if _, err := os.Stat(modelPath); err != nil {
 			log.Printf("embedding: downloading ONNX model %s...", modelName)

@@ -188,7 +188,7 @@ func NewHNSWStore(indexPath string, modelHash string) (*HNSWStore, error) {
 	// hnsw.Add ("node not added"). Clear the graph so the next build rebuilds
 	// from a consistent state.
 	if len(store.records) == 0 && sg.Len() > 0 {
-		log.Printf("embedding: hnsw store %s has %d graph nodes but no records metadata; clearing for rebuild",
+		debugLogf("embedding: hnsw store %s has %d graph nodes but no records metadata; clearing for rebuild",
 			indexPath, sg.Len())
 		store.clear()
 	}

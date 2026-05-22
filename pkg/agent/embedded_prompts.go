@@ -20,6 +20,9 @@ var planningPromptContent string
 //go:embed prompts/*.md prompts/subagent_prompts/*.md
 var embeddedPromptFiles embed.FS
 
+//go:embed prompts/persona_appends/orchestrator_git_policy.md
+var orchestratorGitPolicyAppend string
+
 // //go:embed prompts/project_goals_prompt.md
 // var projectGoalsPromptContent string
 

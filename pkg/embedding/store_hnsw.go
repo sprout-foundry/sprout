@@ -1,5 +1,3 @@
-//go:build !js
-
 // Package embedding — HNSW-backed vector store for fast approximate nearest
 // neighbor search. Uses github.com/coder/hnsw for the graph index.
 package embedding
@@ -14,6 +12,19 @@ import (
 
 	"github.com/coder/hnsw"
 )
+
+// metaFile holds the model hash in a sidecar JSON file.
+type metaFile struct {
+	ModelHash string `json:"modelHash"`
+}
+
+// hashPrefix returns the first 16 characters of s, or the full string if shorter.
+func hashPrefix(s string) string {
+	if len(s) > 16 {
+		return s[:16]
+	}
+	return s
+}
 
 // HNSWStore is a thread-safe VectorStore backed by an HNSW index.
 // The graph stores vectors keyed by record ID; a separate map holds
@@ -153,7 +164,8 @@ func NewHNSWStore(indexPath string, modelHash string) (*HNSWStore, error) {
 		return nil, fmt.Errorf("hnsw: load graph %s: %w", indexPath, err)
 	}
 
-	// Configure search parameters.
+	// Configure search parameters to match newConfiguredGraph() so the
+	// loaded graph behaves identically to one created fresh.
 	sg.M = 16
 	sg.EfSearch = 50
 	sg.Distance = hnsw.CosineDistance
@@ -167,6 +179,18 @@ func NewHNSWStore(indexPath string, modelHash string) (*HNSWStore, error) {
 	// Load persisted records metadata.
 	if err := store.loadRecords(); err != nil {
 		log.Printf("embedding: warn: failed to load hnsw records: %v", err)
+	}
+
+	// Reconcile graph and records. The two files are written in separate
+	// non-atomic steps; if a previous session crashed between them, the graph
+	// can contain nodes that the records map has no metadata for. Querying
+	// such orphans is useless, and re-adding their IDs later panics inside
+	// hnsw.Add ("node not added"). Clear the graph so the next build rebuilds
+	// from a consistent state.
+	if len(store.records) == 0 && sg.Len() > 0 {
+		log.Printf("embedding: hnsw store %s has %d graph nodes but no records metadata; clearing for rebuild",
+			indexPath, sg.Len())
+		store.clear()
 	}
 
 	// Check model hash.
@@ -191,25 +215,45 @@ func NewHNSWStore(indexPath string, modelHash string) (*HNSWStore, error) {
 
 // clear empties the graph and metadata map and persists both.
 func (s *HNSWStore) clear() {
-	newGraph := hnsw.NewGraph[string]()
-	newGraph.M = 16
-	newGraph.EfSearch = 50
-	newGraph.Distance = hnsw.CosineDistance
 	s.graph = &hnsw.SavedGraph[string]{
-		Graph: newGraph,
+		Graph: newConfiguredGraph(),
 		Path:  s.path,
 	}
 	s.records = make(map[string]VectorRecord)
 	s.dirty = true
 }
 
-// Save persists the graph and metadata to disk.
-func (s *HNSWStore) Save() error {
-	if err := s.graph.Save(); err != nil {
-		return fmt.Errorf("hnsw: save graph: %w", err)
+// newConfiguredGraph returns a fresh hnsw.Graph with the parameters this
+// store uses everywhere. Centralized so M/EfSearch/Distance don't drift
+// between clear(), reconcile, and the post-delete reset path.
+func newConfiguredGraph() *hnsw.Graph[string] {
+	g := hnsw.NewGraph[string]()
+	g.M = 16
+	g.EfSearch = 50
+	g.Distance = hnsw.CosineDistance
+	return g
+}
+
+// resetIfDrained replaces the underlying graph with a fresh one when it
+// has been emptied. The hnsw library leaves stale empty layer slices
+// behind after deletions; the next Add then calls Dims(), which
+// dereferences layers[0].entry().Value and panics on a nil entry.
+// Callers must hold s.mu.
+func (s *HNSWStore) resetIfDrained() {
+	if s.graph.Len() == 0 {
+		s.graph.Graph = newConfiguredGraph()
 	}
+}
+
+// Save persists the graph and metadata to disk.
+// Records are written before the graph so a crash mid-save leaves records
+// ahead of the graph (recoverable) rather than vice versa (panic-prone).
+func (s *HNSWStore) Save() error {
 	if err := s.saveRecords(); err != nil {
 		return fmt.Errorf("hnsw: save records: %w", err)
+	}
+	if err := s.graph.Save(); err != nil {
+		return fmt.Errorf("hnsw: save graph: %w", err)
 	}
 	return nil
 }
@@ -226,28 +270,29 @@ func (s *HNSWStore) Store(records []VectorRecord) error {
 			s.records[rec.ID] = *rec
 			continue
 		}
-		if _, exists := s.records[rec.ID]; exists {
+		// Check the graph itself, not s.records — the two can be out of sync
+		// after a partial save, and re-adding a key already in the graph
+		// trips hnsw's "node not added" invariant.
+		if _, inGraph := s.graph.Lookup(rec.ID); inGraph {
 			s.graph.Delete(rec.ID)
-			// After deletion, graph layers may be empty in a way that panics on Add.
-			// Recreate the graph if it has no valid nodes.
-			if s.graph.Len() == 0 {
-				newG := hnsw.NewGraph[string]()
-				newG.M = 16
-				newG.EfSearch = 50
-				newG.Distance = hnsw.CosineDistance
-				s.graph.Graph = newG
-			}
 		}
+		// Reset the graph if any prior step (this loop's Delete, or an
+		// earlier DeleteByFile/DeleteByIDs) drained it. Add panics on a
+		// drained graph because hnsw.Dims() nil-derefs an empty entry.
+		s.resetIfDrained()
 		s.graph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
 		s.records[rec.ID] = *rec
 	}
 
 	s.dirty = true
-	if err := s.graph.Save(); err != nil {
-		return fmt.Errorf("hnsw: save after store: %w", err)
-	}
+	// Persist records first so a crash mid-save leaves records ahead of the
+	// graph (recoverable on next build) rather than graph ahead of records
+	// (which triggers the "node not added" panic).
 	if err := s.saveRecords(); err != nil {
 		return fmt.Errorf("hnsw: save records after store: %w", err)
+	}
+	if err := s.graph.Save(); err != nil {
+		return fmt.Errorf("hnsw: save after store: %w", err)
 	}
 	return nil
 }
@@ -322,13 +367,46 @@ func (s *HNSWStore) DeleteByFile(filePath string) error {
 	}
 
 	if len(toDelete) > 0 {
+		s.resetIfDrained()
 		s.dirty = true
-		if err := s.graph.Save(); err != nil {
-			return fmt.Errorf("hnsw: save after delete: %w", err)
-		}
 		if err := s.saveRecords(); err != nil {
 			return fmt.Errorf("hnsw: save records after delete: %w", err)
 		}
+		if err := s.graph.Save(); err != nil {
+			return fmt.Errorf("hnsw: save after delete: %w", err)
+		}
+	}
+	return nil
+}
+
+// DeleteByIDs removes records with the given IDs in a single batched
+// operation. IDs not present in the store are silently skipped.
+// Saves to disk only once, regardless of how many IDs are deleted.
+func (s *HNSWStore) DeleteByIDs(ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var deleted int
+	for _, id := range ids {
+		if _, ok := s.records[id]; !ok {
+			continue
+		}
+		s.graph.Delete(id)
+		delete(s.records, id)
+		deleted++
+	}
+
+	if deleted == 0 {
+		return nil
+	}
+
+	s.resetIfDrained()
+	s.dirty = true
+	if err := s.saveRecords(); err != nil {
+		return fmt.Errorf("hnsw: save records after delete-by-ids: %w", err)
+	}
+	if err := s.graph.Save(); err != nil {
+		return fmt.Errorf("hnsw: save after delete-by-ids: %w", err)
 	}
 	return nil
 }
@@ -338,10 +416,7 @@ func (s *HNSWStore) ReplaceAll(records []VectorRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newGraph := hnsw.NewGraph[string]()
-	newGraph.M = 16
-	newGraph.EfSearch = 50
-	newGraph.Distance = hnsw.CosineDistance
+	newGraph := newConfiguredGraph()
 
 	newRecords := make(map[string]VectorRecord, len(records))
 	for i := range records {
@@ -359,11 +434,11 @@ func (s *HNSWStore) ReplaceAll(records []VectorRecord) error {
 	s.records = newRecords
 	s.dirty = true
 
-	if err := s.graph.Save(); err != nil {
-		return fmt.Errorf("hnsw: save after replace: %w", err)
-	}
 	if err := s.saveRecords(); err != nil {
 		return fmt.Errorf("hnsw: save records after replace: %w", err)
+	}
+	if err := s.graph.Save(); err != nil {
+		return fmt.Errorf("hnsw: save after replace: %w", err)
 	}
 	return nil
 }
@@ -382,11 +457,11 @@ func (s *HNSWStore) Close() error {
 	defer s.mu.Unlock()
 
 	if s.dirty {
-		if err := s.graph.Save(); err != nil {
-			return fmt.Errorf("hnsw: save on close: %w", err)
-		}
 		if err := s.saveRecords(); err != nil {
 			return fmt.Errorf("hnsw: save records on close: %w", err)
+		}
+		if err := s.graph.Save(); err != nil {
+			return fmt.Errorf("hnsw: save on close: %w", err)
 		}
 	}
 

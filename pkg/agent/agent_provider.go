@@ -10,6 +10,7 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
@@ -187,6 +188,7 @@ func isModelNotFoundError(err error) bool {
 }
 
 func promptProviderRecoveryChoice(isModelError bool) (int, error) {
+	clihooks.SuspendIndicator()
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		_, _ = os.Stderr.Write([]byte("Options:\n"))
@@ -230,6 +232,7 @@ func promptProviderRecoveryChoice(isModelError bool) (int, error) {
 // pick one. Returns the selected model ID and true, or ("", false) if the user
 // cancels.
 func promptModelSelection(models []api.ModelInfo) (string, bool) {
+	clihooks.SuspendIndicator()
 	reader := bufio.NewReader(os.Stdin)
 	_, _ = os.Stderr.Write([]byte("\nAvailable models:\n"))
 	for i, m := range models {

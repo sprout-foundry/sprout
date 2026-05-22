@@ -4,7 +4,7 @@
 **Date:** 2026-05-22
 **Depends on:** SP-004 (Security, Validation & MCP) — extends existing classifier
 **Priority:** High (closes a real headless data-loss path for `git reset --hard`)
-**Effort Estimate:** ~2.5-3 weeks across three phases, each independently shippable
+**Scope:** Three phases, each independently shippable — see each phase for files touched and new surfaces introduced
 
 ## Problem
 
@@ -91,23 +91,23 @@ existing config has `AllowedTools` (per-tool gate) and
 
 ### What's Actually Missing
 
-| Gap | Impact | Effort | Addressed by |
-|---|---|---|---|
-| `git reset --hard` not flag-aware in git-tool classification | High (silent data loss in headless) | S | Phase 1 |
-| Headless CAUTION soft-nudge re-issuable by LLM | Medium-High | XS | Phase 1 |
-| No user-configurable allow/deny patterns | High (UX) | M | Phase 2 |
-| No import/export of policy | Medium | S | Phase 2 |
-| `--unsafe` is all-or-nothing | Medium | S | Phase 3 |
-| No audit trail for security decisions | Medium | S | Phase 3 |
+| Gap | Impact | Addressed by |
+|---|---|---|
+| `git reset --hard` not flag-aware in git-tool classification | High (silent data loss in headless) | Phase 1 |
+| Headless CAUTION soft-nudge re-issuable by LLM | Medium-High | Phase 1 |
+| No user-configurable allow/deny patterns | High (UX) | Phase 2 |
+| No import/export of policy | Medium | Phase 2 |
+| `--unsafe` is all-or-nothing | Medium | Phase 3 |
+| No audit trail for security decisions | Medium | Phase 3 |
 
 ## Proposed Solution
 
-Three phases. Phase 1 is the highest-impact fix and is ~1 day of work.
-Phases 2 and 3 build the user-facing policy and audit surface.
+Three phases, each independently shippable. Phase 1 is the highest-impact
+fix; Phases 2 and 3 build the user-facing policy and audit surface.
 
-### Phase 1: Patch the two real classification gaps (S, ~1 day)
+### Phase 1: Patch the two real classification gaps
 
-Two surgical changes to existing files. No new packages, no config schema,
+**Scope:** two existing files touched, no new packages, no config schema,
 no API changes.
 
 **1a. Flag-aware reset/rebase classification.** Update
@@ -152,7 +152,11 @@ Phase 1 ships with test cases for every new classification: `git reset
 --hard`, `git reset --soft`, `git rebase -i HEAD~3`, `git rebase --onto`,
 plus regression tests confirming the safelist is unchanged.
 
-### Phase 2: User-configurable policy with safe import/export (M, ~1 week)
+### Phase 2: User-configurable policy with safe import/export
+
+**Scope:** new `Shell` section in the config schema; new `sprout policy`
+CLI subcommand tree; new workspace overlay loader; classifier consults
+user patterns at lookup time.
 
 Add a `Shell` section to `pkg/configuration/config.go` stored as JSON
 (matching the existing config schema). YAML is only used as the
@@ -242,7 +246,11 @@ above; tested by a regression that adds `{"match": "rm -rf /", "kind":
 "prefix"}` to `user_safe_patterns` and confirms the command still
 hard-blocks.
 
-### Phase 3: Scoped unsafe mode + audit log (S, ~3-4 days)
+### Phase 3: Scoped unsafe mode + audit log
+
+**Scope:** new `--unsafe-shell` flag and `GetUnsafeShellMode()` accessor;
+new audit log writer with rotation and redaction; `sprout audit` CLI
+subcommand.
 
 **Split `--unsafe` into two flags.** The existing `--unsafe` stays as the
 full-bypass automation flag (file security, shell security, all prompts).

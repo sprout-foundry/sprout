@@ -529,6 +529,13 @@ func (ir *InputReader) SetCompleter(c CompletionProvider) {
 	ir.completer = c
 }
 
+// SetPrompt updates the input reader's prompt prefix. Call this between
+// ReadLine invocations (not during) to reflect state changes such as the
+// active model name after a `/model` switch. SP-048-5d follow-up.
+func (ir *InputReader) SetPrompt(p string) {
+	ir.prompt = p
+}
+
 // handleTabCompletion either starts a new completion cycle or advances the
 // existing one. A cycle is "live" as long as the buffer still matches the
 // last completion we applied; any other edit (typing, arrow keys) leaves

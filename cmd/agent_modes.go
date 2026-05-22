@@ -6,6 +6,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -107,6 +108,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Create event bus
 	eventBus := events.NewEventBus()
 
+	// Always wire the agent's event bus so terminal subscribers (activity
+	// indicator, tool timeline) receive PublishToolStart / PublishToolEnd
+	// even when the WebUI is disabled. SP-048-1.
+	chatAgent.SetEventBus(eventBus)
+
 	// Create a single cancellable context for the entire application
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -135,9 +141,6 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		if bindAddr == "0.0.0.0" || bindAddr == "::" {
 			fmt.Fprintf(os.Stderr, "[WARN] Binding to %s — web UI is accessible from all network interfaces\n", bindAddr)
 		}
-
-		// Connect agent to event bus for real-time UI updates
-		chatAgent.SetEventBus(eventBus)
 
 		// Determine port strategy.
 		//
@@ -337,8 +340,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 	}()
 
+	// SP-048-1: Activity indicator renders the "Thinking…" spinner during the
+	// gap between user submit and first stream chunk, and shows per-tool
+	// progress lines via tool events. Suppressed automatically on non-TTY.
+	indicator := console.NewActivityIndicator(os.Stderr)
+
 	// Set up event publishing for agent
-	SetupAgentEvents(chatAgent, eventBus)
+	SetupAgentEvents(chatAgent, eventBus, indicator)
 
 	// Check for queue mode before interactive mode
 	if chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
@@ -357,7 +365,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// Check if we should prompt for GitHub MCP setup (interactive, non-SkipPrompt)
 		promptGitHubMCPSetupIfNeeded(&AgentAdapter{agent: chatAgent})
 
-		err = runInteractiveMode(ctx, chatAgent, eventBus)
+		err = runInteractiveMode(ctx, chatAgent, eventBus, indicator)
 	} else {
 		directModeStart := time.Now()
 		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
@@ -547,7 +555,10 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 // The OutputRouter handles dual-path delivery (EventBus + terminal)
 // so no separate streaming callback is needed here. This function ensures
 // the agent's output router is wired to the event bus for WebUI subscribers.
-func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
+//
+// When indicator is non-nil, the streaming callback also stops it on the
+// first chunk so any "Thinking…" spinner is cleared before tokens appear.
+func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator) {
 	// Ensure the output router is connected to the event bus.
 	// When WebUI is active, events flow to both terminal and WebUI.
 	// When WebUI is inactive, events only flow to terminal.
@@ -561,6 +572,7 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus) {
 	// the event AND calls this callback — no duplicate events or writes.
 	if !agentNoStreaming {
 		chatAgent.EnableStreaming(func(chunk string) {
+			indicator.Stop()
 			fmt.Print(chunk)
 		})
 	}
@@ -707,7 +719,7 @@ func buildQueueTaskQuery(task tools.Task) string {
 }
 
 // runInteractiveMode handles interactive REPL mode
-func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
+func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator) error {
 	fmt.Printf("\n[bot] Welcome to sprout! Enhanced CLI with Web UI\n")
 	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
 		chatAgent.GetProvider(),
@@ -718,6 +730,34 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
+
+	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
+	// per call so newly-installed MCP commands (which can be added mid-
+	// session) are reflected in completion.
+	inputReader.SetCompleter(func(line string, cursorPos int) []string {
+		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
+			return nil
+		}
+		// Don't complete once the user has moved past the command name.
+		if strings.ContainsAny(line, " \t") {
+			return nil
+		}
+		prefix := strings.ToLower(line[1:])
+		registry := agent_commands.NewCommandRegistry()
+		var matches []string
+		for _, name := range registry.CompletionCandidates() {
+			if strings.HasPrefix(strings.ToLower(name), prefix) {
+				matches = append(matches, "/"+name)
+			}
+		}
+		return matches
+	})
+
+	// SP-048-1c: Subscribe to tool start/end events so the activity indicator
+	// can render a per-tool timeline. Runs until ctx is cancelled.
+	subCtx, cancelSub := context.WithCancel(ctx)
+	defer cancelSub()
+	startTerminalToolSubscriber(subCtx, eventBus, indicator)
 
 	for {
 		select {
@@ -752,31 +792,176 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				return nil
 			}
 
+			// SP-048-1b: spinner during the gap between submit and first
+			// stream chunk (or first tool event). The streaming callback
+			// registered in SetupAgentEvents stops it on first chunk; we
+			// also Stop() defensively after ProcessQuery returns.
+			indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
+
 			// Slash/bang commands should bypass command-detection fast paths.
 			registry := agent_commands.NewCommandRegistry()
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+					indicator.Stop()
 					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 				}
+				indicator.Stop()
 				continue
 			}
 
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
+				indicator.Stop()
 				fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 			} else if !executed {
 				// Zsh detection didn't trigger, try LLM-based detection
 				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
+					indicator.Stop()
 					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 				} else if !executed {
 					// Neither fast path triggered, process normally
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+						indicator.Stop()
 						fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
 					}
 				}
 			}
+			// Defensive: ensure the spinner is cleared at the end of every turn
+			// even if the streamFn never fired (e.g. zsh fast-path executed).
+			indicator.Stop()
 		}
 	}
+}
+
+// startTerminalToolSubscriber subscribes a goroutine to the event bus that
+// translates PublishToolStart / PublishToolEnd events into terminal spinner
+// updates and ✓/✗ result lines. Runs until ctx is cancelled.
+func startTerminalToolSubscriber(ctx context.Context, eventBus *events.EventBus, indicator *console.ActivityIndicator) {
+	if eventBus == nil || indicator == nil {
+		return
+	}
+	subName := fmt.Sprintf("cli_tool_indicator_%d", time.Now().UnixNano())
+	ch := eventBus.Subscribe(subName)
+
+	go func() {
+		defer eventBus.Unsubscribe(subName)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case evt, ok := <-ch:
+				if !ok {
+					return
+				}
+				data, _ := evt.Data.(map[string]interface{})
+				switch evt.Type {
+				case events.EventTypeToolStart:
+					name, _ := data["tool_name"].(string)
+					args, _ := data["arguments"].(string)
+					// Ensure the spinner lands on a fresh line so it never
+					// overwrites partial streamed text. Stdout for parity
+					// with how stream chunks were just printed.
+					fmt.Fprintln(os.Stdout)
+					indicator.Start(fmt.Sprintf("  %s%s", name, formatToolArgPreview(name, args)))
+				case events.EventTypeToolEnd:
+					name, _ := data["tool_name"].(string)
+					status, _ := data["status"].(string)
+					var durationMs int64
+					switch v := data["duration_ms"].(type) {
+					case int64:
+						durationMs = v
+					case float64:
+						durationMs = int64(v)
+					}
+					icon := "[OK]"
+					if status != "completed" {
+						icon = "[FAIL]"
+					}
+					indicator.Replace(fmt.Sprintf("  %s %s · %.1fs", icon, name, float64(durationMs)/1000.0))
+				}
+			}
+		}
+	}()
+}
+
+// formatToolArgPreview produces a short, single-line preview of a tool's
+// arguments for the activity indicator. The arguments string is the raw
+// JSON the model emitted; we extract whichever field is most informative
+// for the tool at hand. Returns an empty string (no parens) when nothing
+// useful is available. Best-effort — invalid JSON yields no preview.
+func formatToolArgPreview(toolName, arguments string) string {
+	if arguments == "" {
+		return ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil || len(args) == 0 {
+		return ""
+	}
+
+	pick := func(keys ...string) string {
+		for _, k := range keys {
+			if v, ok := args[k].(string); ok && v != "" {
+				return v
+			}
+		}
+		return ""
+	}
+
+	const maxLen = 60
+	truncate := func(s string) string {
+		if len(s) > maxLen {
+			return s[:maxLen-1] + "…"
+		}
+		return s
+	}
+
+	var preview string
+	switch toolName {
+	case "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+		preview = pick("path", "file_path", "filename")
+	case "shell_command", "exec":
+		preview = pick("command", "cmd")
+	case "search_files", "grep":
+		preview = pick("pattern", "query", "search")
+	case "fetch_url":
+		preview = pick("url")
+	default:
+		// Generic fallback: surface the first short string value.
+		for _, v := range args {
+			if s, ok := v.(string); ok && len(s) > 0 && len(s) < 120 {
+				preview = s
+				break
+			}
+		}
+	}
+
+	preview = sanitizeArgForPreview(preview)
+	if preview == "" {
+		return ""
+	}
+	return " (" + truncate(preview) + ")"
+}
+
+// sanitizeArgForPreview collapses whitespace and strips control characters
+// so the preview always renders on one line inside parentheses.
+func sanitizeArgForPreview(s string) string {
+	out := make([]rune, 0, len(s))
+	prevSpace := false
+	for _, r := range s {
+		if r == '\n' || r == '\r' || r == '\t' {
+			if !prevSpace {
+				out = append(out, ' ')
+				prevSpace = true
+			}
+			continue
+		}
+		if r < 32 {
+			continue
+		}
+		out = append(out, r)
+		prevSpace = r == ' '
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // runDirectMode handles single query execution

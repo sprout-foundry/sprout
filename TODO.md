@@ -510,3 +510,25 @@ Collapse `orchestrator` and `repo_orchestrator` into a single `orchestrator` per
 [x] - SP-050-1h: Update tests. `pkg/agent/persona_test.go`, `pkg/agent/submanager_state_new_test.go`, `pkg/agent/submanagers_test.go`, `pkg/agent/agent_creation_test.go`. Add: alias resolution (`repo_orchestrator` → `orchestrator`), git-policy append present/absent based on flag, auto-approve gating fires only when persona==orchestrator AND flag==true (test both flag states), catalog no longer has `repo_orchestrator` as a top-level ID but `GetSubagentType("repo_orchestrator")` still resolves via alias.
 [x] - SP-050-1i: Update human-facing docs. Collapse `docs/PERSONAS.md` to a single orchestrator entry with a "Git Operations" subsection explaining what the flag gates. Update one `repo_orchestrator` ref in top-level `AGENTS.md`.
 
+---
+
+## SP-051: Depth-Aware Subagent UI
+
+Spec: `roadmap/SP-051-depth-aware-subagent-ui.md`
+
+Tag every event a subagent publishes with `subagent_depth` and `active_persona`, then have the CLI tool-timeline subscriber indent and color-badge each tool line based on those fields. Also show a one-shot `↳ persona spawned (provider · model)` line when a new (depth, persona) pair first appears so users can see which cheaper/faster model their subagents are running. Adds an optional `· N sub` suffix to the status footer when subagents are active. Two phases: phase 1 is event decoration (plumbing only, no visible change), phase 2 is the rendering layer.
+
+### Phase 1: Event metadata plumbing
+
+[x] - SP-051-1a: Decorate subagent event metadata at creation. In `pkg/agent/subagent_runner.go` around the `subagentDepth = parent + 1` site (~`:680`), call `subAgent.SetEventMetadata` with `subagent_depth`, `active_persona`, and (when non-empty) `subagent_task_id`. Be additive — if the parent already set client/chat/user IDs that should propagate, merge rather than replace. The existing `decorateEventPayload` in `pkg/agent/agent_events.go:19-53` already merges this metadata into every published event.
+[x] - SP-051-1b: Decorate the primary agent (depth 0) the same way so the subscriber's branching is uniform. Either at agent creation or via a hook in `ApplyPersona` that re-applies metadata whenever the active persona changes (relevant for SP-050 alias canonicalization).
+[x] - SP-051-1c: Tests in `pkg/agent/subagent_runner_test.go`. Spawn a subagent against a captured event bus, fire a `ToolStart`, and assert the payload contains `subagent_depth: 1` and the expected persona ID. Cover depth-2 (grandchild) as well.
+
+### Phase 2: CLI rendering
+
+[x] - SP-051-2a: Indent tool lines by depth in `cmd/agent_modes.go` `startTerminalToolSubscriber` (~`:1055-1122`). Read `subagent_depth` from event data on `ToolStart` and `ToolEnd`; prepend `strings.Repeat("  ", depth)` to the format strings at `:1087` and `:1107`. Depth-0 events are byte-identical to today's output (no extra indent, no badge).
+[x] - SP-051-2b: Persona color + `[persona]` badge. Add a deterministic persona-ID → ANSI-color map (suggested: `coder=cyan`, `tester=green`, `debugger=yellow`, `researcher=magenta`, `code_reviewer=blue`, `refactor=white`, `orchestrator=bold-white`). Prefix non-zero-depth tool lines with the colored badge; respect `NO_COLOR` via `pkg/envutil.ResolveColorPreference`. Probably belongs in a small helper in `pkg/console/persona_style.go`.
+[x] - SP-051-2c: Spawn line on first event from new (depth, persona) pair. Track `map[int]string{depth: persona}` in the subscriber's state; when an event arrives with a (depth, persona) the subscriber hasn't seen this turn, emit `↳ persona spawned (provider · model)` using the existing `formatRunSubagentPreview` logic for the provider/model resolution. Clear the map at end-of-turn so the next user prompt starts fresh.
+[x] - SP-051-2d: Status-footer subagent count. Add optional `ActiveSubagents() int` to the `ContentSource` interface in `pkg/console/status_footer.go` (interface-assertion check so the existing stub `ContentSource` implementations keep compiling). When non-zero, append ` · N sub` to `composeLine`. Counter source: a new atomic counter on `*Agent` incremented at subagent start and decremented at subagent end; the existing `agentFooterSource` adapter in `cmd/agent_modes.go` adds the `ActiveSubagents()` method that reads it.
+[x] - SP-051-2e: Tests in `cmd/agent_modes_test.go`. Extract a pure helper (e.g. `formatDepthedToolLine(depth, persona, name, preview, status, duration)`) from the subscriber goroutine so it's testable, then unit-test depth-0 (no badge, no indent), depth-1 (2-space indent + badge), depth-2 (4-space indent + badge), NO_COLOR mode (no ANSI), and the `↳ spawned` dedupe (two events from the same depth+persona produce exactly one spawn line). Status-footer test in `pkg/console/status_footer_test.go` for the `· N sub` suffix.
+

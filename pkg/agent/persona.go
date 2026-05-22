@@ -117,6 +117,15 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		a.rootPersonaID = personaID
 	}
 
+	// SP-051: keep the depth/persona event-metadata in sync with the active
+	// persona so every event the agent publishes is tagged. Subagents get
+	// theirs at creation in subagent_runner.createSubagent; this covers the
+	// primary agent and any later persona switches mid-session.
+	a.MergeEventMetadata(map[string]interface{}{
+		"subagent_depth": a.subagentDepth,
+		"active_persona": personaID,
+	})
+
 	return nil
 }
 

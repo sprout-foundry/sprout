@@ -198,15 +198,34 @@ func TestStatusFooter_ComposeLine_TruncatesAtNarrowWidth(t *testing.T) {
 	}
 }
 
-func TestStatusFooter_ComposeLine_PadsWithRule(t *testing.T) {
+func TestStatusFooter_ComposeLine_PadsWithSpaces(t *testing.T) {
 	var buf bytes.Buffer
 	f := NewStatusFooter(&buf, &stubSource{
 		model:   "m",
 		workdir: "/x",
 	})
 	line := f.composeLine(80)
-	// Trailing padding should be box-drawing horizontal lines, not blanks.
-	if !strings.HasSuffix(line, "─") {
-		t.Errorf("composeLine should pad with horizontal rule chars, got %q", line)
+	// Trailing padding is spaces — the top hr (drawn separately by
+	// draw()) provides the visual framing, so the content row stays
+	// uncluttered.
+	if !strings.HasSuffix(line, " ") {
+		t.Errorf("composeLine should pad with spaces, got %q", line)
+	}
+	if visibleLen(line) != 80 {
+		t.Errorf("composeLine should be exactly 80 visible chars, got %d", visibleLen(line))
+	}
+}
+
+// SP-048-3d: cost styling should keep the footer's base color (cyan) on
+// either side of the highlighted span, so the line reads as a coherent
+// chrome rather than three separately-colored pieces.
+func TestStatusFooter_StyleCost_RestoresBaseColorAfterAlert(t *testing.T) {
+	f := &StatusFooter{WarnCost: 1.0, AlertCost: 5.0}
+	got := f.styleCost(10.0, "$10.00")
+	if !strings.HasPrefix(got, "\033[31m") {
+		t.Errorf("alert cost should start with red ANSI, got %q", got)
+	}
+	if !strings.HasSuffix(got, footerResetFgKeepBase) {
+		t.Errorf("alert cost should end by popping fg back to base color, got %q", got)
 	}
 }

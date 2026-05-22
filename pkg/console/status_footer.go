@@ -157,14 +157,18 @@ func (f *StatusFooter) Stop() {
 	}
 
 	_, rows := f.terminalSize()
-	if rows > 0 {
-		// Move to footer row and clear it before resetting the region,
-		// so we don't leave the footer text behind in the scrollback.
+	if rows > 1 {
+		// Clear both footer rows (N-1 hr + N content) before resetting
+		// the scroll region so we don't leave residual chrome in the
+		// scrollback. Order matters: bottom-up so the cursor ends near
+		// the top of where the footer was, which is more useful for the
+		// outgoing rendering context than the absolute bottom.
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows)
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-1)
 	}
 	// Reset scroll region to full screen.
 	fmt.Fprint(f.w, "\033[r")
-	// Restore cursor to a sensible position (one row above the footer).
+	// Restore cursor to a sensible position (where the hr used to be).
 	if rows > 1 {
 		fmt.Fprintf(f.w, "\033[%d;1H", rows-1)
 	}
@@ -194,39 +198,58 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 	}
 }
 
-// applyScrollRegion sets the scroll region to rows 1..(rows-1) so the
-// last row is reserved for the footer. No-op when terminal size is
-// unreadable.
+// footerBaseColor is the ANSI escape used to colorize the entire footer
+// (top horizontal rule + content row). Cyan reads as "informational" in
+// most terminal themes and stays legible on both dark and light
+// backgrounds. The "39" code in resetToFooterColor below resets just the
+// foreground while preserving the colored context.
+const (
+	footerBaseColor       = "\033[36m" // cyan
+	footerResetAll        = "\033[0m"
+	footerResetFgKeepBase = "\033[39m" + footerBaseColor // pop fg back to cyan
+)
+
+// applyScrollRegion sets the scroll region to rows 1..(rows-2) so the
+// bottom two rows are reserved for the footer: row N-1 is a horizontal
+// rule and row N is the content. No-op when the terminal is too short
+// for both the footer and any usable scroll area.
 func (f *StatusFooter) applyScrollRegion() {
 	_, rows := f.terminalSize()
-	if rows < 2 {
+	if rows < 3 {
 		return
 	}
 	// DECSTBM: set scroll region. After setting, cursor moves to the
 	// home position of the new region (row 1, col 1) per VT100 spec.
-	// We then move it back to a useful spot just above the footer so
-	// subsequent prints land where the user expects.
-	fmt.Fprintf(f.w, "\033[1;%dr", rows-1)
-	fmt.Fprintf(f.w, "\033[%d;1H", rows-1)
+	// We then move it just above the footer so subsequent prints land
+	// where the user expects (at the bottom of the active scroll area).
+	fmt.Fprintf(f.w, "\033[1;%dr", rows-2)
+	fmt.Fprintf(f.w, "\033[%d;1H", rows-2)
 }
 
-// draw renders the current footer line. Uses save/restore cursor (DEC
-// private mode \0337/\0338) so any in-flight prompt rendering above the
-// footer row is not perturbed.
+// draw renders the two-row footer: the horizontal rule on row N-1 and
+// the content on row N. Uses save/restore cursor (DEC private mode
+// \0337/\0338) so any in-flight prompt rendering above the footer is
+// not perturbed.
 func (f *StatusFooter) draw() {
 	cols, rows := f.terminalSize()
-	if rows < 2 {
+	if rows < 3 {
 		return
 	}
 	line := f.composeLine(cols)
+	rule := strings.Repeat("─", cols)
 
-	// \0337 save cursor; jump to footer row; clear line; write; restore.
+	// \0337 save cursor; draw rule at N-1; draw content at N; \0338
+	// restore. Color codes wrap each row so the chrome reads as "system
+	// UI" without leaking color into surrounding output.
 	fmt.Fprint(f.w, "\0337")
-	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s\0338", rows, line)
+	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
+	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s\0338", rows, footerBaseColor, line, footerResetAll)
 }
 
-// composeLine builds the single-row footer string, padded/truncated to
-// cols width. Cost is colored against WarnCost/AlertCost.
+// composeLine builds the content row of the footer, padded/truncated to
+// cols width. Costs above WarnCost/AlertCost render in yellow/red
+// respectively, with the surrounding cyan restored after each colored
+// span so the line stays visually consistent.
 func (f *StatusFooter) composeLine(cols int) string {
 	if f.source == nil {
 		return ""
@@ -242,26 +265,29 @@ func (f *StatusFooter) composeLine(cols int) string {
 	costStyled := f.styleCost(cost, costStr)
 
 	parts := []string{model, ctxStr, costStyled, cwdSegment(cwd, branch)}
-	// Render with " · " separators; pad with a thin line on either end so
-	// the bar visually rests at the bottom of the screen.
-	body := " ─ " + strings.Join(parts, " · ") + " "
-	// Truncate or pad to terminal width. ANSI codes are not visible chars;
-	// rather than measure visible width here we accept slight over/underfill
-	// when cost styling is on — terminals tolerate it.
+	body := " " + strings.Join(parts, " · ") + " "
 	if visibleLen(body) >= cols {
 		return truncWithEllipsis(body, cols)
 	}
-	return body + strings.Repeat("─", cols-visibleLen(body))
+	// Pad with spaces — the top hr already provides visual framing, so
+	// the content row stays light. \033[K isn't enough here because the
+	// surrounding color codes need to extend through the padding too.
+	return body + strings.Repeat(" ", cols-visibleLen(body))
 }
 
+// styleCost colorizes a cost string against the threshold fields. The
+// closing escape pops the foreground back to footerBaseColor (cyan)
+// rather than to the terminal default, so the rest of the footer line
+// stays cyan after the highlighted span. SP-048-3d.
 func (f *StatusFooter) styleCost(cost float64, text string) string {
-	if cost >= f.AlertCost {
-		return "\033[31m" + text + "\033[0m" // red
+	switch {
+	case cost >= f.AlertCost:
+		return "\033[31m" + text + footerResetFgKeepBase // red, then back to cyan
+	case cost >= f.WarnCost:
+		return "\033[33m" + text + footerResetFgKeepBase // yellow, then back to cyan
+	default:
+		return text
 	}
-	if cost >= f.WarnCost {
-		return "\033[33m" + text + "\033[0m" // yellow
-	}
-	return text
 }
 
 // Global registration so signal handlers (which don't have a footer

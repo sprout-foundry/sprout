@@ -33,6 +33,14 @@ type ToolConfig struct {
 	Parameters    []ParameterConfig     `json:"parameters"`
 	Handler       ToolHandler           `json:"-"` // Function reference, not serialized
 	HandlerImages ToolHandlerWithImages `json:"-"` // Optional image-returning handler (takes precedence over Handler when set)
+
+	// Interactive declares that the tool renders its own user-facing prompt
+	// to stdout / stdin (or stderr) and must NOT be obscured by the CLI
+	// activity-indicator spinner or any other transient terminal chrome.
+	// When true, ToolStart subscribers should stop any active spinner and
+	// emit no result chrome on ToolEnd — the tool's natural output is the
+	// feedback the user expects.
+	Interactive bool `json:"interactive,omitempty"`
 }
 
 // ToolHandler represents a function that can handle a tool execution
@@ -196,7 +204,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Parameters: []ParameterConfig{
 			{"question", "string", true, []string{}, "The question to ask the user (required)"},
 		},
-		Handler: handleAskUser,
+		Handler:     handleAskUser,
+		Interactive: true,
 	})
 
 	// Register run_subagent tool - for multi-agent collaboration
@@ -519,6 +528,22 @@ func (r *ToolRegistry) GetAllToolConfigs() map[string]ToolConfig {
 		result[name] = config
 	}
 	return result
+}
+
+// IsInteractive reports whether the named tool is registered with
+// Interactive=true. Unknown tools return false. Use this from CLI
+// subscribers (e.g. the activity-indicator goroutine) to decide whether
+// to suppress transient chrome that would clobber the tool's own prompt.
+func (r *ToolRegistry) IsInteractive(name string) bool {
+	cfg, ok := r.tools[name]
+	return ok && cfg.Interactive
+}
+
+// IsInteractiveTool is a top-level convenience wrapping
+// GetToolRegistry().IsInteractive(name). It exists so callers that just
+// need a name → bool lookup don't have to take a registry handle.
+func IsInteractiveTool(name string) bool {
+	return GetToolRegistry().IsInteractive(name)
 }
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling

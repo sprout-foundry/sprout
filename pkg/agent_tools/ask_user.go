@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -160,6 +161,9 @@ func AskUser(question string) (string, error) {
 	if question == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
+	// SP-048 follow-up: stop any active CLI spinner so it doesn't overwrite
+	// the question text on stderr while we render it on stdout.
+	clihooks.SuspendIndicator()
 	// Display the prompt
 	fmt.Printf("%s: ", question)
 	// Read user input

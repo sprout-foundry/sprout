@@ -329,20 +329,6 @@
   text-decoration-color: rgba(255, 255, 255, 0.5);
 }
 
-/* Screen reader only — visually hidden but accessible to assistive technology */
-.command-palette-sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  clip-path: inset(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* Scrollbar Styling */
 .command-palette-results::-webkit-scrollbar {
   width: 8px;

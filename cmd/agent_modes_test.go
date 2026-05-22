@@ -162,7 +162,87 @@ func TestSetupAgentEvents(t *testing.T) {
 	eventBus := events.NewEventBus()
 
 	// SetupAgentEvents should not panic
-	SetupAgentEvents(a, eventBus)
+	SetupAgentEvents(a, eventBus, nil)
 }
 
 // TestSetupAgentEvents_NilEventBus skipped - it panics with nil event bus (exposes code bug)
+
+// SP-048-1d: tool-arg preview helper for the activity indicator timeline.
+
+func TestFormatToolArgPreview(t *testing.T) {
+	cases := []struct {
+		name     string
+		tool     string
+		args     string
+		want     string
+	}{
+		{
+			name: "read_file uses path",
+			tool: "read_file",
+			args: `{"path": "pkg/console/input_core.go"}`,
+			want: " (pkg/console/input_core.go)",
+		},
+		{
+			name: "shell_command uses command",
+			tool: "shell_command",
+			args: `{"command": "go test ./pkg/console/"}`,
+			want: " (go test ./pkg/console/)",
+		},
+		{
+			name: "write_file uses path",
+			tool: "write_file",
+			args: `{"path": "/tmp/foo.txt", "content": "hello"}`,
+			want: " (/tmp/foo.txt)",
+		},
+		{
+			name: "search_files uses pattern",
+			tool: "search_files",
+			args: `{"pattern": "TODO", "directory": "."}`,
+			want: " (TODO)",
+		},
+		{
+			name: "fetch_url uses url",
+			tool: "fetch_url",
+			args: `{"url": "https://example.com/page"}`,
+			want: " (https://example.com/page)",
+		},
+		{
+			name: "long path is truncated",
+			tool: "read_file",
+			args: `{"path": "a/very/long/path/that/exceeds/the/sixty/character/preview/limit/foo.go"}`,
+			want: " (a/very/long/path/that/exceeds/the/sixty/character/preview/l…)",
+		},
+		{
+			name: "empty arguments returns empty",
+			tool: "read_file",
+			args: "",
+			want: "",
+		},
+		{
+			name: "invalid json returns empty",
+			tool: "read_file",
+			args: "not json",
+			want: "",
+		},
+		{
+			name: "unknown tool falls back to first string field",
+			tool: "future_tool",
+			args: `{"thing": "value123"}`,
+			want: " (value123)",
+		},
+		{
+			name: "newlines in command are collapsed",
+			tool: "shell_command",
+			args: `{"command": "line1\nline2\tline3"}`,
+			want: " (line1 line2 line3)",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatToolArgPreview(c.tool, c.args)
+			if got != c.want {
+				t.Errorf("formatToolArgPreview(%q, %q) = %q, want %q", c.tool, c.args, got, c.want)
+			}
+		})
+	}
+}

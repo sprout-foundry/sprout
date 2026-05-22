@@ -216,6 +216,49 @@ func TestStatusFooter_ComposeLine_PadsWithSpaces(t *testing.T) {
 	}
 }
 
+// SP-051-2d: a ContentSource that also satisfies the optional
+// activeSubagentsSource interface should produce a footer with the
+// " · N sub" suffix when N > 0, and no suffix when N == 0.
+type subSrc struct {
+	stubSource
+	n int
+}
+
+func (s *subSrc) ActiveSubagents() int { return s.n }
+
+func TestStatusFooter_ComposeLine_ShowsSubagentCount_WhenNonZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &subSrc{
+		stubSource: stubSource{model: "m", workdir: "/x"},
+		n:          2,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "2 sub") {
+		t.Errorf("composeLine with 2 active subagents should contain '2 sub', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_OmitsSubagentCount_WhenZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &subSrc{
+		stubSource: stubSource{model: "m", workdir: "/x"},
+		n:          0,
+	})
+	line := f.composeLine(120)
+	if strings.Contains(line, "sub") {
+		t.Errorf("composeLine with 0 active subagents should not include 'sub', got %q", line)
+	}
+}
+
+// Sources that don't implement activeSubagentsSource (the baseline case —
+// e.g. tests that only care about cost/model rendering) should produce a
+// footer with no subagent suffix at all.
+func TestStatusFooter_ComposeLine_BaselineSourceOmitsSubagentSuffix(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: "/x"})
+	line := f.composeLine(120)
+	if strings.Contains(line, "sub") {
+		t.Errorf("baseline ContentSource (no ActiveSubagents method) should produce no 'sub' segment, got %q", line)
+	}
+}
+
 // SP-048-3d: cost styling should keep the footer's base color (cyan) on
 // either side of the highlighted span, so the line reads as a coherent
 // chrome rather than three separately-colored pieces.

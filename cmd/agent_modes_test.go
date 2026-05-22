@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -301,5 +302,101 @@ func TestFormatRunSubagentPreview_NilAgent(t *testing.T) {
 	got := formatRunSubagentPreview(nil, `{"persona":"coder"}`)
 	if got != "" {
 		t.Errorf("nil agent should yield empty preview, got %q", got)
+	}
+}
+
+// =============================================================================
+// SP-051: depth-aware tool timeline rendering
+// =============================================================================
+
+func TestReadEventDepth(t *testing.T) {
+	cases := []struct {
+		name string
+		data map[string]interface{}
+		want int
+	}{
+		{"nil_map", nil, 0},
+		{"missing_key", map[string]interface{}{}, 0},
+		{"int_value", map[string]interface{}{"subagent_depth": 2}, 2},
+		{"int64_value", map[string]interface{}{"subagent_depth": int64(1)}, 1},
+		{"float_value_from_json", map[string]interface{}{"subagent_depth": float64(1)}, 1},
+		{"wrong_type_string", map[string]interface{}{"subagent_depth": "1"}, 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := readEventDepth(c.data); got != c.want {
+				t.Errorf("readEventDepth = %d, want %d", got, c.want)
+			}
+		})
+	}
+}
+
+func TestReadEventPersona(t *testing.T) {
+	cases := []struct {
+		name string
+		data map[string]interface{}
+		want string
+	}{
+		{"nil_map", nil, ""},
+		{"missing_key", map[string]interface{}{}, ""},
+		{"plain", map[string]interface{}{"active_persona": "coder"}, "coder"},
+		{"whitespace_trimmed", map[string]interface{}{"active_persona": "  coder  "}, "coder"},
+		{"wrong_type", map[string]interface{}{"active_persona": 42}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := readEventPersona(c.data); got != c.want {
+				t.Errorf("readEventPersona = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// Depth 0 must produce a line byte-identical to the pre-SP-051 format so
+// primary-agent tool calls don't regress visually.
+func TestFormatToolStartLine_Depth0_Unchanged(t *testing.T) {
+	got := formatToolStartLine(0, "", "read_file", " (foo.go)")
+	want := "  read_file (foo.go)"
+	if got != want {
+		t.Errorf("formatToolStartLine(0, ...) = %q, want %q", got, want)
+	}
+}
+
+// Depth ≥ 1 should add an indent and a [persona] badge that contains the
+// persona name. NO_COLOR keeps the line ANSI-free for stable comparison.
+func TestFormatToolStartLine_Depth1_IndentedAndBadged(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := formatToolStartLine(1, "coder", "read_file", " (foo.go)")
+	if !strings.HasPrefix(got, "    [coder] read_file") {
+		// 4 spaces = 2 (depth indent) + 2 (existing tool-line prefix)
+		t.Errorf("depth-1 start line should be indented + badged, got %q", got)
+	}
+}
+
+func TestFormatToolStartLine_Depth2_DoubleIndent(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := formatToolStartLine(2, "coder", "read_file", " (foo.go)")
+	if !strings.HasPrefix(got, "      [coder] read_file") {
+		// 6 spaces = 4 (depth-2 indent) + 2 (existing tool-line prefix)
+		t.Errorf("depth-2 start line should be double-indented, got %q", got)
+	}
+}
+
+func TestFormatToolEndLine_Depth0_Unchanged(t *testing.T) {
+	got := formatToolEndLine(0, "", "[OK]", "read_file", " (foo.go)", 0.1)
+	want := "  [OK] read_file (foo.go) · 0.1s"
+	if got != want {
+		t.Errorf("formatToolEndLine(0, ...) = %q, want %q", got, want)
+	}
+}
+
+func TestFormatToolEndLine_Depth1_Badged(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := formatToolEndLine(1, "coder", "[OK]", "read_file", " (foo.go)", 0.2)
+	if !strings.Contains(got, "[coder]") {
+		t.Errorf("depth-1 end line should include persona badge, got %q", got)
+	}
+	if !strings.HasSuffix(got, " · 0.2s") {
+		t.Errorf("end line should preserve duration suffix, got %q", got)
 	}
 }

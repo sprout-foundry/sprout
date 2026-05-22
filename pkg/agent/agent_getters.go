@@ -119,6 +119,15 @@ func (a *Agent) AddMessage(message api.Message) {
 }
 
 // GetTotalCost returns the total cost of the conversation
+// GetContextTokens returns the current and max token counts for the active
+// model's context window. (0, 0) when state is unavailable. SP-048-3.
+func (a *Agent) GetContextTokens() (used, limit int) {
+	if a == nil || a.state == nil {
+		return 0, 0
+	}
+	return a.state.GetCurrentContextTokens(), a.state.GetMaxContextTokens()
+}
+
 func (a *Agent) GetTotalCost() float64 {
 	return a.state.GetTotalCost()
 }

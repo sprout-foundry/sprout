@@ -111,7 +111,7 @@ func TestEmbeddingManager_IndexSize_AfterInit(t *testing.T) {
 	mgr := NewEmbeddingManager(cfg, dir)
 
 	// Manually set up the manager's internals to simulate a successful Init.
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestEmbeddingManager_CheckDuplicates_WithConfigThreshold(t *testing.T) {
 	mgr := NewEmbeddingManager(cfg, dir)
 
 	// Manually set up internals.
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestEmbeddingManager_CheckDuplicates_UsesConfigDefaults(t *testing.T) {
 	}
 	mgr := NewEmbeddingManager(cfg, dir)
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestEmbeddingManager_Close_AfterInit(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
 	mgr := NewEmbeddingManager(cfg, dir)
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestEmbeddingManager_Close_Idempotent(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
 	mgr := NewEmbeddingManager(cfg, dir)
 
-	store, err := NewJSONLFileStore(filepath.Join(dir, "index.jsonl"), "test-model-hash")
+	store, err := NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-model-hash")
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

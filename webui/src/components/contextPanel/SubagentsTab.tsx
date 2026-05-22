@@ -4,12 +4,11 @@ import React from 'react';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
 import { getPersonaColor, getStatusIcon, formatDuration, formatTime } from './helpers';
-import type { ContextSubagentRun, LiveLogLine, SubagentLifecycleCounts } from './types';
+import type { ContextSubagentRun, LiveLogLine, SubagentResourceCounts } from './types';
 
 interface SubagentsTabProps {
   subagentRuns: ContextSubagentRun[];
-  lifecycleCounts?: SubagentLifecycleCounts;
-  totalLifecycle?: number;
+  resourceCounts: SubagentResourceCounts;
   expandedSubagents: Set<string>;
   toolRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   expandedTools: Set<string>;
@@ -23,8 +22,7 @@ interface SubagentsTabProps {
 
 export function SubagentsTab({
   subagentRuns,
-  lifecycleCounts,
-  totalLifecycle,
+  resourceCounts,
   expandedSubagents,
   toolRefs,
   expandedTools: _expandedTools,
@@ -57,39 +55,27 @@ export function SubagentsTab({
 
   return (
     <div className="context-panel-tools-list">
-      {totalLifecycle != null && totalLifecycle > 0 && lifecycleCounts && (
-        <div
-          className="subagent-lifecycle-summary"
-          style={{
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            marginBottom: '12px',
-            fontSize: '12px',
-            color: 'rgba(255,255,255,0.6)',
-            display: 'flex',
-            gap: '12px',
-            flexWrap: 'wrap',
-          }}
-        >
-          {lifecycleCounts.active > 0 && (
-            <span style={{ color: '#4ade80' }}>
-              ▶ {lifecycleCounts.active} active
+      {subagentRuns.length > 0 && (
+        <div className="subagent-resource-summary">
+          <span className="subagent-stat-chip subagent-stat-active">
+            {resourceCounts.active} active
+          </span>
+          {resourceCounts.queued > 0 && (
+            <span className="subagent-stat-chip subagent-stat-queued">
+              {resourceCounts.queued} queued
             </span>
           )}
-          {lifecycleCounts.queued > 0 && (
-            <span style={{ color: '#fbbf24' }}>
-              ⏳ {lifecycleCounts.queued} queued
+          <span className="subagent-stat-chip subagent-stat-completed">
+            {resourceCounts.completed} completed
+          </span>
+          {resourceCounts.failed > 0 && (
+            <span className="subagent-stat-chip subagent-stat-failed">
+              {resourceCounts.failed} failed
             </span>
           )}
-          {lifecycleCounts.completed > 0 && (
-            <span style={{ color: '#4ade80' }}>
-              ✓ {lifecycleCounts.completed} completed
-            </span>
-          )}
-          {lifecycleCounts.cancelled > 0 && (
-            <span style={{ color: '#f87171' }}>
-              ✕ {lifecycleCounts.cancelled} cancelled
+          {resourceCounts.cancelled > 0 && (
+            <span className="subagent-stat-chip subagent-stat-cancelled">
+              {resourceCounts.cancelled} cancelled
             </span>
           )}
         </div>

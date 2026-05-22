@@ -26,6 +26,7 @@ import (
 	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -102,6 +103,11 @@ type SubagentRunner struct {
 	metricFailed       atomic.Int64
 	metricCancelled    atomic.Int64
 	metricQueuedWaitMS atomic.Int64
+
+	// testClientFactory overrides client creation for testing only.
+	// When non-nil, it is called instead of factory.CreateProviderClient.
+	// This field is never set in production code.
+	testClientFactory func(clientType agent_api.ClientType, model string) (agent_api.ClientInterface, error)
 }
 
 // runningSubagent tracks an active subagent execution
@@ -150,7 +156,10 @@ func (r *SubagentRunner) Metrics() SubagentMetrics {
 // describing the lifecycle transition. The event is only published when
 // the shared EventBus is available.
 func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason string, tokensUsed int, elapsedMs int64) {
-	data := map[string]interface{}{
+	if r.shared == nil || r.shared.EventBus == nil {
+		return
+	}
+	data := map[string]any{
 		"task_id": taskID,
 		"persona": persona,
 		"status":  status, // "queued", "started", "completed", "cancelled"
@@ -164,14 +173,13 @@ func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason s
 	if elapsedMs > 0 {
 		data["elapsed_ms"] = elapsedMs
 	}
+	r.shared.EventBus.Publish(events.EventTypeSubagentActivity, data)
 
-	// Publish to EventBus (for WebUI real-time updates)
-	if r.shared != nil && r.shared.EventBus != nil {
-		r.shared.EventBus.Publish(events.EventTypeSubagentActivity, data)
+	// Also write to the runlog for persistent structured logging.
+	logger := utils.GetRunLogger()
+	if logger != nil {
+		logger.LogEvent("subagent_activity", data)
 	}
-
-	// Write to runlog (for persistent JSONL logging)
-	utils.GetRunLogger().LogEvent("subagent."+status, data)
 }
 
 // Run spawns an in-process subagent and waits for completion
@@ -597,8 +605,13 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		return nil, fmt.Errorf("resolve provider/model: %w", err)
 	}
 
-	// Create client via factory
-	client, err := factory.CreateProviderClient(clientType, finalModel)
+	// Create client via factory (or test hook for testing)
+	var client agent_api.ClientInterface
+	if r.testClientFactory != nil {
+		client, err = r.testClientFactory(clientType, finalModel)
+	} else {
+		client, err = factory.CreateProviderClient(clientType, finalModel)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("create client: %w", err)
 	}

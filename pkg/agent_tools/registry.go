@@ -1,107 +1,103 @@
-// Tool registry for registering and looking up ToolHandler implementations.
-//
-// The registry is thread-safe via sync.RWMutex and provides deterministic
-// (sorted) output for All(), Names(), and ForPersona().
 package tools
 
 import (
-	"sort"
+	"fmt"
+	"slices"
 	"sync"
 )
 
-// ToolRegistry provides a thread-safe registry for tool handlers.
+// ---------------------------------------------------------------------------
+// Global singleton for new-style tool registry (SP-038-2a dual-dispatch)
+// ---------------------------------------------------------------------------
+
+var (
+	defaultNewRegistry *ToolRegistry
+	newRegistryOnce    sync.Once
+)
+
+// GetNewToolRegistry returns the global new-style tool registry singleton.
+func GetNewToolRegistry() *ToolRegistry {
+	newRegistryOnce.Do(func() {
+		defaultNewRegistry = NewToolRegistry()
+		for _, h := range AllTools() {
+			if err := defaultNewRegistry.Register(h); err != nil {
+				// Log but don't panic - this is initialization code
+				fmt.Printf("WARNING: failed to register tool %q: %v\n", h.Name(), err)
+			}
+		}
+	})
+	return defaultNewRegistry
+}
+
+// ToolRegistry provides thread-safe registration and lookup of ToolHandlers.
 type ToolRegistry struct {
 	mu    sync.RWMutex
 	tools map[string]ToolHandler
 }
 
-// NewToolRegistry creates an empty registry.
+// NewToolRegistry creates an empty ToolRegistry.
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
 		tools: make(map[string]ToolHandler),
 	}
 }
 
-// Register adds a tool handler to the registry. Panics if a handler with the
-// same name is already registered.
-func (r *ToolRegistry) Register(handler ToolHandler) {
+// Register adds a tool handler. Returns error if name is already registered.
+func (r *ToolRegistry) Register(handler ToolHandler) error {
+	name := handler.Name()
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	name := handler.Name()
 	if _, exists := r.tools[name]; exists {
-		panic("tool already registered: " + name)
+		return fmt.Errorf("tool %q is already registered", name)
 	}
 	r.tools[name] = handler
+	return nil
 }
 
-// Lookup returns a tool handler by name, or nil if not found.
-func (r *ToolRegistry) Lookup(name string) ToolHandler {
+// Lookup finds a tool by name. Returns (handler, true) if found, (nil, false) otherwise.
+func (r *ToolRegistry) Lookup(name string) (ToolHandler, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	return r.tools[name]
+	h, ok := r.tools[name]
+	return h, ok
 }
 
-// All returns all registered tool handlers, sorted by name.
-func (r *ToolRegistry) All() []ToolHandler {
+// All returns a copy of all registered tools.
+func (r *ToolRegistry) All() map[string]ToolHandler {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
-	result := make([]ToolHandler, 0, len(r.tools))
-	for _, h := range r.tools {
-		result = append(result, h)
+	out := make(map[string]ToolHandler, len(r.tools))
+	for k, v := range r.tools {
+		out[k] = v
 	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name() < result[j].Name()
-	})
-	return result
+	return out
 }
 
-// ForPersona returns tools allowed for a given persona by filtering the
-// registered handlers against the provided allowlist. If allowedTools is nil
-// or empty, all registered tools are returned.
-func (r *ToolRegistry) ForPersona(allowedTools []string) []ToolHandler {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	if len(allowedTools) == 0 {
-		result := make([]ToolHandler, 0, len(r.tools))
-		for _, h := range r.tools {
-			result = append(result, h)
-		}
-		sort.Slice(result, func(i, j int) bool {
-			return result[i].Name() < result[j].Name()
-		})
-		return result
-	}
-
-	allowed := make(map[string]struct{}, len(allowedTools))
-	for _, n := range allowedTools {
-		allowed[n] = struct{}{}
-	}
-
-	result := make([]ToolHandler, 0)
-	for _, h := range r.tools {
-		if _, ok := allowed[h.Name()]; ok {
-			result = append(result, h)
-		}
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name() < result[j].Name()
-	})
-	return result
+// ForPersona returns tools available for a given persona. Initially returns all tools.
+// TODO(SP-038): Implement per-persona tool filtering
+func (r *ToolRegistry) ForPersona(persona string) map[string]ToolHandler {
+	return r.All()
 }
 
-// Names returns all registered tool names, sorted alphabetically.
+// Unregister removes a tool handler by name. Returns true if the tool was found and removed.
+func (r *ToolRegistry) Unregister(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.tools[name]; !exists {
+		return false
+	}
+	delete(r.tools, name)
+	return true
+}
+
+// Names returns a sorted list of all registered tool names.
 func (r *ToolRegistry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-
 	names := make([]string, 0, len(r.tools))
-	for n := range r.tools {
-		names = append(names, n)
+	for name := range r.tools {
+		names = append(names, name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }

@@ -8,7 +8,10 @@ func newDefaultToolRegistry() *ToolRegistry {
 		tools: make(map[string]ToolConfig),
 	}
 
-	// Register shell_command tool
+	// Register shell_command tool. Interactive=true because the handler
+	// streams subprocess stdout/stderr live to the user's terminal via
+	// io.MultiWriter (see pkg/agent_tools/shell_native.go:76). The
+	// activity-indicator spinner would interleave with that output.
 	registry.RegisterTool(ToolConfig{
 		Name:        "shell_command",
 		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id)",
@@ -18,8 +21,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"check_background", "string", false, []string{}, "Session ID of a background session to check (returns accumulated output)"},
 			{"stop_background", "string", false, []string{}, "Session ID of a background session to stop/terminate"},
 		},
-		Handler: handleShellCommand,
-		Timeout: 2 * time.Minute,
+		Handler:     handleShellCommand,
+		Timeout:     2 * time.Minute,
+		Interactive: true,
 	})
 
 	// Register git tool - handles operations that modify repository state or require network access

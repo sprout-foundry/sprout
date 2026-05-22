@@ -16,6 +16,8 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/logging"
 	modelsettings "github.com/sprout-foundry/sprout/pkg/model_settings"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // GenericProvider implements ClientInterface using JSON configuration
@@ -1165,6 +1167,20 @@ func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.R
 
 // buildHTTPRequestCtx builds the HTTP request bound to ctx.
 func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, streaming bool) (*http.Request, error) {
+	// For local instances like LM Studio, skip auth check entirely if it would fail
+	isLocalInstance := strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost")
+
+	// Egress redaction backstop: scan the outbound payload for any secrets
+	// that escaped per-tool redaction (Layer 5) and replace them with opaque
+	// [REDACTED] tokens. Skipped for local providers since the threat model
+	// — third-party logging/training — only applies to remote endpoints.
+	if !isLocalInstance && len(body) > 0 {
+		if redacted := secretdetect.RedactOpaque(string(body)); redacted != string(body) {
+			utils.GetLogger(false).Logf("[security] egress backstop redacted secrets from outbound LLM request payload (per-tool redaction missed something — investigate if frequent)")
+			body = []byte(redacted)
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("get model context limit: %w", err)
@@ -1172,9 +1188,6 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 
 	// Check if authentication is needed
 	var token string
-
-	// For local instances like LM Studio, skip auth check entirely if it would fail
-	isLocalInstance := strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost")
 
 	if isLocalInstance && (p.config.Auth.Type == "bearer" || p.config.Auth.Type == "api_key") &&
 		p.config.Auth.EnvVar == "" && p.config.Auth.Key == "" {

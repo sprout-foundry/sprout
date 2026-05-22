@@ -1,10 +1,9 @@
-//go:build !js
-
 package embedding
 
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -108,13 +107,70 @@ func TestHNSWStoreReload(t *testing.T) {
 	require.NoError(t, err)
 	defer s2.Close()
 
-	// HNSW graph is reloaded but metadata map is not persisted separately.
-	// When graph has nodes but no records, clear() is called (rebuild needed).
-	// This is expected behavior — metadata must be rebuilt from source.
-	// Size may be 0 if cleared, or the query may still work if graph data
-	// is intact. Verify the store doesn't error.
-	_, err = s2.LoadAll()
+	all, err := s2.LoadAll()
 	require.NoError(t, err)
+	require.Len(t, all, 1)
+	require.Equal(t, "hello", all[0].Name)
+}
+
+// TestHNSWStorePartialSaveRecovery simulates the crash scenario where a
+// previous session persisted the graph file but failed to persist the
+// records sidecar. The next session must not panic when rebuilding —
+// previously, Store() consulted s.records to decide whether to delete a
+// key before re-adding it; when records was empty but the graph still
+// held the IDs, Add() tripped hnsw's "node not added" invariant.
+func TestHNSWStorePartialSaveRecovery(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.hnsw")
+
+	s1, err := NewHNSWStore(path, "v1")
+	require.NoError(t, err)
+	require.NoError(t, s1.Store([]VectorRecord{
+		{ID: "x:1", File: "x.go", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+		{ID: "x:2", File: "x.go", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+	}))
+	require.NoError(t, s1.Close())
+
+	// Simulate a partial save: drop the records sidecar but keep the graph.
+	require.NoError(t, os.Remove(path+".records.json"))
+
+	s2, err := NewHNSWStore(path, "v1")
+	require.NoError(t, err)
+	defer s2.Close()
+
+	// Reconciliation should have cleared the graph so re-Store of the same
+	// IDs works without tripping the hnsw "node not added" invariant.
+	require.NotPanics(t, func() {
+		require.NoError(t, s2.Store([]VectorRecord{
+			{ID: "x:1", File: "x.go", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now()},
+			{ID: "x:2", File: "x.go", Embedding: []float32{0, 1, 0}, IndexedAt: time.Now()},
+		}))
+	})
+	require.Equal(t, 2, s2.Size())
+}
+
+// TestHNSWStoreStaleGraphKeyRecovery covers the same panic surface from a
+// different angle: the records map is populated but the graph happens to
+// already contain a stray key (e.g., loaded from a corrupted prior state).
+// Store() must check the graph itself, not just s.records, to decide
+// whether to delete-before-add.
+func TestHNSWStoreStaleGraphKeyRecovery(t *testing.T) {
+	s := newTestHNSWStore(t)
+
+	// Seed the graph directly, bypassing s.records, to mimic the
+	// graph-ahead-of-records state.
+	rec := VectorRecord{
+		ID: "stale:1", File: "x.go", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now(),
+	}
+	require.NoError(t, s.Store([]VectorRecord{rec}))
+	// Drop from s.records but leave it in the graph.
+	delete(s.records, rec.ID)
+
+	// Re-storing the same ID must not panic.
+	require.NotPanics(t, func() {
+		require.NoError(t, s.Store([]VectorRecord{rec}))
+	})
+	require.Equal(t, 1, s.Size())
 }
 
 func TestHNSWStoreEmptyQuery(t *testing.T) {

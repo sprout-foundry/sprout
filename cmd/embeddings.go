@@ -138,17 +138,21 @@ func listEmbeddingFiles(indexDir string, fileType string) []string {
 	switch fileType {
 	case "code":
 		return []string{
-			filepath.Join(indexDir, "index.jsonl"),
-			filepath.Join(indexDir, ".index.jsonl.meta.json"),
-			filepath.Join(indexDir, "embedding_index_onnx.jsonl"),
-			filepath.Join(indexDir, ".embedding_index_onnx.jsonl.meta.json"),
+			filepath.Join(indexDir, "index.hnsw"),
+			filepath.Join(indexDir, "index.hnsw.meta"),
+			filepath.Join(indexDir, "index.hnsw.records.json"),
+			filepath.Join(indexDir, "embedding_index_onnx.hnsw"),
+			filepath.Join(indexDir, "embedding_index_onnx.hnsw.meta"),
+			filepath.Join(indexDir, "embedding_index_onnx.hnsw.records.json"),
 		}
 	case "conversation_turn", "memory":
 		return []string{
-			filepath.Join(indexDir, "conversation_turns.jsonl"),
-			filepath.Join(indexDir, ".conversation_turns.jsonl.meta.json"),
-			filepath.Join(indexDir, "conversation_turns_onnx.jsonl"),
-			filepath.Join(indexDir, ".conversation_turns_onnx.jsonl.meta.json"),
+			filepath.Join(indexDir, "conversation_turns.hnsw"),
+			filepath.Join(indexDir, "conversation_turns.hnsw.meta"),
+			filepath.Join(indexDir, "conversation_turns.hnsw.records.json"),
+			filepath.Join(indexDir, "conversation_turns_onnx.hnsw"),
+			filepath.Join(indexDir, "conversation_turns_onnx.hnsw.meta"),
+			filepath.Join(indexDir, "conversation_turns_onnx.hnsw.records.json"),
 		}
 	case "all":
 		return append(

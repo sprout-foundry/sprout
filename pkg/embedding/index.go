@@ -114,25 +114,6 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			unchangedFiles = diff.UnchangedFiles
 			manifestInvalidated = diff.ManifestInvalidated
 
-			// Remove records for deleted files.
-			if len(diff.DeletedFiles) > 0 {
-				deleteSet := make(map[string]bool, len(diff.DeletedFiles))
-				for _, f := range diff.DeletedFiles {
-					deleteSet[f] = true
-				}
-				var kept []VectorRecord
-				for _, rec := range existingRecords {
-					if !deleteSet[rec.File] {
-						kept = append(kept, rec)
-					}
-				}
-				if len(kept) < len(existingRecords) {
-					debugLogf("index: manifest: dropping %d records for deleted files",
-						len(existingRecords)-len(kept))
-					existingRecords = kept
-				}
-			}
-
 			debugLogf("index: manifest: %d changed, %d unchanged, %d deleted (out of %d walked)",
 				len(changedFiles), len(unchangedFiles), len(diff.DeletedFiles), len(files))
 		}
@@ -190,18 +171,9 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 
 	stats.UnitsExtracted = len(allUnits)
 
-	// If manifest optimization is active and no units were extracted (all unchanged),
-	// we can skip the incremental comparison and store write entirely.
-	if len(allUnits) == 0 && len(unchangedFiles) > 0 {
-		debugLogf("index: all %d files unchanged (manifest), nothing to do", len(unchangedFiles))
-		stats.Duration = time.Since(start)
-		return stats, nil
-	}
-
-	if len(allUnits) == 0 {
-		stats.Duration = time.Since(start)
-		return stats, nil
-	}
+	// Note: we no longer early-return when allUnits is empty. Even if no
+	// files changed, existing records for files that were deleted from
+	// the workspace must still be cleaned up below.
 
 	// --- Incremental rebuild logic ---
 
@@ -212,24 +184,6 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 			existingFileUnits[rec.File] = make(map[string]string)
 		}
 		existingFileUnits[rec.File][rec.ID] = rec.Hash
-	}
-
-	// Build a set of current files from extracted units.
-	currentFiles := make(map[string]bool)
-	for _, unit := range allUnits {
-		currentFiles[unit.File] = true
-	}
-
-	// Filter existing records to only include files that still exist.
-	var baseRecords []VectorRecord
-	for _, rec := range existingRecords {
-		if currentFiles[rec.File] {
-			baseRecords = append(baseRecords, rec)
-		}
-	}
-	if len(baseRecords) < len(existingRecords) {
-		debugLogf("index: dropping %d records for deleted files",
-			len(existingRecords)-len(baseRecords))
 	}
 
 	// Build a map of file → unit ID → hash from extracted units.
@@ -288,9 +242,8 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		debugLogf("index: re-embedded %d units in %s", len(newRecords), time.Since(embedStart))
 	}
 
-	// Store all records.
-	// When manifest is invalidated (model change), replace all records —
-	// old records have stale embeddings from the previous model.
+	// Manifest-invalidated path: model changed, every embedding is stale.
+	// ReplaceAll wipes the store and writes the freshly-embedded records.
 	if manifestInvalidated && len(newRecords) > 0 {
 		debugLogf("index: replacing all records with %d re-embedded records (model changed)", len(newRecords))
 		storeStart := time.Now()
@@ -299,21 +252,51 @@ func (m *IndexManager) BuildIndex(ctx context.Context, rootDir string) (*IndexSt
 		}
 		debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
 		stats.UnitsEmbedded = len(newRecords)
-	} else if len(newRecords) > 0 || len(baseRecords) < len(existingRecords) {
-		allStoreRecords := make([]VectorRecord, 0, len(baseRecords)+len(newRecords))
-		allStoreRecords = append(allStoreRecords, baseRecords...)
-		allStoreRecords = append(allStoreRecords, newRecords...)
-
-		debugLogf("index: storing %d records (%d existing + %d new)...",
-			len(allStoreRecords), len(baseRecords), len(newRecords))
-		storeStart := time.Now()
-		if err := m.store.Store(allStoreRecords); err != nil {
-			return stats, fmt.Errorf("index: store: %w", err)
-		}
-		debugLogf("index: stored %d records in %s", len(allStoreRecords), time.Since(storeStart))
-		stats.UnitsEmbedded = len(newRecords)
 	} else {
-		debugLogf("index: no changes detected, skipping store")
+		// Compute stale record IDs: records whose owning file or symbol no
+		// longer exists in the workspace. Two cases:
+		//   1. The file was re-walked (in currentFileUnits) and the symbol
+		//      ID is missing from the new extraction → symbol was removed.
+		//   2. The file is absent from both changedFiles (walked) and
+		//      unchangedFiles (manifest-skipped) → file was deleted.
+		// Records for manifest-skipped files are left alone; we have no
+		// evidence they're stale.
+		unchangedSet := make(map[string]bool, len(unchangedFiles))
+		for _, f := range unchangedFiles {
+			unchangedSet[f] = true
+		}
+
+		var staleIDs []string
+		for _, rec := range existingRecords {
+			if walked, ok := currentFileUnits[rec.File]; ok {
+				if _, stillExists := walked[rec.ID]; !stillExists {
+					staleIDs = append(staleIDs, rec.ID)
+				}
+				continue
+			}
+			if !unchangedSet[rec.File] {
+				staleIDs = append(staleIDs, rec.ID)
+			}
+		}
+
+		if len(staleIDs) > 0 {
+			debugLogf("index: removing %d stale records (deleted files + removed symbols)", len(staleIDs))
+			if err := m.store.DeleteByIDs(staleIDs); err != nil {
+				return stats, fmt.Errorf("index: delete stale records: %w", err)
+			}
+		}
+
+		if len(newRecords) > 0 {
+			debugLogf("index: storing %d new records...", len(newRecords))
+			storeStart := time.Now()
+			if err := m.store.Store(newRecords); err != nil {
+				return stats, fmt.Errorf("index: store: %w", err)
+			}
+			debugLogf("index: stored %d records in %s", len(newRecords), time.Since(storeStart))
+			stats.UnitsEmbedded = len(newRecords)
+		} else if len(staleIDs) == 0 {
+			debugLogf("index: no changes detected, skipping store")
+		}
 	}
 
 	// Save manifest after successful store (always, when ManifestPath is set,

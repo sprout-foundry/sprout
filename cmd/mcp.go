@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
 )
 
@@ -223,7 +223,7 @@ func runMCPAdd() error {
 
 	fmt.Println()
 	fmt.Printf("[OK] %s configured successfully!\n", serverConfig.Name)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
 	fmt.Println()
@@ -315,7 +315,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 
 	fmt.Println()
 	fmt.Println("[OK] Git MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test git")
 	fmt.Println()
@@ -448,9 +448,9 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println("[OK] GitHub MCP Server configured successfully!")
 	if serverConfig.Type == "http" {
 		fmt.Printf("   Type: Remote HTTP server (OAuth)\n")
-		fmt.Printf("   URL:  %s\n", credentials.RedactLogLine(serverConfig.URL))
+		fmt.Printf("   URL:  %s\n", secretdetect.RedactOpaque(serverConfig.URL))
 	} else {
-		fmt.Printf("   Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+		fmt.Printf("   Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	}
 	fmt.Println()
 
@@ -594,7 +594,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 
 	fmt.Println()
 	fmt.Println("[OK] Playwright MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test playwright")
 	fmt.Println()
@@ -675,7 +675,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 
 	fmt.Println()
 	fmt.Println("[OK] Chrome DevTools MCP Server configured successfully!")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test chrome-devtools")
 	fmt.Println()
@@ -821,7 +821,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 
 	fmt.Println()
 	fmt.Printf("[OK] Custom MCP Server '%s' configured successfully!\n", serverName)
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
 
@@ -948,9 +948,9 @@ func runMCPList() error {
 		fmt.Printf("[signal] %s\n", name)
 		if server.Type == "http" {
 			fmt.Printf("   Type: HTTP Remote Server\n")
-			fmt.Printf("   URL: %s\n", credentials.RedactLogLine(server.URL))
+			fmt.Printf("   URL: %s\n", secretdetect.RedactOpaque(server.URL))
 		} else {
-			fmt.Printf("   Command: %s %v\n", server.Command, credentials.RedactLogLine(fmt.Sprintf("%v", server.Args)))
+			fmt.Printf("   Command: %s %v\n", server.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", server.Args)))
 		}
 		fmt.Printf("   Auto-start: %t\n", server.AutoStart)
 		fmt.Printf("   Max restarts: %d\n", server.MaxRestarts)
@@ -1043,7 +1043,7 @@ func runMCPTest(serverName string) error {
 
 	fmt.Printf("[test] Testing MCP Server: %s\n", serverName)
 	fmt.Println("========================")
-	fmt.Printf("Command: %s %v\n", serverConfig.Command, credentials.RedactLogLine(fmt.Sprintf("%v", serverConfig.Args)))
+	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 
 	// Create manager and client

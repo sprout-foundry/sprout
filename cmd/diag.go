@@ -13,6 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
 )
 
@@ -72,7 +73,7 @@ func runDiag() {
 		fmt.Printf("Custom providers found: %d\n", len(config.CustomProviders))
 		for name, provider := range config.CustomProviders {
 			fmt.Printf("  • %s\n", name)
-			fmt.Printf("    Endpoint: %s\n", credentials.RedactLogLine(provider.Endpoint))
+			fmt.Printf("    Endpoint: %s\n", secretdetect.RedactOpaque(provider.Endpoint))
 			fmt.Printf("    Model: %s\n", provider.ModelName)
 			fmt.Printf("    Context: %d tokens\n", provider.ContextSize)
 		}
@@ -101,9 +102,9 @@ func runDiag() {
 				fmt.Printf("    • %s\n", name)
 				if server.Type == "http" {
 					fmt.Printf("      Type: HTTP Remote Server\n")
-					fmt.Printf("      URL: %s\n", credentials.RedactLogLine(server.URL))
+					fmt.Printf("      URL: %s\n", secretdetect.RedactOpaque(server.URL))
 				} else {
-					fmt.Printf("      Command: %s %v\n", server.Command, credentials.RedactLogLine(fmt.Sprintf("%v", server.Args)))
+					fmt.Printf("      Command: %s %v\n", server.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", server.Args)))
 				}
 				fmt.Printf("      Auto-start: %t\n", server.AutoStart)
 				fmt.Printf("      Max restarts: %d\n", server.MaxRestarts)

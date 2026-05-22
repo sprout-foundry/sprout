@@ -670,7 +670,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 			err = ProcessQuery(ctx, chatAgent, eventBus, query)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "\n[FAIL] Error processing task %s: %v\n", task.ID, err)
+				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("[FAIL] Error processing task %s", task.ID), err))
 				// Mark task as failed
 				_, _ = tq.PublishTask(task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
 				continue
@@ -878,7 +878,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			registry := agent_commands.NewCommandRegistry()
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
+					fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
 				}
 				// `/model` and friends may have changed the active model;
 				// rebuild the prompt prefix so the next prompt reflects it.
@@ -909,17 +909,17 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				indicator.Stop()
-				fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
+				fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
 			} else if !executed {
 				// Zsh detection didn't trigger, try LLM-based detection
 				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
 					indicator.Stop()
-					fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
+					fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
 				} else if !executed {
 					// Neither fast path triggered, process normally
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 						indicator.Stop()
-						fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)
+						fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
 					}
 				}
 			}

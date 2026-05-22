@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -44,6 +45,6 @@ func IsConfigConflict(err error) bool {
 	if err == nil {
 		return false
 	}
-	_, ok := err.(*ConfigConflictError)
-	return ok
+	var cce *ConfigConflictError
+	return errors.As(err, &cce)
 }

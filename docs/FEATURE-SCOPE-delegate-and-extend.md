@@ -280,7 +280,7 @@ subagents or delegates.
     }
   },
   "skills": {
-    "active": ["go-conventions", "test-writing"]
+    "active": ["project-planning"]
   },
   "constraints": {
     "max_iterations": 200,

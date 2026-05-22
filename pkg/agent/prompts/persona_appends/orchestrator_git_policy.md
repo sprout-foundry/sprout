@@ -38,10 +38,7 @@ The following operations are NEVER allowed via shell_command regardless of conte
 
 ### Skills — Activate Before Work
 - **First time in a repository or starting a new project?** → activate `project-planning` immediately to map structure, plan phases, and scaffold properly
-- **Language-specific work?** → activate matching conventions skill (`go-conventions`, `python-conventions`, `typescript-conventions`, `rust-conventions`)
-- Writing tests? → activate `test-writing`
-- Refactoring? → activate `safe-refactor`
-- Bug fix? → activate `bug-triage`
+- **Web UI debugging?** → activate `browse-debugging`
 
 ### Workflow
 1. Understand the task requirements

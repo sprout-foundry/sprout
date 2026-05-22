@@ -68,7 +68,7 @@ Users must manually edit `config.json` for any customization — fragile, not ro
     }
   },
   "skills": {
-    "active": ["go-conventions", "test-writing"]
+    "active": ["project-planning"]
   },
   "constraints": {
     "max_iterations": 200,

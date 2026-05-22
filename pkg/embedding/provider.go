@@ -44,6 +44,12 @@ type VectorStore interface {
 	// DeleteByFile removes all records whose File field matches filePath.
 	DeleteByFile(filePath string) error
 
+	// DeleteByIDs removes records with the given IDs in a single batched
+	// operation. Implementations should issue at most one disk write
+	// regardless of how many IDs are deleted. IDs that are not present in
+	// the store are silently skipped.
+	DeleteByIDs(ids []string) error
+
 	// Size returns the total number of records in the store.
 	Size() int
 

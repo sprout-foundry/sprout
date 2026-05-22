@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
@@ -21,8 +23,12 @@ func (h *HelpCommand) Description() string {
 	return "Show help information and available slash commands"
 }
 
-// Execute runs the help command
+// Execute runs the help command. With no args, prints the global help and
+// command list. With one arg, prints per-command help (SP-048-2c).
 func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	if len(args) > 0 {
+		return h.printCommandHelp(strings.TrimPrefix(args[0], "/"))
+	}
 	fmt.Print(`
 [bot] Sprout - AI Coding Agent
 
@@ -72,14 +78,69 @@ Type 'exit' or 'quit' to end the session.
 
 `)
 
-	// List all registered commands
+	// List all registered commands, sorted, with aliases inline.
 	commands := h.registry.ListCommands()
+	sort.Slice(commands, func(i, j int) bool {
+		return commands[i].Name() < commands[j].Name()
+	})
 	fmt.Println("AVAILABLE SLASH COMMANDS:")
 	for _, cmd := range commands {
-		fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
+		aliases := h.registry.AliasesOf(cmd.Name())
+		sort.Strings(aliases)
+		if len(aliases) > 0 {
+			aliasParts := make([]string, len(aliases))
+			for i, a := range aliases {
+				aliasParts[i] = "/" + a
+			}
+			fmt.Printf("  /%s (%s) - %s\n", cmd.Name(), strings.Join(aliasParts, ", "), cmd.Description())
+		} else {
+			fmt.Printf("  /%s - %s\n", cmd.Name(), cmd.Description())
+		}
 	}
 
 	fmt.Println()
+	fmt.Println("Tip: type /help <command> for per-command details, or press Tab after / to autocomplete.")
+	fmt.Println()
 
+	return nil
+}
+
+// printCommandHelp emits a single command's detailed help. Commands that
+// implement UsageProvider supply their own multi-line usage text; others
+// fall back to Description.
+func (h *HelpCommand) printCommandHelp(name string) error {
+	// Resolve aliases so /help m → /help models.
+	resolved := name
+	if canonical, ok := h.registry.aliases[name]; ok {
+		resolved = canonical
+	}
+
+	cmd, exists := h.registry.GetCommand(resolved)
+	if !exists {
+		suggestions := h.registry.SuggestCommands(name, 2)
+		if len(suggestions) > 0 {
+			return fmt.Errorf("no such command: /%s — did you mean /%s?", name, strings.Join(suggestions, " or /"))
+		}
+		return fmt.Errorf("no such command: /%s", name)
+	}
+
+	fmt.Printf("\n[bot] /%s — %s\n\n", cmd.Name(), cmd.Description())
+
+	aliases := h.registry.AliasesOf(cmd.Name())
+	if len(aliases) > 0 {
+		sort.Strings(aliases)
+		aliasParts := make([]string, len(aliases))
+		for i, a := range aliases {
+			aliasParts[i] = "/" + a
+		}
+		fmt.Printf("Aliases: %s\n\n", strings.Join(aliasParts, ", "))
+	}
+
+	if u, ok := cmd.(UsageProvider); ok {
+		fmt.Println(u.Usage())
+	} else {
+		fmt.Println("(No additional usage details available.)")
+	}
+	fmt.Println()
 	return nil
 }

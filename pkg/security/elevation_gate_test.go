@@ -233,3 +233,34 @@ func (c *countingPrompter) PromptSecretAction(_ []DetectedSecret, _ string) (Sec
 	*c.count++
 	return c.action, nil
 }
+
+// TestEvaluate_AllowSource_WhitelistsSourceForSession verifies that when the
+// user picks SecretAllowSource, subsequent evaluations on the same source
+// short-circuit to SecretAllow without re-prompting.
+func TestEvaluate_AllowSource_WhitelistsSourceForSession(t *testing.T) {
+	count := 0
+	g := NewElevationGate(&countingPrompter{count: &count, action: SecretAllowSource})
+
+	secret := DetectedSecret{Type: "openai-api-key", Snippet: "sk-firstdetection12345"}
+
+	// First call: prompter is consulted, returns SecretAllowSource → SecretAllow.
+	action1, err := g.Evaluate([]DetectedSecret{secret}, "read_file: /tmp/example.html")
+	assert.NoError(t, err)
+	assert.Equal(t, SecretAllow, action1)
+	assert.Equal(t, 1, count)
+	assert.True(t, g.IsSourceAllowed("read_file: /tmp/example.html"))
+
+	// Second call on the same source with a DIFFERENT secret: should NOT prompt.
+	other := DetectedSecret{Type: "github-pat", Snippet: "ghp_seconddetection98765"}
+	action2, err := g.Evaluate([]DetectedSecret{other}, "read_file: /tmp/example.html")
+	assert.NoError(t, err)
+	assert.Equal(t, SecretAllow, action2)
+	assert.Equal(t, 1, count, "should not re-prompt for a whitelisted source")
+
+	// Same secret type on a DIFFERENT source: should still prompt.
+	action3, err := g.Evaluate([]DetectedSecret{secret}, "read_file: /tmp/other.html")
+	assert.NoError(t, err)
+	assert.Equal(t, SecretAllow, action3)
+	assert.Equal(t, 2, count, "different source should prompt independently")
+}
+

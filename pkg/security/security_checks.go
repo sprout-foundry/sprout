@@ -8,6 +8,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/prompts"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -15,78 +16,38 @@ import (
 // These are inline embedded resources and should never be treated as secrets.
 var dataURLPattern = regexp.MustCompile(`data:[^;,\s]+;base64,[A-Za-z0-9+/=]+`)
 
-// stripDataURLs removes the base64 payload from data URLs, replacing them with
-// a placeholder. This prevents the embedded data from triggering false positive
-// matches on credential patterns (e.g., JWT-like base64 strings).
+// stripDataURLs removes the base64 payload from data URLs, replacing them
+// with a placeholder. This prevents the embedded data from triggering false
+// positive matches on credential patterns (e.g., JWT-like base64 strings).
 func stripDataURLs(content string) string {
 	return dataURLPattern.ReplaceAllString(content, "data:[stripped]")
 }
 
-// Define regex patterns for security concerns with reduced false positives
-var (
-	// API Key/Token patterns: More specific patterns requiring longer, more realistic key formats
-	// The context filtering will handle excluding test/placeholder values
-	apiKeyRegex = regexp.MustCompile(`(?i)(api_key|apikey|api-key|access_key|access-key|secret_key|secret-key|auth_token|auth-token|bearer_token|bearer-token|client_secret|client-secret|consumer_key|consumer-key|consumer_secret|consumer-secret|private_key|private-key|public_key|public-key|token|key|secret|client_id|app_id|api_secret|auth_key|api_secret_key)\s*(=|:)\s*['"]?[a-zA-Z0-9_.\-=/+]{20,128}['"]?`)
+// dbUrlRegex matches database/service URLs with credentials potentially in
+// the userinfo portion. This is a sprout-specific concern (gitleaks doesn't
+// flag bare connection strings) — we treat any remote DB URL as worth
+// surfacing to the user since they often carry embedded credentials.
+var dbUrlRegex = regexp.MustCompile(`(?i)(jdbc|mongodb|mysql|postgresql|sqlserver|redis|amqp|kafka|mqtt|sftp|ftp|smb|ldap|rdp):\/\/[^\s'"]+`)
 
-	// Password patterns: Require longer passwords and more realistic characters
-	// The context filtering will handle excluding test/placeholder values
-	passwordRegex = regexp.MustCompile(`(?i)(password|passwd|pass|pwd|passphrase)\s*(=|:)\s*['"]?[a-zA-Z0-9_.\-=/+!@#$%^&*()]{10,64}['"]?`)
-
-	// Database/Service URL patterns: Focus on URLs with credentials or external hosts
-	// Context filtering will handle local/test database exclusions
-	dbUrlRegex = regexp.MustCompile(`(?i)(jdbc|mongodb|mysql|postgresql|sqlserver|redis|amqp|kafka|mqtt|sftp|ftp|smb|ldap|rdp):\/\/[^\s'"]+`)
-
-	// SSH Private Key patterns: looks for standard PEM headers
-	sshPrivateKeyRegex = regexp.MustCompile(`(?i)BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY`)
-
-	// AWS Credentials patterns: specific patterns for AWS Access Key ID and Secret Access Key
-	awsAccessKeyIDRegex     = regexp.MustCompile(`(AKIA|AROA|AIDA|ASIA)[0-9A-Z]{16}`)
-	awsSecretAccessKeyRegex = regexp.MustCompile(`(?i)aws_secret_access_key\s*=\s*['"]?[a-zA-Z0-9\/+=]{40}['"]?`)
-	awsSessionTokenRegex    = regexp.MustCompile(`(?i)aws_session_token\s*=\s*['"]?[a-zA-Z0-9\/+=]{100,200}['"]?`) // Session tokens are longer
-
-	// Generic Bearer Token (often JWTs or similar long strings)
-	bearerTokenRegex = regexp.MustCompile(`(?i)Bearer\s+[a-zA-Z0-9\-_=\.]{30,}`)
-
-	// JSON Web Token (JWT) pattern
-	jwtRegex = regexp.MustCompile(`eyJ[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_.+/=]*`)
-
-	// GitHub Personal Access Token (PAT)
-	githubPatRegex = regexp.MustCompile(`(ghp_[a-zA-Z0-9]{36}|github_pat_[a-zA-Z0-9_]{80})`)
-
-	// GitLab Personal Access Token (PAT)
-	gitlabPatRegex = regexp.MustCompile(`glpat-[a-zA-Z0-9\-_]{20,}`)
-
-	// Stripe API Keys (sk_live_, pk_live_)
-	stripeApiKeyRegex = regexp.MustCompile(`(sk|pk)_(test|live)_[a-zA-Z0-9]{24,}`)
-
-	// Twilio Auth Tokens (ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)
-	twilioAuthTokenRegex = regexp.MustCompile(`(AC|SK)[a-zA-Z0-9]{32}`)
-
-	// Slack Tokens (xoxb-, xapp-)
-	slackTokenRegex = regexp.MustCompile(`(xoxb|xapp)-[0-9]{10,15}-[0-9]{10,15}-[a-zA-Z0-9]{10,}`)
-
-	// Google API Key (AIza...)
-	googleApiKeyRegex = regexp.MustCompile(`AIza[0-9A-Za-z\-_]{35}`)
-
-	// Heroku API Key (UUID format)
-	herokuApiKeyRegex = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
-)
-
-// isTestFile checks if the content or context suggests this is a test/example file
+// isTestFile reports whether content or path suggests this is a test, demo,
+// example, or sample file. Used as a stronger filter on top of gitleaks'
+// built-in stopwords for the user-prompt path (Layer 6), where being slightly
+// more permissive is preferable to interrupting a developer with a false
+// positive every time they edit an example.
 func isTestFile(content, filePath string) bool {
-	// Check file path for test indicators
-	if strings.Contains(strings.ToLower(filePath), "test") ||
-		strings.Contains(strings.ToLower(filePath), "example") ||
-		strings.Contains(strings.ToLower(filePath), "demo") ||
-		strings.Contains(strings.ToLower(filePath), "sample") ||
-		strings.Contains(strings.ToLower(filePath), "mock") ||
-		strings.Contains(strings.ToLower(filePath), ".env.example") ||
-		strings.Contains(strings.ToLower(filePath), "config.example") {
-		return true
+	pathLower := strings.ToLower(filePath)
+	pathIndicators := []string{
+		"test", "example", "demo", "sample", "mock",
+		".env.example", "config.example",
+	}
+	for _, ind := range pathIndicators {
+		if strings.Contains(pathLower, ind) {
+			return true
+		}
 	}
 
-	// Check content for test/example indicators
-	testIndicators := []string{
+	contentLower := strings.ToLower(content)
+	contentIndicators := []string{
 		"# test", "// test", "/* test", "test_", "_test",
 		"# example", "// example", "/* example", "example_",
 		"# demo", "// demo", "/* demo", "demo_",
@@ -95,106 +56,103 @@ func isTestFile(content, filePath string) bool {
 		"# mock", "// mock", "/* mock",
 		"PASS:", "FAIL:", "TODO:", "FIXME:",
 	}
-
-	contentLower := strings.ToLower(content)
-	for _, indicator := range testIndicators {
-		if strings.Contains(contentLower, indicator) {
+	for _, ind := range contentIndicators {
+		if strings.Contains(contentLower, ind) {
 			return true
 		}
 	}
-
 	return false
 }
 
-// DetectSecurityConcerns analyzes the given content for common security-related patterns.
-// It returns a list of detected concern types and a map linking each concern type to its first matched snippet.
+// concernNameFor returns the user-facing concern label for a gitleaks rule
+// ID, suffixed with " Exposure" for readability in the prompt.
+func concernNameFor(ruleID string) string {
+	return secretdetect.DisplayName(ruleID) + " Exposure"
+}
+
+// DetectSecurityConcerns analyzes content for security-related patterns and
+// returns a sorted, deduplicated list of concern types plus a map from each
+// concern type to its first matched snippet.
 func DetectSecurityConcerns(content string) ([]string, map[string]string) {
 	return DetectSecurityConcernsWithContext(content, "")
 }
 
-// DetectSecurityConcernsWithContext analyzes content with additional file context to reduce false positives
+// DetectSecurityConcernsWithContext analyzes content with file-path context
+// to reduce false positives. The path is consulted via isTestFile to apply
+// stricter filtering in obvious test/example files.
 func DetectSecurityConcernsWithContext(content, filePath string) ([]string, map[string]string) {
-	// Strip data URL payloads to prevent base64 image/font data from triggering
-	// credential patterns (e.g., JWT regex matching base64 content starting with "eyJ").
-	scannedContent := stripDataURLs(content)
-	var concerns []string
-	snippets := make(map[string]string) // Stores the first matched snippet for each concern type
-
-	// Skip security checks for test files unless they contain obvious real credentials
+	scanned := stripDataURLs(content)
 	isTest := isTestFile(content, filePath)
 
-	// Helper function to add concern with context awareness
-	addConcern := func(concernType string, regex *regexp.Regexp) {
-		if match := regex.FindString(scannedContent); match != "" {
-			// For test files, only flag patterns that look like real credentials
-			if isTest {
-				matchLower := strings.ToLower(match)
-				// Skip obvious placeholders in test files
-				if strings.Contains(matchLower, "test") ||
-					strings.Contains(matchLower, "demo") ||
-					strings.Contains(matchLower, "sample") ||
-					strings.Contains(matchLower, "placeholder") ||
-					strings.Contains(matchLower, "example") ||
-					strings.Contains(matchLower, "changeme") ||
-					strings.Contains(matchLower, "your-") ||
-					strings.Contains(matchLower, "paste-your") ||
-					strings.Contains(matchLower, "abc") ||
-					strings.Contains(matchLower, "123") {
-					return // Skip this match
-				}
-			}
+	concerns := make(map[string]string)
 
-			// Additional filtering for database URLs (all files)
-			if concernType == "Database/Service Creds Exposure" {
-				matchLower := strings.ToLower(match)
-				// Skip local/test database URLs
-				if strings.Contains(matchLower, "localhost") ||
-					strings.Contains(matchLower, "127.0.0.1") ||
-					strings.Contains(matchLower, "test.db") ||
-					strings.Contains(matchLower, "example.db") ||
-					strings.Contains(matchLower, "./") ||
-					strings.Contains(matchLower, "file://") ||
-					strings.Contains(matchLower, "memory:") {
-					return // Skip this match
-				}
+	scanner, err := secretdetect.Default()
+	if err == nil && scanner != nil {
+		for _, m := range scanner.Scan(scanned) {
+			if isTest && looksLikePlaceholder(m.Secret) {
+				continue
 			}
-
-			concerns = append(concerns, concernType)
-			if _, ok := snippets[concernType]; !ok { // Only store the first snippet found for this type
-				snippets[concernType] = match
+			name := concernNameFor(m.RuleID)
+			if _, ok := concerns[name]; !ok {
+				snippet := m.Secret
+				if snippet == "" {
+					snippet = m.Match
+				}
+				concerns[name] = snippet
 			}
 		}
 	}
 
-	addConcern("API Key Exposure", apiKeyRegex)
-	addConcern("Password Exposure", passwordRegex)
-	addConcern("Database/Service Creds Exposure", dbUrlRegex)
-	addConcern("SSH Private Key Exposure", sshPrivateKeyRegex)
-	addConcern("AWS Access Key ID Exposure", awsAccessKeyIDRegex)
-	addConcern("AWS Secret Access Key Exposure", awsSecretAccessKeyRegex)
-	addConcern("AWS Session Token Exposure", awsSessionTokenRegex)
-	addConcern("Generic Bearer Token Exposure", bearerTokenRegex)
-	addConcern("JWT Token Exposure", jwtRegex)
-	addConcern("GitHub PAT Exposure", githubPatRegex)
-	addConcern("GitLab PAT Exposure", gitlabPatRegex)
-	addConcern("Stripe API Key Exposure", stripeApiKeyRegex)
-	addConcern("Twilio Auth Token Exposure", twilioAuthTokenRegex)
-	addConcern("Slack Token Exposure", slackTokenRegex)
-	addConcern("Google API Key Exposure", googleApiKeyRegex)
-	addConcern("Heroku API Key Exposure", herokuApiKeyRegex)
-
-	// Deduplicate concerns list and sort it
-	uniqueConcernsMap := make(map[string]bool)
-	var uniqueConcernsList []string
-	for _, c := range concerns {
-		if !uniqueConcernsMap[c] {
-			uniqueConcernsMap[c] = true
-			uniqueConcernsList = append(uniqueConcernsList, c)
+	if match := dbUrlRegex.FindString(scanned); match != "" && !isLocalDBURL(match) {
+		const name = "Database/Service Creds Exposure"
+		if _, ok := concerns[name]; !ok {
+			concerns[name] = match
 		}
 	}
-	sort.Strings(uniqueConcernsList)
 
-	return uniqueConcernsList, snippets
+	if len(concerns) == 0 {
+		return nil, concerns
+	}
+	names := make([]string, 0, len(concerns))
+	for n := range concerns {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names, concerns
+}
+
+// looksLikePlaceholder reports whether a matched secret value reads as a
+// human-written placeholder rather than a real key. Used only when context
+// indicates a test/example file.
+func looksLikePlaceholder(value string) bool {
+	if value == "" {
+		return true
+	}
+	v := strings.ToLower(value)
+	for _, marker := range []string{
+		"test", "demo", "sample", "placeholder", "example",
+		"changeme", "your-", "your_", "paste-", "abc", "123",
+	} {
+		if strings.Contains(v, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLocalDBURL reports whether a database URL points at local/loopback
+// infrastructure and should not be treated as an exposure.
+func isLocalDBURL(url string) bool {
+	u := strings.ToLower(url)
+	for _, marker := range []string{
+		"localhost", "127.0.0.1", "test.db", "example.db",
+		"://./", "file://", "memory:",
+	} {
+		if strings.Contains(u, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // CheckFileSecurity analyzes a file's content for security concerns,

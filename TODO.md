@@ -311,7 +311,7 @@ Adding a tool today requires editing four locations across two packages (definit
 ### Phase 6: Cleanup + tests
 
 [x] - SP-038-6a: Remove the legacy switch from `pkg/agent/tool_executor*.go` once every tool is registered.
-[] - SP-038-6b: Verify `pkg/agent/tool_definitions.go` is ≤ 150 lines.
+[x] - SP-038-6b: Verify `pkg/agent/tool_definitions.go` is ≤ 150 lines.
 [x] - SP-038-6c: Add `TestRegistry_AllToolsHaveValidDefinitions`, `TestRegistry_AllToolsRespectPersonaFilter`, `TestRegistry_AllToolsValidate`, `TestRegistry_NoOrphanHandlers` in `pkg/agent_tools/registry_test.go`.
 [x] - SP-038-6d: Run `go test -race ./pkg/agent/ ./pkg/agent_tools/` 10× clean.
 

@@ -16,9 +16,7 @@
 
 .command-input:focus-within {
   border-color: var(--border-focus);
-  box-shadow:
-    var(--shadow-elevated),
-    0 0 0 1px var(--border-focus);
+  box-shadow: var(--shadow-elevated);
 }
 
 .input-header {
@@ -66,7 +64,10 @@
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 10px;
-  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .history-exit-btn:hover {
@@ -749,4 +750,55 @@
     padding: 7px;
     border-radius: 7px;
   }
+}
+
+/* Index badge toggle */
+.index-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  gap: 4px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.index-badge:hover {
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text-primary, #ddd);
+}
+
+.index-badge.enabled {
+  color: var(--accent-primary, #4dabf7);
+  border-color: var(--accent-primary-dim, rgba(77, 171, 247, 0.3));
+  background: var(--accent-primary-bg, rgba(77, 171, 247, 0.08));
+}
+
+.index-badge.enabled:hover {
+  background: var(--accent-primary-bg-hover, rgba(77, 171, 247, 0.15));
+}
+
+.index-badge.disabled {
+  opacity: 0.5;
+}
+
+.index-badge-slash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 2px;
+  background: var(--accent-error, #e03131);
+  transform: translate(-50%, -50%) rotate(-45deg);
+  border-radius: 1px;
+  pointer-events: none;
 }

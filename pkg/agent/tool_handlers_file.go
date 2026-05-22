@@ -546,6 +546,13 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		if readErr != nil {
 			return "", fmt.Errorf("json edit succeeded but failed to read edited file: %w", readErr)
 		}
+		// Record the re-read so the staleness check in handleWriteStructuredFile
+		// sees an up-to-date readAt that is >= the edit's ModTime. Without this,
+		// the JSON normalization write triggers a false-positive "file modified
+		// after your last read_file" because the edit we just applied updated
+		// ModTime to be newer than the read_file recorded at the start of this
+		// turn.
+		a.RecordFileReadThisTurn(path)
 		parsed, parseErr := parseStructuredJSONContent(editedContent, "edit_file")
 		if parseErr != nil {
 			restoreErr := func() error {

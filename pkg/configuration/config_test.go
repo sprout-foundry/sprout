@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestConfigValidate(t *testing.T) {
@@ -490,6 +491,37 @@ func TestAllowedToolsOverride_WarnsAndDrops(t *testing.T) {
 		"Expected warning about AllowedTools override being dropped for built-in persona")
 }
 
+// TestAllowedToolsOverride_NoWarnWhenMatching verifies that when a user config
+// lists AllowedTools for a built-in persona that match the defaults exactly,
+// no warning is logged. This avoids noisy warnings for configs that restate defaults.
+func TestAllowedToolsOverride_NoWarnWhenMatching(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	personaDefaultsWarningOnce = sync.Once{}
+
+	cfg := NewConfig()
+
+	// Get the default AllowedTools for "general" and restate them exactly
+	defaultGeneral := cfg.GetSubagentType("general")
+	require.NotNil(t, defaultGeneral, "general persona should exist in defaults")
+
+	cfg.SubagentTypes["general"] = SubagentType{
+		ID:           "general",
+		Name:         defaultGeneral.Name,
+		Enabled:      true,
+		AllowedTools: append([]string{}, defaultGeneral.AllowedTools...),
+	}
+
+	result := cfg.GetSubagentType("general")
+	assert.NotNil(t, result)
+
+	logOutput := buf.String()
+	assert.NotContains(t, logOutput, "AllowedTools override ignored",
+		"Should NOT warn when user AllowedTools match defaults exactly")
+}
+
 // TestLegacyCustomPersona_WarnsOnce verifies that for a custom (non-default) persona
 // with write_file but missing write_structured_file/patch_structured_file,
 // those tools are auto-added and a one-time warning is logged (SP-035-4b).
@@ -557,4 +589,25 @@ func TestLegacyCustomPersona_WarnsOnce(t *testing.T) {
 		"write_structured_file should still be auto-added for new custom persona")
 	assert.Contains(t, another.AllowedTools, "patch_structured_file",
 		"patch_structured_file should still be auto-added for new custom persona")
+}
+
+func TestToolSetsEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b []string
+		want bool
+	}{
+		{"identical", []string{"a", "b", "c"}, []string{"a", "b", "c"}, true},
+		{"reordered", []string{"c", "b", "a"}, []string{"a", "b", "c"}, true},
+		{"different length", []string{"a", "b"}, []string{"a", "b", "c"}, false},
+		{"different content", []string{"a", "b"}, []string{"a", "c"}, false},
+		{"both empty", nil, nil, true},
+		{"one empty", nil, []string{"a"}, false},
+		{"with whitespace", []string{" a", "b "}, []string{"a", "b"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, toolSetsEqual(tt.a, tt.b))
+		})
+	}
 }

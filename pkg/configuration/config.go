@@ -682,6 +682,7 @@ func NewConfig() *Config {
 		SelfReviewGateMode:          SelfReviewGateModeOff,
 		EnableZshCommandDetection:   true, // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
+		AllowOrchestratorGitWrite:   true, // SP-050: orchestrator gets git-write by default; flip to false to require the git tool for write ops
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		PDFOCREnabled:               true,

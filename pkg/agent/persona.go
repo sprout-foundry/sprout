@@ -42,6 +42,12 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		}
 		return fmt.Errorf("persona not found or disabled: %s (available personas: %s)", personaID, strings.Join(available, ", "))
 	}
+	// Canonicalize the persona ID: an alias (e.g. legacy "repo_orchestrator")
+	// resolves to its primary ID (e.g. "orchestrator") via GetSubagentType, and
+	// we store the canonical form so downstream checks key off one name.
+	if canonical := normalizeAgentPersonaID(persona.ID); canonical != "" {
+		personaID = canonical
+	}
 
 	// Composition rules:
 	// 1) Start from current provider/model.
@@ -84,6 +90,22 @@ func (a *Agent) ApplyPersona(personaID string) error {
 			a.SetSystemPrompt(current + "\n\n---\n\n" + appendText)
 		} else {
 			a.SetSystemPrompt(appendText)
+		}
+	}
+
+	// SP-050: the orchestrator persona's git-policy append rides on the
+	// AllowOrchestratorGitWrite flag rather than living as a separate persona
+	// (formerly repo_orchestrator). When the flag is on, append the embedded
+	// policy markdown so the model knows about the commit tool, staging rules,
+	// and which shell-side git ops are blocked.
+	if personaID == "orchestrator" && config.AllowOrchestratorGitWrite {
+		if policy := strings.TrimSpace(orchestratorGitPolicyAppend); policy != "" {
+			current := a.GetSystemPrompt()
+			if strings.TrimSpace(current) != "" {
+				a.SetSystemPrompt(current + "\n\n---\n\n" + policy)
+			} else {
+				a.SetSystemPrompt(policy)
+			}
 		}
 	}
 
@@ -218,12 +240,12 @@ func (a *Agent) GetAvailableToolNames() []string {
 	return names
 }
 
-// isOrchestratorGitWriteAllowed returns true if the current agent is an orchestrator
-// persona (orchestrator or repo_orchestrator) and the AllowOrchestratorGitWrite
-// config is enabled.
+// isOrchestratorGitWriteAllowed returns true if the current agent is the
+// orchestrator persona and the AllowOrchestratorGitWrite config is enabled.
+// The legacy "repo_orchestrator" ID resolves to "orchestrator" via aliases.
 func (a *Agent) isOrchestratorGitWriteAllowed() bool {
 	persona := a.GetActivePersona()
-	if persona != "orchestrator" && persona != "repo_orchestrator" {
+	if persona != "orchestrator" {
 		// Personas with auto-approve rules (e.g., executive_assistant) are treated
 		// as having git write access when their rules include git write operations.
 		if persona != "" && a.hasEAGitWriteApproval() {

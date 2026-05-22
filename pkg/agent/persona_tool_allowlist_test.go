@@ -47,8 +47,10 @@ func TestPersonaToolAllowlistFix(t *testing.T) {
 	assert.Equal(t, "Orchestrator", persona.Name, "name should come from defaults")
 	// SystemPrompt is empty in defaults, so it should be empty
 	assert.Equal(t, "", persona.SystemPrompt, "system prompt should be empty from defaults")
-	// Orchestrator has alias "orchestration" in defaults
-	assert.Equal(t, []string{"orchestration"}, persona.Aliases, "aliases should come from defaults")
+	// Orchestrator has alias "orchestration" plus legacy aliases from the
+	// SP-050 collapse so that pre-existing configs / sessions naming
+	// "repo_orchestrator" still resolve.
+	assert.Equal(t, []string{"orchestration", "repo_orchestrator", "repo_operator", "git_orchestrator"}, persona.Aliases, "aliases should come from defaults")
 
 	// Verify authoritative allowed_tools include all expected tools
 	// The stale config should be ignored and defaults should be used

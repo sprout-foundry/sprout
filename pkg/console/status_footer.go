@@ -57,6 +57,14 @@ type ContentSource interface {
 	WorkingDir() string
 }
 
+// activeSubagentsSource is an optional addition to ContentSource for sources
+// that can report how many subagents are currently running. When the
+// concrete source implements it AND the count is non-zero, the footer
+// renders a " · N sub" segment. SP-051-2d.
+type activeSubagentsSource interface {
+	ActiveSubagents() int
+}
+
 // NewStatusFooter constructs a footer that writes to w. If w is nil
 // os.Stderr is used (the same channel the spinner uses). Non-TTY writers
 // produce a no-op footer.
@@ -293,6 +301,14 @@ func (f *StatusFooter) composeLine(cols int) string {
 	costStyled := f.styleCost(cost, costStr)
 
 	parts := []string{model, ctxStr, costStyled, cwdSegment(cwd, branch)}
+	// SP-051-2d: append " · N sub" when subagents are active. Optional
+	// interface — sources that don't implement it (e.g. WebUI) get the
+	// baseline footer with no change.
+	if asc, ok := f.source.(activeSubagentsSource); ok {
+		if n := asc.ActiveSubagents(); n > 0 {
+			parts = append(parts, fmt.Sprintf("%d sub", n))
+		}
+	}
 	body := " " + strings.Join(parts, " · ") + " "
 	if visibleLen(body) >= cols {
 		return truncWithEllipsis(body, cols)

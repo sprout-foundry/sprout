@@ -131,6 +131,26 @@ func (a *Agent) SetEventMetadata(metadata map[string]interface{}) {
 	}
 }
 
+// MergeEventMetadata adds extras to the current event metadata without
+// discarding existing keys. Unlike SetEventMetadata, which replaces the
+// map wholesale, this is the right call when a subagent needs to layer
+// per-spawn fields (e.g. subagent_depth, active_persona) on top of
+// already-set chat/client routing keys inherited from its parent.
+func (a *Agent) MergeEventMetadata(extras map[string]interface{}) {
+	if len(extras) == 0 {
+		return
+	}
+	existing := a.output.GetEventMetadata()
+	merged := make(map[string]interface{}, len(existing)+len(extras))
+	for k, v := range existing {
+		merged[k] = v
+	}
+	for k, v := range extras {
+		merged[k] = v
+	}
+	a.SetEventMetadata(merged)
+}
+
 // GetEventClientID returns the bound client_id from event metadata, if present.
 func (a *Agent) GetEventClientID() string {
 	mu := a.output.GetEventMetadataMutex()

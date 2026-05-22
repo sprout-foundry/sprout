@@ -64,8 +64,12 @@ func NewOutputRedactor() *OutputRedactor {
 			continue
 		}
 
-		// Skip values that look like file paths or URLs to reduce false positives.
-		if strings.Contains(v, "/") || strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+		// Skip values that look like absolute file paths or URLs. We only reject
+		// values that *start* with a path-shaped prefix; a "/" anywhere else in
+		// the value is allowed because real secrets often contain "/" (base64
+		// padding, AWS secret keys, JWT signatures).
+		if strings.HasPrefix(v, "/") || strings.HasPrefix(v, "./") || strings.HasPrefix(v, "../") ||
+			strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
 			continue
 		}
 
@@ -98,8 +102,7 @@ func (r *OutputRedactor) RedactToolOutput(output string, toolName string, toolAr
 	// a tagged placeholder so operators can tell which var leaked.
 	content, secrets = r.redactEnvValues(content)
 
-	// Pass 2 — pattern scan: use DetectSecurityConcerns (same package) for
-	// detection and credentials.RedactLogLine for redaction.
+	// Pass 2 — pattern scan via the gitleaks-backed secretdetect scanner.
 	patternSecrets := r.detectAndRedactPatterns(&content)
 	secrets = append(secrets, patternSecrets...)
 

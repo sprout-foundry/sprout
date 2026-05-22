@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
 )
 
@@ -234,8 +234,8 @@ func runCustomModelAdd() error {
 	path, _ := configuration.GetCustomProviderPath(normalized.Name)
 	fmt.Println()
 	fmt.Printf("Saved provider '%s'\n", normalized.Name)
-	fmt.Printf("  Chat endpoint: %s\n", credentials.RedactLogLine(normalized.Endpoint))
-	fmt.Printf("  Models endpoint: %s\n", credentials.RedactLogLine(normalized.ModelsEndpoint()))
+	fmt.Printf("  Chat endpoint: %s\n", secretdetect.RedactOpaque(normalized.Endpoint))
+	fmt.Printf("  Models endpoint: %s\n", secretdetect.RedactOpaque(normalized.ModelsEndpoint()))
 	if normalized.EnvVar != "" {
 		fmt.Printf("  API key env: %s\n", normalized.EnvVar)
 	}
@@ -342,8 +342,8 @@ func runCustomModelList() error {
 		provider := cfg.CustomProviders[name]
 		path, _ := configuration.GetCustomProviderPath(name)
 		fmt.Printf("%s\n", name)
-		fmt.Printf("  Chat endpoint: %s\n", credentials.RedactLogLine(provider.Endpoint))
-		fmt.Printf("  Models endpoint: %s\n", credentials.RedactLogLine(provider.ModelsEndpoint()))
+		fmt.Printf("  Chat endpoint: %s\n", secretdetect.RedactOpaque(provider.Endpoint))
+		fmt.Printf("  Models endpoint: %s\n", secretdetect.RedactOpaque(provider.ModelsEndpoint()))
 		if provider.EnvVar != "" {
 			fmt.Printf("  API key env: %s\n", provider.EnvVar)
 		} else {

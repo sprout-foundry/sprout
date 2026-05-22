@@ -1,9 +1,23 @@
 package secretdetect
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
+
+// RedactTagged scans content with the default scanner and replaces every
+// detected secret with [REDACTED:<rule-id>]. Use this for log files and
+// debugging contexts where it's useful to know the *kind* of secret that was
+// present without exposing its value, length, or entropy.
+//
+// If the default scanner cannot be initialised, content is returned
+// unchanged.
+func RedactTagged(content string) string {
+	return redactReplace(content, func(m Match) string {
+		return fmt.Sprintf("[REDACTED:%s]", m.RuleID)
+	})
+}
 
 // RedactOpaque scans content with the default scanner and replaces every
 // detected secret with the literal token [REDACTED]. Use this for log files,
@@ -17,6 +31,13 @@ import (
 // If the default scanner cannot be initialised, content is returned
 // unchanged.
 func RedactOpaque(content string) string {
+	return redactReplace(content, func(Match) string { return "[REDACTED]" })
+}
+
+// redactReplace is the shared scan + longest-first replacement loop used by
+// RedactOpaque and RedactTagged. The replacement string for each match is
+// produced by tokenFor.
+func redactReplace(content string, tokenFor func(Match) string) string {
 	if content == "" {
 		return content
 	}
@@ -29,7 +50,11 @@ func RedactOpaque(content string) string {
 		return content
 	}
 
-	needles := make([]string, 0, len(matches))
+	type rep struct {
+		needle string
+		token  string
+	}
+	reps := make([]rep, 0, len(matches))
 	seen := make(map[string]struct{}, len(matches))
 	for _, m := range matches {
 		n := m.Secret
@@ -43,16 +68,16 @@ func RedactOpaque(content string) string {
 			continue
 		}
 		seen[n] = struct{}{}
-		needles = append(needles, n)
+		reps = append(reps, rep{needle: n, token: tokenFor(m)})
 	}
 
-	sort.SliceStable(needles, func(i, j int) bool {
-		return len(needles[i]) > len(needles[j])
+	sort.SliceStable(reps, func(i, j int) bool {
+		return len(reps[i].needle) > len(reps[j].needle)
 	})
 
 	out := content
-	for _, n := range needles {
-		out = strings.ReplaceAll(out, n, "[REDACTED]")
+	for _, r := range reps {
+		out = strings.ReplaceAll(out, r.needle, r.token)
 	}
 	return out
 }

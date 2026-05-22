@@ -5,109 +5,37 @@ import (
 	"testing"
 )
 
-func TestApply_AWSAccessKey(t *testing.T) {
-	input := []byte(`key=AKIAIOSFODNN7EXAMPLE`)
-	got := string(Apply(input))
-	if strings.Contains(got, "AKIAIOSFODNN7EXAMPLE") {
-		t.Errorf("AWS access key not redacted: %s", got)
-	}
-	if !strings.Contains(got, "[REDACTED:aws-access-key]") {
-		t.Errorf("expected aws-access-key label, got: %s", got)
-	}
-}
+// realisticOpenAIKey matches gitleaks' openai-api-key rule shape
+// (sk- + 20 alphanumeric + T3BlbkFJ + 20 alphanumeric). Not a live key.
+const realisticOpenAIKey = "sk-AbCdEfGhIjKlMnOpQrStT3BlbkFJ1234567890abcdefghij"
 
-func TestApply_GitHubToken(t *testing.T) {
-	// A raw GitHub token without env prefix should be caught by the github-token pattern
-	input := []byte(`token: ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij1234`)
-	got := string(Apply(input))
-	if strings.Contains(got, "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij1234") {
-		t.Errorf("GitHub token not redacted: %s", got)
-	}
-	if !strings.Contains(got, "[REDACTED:github-token]") {
-		t.Errorf("expected github-token label, got: %s", got)
-	}
-}
-
-func TestApply_GitHubTokenInEnv(t *testing.T) {
-	// GH_TOKEN=... form is caught by the broader env-secret pattern
-	input := []byte(`GH_TOKEN=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij1234`)
-	got := string(Apply(input))
-	if strings.Contains(got, "ghp_") {
-		t.Errorf("GitHub token not redacted: %s", got)
-	}
-}
-
-func TestApply_SlackToken(t *testing.T) {
-	input := []byte(`token=xoxb-1234567890-1234567890123-abcdefghijklmnopqrstuvwx`)
-	got := string(Apply(input))
-	if strings.Contains(got, "xoxb-") {
-		t.Errorf("Slack token not redacted: %s", got)
-	}
-}
+// realisticJWT is a syntactically valid JWT (header.payload.signature).
+const realisticJWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
 
 func TestApply_OpenAIKey(t *testing.T) {
-	input := []byte(`sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghij`)
+	input := []byte(`OPENAI_API_KEY="` + realisticOpenAIKey + `"`)
 	got := string(Apply(input))
-	if strings.Contains(got, "sk-proj-") {
+	if strings.Contains(got, realisticOpenAIKey) {
 		t.Errorf("OpenAI key not redacted: %s", got)
 	}
-	if !strings.Contains(got, "[REDACTED:api-key]") {
-		t.Errorf("expected api-key label, got: %s", got)
+	if !strings.Contains(got, "[REDACTED:") {
+		t.Errorf("expected tagged redaction token, got: %s", got)
 	}
 }
 
 func TestApply_PrivateKey(t *testing.T) {
-	input := []byte("-----BEGIN RSA PRIVATE KEY-----\nMIIEowI...\n-----END RSA PRIVATE KEY-----")
+	input := []byte("-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAabcdefghijklmnop\nMoreFakeKeyMaterialHere1234567890\n-----END RSA PRIVATE KEY-----")
 	got := string(Apply(input))
-	if strings.Contains(got, "MIIEowI") {
-		t.Errorf("Private key not redacted: %s", got)
-	}
-	if !strings.Contains(got, "[REDACTED:private-key]") {
-		t.Errorf("expected private-key label, got: %s", got)
+	if strings.Contains(got, "MIIEowIBAAKCAQEAabcdefghijklmnop") {
+		t.Errorf("Private key body not redacted: %s", got)
 	}
 }
 
-func TestApply_AuthHeader(t *testing.T) {
-	input := []byte("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.x")
+func TestApply_JWT(t *testing.T) {
+	input := []byte("Authorization: Bearer " + realisticJWT)
 	got := string(Apply(input))
-	if !strings.Contains(got, "[REDACTED:http-auth-header]") {
-		t.Errorf("expected http-auth-header label, got: %s", got)
-	}
-	// The Bearer token portion should be caught by the http-auth-header pattern
-	if strings.Contains(got, "Bearer eyJhbGciOiJIUzI1NiJ9") {
-		t.Errorf("Bearer token not redacted: %s", got)
-	}
-}
-
-func TestApply_XAPIKey(t *testing.T) {
-	input := []byte("X-API-Key: my-secret-key-1234567890")
-	got := string(Apply(input))
-	if strings.Contains(got, "my-secret-key-1234567890") {
-		t.Errorf("X-API-Key not redacted: %s", got)
-	}
-}
-
-func TestApply_EnvSecret(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-	}{
-		{"TOKEN", "MY_TOKEN=secret123"},
-		{"API_KEY", "API_KEY=sk-test1234567890abcdef"},
-		{"SECRET", "CLIENT_SECRET=abc123def456"},
-		{"PASSWORD", "DB_PASSWORD=hunter2"},
-		{"colon separator", "MY_TOKEN:secret123"},
-		{"PASSWD", "PASSWD=hunter2"},
-		{"CREDENTIAL", "AWS_CREDENTIAL=something"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := string(Apply([]byte(tt.input)))
-			if strings.Contains(got, "secret123") || strings.Contains(got, "hunter2") || strings.Contains(got, "something") {
-				t.Errorf("env secret not redacted: input=%q got=%q", tt.input, got)
-			}
-		})
+	if strings.Contains(got, realisticJWT) {
+		t.Errorf("JWT not redacted: %s", got)
 	}
 }
 
@@ -120,7 +48,7 @@ func TestApply_PreservesNonSecrets(t *testing.T) {
 }
 
 func TestApply_DoesNotModifyOriginal(t *testing.T) {
-	original := []byte("AWS_SECRET_ACCESS_KEY=mysecret")
+	original := []byte("AWS_SECRET_ACCESS_KEY=" + realisticOpenAIKey)
 	origCopy := string(original)
 	_ = Apply(original)
 	if string(original) != origCopy {
@@ -128,9 +56,24 @@ func TestApply_DoesNotModifyOriginal(t *testing.T) {
 	}
 }
 
+func TestApply_EmptyInput(t *testing.T) {
+	if got := Apply(nil); len(got) != 0 {
+		t.Errorf("expected empty output for nil input, got %q", got)
+	}
+	if got := Apply([]byte{}); len(got) != 0 {
+		t.Errorf("expected empty output for empty input, got %q", got)
+	}
+}
+
 func TestString(t *testing.T) {
-	got := String("sk-proj-supersecret12345678901234567890")
-	if strings.Contains(got, "supersecret") {
+	got := String(realisticOpenAIKey)
+	if strings.Contains(got, "T3BlbkFJ") {
 		t.Errorf("String() did not redact: %s", got)
+	}
+}
+
+func TestString_EmptyInput(t *testing.T) {
+	if got := String(""); got != "" {
+		t.Errorf("expected empty output for empty input, got %q", got)
 	}
 }

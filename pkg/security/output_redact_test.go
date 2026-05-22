@@ -60,10 +60,6 @@ func TestRedactToolOutput_EnvVarValue(t *testing.T) {
 	assert.True(t, found, "expected an Env Var Value secret")
 }
 
-// realisticOpenAIKey matches gitleaks' openai-api-key rule shape
-// (sk- + 20 alphanumeric + T3BlbkFJ + 20 alphanumeric). Not a live key.
-const realisticOpenAIKey = "sk-AbCdEfGhIjKlMnOpQrStT3BlbkFJ1234567890abcdefghij"
-
 // TestRedactToolOutput_APIKeyPattern verifies that pattern-based detection
 // catches realistic API key shapes in tool output and replaces them with
 // the self-disclosing [REDACTED:rule=...] token.
@@ -199,6 +195,28 @@ func TestRedactToolOutput_ShortValuesSkipped(t *testing.T) {
 	result := r.RedactToolOutput(output, "shell", nil)
 	// "abc123" is only 6 chars, too short for any pattern match.
 	assert.Equal(t, output, result.Content)
+}
+
+// TestRedactToolOutput_SlashInValueIsScanned verifies that env var values
+// containing "/" but not starting with a path/URL prefix ARE scanned.
+// This is the AWS-secret / base64-with-padding / JWT-signature shape that
+// the old "skip anything with /" heuristic would silently miss.
+func TestRedactToolOutput_SlashInValueIsScanned(t *testing.T) {
+	const varName = "LEdit_AWS_SECRET_ACCESS_KEY"
+	// Realistic AWS-secret-key shape (40 chars, mixed letters/digits, contains "/").
+	const varValue = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+	t.Setenv(varName, varValue)
+
+	r := NewOutputRedactor()
+
+	v, ok := r.envSecretValues[varName]
+	assert.True(t, ok, "AWS-shape secret containing / should be tracked")
+	assert.Equal(t, varValue, v)
+
+	output := "credentials: " + varValue + " (do not log)"
+	result := r.RedactToolOutput(output, "shell", nil)
+	assert.Contains(t, result.Content, "[REDACTED:"+varName+"]")
+	assert.NotContains(t, result.Content, varValue)
 }
 
 // TestRedactToolOutput_HTTPValuesSkipped verifies that env var values

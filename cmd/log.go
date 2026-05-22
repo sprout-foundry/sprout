@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
 )
 
@@ -88,7 +88,7 @@ func displayVerboseLog() {
 
 	for _, line := range displayLines {
 		// Redact credential patterns from log lines
-		redactedLine := credentials.RedactLogLine(line)
+		redactedLine := secretdetect.RedactOpaque(line)
 		buffer.WriteString(redactedLine + "\n")
 	}
 

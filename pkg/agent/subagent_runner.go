@@ -132,6 +132,22 @@ func buildSubagentPrefix(persona, taskID string) string {
 	return fmt.Sprintf("[%s]", persona)
 }
 
+// activeSubagentCount is the process-wide count of currently-running
+// subagents. The CLI status footer reads it via GetActiveSubagents() to
+// render " · N sub" while delegation is in flight. SP-051-2d.
+var activeSubagentCount atomic.Int64
+
+// IncrementActiveSubagents bumps the active-subagent counter; paired with
+// DecrementActiveSubagents under a defer in the spawner.
+func IncrementActiveSubagents() { activeSubagentCount.Add(1) }
+
+// DecrementActiveSubagents lowers the active-subagent counter when a
+// subagent finishes (success, error, cancel — any terminal state).
+func DecrementActiveSubagents() { activeSubagentCount.Add(-1) }
+
+// GetActiveSubagents returns the current number of running subagents.
+func GetActiveSubagents() int { return int(activeSubagentCount.Load()) }
+
 // NewSubagentRunner creates a new SubagentRunner
 func NewSubagentRunner(parent *Agent, shared *SharedState) *SubagentRunner {
 	return &SubagentRunner{
@@ -388,6 +404,12 @@ func (r *SubagentRunner) runTask(
 			Elapsed: time.Since(startTime),
 		}
 	}
+
+	// SP-051-2d: bump the process-wide active-subagent counter so the CLI
+	// status footer can show " · N sub" while subagents are running.
+	// Decremented on Run completion via the defer below.
+	IncrementActiveSubagents()
+	defer DecrementActiveSubagents()
 
 	// Wire up per-LLM-call fleet budget tracking (SP-037-2c).
 	// This enables the subagent to debit tokens after each LLM call and
@@ -683,6 +705,21 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 	if r.parentAgent.rootPersonaID != "" {
 		agent.rootPersonaID = r.parentAgent.rootPersonaID
 	}
+
+	// SP-051: tag every event this subagent publishes with depth + persona
+	// so the CLI tool-timeline can indent and color-badge by who's running.
+	// Merge (not replace) so parent-set chat/client/user routing keys still
+	// flow through subagent events to the right WebUI client.
+	parentMeta := r.parentAgent.output.GetEventMetadata()
+	merged := make(map[string]interface{}, len(parentMeta)+3)
+	for k, v := range parentMeta {
+		merged[k] = v
+	}
+	merged["subagent_depth"] = agent.subagentDepth
+	if persona := strings.TrimSpace(opts.Persona); persona != "" {
+		merged["active_persona"] = persona
+	}
+	agent.SetEventMetadata(merged)
 
 	return agent, nil
 }

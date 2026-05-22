@@ -53,11 +53,17 @@ export interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenFile: (filePath: string) => void;
-  onExecuteCommand: (commandId: string) => void;
+  onExecuteCommand?: (commandId: string) => void;
   /** Mode to open with */
   initialMode?: PaletteMode;
   /** Navigate to a line in the active editor */
   onNavigateToLine?: (line: number) => void;
+  /** Webui-specific: toggle sidebar */
+  onToggleSidebar?: () => void;
+  /** Webui-specific: toggle terminal */
+  onToggleTerminal?: () => void;
+  /** Webui-specific: open hotkeys config */
+  onOpenHotkeysConfig?: () => void;
 
   // Data providers
   /** Available commands */

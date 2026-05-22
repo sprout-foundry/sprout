@@ -467,11 +467,11 @@ The interactive `sprout agent` CLI is capable but quiet — silent between submi
 
 ### Phase 3: Persistent status footer
 
-[] - SP-048-3a: `pkg/console/status_footer.go` — render a single bottom line using terminal scrolling region (`\033[1;<rows-1>r`). Format: `─ <model> · <ctx-used>/<ctx-limit> · $<cost> · <cwd> (<branch>) ──────`. Update on PublishToolEnd and after each assistant turn.
-[] - SP-048-3b: Handle SIGWINCH — recompute terminal size, redraw footer, reset scroll region.
-[] - SP-048-3c: Clean restoration on exit (`\033[r`) — register in signal/exit handler so even Ctrl-C unwinds the scroll region.
-[] - SP-048-3d: Cost color thresholds — yellow >$1, red >$5. Configurable via `cli.footer.cost_warn` and `cli.footer.cost_alert` in config.
-[] - SP-048-3e: Suppress entirely on non-TTY output and in `--pipe` / `--no-interactive` modes.
+[x] - SP-048-3a: `pkg/console/status_footer.go` — renders a single bottom line via DECSTBM scroll region (`\033[1;<rows-1>r`). Format: ` ─ <model> · <ctx-used>/<ctx-limit> ctx · $<cost> · <cwd> (<branch>) ─────`. Refreshed on PublishToolEnd and at end of each interactive turn. Helper `agentFooterSource` in `cmd/agent_modes.go` adapts `*agent.Agent` to the `console.ContentSource` interface (model, context tokens, cost, cwd). New `(*Agent).GetContextTokens()` passthrough added.
+[x] - SP-048-3b: SIGWINCH watcher spawned by `Start`, re-applies scroll region + redraws on terminal resize. Uses the existing `resizeSignal()` cross-platform helper; no-op on platforms without SIGWINCH (Windows, js/wasm).
+[x] - SP-048-3c: Clean restoration on exit. Deferred `footer.Stop()` in `runInteractiveMode` handles graceful exit. Global registration via `console.RegisterGlobalStatusFooter` + `console.StopGlobalStatusFooter` so the signal handler's force-quit paths (both rapid-double-Ctrl+C and 5s force-quit timeout) reset the scroll region before `os.Exit`.
+[x] - SP-048-3d: Cost color thresholds — yellow >$1, red >$5 via `WarnCost`/`AlertCost` fields on `StatusFooter`. ANSI-aware `visibleLen` keeps padding correct when styling is active. Config wiring (cli.footer.cost_warn / cost_alert) deferred — defaults exposed as public fields, set at construction.
+[x] - SP-048-3e: Suppressed on non-TTY automatically via `term.IsTerminal` check at construction; `Start`/`Refresh`/`Resize`/`Stop` all become no-ops. `composeLine` still produces a usable string for testing on non-TTY writers.
 
 ### Phase 4: Input ergonomics
 

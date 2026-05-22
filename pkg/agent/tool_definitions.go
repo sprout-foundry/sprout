@@ -25,12 +25,15 @@ type ToolConfig struct {
 	Handler       ToolHandler           `json:"-"` // Function reference, not serialized
 	HandlerImages ToolHandlerWithImages `json:"-"` // Optional image-returning handler (takes precedence over Handler when set)
 
-	// Interactive declares that the tool renders its own user-facing prompt
-	// to stdout / stdin (or stderr) and must NOT be obscured by the CLI
-	// activity-indicator spinner or any other transient terminal chrome.
-	// When true, ToolStart subscribers should stop any active spinner and
-	// emit no result chrome on ToolEnd — the tool's natural output is the
-	// feedback the user expects.
+	// Interactive declares that the tool owns the terminal during
+	// execution — either by reading from stdin (e.g. ask_user prompting
+	// for a response) OR by streaming output to stdout/stderr live (e.g.
+	// shell_command tee'ing subprocess output via io.MultiWriter). Either
+	// case is incompatible with the CLI activity-indicator spinner: the
+	// spinner's \r\033[K updates would clobber the tool's prompt or
+	// interleave with its output. When true, ToolStart subscribers must
+	// stop any active spinner and emit no result chrome on ToolEnd — the
+	// tool's natural output IS the feedback the user expects.
 	Interactive bool `json:"interactive,omitempty"`
 
 	// Per-tool execution config consumed by the seed core.ToolRegistry

@@ -2,8 +2,9 @@ package credentials
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 )
 
 // commonSecretPrefixes are env var prefixes that are typically NOT secrets.
@@ -132,71 +133,14 @@ func RedactEnvMap(env map[string]string) map[string]string {
 	return result
 }
 
-// logRedactionPatterns are regex patterns that match potential credential values in log lines
-var logRedactionPatterns = []*regexp.Regexp{
-	// Authorization headers
-	regexp.MustCompile(`(?i)"Authorization"\s*:\s*"Bearer\s+[^"]+"`),
-	regexp.MustCompile(`(?i)"Authorization"\s*:\s*"Basic\s+[^"]+"`),
-	regexp.MustCompile(`Authorization:\s*Bearer\s+\S+`),
-	regexp.MustCompile(`Authorization:\s*Basic\s+\S+`),
-
-	// JSON API key patterns
-	regexp.MustCompile(`(?i)"api_key"\s*:\s*"[^"]+"`),
-	regexp.MustCompile(`(?i)"apikey"\s*:\s*"[^"]+"`),
-	regexp.MustCompile(`(?i)"token"\s*:\s*"[^"]+"`),
-	regexp.MustCompile(`(?i)"secret"\s*:\s*"[^"]+"`),
-	regexp.MustCompile(`(?i)"password"\s*:\s*"[^"]+"`),
-
-	// Common API key patterns (sk-..., ghp_..., xoxb-..., etc.)
-	regexp.MustCompile(`sk-[a-zA-Z0-9]{20,}`),
-	regexp.MustCompile(`ghp_[a-zA-Z0-9]{36,}`),
-	regexp.MustCompile(`gho_[a-zA-Z0-9]{36,}`),
-	regexp.MustCompile(`ghu_[a-zA-Z0-9]{36,}`),
-	regexp.MustCompile(`ghs_[a-zA-Z0-9]{36,}`),
-	regexp.MustCompile(`ghr_[a-zA-Z0-9]{36,}`),
-	regexp.MustCompile(`xox[baprs]-[a-zA-Z0-9-]+`),
-	regexp.MustCompile(`ghpat_[a-zA-Z0-9]{36,}`),
-	regexp.MustCompile(`(pika|pika_)[a-zA-Z0-9_-]{20,}`),
-	regexp.MustCompile(`(?i)api[_-]?key["']?\s*[:=]\s*["']?[a-zA-Z0-9_-]{20,}`),
-}
-
-// dataURLRedactPattern matches data URLs (e.g., data:image/png;base64,iVBOR...).
-// These are inline embedded resources, not secrets. Stripping them prevents
-// base64 payloads from triggering credential redaction patterns.
-var dataURLRedactPattern = regexp.MustCompile(`data:[^;,\s]+;base64,[A-Za-z0-9+/=]+`)
-
-// RedactLogLine scans a single log line for potential credential values and
-// replaces them with [REDACTED]. It catches:
-//   - "Authorization: Bearer sk-..." or "Authorization: Basic ..."
-//   - JSON fields like "api_key": "sk-..." or "token": "..."
-//   - API key patterns (sk-...., ghp_...., xoxb-...., etc.)
-// Returns the redacted line.
-func RedactLogLine(line string) string {
-	redacted := line
-	// Strip data URL payloads first to prevent base64 data from matching
-	// credential patterns (e.g., "sk-" prefixes in image data).
-	redacted = dataURLRedactPattern.ReplaceAllString(redacted, "data:[stripped]")
-	for _, pattern := range logRedactionPatterns {
-		redacted = pattern.ReplaceAllString(redacted, "[REDACTED]")
-	}
-	return redacted
-}
-
-// RedactString applies credential redaction patterns to a string.
-// This is a readability alias for RedactLogLine, intended for non-log contexts
-// where the same pattern-based redaction is needed (e.g., config display, exports).
-func RedactString(s string) string {
-	return RedactLogLine(s)
-}
-
 // RedactJSONBytes applies credential redaction to JSON-encoded data. It
 // unmarshals the data, recursively redacts string values, and re-marshals
 // with indentation. Two redaction strategies are applied:
-//  1. Key-aware: map keys that look like credential field names (e.g.,
-//     "password", "api_key", "token") have their string values replaced
-//     with "[REDACTED]" wholesale.
-//  2. Value-based: all string values are scanned for known credential
-//     patterns (e.g., sk-..., ghp_..., Bearer tokens) regardless of key.
+//  1. Key-aware: map keys whose names match IsSensitiveEnvName have their
+//     string values replaced with "[REDACTED]" wholesale.
+//  2. Value-based: all string values are scanned by the secretdetect
+//     scanner (gitleaks-backed) and matched secrets are replaced with
+//     opaque "[REDACTED]" tokens.
 //
 // Returns the redacted JSON bytes or an error if the input is not valid JSON.
 func RedactJSONBytes(data []byte) ([]byte, error) {
@@ -209,26 +153,19 @@ func RedactJSONBytes(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	redacted := redactValue(v)
-
-	// Marshal with indentation for readability
-	return json.MarshalIndent(redacted, "", "  ")
+	return json.MarshalIndent(redactValue(v), "", "  ")
 }
 
 // redactValue recursively redacts string values in a JSON-like structure.
-// For maps, keys are checked with IsSensitiveEnvName; if sensitive, string
-// values are replaced with "[REDACTED]" wholesale. For all strings, RedactString()
-// is applied (value-based pattern matching). For slices, it recurses. For
-// everything else (numbers, bools, null), it returns as-is.
+// Map keys matching IsSensitiveEnvName have their string values replaced
+// wholesale; other strings go through the secretdetect opaque redactor.
 func redactValue(v interface{}) interface{} {
 	switch val := v.(type) {
 	case string:
-		return RedactString(val)
+		return secretdetect.RedactOpaque(val)
 	case map[string]interface{}:
 		redacted := make(map[string]interface{}, len(val))
 		for k, v := range val {
-			// Key-aware redaction: if the key looks like a credential field
-			// name, replace string values with "[REDACTED]" wholesale.
 			if IsSensitiveEnvName(k) {
 				if _, ok := v.(string); ok {
 					redacted[k] = "[REDACTED]"
@@ -245,7 +182,6 @@ func redactValue(v interface{}) interface{} {
 		}
 		return redacted
 	default:
-		// Numbers, bools, null, etc. pass through unchanged
 		return v
 	}
 }

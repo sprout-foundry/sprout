@@ -87,7 +87,18 @@ export default defineConfig(({ mode: _mode }) => {
       port: 3000,
       proxy: {
         '/api': {
-          target: 'http://localhost:56000',
+          target: process.env.SPROUT_DEV_BACKEND_URL || 'http://localhost:56000',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/ws': {
+          target: process.env.SPROUT_DEV_BACKEND_URL || 'http://localhost:56000',
+          ws: true,
+          changeOrigin: true,
+        },
+        '/terminal': {
+          target: process.env.SPROUT_DEV_BACKEND_URL || 'http://localhost:56000',
+          ws: true,
           changeOrigin: true,
         },
       },

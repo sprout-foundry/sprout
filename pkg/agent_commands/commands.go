@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -38,15 +39,24 @@ const (
 	OutputJSON
 )
 
+// UsageProvider is implemented by commands that want to surface a longer
+// per-command help string via `/help <name>`. Commands that don't implement
+// it fall back to their Description().
+type UsageProvider interface {
+	Usage() string
+}
+
 // CommandRegistry manages all available slash commands
 type CommandRegistry struct {
 	commands map[string]Command
+	aliases  map[string]string // short → canonical command name
 }
 
 // NewCommandRegistry creates a new command registry
 func NewCommandRegistry() *CommandRegistry {
 	registry := &CommandRegistry{
 		commands: make(map[string]Command),
+		aliases:  make(map[string]string),
 	}
 
 	// Register built-in commands
@@ -92,7 +102,54 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register indexing command
 	registry.Register(&IndexCommand{})
 
+	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
+	// to canonical names during dispatch and appear in tab completion.
+	registry.RegisterAlias("m", "model")
+	registry.RegisterAlias("p", "provider")
+	registry.RegisterAlias("x", "exit")
+	registry.RegisterAlias("q", "exit")
+	registry.RegisterAlias("?", "help")
+	registry.RegisterAlias("h", "help")
+
 	return registry
+}
+
+// RegisterAlias maps a short name to a canonical command name. Looking up
+// the alias via GetCommand or Execute resolves transparently. Aliases also
+// participate in tab completion and "did you mean" suggestions.
+func (r *CommandRegistry) RegisterAlias(short, canonical string) {
+	if short == "" || canonical == "" {
+		return
+	}
+	r.aliases[short] = canonical
+}
+
+// AliasesOf returns the set of aliases that resolve to the given canonical
+// command name. Used by /help <name> to show alternate spellings.
+func (r *CommandRegistry) AliasesOf(canonical string) []string {
+	var out []string
+	for short, target := range r.aliases {
+		if target == canonical {
+			out = append(out, short)
+		}
+	}
+	return out
+}
+
+// CompletionCandidates returns all valid slash-command names (canonical
+// plus aliases) sorted alphabetically. Used by the tab-completion
+// CompletionProvider in the input reader.
+func (r *CommandRegistry) CompletionCandidates() []string {
+	out := make([]string, 0, len(r.commands)+len(r.aliases))
+	for name := range r.commands {
+		out = append(out, name)
+	}
+	for alias := range r.aliases {
+		out = append(out, alias)
+	}
+	// Stable sort so cycle order is deterministic for the user.
+	sort.Strings(out)
+	return out
 }
 
 // Register adds a command to the registry
@@ -132,9 +189,19 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		commandName = "exec"
 	}
 
+	// Resolve aliases (SP-048-2d) before dispatching.
+	if canonical, ok := r.aliases[commandName]; ok {
+		commandName = canonical
+	}
+
 	// Find and execute command
 	cmd, exists := r.commands[commandName]
 	if !exists {
+		// SP-048-2b: did-you-mean suggestions in the error message.
+		suggestions := r.SuggestCommands(commandName, 2)
+		if len(suggestions) > 0 {
+			return fmt.Errorf("unknown command: %s — did you mean /%s?", commandName, strings.Join(suggestions, " or /"))
+		}
 		return fmt.Errorf("unknown command: %s", commandName)
 	}
 
@@ -186,8 +253,12 @@ func isLikelySlashCommandName(name string) bool {
 	return true
 }
 
-// GetCommand returns a command by name
+// GetCommand returns a command by name. If name matches an alias, the
+// canonical command is returned (SP-048-2d).
 func (r *CommandRegistry) GetCommand(name string) (Command, bool) {
+	if canonical, ok := r.aliases[name]; ok {
+		name = canonical
+	}
 	cmd, exists := r.commands[name]
 	return cmd, exists
 }

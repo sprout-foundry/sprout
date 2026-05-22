@@ -96,9 +96,9 @@ func main() {
 			expected: []string{"DeleteByFile", "delete", "remove"},
 		},
 		{
-			name:     "JSONL file store persistence",
-			query:    "thread-safe vector store backed by JSONL file",
-			expected: []string{"JSONLFileStore", "jsonl", "store"},
+			name:     "HNSW vector store persistence",
+			query:    "thread-safe vector store backed by HNSW graph index",
+			expected: []string{"HNSWStore", "hnsw", "store"},
 		},
 		{
 			name:     "WordPiece tokenizer",

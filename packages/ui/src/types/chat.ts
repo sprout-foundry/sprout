@@ -24,6 +24,19 @@ export interface Message {
   timestamp: Date;
   reasoning?: string; // Chain-of-thought content from content_type: "reasoning"
   toolRefs?: ToolRef[];
+  /**
+   * SP-053-1b: persona ID (e.g. "coder", "tester") when this message
+   * originated from a subagent. Drives the colored persona badge in
+   * MessageBubble. Absent for primary-agent messages.
+   */
+  persona?: string;
+  /**
+   * SP-053-1b: nesting depth — 0=primary agent, 1=orchestrator,
+   * 2=specialist subagent. Drives the left-margin indent in MessageBubble
+   * so a delegation chain reads as a visible hierarchy. Absent or 0 means
+   * primary agent (no indent).
+   */
+  subagentDepth?: number;
 }
 
 export interface ToolExecution {

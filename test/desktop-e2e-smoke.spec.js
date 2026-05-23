@@ -37,7 +37,7 @@ function wait(ms) {
 function assertBackendBinary() {
   const platform = process.platform === 'win32' ? 'windows' : process.platform;
   const arch = process.arch === 'x64' ? 'amd64' : process.arch;
-  const binaryName = platform === 'windows' ? 'ledit.exe' : 'ledit';
+  const binaryName = platform === 'windows' ? 'sprout.exe' : 'sprout';
   const binaryPath = path.join(APP_ROOT, 'desktop', 'dist', 'backend', `${platform}-${arch}`, binaryName);
   if (!fs.existsSync(binaryPath)) {
     throw new Error(`Backend binary not found at ${binaryPath}. Run "npm run build:desktop:backend".`);
@@ -251,7 +251,7 @@ function logDiagnostics(app, statusDir, statusFile) {
  */
 async function setupTestWorkspace() {
   assertBackendBinary();
-  const statusDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledit-e2e-'));
+  const statusDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sprout-e2e-'));
   const statusFile = path.join(statusDir, 'status.json');
   const workspaceDir = path.join(statusDir, 'workspace');
   fs.mkdirSync(workspaceDir, { recursive: true });

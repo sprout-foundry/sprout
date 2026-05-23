@@ -142,7 +142,7 @@ describe('ChatStatusBarItems', () => {
     });
     const persona = container.querySelector('.chat-statusbar-persona') as HTMLElement | null;
     expect(persona).not.toBeNull();
-    expect(persona?.textContent).toBe('[coder]');
+    expect(persona?.textContent).toBe('coder');
     // getPersonaColor('coder') → #58a6ff → rgb(88, 166, 255)
     expect(persona?.style.color.replace(/\s/g, '').toLowerCase()).toBe('rgb(88,166,255)');
   });

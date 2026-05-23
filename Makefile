@@ -217,12 +217,12 @@ deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
-		cd packages/events && npm install --silent 2>/dev/null && npm run build; \
-		cd packages/ui && npm install --silent 2>/dev/null && npm run build; \
-		cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true; \
-		cd webui && npm run build; \
+		(cd packages/events && npm install --silent 2>/dev/null && npm run build); \
+		(cd packages/ui && npm install --silent 2>/dev/null && npm run build); \
+		(cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true); \
+		(cd webui && npm run build); \
 		echo "React web UI build completed in webui/dist/"; \
-		cd "$(CURDIR)" && node scripts/build-webui-embed.mjs; \
+		node scripts/build-webui-embed.mjs; \
 	else \
 		echo "React UI is up-to-date, skipping rebuild"; \
 		echo "Deploying existing React build to Go static directory..."; \

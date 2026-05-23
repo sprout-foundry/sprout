@@ -125,6 +125,10 @@
   --toolbar-hover-fg: #ffffff;
   --accent-bg: #06b6d4;
   --accent-fg: #ffffff;
+  /* Dark text for legibility on warning/amber surfaces — white-on-yellow
+     fails contrast. Stays dark across themes since warning is amber-ish
+     in both. */
+  --accent-warning-fg: #1a1a2e;
   --border-color: rgba(148, 163, 184, 0.25);
   --input-bg: #0f1a2d;
   --input-fg: #e2e8f0;
@@ -205,6 +209,7 @@
   --toolbar-hover-fg: #0f172a;
   --accent-bg: #1d4ed8;
   --accent-fg: #ffffff;
+  --accent-warning-fg: #1a1a2e;
   --border-color: rgba(71, 85, 105, 0.26);
   --input-bg: #ffffff;
   --accent-color: var(--accent-primary);

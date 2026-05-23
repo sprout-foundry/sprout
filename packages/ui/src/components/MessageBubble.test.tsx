@@ -246,4 +246,91 @@ describe('MessageBubble', () => {
     expect(container.querySelector('.message-timestamp')?.textContent).toBe('Now');
     expect(container.querySelector('.message-content')?.textContent).toBe('Full example');
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SP-053-1d: persona badge + depth indent
+  // ─────────────────────────────────────────────────────────────────────
+
+  // Backwards-compat pin: a MessageBubble called the old way (no persona,
+  // no depth) must produce no badge, no inline marginLeft, and no
+  // data-subagent-depth attr — so sprout-foundry and other consumers that
+  // haven't upgraded see byte-identical layout.
+  it('SP-053: omits badge and indent when persona/depth absent (backwards-compat)', () => {
+    act(() => {
+      root.render(createElement(MessageBubble, {
+        ariaLabel: 'Primary agent message',
+        children: 'Hello',
+      }));
+    });
+
+    const bubble = container.querySelector('.message') as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    expect(container.querySelector('.message-persona-badge')).toBeNull();
+    // No inline marginLeft for primary-agent bubbles.
+    expect(bubble?.style.marginLeft).toBe('');
+    expect(bubble?.getAttribute('data-subagent-depth')).toBeNull();
+  });
+
+  it('SP-053: renders colored persona badge when persona is set', () => {
+    act(() => {
+      root.render(createElement(MessageBubble, {
+        ariaLabel: 'Coder subagent message',
+        persona: 'coder',
+        children: 'Coder said',
+      }));
+    });
+
+    const badge = container.querySelector('.message-persona-badge') as HTMLElement | null;
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe('[coder]');
+    // getPersonaColor('coder') = '#58a6ff'; lowercased in DOM style.
+    expect(badge?.style.color.replace(/\s/g, '').toLowerCase()).toBe('rgb(88,166,255)');
+  });
+
+  it('SP-053: applies depth indent when depth > 0', () => {
+    act(() => {
+      root.render(createElement(MessageBubble, {
+        ariaLabel: 'Depth 2 message',
+        depth: 2,
+        children: 'Deep',
+      }));
+    });
+
+    const bubble = container.querySelector('.message') as HTMLElement | null;
+    expect(bubble?.style.marginLeft).toBe('24px'); // 2 * 12px
+    expect(bubble?.getAttribute('data-subagent-depth')).toBe('2');
+  });
+
+  it('SP-053: depth 0 with persona renders badge but no indent', () => {
+    // A primary-agent message could still have a persona (e.g.
+    // orchestrator at depth 0). Badge shows; no indent applied.
+    act(() => {
+      root.render(createElement(MessageBubble, {
+        ariaLabel: 'Orchestrator message',
+        persona: 'orchestrator',
+        depth: 0,
+        children: 'Plan',
+      }));
+    });
+
+    const bubble = container.querySelector('.message') as HTMLElement | null;
+    expect(container.querySelector('.message-persona-badge')).not.toBeNull();
+    expect(bubble?.style.marginLeft).toBe('');
+    expect(bubble?.getAttribute('data-subagent-depth')).toBeNull();
+  });
+
+  it('SP-053: unknown persona falls back to dim-gray color', () => {
+    act(() => {
+      root.render(createElement(MessageBubble, {
+        ariaLabel: 'Unknown',
+        persona: 'made_up_persona',
+        children: 'x',
+      }));
+    });
+
+    const badge = container.querySelector('.message-persona-badge') as HTMLElement | null;
+    expect(badge?.textContent).toBe('[made_up_persona]');
+    // Fallback color #6e7681 — neutral mid-gray, readable on both themes.
+    expect(badge?.style.color.replace(/\s/g, '').toLowerCase()).toBe('rgb(110,118,129)');
+  });
 });

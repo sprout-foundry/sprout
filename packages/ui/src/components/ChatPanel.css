@@ -693,6 +693,28 @@
   border-color: var(--border-subtle);
 }
 
+/* SP-053-1d: persona badge rendered above the content when a subagent
+ * produced the message. Colored via inline style from getPersonaColor()
+ * so the badge, the depth rail, and the rest of the WebUI's persona
+ * surfaces (subagent feed, tool timeline) all read the same color. */
+.message-persona-badge {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  opacity: 0.9;
+}
+
+/* Colored left rail for subagent bubbles. --persona-color is set inline by
+ * MessageBubble when a persona is present; falls back to the subtle border
+ * color when no persona was supplied. */
+.message[data-subagent-depth] .message-bubble {
+  border-left: 3px solid var(--persona-color, var(--border-subtle));
+}
+
 .message-content {
   min-width: 0;
   line-height: 1.6;

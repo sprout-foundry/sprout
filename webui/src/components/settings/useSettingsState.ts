@@ -239,9 +239,13 @@ export function useSettingsState(
     }
   }, [activeSubTab, configViewLayer]);
 
-  // Fetch subagent types + providers when subagents tab is activated
+  // Fetch subagent types + providers when the subagents OR providers
+  // tab is active. Both tabs surface provider/model dropdowns now (the
+  // providers tab uses them for the primary chat agent), so loading the
+  // provider list on either entry keeps the dropdowns populated without
+  // forcing the user to visit the subagents tab first.
   useEffect(() => {
-    if (activeSubTab !== 'subagents') return;
+    if (activeSubTab !== 'subagents' && activeSubTab !== 'providers') return;
     let cancelled = false;
     (async () => {
       try {

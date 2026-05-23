@@ -24,24 +24,10 @@ import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
 import ChatMessageContextMenu from './ChatMessageContextMenu';
 import LiveLog from './LiveLog';
+import { getPersonaColor } from '../utils/personaColors';
 import './ChatPanel.css';
 
 // ── Subagent Activity Feed ─────────────────────────────────────────
-
-const PERSONA_COLORS: Record<string, string> = {
-  coder: '#58a6ff',
-  reviewer: '#d2a8ff',
-  code_reviewer: '#d2a8ff',
-  tester: '#7ee787',
-  debugger: '#f0883e',
-  refactor: '#79c0ff',
-  researcher: '#ff7b72',
-  general: '#8b949e',
-};
-
-const getPersonaColor = (persona?: string): string => {
-  return PERSONA_COLORS[persona || ''] || '#8b949e';
-};
 
 const formatDuration = (start: Date, end?: Date): string => {
   const ms = (end || new Date()).getTime() - start.getTime();

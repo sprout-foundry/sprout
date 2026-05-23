@@ -253,7 +253,7 @@ function CommandPalette({
         if (!result) return;
 
         if (result.kind === 'command' && result.commandId) {
-          onExecuteCommand(result.commandId);
+          onExecuteCommand?.(result.commandId);
         } else if (result.kind === 'file' && result.filePath) {
           onOpenFile(result.filePath);
         } else if (result.kind === 'symbol' && result.symbolLine != null) {
@@ -329,7 +329,7 @@ function CommandPalette({
               aria-posinset={index + 1}
               onClick={() => {
                 if (result.kind === 'command' && result.commandId) {
-                  onExecuteCommand(result.commandId);
+                  onExecuteCommand?.(result.commandId);
                 } else if (result.kind === 'file' && result.filePath) {
                   onOpenFile(result.filePath);
                 } else if (result.kind === 'symbol' && result.symbolLine != null) {

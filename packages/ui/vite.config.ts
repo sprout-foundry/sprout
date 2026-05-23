@@ -10,7 +10,7 @@ export default defineConfig({
       include: ['src/**/*'],
       outDir: 'dist',
       tsconfigPath: './tsconfig.build.json',
-      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/**/*.spec.ts', 'src/**/*.spec.tsx'],
+      exclude: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'src/**/*.spec.ts', 'src/**/*.spec.tsx', 'src/**/*.stories.ts', 'src/**/*.stories.tsx'],
     }),
   ],
   build: {

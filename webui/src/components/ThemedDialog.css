@@ -230,26 +230,26 @@
 .themed-dialog-btn--danger {
   background: var(--accent-error);
   border-color: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .themed-dialog-btn--danger:hover {
   filter: brightness(1.1);
   border-color: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 /* Success variant */
 .themed-dialog-btn--success {
   background: var(--accent-success);
   border-color: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .themed-dialog-btn--success:hover {
   filter: brightness(1.1);
   border-color: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 /* ── Merge-expanded dialog state (FileChangeDialog) ─────── */
@@ -579,38 +579,38 @@
 .security-approval-btn--block--dangerous {
   background: var(--accent-error);
   border-color: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .security-approval-btn--block--dangerous:hover {
   filter: brightness(1.1);
   border-color: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 /* Allow button */
 .security-approval-btn--allow {
   background: var(--accent-success);
   border-color: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .security-approval-btn--allow:hover {
   filter: brightness(1.1);
   border-color: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .security-approval-btn--allow--caution {
   background: var(--accent-warning);
   border-color: var(--accent-warning);
-  color: #1a1a2e;
+  color: var(--accent-warning-fg);
 }
 
 .security-approval-btn--allow--caution:hover {
   filter: brightness(1.1);
   border-color: var(--accent-warning);
-  color: #1a1a2e;
+  color: var(--accent-warning-fg);
 }
 
 .security-approval-btn--allow--dangerous {
@@ -805,13 +805,13 @@
 .security-prompt-btn--issue {
   background: var(--accent-warning);
   border-color: var(--accent-warning);
-  color: #1a1a2e;
+  color: var(--accent-warning-fg);
 }
 
 .security-prompt-btn--issue:hover {
   filter: brightness(1.1);
   border-color: var(--accent-warning);
-  color: #1a1a2e;
+  color: var(--accent-warning-fg);
 }
 
 /* ── AskUserDialog ────────────────────────────────────────────── */

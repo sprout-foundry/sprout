@@ -148,13 +148,13 @@
 
 .merge-view-controls .btn-accept {
   background: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
   border-color: var(--accent-success);
 }
 
 .merge-view-controls .btn-reject {
   background: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
   border-color: var(--accent-error);
 }
 
@@ -235,12 +235,12 @@
 
 .cm-merge-view .cm-merge-view-accept {
   background: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .cm-merge-view .cm-merge-view-reject {
   background: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 /* Theme-integrated change decoration overrides

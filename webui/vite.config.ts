@@ -14,9 +14,17 @@ const reactPlugin = useSwc
 export default defineConfig(({ mode: _mode }) => {
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
+  //
+  // VITE_API_BASE_URL / VITE_WS_URL default to empty so the runtime falls
+  // back to the same-origin relative URLs (services/websocket.ts:152-159
+  // and services/clientSession.ts). Sprout picks a free port when 56000 is
+  // in use (56001, 56003, ...), so baking an absolute ws://localhost:56000
+  // here would lock the WebUI to one port and silently fail on the others.
+  // The Vite dev server's /ws proxy entry routes the relative URL to the
+  // configured backend in dev mode.
   const runtimeDefaults: Record<string, string> = {
-    VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || 'http://localhost:56000',
-    VITE_WS_URL: process.env.VITE_WS_URL || 'ws://localhost:56000/ws',
+    VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || '',
+    VITE_WS_URL: process.env.VITE_WS_URL || '',
     VITE_AUTH_MODE: process.env.VITE_AUTH_MODE || 'none',
     VITE_APP_MODE: process.env.VITE_APP_MODE || 'local',
   };

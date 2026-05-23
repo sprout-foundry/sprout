@@ -116,6 +116,7 @@ export { copyToClipboard } from './utils/clipboard';
 export { fuzzyScore, fuzzyFilter, highlightMatches, type FuzzyResult } from './utils/fuzzyMatch';
 export { debugLog } from './utils/log';
 export { groupSubagentRuns } from './utils/subagentGrouping';
+export { PERSONA_COLORS, getPersonaColor } from './utils/personaColors';
 export { stripAnsiCodes, hasAnsiCodes, ansiToHtml } from './utils/ansi';
 export { getStatusInfo } from './utils/git';
 export type { CommandHistoryState, CommandHistoryApi } from './components/command_input_history';

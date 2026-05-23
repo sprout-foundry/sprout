@@ -194,7 +194,11 @@ export function useEventHandler({
               };
             }
           } else {
-            // Create new assistant message
+            // Create new assistant message. SP-053-1c: decorate with
+            // subagent_depth / active_persona from the event payload (set
+            // by SP-051's decorateEventPayload on every subagent event) so
+            // both the regular-content and reasoning paths tag the
+            // resulting bubble with the right persona/depth.
             const newMsg: Message = {
               id: Date.now().toString(),
               type: 'assistant',
@@ -204,6 +208,10 @@ export function useEventHandler({
             if (chunkType === 'reasoning') {
               newMsg.reasoning = chunkContent;
             }
+            const persona = typeof eventData?.active_persona === 'string' ? eventData.active_persona : '';
+            if (persona) newMsg.persona = persona;
+            const depth = Number(eventData?.subagent_depth ?? 0);
+            if (Number.isFinite(depth) && depth > 0) newMsg.subagentDepth = depth;
             newMessages.push(newMsg);
           }
           return {
@@ -229,14 +237,25 @@ export function useEventHandler({
           setQueuedMessages([]);
         }
         setState((prev) => {
+          // SP-053-1c: when synthesizing the completed-query assistant
+          // message, carry the event's subagent_depth / active_persona
+          // through so MessageBubble renders the right depth/badge for
+          // responses that came from a subagent.
+          const completedPersona = typeof eventData?.active_persona === 'string' ? eventData.active_persona : '';
+          const completedDepth = Number(eventData?.subagent_depth ?? 0);
           let nextMessages = wasClearCommand
             ? []
-            : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => ({
-                id: Date.now().toString(),
-                type: 'assistant',
-                content: responseText,
-                timestamp: new Date(),
-              }));
+            : ensureCompletedAssistantMessage(prev.messages, completedResponse, (responseText) => {
+                const m: Message = {
+                  id: Date.now().toString(),
+                  type: 'assistant',
+                  content: responseText,
+                  timestamp: new Date(),
+                };
+                if (completedPersona) m.persona = completedPersona;
+                if (Number.isFinite(completedDepth) && completedDepth > 0) m.subagentDepth = completedDepth;
+                return m;
+              });
 
           // Deduplication: some thinking models emit their entire response via the
           // reasoning_content field with no separate content field. The backend fallback

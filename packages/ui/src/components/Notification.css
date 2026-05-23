@@ -94,6 +94,38 @@
   word-wrap: break-word;
 }
 
+/* Action Button — inline CTA on a notification (e.g. "Configure" on a
+   missing-credential toast). Visual weight: button-secondary in the
+   design system pattern — bg-elevated, 6-px radius, compact. */
+.notification-action {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t-fast, 0.12s) ease, border-color var(--t-fast, 0.12s) ease;
+}
+
+.notification-action:hover {
+  background: var(--bg-surface, var(--bg-secondary));
+  border-color: var(--border-focus);
+}
+
+.notification-action:active {
+  transform: scale(0.97);
+}
+
+.notification-action:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary));
+  outline-offset: 1px;
+}
+
 /* Dismiss Button */
 .notification-dismiss {
   flex-shrink: 0;

@@ -41,6 +41,7 @@ function NotificationStack({
           title={notification.title}
           message={notification.message}
           duration={notification.duration}
+          action={notification.action}
           onClose={onDismiss}
         />
       ))}

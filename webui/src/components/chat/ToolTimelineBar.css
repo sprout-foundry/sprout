@@ -35,8 +35,8 @@
 }
 
 .tool-timeline-card--error {
-  background: color-mix(in srgb, #ff7b72 12%, var(--bg-elevated, transparent));
-  border-color: color-mix(in srgb, #ff7b72 35%, var(--border-subtle, transparent));
+  background: color-mix(in srgb, var(--accent-error, #e06c75) 12%, var(--bg-elevated, transparent));
+  border-color: color-mix(in srgb, var(--accent-error, #e06c75) 35%, var(--border-subtle, transparent));
 }
 
 .tool-timeline-status {
@@ -60,17 +60,23 @@
 }
 
 .tool-timeline-icon-ok {
-  color: #7ee787;
+  color: var(--accent-success, #98c379);
 }
 
 .tool-timeline-icon-error {
-  color: #ff7b72;
+  color: var(--accent-error, #e06c75);
 }
 
+/* Persona chip inside the timeline card — same design-system "status pill"
+   treatment as the status-bar and chat-bubble badges so all three persona
+   surfaces read coherent (color-mix bg derived from currentColor). */
 .tool-timeline-persona {
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
 .tool-timeline-name {

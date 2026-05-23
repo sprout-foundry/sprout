@@ -1,13 +1,15 @@
-/* SP-053-3a: chat-context status-bar items rendered via the shared
-   @sprout/ui StatusBar's rightItems slot. Mirrors the visual weight of
-   the CLI's status footer — compact, monospace, with two cost-tier
-   color emphases (yellow >$1, red >$5). */
+/* Chat-context status-bar items rendered via the shared @sprout/ui
+   StatusBar's rightItems slot. Mirrors the visual weight of the CLI's
+   status footer — compact, monospace, with two cost-tier color
+   emphases (yellow >$1, red >$5). Padding/radius follow the design
+   system status-bar pattern (preview/components-statusbar.html). */
 
 .chat-statusbar-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   color: var(--text-secondary, #8b949e);
@@ -24,7 +26,7 @@
 }
 
 .chat-statusbar-model-name {
-  font-weight: 600;
+  font-weight: 500;
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -44,7 +46,7 @@
   font: inherit;
   cursor: pointer;
   border-radius: 3px;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--t-fast, 0.12s) ease, color var(--t-fast, 0.12s) ease;
 }
 
 .chat-statusbar-model-button:hover {
@@ -53,17 +55,22 @@
 }
 
 .chat-statusbar-model-button:focus-visible {
-  outline: 2px solid var(--accent-primary, #58a6ff);
+  outline: 2px solid var(--border-focus, var(--accent-primary, #58a6ff));
   outline-offset: 1px;
 }
 
-/* Active-persona badge — colored via inline style from getPersonaColor()
-   to keep parity with the chat-bubble badge and the tool timeline. */
+/* Active-persona chip — design-system "status pill" treatment: tinted
+   background mixed from the persona color so the chip reads coherent
+   with the chat-bubble badge and the subagent feed entries. The persona
+   color flows through inline style (set by ChatStatusBarItems.tsx). */
 .chat-statusbar-persona {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-weight: 600;
   font-size: 11px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
 .chat-statusbar-cost {

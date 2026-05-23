@@ -243,7 +243,7 @@ const BillingPage: React.FC = () => {
               <div className="platform-card-body">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Current period proration credit:</span>
-                  <span style={{ fontWeight: '600', color: '#22c55e' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--accent-success)' }}>
                     +{formatCurrency(billingStatus.proration_credits)}
                   </span>
                 </div>
@@ -259,7 +259,7 @@ const BillingPage: React.FC = () => {
               <div className="platform-card-body">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Current period proration charge:</span>
-                  <span style={{ fontWeight: '600', color: '#ef4444' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--accent-error)' }}>
                     -{formatCurrency(billingStatus.proration_charges)}
                   </span>
                 </div>

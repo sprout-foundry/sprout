@@ -352,13 +352,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           </div>
         )}
         {wasmError && !wasmActive && (
-          <div className="terminal-status-inline" style={{ color: '#ef6b73' }}>
+          <div className="terminal-status-inline terminal-status-inline--error">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />
             WASM shell failed: {wasmError}
           </div>
         )}
         {wasmActive && (
-          <div className="terminal-status-inline" style={{ color: '#7ddf97' }}>
+          <div className="terminal-status-inline terminal-status-inline--success">
             <Terminal size={14} className="inline-block mr-1 align-text-bottom" />
             Browser shell · Files persist in IndexedDB
           </div>

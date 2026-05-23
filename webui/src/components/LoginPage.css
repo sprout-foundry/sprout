@@ -1,0 +1,77 @@
+.login-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: var(--bg-primary);
+}
+
+.login-form {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  padding: 2rem;
+  border-radius: 8px;
+  width: 360px;
+  box-shadow: var(--shadow-elevated);
+}
+
+.login-title {
+  color: var(--text-primary);
+  margin: 0 0 1rem 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.login-error {
+  color: var(--accent-error);
+  margin: 0 0 0.5rem 0;
+  font-size: 13px;
+}
+
+.login-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.login-input:focus-visible {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+.login-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.login-button {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.login-button:hover {
+  background: color-mix(in srgb, var(--accent-primary) 85%, black);
+}
+
+.login-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-primary);
+}

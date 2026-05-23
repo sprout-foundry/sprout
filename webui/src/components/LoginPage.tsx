@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import './LoginPage.css';
 
 export default function LoginPage() {
   const [inputToken, setInputToken] = useState('');
@@ -16,19 +17,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#1a1a2e' }}>
-      <form onSubmit={handleSubmit} style={{ background: '#16213e', padding: '2rem', borderRadius: '8px', width: '360px' }}>
-        <h2 style={{ color: '#e0e0e0', marginBottom: '1rem' }}>Sign in to Sprout</h2>
-        {error && <p style={{ color: '#ff6b6b', marginBottom: '0.5rem' }}>{error}</p>}
+    <div className="login-page">
+      <form onSubmit={handleSubmit} className="login-form">
+        <h2 className="login-title">Sign in to Sprout</h2>
+        {error && <p className="login-error" role="alert">{error}</p>}
         <input
           type="password"
           value={inputToken}
           onChange={(e) => { setInputToken(e.target.value); setError(''); }}
           placeholder="Enter auth token"
-          style={{ width: '100%', padding: '0.5rem', marginBottom: '1rem', borderRadius: '4px', border: '1px solid #0f3460', background: '#0f3460', color: '#e0e0e0' }}
+          className="login-input"
+          aria-label="Auth token"
           autoFocus
         />
-        <button type="submit" style={{ width: '100%', padding: '0.5rem', background: '#533483', color: '#e0e0e0', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+        <button type="submit" className="login-button">
           Sign in
         </button>
       </form>

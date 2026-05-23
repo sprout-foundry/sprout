@@ -1,43 +1,52 @@
 import type { EditorPreferences } from './types';
+import type { FieldRenderers } from './useSettingsFieldRenderers';
 
 interface GeneralSettingsTabProps {
   editorPreferences: EditorPreferences | null | undefined;
   onEditorPreferenceChanged?: (key: string, value: unknown) => void;
+  /** Shared toggle renderer for local component state (editor prefs).
+   *  Optional for backwards compatibility — falls back to inline markup. */
+  renderLocalToggle?: FieldRenderers['renderLocalToggle'];
 }
 
 /**
  * Editor display preferences — auto-save, format-on-save, whitespace rendering.
  * Runtime-scoped (Editor section).
  */
-export default function GeneralSettingsTab({ editorPreferences, onEditorPreferenceChanged }: GeneralSettingsTabProps) {
+export default function GeneralSettingsTab({
+  editorPreferences,
+  onEditorPreferenceChanged,
+  renderLocalToggle,
+}: GeneralSettingsTabProps) {
   if (!editorPreferences || !onEditorPreferenceChanged) {
     return <div className="settings-empty">Editor preferences not available</div>;
   }
 
+  // Fallback for callers that haven't wired renderLocalToggle yet —
+  // identical markup so the visual treatment stays consistent across
+  // both paths.
+  const toggle =
+    renderLocalToggle ??
+    ((checked: boolean, label: string, onChange: (next: boolean) => void) => (
+      <label className="styled-toggle">
+        <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} />
+        <span className="toggle-track" />
+        <span className="toggle-label">{label}</span>
+      </label>
+    ));
+
   return (
     <div className="section">
       <h4>Display</h4>
-      <label className="styled-toggle">
-        <input
-          type="checkbox"
-          checked={!!editorPreferences.autoSaveEnabled}
-          onChange={() => onEditorPreferenceChanged('autoSaveEnabled', !editorPreferences.autoSaveEnabled)}
-        />
-        <span className="toggle-track" />
-        <span className="toggle-label">Auto-save files (every 30s)</span>
-      </label>
-      <label className="styled-toggle">
-        <input
-          type="checkbox"
-          checked={!!editorPreferences.formatOnSaveEnabled}
-          onChange={() => onEditorPreferenceChanged('formatOnSaveEnabled', !editorPreferences.formatOnSaveEnabled)}
-        />
-        <span className="toggle-track" />
-        <span className="toggle-label">Format on Save</span>
-      </label>
-      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)', lineHeight: 1.3, marginTop: 2 }}>
-        Format files with Prettier before saving
-      </span>
+      {toggle(!!editorPreferences.autoSaveEnabled, 'Auto-save files (every 30s)', (v) =>
+        onEditorPreferenceChanged('autoSaveEnabled', v),
+      )}
+      {toggle(
+        !!editorPreferences.formatOnSaveEnabled,
+        'Format on Save',
+        (v) => onEditorPreferenceChanged('formatOnSaveEnabled', v),
+        'Format files with Prettier before saving',
+      )}
       <div className="config-item">
         <label htmlFor="whitespace-rendering-select">Render whitespace</label>
         <select

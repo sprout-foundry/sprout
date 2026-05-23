@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. **Go backend (ledit)** - The main application
+1. **Go backend (sprout)** - The main application
 2. **Node.js & npm** - For the React development server
 3. **Modern web browser** - Chrome, Firefox, Safari, or Edge
 
@@ -12,18 +12,18 @@
 
 **Option 1: Production Mode (Recommended for testing)**
 ```bash
-# Build and run ledit with embedded web UI
-cd /path/to/ledit
-go build -o ledit
-./ledit agent
+# Build and run sprout with embedded web UI
+cd /path/to/sprout
+go build -o sprout
+./sprout agent
 # Web UI will be available at http://localhost:54321
 ```
 
 **Option 2: Development Mode (Separate servers)**
 ```bash
 # Terminal 1: Start the Go backend
-cd /path/to/ledit
-./ledit agent --web-port 56000
+cd /path/to/sprout
+./sprout agent --web-port 56000
 
 # Terminal 2: Start the React development server
 cd webui

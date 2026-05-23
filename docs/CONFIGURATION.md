@@ -10,22 +10,22 @@ For Z.AI Coding Plan support, set `ZAI_API_KEY` and select the provider/model:
 
 ```bash
 export ZAI_API_KEY=your_api_key
-ledit agent --provider zai --model GLM-4.6 "implement feature X"
+sprout agent --provider zai --model GLM-4.6 "implement feature X"
 ```
 
 ## Environment Variables
 
-`ledit` respects the following environment variables:
+`sprout` respects the following environment variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `LEDIT_NO_STREAM=1` | Disable streaming mode | `LEDIT_NO_STREAM=1 ledit agent "task"` |
-| `LEDIT_NO_SUBAGENTS=1` | Disable subagent tools | `LEDIT_NO_SUBAGENTS=1 ledit agent "task"` |
-| `LEDIT_NO_CONNECTION_CHECK=1` | Skip provider connection check | `LEDIT_NO_CONNECTION_CHECK=1 ledit agent "task"` |
+| `LEDIT_NO_STREAM=1` | Disable streaming mode | `LEDIT_NO_STREAM=1 sprout agent "task"` |
+| `LEDIT_NO_SUBAGENTS=1` | Disable subagent tools | `LEDIT_NO_SUBAGENTS=1 sprout agent "task"` |
+| `LEDIT_NO_CONNECTION_CHECK=1` | Skip provider connection check | `LEDIT_NO_CONNECTION_CHECK=1 sprout agent "task"` |
 | `LEDIT_RESOURCE_DIRECTORY=<dir>` | Store web/vision resources | `LEDIT_RESOURCE_DIRECTORY=captures` |
 | `LEDIT_TRACE_DATASET_DIR=<dir>` | Enable dataset tracing | `LEDIT_TRACE_DATASET_DIR=traces` |
 | `LEDIT_CONFIG=<dir>` | Custom config directory | `LEDIT_CONFIG=/my/config` |
-| `CI=1` or `GITHUB_ACTIONS=1` | CI environment mode | `CI=1 ledit agent "task"` |
+| `CI=1` or `GITHUB_ACTIONS=1` | CI environment mode | `CI=1 sprout agent "task"` |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub token for MCP | Auto-discovers GitHub MCP server |
 | `OPENAI_API_KEY`, `DEEPINFRA_API_KEY`, etc. | API keys for providers | Set directly or in `api_keys.json` |
 
@@ -128,7 +128,7 @@ PDF analysis settings for OCR processing. When enabled, uses the specified provi
 
 ## Zsh Command Detection
 
-When using zsh as your shell, `ledit` automatically detects commands available in your environment (external commands, builtins, aliases, and functions) and executes them directly instead of sending them to the AI. This feature is **enabled by default** when using zsh.
+When using zsh as your shell, `sprout` automatically detects commands available in your environment (external commands, builtins, aliases, and functions) and executes them directly instead of sending them to the AI. This feature is **enabled by default** when using zsh.
 
 ### Configuration Options
 
@@ -162,7 +162,7 @@ To modify behavior, add to your `~/.config/sprout/config.json`:
 
 ### How it works:
 
-1. When you type a command that matches an available zsh command (e.g., `git status`, `ls -la`), `ledit` detects it
+1. When you type a command that matches an available zsh command (e.g., `git status`, `ls -la`), `sprout` detects it
 2. By default, **auto-executes** the command immediately (configurable):
    ```
    [Detected external command: git] [/usr/bin/git]
@@ -176,7 +176,7 @@ To modify behavior, add to your `~/.config/sprout/config.json`:
 
 Prefix your command with `!` to force auto-execution (overrides config):
 ```bash
-ledit> !git status  # Always executes immediately
+sprout> !git status  # Always executes immediately
 ```
 
 ### Why use this?
@@ -192,11 +192,11 @@ If the input is not clearly a command, it will be passed to the AI as normal. Th
 
 ## CI/CD and Non-Interactive Usage
 
-`ledit` is designed to work seamlessly in CI/CD pipelines and automated environments:
+`sprout` is designed to work seamlessly in CI/CD pipelines and automated environments:
 
 ### Automatic CI Detection
 
-`ledit` automatically detects CI environments via `CI` or `GITHUB_ACTIONS` environment variables. When detected:
+`sprout` automatically detects CI environments via `CI` or `GITHUB_ACTIONS` environment variables. When detected:
 
 - Clean, structured output without terminal control sequences
 - Progress updates every 5 seconds with token/cost tracking
@@ -206,32 +206,32 @@ If the input is not clearly a command, it will be passed to the AI as normal. Th
 
 ```bash
 # Basic CI usage
-CI=1 ledit agent "Review changes and generate commit message"
+CI=1 sprout agent "Review changes and generate commit message"
 
 # With specific provider/model
-ledit agent --provider deepinfra --model "meta-llama/Llama-3.3-70B-Instruct" "task"
+sprout agent --provider deepinfra --model "meta-llama/Llama-3.3-70B-Instruct" "task"
 
 # Skip prompts for automation
-ledit agent --skip-prompt "Implement feature"
+sprout agent --skip-prompt "Implement feature"
 
 # Disable streaming for scripts
-LEDIT_NO_STREAM=1 ledit agent "task"
+LEDIT_NO_STREAM=1 sprout agent "task"
 
 # Skip provider connection check (faster in CI)
-LEDIT_NO_CONNECTION_CHECK=1 ledit agent "task"
+LEDIT_NO_CONNECTION_CHECK=1 sprout agent "task"
 ```
 
 ### Piped Input Support
 
-For scripted automation, `ledit` supports piped input:
+For scripted automation, `sprout` supports piped input:
 
 ```bash
-echo "Analyze main.go for potential issues" | ledit agent --prompt-stdin
+echo "Analyze main.go for potential issues" | sprout agent --prompt-stdin
 ```
 
 ### Exit Code Handling
 
-`ledit` returns appropriate exit codes for CI integration:
+`sprout` returns appropriate exit codes for CI integration:
 
 - `0`: Success
 - Non-zero: Error or failure
@@ -239,10 +239,10 @@ echo "Analyze main.go for potential issues" | ledit agent --prompt-stdin
 ### Example GitHub Actions Workflow:
 
 ```yaml
-- name: Run ledit agent
+- name: Run sprout agent
   env:
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   run: |
-    CI=1 ledit agent --skip-prompt "Review staged changes"
-    ledit commit --skip-prompt
+    CI=1 sprout agent --skip-prompt "Review staged changes"
+    sprout commit --skip-prompt
 ```

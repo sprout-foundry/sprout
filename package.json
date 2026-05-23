@@ -5,7 +5,7 @@
   },
   "build": {
     "afterSign": "scripts/electron-after-sign.cjs",
-    "appId": "dev.alantheprice.sprout",
+    "appId": "dev.sprout-foundry.sprout",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "asar": true,
     "beforePack": "scripts/electron-before-pack.cjs",

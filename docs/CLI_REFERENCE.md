@@ -1,93 +1,93 @@
 # CLI Reference
 
-Command-line interface reference for `ledit`. This document covers all CLI commands, flags, and interactive features.
+Command-line interface reference for `sprout`. This document covers all CLI commands, flags, and interactive features.
 
 ## Quick Start
 
 ```bash
 # Start interactive agent mode (Web UI enabled by default)
-ledit
+sprout
 
 # Run a specific task
-ledit agent "Add JWT auth to API"
-ledit agent --skip-prompt "Implement user authentication"
+sprout agent "Add JWT auth to API"
+sprout agent --skip-prompt "Implement user authentication"
 
 # Generate a commit message
-ledit commit
-ledit commit --skip-prompt  # Auto-review and commit
+sprout commit
+sprout commit --skip-prompt  # Auto-review and commit
 
 # Generate a shell script
-ledit shell "backup all .go files to a timestamped archive"
+sprout shell "backup all .go files to a timestamped archive"
 
 # View change history
 sprout log
 sprout log --raw-log  # Verbose logs
 
 # Manage MCP servers
-ledit mcp list
-ledit mcp add
+sprout mcp list
+sprout mcp add
 ```
 
 ## Commands
 
-### `ledit agent`
+### `sprout agent`
 
 Core AI agent for analysis, generation, explanation, and orchestration.
 
 **Basic Usage:**
 ```bash
-ledit agent [intent] [flags]
+sprout agent [intent] [flags]
 ```
 
 **Examples:**
 ```bash
-ledit agent  # Interactive mode
-ledit agent "Add JWT auth to API" --skip-prompt --model "deepinfra:qwen3-coder"
-ledit agent --dry-run "Refactor main.go for modularity"
-ledit agent "Analyze this codebase" --persona researcher
+sprout agent  # Interactive mode
+sprout agent "Add JWT auth to API" --skip-prompt --model "deepinfra:qwen3-coder"
+sprout agent --dry-run "Refactor main.go for modularity"
+sprout agent "Analyze this codebase" --persona researcher
 ```
 
-### `ledit commit`
+### `sprout commit`
 
 AI-generated conventional commit for staged Git changes.
 
 **Basic Usage:**
 ```bash
-ledit commit [flags]
+sprout commit [flags]
 ```
 
 **Examples:**
 ```bash
-ledit commit --dry-run
-ledit commit --skip-prompt  # Auto-review and commit
+sprout commit --dry-run
+sprout commit --skip-prompt  # Auto-review and commit
 ```
 
-### `ledit review`
+### `sprout review`
 
 LLM code review for staged Git changes.
 
 **Basic Usage:**
 ```bash
-ledit review [flags]
+sprout review [flags]
 ```
 
 **Examples:**
 ```bash
-ledit review --model "openai:gpt-5"
+sprout review --model "openai:gpt-5"
 ```
 
-### `ledit shell`
+### `sprout shell`
 
 Generate shell scripts from natural language descriptions (no execution).
 
 **Basic Usage:**
 ```bash
-ledit shell [description] [flags]
+sprout shell [description] [flags]
 ```
 
 **Examples:**
 ```bash
-ledit shell "Setup React dev environment and install dependencies"
+sprout shell "Setup React dev environment and install dependencies"
 ```
 
 ### `sprout log`
@@ -105,75 +105,75 @@ sprout log  # Summary
 sprout log --raw-log  # Verbose .sprout/workspace.log
 ```
 
-### `ledit mcp`
+### `sprout mcp`
 
 Manage MCP (Model Context Protocol) servers.
 
 **Basic Usage:**
 ```bash
-ledit mcp <command> [flags]
+sprout mcp <command> [flags]
 ```
 
 **Commands:**
 ```bash
-ledit mcp add      # Interactive setup (GitHub or custom)
-ledit mcp list     # Show server status
-ledit mcp test [name]  # Verify connection
-ledit mcp remove [name]  # Remove a server
+sprout mcp add      # Interactive setup (GitHub or custom)
+sprout mcp list     # Show server status
+sprout mcp test [name]  # Verify connection
+sprout mcp remove [name]  # Remove a server
 ```
 
-### `ledit custom`
+### `sprout custom`
 
 Manage custom OpenAI-compatible providers.
 
 **Basic Usage:**
 ```bash
-ledit custom [command] [flags]
+sprout custom [command] [flags]
 ```
 
-### `ledit diag`
+### `sprout diag`
 
 Show diagnostic information about configuration and environment.
 
 **Basic Usage:**
 ```bash
-ledit diag [flags]
+sprout diag [flags]
 ```
 
-### `ledit version`
+### `sprout version`
 
 Print version, build, and platform information.
 
 **Basic Usage:**
 ```bash
-ledit version
+sprout version
 ```
 
-### `ledit plan`
+### `sprout plan`
 
 Planning and execution mode with todo creation.
 
 **Basic Usage:**
 ```bash
-ledit plan [idea] [flags]
+sprout plan [idea] [flags]
 ```
 
-### `ledit skill`
+### `sprout skill`
 
 Manage agent skills and conventions.
 
 **Basic Usage:**
 ```bash
-ledit skill [command] [flags]
+sprout skill [command] [flags]
 ```
 
-### `ledit export-training`
+### `sprout export-training`
 
 Export session data to training formats (ShareGPT, OpenAI, Alpaca).
 
 **Basic Usage:**
 ```bash
-ledit export-training [flags]
+sprout export-training [flags]
 ```
 
 ---
@@ -184,14 +184,14 @@ ledit export-training [flags]
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--session-id <id>` | Specify a session identifier | `ledit agent --session-id my-session "continue work"` |
-| `--last-session` | Resume previous session | `ledit agent --last-session "resume"` |
+| `--session-id <id>` | Specify a session identifier | `sprout agent --session-id my-session "continue work"` |
+| `--last-session` | Resume previous session | `sprout agent --last-session "resume"` |
 
 ### Persona Selection
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--persona <name>` | Select agent persona | `ledit agent --persona coder "implement feature"` |
+| `--persona <name>` | Select agent persona | `sprout agent --persona coder "implement feature"` |
 
 **Available Personas:**
 - `orchestrator` — Process-oriented planning and delegation
@@ -209,48 +209,48 @@ ledit export-training [flags]
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--no-connection-check` | Skip provider connection check | `ledit agent --no-connection-check "task"` |
-| `--max-iterations <n>` | Limit iterations (default: 1000) | `ledit agent --max-iterations 50 "task"` |
-| `--no-stream` | Disable streaming for scripts | `LEDIT_NO_STREAM=1 ledit agent "task"` |
-| `--no-subagents` | Disable subagent tools | `ledit agent --no-subagents "task"` |
-| `--unsafe` | Bypass security checks (use with caution) | `ledit agent --unsafe "task"` |
+| `--no-connection-check` | Skip provider connection check | `sprout agent --no-connection-check "task"` |
+| `--max-iterations <n>` | Limit iterations (default: 1000) | `sprout agent --max-iterations 50 "task"` |
+| `--no-stream` | Disable streaming for scripts | `LEDIT_NO_STREAM=1 sprout agent "task"` |
+| `--no-subagents` | Disable subagent tools | `sprout agent --no-subagents "task"` |
+| `--unsafe` | Bypass security checks (use with caution) | `sprout agent --unsafe "task"` |
 
 ### Custom Prompts
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--system-prompt <file>` | Use custom system prompt from file | `ledit agent --system-prompt prompts/custom.md "task"` |
-| `--system-prompt-str <text>` | Inline custom system prompt | `ledit agent --system-prompt-str "You are a security expert..." "task"` |
+| `--system-prompt <file>` | Use custom system prompt from file | `sprout agent --system-prompt prompts/custom.md "task"` |
+| `--system-prompt-str <text>` | Inline custom system prompt | `sprout agent --system-prompt-str "You are a security expert..." "task"` |
 
 ### Resource Management
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--resource-directory <dir>` | Store web/vision resources | `ledit agent --resource-directory captures "task"` |
-| `--workflow-config <file>` | Run workflow configuration | `ledit agent --workflow-config examples/agent_workflow.json "task"` |
-| `--trace-dataset-dir <dir>` | Enable dataset tracing | `ledit agent --trace-dataset-dir traces "task"` |
-| `--prompt-stdin` | Read prompt from stdin | `echo "task" | ledit agent --prompt-stdin` |
+| `--resource-directory <dir>` | Store web/vision resources | `sprout agent --resource-directory captures "task"` |
+| `--workflow-config <file>` | Run workflow configuration | `sprout agent --workflow-config examples/agent_workflow.json "task"` |
+| `--trace-dataset-dir <dir>` | Enable dataset tracing | `sprout agent --trace-dataset-dir traces "task"` |
+| `--prompt-stdin` | Read prompt from stdin | `echo "task" | sprout agent --prompt-stdin` |
 
 ### Model Selection
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--model <provider:model>` | Specify model | `ledit agent --model "deepinfra:qwen3-coder" "task"` |
-| `--provider <name>` | Specify provider | `ledit agent --provider ollama "task"` |
+| `--model <provider:model>` | Specify model | `sprout agent --model "deepinfra:qwen3-coder" "task"` |
+| `--provider <name>` | Specify provider | `sprout agent --provider ollama "task"` |
 
 ### Web UI Control
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--no-web-ui` | Disable Web UI | `ledit agent --no-web-ui "task"` |
-| `--web-port <port>` | Use custom port | `ledit agent --web-port 8080` |
-| `-d`, `--daemon` | Daemon mode (keep Web UI running) | `ledit agent -d` |
+| `--no-web-ui` | Disable Web UI | `sprout agent --no-web-ui "task"` |
+| `--web-port <port>` | Use custom port | `sprout agent --web-port 8080` |
+| `-d`, `--daemon` | Daemon mode (keep Web UI running) | `sprout agent -d` |
 
 ---
 
 ## Slash Commands in Interactive Mode
 
-In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete).
+In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 
 ### Session & History
 
@@ -297,7 +297,7 @@ In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete).
 
 ## Agent Personas
 
-`ledit` supports 10 specialized personas, each optimized for different types of tasks. See [`docs/subagent_personas.md`](subagent_personas.md) for detailed descriptions.
+`sprout` supports 10 specialized personas, each optimized for different types of tasks. See [`docs/subagent_personas.md`](subagent_personas.md) for detailed descriptions.
 
 | Persona | Description |
 |---------|-------------|
@@ -314,13 +314,13 @@ In interactive `ledit` or `ledit agent`, use `/` for commands (tab-complete).
 
 **Using Personas:**
 ```bash
-ledit agent --persona coder "implement feature"
-ledit agent --persona debugger "fix this bug"
-ledit agent --persona code_reviewer "review my code"
-ledit agent --persona researcher "analyze codebase and external sources"
-ledit agent --persona web_scraper "extract structured content from web pages"
-ledit agent --persona refactor "refactor code while preserving behavior"
-ledit agent --persona computer_user "execute system administration tasks"
+sprout agent --persona coder "implement feature"
+sprout agent --persona debugger "fix this bug"
+sprout agent --persona code_reviewer "review my code"
+sprout agent --persona researcher "analyze codebase and external sources"
+sprout agent --persona web_scraper "extract structured content from web pages"
+sprout agent --persona refactor "refactor code while preserving behavior"
+sprout agent --persona computer_user "execute system administration tasks"
 ```
 
 ---
@@ -340,10 +340,10 @@ The memory system persists learned information across all conversations. Memorie
 
 **Usage in Interactive Mode:**
 ```
-ledit> add_memory "git-safety" "Never force-push to shared branches"
-ledit> list_memories
-ledit> read_memory "git-safety"
-ledit> delete_memory "git-safety"
+sprout> add_memory "git-safety" "Never force-push to shared branches"
+sprout> list_memories
+sprout> read_memory "git-safety"
+sprout> delete_memory "git-safety"
 ```
 
 **Use Cases:**
@@ -390,7 +390,7 @@ Thumbs.db
 
 ## Tool Suite
 
-`ledit` includes a comprehensive built-in tool suite for all development tasks.
+`sprout` includes a comprehensive built-in tool suite for all development tasks.
 
 ### File Operations
 
@@ -454,22 +454,22 @@ Thumbs.db
 
 ## MCP Server Integration
 
-MCP (Model Context Protocol) extends `ledit` with external tools and services.
+MCP (Model Context Protocol) extends `sprout` with external tools and services.
 
 ### Quick Start
 
 ```bash
 # Interactive setup
-ledit mcp add
+sprout mcp add
 
 # List servers
-ledit mcp list
+sprout mcp list
 
 # Test connection
-ledit mcp test [name]
+sprout mcp test [name]
 
 # Remove server
-ledit mcp remove [name]
+sprout mcp remove [name]
 ```
 
 ### Configuration
@@ -490,10 +490,10 @@ See [docs/MCP_INTEGRATION.md](MCP_INTEGRATION.md) for detailed MCP setup.
 
 ## Workspace Initialization
 
-The `.sprout/` directory is automatically created when you first run `ledit` commands. It contains:
+The `.sprout/` directory is automatically created when you first run `sprout` commands. It contains:
 
 - `config.json` — Local configuration overrides
-- `leditignore` — Ignore patterns (augments `.gitignore`)
+- `sproutignore` — Ignore patterns (augments `.gitignore`)
 - `changes/` — Per-change diff logs
 - `memories/` — Persistent memory storage (markdown files)
 - `revisions/` — Per-session directories with instructions and LLM responses

@@ -58,6 +58,25 @@
   --bg-hover: var(--bg-elevated);
   --accent-primary-bg-hover: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 
+  /* Semantic status-tinted backgrounds (status pills, inline alerts). Defined
+   * here so callsites can use `var(--bg-error)` etc. without falling back to
+   * hardcoded rgba — which previously broke theme switching. The 12% mix
+   * matches the design-system status-pill recipe. */
+  --bg-error: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  --bg-success: color-mix(in srgb, var(--accent-success) 12%, transparent);
+  --bg-warning: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  --bg-info: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+
+  /* `--accent-info` is informational/neutral-but-emphasized — we map it to
+   * primary since that's our blue. */
+  --accent-info: var(--accent-primary);
+  /* `--accent-on-primary` is foreground text on a primary-color surface. */
+  --accent-on-primary: var(--accent-fg);
+  /* Code/inline-code background — slightly elevated above bg-secondary. */
+  --bg-code: var(--bg-elevated);
+  /* Input background — distinct from page bg so form fields read as fields. */
+  --bg-input: var(--bg-primary);
+
   --color-success-bg: rgba(16, 185, 129, 0.1);
   --color-warning-bg: rgba(245, 158, 11, 0.1);
   --color-error-bg: rgba(244, 63, 94, 0.12);

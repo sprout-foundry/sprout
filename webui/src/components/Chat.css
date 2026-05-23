@@ -604,7 +604,7 @@
   background: var(--bg-tertiary);
   color: var(--text-secondary);
   padding: 20px;
-  border-radius: 14px;
+  border-radius: var(--radius-xl, 12px);
   text-align: center;
   border: 1px solid var(--border-default);
   margin: auto;
@@ -618,17 +618,56 @@
 
 .welcome-icon {
   font-size: 34px;
+  color: var(--text-tertiary);
 }
 
 .welcome-text {
   color: var(--text-primary);
-  font-weight: 560;
+  font-weight: 650;
   line-height: 1.5;
+  letter-spacing: -0.01em;
 }
 
 .welcome-hint {
   color: var(--text-tertiary);
   font-size: 12px;
+  line-height: 1.45;
+}
+
+/* Provider setup CTA on the no-provider empty state. Mirrors
+ * .chat-offline-retry-btn so both empty states present the same
+ * visual weight. Was previously unstyled. */
+.provider-setup-btn {
+  margin-top: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-lg, 8px);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background var(--t-base, 0.15s) var(--ease-out, ease),
+              border-color var(--t-base, 0.15s) var(--ease-out, ease),
+              transform var(--t-fast, 0.12s) var(--ease-out, ease);
+}
+
+.provider-setup-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-focus);
+}
+
+.provider-setup-btn:active {
+  transform: scale(0.98);
+}
+
+.provider-setup-btn:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary));
+  outline-offset: 2px;
 }
 
 .message {

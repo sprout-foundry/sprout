@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { NotificationType } from '../contexts/NotificationContext';
+import type { NotificationAction } from '../types/notification';
 
 export interface NotificationItemProps {
   id: string;
@@ -7,6 +8,7 @@ export interface NotificationItemProps {
   title: string;
   message: string;
   duration?: number;
+  action?: NotificationAction;
   onClose: (id: string) => void;
 }
 
@@ -26,6 +28,7 @@ function NotificationItem({
   title,
   message,
   duration = DEFAULT_DURATION,
+  action,
   onClose,
 }: NotificationItemProps): JSX.Element {
   const exitAnimationRef = useRef<number | null>(null);
@@ -106,6 +109,21 @@ function NotificationItem({
       <div className="notification-content">
         {title && <h4 className="notification-title">{title}</h4>}
         <p className="notification-message">{message}</p>
+        {action && (
+          <button
+            type="button"
+            className="notification-action"
+            onClick={(e) => {
+              e.stopPropagation();
+              action.onClick();
+              if (!action.keepOpen) {
+                handleClose();
+              }
+            }}
+          >
+            {action.label}
+          </button>
+        )}
       </div>
       <button className="notification-dismiss" onClick={handleClose} aria-label="Dismiss notification" type="button">
         ×

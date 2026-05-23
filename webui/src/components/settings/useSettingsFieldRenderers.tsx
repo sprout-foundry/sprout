@@ -15,16 +15,35 @@ interface FieldRenderersParams {
 
 export interface FieldRenderers {
   renderProvenanceBadge: (settingKey: string) => JSX.Element | null;
-  renderToggle: (settingKey: string, label: string) => JSX.Element | null;
-  renderSelect: (settingKey: string, label: string, options: string[]) => JSX.Element | null;
+  renderToggle: (settingKey: string, label: string, helpText?: string) => JSX.Element | null;
+  /**
+   * Toggle bound to **local component state** (editor preferences, form
+   * draft state) rather than the settings API. Same `.styled-toggle`
+   * markup as renderToggle so future structural changes only happen in
+   * one place — was previously inlined raw in GeneralSettingsTab,
+   * SkillsSettingsTab, and ProviderSettingsTab.
+   */
+  renderLocalToggle: (
+    checked: boolean,
+    label: string,
+    onChange: (next: boolean) => void,
+    helpText?: string,
+  ) => JSX.Element;
+  renderSelect: (settingKey: string, label: string, options: string[], helpText?: string) => JSX.Element | null;
   renderNumberInput: (
     settingKey: string,
     label: string,
     min?: number,
     max?: number,
     step?: number,
+    helpText?: string,
   ) => JSX.Element | null;
-  renderTextInput: (settingKey: string, label: string, placeholder?: string) => JSX.Element | null;
+  renderTextInput: (
+    settingKey: string,
+    label: string,
+    placeholder?: string,
+    helpText?: string,
+  ) => JSX.Element | null;
   renderTextareaInput: (
     settingKey: string,
     label: string,
@@ -77,23 +96,42 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     );
   };
 
-  const renderToggle = (settingKey: string, label: string) => {
+  const renderToggle = (settingKey: string, label: string, helpText?: string) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
     const checked = !!getNestedValue(current, settingKey);
     return (
-      <label className="styled-toggle">
-        <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
-        <span className="toggle-track" />
-        <span className="toggle-label">
-          {label}
-          {renderProvenanceBadge(settingKey)}
-        </span>
-      </label>
+      <div className="config-item">
+        <label className="styled-toggle">
+          <input type="checkbox" checked={checked} onChange={() => updateSetting(settingKey, !checked)} />
+          <span className="toggle-track" />
+          <span className="toggle-label">
+            {label}
+            {renderProvenanceBadge(settingKey)}
+          </span>
+        </label>
+        {helpText ? <div className="config-help">{helpText}</div> : null}
+      </div>
     );
   };
 
-  const renderSelect = (settingKey: string, label: string, options: string[]) => {
+  const renderLocalToggle = (
+    checked: boolean,
+    label: string,
+    onChange: (next: boolean) => void,
+    helpText?: string,
+  ) => (
+    <div className="config-item">
+      <label className="styled-toggle">
+        <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} />
+        <span className="toggle-track" />
+        <span className="toggle-label">{label}</span>
+      </label>
+      {helpText ? <div className="config-help">{helpText}</div> : null}
+    </div>
+  );
+
+  const renderSelect = (settingKey: string, label: string, options: string[], helpText?: string) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
     const value = String(getNestedValue(current, settingKey) || '');
@@ -115,11 +153,19 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
             </option>
           ))}
         </select>
+        {helpText ? <div className="config-help">{helpText}</div> : null}
       </div>
     );
   };
 
-  const renderNumberInput = (settingKey: string, label: string, min?: number, max?: number, step = 1) => {
+  const renderNumberInput = (
+    settingKey: string,
+    label: string,
+    min?: number,
+    max?: number,
+    step = 1,
+    helpText?: string,
+  ) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
     const value = getNestedValue(current, settingKey);
@@ -142,11 +188,12 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
             updateSetting(settingKey, v);
           }}
         />
+        {helpText ? <div className="config-help">{helpText}</div> : null}
       </div>
     );
   };
 
-  const renderTextInput = (settingKey: string, label: string, placeholder?: string) => {
+  const renderTextInput = (settingKey: string, label: string, placeholder?: string, helpText?: string) => {
     const current = displaySettingsRef.current ?? settings;
     if (!current) return null;
     const persistedValue = String(getNestedValue(current, settingKey) || '');
@@ -188,6 +235,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
             }
           }}
         />
+        {helpText ? <div className="config-help">{helpText}</div> : null}
       </div>
     );
   };
@@ -258,6 +306,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
   return {
     renderProvenanceBadge,
     renderToggle,
+    renderLocalToggle,
     renderSelect,
     renderNumberInput,
     renderTextInput,

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for the inline primary-provider/model switcher added to
  * ProviderSettingsTab. Pins:

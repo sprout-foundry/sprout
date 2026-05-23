@@ -542,3 +542,38 @@ Five `fmt.Fprintf(os.Stderr, "[FAIL] Error: %v\n", err)` sites in `cmd/agent_mod
 [x] - SP-052: Route all 5 `[FAIL] Error: %v` sites through the helper: `cmd/agent_modes.go:673` (EA task processing), `:881` (slash command), `:912/917/922` (zsh fast-path, direct execution, normal ProcessQuery). All `[WARN]` sites left unchanged — they're benign single-line messages that already render fine.
 [x] - SP-052: Tests in `pkg/console/error_block_test.go` covering nil/single-line/multi-line, NO_COLOR vs FORCE_COLOR, trailing-newline trim, and single-line-stays-plain even with colors enabled. Pin the legacy single-line format so log scrapers and screenshots don't see a regression.
 
+---
+
+## SP-053: WebUI CLI Parity Pass
+
+Spec: `roadmap/SP-053-webui-cli-parity.md`
+
+Three CLI improvements (SP-048 timeline, SP-051 depth/persona, SP-048 footer) need WebUI equivalents. The CLI got per-tool spinners, indented + persona-badged subagent output, and a live cost/model/ctx footer; the WebUI is still flat. Backend already publishes `subagent_depth` + `active_persona` on every event (per SP-051) — WebUI just doesn't consume them yet.
+
+### Phase 1: Persona badge + depth indent in chat messages
+
+[x] - SP-053-1a: Lift persona color map into `@sprout/ui`. Create `packages/ui/src/utils/personaColors.ts` containing the existing `PERSONA_COLORS` map + `getPersonaColor(persona?: string): string` from `webui/src/components/chat/SubagentActivityFeed.tsx:11-24`. Re-export from package barrel. Update `SubagentActivityFeed.tsx` to import from `@sprout/ui` instead of defining its own copy.
+[x] - SP-053-1b: Extend `Message` type at `packages/ui/src/types/chat.ts:20-27` with optional `persona?: string` and `subagentDepth?: number`. Both optional — existing message-construction sites stay valid.
+[x] - SP-053-1c: Populate persona/depth from incoming events in `webui/src/hooks/useEventHandler.ts` (grep for `type: 'assistant'` to find construction sites). Read `subagent_depth` + `active_persona` from event payload (SP-051's `decorateEventPayload` already places them there) and attach to constructed `Message`.
+[x] - SP-053-1d: Add optional `persona?: string` + `depth?: number` props to `packages/ui/src/components/MessageBubble.tsx`. When `depth > 0`, apply `marginLeft: depth * 12px` to outer `.message`. When `persona` is non-empty, render a colored badge (left of copy button) using `getPersonaColor`. Default styling preserves today's look.
+[x] - SP-053-1e: Tests in `packages/ui/src/components/MessageBubble.test.tsx`: persona+depth absent (matches today), persona present (badge with expected color), depth > 0 (correct indent), depth 0 with persona (badge but no indent). One backwards-compat pin test confirming existing callers render identically.
+
+### Phase 2: Live tool timeline in chat footer
+
+[x] - SP-053-2a: New `ToolTimelineBar.tsx` in `webui/src/components/chat/`. Renders up to 4 in-flight or recently-completed tools horizontally. Per-tool card: status icon (spinner for `started`/`running`, green check for `completed`, red X for `error`), tool name (monospace), compact arg preview, persona badge (when `ToolExecution.persona` set), elapsed time (live-ticking for running, final for completed). Completed tools fade after 3s via CSS; errors stick until next tool starts.
+[x] - SP-053-2b: Wire `ToolTimelineBar` into `ChatFooter.tsx:28` when `filteredToolExecutions.length > 0`. Replace the generic skeleton at `:54-63` — suppress it when tools are visible (don't double-signal). Keep skeleton as fallback when no tools but `isProcessing=true`.
+[x] - SP-053-2c: Tests in `ToolTimelineBar.test.tsx`: zero tools (renders nothing), one running tool (spinner + name), one completed (check + duration), mix of running/completed (running first), error sticks past 3s window, persona badge appears with expected color.
+
+### Phase 3: Provider/model/cost in status bar
+
+[x] - SP-053-3a: New `ChatStatusBarItems.tsx` in `webui/src/components/chat/`. Renders right-aligned cluster: `<provider-icon> <model> · <used>k/<limit>k ctx · $<cost>`. Reads from `stats` prop. Cost color thresholds match the CLI: yellow >$1, red >$5 (mirroring `pkg/console/status_footer.go:310-319`); respect `NO_COLOR` via existing theme variables. Generic lucide provider icon (Cloud/Server/Cpu) — defer per-provider brand icons.
+[x] - SP-053-3b: Render `ChatStatusBarItems` via the existing `rightItems` slot on shared `@sprout/ui` `StatusBar` (`packages/ui/src/components/StatusBar.tsx:25`). In `webui/src/components/StatusBar.tsx`, when chat is active (`stats` non-empty), pass `<ChatStatusBarItems stats={stats} />`; otherwise keep today's editor metadata. No schema change to the shared component.
+[x] - SP-053-3c: Verify live update cadence. `stats` already flows as a prop; check that updates aren't throttled >1s. If they are, bump the event source to match CLI footer's behavior (refreshes on every `ToolEnd`).
+[x] - SP-053-3d: Tests in `ChatStatusBarItems.test.tsx`: renders with full stats (all segments), missing fields (segment omitted, no empty `·`), cost threshold styling (below warn = no color, above warn = yellow class, above alert = red class). Composition test in WebUI `StatusBar.tsx`: empty `stats` → editor metadata, non-empty → chat items.
+
+### Verification
+
+[x] - SP-053: `npm run build` in `webui/` succeeds (shared `@sprout/ui` package + WebUI consumers compile cleanly).
+[x] - SP-053: `make build-all` succeeds (Go binary embeds the rebuilt UI).
+[x] - SP-053: Existing `MessageBubble` consumers (sprout-foundry) keep compiling — new props are optional.
+

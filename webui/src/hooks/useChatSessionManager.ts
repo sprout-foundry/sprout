@@ -226,6 +226,29 @@ export function useChatSessionManager({
       const isClearCommand = trimmedMessage.toLowerCase() === '/clear';
       const allowConcurrent = options?.allowConcurrent === true;
 
+      // Intercept the /model and /provider slash commands client-side and
+      // route them to the equivalent WebUI affordances (model picker
+      // modal, settings panel focus). The backend's CLI command registry
+      // writes its output to stdout (via fmt.Printf) which never reaches
+      // the browser — so handing those off to native UI gives users the
+      // result they expect instead of an empty "Executed command" echo.
+      const lc = trimmedMessage.toLowerCase();
+      if (lc === '/model' || lc === '/model select' || lc.startsWith('/model ')) {
+        setState((prev) => ({
+          ...prev,
+          modelSelectionRequest: { provider: prev.provider },
+        }));
+        setInputValue('');
+        return;
+      }
+      if (lc === '/provider' || lc.startsWith('/provider ')) {
+        window.dispatchEvent(
+          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
+        );
+        setInputValue('');
+        return;
+      }
+
       if (isClearCommand && !allowConcurrent && activeRequestsRef.current > 0) {
         try {
           await apiService.stopQuery();

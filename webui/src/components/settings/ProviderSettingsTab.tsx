@@ -1,6 +1,6 @@
 import { SkeletonText } from '@sprout/ui';
 import { Pencil, Plus, Trash2, Cog } from 'lucide-react';
-import type { SproutSettings } from '../../services/api';
+import type { SproutSettings, ProviderOption } from '../../services/api';
 
 interface ProviderSettingsTabProps {
   settings: SproutSettings;
@@ -16,6 +16,14 @@ interface ProviderSettingsTabProps {
   providerModelContextSizes: string;
   loadingProviderInfo: boolean;
   currentProviderInfo: { provider: string; model: string; hasCredential: boolean } | null;
+  /** Provider catalog for the inline switcher dropdowns. Populated by
+   *  useSettingsState whenever the env-providers or subagents tab is
+   *  open. Empty list falls back to the read-only display. */
+  availableProviders?: ProviderOption[];
+  /** Settings PUT mutation used to persist primary provider/model changes
+   *  from the inline switcher. Matches the same callback consumed by
+   *  SubagentSettingsTab and CommitReviewSettingsTab for parity. */
+  updateSetting?: (keyOrPath: string, value: unknown) => Promise<void>;
   setEditingProvider: (v: { mode: 'add' | 'edit'; originalName?: string } | null) => void;
   setProviderName: (v: string) => void;
   setProviderApiBase: (v: string) => void;
@@ -45,6 +53,8 @@ export default function ProviderSettingsTab({
   providerModelContextSizes,
   loadingProviderInfo,
   currentProviderInfo,
+  availableProviders,
+  updateSetting,
   setEditingProvider,
   setProviderName,
   setProviderApiBase,
@@ -62,6 +72,15 @@ export default function ProviderSettingsTab({
   const customProviders = settings.custom_providers || {};
   const providerEntries = Object.entries(customProviders);
 
+  // The inline switcher only renders when we have both a provider catalog
+  // and a persistence callback — otherwise we fall back to the read-only
+  // "Current Provider" panel + Provider Setup button (the legacy path).
+  const canSwitchInline = !!updateSetting && (availableProviders?.length ?? 0) > 0;
+  const currentProviderId = currentProviderInfo?.provider || '';
+  const currentModelId = currentProviderInfo?.model || '';
+  const selectedProviderEntry = availableProviders?.find((p) => p.id === currentProviderId);
+  const availableModelsForCurrent = selectedProviderEntry?.models || [];
+
   return (
     <div className="section">
       <div className="current-provider-section">
@@ -73,25 +92,74 @@ export default function ProviderSettingsTab({
           </div>
         ) : currentProviderInfo ? (
           <div className="current-provider-info">
-            <div className="current-provider-detail">
-              <span className="label">Provider:</span>
-              <span className="value">{currentProviderInfo.provider || 'Not configured'}</span>
-            </div>
-            <div className="current-provider-detail">
-              <span className="label">Model:</span>
-              <span className="value">{currentProviderInfo.model || '—'}</span>
-            </div>
-            <div className="current-provider-detail">
-              <span className="label">Credential:</span>
-              <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
-              </span>
-            </div>
+            {canSwitchInline ? (
+              <>
+                <div className="config-item">
+                  <label htmlFor="primary-provider-select">Provider</label>
+                  <select
+                    id="primary-provider-select"
+                    className="styled-select"
+                    value={currentProviderId}
+                    onChange={(e) => updateSetting!('provider', e.target.value)}
+                  >
+                    {!currentProviderId && <option value="">Not configured</option>}
+                    {availableProviders!.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="config-item">
+                  <label htmlFor="primary-model-select">Model</label>
+                  <select
+                    id="primary-model-select"
+                    className="styled-select"
+                    value={currentModelId}
+                    onChange={(e) => updateSetting!('model', e.target.value)}
+                    disabled={!currentProviderId || availableModelsForCurrent.length === 0}
+                  >
+                    {currentModelId && !availableModelsForCurrent.includes(currentModelId) && (
+                      <option value={currentModelId}>{currentModelId}</option>
+                    )}
+                    {availableModelsForCurrent.length === 0 && <option value="">No models available</option>}
+                    {availableModelsForCurrent.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="current-provider-detail">
+                  <span className="label">Credential:</span>
+                  <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
+                    {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="current-provider-detail">
+                  <span className="label">Provider:</span>
+                  <span className="value">{currentProviderInfo.provider || 'Not configured'}</span>
+                </div>
+                <div className="current-provider-detail">
+                  <span className="label">Model:</span>
+                  <span className="value">{currentProviderInfo.model || '—'}</span>
+                </div>
+                <div className="current-provider-detail">
+                  <span className="label">Credential:</span>
+                  <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
+                    {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                  </span>
+                </div>
+              </>
+            )}
             <button
               type="button"
               className="onboarding-reopen-btn"
               onClick={() => onRequestProviderSetup?.()}
-              title="Change provider, model, or API key"
+              title="Change provider, model, or API key via guided setup"
             >
               <Cog size={14} />
               Provider Setup

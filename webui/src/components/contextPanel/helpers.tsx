@@ -62,19 +62,10 @@ export const getToolIcon = (toolName: string): ReactNode => {
   return iconMap[toolName] || <Wrench size={14} />;
 };
 
-export const getPersonaColor = (persona?: string) => {
-  const colorMap: Record<string, string> = {
-    coder: '#58a6ff',
-    reviewer: '#d2a8ff',
-    code_reviewer: '#d2a8ff',
-    tester: '#7ee787',
-    debugger: '#f0883e',
-    refactor: '#79c0ff',
-    researcher: '#ff7b72',
-    general: '#8b949e',
-  };
-  return colorMap[persona || ''] || '#8b949e';
-};
+// SP-053-1a: re-export from @sprout/ui to keep the single source of truth
+// in `packages/ui/src/utils/personaColors.ts`. Existing importers of this
+// module keep working without code changes.
+export { getPersonaColor } from '@sprout/ui';
 
 export const getStatusIcon = (status: string): ReactNode => {
   switch (status) {

@@ -75,8 +75,8 @@ jobs:
 
       - name: Build workspace packages
         run: |
-          cd packages/events && npm install && npm run build
-          cd packages/ui && npm install && npm run build
+          (cd packages/events && npm install && npm run build)
+          (cd packages/ui && npm install && npm run build)
 
       - name: Set up Node.js webui
         run: |

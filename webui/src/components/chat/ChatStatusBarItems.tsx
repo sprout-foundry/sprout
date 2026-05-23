@@ -101,10 +101,12 @@ export function ChatStatusBarItems({ stats, onModelClick }: ChatStatusBarItemsPr
 
   const segments: JSX.Element[] = [];
 
-  // Persona badge — only when the agent's active persona is something
+  // Persona chip — only when the agent's active persona is something
   // other than the unmarked primary. The CLI shows persona via tool-line
   // badges; this surfaces the same signal at the status level so users
-  // can see at a glance which sub-agent is currently running.
+  // can see at a glance which sub-agent is currently running. Styled as
+  // a tinted chip (design-system status-pill pattern) — the background
+  // derives from the inline color via `currentColor` color-mix.
   if (persona && persona !== 'orchestrator') {
     segments.push(
       <span
@@ -113,7 +115,7 @@ export function ChatStatusBarItems({ stats, onModelClick }: ChatStatusBarItemsPr
         style={{ color: getPersonaColor(persona) }}
         title={`Active persona: ${persona}`}
       >
-        [{persona}]
+        {persona}
       </span>,
     );
   }

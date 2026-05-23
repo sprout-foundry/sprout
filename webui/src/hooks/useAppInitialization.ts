@@ -186,14 +186,21 @@ export function useAppInitialization({
     // Snapshot ref value for cleanup (ref.current in cleanup triggers exhaustive-deps)
     const timeoutId = connectionTimeoutRef.current;
 
-    // Cleanup
+    // Cleanup — detach listeners and timers, but DON'T disconnect the WS.
+    // WebSocketService is a process-lifetime singleton; calling disconnect()
+    // here sets `intentionalClose=true` and exhausts reconnectAttempts,
+    // which permanently kills the connection if this effect ever runs
+    // twice (React 18 StrictMode dev double-invoke, error-boundary retry,
+    // or a dep change). The backend then sees a single connect/close
+    // pair and the app sits in a disconnected state with no recovery.
+    // Leaving the WS alive across remounts is safe: the next effect run
+    // re-registers the handler and reuses the existing connection.
     return () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
       eventsProvider.removeEvent(handleEvent);
       eventsProvider.onReconnect(null);
-      eventsProvider.disconnect();
       window.removeEventListener('resize', checkBreakpoints);
       clearInterval(statsInterval);
     };

@@ -159,13 +159,13 @@
 
 .lines-added,
 .additions {
-  color: #22c55e;
+  color: var(--accent-success);
   font-weight: 700;
 }
 
 .lines-deleted,
 .deletions {
-  color: #ef4444;
+  color: var(--accent-error);
   font-weight: 700;
 }
 
@@ -248,9 +248,9 @@
   margin: 10px 14px 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(127, 29, 29, 0.2);
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  color: #fecaca;
+  background: color-mix(in srgb, var(--accent-error) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-error) 35%, transparent);
+  color: color-mix(in srgb, var(--accent-error) 70%, var(--text-primary));
   font-size: 12px;
 }
 
@@ -400,19 +400,19 @@
 }
 
 .file-created {
-  border-color: rgba(34, 197, 94, 0.45);
-  color: #86efac;
+  border-color: color-mix(in srgb, var(--accent-success) 45%, transparent);
+  color: var(--accent-success);
 }
 
 .file-edited,
 .file-renamed {
-  border-color: rgba(56, 189, 248, 0.45);
-  color: #7dd3fc;
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  color: var(--accent-primary);
 }
 
 .file-deleted {
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #fca5a5;
+  border-color: color-mix(in srgb, var(--accent-error) 45%, transparent);
+  color: var(--accent-error);
 }
 
 .file-path-small {
@@ -440,9 +440,9 @@
 
 .rollback-button {
   appearance: none;
-  border: 1px solid rgba(248, 113, 113, 0.38);
-  background: rgba(127, 29, 29, 0.25);
-  color: #fecaca;
+  border: 1px solid color-mix(in srgb, var(--accent-error) 38%, transparent);
+  background: color-mix(in srgb, var(--accent-error) 22%, transparent);
+  color: color-mix(in srgb, var(--accent-error) 70%, var(--text-primary));
   border-radius: 8px;
   padding: 7px 10px;
   font-size: 12px;

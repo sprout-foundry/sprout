@@ -249,7 +249,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
-  color: #fecaca;
+  color: var(--accent-error);
   white-space: nowrap;
   background: var(--sidebar-bg);
   padding: 0 var(--space-2);

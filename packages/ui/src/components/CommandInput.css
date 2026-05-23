@@ -16,7 +16,11 @@
 
 .command-input:focus-within {
   border-color: var(--border-focus);
-  box-shadow: var(--shadow-elevated);
+  /* Soft 3-px accent halo + the existing elevated shadow, per the design
+     system focus pattern (preview/spacing-shadows.html). The previous
+     solid `--border-focus` border alone read as a hard blue outline that
+     fought with the persona chip and model hint stacked above the input. */
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha), var(--shadow-elevated);
 }
 
 .input-header {

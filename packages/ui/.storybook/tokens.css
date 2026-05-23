@@ -1,0 +1,77 @@
+/* Design tokens for Storybook isolation only.
+ *
+ * In the real webui these come from `webui/src/App.css` (which defines
+ * `:root` + `:root[data-theme='light']`). The @sprout/ui package itself
+ * doesn't ship a token stylesheet — consumers wire their own. Stories
+ * imported components used `var(--bg-elevated)`, `var(--accent-primary)`,
+ * etc., which would otherwise resolve to nothing in Storybook and the
+ * components would render unstyled.
+ *
+ * Keep these synced with `webui/src/App.css`. */
+
+:root {
+  /* Dark theme (default) */
+  --bg-primary: #282c34;
+  --bg-secondary: #21252b;
+  --bg-tertiary: #2c313a;
+  --bg-elevated: #303742;
+  --bg-surface: #3a404b;
+
+  --border-subtle: rgba(171, 178, 191, 0.14);
+  --border-default: rgba(171, 178, 191, 0.22);
+  --border-strong: rgba(171, 178, 191, 0.34);
+  --border-focus: rgba(97, 175, 239, 0.75);
+
+  --text-primary: #abb2bf;
+  --text-secondary: #9aa3b2;
+  --text-tertiary: #7f8794;
+  --text-muted: #5c6370;
+
+  --accent-primary: #61afef;
+  --accent-secondary: #56b6c2;
+  --accent-success: #98c379;
+  --accent-warning: #e5c07b;
+  --accent-error: #e06c75;
+  --accent-primary-alpha: rgba(97, 175, 239, 0.20);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+
+  --shadow-subtle: 0 2px 6px rgba(2, 6, 23, 0.32);
+  --shadow-elevated: 0 10px 22px rgba(2, 6, 23, 0.42);
+  --shadow-float: 0 20px 38px rgba(2, 6, 23, 0.52);
+
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --font-sans: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+:root[data-theme='light'] {
+  --bg-primary: #f4f7fb;
+  --bg-secondary: #eef3f9;
+  --bg-tertiary: #e5edf7;
+  --bg-elevated: #dbe7f5;
+
+  --border-subtle: rgba(56, 60, 67, 0.12);
+  --border-default: rgba(56, 60, 67, 0.20);
+  --border-strong: rgba(56, 60, 67, 0.30);
+  --border-focus: rgba(64, 120, 242, 0.65);
+
+  --text-primary: #383a42;
+  --text-secondary: #4f535f;
+  --text-tertiary: #696f7a;
+  --text-muted: #8a9099;
+
+  --accent-primary: #4078f2;
+  --accent-secondary: #0184bc;
+  --accent-success: #50a14f;
+  --accent-warning: #c18401;
+  --accent-error: #e45649;
+  --accent-primary-alpha: rgba(64, 120, 242, 0.16);
+
+  --shadow-subtle: 0 2px 6px rgba(15, 23, 42, 0.08);
+  --shadow-elevated: 0 10px 22px rgba(15, 23, 42, 0.12);
+  --shadow-float: 0 20px 38px rgba(15, 23, 42, 0.18);
+}

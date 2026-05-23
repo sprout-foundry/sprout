@@ -2,6 +2,11 @@ import type { Preview } from '@storybook/react';
 import { SproutProvider } from '../src/contexts/SproutAdapterContext';
 import { MockAdapter } from './mocks/MockAdapter';
 
+// Design tokens — must load BEFORE component stylesheets so var() lookups
+// resolve correctly. Otherwise components rendered in Storybook lose
+// background/border/shadow because their CSS references undefined vars.
+import './tokens.css';
+
 // Import all component CSS files for proper styling
 import '../src/components/ChatPanel.css';
 import '../src/components/CommandInput.css';

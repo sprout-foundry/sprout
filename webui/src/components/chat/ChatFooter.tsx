@@ -2,6 +2,8 @@ import { SkeletonText } from '@sprout/ui';
 import { Zap, AlertTriangle } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
+import { ToolTimelineBar } from './ToolTimelineBar';
+import './ToolTimelineBar.css';
 import type { ToolExecution, SubagentActivity } from './types';
 
 interface ChatFooterProps {
@@ -27,6 +29,15 @@ export function ChatFooter({
 }: ChatFooterProps): JSX.Element {
   const elements: JSX.Element[] = [];
 
+  // SP-053-2b: live tool timeline above subagent feed / query progress.
+  // Shown whenever there are tool executions to surface (running, or
+  // recently-completed within the fade window); ToolTimelineBar itself
+  // returns null when there's nothing visible, so no extra guard needed.
+  const hasToolsToShow = filteredToolExecutions.length > 0;
+  if (hasToolsToShow) {
+    elements.push(<ToolTimelineBar key="tool-timeline" toolExecutions={filteredToolExecutions} />);
+  }
+
   if (hasSubagentActivity) {
     elements.push(<SubagentActivityFeed key="subagent" activities={subagentActivities} />);
   }
@@ -51,7 +62,7 @@ export function ChatFooter({
     );
   }
 
-  if (isProcessing && filteredToolExecutions.length === 0 && !queryProgress && !hasSubagentActivity) {
+  if (isProcessing && !hasToolsToShow && !queryProgress && !hasSubagentActivity) {
     elements.push(
       <div key="processing" className="processing-indicator" role="status" aria-label="Processing request">
         <div className="processing-content">

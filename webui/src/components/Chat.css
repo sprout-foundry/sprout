@@ -892,6 +892,41 @@
   flex-shrink: 0;
 }
 
+/* Compact "model ▸" hint shown above the chat input, mirroring the CLI's
+   prompt prefix at `cmd/agent_modes.go:1005`. Tiny + muted so it sits
+   quietly above the input without competing with content. */
+.input-model-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: var(--text-tertiary, #6e7681);
+  margin-bottom: 4px;
+  line-height: 1.2;
+  user-select: none;
+  pointer-events: none;
+}
+
+.input-model-hint-persona {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.input-model-hint-name {
+  font-weight: 600;
+  color: var(--text-secondary, #8b949e);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.input-model-hint-arrow {
+  color: var(--text-tertiary, #6e7681);
+  font-weight: 400;
+}
+
 @media (max-width: 1400px) {
   .context-panel {
     width: 320px !important;

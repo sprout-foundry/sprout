@@ -1035,12 +1035,58 @@
   scrollbar-color: var(--border-muted) transparent;
 }
 
-/* Accent bar - warning color */
+/* Accent bar — warning yellow by default (model-unavailable recovery
+ * use case), brand blue when the modal is opened proactively from the
+ * status bar (model-selection-card--switch). */
 .model-selection-accent-bar {
   height: 4px;
   width: 100%;
   flex-shrink: 0;
   background: var(--accent-warning);
+}
+
+.model-selection-card--switch .model-selection-accent-bar {
+  background: var(--accent-primary);
+}
+
+.model-selection-card--switch .model-selection-icon {
+  background: var(--accent-primary-alpha);
+  color: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 35%, transparent);
+}
+
+.model-selection-card--switch .model-selection-item[aria-selected='true'] {
+  background: var(--accent-primary-alpha);
+  color: var(--accent-primary);
+}
+
+.model-selection-card--switch .model-selection-item-check {
+  color: var(--accent-primary);
+}
+
+/* Search input above the model list — matches .styled-input pattern with
+ * the 3-px focus halo from the design-system inputs spec. */
+.model-selection-search {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
+}
+
+.model-selection-search:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
+}
+
+.model-selection-search::placeholder {
+  color: var(--text-tertiary);
 }
 
 /* Header */

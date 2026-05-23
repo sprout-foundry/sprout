@@ -168,8 +168,10 @@ const AppContent: React.FC<AppContentProps> = ({
       }
       // useAppStoreSetState takes an updater that returns a *partial*
       // AppState (the store merges it in) — not the full spread we'd use
-      // with React's setState.
-      setAppState(() => ({ modelSelectionRequest: { provider: p } }));
+      // with React's setState. reason='switch' so the modal renders with
+      // neutral "Choose a model" copy instead of the warning treatment
+      // used for unavailable-model recovery.
+      setAppState(() => ({ modelSelectionRequest: { provider: p, reason: 'switch' } }));
     },
     [setAppState, state.provider],
   );

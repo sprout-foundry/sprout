@@ -7,6 +7,16 @@
 :root {
   color-scheme: dark;
   --sprout-terminal-reserved-height: 42px;
+
+  /* Brand tokens (design system § "Color · brand") — surfaces that want
+   * the sprout *brand* color rather than an Atom-One accent should
+   * resolve through these. --brand-active-cyan is the canonical "active
+   * rail / underline" hue (sidebar nav, editor tab, etc.). */
+  --brand-teal: #14b8c8;
+  --brand-frost: #68e3ee;
+  --brand-active-cyan: #22d3ee;
+  --brand-navy: #10212d;
+
   --bg-primary: #282c34;
   --bg-secondary: #21252b;
   --bg-tertiary: #2c313a;
@@ -31,6 +41,11 @@
   --accent-error: #e06c75;
   --accent-cyan: #56b6c2;
   --accent-primary-alpha: rgba(97, 175, 239, 0.2);
+  /* RGB triplet for callsites using rgba() with a CSS variable — used in
+   * Chat.css and ChatPanel.css for selection/focus halos. Must stay in
+   * sync with --accent-primary; without this every fallback resolves to
+   * indigo (99,102,241) and the brand color is wrong. */
+  --accent-primary-rgb: 97, 175, 239;
 
   --color-success-bg: rgba(16, 185, 129, 0.1);
   --color-warning-bg: rgba(245, 158, 11, 0.1);
@@ -123,6 +138,15 @@
 
 :root[data-theme='light'] {
   color-scheme: light;
+
+  /* Brand tokens — teal stays constant across themes per the design
+   * system. The "frost" leaf accent flips to sprout green in light mode
+   * so the logo reads on the lighter background. Active cyan stays
+   * cyan but pulls slightly darker for legibility. */
+  --brand-teal: #14b8c8;
+  --brand-frost: #1ba03d;
+  --brand-active-cyan: #0891b2;
+
   --bg-primary: #f4f7fb;
   --bg-secondary: #eef3f9;
   --bg-tertiary: #e5edf7;
@@ -147,6 +171,7 @@
   --accent-error: #dc2626;
   --accent-cyan: #0891b2;
   --accent-primary-alpha: rgba(29, 78, 216, 0.16);
+  --accent-primary-rgb: 29, 78, 216;
 
   --editor-pane-bg: #f8fbff;
   --editor-pane-bg-secondary: rgba(0, 0, 0, 0.03);

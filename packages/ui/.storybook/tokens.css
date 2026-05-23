@@ -11,6 +11,13 @@
 
 :root {
   /* Dark theme (default) */
+
+  /* Brand tokens — see webui/src/App.css for canonical definitions. */
+  --brand-teal: #14b8c8;
+  --brand-frost: #68e3ee;
+  --brand-active-cyan: #22d3ee;
+  --brand-navy: #10212d;
+
   --bg-primary: #282c34;
   --bg-secondary: #21252b;
   --bg-tertiary: #2c313a;
@@ -33,6 +40,8 @@
   --accent-warning: #e5c07b;
   --accent-error: #e06c75;
   --accent-primary-alpha: rgba(97, 175, 239, 0.20);
+  /* RGB triplet for rgba() callsites — must stay in sync with --accent-primary. */
+  --accent-primary-rgb: 97, 175, 239;
 
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -49,6 +58,10 @@
 }
 
 :root[data-theme='light'] {
+  --brand-teal: #14b8c8;
+  --brand-frost: #1ba03d;
+  --brand-active-cyan: #0891b2;
+
   --bg-primary: #f4f7fb;
   --bg-secondary: #eef3f9;
   --bg-tertiary: #e5edf7;
@@ -70,6 +83,7 @@
   --accent-warning: #c18401;
   --accent-error: #e45649;
   --accent-primary-alpha: rgba(64, 120, 242, 0.16);
+  --accent-primary-rgb: 64, 120, 242;
 
   --shadow-subtle: 0 2px 6px rgba(15, 23, 42, 0.08);
   --shadow-elevated: 0 10px 22px rgba(15, 23, 42, 0.12);

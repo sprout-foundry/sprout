@@ -63,10 +63,15 @@
   z-index: 1;
 }
 
+/* Active tab — bg matches the editor canvas so the tab "merges" into
+ * the open pane, with only a 2-px cyan underline marking it active.
+ * Matches the design-system editor-tabs pattern. Previously this used a
+ * tinted alpha bg + full blue outline which read as a button rather
+ * than a tab. */
 .tab.active {
-  background: var(--accent-primary-alpha);
-  border-color: var(--border-focus);
-  border-bottom-color: var(--accent-primary);
+  background: var(--bg-primary);
+  border-color: transparent;
+  border-bottom-color: var(--brand-active-cyan, #22d3ee);
   z-index: 2;
 }
 

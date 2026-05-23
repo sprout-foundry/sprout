@@ -586,7 +586,7 @@
 }
 
 .location-switcher-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elevated);
 }
 
 .location-switcher-item.selected {

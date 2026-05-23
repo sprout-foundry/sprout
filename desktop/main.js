@@ -281,6 +281,14 @@ app.whenReady().then(async () => {
   }
 
   if (isSmokeTestMode()) {
+    const smokeWorkspace = process.env.SPROUT_SMOKE_WORKSPACE;
+    if (smokeWorkspace) {
+      const resolvedWorkspace = resolveWorkspaceDirectory(smokeWorkspace);
+      if (resolvedWorkspace) {
+        await createWorkspaceWindow({ workspacePath: resolvedWorkspace });
+        return;
+      }
+    }
     await openInitialWindow();
     return;
   }

@@ -383,6 +383,15 @@ async function createWorkspaceWindow(options = {}) {
     }
   });
 
+  if (isSmokeTestMode()) {
+    writeSmokeStatus({
+      event: 'workspace-opened',
+      port: backend.port,
+      workspacePath,
+      url: `http://127.0.0.1:${backend.port}`,
+    });
+  }
+
   await browserWindow.loadURL(`http://127.0.0.1:${backend.port}`);
   return browserWindow;
 }

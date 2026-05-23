@@ -54,7 +54,7 @@ async function waitForSmokeStatusOrExit(app, timeoutMs = 30000) {
 }
 
 async function launchSmokeApp() {
-  const statusDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ledit-desktop-smoke-'));
+  const statusDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sprout-desktop-smoke-'));
   const statusFile = path.join(statusDir, 'status.json');
   const child = spawn(ELECTRON_BIN, [APP_ROOT], {
     cwd: APP_ROOT,
@@ -110,7 +110,7 @@ test.describe('Desktop smoke', () => {
       // 'launcher-ready-to-show' overwrites 'launcher-loaded' in the status file.
       expect(['launcher-loaded', 'launcher-ready-to-show']).toContain(status.event);
       expect(status.title).toBeTruthy();
-      expect(status.title).toContain('Ledit');
+      expect(status.title).toContain('Sprout');
       expect(status.visible).toBe(true);
     } finally {
       await closeSmokeApp(app.child, app.statusDir);

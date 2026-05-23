@@ -1676,8 +1676,29 @@
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
-  border-radius: 8px;
+  border-radius: var(--radius-lg, 8px);
   cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background var(--t-base, 0.15s) var(--ease-out, ease),
+              border-color var(--t-base, 0.15s) var(--ease-out, ease),
+              box-shadow var(--t-base, 0.15s) var(--ease-out, ease),
+              transform var(--t-fast, 0.12s) var(--ease-out, ease);
+}
+
+.sidebar-action-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  border-color: var(--border-strong, var(--border-focus));
+}
+
+.sidebar-action-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.sidebar-action-btn:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary));
+  outline-offset: 1px;
 }
 
 .git-generate-icon-btn {
@@ -1728,6 +1749,15 @@
   background: var(--accent-primary);
   color: var(--accent-on-primary, #fff);
   border-color: var(--accent-primary);
+  /* Subtle specular highlight on raised primary buttons — design-system
+     spec for the btn-primary variant (preview/components-buttons.html). */
+  box-shadow: var(--shadow-subtle, 0 2px 6px rgba(2, 6, 23, 0.32)),
+              inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.sidebar-action-btn.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 88%, white);
+  border-color: color-mix(in srgb, var(--accent-primary) 88%, white);
 }
 
 .sidebar-action-btn.ghost {

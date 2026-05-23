@@ -24,6 +24,12 @@ interface ChatStatusBarItemsProps {
    */
   stats?: Record<string, unknown> | null;
   /**
+   * Connection state for the WebSocket transport. When false the status
+   * bar shows a "disconnected" pill instead of the connected one — the
+   * only feedback the user gets that events have stopped flowing.
+   */
+  isConnected?: boolean;
+  /**
    * If supplied, the model name becomes a clickable button that invokes
    * this callback (typically opens the ModelSelectionModal). Without it
    * the model name renders as plain text.
@@ -76,7 +82,7 @@ function ProviderIcon({ provider }: { provider?: string }): JSX.Element | null {
   return <Cloud size={11} aria-hidden="true" />;
 }
 
-export function ChatStatusBarItems({ stats, onModelClick }: ChatStatusBarItemsProps): JSX.Element | null {
+export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatStatusBarItemsProps): JSX.Element | null {
   if (!stats) return null;
 
   const provider = typeof stats.provider === 'string' ? stats.provider : '';
@@ -90,6 +96,10 @@ export function ChatStatusBarItems({ stats, onModelClick }: ChatStatusBarItemsPr
   // If literally nothing is populated, render nothing rather than an empty
   // "·  ·  ·" stub. The shared StatusBar then falls back to today's editor
   // metadata via its baseline rightItems path.
+  //
+  // Exception: if connection state is explicitly disconnected we still
+  // want to render so the user sees the warning pill — silent failure is
+  // worse than a thin status bar.
   const hasAny =
     provider ||
     model ||
@@ -97,9 +107,26 @@ export function ChatStatusBarItems({ stats, onModelClick }: ChatStatusBarItemsPr
     Number.isFinite(totalTokens) ||
     Number.isFinite(currentCtx) ||
     Number.isFinite(totalCost);
-  if (!hasAny) return null;
+  if (!hasAny && isConnected !== false) return null;
 
   const segments: JSX.Element[] = [];
+
+  // Connection pill — leads the segment list so disconnect state catches
+  // the eye first. We only render when explicitly disconnected (default
+  // "connected" is implicit / no clutter). Pattern follows the design
+  // system status-pills mockup: 8-px solid dot + tinted background.
+  if (isConnected === false) {
+    segments.push(
+      <span
+        key="conn"
+        className="chat-statusbar-item chat-statusbar-conn chat-statusbar-conn--off"
+        title="WebSocket disconnected — events will resume on reconnect"
+      >
+        <span className="chat-statusbar-conn-dot" aria-hidden="true" />
+        disconnected
+      </span>,
+    );
+  }
 
   // Persona chip — only when the agent's active persona is something
   // other than the unmarked primary. The CLI shows persona via tool-line

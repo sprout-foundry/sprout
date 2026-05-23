@@ -28,6 +28,12 @@ interface WebuiStatusBarProps {
    */
   chatStats?: Record<string, unknown> | null;
   /**
+   * WebSocket connection state — forwarded to ChatStatusBarItems so the
+   * status bar shows a "disconnected" pill when events have stopped
+   * flowing. Without this the user has no feedback about the drop.
+   */
+  isConnected?: boolean;
+  /**
    * Fired when the user clicks the model name in the chat status segment.
    * Passes the active provider name so the caller can open the model
    * picker scoped to that provider. Without this, the model name renders
@@ -70,6 +76,7 @@ function StatusBar({
   onToggleNotificationCenter,
   notificationCenterRef,
   chatStats,
+  isConnected,
   onModelClick,
 }: WebuiStatusBarProps): JSX.Element {
   // Language name — derived from buffer metadata using local language registry
@@ -103,9 +110,14 @@ function StatusBar({
   // When a chat is active and has any stats payload, render the chat
   // segments (provider · model · ctx · cost); otherwise fall through to
   // the shared StatusBar's editor metadata defaults.
+  // Render the chat status segment whenever stats are non-empty OR the
+  // user is explicitly disconnected — the disconnected pill is the only
+  // feedback that events have stopped flowing, so we render it even
+  // when there's no other chat metadata to show.
   const hasChatStats = chatStats != null && Object.keys(chatStats).length > 0;
-  const chatRightItems = hasChatStats ? (
-    <ChatStatusBarItems stats={chatStats} onModelClick={onModelClick} />
+  const showChatSegment = hasChatStats || isConnected === false;
+  const chatRightItems = showChatSegment ? (
+    <ChatStatusBarItems stats={chatStats} isConnected={isConnected} onModelClick={onModelClick} />
   ) : undefined;
 
   return (
@@ -117,7 +129,7 @@ function StatusBar({
         encoding={encoding}
         lineEnding={lineEnding}
         indentation={indentation}
-        showRightSection={buffer != null || hasChatStats}
+        showRightSection={buffer != null || showChatSegment}
         rightItems={chatRightItems}
       />
       {onToggleNotificationCenter && (

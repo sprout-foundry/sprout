@@ -20,6 +20,10 @@ export interface MutationContext {
   setProvenanceSources: (v: Record<string, string>) => void;
   /** Setter for savingKey (to update loading indicators) */
   setSavingKey: (key: string | null) => void;
+  /** Refresh the provider catalog. Called by provider CRUD mutations so
+   *  newly added/updated/deleted custom providers appear immediately in
+   *  the ProviderSettingsTab and SubagentSettingsTab dropdowns. */
+  refreshProviderCatalog?: () => void;
 }
 
 /** @deprecated Use SubagentTypeInfo from services/api/types */

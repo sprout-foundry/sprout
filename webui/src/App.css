@@ -46,6 +46,17 @@
    * sync with --accent-primary; without this every fallback resolves to
    * indigo (99,102,241) and the brand color is wrong. */
   --accent-primary-rgb: 97, 175, 239;
+  /* `--accent-foreground` aliases `--accent-primary` so components that
+   * want a "foreground accent" semantic (chat tab worktree badge,
+   * editor-tab icon on active) have a token to bind to. Without this
+   * the 3+ existing callsites resolved to hardcoded #58a6ff. */
+  --accent-foreground: var(--accent-primary);
+  /* Standard hover surface — used by chat tab bar, location switcher,
+   * update notification, context panel hover, etc. Without this alias
+   * every callsite fell back to hardcoded white-alpha and broke in the
+   * light theme. */
+  --bg-hover: var(--bg-elevated);
+  --accent-primary-bg-hover: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 
   --color-success-bg: rgba(16, 185, 129, 0.1);
   --color-warning-bg: rgba(245, 158, 11, 0.1);

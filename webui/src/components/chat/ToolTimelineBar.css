@@ -1,0 +1,96 @@
+/* SP-053-2a: Live tool timeline rendered above the chat input. Sits in
+   the chat-footer flow, just above the SubagentActivityFeed when both
+   are present. Compact, single-row layout so multiple tools fit in the
+   horizontal space without overflowing into the chat area. */
+
+.tool-timeline-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary, #8b949e);
+}
+
+.tool-timeline-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  max-width: 100%;
+  min-width: 0;
+  transition: opacity 0.4s ease, background 0.15s ease;
+}
+
+.tool-timeline-card--completed {
+  /* Completed cards fade gradually over their visible window via opacity
+     so they don't pop out abruptly. The ToolTimelineBar component
+     removes them from the DOM after FADE_MS. */
+  opacity: 0.7;
+}
+
+.tool-timeline-card--error {
+  background: color-mix(in srgb, #ff7b72 12%, var(--bg-elevated, transparent));
+  border-color: color-mix(in srgb, #ff7b72 35%, var(--border-subtle, transparent));
+}
+
+.tool-timeline-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tool-timeline-spinner {
+  animation: tool-timeline-spin 1s linear infinite;
+}
+
+@keyframes tool-timeline-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.tool-timeline-icon-ok {
+  color: #7ee787;
+}
+
+.tool-timeline-icon-error {
+  color: #ff7b72;
+}
+
+.tool-timeline-persona {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.tool-timeline-name {
+  font-weight: 600;
+  color: var(--text-primary, #e6edf3);
+  flex-shrink: 0;
+}
+
+.tool-timeline-args {
+  color: var(--text-secondary, #8b949e);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 280px;
+}
+
+.tool-timeline-duration {
+  color: var(--text-tertiary, #6e7681);
+  margin-left: 2px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}

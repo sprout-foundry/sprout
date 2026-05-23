@@ -43,6 +43,19 @@
   /* RGB triplet for rgba() callsites — must stay in sync with --accent-primary. */
   --accent-primary-rgb: 97, 175, 239;
 
+  --accent-fg: #ffffff;
+  --accent-warning-fg: #1a1a2e;
+  --accent-info: var(--accent-primary);
+  --accent-on-primary: var(--accent-fg);
+
+  --bg-error: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  --bg-success: color-mix(in srgb, var(--accent-success) 12%, transparent);
+  --bg-warning: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  --bg-info: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  --bg-hover: var(--bg-elevated);
+  --bg-code: var(--bg-elevated);
+  --bg-input: var(--bg-primary);
+
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;

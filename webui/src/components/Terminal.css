@@ -393,12 +393,24 @@
 
 .terminal-status-inline {
   margin: 0 10px 10px 10px;
-  background: var(--color-error-bg);
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
   border: 1px solid var(--accent-error);
   border-radius: 8px;
   padding: 8px 10px;
   color: var(--accent-error);
   font-size: 12px;
+}
+
+.terminal-status-inline--error {
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  border-color: var(--accent-error);
+  color: var(--accent-error);
+}
+
+.terminal-status-inline--success {
+  background: color-mix(in srgb, var(--accent-success) 12%, transparent);
+  border-color: var(--accent-success);
+  color: var(--accent-success);
 }
 
 .terminal-status-inline code {

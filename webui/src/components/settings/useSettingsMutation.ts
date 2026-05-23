@@ -77,6 +77,8 @@ interface MutationHookParams {
   creatingWorkspaceConfig: boolean;
   setCreatingWorkspaceConfig: (v: boolean) => void;
   setLayerData: (v: Record<string, unknown> | null) => void;
+  // Provider catalog refresh (used after custom provider CRUD)
+  refreshProviderCatalog?: () => void;
 }
 
 export function useSettingsMutation(params: MutationHookParams) {
@@ -133,6 +135,7 @@ export function useSettingsMutation(params: MutationHookParams) {
     creatingWorkspaceConfig,
     setCreatingWorkspaceConfig,
     setLayerData,
+    refreshProviderCatalog,
   } = params;
 
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -146,6 +149,7 @@ export function useSettingsMutation(params: MutationHookParams) {
     configViewLayer,
     setProvenanceSources,
     setSavingKey,
+    refreshProviderCatalog,
   };
 
   /* ─── Domain-specific mutation hooks ───────────────────── */

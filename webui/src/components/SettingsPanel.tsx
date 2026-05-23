@@ -145,6 +145,7 @@ function SettingsPanel({
     creatingWorkspaceConfig: state.creatingWorkspaceConfig,
     setCreatingWorkspaceConfig: state.setCreatingWorkspaceConfig,
     setLayerData: state.setLayerData,
+    refreshProviderCatalog: state.refreshSubagentProviders,
   });
 
   // Use field renderers hook — pass effectiveLayer for provenance/scoping
@@ -295,6 +296,7 @@ function SettingsPanel({
             settings={activeSettings ?? settings}
             onRequestProviderSetup={onRequestProviderSetup}
             availableProviders={state.subagentProviders}
+            onPrimaryProviderChanged={state.refreshCurrentProviderInfo}
             updateSetting={mutations.updateSetting}
             editingProvider={state.editingProvider}
             providerName={state.providerName}

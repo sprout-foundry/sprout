@@ -1,6 +1,7 @@
 import { SkeletonText } from '@sprout/ui';
 import { Pencil, Plus, Trash2, Cog } from 'lucide-react';
-import type { SproutSettings, ProviderOption } from '../../services/api';
+import { useState } from 'react';
+import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 
 interface ProviderSettingsTabProps {
   settings: SproutSettings;
@@ -20,6 +21,10 @@ interface ProviderSettingsTabProps {
    *  useSettingsState whenever the env-providers or subagents tab is
    *  open. Empty list falls back to the read-only display. */
   availableProviders?: ProviderOption[];
+  /** Notify the parent that the persisted provider/model changed so it
+   *  can refresh the "Current Provider" panel (which reads from a
+   *  separate endpoint). */
+  onPrimaryProviderChanged?: () => void;
   /** Settings PUT mutation used to persist primary provider/model changes
    *  from the inline switcher. Matches the same callback consumed by
    *  SubagentSettingsTab and CommitReviewSettingsTab for parity. */
@@ -54,6 +59,7 @@ export default function ProviderSettingsTab({
   loadingProviderInfo,
   currentProviderInfo,
   availableProviders,
+  onPrimaryProviderChanged,
   updateSetting,
   setEditingProvider,
   setProviderName,
@@ -81,6 +87,28 @@ export default function ProviderSettingsTab({
   const selectedProviderEntry = availableProviders?.find((p) => p.id === currentProviderId);
   const availableModelsForCurrent = selectedProviderEntry?.models || [];
 
+  // Primary provider/model changes must persist to disk, not stay in the
+  // current chat session's ConfigOverrides — so call the API directly with
+  // an explicit "global" layer instead of going through updateSetting
+  // (which routes via configViewLayer and would land in session scope
+  // when the user is viewing the session layer). This matches the
+  // existing onboarding finalize path which also writes globally.
+  const [primarySaving, setPrimarySaving] = useState<'provider' | 'model' | null>(null);
+  const persistPrimary = async (key: 'provider' | 'model', value: string) => {
+    setPrimarySaving(key);
+    try {
+      await ApiService.getInstance().updateSettings({ [key]: value }, 'global');
+      // Refresh the "Current Provider" panel — it reads from a separate
+      // endpoint (see useSettingsState `loadCurrentProviderInfo`), so a
+      // simple state update isn't enough.
+      onPrimaryProviderChanged?.();
+    } catch (err) {
+      console.error('Failed to persist primary', key, err);
+    } finally {
+      setPrimarySaving(null);
+    }
+  };
+
   return (
     <div className="section">
       <div className="current-provider-section">
@@ -100,7 +128,8 @@ export default function ProviderSettingsTab({
                     id="primary-provider-select"
                     className="styled-select"
                     value={currentProviderId}
-                    onChange={(e) => updateSetting!('provider', e.target.value)}
+                    onChange={(e) => persistPrimary('provider', e.target.value)}
+                    disabled={primarySaving !== null}
                   >
                     {!currentProviderId && <option value="">Not configured</option>}
                     {availableProviders!.map((p) => (
@@ -116,8 +145,8 @@ export default function ProviderSettingsTab({
                     id="primary-model-select"
                     className="styled-select"
                     value={currentModelId}
-                    onChange={(e) => updateSetting!('model', e.target.value)}
-                    disabled={!currentProviderId || availableModelsForCurrent.length === 0}
+                    onChange={(e) => persistPrimary('model', e.target.value)}
+                    disabled={primarySaving !== null || !currentProviderId || availableModelsForCurrent.length === 0}
                   >
                     {currentModelId && !availableModelsForCurrent.includes(currentModelId) && (
                       <option value={currentModelId}>{currentModelId}</option>

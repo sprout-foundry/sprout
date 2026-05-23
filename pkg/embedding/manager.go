@@ -187,6 +187,15 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 // Errors are cached in m.onnxError to avoid repeated failures.
 // This is safe to call multiple times and from multiple goroutines.
 func (m *EmbeddingManager) initONNX(ctx context.Context) error {
+	// If no ONNX backend is available (no CGO, no WASM bridge), fail fast
+	if !onnxAvailable {
+		m.mu.Lock()
+		if !m.onnxReady && m.onnxError == nil {
+			m.onnxError = fmt.Errorf("ONNX runtime not available in this build (requires CGO or WASM)")
+		}
+		m.mu.Unlock()
+		return m.onnxError
+	}
 	m.mu.Lock()
 	// Fast path: already initialized or already failed
 	if m.onnxReady {

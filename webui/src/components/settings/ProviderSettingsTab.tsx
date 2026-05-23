@@ -205,7 +205,7 @@ export default function ProviderSettingsTab({
         )}
       </div>
 
-      <h4 style={{ marginTop: '24px' }}>Custom Providers ({providerEntries.length})</h4>
+      <h4 style={{ marginTop: 'var(--space-12)' }}>Custom Providers ({providerEntries.length})</h4>
 
       {providerEntries.length === 0 && !editingProvider && (
         <div className="settings-empty">No custom providers configured</div>

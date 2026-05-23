@@ -104,8 +104,8 @@ export default function EmbeddingSettingsTab({
       <h4>Embedding Index</h4>
 
       {/* Status Card */}
-      <div className="settings-card" style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+      <div className="settings-card" style={{ marginBottom: 'var(--space-8)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
           <Database size={16} />
           <span style={{ fontWeight: 500 }}>Index Status</span>
         </div>
@@ -160,25 +160,15 @@ export default function EmbeddingSettingsTab({
       {renderTextInput('embedding_index.similarity_threshold', 'Similarity threshold', '0.0 – 1.0')}
       {renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
 
-      {/* Rebuild Action */}
-      <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      {/* Rebuild Action — uses the now-defined .settings-action-btn CSS
+       * for visual consistency with other tab-local action buttons. Inline
+       * style hooks dropped now that the class carries the look. */}
+      <div style={{ marginTop: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
         <button
           className="settings-action-btn"
           type="button"
           onClick={handleRebuild}
           disabled={isRebuilding || status?.building}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 12px',
-            borderRadius: '6px',
-            border: '1px solid var(--border-primary)',
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-primary)',
-            fontSize: '13px',
-            cursor: isRebuilding ? 'not-allowed' : 'pointer',
-          }}
         >
           {isRebuilding || status?.building ? <Loader2 size={14} className="spinning" /> : <RefreshCw size={14} />}
           {isRebuilding || status?.building ? 'Building...' : 'Rebuild Index'}

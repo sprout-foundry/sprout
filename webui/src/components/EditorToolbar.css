@@ -64,8 +64,13 @@
 }
 
 .toolbar-button:hover {
-  background: var(--toolbar-hover-bg, #333);
-  color: var(--toolbar-hover-fg, #fff);
+  background: var(--toolbar-hover-bg, var(--bg-elevated));
+  color: var(--toolbar-hover-fg, var(--text-primary));
+}
+
+.toolbar-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .toolbar-button:disabled {
@@ -74,8 +79,8 @@
 }
 
 .toolbar-button.active {
-  background: var(--accent-bg, #0e7490);
-  color: var(--accent-fg, #fff);
+  background: var(--accent-bg, var(--accent-primary));
+  color: var(--accent-fg);
 }
 
 /* Spinner animation */

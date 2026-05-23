@@ -81,7 +81,7 @@
 .live-preview-toggle.active {
   background-color: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #ffffff;
+  color: var(--accent-fg);
 }
 
 /* Main content area */

@@ -136,7 +136,7 @@ function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
           style={{ color: personaColor }}
           title={`Persona: ${tool.persona}`}
         >
-          [{tool.persona}]
+          {tool.persona}
         </span>
       ) : null}
       <span className="tool-timeline-name">{tool.tool}</span>

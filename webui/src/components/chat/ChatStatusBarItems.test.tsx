@@ -124,6 +124,24 @@ describe('ChatStatusBarItems', () => {
     expect(cost?.classList.contains('chat-statusbar-cost--alert')).toBe(true);
   });
 
+  it('renders a disconnected pill when isConnected is false (even with empty stats)', () => {
+    act(() => {
+      root.render(createElement(ChatStatusBarItems, { stats: {}, isConnected: false }));
+    });
+    const pill = container.querySelector('.chat-statusbar-conn--off');
+    expect(pill).not.toBeNull();
+    expect(pill?.textContent).toContain('disconnected');
+    // 8-px dot inside the pill
+    expect(container.querySelector('.chat-statusbar-conn-dot')).not.toBeNull();
+  });
+
+  it('does NOT render a connection pill when connected (default)', () => {
+    act(() => {
+      root.render(createElement(ChatStatusBarItems, { stats: { provider: 'anthropic', model: 'claude-haiku-4-5' } }));
+    });
+    expect(container.querySelector('.chat-statusbar-conn--off')).toBeNull();
+  });
+
   it('renders provider icon (lucide SVG) when provider is set', () => {
     act(() => {
       root.render(createElement(ChatStatusBarItems, { stats: { provider: 'anthropic', model: 'claude-haiku-4-5' }}));

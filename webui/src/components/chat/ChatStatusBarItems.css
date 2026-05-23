@@ -59,6 +59,34 @@
   outline-offset: 1px;
 }
 
+/* Connection state pill — design-system status-pills pattern: tinted bg
+   + 1-px tinted border + 8-px solid dot. Only renders when explicitly
+   disconnected; the default "connected" state is implied by the absence
+   of a pill (keeps the bar uncluttered while still loud-failing on drop). */
+.chat-statusbar-conn {
+  letter-spacing: 0.02em;
+  font-weight: 600;
+}
+
+.chat-statusbar-conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.chat-statusbar-conn--off {
+  color: var(--accent-error, #e06c75);
+  background: color-mix(in srgb, var(--accent-error, #e06c75) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-error, #e06c75) 35%, transparent);
+}
+
+.chat-statusbar-conn--off .chat-statusbar-conn-dot {
+  background: var(--accent-error, #e06c75);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-error, #e06c75) 15%, transparent);
+}
+
 /* Active-persona chip — design-system "status pill" treatment: tinted
    background mixed from the persona color so the chip reads coherent
    with the chat-bubble badge and the subagent feed entries. The persona

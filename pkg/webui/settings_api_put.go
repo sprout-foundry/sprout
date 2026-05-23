@@ -174,6 +174,20 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		if err := ws.syncAgentStateForClient(clientID); err != nil {
 			log.Printf("webui: failed to sync agent state after provider/model change: %v", err)
 		}
+		// Publish provider state so the WebUI status bar reflects the new
+		// model/cost/ctx immediately. Without this the bar lags until the
+		// next metrics event (e.g. the next tool_end), which after a user-
+		// initiated provider switch reads as "the change didn't take".
+		ws.publishProviderState(clientID)
+		if newProvider != "" {
+			activeChatID := ""
+			ws.mutex.RLock()
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				activeChatID = ctx.getActiveChatID()
+			}
+			ws.mutex.RUnlock()
+			ws.notifyMissingCredentialIfNeeded(clientID, activeChatID, newProvider)
+		}
 	}
 
 	resp := map[string]interface{}{
@@ -280,19 +294,38 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 	ws.mutex.Unlock()
 
 	// Apply to live agent in-memory
+	providerOrModelChanged := false
 	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
 		if p, ok := savedOverrides["provider"].(string); ok && p != "" {
 			cm := ws.getConfigManager(r, w)
 			if cm != nil {
 				if pt, err := cm.MapStringToClientType(p); err == nil {
 					agentInst.SetProvider(pt)
+					providerOrModelChanged = true
 				}
 			}
 		}
 		if m, ok := savedOverrides["model"].(string); ok && m != "" {
 			agentInst.SetModel(m)
+			providerOrModelChanged = true
 		}
 		agentInst.SetConfigOverrides(savedOverrides)
+	}
+
+	// Refresh the status bar for any provider/model change in session
+	// scope, matching the default handler's behavior so the WebUI never
+	// looks "stuck" on a stale model after the user picks a new one.
+	if providerOrModelChanged {
+		ws.publishProviderState(clientID)
+		if p, ok := savedOverrides["provider"].(string); ok && p != "" {
+			activeChatID := ""
+			ws.mutex.RLock()
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				activeChatID = ctx.getActiveChatID()
+			}
+			ws.mutex.RUnlock()
+			ws.notifyMissingCredentialIfNeeded(clientID, activeChatID, p)
+		}
 	}
 
 	resp := map[string]interface{}{
@@ -404,6 +437,52 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 	if err := os.WriteFile(configPath, data, 0600); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to write config: %v", err))
 		return
+	}
+
+	// If the patch contained a primary provider/model change, also apply
+	// it to the live agent and republish provider state. Without this,
+	// the on-disk config is correct but the active session keeps running
+	// against the old model — the dropdown "looks broken" because the
+	// status bar doesn't move until the user reloads.
+	newProvider, _ := incoming["last_used_provider"].(string)
+	var newModel string
+	if pm, ok := incoming["provider_models"].(map[string]interface{}); ok && newProvider != "" {
+		if m, ok := pm[newProvider].(string); ok {
+			newModel = m
+		}
+	}
+	if newProvider != "" || newModel != "" {
+		clientID := ws.resolveClientID(r)
+		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+			if newProvider != "" {
+				if cm := ws.getConfigManager(r, w); cm != nil {
+					if pt, err := cm.MapStringToClientType(newProvider); err == nil {
+						if err := agentInst.SetProvider(pt); err != nil {
+							log.Printf("webui: failed to set provider on live agent after persisted PUT: %v", err)
+						}
+					}
+				}
+			}
+			if newModel != "" {
+				if err := agentInst.SetModel(newModel); err != nil {
+					log.Printf("webui: failed to set model on live agent after persisted PUT: %v", err)
+				}
+			}
+		}
+		ws.publishProviderState(clientID)
+		// Warn the user if the persisted provider needs a credential it
+		// doesn't have — same warning path as the websocket
+		// provider_change handler so the UX is consistent across all the
+		// surfaces that can swap the active provider.
+		if newProvider != "" {
+			activeChatID := ""
+			ws.mutex.RLock()
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				activeChatID = ctx.getActiveChatID()
+			}
+			ws.mutex.RUnlock()
+			ws.notifyMissingCredentialIfNeeded(clientID, activeChatID, newProvider)
+		}
 	}
 
 	resp := map[string]interface{}{

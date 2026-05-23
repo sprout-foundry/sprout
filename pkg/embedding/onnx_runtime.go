@@ -1,4 +1,4 @@
-//go:build !wasm
+//go:build !wasm && cgo
 
 // Package embedding provides ONNX-based embedding infrastructure for sprout.
 //
@@ -20,6 +20,11 @@ import (
 
 	onnxruntime "github.com/yalue/onnxruntime_go"
 )
+
+// onnxAvailable is true when the ONNX runtime backend is available.
+// True in CGO builds (native onnxruntime_go) and WASM builds (JS bridge).
+// False when CGO is disabled and no alternative backend exists.
+const onnxAvailable = true
 
 // ONNXRuntime provides shared ONNX Runtime infrastructure.
 // It initializes the ONNX environment and creates dynamic inference sessions

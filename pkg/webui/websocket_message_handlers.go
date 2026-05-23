@@ -10,6 +10,8 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *ProviderChangeData, clientID string) {
@@ -141,6 +143,12 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 
 	_ = ws.syncAgentStateForClientWithChat(clientID, activeChatID)
 	ws.publishProviderState(clientID)
+
+	// Emit a warning notice if the newly active provider needs an API
+	// key but doesn't have one — without this the change "succeeds"
+	// silently and the user only discovers the problem on the next
+	// query, when the underlying provider call returns 401.
+	ws.notifyMissingCredentialIfNeeded(clientID, activeChatID, data.Provider)
 }
 
 func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *ModelChangeData, clientID string) {
@@ -275,6 +283,40 @@ func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, data *P
 
 	_ = ws.syncAgentStateForClientWithChat(clientID, activeChatID)
 	ws.publishProviderState(clientID)
+}
+
+// notifyMissingCredentialIfNeeded publishes an agent_message warning if
+// the just-activated provider requires an API key but doesn't have one
+// configured. Without this the user only learns about the missing
+// credential when their next query fails with a provider-level 401 —
+// surfacing it at the moment of change lets them open Settings →
+// Credentials and fix it before sending traffic.
+//
+// Best-effort: any lookup failure is silently skipped (we'd rather miss
+// a warning than block a legitimate provider change on transient state).
+func (ws *ReactWebServer) notifyMissingCredentialIfNeeded(clientID, chatID, providerID string) {
+	if providerID == "" {
+		return
+	}
+	meta, err := configuration.GetProviderAuthMetadata(providerID)
+	if err != nil || !meta.RequiresAPIKey {
+		return
+	}
+	if configuration.HasProviderAuth(providerID) {
+		return
+	}
+	msg := fmt.Sprintf(
+		"Provider %q requires an API key. Configure it in Settings → Credentials before sending messages.",
+		providerID,
+	)
+	ws.publishClientEventWithChat(clientID, chatID, events.EventTypeAgentMessage, events.AgentMessageEvent(
+		"warning",
+		msg,
+		map[string]interface{}{
+			"provider":          providerID,
+			"missing_credential": true,
+		},
+	))
 }
 
 // persistProviderModelToConfig attempts to persist the provider and model to the

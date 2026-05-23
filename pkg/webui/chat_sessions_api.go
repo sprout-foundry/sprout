@@ -594,6 +594,14 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 
 	ws.publishSessionChanged(clientID, chatID, "switch", cs.chatSessionSummary(false))
 
+	// Re-publish provider state so the WebUI status bar (model/cost/ctx)
+	// reflects the newly active chat's agent rather than stale data from
+	// the previous chat. Each chat owns its own agent, so the provider
+	// and model may differ across chats — without this republish the bar
+	// only updates on the next metrics event (e.g. tool_end), which can
+	// leave the user looking at the wrong model name for several seconds.
+	ws.publishProviderState(clientID)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":         "Chat session switched",

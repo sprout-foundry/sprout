@@ -110,6 +110,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
       await ctx.api.addCustomProvider(provider);
       ctx.addNotification('success', 'Providers', `Provider "${providerName}" added`, 3000);
       resetProviderForm();
+      ctx.refreshProviderCatalog?.();
     } catch (err) {
       debugLog('[SettingsPanel] failed to add provider:', err);
       ctx.addNotification('error', 'Providers', 'Failed to add provider', 5000);
@@ -148,6 +149,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
       await ctx.api.updateCustomProvider(editingProvider.originalName, provider);
       ctx.addNotification('success', 'Providers', `Provider "${editingProvider.originalName}" updated`, 3000);
       resetProviderForm();
+      ctx.refreshProviderCatalog?.();
     } catch (err) {
       debugLog('[SettingsPanel] failed to update provider:', err);
       ctx.addNotification('error', 'Providers', 'Failed to update provider', 5000);
@@ -177,6 +179,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
         if (editingProvider?.originalName === name) {
           resetProviderForm();
         }
+        ctx.refreshProviderCatalog?.();
       } catch (err) {
         debugLog('[SettingsPanel] failed to delete provider:', err);
         ctx.addNotification('error', 'Providers', 'Failed to delete provider', 5000);

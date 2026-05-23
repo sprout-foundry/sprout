@@ -8,21 +8,21 @@
 }
 
 .progress-item {
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 16px;
   margin-bottom: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-elevated);
 }
 
 .progress-item.done {
-  border-color: #4caf50;
+  border-color: var(--accent-success);
   opacity: 0.8;
 }
 
 .progress-item.active {
-  border-left: 4px solid #007acc;
+  border-left: 4px solid var(--accent-primary);
 }
 
 .progress-header {
@@ -33,7 +33,7 @@
 }
 
 .progress-message {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
   flex: 1;
@@ -41,14 +41,14 @@
 }
 
 .progress-time {
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .progress-bar-container {
-  background: #1a1a1a;
+  background: var(--bg-primary);
   border-radius: 4px;
   height: 8px;
   overflow: hidden;
@@ -71,12 +71,12 @@
 }
 
 .progress-count {
-  color: #ccc;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .progress-percentage {
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 12px;
   font-weight: 500;
 }
@@ -107,10 +107,10 @@
 @keyframes pulse {
   0%,
   100% {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-elevated);
   }
   50% {
-    box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-primary) 40%, transparent);
   }
 }
 

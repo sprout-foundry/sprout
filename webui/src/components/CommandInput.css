@@ -221,7 +221,7 @@
 }
 
 .stop-button:hover:not(:disabled) {
-  color: #fff;
+  color: var(--accent-fg);
   border-color: var(--accent-error);
   background: color-mix(in srgb, var(--accent-error) 18%, transparent);
 }
@@ -452,9 +452,9 @@
 }
 
 .image-preview-chip .remove-btn:hover {
-  background: var(--color-danger, #dc3545);
-  color: #fff;
-  border-color: var(--color-danger, #dc3545);
+  background: var(--accent-error);
+  color: var(--accent-fg);
+  border-color: var(--accent-error);
 }
 
 .image-preview-chip.uploading {

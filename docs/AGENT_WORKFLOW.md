@@ -1,19 +1,19 @@
 # Agent Workflow
 
-Agent workflow lets `ledit agent` run a config-driven sequence of prompts with conditional routing and per-step runtime overrides.
+Agent workflow lets `sprout agent` run a config-driven sequence of prompts with conditional routing and per-step runtime overrides.
 
 Use it for CI/CD orchestration, post-implementation audits, error recovery paths, and multi-model review pipelines.
 
 ## Command
 
 ```bash
-ledit agent --workflow-config path/to/workflow.json
+sprout agent --workflow-config path/to/workflow.json
 ```
 
 You can still pass a CLI prompt:
 
 ```bash
-ledit agent --workflow-config path/to/workflow.json "Implement feature X"
+sprout agent --workflow-config path/to/workflow.json "Implement feature X"
 ```
 
 If both are provided, the CLI prompt is used as the initial prompt.
@@ -257,7 +257,7 @@ If trigger conditions are not met, the step is skipped (not treated as an error)
 
 ## Persistence and Restoration
 
-If `persist_runtime_overrides` is `false`, ledit restores runtime state after workflow completes:
+If `persist_runtime_overrides` is `false`, sprout restores runtime state after workflow completes:
 
 - provider/model
 - persona
@@ -425,7 +425,7 @@ See: `examples/agent_workflow.json`
 
 ## External Orchestration
 
-When orchestration mode is enabled, `ledit` emits:
+When orchestration mode is enabled, `sprout` emits:
 
 - State checkpoint (`state_file`) with:
   - `initial_completed`
@@ -448,7 +448,7 @@ This allows an external orchestrator to:
 
 1. Read `next_step_index` and determine required provider.
 2. Acquire provider-specific concurrency slot.
-3. Invoke `ledit agent --workflow-config ...`.
+3. Invoke `sprout agent --workflow-config ...`.
 4. Repeat until `complete=true`.
 
 See: `examples/workflow_orchestrator.py` for a full asyncio-based orchestrator with per-provider concurrency limits.

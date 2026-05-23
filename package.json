@@ -1,5 +1,5 @@
 {
-  "author": "Alan Price <alan@inicion.com>",
+  "author": "Alan Price <alantheprice@users.noreply.github.com>",
   "bugs": {
     "url": "https://github.com/sprout-foundry/sprout/issues"
   },
@@ -72,7 +72,7 @@
       }
     ],
     "publish": {
-      "owner": "alantheprice",
+      "owner": "sprout-foundry",
       "provider": "github",
       "releaseType": "release",
       "repo": "sprout"

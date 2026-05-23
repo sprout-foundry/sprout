@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ledit will be documented in this file.
+All notable changes to sprout will be documented in this file.
 
 ## [v0.15.3] - 2026-04-17
 

@@ -152,7 +152,7 @@ type sshLaunchStatus struct {
 // ---------------------------------------------------------------------------
 
 const (
-	githubReleaseRepoOwner = "alantheprice"
+	githubReleaseRepoOwner = "sprout-foundry"
 	githubReleaseRepoName  = "sprout"
 
 	sshLaunchHealthTimeout  = 30 * time.Second

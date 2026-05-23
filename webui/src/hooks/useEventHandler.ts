@@ -681,15 +681,29 @@ export function useEventHandler({
         // their version?" Surface in the log but don't echo as an
         // assistant message; that would be noise in the chat thread.
         if (errorCode === 'config_conflict') {
-          setState((prev) => ({
-            isProcessing: activeRequestsRef.current > 0,
-            queryProgress: null,
-            logs: appendCappedLog(prev.logs, logEntry),
-          }));
-          logError('[FAIL] config_conflict event: ' + String(eventData));
           const summary = (eventData?.current_summary as Record<string, unknown> | undefined) || {};
           const provider = typeof summary.provider === 'string' ? summary.provider : '';
           const model = typeof summary.model === 'string' ? summary.model : '';
+          // Reconcile the in-memory provider/model with what's now on
+          // disk. Without this, the status bar and chat-input model
+          // hint keep showing the pre-conflict values, which can mislead
+          // the user about which model their next message goes to until
+          // they reload. We also merge the on-disk fields into stats so
+          // the right-side bar refreshes without waiting for the next
+          // metrics_update.
+          setState((prev) => ({
+            isProcessing: activeRequestsRef.current > 0,
+            queryProgress: null,
+            provider: provider || prev.provider,
+            model: model || prev.model,
+            stats: {
+              ...prev.stats,
+              ...(provider ? { provider } : {}),
+              ...(model ? { model } : {}),
+            },
+            logs: appendCappedLog(prev.logs, logEntry),
+          }));
+          logError('[FAIL] config_conflict event: ' + String(eventData));
           const detailLine =
             provider || model
               ? `Current on-disk settings: provider=${provider || '?'}${model ? `, model=${model}` : ''}. `

@@ -1,20 +1,58 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../services/api';
 import { debugLog } from '../utils/log';
 import './ThemedDialog.css';
 
 export interface ModelSelectionModalProps {
   provider: string;
+  /**
+   * Why the modal opened. `unavailable` shows the warning-styled "Model
+   * Not Available" treatment (the original error-recovery use case);
+   * `switch` shows a neutral "Choose a model" treatment for proactive
+   * switching from the status bar.
+   */
+  reason?: 'unavailable' | 'switch';
   onClose: () => void;
   onSelectModel: (model: string) => void;
 }
 
-function ModelSelectionModal({ provider, onClose, onSelectModel }: ModelSelectionModalProps): JSX.Element {
+function ModelSelectionModal({
+  provider,
+  reason = 'unavailable',
+  onClose,
+  onSelectModel,
+}: ModelSelectionModalProps): JSX.Element {
   const [models, setModels] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [filter, setFilter] = useState('');
   const listRef = useRef<HTMLUListElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Filter models against the search input — handy when a provider lists
+  // dozens of variants (Anthropic claude-*-*, OpenRouter's full catalog).
+  const visibleModels = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((m) => m.toLowerCase().includes(q));
+  }, [models, filter]);
+
+  // Copy + intent vary by why the modal opened.
+  const isWarning = reason !== 'switch';
+  const title = isWarning ? 'Model Not Available' : 'Choose a model';
+  const icon = isWarning ? '⚠' : '✱';
+  const description = isWarning ? (
+    <>
+      The configured model is not available for provider <strong>{provider}</strong>. Please select a different model
+      to continue.
+    </>
+  ) : (
+    <>
+      Select a model available on <strong>{provider}</strong>. The change applies immediately and is saved to your
+      session.
+    </>
+  );
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
@@ -53,22 +91,22 @@ function ModelSelectionModal({ provider, onClose, onSelectModel }: ModelSelectio
     [onClose, selectedModel, handleSelect],
   );
 
-  // Auto-focus the first model in the list when loaded
+  // Auto-preselect the first visible model when the list/filter changes.
   useEffect(() => {
-    if (!loading && !error && models.length > 0 && !selectedModel) {
-      setSelectedModel(models[0]);
+    if (!loading && !error && visibleModels.length > 0 && !visibleModels.includes(selectedModel)) {
+      setSelectedModel(visibleModels[0]);
     }
-  }, [loading, error, models, selectedModel]);
+  }, [loading, error, visibleModels, selectedModel]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     // Lock scroll while modal is open
     document.body.style.overflow = 'hidden';
 
-    // Focus first item in list after mount
+    // Auto-focus the search input on mount — typing immediately filters,
+    // which is the fastest path for providers with many models.
     const timer = setTimeout(() => {
-      const firstItem = listRef.current?.querySelector('button') as HTMLButtonElement;
-      firstItem?.focus();
+      searchRef.current?.focus();
     }, 60);
 
     return () => {
@@ -83,23 +121,30 @@ function ModelSelectionModal({ provider, onClose, onSelectModel }: ModelSelectio
   }, [fetchModels]);
 
   return (
-    <div className="model-selection-overlay" role="dialog" aria-modal="true" aria-label="Model selection required">
-      <div className="model-selection-card" onClick={(e) => e.stopPropagation()}>
-        {/* Accent bar - warning color */}
+    <div
+      className={`model-selection-overlay${isWarning ? '' : ' model-selection-overlay--switch'}`}
+      role="dialog"
+      aria-modal="true"
+      aria-label={isWarning ? 'Model selection required' : 'Choose a model'}
+    >
+      <div
+        className={`model-selection-card${isWarning ? '' : ' model-selection-card--switch'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Accent bar — warning yellow for the recovery case, brand blue
+         * for the proactive-switch case so the modal doesn't read as
+         * alarming when the user opened it themselves. */}
         <div className="model-selection-accent-bar" />
 
         {/* Header */}
         <div className="model-selection-header">
-          <span className="model-selection-icon">⚠</span>
-          <h2 className="model-selection-title">Model Not Available</h2>
+          <span className="model-selection-icon">{icon}</span>
+          <h2 className="model-selection-title">{title}</h2>
         </div>
 
         {/* Body */}
         <div className="model-selection-body">
-          <div className="model-selection-message">
-            The configured model is not available for provider <strong>{provider}</strong>. Please select a different
-            model to continue.
-          </div>
+          <div className="model-selection-message">{description}</div>
 
           {loading && <div className="model-selection-loading">Loading available models...</div>}
 
@@ -110,9 +155,23 @@ function ModelSelectionModal({ provider, onClose, onSelectModel }: ModelSelectio
           )}
 
           {!loading && !error && models.length > 0 && (
-            <div className="model-selection-list-wrapper">
-              <ul ref={listRef} className="model-selection-list" role="listbox" aria-label="Available models">
-                {models.map((model) => (
+            <>
+              <input
+                ref={searchRef}
+                type="text"
+                className="model-selection-search"
+                placeholder="Filter models…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                aria-label="Filter models"
+              />
+              {visibleModels.length === 0 && (
+                <div className="model-selection-empty">No models match &quot;{filter}&quot;.</div>
+              )}
+              {visibleModels.length > 0 && (
+                <div className="model-selection-list-wrapper">
+                  <ul ref={listRef} className="model-selection-list" role="listbox" aria-label="Available models">
+                    {visibleModels.map((model) => (
                   <li key={model}>
                     <button
                       type="button"
@@ -134,8 +193,10 @@ function ModelSelectionModal({ provider, onClose, onSelectModel }: ModelSelectio
                     </button>
                   </li>
                 ))}
-              </ul>
-            </div>
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </div>
 

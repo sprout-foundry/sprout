@@ -225,9 +225,20 @@
 }
 
 .stop-button:hover:not(:disabled) {
-  color: #fff;
+  /* Was hardcoded #fff — `--accent-fg` is the on-accent foreground
+   * token, which is white in dark theme but renders correctly in light
+   * theme too. */
+  color: var(--accent-fg);
   border-color: var(--accent-error);
   background: color-mix(in srgb, var(--accent-error) 18%, transparent);
+}
+
+.stop-button:focus-visible,
+.send-button:focus-visible,
+.upload-button:focus-visible,
+.queue-button:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary));
+  outline-offset: 2px;
 }
 
 .stop-button:disabled {

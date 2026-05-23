@@ -105,6 +105,14 @@ export interface AppState {
   } | null;
   modelSelectionRequest: {
     provider: string;
+    /**
+     * Why the modal opened. `unavailable` = backend told us the configured
+     * model isn't available and we need a replacement (warning treatment);
+     * `switch` = user clicked the model name in the status bar to
+     * proactively change (neutral treatment). Defaults to `unavailable`
+     * when omitted so legacy callers keep their existing UX.
+     */
+    reason?: 'unavailable' | 'switch';
   } | null;
   driftNotification: {
     similarity: number;

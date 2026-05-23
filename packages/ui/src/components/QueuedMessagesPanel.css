@@ -79,7 +79,7 @@
 
 .queue-panel-close:hover {
   color: var(--text-primary, #e0e0e0);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-elevated);
 }
 
 .queue-panel-empty {
@@ -110,7 +110,7 @@
 }
 
 .queue-panel-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-elevated);
 }
 
 .queue-panel-item.editing {
@@ -237,7 +237,7 @@
 
 .queue-panel-action:hover:not(:disabled) {
   color: var(--text-primary, #e0e0e0);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
 }
 
 .queue-panel-action:disabled {
@@ -257,5 +257,5 @@
 
 .queue-panel-action.cancel:hover {
   color: var(--text-primary, #e0e0e0);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
 }

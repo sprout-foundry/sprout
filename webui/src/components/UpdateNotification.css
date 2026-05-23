@@ -127,8 +127,12 @@
   width: 24px;
   height: 24px;
   border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  /* All three were hardcoded white-alpha — sat fine on the dark update
+   * banner but disappeared / inverted on the light theme. Now derived
+   * from the accent-fg token (the on-accent foreground) so contrast
+   * holds against whatever the banner background is. */
+  background: color-mix(in srgb, var(--accent-fg) 12%, transparent);
+  color: var(--accent-fg);
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
@@ -139,7 +143,7 @@
 }
 
 .update-pending-dismiss:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
   transform: scale(1.05);
 }
 
@@ -149,7 +153,7 @@
 
 .update-pending-dismiss:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-fg) 30%, transparent);
 }
 
 /* Update Buttons */

@@ -320,7 +320,7 @@
   word-break: break-word;
   color: var(--cm-fg, #c9d1d9);
   background: var(--cm-tooltip-bg, #1e1e2e);
-  border: 1px solid var(--cm-tooltip-border, rgba(255, 255, 255, 0.1));
+  border: 1px solid var(--cm-tooltip-border, var(--border-default));
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
@@ -328,7 +328,7 @@
 .cm-hover-tooltip code {
   font-family: 'Monaco', 'Menlo', 'Fira Code', monospace;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
   padding: 1px 4px;
   border-radius: 3px;
 }

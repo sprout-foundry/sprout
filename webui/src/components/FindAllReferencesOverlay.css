@@ -130,7 +130,7 @@
 }
 
 .find-refs-item-active .find-refs-file-path {
-  color: var(--accent-fg, rgba(255, 255, 255, 0.8));
+  color: color-mix(in srgb, var(--accent-fg) 85%, transparent);
 }
 
 /* ── Line number ──────────────────────────────────────────────────── */
@@ -145,7 +145,7 @@
 }
 
 .find-refs-item-active .find-refs-line-num {
-  color: var(--accent-fg, rgba(255, 255, 255, 0.7));
+  color: color-mix(in srgb, var(--accent-fg) 80%, transparent);
 }
 
 /* ── Line text (code) ───────────────────────────────────────────── */
@@ -172,8 +172,8 @@
 }
 
 .find-refs-item-active .find-refs-line-text .find-refs-symbol {
-  color: #fff;
-  text-decoration-color: rgba(255, 255, 255, 0.8);
+  color: var(--accent-fg);
+  text-decoration-color: color-mix(in srgb, var(--accent-fg) 80%, transparent);
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────── */

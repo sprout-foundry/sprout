@@ -30,7 +30,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build",
     "type-check": "tsc --noEmit"
   },
   "sideEffects": false,

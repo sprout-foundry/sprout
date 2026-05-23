@@ -587,6 +587,7 @@ const AppContent: React.FC<AppContentProps> = ({
           onToggleNotificationCenter={() => setIsNotificationCenterOpen((prev) => !prev)}
           notificationCenterRef={notificationBellRef}
           chatStats={state.stats}
+          isConnected={state.isConnected}
           onModelClick={handleStatusBarModelClick}
         />
         <NotificationCenter

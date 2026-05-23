@@ -126,8 +126,8 @@
 }
 
 .command-palette-selected .command-palette-shortcut {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent-fg) 35%, transparent);
   color: var(--accent-fg);
 }
 
@@ -170,7 +170,7 @@
 }
 
 .command-palette-selected .command-palette-file-path {
-  color: rgba(255, 255, 255, 0.78);
+  color: color-mix(in srgb, var(--accent-fg) 78%, transparent);
 }
 
 /* Empty / Loading State */
@@ -277,7 +277,7 @@
 }
 
 .command-palette-selected .command-palette-symbol-icon {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
   color: var(--accent-fg) !important;
 }
 
@@ -293,7 +293,7 @@
 }
 
 .command-palette-selected .command-palette-symbol-scope {
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--accent-fg) 70%, transparent);
 }
 
 .command-palette-symbol-line {
@@ -305,7 +305,7 @@
 }
 
 .command-palette-selected .command-palette-symbol-line {
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--accent-fg) 70%, transparent);
 }
 
 /* Highlight matched characters inside command/file/symbol labels */
@@ -326,7 +326,7 @@
 .command-palette-selected .command-palette-file-path mark,
 .command-palette-selected .command-palette-symbol-scope mark {
   color: inherit;
-  text-decoration-color: rgba(255, 255, 255, 0.5);
+  text-decoration-color: color-mix(in srgb, var(--accent-fg) 50%, transparent);
 }
 
 /* Scrollbar Styling */

@@ -58,7 +58,7 @@ function runGit(args, cwd, errorMsg) {
 function assertBackendBinary() {
   const platform = process.platform === 'win32' ? 'windows' : process.platform;
   const arch = process.arch === 'x64' ? 'amd64' : process.arch;
-  const binaryName = platform === 'windows' ? 'ledit.exe' : 'ledit';
+  const binaryName = platform === 'windows' ? 'sprout.exe' : 'sprout';
   const binaryPath = path.join(APP_ROOT, 'desktop', 'dist', 'backend', `${platform}-${arch}`, binaryName);
   if (!fs.existsSync(binaryPath)) {
     throw new Error(`Backend binary not found at ${binaryPath}. Run "npm run build:desktop:backend".`);

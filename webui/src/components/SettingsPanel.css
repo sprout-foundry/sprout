@@ -47,6 +47,11 @@
   background: var(--bg-elevated);
 }
 
+.sidebar .settings-section-header:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: -2px;
+}
+
 .sidebar .settings-section-label {
   flex: 1;
   text-align: left;
@@ -71,24 +76,31 @@
   line-height: 1.4;
 }
 
+/* Scope badges — each settings section announces which config layer
+ * "owns" its values (session/workspace/global/runtime). Each gets a
+ * distinct semantic-token color so users can scan and recognize
+ * scopes quickly. Previously hardcoded the Tailwind palette which
+ * looked off-brand and didn't adapt to the light theme. */
 .sidebar .scope-session {
-  background: color-mix(in srgb, #3b82f6 15%, transparent);
-  color: #60a5fa;
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
 }
 
 .sidebar .scope-workspace {
-  background: color-mix(in srgb, #22c55e 15%, transparent);
-  color: #4ade80;
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+  color: var(--accent-success);
 }
 
 .sidebar .scope-global {
-  background: color-mix(in srgb, #a855f7 15%, transparent);
-  color: #c084fc;
+  /* Brand teal as the "highest scope" tint so global sits visually
+   * distinct from session-blue / workspace-green. */
+  background: color-mix(in srgb, var(--brand-active-cyan) 15%, transparent);
+  color: var(--brand-active-cyan);
 }
 
 .sidebar .scope-runtime {
-  background: color-mix(in srgb, #9ca3af 15%, transparent);
-  color: #9ca3af;
+  background: color-mix(in srgb, var(--text-tertiary) 15%, transparent);
+  color: var(--text-tertiary);
 }
 
 .sidebar .settings-section-body {

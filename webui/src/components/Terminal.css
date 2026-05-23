@@ -615,9 +615,11 @@
 
 .terminal-search-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
+  /* Was hardcoded `rgba(255, 255, 255, 0.05)` — broke on light theme.
+   * Token-driven now so hover/focus tint reads on both backdrops. */
+  background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 4px 8px;
   color: var(--text-primary);
   font-size: 12px;
@@ -625,11 +627,12 @@
   outline: none;
   transition:
     background 0.15s,
-    border-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .terminal-search-input:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-surface);
 }
 
 .terminal-search-input:focus {
@@ -638,8 +641,9 @@
 
 .terminal-search-input:focus-visible {
   outline: none;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: var(--accent-secondary);
+  background: var(--bg-surface);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
 }
 
 .terminal-search-input::placeholder {
@@ -671,7 +675,7 @@
 
 .terminal-search-nav-btn:hover:not(:disabled) {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-elevated);
 }
 
 .terminal-search-nav-btn:disabled {
@@ -718,12 +722,14 @@
 
 .terminal-search-toggle-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-elevated);
 }
 
 .terminal-search-toggle-btn.active {
   color: var(--accent-secondary);
-  background: rgba(94, 161, 255, 0.15);
+  /* Was hardcoded blue rgba(94,161,255,0.15); now derived from the
+   * accent-secondary token so the active state tracks the theme. */
+  background: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
 }
 
 .terminal-search-close-btn {
@@ -745,7 +751,7 @@
 
 .terminal-search-close-btn:hover {
   color: var(--accent-error);
-  background: rgba(224, 108, 117, 0.15);
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
 }
 
 .terminal-search-input-error {

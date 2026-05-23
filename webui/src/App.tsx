@@ -347,6 +347,7 @@ function AppInner() {
                   {state.modelSelectionRequest && (
                     <ModelSelectionModal
                       provider={state.modelSelectionRequest.provider}
+                      reason={state.modelSelectionRequest.reason}
                       onClose={handleModelSelectionClose}
                       onSelectModel={handleModelSelectionResponse}
                     />

@@ -1,9 +1,11 @@
-/* Command Palette Overlay */
+/* Command Palette Overlay — uses the same darken-on-token pattern as
+ * the onboarding overlay so light theme renders a proper scrim instead
+ * of the previous hardcoded near-black `rgba(2, 6, 23, 0.56)`. */
 .command-palette-overlay {
   position: fixed;
   inset: 0;
   z-index: 1600;
-  background: rgba(2, 6, 23, 0.56);
+  background: color-mix(in srgb, var(--bg-primary) 60%, #000 40%);
   backdrop-filter: blur(2px);
   display: flex;
   justify-content: center;
@@ -16,7 +18,7 @@
   max-height: min(70vh, 560px);
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-elevated);
   display: flex;
   flex-direction: column;
@@ -126,8 +128,11 @@
 }
 
 .command-palette-selected .command-palette-shortcut {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.35);
+  /* Use color-mix off the accent-fg so the contrast lifts off the
+   * selected (accent-primary) row in both themes — was hardcoded white
+   * alpha, which disappeared on the light theme's blue selection. */
+  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent-fg) 35%, transparent);
   color: var(--accent-fg);
 }
 
@@ -170,7 +175,7 @@
 }
 
 .command-palette-selected .command-palette-file-path {
-  color: rgba(255, 255, 255, 0.78);
+  color: color-mix(in srgb, var(--accent-fg) 78%, transparent);
 }
 
 /* Empty / Loading State */
@@ -277,7 +282,7 @@
 }
 
 .command-palette-selected .command-palette-symbol-icon {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
   color: var(--accent-fg) !important;
 }
 
@@ -293,7 +298,7 @@
 }
 
 .command-palette-selected .command-palette-symbol-scope {
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--accent-fg) 70%, transparent);
 }
 
 .command-palette-symbol-line {
@@ -305,7 +310,7 @@
 }
 
 .command-palette-selected .command-palette-symbol-line {
-  color: rgba(255, 255, 255, 0.7);
+  color: color-mix(in srgb, var(--accent-fg) 70%, transparent);
 }
 
 /* Highlight matched characters inside command/file/symbol labels */
@@ -326,7 +331,7 @@
 .command-palette-selected .command-palette-file-path mark,
 .command-palette-selected .command-palette-symbol-scope mark {
   color: inherit;
-  text-decoration-color: rgba(255, 255, 255, 0.5);
+  text-decoration-color: color-mix(in srgb, var(--accent-fg) 50%, transparent);
 }
 
 /* Scrollbar Styling */

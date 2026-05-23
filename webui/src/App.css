@@ -1114,6 +1114,20 @@ body,
   padding: 0 12px;
   font-family: var(--font-sans);
   font-size: 14px;
+  transition:
+    border-color 0.15s var(--ease-out),
+    box-shadow 0.15s var(--ease-out);
+}
+
+.onboarding-card select:focus-visible,
+.onboarding-card input:focus-visible {
+  /* Focus halo per the design-system inputs spec — without this the
+   * first-run dialog had zero visual feedback on the model combobox
+   * and provider select, which is the primary input surface on first
+   * launch. Mirrors the chat composer + sidebar input focus pattern. */
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
 }
 
 .onboarding-card select {
@@ -1156,7 +1170,28 @@ body,
   color: var(--text-primary);
   padding: 10px 12px;
   cursor: pointer;
-  transition: border-color 0.1s;
+  transition:
+    border-color 0.15s var(--ease-out),
+    background 0.15s var(--ease-out),
+    transform 0.12s var(--ease-out);
+  font-family: inherit;
+}
+
+/* Hover + focus states — the provider grid is the primary interactive
+ * surface on first-run; previously had zero feedback when hovering
+ * cards, so the UI read as dead. */
+.onboarding-provider-card:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+}
+
+.onboarding-provider-card:active {
+  transform: scale(0.99);
+}
+
+.onboarding-provider-card:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
 }
 
 .onboarding-provider-card.selected {
@@ -1230,6 +1265,26 @@ body,
   font-family: var(--font-sans);
   font-size: 13px;
   font-weight: 600;
+  transition:
+    background 0.15s var(--ease-out),
+    border-color 0.15s var(--ease-out),
+    color 0.15s var(--ease-out),
+    transform 0.12s var(--ease-out);
+}
+
+.onboarding-toggle-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.onboarding-toggle-btn:active {
+  transform: scale(0.98);
+}
+
+.onboarding-toggle-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
 }
 
 .onboarding-provider-summary {
@@ -1550,21 +1605,28 @@ button.primary.success {
   right: 12px;
   background: none;
   border: none;
-  color: var(--text-muted, #888);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    background-color 0.15s,
-    color 0.15s;
+    background-color 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
 }
 
 .onboarding-card-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #e0e0e0);
+  /* Was `rgba(255, 255, 255, 0.1)` — white-alpha that's invisible on
+   * a light theme background. Token-driven now. */
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.onboarding-card-close:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
 }
 
 .onboarding-card-close:disabled {

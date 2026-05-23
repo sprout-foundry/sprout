@@ -833,7 +833,7 @@
 }
 
 .sidebar .status-m,
-.sidebar .status-?,
+.sidebar .status-unknown,
 .sidebar .status-d,
 .sidebar .status-r {
   color: var(--text-primary);

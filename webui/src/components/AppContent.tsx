@@ -17,6 +17,7 @@ import { type SectionTab } from '../hooks/useSidebarState';
 import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
+import { useAppStateContext } from '../contexts/AppStateContext';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import type { ContextPanelHandle } from './contextPanel/types';
 import ContextSidebar from './ContextSidebar';
@@ -145,6 +146,30 @@ const AppContent: React.FC<AppContentProps> = ({
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const notificationBellRef = useRef<HTMLDivElement>(null);
+
+  const { setState: setAppState } = useAppStateContext();
+  // Opens the ModelSelectionModal for the currently active provider when
+  // the user clicks the model name in the status bar. The modal handles
+  // the actual swap via the existing handleModelSelectionResponse path.
+  //
+  // Editor-only mode ("editor" is the sentinel used by
+  // pkg/webui/provider_check.go for "no LLM, editor only") gets routed to
+  // the provider setup flow instead — opening ModelSelectionModal for
+  // "editor" would fail at the /api/providers/models?provider=editor
+  // fetch since there's no such provider on the backend.
+  const handleStatusBarModelClick = useCallback(
+    (provider: string) => {
+      const p = provider || state.provider || '';
+      if (!p || p === 'editor') {
+        window.dispatchEvent(
+          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
+        );
+        return;
+      }
+      setAppState((prev) => ({ ...prev, modelSelectionRequest: { provider: p } }));
+    },
+    [setAppState, state.provider],
+  );
   const hotkeysConfigPath = useHotkeysConfig(apiService, isConnected);
   const {
     instances,
@@ -558,6 +583,8 @@ const AppContent: React.FC<AppContentProps> = ({
           notificationCount={notifications.length}
           onToggleNotificationCenter={() => setIsNotificationCenterOpen((prev) => !prev)}
           notificationCenterRef={notificationBellRef}
+          chatStats={state.stats}
+          onModelClick={handleStatusBarModelClick}
         />
         <NotificationCenter
           isOpen={isNotificationCenterOpen}

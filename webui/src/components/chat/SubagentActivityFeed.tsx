@@ -1,27 +1,15 @@
-import { LiveLog, groupSubagentRuns } from '@sprout/ui';
+import { LiveLog, groupSubagentRuns, getPersonaColor } from '@sprout/ui';
 import { Bot, CheckCircle2, XCircle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useState, useMemo } from 'react';
 import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';
 
-// ── Utility Functions ────────────────────────────────────────────────
-// groupSubagentRuns is now imported from @sprout/ui
-
-const PERSONA_COLORS: Record<string, string> = {
-  coder: '#58a6ff',
-  reviewer: '#d2a8ff',
-  code_reviewer: '#d2a8ff',
-  tester: '#7ee787',
-  debugger: '#f0883e',
-  refactor: '#79c0ff',
-  researcher: '#ff7b72',
-  general: '#8b949e',
-};
-
-export const getPersonaColor = (persona?: string): string => {
-  return PERSONA_COLORS[persona || ''] || '#8b949e';
-};
+// SP-053-1a: getPersonaColor + PERSONA_COLORS now live in @sprout/ui so the
+// chat-bubble badges, the tool timeline, and this activity feed all read
+// from one source. Re-exported here for any older importers in this package
+// that referenced this module directly.
+export { getPersonaColor };
 
 export const formatDuration = (start: Date, end?: Date): string => {
   const ms = (end || new Date()).getTime() - start.getTime();

@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+// In WASM builds the ONNX runtime is available via JS bridge, so
+// onnxAvailable — the initONNX fast-path won't reject it.
+const onnxAvailable = true
+
 // This file provides the WASM-side ONNX implementation. There are two modes:
 //
 //  1. **JS bridge active** — when the host page registers a provider on

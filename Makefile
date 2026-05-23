@@ -203,6 +203,9 @@ build-ui:
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
+	@# Build workspace packages first (needed by webui via file: references)
+	@cd packages/events && npm install --silent 2>/dev/null && npm run build
+	@cd packages/ui && npm install --silent 2>/dev/null && npm run build
 	@# Install npm dependencies if needed
 	@cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true
 	@cd webui && npm run build
@@ -214,6 +217,8 @@ deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
+		cd packages/events && npm install --silent 2>/dev/null && npm run build; \
+		cd packages/ui && npm install --silent 2>/dev/null && npm run build; \
 		cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true; \
 		cd webui && npm run build; \
 		echo "React web UI build completed in webui/dist/"; \

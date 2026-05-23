@@ -97,6 +97,11 @@ jobs:
     - name: Install root dependencies
       run: npm ci
 
+    - name: Build workspace packages
+      run: |
+        cd packages/events && npm install && npm run build
+        cd packages/ui && npm install && npm run build
+
     - name: Install web UI dependencies
       run: npm ci
       working-directory: webui

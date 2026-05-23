@@ -266,20 +266,20 @@ describe('getPersonaColor', () => {
     expect(getPersonaColor('researcher')).toBe('#ff7b72');
   });
 
-  it('returns #8b949e for general', () => {
-    expect(getPersonaColor('general')).toBe('#8b949e');
+  it('returns #6e7681 for general', () => {
+    expect(getPersonaColor('general')).toBe('#6e7681');
   });
 
-  it('returns #8b949e for undefined persona', () => {
-    expect(getPersonaColor(undefined)).toBe('#8b949e');
+  it('returns #6e7681 for undefined persona', () => {
+    expect(getPersonaColor(undefined)).toBe('#6e7681');
   });
 
-  it('returns #8b949e for unknown persona', () => {
-    expect(getPersonaColor('unknown_persona')).toBe('#8b949e');
+  it('returns #6e7681 for unknown persona', () => {
+    expect(getPersonaColor('unknown_persona')).toBe('#6e7681');
   });
 
-  it('returns #8b949e for empty string persona', () => {
-    expect(getPersonaColor('')).toBe('#8b949e');
+  it('returns #6e7681 for empty string persona', () => {
+    expect(getPersonaColor('')).toBe('#6e7681');
   });
 });
 

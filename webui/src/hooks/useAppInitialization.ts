@@ -131,7 +131,7 @@ export function useAppInitialization({
           // equals workspaceRoot the user intentionally set their workspace to the
           // daemon root (e.g. home dir) — don't interrupt them with the picker.
           if (!savedWorkspace) {
-            window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+            window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
           }
         }
       } catch (error) {
@@ -155,7 +155,7 @@ export function useAppInitialization({
             const restored = await apiService.restoreSession(String(restorable.session_id));
             if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
               window.dispatchEvent(
-                new CustomEvent('ledit:session-restored', {
+                new CustomEvent('sprout:session-restored', {
                   detail: { messages: restored.messages },
                 }),
               );

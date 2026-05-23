@@ -23,7 +23,7 @@ function WorkspacePickerView({
   setWorkspace: (path: string) => Promise<void>;
 }): JSX.Element {
   const handleBrowse = () => {
-    window.dispatchEvent(new CustomEvent('ledit:open-workspace-switcher'));
+    window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
   };
 
   return (

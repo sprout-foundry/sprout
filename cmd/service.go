@@ -59,7 +59,7 @@ var serviceInstallCmd = &cobra.Command{
 			return fmt.Errorf("failed to check for legacy services: %w", err)
 		}
 		if len(legacyPaths) > 0 {
-			fmt.Println("\nLegacy service configuration(s) detected from a previous 'ledit' installation:")
+			fmt.Println("\nLegacy service configuration(s) detected from a previous 'sprout' installation:")
 			for _, p := range legacyPaths {
 				fmt.Printf("  %s\n", p)
 			}
@@ -194,11 +194,11 @@ func init() {
 	rootCmd.AddCommand(serviceCmd)
 }
 
-// detectLegacyService searches for legacy "ledit" service configuration files
-// that may conflict with the current "sprout" service installation.
+// detectLegacyService searches for legacy "sprout" service configuration files
+// that may conflict with a new service installation.
 //
-// Darwin checks ~/Library/LaunchAgents/com.ledit.*.plist
-// Linux checks ~/.config/systemd/user/ledit*.service
+// Darwin checks ~/Library/LaunchAgents/com.ledit.*.plist (legacy naming)
+// Linux checks ~/.config/systemd/user/ledit*.service (legacy naming)
 func detectLegacyService() ([]string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

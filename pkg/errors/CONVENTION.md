@@ -74,7 +74,7 @@ if errors.As(err, &pathErr) {
 The `utils.WrapError()` helper is available but not required:
 
 ```go
-import "github.com/alantheprice/ledit/pkg/utils"
+import "github.com/sprout-foundry/sprout/pkg/utils"
 
 if err != nil {
     return utils.WrapError(err, "context description")

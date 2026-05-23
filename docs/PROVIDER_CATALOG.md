@@ -1,6 +1,6 @@
 # Provider Catalog
 
-`ledit` now uses a repo-owned provider catalog instead of depending on an external shared catalog.
+`sprout` now uses a repo-owned provider catalog instead of depending on an external shared catalog.
 
 The source of truth is:
 
@@ -25,7 +25,7 @@ The checked-in catalog file contains:
 
 The default remote refresh URL is:
 
-- `https://raw.githubusercontent.com/alantheprice/ledit/main/pkg/providercatalog/providers.json`
+- `https://raw.githubusercontent.com/sprout-foundry/sprout/main/pkg/providercatalog/providers.json`
 
 It can be overridden with:
 
@@ -67,7 +67,7 @@ That workflow runs daily and on manual dispatch. It executes:
 The refresh command:
 
 1. loads the existing catalog
-2. queries each configured provider through the existing `ledit` provider integration layer
+2. queries each configured provider through the existing `sprout` provider integration layer
 3. normalizes discovered models
 4. preserves curated onboarding metadata
 5. writes the updated catalog back to `providers.json`

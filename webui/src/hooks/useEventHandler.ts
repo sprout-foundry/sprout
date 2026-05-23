@@ -746,6 +746,29 @@ export function useEventHandler({
         break;
       }
 
+      case 'provider_no_credential': {
+        // Dedicated event for "you switched to a provider that needs an
+        // API key it doesn't have." Surface as a sticky toast so the
+        // user notices regardless of whether a chat is in flight —
+        // decoupled from the generic agent_message warning path which
+        // would silently inline into the last assistant bubble.
+        //
+        // We don't auto-open the credentials tab; the toast text points
+        // there and the user opens it intentionally. A future
+        // enhancement could add an action button to the notification.
+        logEntry.category = 'system';
+        logEntry.level = 'warning';
+        const noCredProvider = typeof eventData?.provider === 'string' ? eventData.provider : '';
+        const noCredMsg =
+          typeof eventData?.message === 'string' && eventData.message
+            ? eventData.message
+            : `Provider ${noCredProvider || ''} requires an API key. Configure it in Settings → Credentials.`;
+        const title = noCredProvider ? `${noCredProvider} needs an API key` : 'Provider needs an API key';
+        addNotification('warning', title, noCredMsg, 0);
+        setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+        break;
+      }
+
       case 'metrics_update':
         logEntry.category = 'system';
         logEntry.level = 'info';

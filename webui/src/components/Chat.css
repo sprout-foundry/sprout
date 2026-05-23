@@ -637,8 +637,15 @@
   min-width: 0;
 }
 
+/* User messages flush-right (the bubble width is capped in
+ * .message.user .message-bubble below so flex-end alignment reads). */
 .message.user {
-  justify-content: flex-start;
+  justify-content: flex-end;
+}
+
+.message.user .message-bubble {
+  width: auto;
+  max-width: 78%;
 }
 
 .message.assistant {
@@ -687,12 +694,10 @@
 }
 
 .message.user .message-bubble {
-  width: 100%;
-  max-width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  box-shadow: inset -3px 0 0 color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
 .message.assistant .message-bubble {

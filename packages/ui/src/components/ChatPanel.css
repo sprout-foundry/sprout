@@ -632,8 +632,21 @@
   min-width: 0;
 }
 
+/* User messages flush-right so the asymmetric bottom-right corner reads
+ * as a clear "you said this" cue (matches the design system mockup at
+ * preview/components-message-bubbles.html). Assistant messages stay
+ * flush-left so subagent depth indents accumulate cleanly on the left.
+ *
+ * The bubble itself stops growing past 78% of the row — without that
+ * cap, the user message would still occupy the full width and the
+ * flex-end alignment wouldn't read. */
 .message.user {
-  justify-content: flex-start;
+  justify-content: flex-end;
+}
+
+.message.user .message-bubble {
+  width: auto;
+  max-width: 78%;
 }
 
 .message.assistant {
@@ -679,12 +692,13 @@
 }
 
 .message.user .message-bubble {
-  width: 100%;
-  max-width: 100%;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-primary) 45%, transparent);
+  /* Accent rail on the RIGHT (negative x-offset) since the bubble is
+   * right-aligned — the eye reads the colored stripe as the bubble's
+   * anchor toward the input area below. */
+  box-shadow: inset -3px 0 0 color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
 .message.assistant .message-bubble {
@@ -722,11 +736,12 @@
   border-left: 3px solid var(--persona-color, var(--border-subtle));
 }
 
-/* Asymmetric user-bubble corner — clip the bottom-LEFT corner so the
- * left rail "tail" reads as a speech-bubble cue against the left-flush
- * layout. Order: top-left | top-right | bottom-right | bottom-left. */
+/* Asymmetric user-bubble corner — clip the bottom-RIGHT corner so the
+ * bubble's "tail" points down-right toward where the chat input lives,
+ * matching the design system mockup. Order: top-left | top-right |
+ * bottom-right | bottom-left. */
 .message.user .message-bubble {
-  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-sm, 4px);
+  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-sm, 4px) var(--radius-lg, 8px);
 }
 
 .message-content {

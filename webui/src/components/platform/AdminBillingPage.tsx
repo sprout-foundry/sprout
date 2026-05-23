@@ -219,7 +219,7 @@ const AdminBillingPage: React.FC = () => {
                 {refundError && (
                   <div className="platform-card error">
                     <div className="platform-card-body">
-                      <p style={{ color: '#ef4444' }}>{refundError}</p>
+                      <p style={{ color: 'var(--accent-error)' }}>{refundError}</p>
                     </div>
                   </div>
                 )}
@@ -227,7 +227,7 @@ const AdminBillingPage: React.FC = () => {
                 {refundResult && (
                   <div className="platform-card running">
                     <div className="platform-card-body">
-                      <p style={{ color: '#22c55e' }}>Refund processed successfully! ID: {refundResult.id}</p>
+                      <p style={{ color: 'var(--accent-success)' }}>Refund processed successfully! ID: {refundResult.id}</p>
                     </div>
                   </div>
                 )}

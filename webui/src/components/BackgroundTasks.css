@@ -234,6 +234,11 @@
   color: var(--text-primary);
 }
 
+.background-task-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 .background-task-btn-attach:hover {
   background: color-mix(in srgb, var(--accent-success) 15%, transparent);
   color: var(--accent-success);

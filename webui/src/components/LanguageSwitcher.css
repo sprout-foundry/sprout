@@ -115,7 +115,7 @@
 }
 
 .language-switcher-list::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--border-strong);
 }
 
 /* ── Item ── */

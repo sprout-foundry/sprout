@@ -238,28 +238,28 @@
 }
 
 .commit-detail-file-status.status-a {
-  color: #3fb950;
-  background: rgba(46, 160, 67, 0.15);
+  color: var(--accent-success);
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
 .commit-detail-file-status.status-m {
-  color: #e2c08d;
-  background: rgba(226, 192, 141, 0.15);
+  color: var(--accent-warning);
+  background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
 }
 
 .commit-detail-file-status.status-d {
-  color: #f85149;
-  background: rgba(248, 81, 73, 0.15);
+  color: var(--accent-error);
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
 }
 
 .commit-detail-file-status.status-r {
-  color: #58a6ff;
-  background: rgba(56, 139, 253, 0.15);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .commit-detail-file-status.status-c {
   color: var(--text-tertiary);
-  background: rgba(148, 163, 184, 0.12);
+  background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
 }
 
 .commit-detail-file-status.status-unknown {

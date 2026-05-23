@@ -285,12 +285,17 @@ func (ws *ReactWebServer) handlePersonaChangeMessage(safeConn *SafeConn, data *P
 	ws.publishProviderState(clientID)
 }
 
-// notifyMissingCredentialIfNeeded publishes an agent_message warning if
-// the just-activated provider requires an API key but doesn't have one
-// configured. Without this the user only learns about the missing
-// credential when their next query fails with a provider-level 401 —
-// surfacing it at the moment of change lets them open Settings →
+// notifyMissingCredentialIfNeeded publishes a dedicated provider_no_credential
+// event if the just-activated provider requires an API key but doesn't
+// have one configured. Without this the user only learns about the
+// missing credential when their next query fails with a provider-level
+// 401 — surfacing it at the moment of change lets them open Settings →
 // Credentials and fix it before sending traffic.
+//
+// The event has its own type (vs the prior agent_message warning) so the
+// frontend can render a sticky toast with a "configure credential" action
+// instead of inlining the warning into the active assistant bubble (which
+// silently drops the notice when no chat is in flight).
 //
 // Best-effort: any lookup failure is silently skipped (we'd rather miss
 // a warning than block a legitimate provider change on transient state).
@@ -309,14 +314,8 @@ func (ws *ReactWebServer) notifyMissingCredentialIfNeeded(clientID, chatID, prov
 		"Provider %q requires an API key. Configure it in Settings → Credentials before sending messages.",
 		providerID,
 	)
-	ws.publishClientEventWithChat(clientID, chatID, events.EventTypeAgentMessage, events.AgentMessageEvent(
-		"warning",
-		msg,
-		map[string]interface{}{
-			"provider":          providerID,
-			"missing_credential": true,
-		},
-	))
+	ws.publishClientEventWithChat(clientID, chatID, events.EventTypeProviderNoCredential,
+		events.ProviderNoCredentialEvent(providerID, msg))
 }
 
 // persistProviderModelToConfig attempts to persist the provider and model to the

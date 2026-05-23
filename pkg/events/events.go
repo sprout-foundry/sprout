@@ -42,6 +42,12 @@ const (
 	EventTypeSecurityPromptRequest  = "security_prompt_request"
 	EventTypeAskUserRequest        = "ask_user_request"
 	EventTypeAgentMessage            = "agent_message"
+	// EventTypeProviderNoCredential is published when a provider change
+	// would activate a provider that requires an API key but doesn't
+	// have one configured. The frontend surfaces it as a sticky toast
+	// pointing at Settings → Credentials, distinct from generic warning
+	// messages that get inlined into the active assistant bubble.
+	EventTypeProviderNoCredential    = "provider_no_credential"
 	EventTypeWorkspaceChanged        = "workspace_changed"
 	EventTypeSessionTerminated       = "session_terminated"
 	EventTypeDriftDetected           = "drift_detected"
@@ -323,6 +329,17 @@ func SecurityApprovalRequestEvent(requestID, toolName, riskLevel, reasoning stri
 func TodoUpdateEvent(todos []map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"todos": todos,
+	}
+}
+
+// ProviderNoCredentialEvent creates an event signalling that the newly
+// active provider requires an API key but doesn't have one configured.
+// The frontend uses providerID to drive a toast that opens Settings →
+// Credentials scoped to this provider.
+func ProviderNoCredentialEvent(providerID, message string) map[string]interface{} {
+	return map[string]interface{}{
+		"provider": providerID,
+		"message":  message,
 	}
 }
 

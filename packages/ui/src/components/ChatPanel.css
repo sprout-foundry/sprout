@@ -681,10 +681,10 @@
 .message.user .message-bubble {
   width: 100%;
   max-width: 100%;
-  background: color-mix(in srgb, var(--accent-primary) 7%, var(--bg-secondary));
+  background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-primary);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-primary) 38%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
 .message.assistant .message-bubble {
@@ -722,11 +722,11 @@
   border-left: 3px solid var(--persona-color, var(--border-subtle));
 }
 
-/* Asymmetric user-bubble corner — per the design system, the user message
- * collapses its bottom-left corner to read as "you said this" against the
- * left-flush layout, mirroring how chat tools distinguish self vs reply. */
+/* Asymmetric user-bubble corner — clip the bottom-LEFT corner so the
+ * left rail "tail" reads as a speech-bubble cue against the left-flush
+ * layout. Order: top-left | top-right | bottom-right | bottom-left. */
 .message.user .message-bubble {
-  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-sm, 4px) var(--radius-lg, 8px);
+  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-sm, 4px);
 }
 
 .message-content {

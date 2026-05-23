@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import type { SubagentTypeInfo } from '../../services/api/types';
@@ -9,6 +9,13 @@ import type { SubagentTypeEntry, SettingsSubTab } from './types';
 interface UseSettingsStateReturn {
   activeSubTab: SettingsSubTab;
   setActiveSubTab: (v: SettingsSubTab) => void;
+  /** Force a re-fetch of the current provider/model info shown in the
+   *  Providers tab — used after the inline switcher persists changes. */
+  refreshCurrentProviderInfo: () => void;
+  /** Force a re-fetch of the provider catalog (subagentProviders) — used
+   *  after the ProviderSettingsTab CRUD form adds a custom provider so
+   *  the new entry appears in the dropdowns immediately. */
+  refreshSubagentProviders: () => void;
   configViewLayer: 'session' | 'workspace' | 'global';
   setConfigViewLayer: (v: 'session' | 'workspace' | 'global') => void;
   layerLoading: string | null;
@@ -244,6 +251,14 @@ export function useSettingsState(
   // providers tab uses them for the primary chat agent), so loading the
   // provider list on either entry keeps the dropdowns populated without
   // forcing the user to visit the subagents tab first.
+  // refreshSubagentProviders() lets callers (e.g. the ProviderSettingsTab
+  // after adding a custom provider) force a re-fetch — otherwise the new
+  // provider doesn't appear in the dropdown until the user closes and
+  // reopens the tab.
+  const [subagentProvidersRefreshTick, setSubagentProvidersRefreshTick] = useState(0);
+  const refreshSubagentProviders = useCallback(() => {
+    setSubagentProvidersRefreshTick((n) => n + 1);
+  }, []);
   useEffect(() => {
     if (activeSubTab !== 'subagents' && activeSubTab !== 'providers') return;
     let cancelled = false;
@@ -260,7 +275,7 @@ export function useSettingsState(
     return () => {
       cancelled = true;
     };
-  }, [activeSubTab, api]);
+  }, [activeSubTab, api, subagentProvidersRefreshTick]);
 
   // Fetch providers for commit & review when tab is activated
   useEffect(() => {
@@ -280,7 +295,13 @@ export function useSettingsState(
     };
   }, [activeSubTab, api]);
 
-  // Fetch current provider info when providers tab is activated
+  // Fetch current provider info when providers tab is activated or
+  // when refreshCurrentProviderInfo() is called externally (e.g. after
+  // the inline primary-provider dropdown writes to global config).
+  const [currentProviderRefreshTick, setCurrentProviderRefreshTick] = useState(0);
+  const refreshCurrentProviderInfo = useCallback(() => {
+    setCurrentProviderRefreshTick((n) => n + 1);
+  }, []);
   useEffect(() => {
     if (activeSubTab !== 'providers') return;
     let cancelled = false;
@@ -304,11 +325,13 @@ export function useSettingsState(
     return () => {
       cancelled = true;
     };
-  }, [activeSubTab, api]);
+  }, [activeSubTab, api, currentProviderRefreshTick]);
 
   return {
     activeSubTab,
     setActiveSubTab,
+    refreshCurrentProviderInfo,
+    refreshSubagentProviders,
     configViewLayer,
     setConfigViewLayer,
     layerLoading,

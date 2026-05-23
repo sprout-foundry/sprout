@@ -720,8 +720,8 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: rgba(245, 158, 11, 0.15);
-  color: #f59e0b;
+  background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+  color: var(--accent-warning);
   font-size: 9px;
   font-weight: 700;
   flex-shrink: 0;

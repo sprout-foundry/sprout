@@ -106,10 +106,10 @@
 }
 
 .chat-statusbar-cost--warn {
-  color: #d29922; /* yellow — matches CLI footer warn tier */
+  color: var(--accent-warning);
 }
 
 .chat-statusbar-cost--alert {
-  color: #f85149; /* red — matches CLI footer alert tier */
+  color: var(--accent-error);
   font-weight: 600;
 }

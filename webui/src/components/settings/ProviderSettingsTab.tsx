@@ -310,7 +310,7 @@ export default function ProviderSettingsTab({
               />
               <small
                 style={{
-                  color: '#888',
+                  color: 'var(--text-tertiary)',
                   fontSize: '12px',
                   marginTop: '4px',
                   display: 'block',

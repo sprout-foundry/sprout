@@ -201,7 +201,7 @@
 
 .sidebar .styled-toggle input:checked + .toggle-track::after {
   transform: translateX(16px);
-  background: #fff;
+  background: var(--accent-fg);
 }
 
 .sidebar .styled-toggle .toggle-label {
@@ -336,12 +336,12 @@
 
 .sidebar .settings-toast.success {
   background: var(--accent-success);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 .sidebar .settings-toast.error {
   background: var(--accent-error);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 @keyframes settings-toast-in {

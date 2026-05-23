@@ -383,9 +383,9 @@
 .history-error-inline {
   padding: 8px;
   border-radius: 8px;
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  background: rgba(127, 29, 29, 0.2);
-  color: #fecaca;
+  border: 1px solid color-mix(in srgb, var(--accent-error) 35%, transparent);
+  background: color-mix(in srgb, var(--accent-error) 18%, transparent);
+  color: color-mix(in srgb, var(--accent-error) 70%, var(--text-primary));
   font-size: 12px;
   margin-bottom: 8px;
 }

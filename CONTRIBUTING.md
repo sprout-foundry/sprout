@@ -128,4 +128,3 @@ Before you submit:
 
 Sprout is licensed under the [MIT License](LICENSE). By contributing, you agree
 that your contributions will be licensed under the same terms.
-

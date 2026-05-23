@@ -17,7 +17,7 @@ import { type SectionTab } from '../hooks/useSidebarState';
 import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
-import { useAppStateContext } from '../contexts/AppStateContext';
+import { useAppStoreSetState } from '../contexts/AppStore';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import type { ContextPanelHandle } from './contextPanel/types';
 import ContextSidebar from './ContextSidebar';
@@ -147,7 +147,7 @@ const AppContent: React.FC<AppContentProps> = ({
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const notificationBellRef = useRef<HTMLDivElement>(null);
 
-  const { setState: setAppState } = useAppStateContext();
+  const setAppState = useAppStoreSetState();
   // Opens the ModelSelectionModal for the currently active provider when
   // the user clicks the model name in the status bar. The modal handles
   // the actual swap via the existing handleModelSelectionResponse path.
@@ -166,7 +166,10 @@ const AppContent: React.FC<AppContentProps> = ({
         );
         return;
       }
-      setAppState((prev) => ({ ...prev, modelSelectionRequest: { provider: p } }));
+      // useAppStoreSetState takes an updater that returns a *partial*
+      // AppState (the store merges it in) — not the full spread we'd use
+      // with React's setState.
+      setAppState(() => ({ modelSelectionRequest: { provider: p } }));
     },
     [setAppState, state.provider],
   );

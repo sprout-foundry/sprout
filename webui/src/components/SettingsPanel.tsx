@@ -294,6 +294,8 @@ function SettingsPanel({
           <ProviderSettingsTab
             settings={activeSettings ?? settings}
             onRequestProviderSetup={onRequestProviderSetup}
+            availableProviders={state.subagentProviders}
+            updateSetting={mutations.updateSetting}
             editingProvider={state.editingProvider}
             providerName={state.providerName}
             providerApiBase={state.providerApiBase}

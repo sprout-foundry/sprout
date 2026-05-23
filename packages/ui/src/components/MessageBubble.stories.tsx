@@ -161,6 +161,50 @@ export const WithoutTimestamp: Story = {
   },
 };
 
+// SP-053 — delegation-chain visualization. Renders a primary message, then
+// the same conversation continuing through orchestrator → coder → tester
+// nesting so the persona badge, the depth indent, and the persona-colored
+// left rail can all be inspected together at a glance.
+export const DelegationChain: Story = {
+  render: () => (
+    <div style={{ maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <MessageBubble type="user" ariaLabel="User message" timestamp="10:30 AM">
+        Refactor the auth middleware and add tests.
+      </MessageBubble>
+      <MessageBubble type="assistant" ariaLabel="Primary agent" timestamp="10:30 AM">
+        I'll delegate this to the orchestrator.
+      </MessageBubble>
+      <MessageBubble type="assistant" ariaLabel="Orchestrator" persona="orchestrator" depth={1} timestamp="10:30 AM">
+        Spawning a coder to refactor, then a tester to add coverage.
+      </MessageBubble>
+      <MessageBubble type="assistant" ariaLabel="Coder" persona="coder" depth={2} timestamp="10:31 AM">
+        Refactored `pkg/auth/middleware.go` — split the token validation path from session lookup.
+      </MessageBubble>
+      <MessageBubble type="assistant" ariaLabel="Tester" persona="tester" depth={2} timestamp="10:32 AM">
+        Added 6 new tests in `middleware_test.go`. All passing.
+      </MessageBubble>
+      <MessageBubble type="assistant" ariaLabel="Reviewer" persona="reviewer" depth={3} timestamp="10:33 AM">
+        Deep review looks clean — no concerns about token handling.
+      </MessageBubble>
+      <MessageBubble type="assistant" ariaLabel="Primary agent wrap-up" timestamp="10:34 AM">
+        Done. Refactor + tests + review all complete.
+      </MessageBubble>
+    </div>
+  ),
+};
+
+export const PersonaPalette: Story = {
+  render: () => (
+    <div style={{ maxWidth: '500px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {['coder', 'reviewer', 'tester', 'debugger', 'refactor', 'researcher', 'orchestrator', 'executive_assistant', 'general', 'made_up'].map((p) => (
+        <MessageBubble key={p} type="assistant" ariaLabel={p} persona={p} depth={1}>
+          {`Sample message from ${p}.`}
+        </MessageBubble>
+      ))}
+    </div>
+  ),
+};
+
 export const ChatFlow: Story = {
   render: () => (
     <div style={{ maxWidth: '600px', margin: '0 auto' }}>

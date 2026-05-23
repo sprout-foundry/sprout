@@ -2,6 +2,7 @@
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { useMemo, useRef } from 'react';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
+import { ChatStatusBarItems } from './chat/ChatStatusBarItems';
 import './StatusBar.css';
 
 interface StatusBarBufferInfo {
@@ -20,6 +21,19 @@ interface WebuiStatusBarProps {
   notificationCount?: number;
   onToggleNotificationCenter?: () => void;
   notificationCenterRef?: React.RefObject<HTMLDivElement>;
+  /**
+   * SP-053-3b: chat stats blob (provider/model/tokens/cost). When non-empty,
+   * the right section renders ChatStatusBarItems instead of editor metadata
+   * so the user always sees what they're spending while a chat is active.
+   */
+  chatStats?: Record<string, unknown> | null;
+  /**
+   * Fired when the user clicks the model name in the chat status segment.
+   * Passes the active provider name so the caller can open the model
+   * picker scoped to that provider. Without this, the model name renders
+   * as plain text (no click affordance).
+   */
+  onModelClick?: (provider: string) => void;
 }
 
 // Simple SVG icon for notification bell (similar to existing inline SVGs)
@@ -55,6 +69,8 @@ function StatusBar({
   notificationCount = 0,
   onToggleNotificationCenter,
   notificationCenterRef,
+  chatStats,
+  onModelClick,
 }: WebuiStatusBarProps): JSX.Element {
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
@@ -83,6 +99,15 @@ function StatusBar({
 
   const bellIconRef = useRef<HTMLDivElement>(null);
 
+  // SP-053-3b: chat stats outrank editor metadata in the right section.
+  // When a chat is active and has any stats payload, render the chat
+  // segments (provider · model · ctx · cost); otherwise fall through to
+  // the shared StatusBar's editor metadata defaults.
+  const hasChatStats = chatStats != null && Object.keys(chatStats).length > 0;
+  const chatRightItems = hasChatStats ? (
+    <ChatStatusBarItems stats={chatStats} onModelClick={onModelClick} />
+  ) : undefined;
+
   return (
     <div className="statusbar-wrapper">
       <SproutStatusBar
@@ -92,7 +117,8 @@ function StatusBar({
         encoding={encoding}
         lineEnding={lineEnding}
         indentation={indentation}
-        showRightSection={buffer != null}
+        showRightSection={buffer != null || hasChatStats}
+        rightItems={chatRightItems}
       />
       {onToggleNotificationCenter && (
         <div

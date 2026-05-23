@@ -894,27 +894,33 @@
 
 /* Compact "model ▸" hint shown above the chat input, mirroring the CLI's
    prompt prefix at `cmd/agent_modes.go:1005`. Tiny + muted so it sits
-   quietly above the input without competing with content. */
+   quietly above the input without competing with content. The persona
+   chip follows the design-system status-pill treatment so all three
+   persona surfaces (chat bubbles, status bar, this hint) read coherent. */
 .input-model-hint {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   color: var(--text-tertiary, #6e7681);
-  margin-bottom: 4px;
-  line-height: 1.2;
+  margin-bottom: 6px;
+  line-height: 1.4;
   user-select: none;
   pointer-events: none;
 }
 
 .input-model-hint-persona {
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--accent-secondary, #56b6c2) 16%, transparent);
+  color: var(--accent-secondary, #56b6c2);
 }
 
 .input-model-hint-name {
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-secondary, #8b949e);
   max-width: 280px;
   overflow: hidden;

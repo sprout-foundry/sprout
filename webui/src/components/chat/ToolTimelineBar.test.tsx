@@ -125,7 +125,7 @@ describe('ToolTimelineBar', () => {
     });
     const badge = container.querySelector('.tool-timeline-persona') as HTMLElement | null;
     expect(badge).not.toBeNull();
-    expect(badge?.textContent).toBe('[coder]');
+    expect(badge?.textContent).toBe('coder');
     // getPersonaColor('coder') → #58a6ff → rgb(88, 166, 255) in DOM
     expect(badge?.style.color.replace(/\s/g, '').toLowerCase()).toBe('rgb(88,166,255)');
   });

@@ -216,7 +216,7 @@ function Chat(props: ChatProps): JSX.Element {
           return (
             <div className="input-model-hint" aria-hidden="true">
               {hintPersona && hintPersona !== 'orchestrator' ? (
-                <span className="input-model-hint-persona">[{hintPersona}]</span>
+                <span className="input-model-hint-persona">{hintPersona}</span>
               ) : null}
               <span className="input-model-hint-name">{hintModel}</span>
               <span className="input-model-hint-arrow">▸</span>

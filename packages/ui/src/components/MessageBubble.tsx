@@ -70,10 +70,9 @@ function MessageBubble({
         {persona ? (
           <span
             className="message-persona-badge"
-            style={{ color: personaColor }}
             aria-label={`From ${persona}`}
           >
-            [{persona}]
+            {persona}
           </span>
         ) : null}
         {copyText ? (

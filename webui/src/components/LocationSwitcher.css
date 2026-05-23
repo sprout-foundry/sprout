@@ -42,9 +42,11 @@
 }
 
 .location-host-btn.ssh-active {
-  border-color: #4ade80;
-  background: rgba(74, 222, 128, 0.15);
-  color: #4ade80;
+  /* Was hardcoded green Tailwind palette. Now uses the success token so
+   * the "connected via SSH" state tracks the theme. */
+  border-color: var(--accent-success);
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+  color: var(--accent-success);
 }
 
 .location-host-btn-icon {
@@ -721,14 +723,16 @@
 
 .location-switcher-session-btn.danger:hover:not(:disabled) {
   color: var(--accent-error);
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent-error) 30%, transparent);
 }
 
 .location-switcher-session-btn.primary {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: #fff;
+  /* `--accent-fg` is the on-accent foreground token — was hardcoded
+   * `#fff` which broke any future light-on-light primary variant. */
+  color: var(--accent-fg);
   font-weight: 600;
 }
 
@@ -736,7 +740,7 @@
   background: var(--accent-primary);
   filter: brightness(0.9);
   border-color: var(--accent-primary);
-  color: #fff;
+  color: var(--accent-fg);
 }
 
 /* Path input + Connect + Save on one row */

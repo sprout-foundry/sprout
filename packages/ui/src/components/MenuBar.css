@@ -49,12 +49,15 @@
 }
 
 .menu-bar-title:hover {
-  background: rgba(148, 163, 184, 0.1);
+  /* Token-driven (was hardcoded slate-400 alpha — broke in light theme). */
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
 .menu-bar-title--active {
-  background: rgba(97, 175, 239, 0.15);
+  /* Was hardcoded rgba(97, 175, 239, 0.15) — now derived from accent token
+   * so dark/light themes flow correctly. */
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
   color: var(--text-primary);
 }
 
@@ -95,11 +98,12 @@
   }
 }
 
-/* Selected state for keyboard navigation */
+/* Selected state for keyboard navigation — derived from accent token so
+ * dark/light themes both render the right tint. */
 .menu-bar-dropdown .context-menu-item.selected {
-  background: rgba(97, 175, 239, 0.2);
+  background: var(--accent-primary-alpha);
   color: var(--text-primary);
-  outline: 1px solid rgba(97, 175, 239, 0.4);
+  outline: 1px solid color-mix(in srgb, var(--accent-primary) 40%, transparent);
   outline-offset: -1px;
 }
 

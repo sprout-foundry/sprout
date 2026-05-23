@@ -312,7 +312,9 @@
   background: var(--sidebar-nav-btn-active-bg);
 }
 
-/* Active left-edge indicator bar */
+/* Active left-edge indicator bar — uses the brand active-cyan token so
+ * the same color flows through sidebar rail, editor tab underline, and
+ * any future "active rail" surface. Theme-aware via the token swap. */
 .sidebar .rail-icon.active::before {
   content: '';
   position: absolute;
@@ -321,11 +323,7 @@
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: rgba(34, 211, 238, 0.8);
-}
-
-:root[data-theme='light'] .sidebar .rail-icon.active::before {
-  background: rgba(2, 132, 199, 0.7);
+  background: color-mix(in srgb, var(--brand-active-cyan, #22d3ee) 80%, transparent);
 }
 
 /* ── Platform Nav Divider ───────────────────────────────────── */

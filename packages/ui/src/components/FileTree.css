@@ -299,12 +299,14 @@
 }
 
 .file-tree .file-tree-item:hover {
-  background: rgba(148, 163, 184, 0.08);
+  /* Use design tokens — was hardcoded slate-400 alpha which doesn't
+   * adapt to the light theme. */
+  background: var(--bg-elevated);
   border-left-color: var(--accent-primary);
 }
 
 .file-tree .file-tree-item.selected {
-  background: rgba(14, 165, 233, 0.14);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
   border-left-color: var(--accent-primary);
 }
 

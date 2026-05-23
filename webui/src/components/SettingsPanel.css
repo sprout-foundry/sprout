@@ -227,7 +227,10 @@
 .sidebar .styled-select:focus-visible {
   outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(var(--accent-primary-rgb, 99, 102, 241), 0.2);
+  /* 3-px alpha halo per the design-system inputs spec
+   * (preview/components-inputs.html .input-focus rule). Reads softer than
+   * a solid 2-px ring and matches the chat-composer focus pattern. */
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
 }
 
 .sidebar .styled-input:disabled {

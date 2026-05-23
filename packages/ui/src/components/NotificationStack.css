@@ -1,8 +1,11 @@
-/* Notification Container */
+/* Notification Container — fixed bottom-right, lifted above the
+ * terminal-reserved strip so toasts don't end up underneath the
+ * terminal pane. Without this lift, `bottom: 16px` lands inside the
+ * 42-px terminal reservation and the toast is partially obscured. */
 .notification-container {
   position: fixed;
   z-index: 1500;
-  bottom: 16px;
+  bottom: calc(var(--sprout-terminal-reserved-height, 42px) + 16px);
   right: 16px;
   display: flex;
   flex-direction: column;
@@ -115,7 +118,9 @@
 }
 
 .notification-dismiss:hover {
-  background: rgba(148, 163, 184, 0.1);
+  /* Use design token — was hardcoded slate-400 alpha that didn't
+   * adapt to the light theme. */
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -150,7 +155,7 @@
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .notification-container {
-    bottom: 12px;
+    bottom: calc(var(--sprout-terminal-reserved-height, 42px) + 12px);
     right: 12px;
     left: 12px;
     max-width: none;

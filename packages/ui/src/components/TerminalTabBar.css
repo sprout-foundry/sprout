@@ -6,12 +6,12 @@
   height: 28px;
   min-height: 28px;
   background: transparent;
-  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-top: 1px solid var(--border-subtle);
   padding: 0 12px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+  scrollbar-color: var(--border-strong) transparent;
   gap: 2px;
   -webkit-app-region: drag;
 }
@@ -21,7 +21,7 @@
 }
 
 .terminal-tab-bar::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: var(--border-strong);
   border-radius: 3px;
 }
 
@@ -44,7 +44,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   cursor: pointer;
   font-size: 12px;
   font-family: var(--font-mono);
@@ -61,14 +61,14 @@
 }
 
 .terminal-tab:hover {
-  background: rgba(30, 41, 59, 0.72);
-  color: #cbd5e1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
 }
 
 .terminal-tab.active {
-  background: rgba(30, 41, 59, 0.72);
-  border-bottom-color: #22d3ee;
-  color: #e2e8f0;
+  background: var(--bg-elevated);
+  border-bottom-color: var(--accent-primary);
+  color: var(--text-primary);
 }
 
 .terminal-tab-name {
@@ -91,7 +91,7 @@
   border-radius: 3px;
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
@@ -109,8 +109,8 @@
 
 .terminal-tab-close:hover {
   opacity: 1 !important;
-  background: rgba(248, 113, 113, 0.15);
-  color: #f87171;
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
+  color: var(--accent-error);
 }
 
 /* ── New Session Button ───────────────────────────────── */
@@ -126,7 +126,7 @@
   border-radius: 4px 4px 0 0;
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
@@ -137,8 +137,8 @@
 }
 
 .terminal-tab-new:hover {
-  background: rgba(30, 41, 59, 0.72);
-  color: #cbd5e1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
 }
 
 /* ── Inline Rename Input ──────────────────────────────── */
@@ -147,10 +147,10 @@
   flex: 1;
   min-width: 0;
   height: 18px;
-  border: 1px solid #22d3ee;
+  border: 1px solid var(--accent-primary);
   border-radius: 2px;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 12px;
   font-family: var(--font-mono);
   padding: 0 4px;
@@ -159,20 +159,20 @@
 }
 
 .terminal-tab-rename-input::selection {
-  background: rgba(34, 211, 238, 0.38);
-  color: #f8fafc;
+  background: color-mix(in srgb, var(--accent-primary) 38%, transparent);
+  color: var(--text-primary);
 }
 
 /* ── Focus Visible ───────────────────────────────────── */
 
 .terminal-tab:focus-visible {
-  outline: 2px solid #22d3ee;
+  outline: 2px solid var(--accent-primary);
   outline-offset: -2px;
 }
 
 .terminal-tab-new:focus-visible,
 .terminal-tab-close:focus-visible {
-  outline: 2px solid #22d3ee;
+  outline: 2px solid var(--accent-primary);
   outline-offset: -2px;
 }
 
@@ -194,7 +194,7 @@
   border-radius: 4px 4px 0 0;
   border: none;
   background: transparent;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
@@ -205,8 +205,8 @@
 }
 
 .agent-sessions-btn:hover {
-  background: rgba(30, 41, 59, 0.72);
-  color: #cbd5e1;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
 }
 
 .agent-sessions-menu {
@@ -217,15 +217,15 @@
   max-width: 280px;
   max-height: 300px;
   overflow-y: auto;
-  background: rgba(15, 23, 42, 0.98);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 4px;
   z-index: 200;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-elevated);
   animation: agentSessionsFadeIn 0.1s ease-out;
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .agent-sessions-menu::-webkit-scrollbar {
@@ -233,7 +233,7 @@
 }
 
 .agent-sessions-menu::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.2);
+  background: var(--border-strong);
   border-radius: 3px;
 }
 
@@ -255,7 +255,7 @@
 .agent-sessions-header {
   padding: 6px 8px 4px;
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   user-select: none;
@@ -271,7 +271,7 @@
   border-radius: 4px;
   background: transparent;
   border: none;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 12px;
   font-family: var(--font-mono);
   cursor: pointer;
@@ -280,7 +280,7 @@
 }
 
 .agent-sessions-item:hover:not(:disabled) {
-  background: rgba(30, 41, 59, 0.5);
+  background: var(--bg-elevated);
 }
 
 .agent-sessions-item:disabled {
@@ -298,21 +298,21 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #64748b;
+  background: var(--text-tertiary);
   flex-shrink: 0;
 }
 
 .agent-sessions-status.active .agent-sessions-status-dot {
-  background: #7ddf97;
-  box-shadow: 0 0 0 4px rgba(125, 223, 151, 0.15);
+  background: var(--accent-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
 .agent-sessions-status.inactive .agent-sessions-status-dot {
-  background: #64748b;
+  background: var(--text-tertiary);
 }
 
 .agent-sessions-name {
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 12px;
   font-family: var(--font-mono);
   white-space: nowrap;
@@ -329,11 +329,11 @@
 
 .agent-sessions-item:hover:not(:disabled) .agent-sessions-attach-icon {
   opacity: 1;
-  color: #7ddf97;
+  color: var(--accent-success);
 }
 
 .agent-sessions-btn:focus-visible,
 .agent-sessions-item:focus-visible {
-  outline: 2px solid #22d3ee;
+  outline: 2px solid var(--accent-primary);
   outline-offset: -2px;
 }

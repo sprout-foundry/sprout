@@ -12,8 +12,8 @@
 }
 
 .filebrowser-container {
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   width: 90%;
   max-width: 700px;
@@ -22,7 +22,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-elevated);
 }
 
 .filebrowser-header {
@@ -30,12 +30,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: #333;
-  border-bottom: 1px solid #444;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .filebrowser-header h3 {
-  color: #fff;
+  color: var(--text-primary);
   margin: 0;
   font-size: 16px;
   font-weight: 500;
@@ -44,7 +44,7 @@
 .filebrowser-close {
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 18px;
   cursor: pointer;
   padding: 4px;
@@ -53,8 +53,13 @@
 }
 
 .filebrowser-close:hover {
-  background: #444;
-  color: #fff;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.filebrowser-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .filebrowser-nav {
@@ -62,14 +67,14 @@
   align-items: center;
   gap: 12px;
   padding: 12px 20px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #444;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .filebrowser-nav-button {
   background: transparent;
   border: 1px solid transparent;
-  color: #fff;
+  color: var(--text-primary);
   padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
@@ -78,8 +83,13 @@
 }
 
 .filebrowser-nav-button:hover:not(:disabled) {
-  background: #444;
-  border-color: #555;
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.filebrowser-nav-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .filebrowser-nav-button:disabled {
@@ -93,13 +103,13 @@
 
 .filebrowser-path-input {
   width: 100%;
-  background: #1a1a1a;
-  border: 1px solid #555;
-  color: #fff;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
   padding: 6px 10px;
   border-radius: 4px;
   font-size: 13px;
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-family: var(--font-mono, 'Fira Code', 'Monaco', 'Consolas', monospace);
 }
 
 .filebrowser-path-input:focus {
@@ -108,7 +118,8 @@
 
 .filebrowser-path-input:focus-visible {
   outline: none;
-  border-color: #007acc;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
 .filebrowser-content {
@@ -128,13 +139,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #888;
+  color: var(--text-tertiary);
   font-style: italic;
   padding: 40px;
 }
 
 .filebrowser-error {
-  color: #ff9800;
+  color: var(--accent-warning);
 }
 
 .filebrowser-list {
@@ -146,18 +157,24 @@
   display: flex;
   align-items: center;
   padding: 10px 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-subtle);
   cursor: pointer;
   transition: background-color 0.1s;
 }
 
 .filebrowser-item:hover {
-  background: #1a1a1a;
+  background: var(--bg-elevated);
 }
 
 .filebrowser-item.selected {
-  background: #007acc;
-  border-left: 3px solid #005a9e;
+  background: var(--accent-primary);
+  border-left: 3px solid color-mix(in srgb, var(--accent-primary) 70%, black);
+  color: var(--accent-fg);
+}
+
+.filebrowser-item.selected .filebrowser-name,
+.filebrowser-item.selected .filebrowser-details {
+  color: var(--accent-fg);
 }
 
 .filebrowser-icon {
@@ -173,7 +190,7 @@
 }
 
 .filebrowser-name {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
   margin-bottom: 2px;
@@ -181,7 +198,7 @@
 }
 
 .filebrowser-details {
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 
@@ -190,12 +207,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: #333;
-  border-top: 1px solid #444;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-default);
 }
 
 .filebrowser-help {
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 
@@ -205,9 +222,9 @@
 }
 
 .filebrowser-button {
-  background: #444;
-  border: 1px solid #555;
-  color: #fff;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
@@ -217,16 +234,22 @@
 }
 
 .filebrowser-button:hover:not(:disabled) {
-  background: #555;
+  background: var(--bg-elevated);
+}
+
+.filebrowser-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .filebrowser-button.primary {
-  background: #007acc;
-  border-color: #005a9e;
+  background: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 70%, black);
+  color: var(--accent-fg);
 }
 
 .filebrowser-button.primary:hover:not(:disabled) {
-  background: #005a9e;
+  background: color-mix(in srgb, var(--accent-primary) 85%, black);
 }
 
 .filebrowser-button:disabled {
@@ -235,8 +258,8 @@
 }
 
 .filebrowser-button.secondary {
-  background: #666;
-  border-color: #777;
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
 }
 
 /* Scrollbar styling */
@@ -245,16 +268,16 @@
 }
 
 .filebrowser-list::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: var(--bg-primary);
 }
 
 .filebrowser-list::-webkit-scrollbar-thumb {
-  background: #555;
+  background: var(--border-strong);
   border-radius: 4px;
 }
 
 .filebrowser-list::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--bg-surface);
 }
 
 /* ── Animation ───────────────────────────────────────────────────── */
@@ -296,7 +319,7 @@
   display: flex;
   align-items: center;
   padding: 10px 20px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .filebrowser-skeleton-info {

@@ -12,17 +12,17 @@
 }
 
 .quickprompt-container {
-  background: #2a2a2a;
-  border: 1px solid #444;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 20px;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-elevated);
 }
 
 .quickprompt-prompt {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 500;
   margin-bottom: 16px;
@@ -46,9 +46,9 @@
 }
 
 .quickprompt-option {
-  background: #444;
-  border: 1px solid #555;
-  color: #fff;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
   padding: 12px 20px;
   border-radius: 6px;
   cursor: pointer;
@@ -62,19 +62,25 @@
 }
 
 .quickprompt-option:hover {
-  background: #555;
-  border-color: #666;
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.quickprompt-option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .quickprompt-option.selected {
-  background: #007acc;
-  border-color: #005a9e;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.3);
+  background: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 70%, black);
+  color: var(--accent-fg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
 .quickprompt-hotkey {
-  background: #333;
-  border: 1px solid #555;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 11px;
@@ -84,11 +90,17 @@
   text-align: center;
 }
 
+.quickprompt-option.selected .quickprompt-hotkey {
+  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent-fg) 35%, transparent);
+  color: var(--accent-fg);
+}
+
 .quickprompt-help {
-  color: #888;
+  color: var(--text-tertiary);
   font-size: 12px;
   text-align: center;
-  border-top: 1px solid #444;
+  border-top: 1px solid var(--border-default);
   padding-top: 12px;
   display: flex;
   flex-direction: column;

@@ -417,8 +417,8 @@ export function useChatSessionManager({
       }
     };
 
-    window.addEventListener('ledit:session-restored', handleSessionRestored);
-    return () => window.removeEventListener('ledit:session-restored', handleSessionRestored);
+    window.addEventListener('sprout:session-restored', handleSessionRestored);
+    return () => window.removeEventListener('sprout:session-restored', handleSessionRestored);
   }, [setState]);
 
   // Drain queued messages when not processing

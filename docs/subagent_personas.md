@@ -1,6 +1,6 @@
 # Subagent Personas
 
-This document defines the specialized subagent personas available in ledit. Each persona has a specific focus, custom system prompt, and optimal configuration.
+This document defines the specialized subagent personas available in sprout. Each persona has a specific focus, custom system prompt, and optimal configuration.
 
 ## Overview
 

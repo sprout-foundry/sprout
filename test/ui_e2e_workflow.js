@@ -109,17 +109,17 @@ async function run() {
 
   await check('Provider/model change emits atomic model_change payload', async () => {
     await page.evaluate(() => {
-      if (window.__leditWsCaptureInstalled) {
-        window.__leditWsSends = [];
+      if (window.__sproutWsCaptureInstalled) {
+        window.__sproutWsSends = [];
         return;
       }
 
-      window.__leditWsSends = [];
-      window.__leditWsCaptureInstalled = true;
+      window.__sproutWsSends = [];
+      window.__sproutWsCaptureInstalled = true;
       const originalSend = window.WebSocket.prototype.send;
       window.WebSocket.prototype.send = function patchedSend(data) {
         try {
-          window.__leditWsSends.push(typeof data === 'string' ? data : String(data));
+          window.__sproutWsSends.push(typeof data === 'string' ? data : String(data));
         } catch (_e) {}
         return originalSend.call(this, data);
       };
@@ -162,7 +162,7 @@ async function run() {
     await page.waitForTimeout(200);
 
     const capture = await page.evaluate(() => {
-      const raw = Array.isArray(window.__leditWsSends) ? window.__leditWsSends : [];
+      const raw = Array.isArray(window.__sproutWsSends) ? window.__sproutWsSends : [];
       const parsed = raw
         .map((entry) => {
           try {
@@ -192,7 +192,7 @@ async function run() {
   });
 
   await check('WebSocket connected status', async () => {
-    await page.getByText('Connected to ledit server', { exact: false }).waitFor({ timeout: 12000 });
+    await page.getByText('Connected to sprout server', { exact: false }).waitFor({ timeout: 12000 });
   });
 
   await check('Chat view and input render', async () => {
@@ -247,10 +247,10 @@ async function run() {
     }
 
     const keyCheck = await page.evaluate((instancePid) => {
-      const stateKey = `ledit:webui:state:v1:${instancePid}`;
+      const stateKey = `sprout:webui:state:v1:${instancePid}`;
       return {
         hasStateKey: window.localStorage.getItem(stateKey) !== null,
-        storedPid: window.localStorage.getItem('ledit:webui:instancePid'),
+        storedPid: window.localStorage.getItem('sprout:webui:instancePid'),
       };
     }, pid);
 

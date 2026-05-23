@@ -1,6 +1,6 @@
 # Product Backlog
 
-This backlog is the current productization plan for `ledit` as a desktop-first application that still preserves the existing backend-driven architecture.
+This backlog is the current productization plan for `sprout` as a desktop-first application that still preserves the existing backend-driven architecture.
 
 The goal is not to rewrite working subsystems. The goal is to close the gap between "works for development" and "ships as a dependable product".
 

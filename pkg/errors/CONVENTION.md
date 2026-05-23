@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the standardized error handling patterns used throughout the ledit codebase.
+This document defines the standardized error handling patterns used throughout the sprout codebase.
 
 ## Core Principles
 

@@ -156,3 +156,6 @@ code_review_output.json
 
 # Static embedding model (54MB) — not tracked, built/downloaded locally
 pkg/embedding/static_model.bin
+
+# Archive files
+*.zip

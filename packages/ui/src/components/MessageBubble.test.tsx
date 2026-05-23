@@ -271,7 +271,7 @@ describe('MessageBubble', () => {
     expect(bubble?.getAttribute('data-subagent-depth')).toBeNull();
   });
 
-  it('SP-053: renders colored persona badge when persona is set', () => {
+  it('renders the persona name (as a chip) when persona is set', () => {
     act(() => {
       root.render(createElement(MessageBubble, {
         ariaLabel: 'Coder subagent message',
@@ -282,9 +282,14 @@ describe('MessageBubble', () => {
 
     const badge = container.querySelector('.message-persona-badge') as HTMLElement | null;
     expect(badge).not.toBeNull();
-    expect(badge?.textContent).toBe('[coder]');
-    // getPersonaColor('coder') = '#58a6ff'; lowercased in DOM style.
-    expect(badge?.style.color.replace(/\s/g, '').toLowerCase()).toBe('rgb(88,166,255)');
+    expect(badge?.textContent).toBe('coder');
+    // The persona color now flows in via the --persona-color CSS custom
+    // property set on the outer .message wrapper (so the depth rail and
+    // the chip both pick it up). The chip text-color is `var(--persona-color)`
+    // in CSS — JSDOM doesn't resolve custom properties, so we only assert
+    // that the variable is set on the wrapper.
+    const wrapper = container.querySelector('.message') as HTMLElement | null;
+    expect(wrapper?.style.getPropertyValue('--persona-color')).toBe('#58a6ff');
   });
 
   it('SP-053: applies depth indent when depth > 0', () => {
@@ -319,7 +324,7 @@ describe('MessageBubble', () => {
     expect(bubble?.getAttribute('data-subagent-depth')).toBeNull();
   });
 
-  it('SP-053: unknown persona falls back to dim-gray color', () => {
+  it('unknown persona falls back to the neutral mid-gray color via the custom property', () => {
     act(() => {
       root.render(createElement(MessageBubble, {
         ariaLabel: 'Unknown',
@@ -329,8 +334,9 @@ describe('MessageBubble', () => {
     });
 
     const badge = container.querySelector('.message-persona-badge') as HTMLElement | null;
-    expect(badge?.textContent).toBe('[made_up_persona]');
+    expect(badge?.textContent).toBe('made_up_persona');
+    const wrapper = container.querySelector('.message') as HTMLElement | null;
     // Fallback color #6e7681 — neutral mid-gray, readable on both themes.
-    expect(badge?.style.color.replace(/\s/g, '').toLowerCase()).toBe('rgb(110,118,129)');
+    expect(wrapper?.style.getPropertyValue('--persona-color')).toBe('#6e7681');
   });
 });

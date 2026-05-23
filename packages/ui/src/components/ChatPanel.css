@@ -693,19 +693,26 @@
   border-color: var(--border-subtle);
 }
 
-/* SP-053-1d: persona badge rendered above the content when a subagent
- * produced the message. Colored via inline style from getPersonaColor()
- * so the badge, the depth rail, and the rest of the WebUI's persona
- * surfaces (subagent feed, tool timeline) all read the same color. */
+/* Persona badge rendered above the content when a subagent produced the
+ * message — styled as a tinted chip (per the design system "status pills"
+ * pattern) rather than plain colored text. --persona-color is set inline
+ * on the .message wrapper by MessageBubble; the chip's background is a
+ * low-alpha mix of that color so the badge sits coherently next to the
+ * colored left rail and the subagent activity feed entries. */
 .message-persona-badge {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  margin-bottom: 4px;
-  opacity: 0.9;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 4px);
+  margin-bottom: 6px;
+  background: color-mix(in srgb, var(--persona-color, var(--text-tertiary)) 18%, transparent);
+  color: var(--persona-color, var(--text-secondary));
 }
 
 /* Colored left rail for subagent bubbles. --persona-color is set inline by
@@ -713,6 +720,13 @@
  * color when no persona was supplied. */
 .message[data-subagent-depth] .message-bubble {
   border-left: 3px solid var(--persona-color, var(--border-subtle));
+}
+
+/* Asymmetric user-bubble corner — per the design system, the user message
+ * collapses its bottom-left corner to read as "you said this" against the
+ * left-flush layout, mirroring how chat tools distinguish self vs reply. */
+.message.user .message-bubble {
+  border-radius: var(--radius-lg, 8px) var(--radius-lg, 8px) var(--radius-sm, 4px) var(--radius-lg, 8px);
 }
 
 .message-content {

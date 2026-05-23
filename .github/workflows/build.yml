@@ -44,6 +44,11 @@ jobs:
       with:
         node-version: '22'
 
+    - name: Build workspace packages
+      run: |
+        cd packages/events && npm install && npm run build
+        cd packages/ui && npm install && npm run build
+
     - name: Install Node.js dependencies
       run: |
         cd webui && npm ci
@@ -164,6 +169,11 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '22'
+
+    - name: Build workspace packages
+      run: |
+        cd packages/events && npm install && npm run build
+        cd packages/ui && npm install && npm run build
 
     - name: Install Node.js dependencies
       run: |

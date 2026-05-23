@@ -255,7 +255,7 @@ describe('MenuBar', () => {
 
     expect(texts).toEqual([
       'New File',
-      'Open File...',
+      'Open File\u2026',
       'Save',
       'Save All',
       'Close Editor',
@@ -327,8 +327,8 @@ describe('MenuBar', () => {
 
   // ─── Toggle items ─────────────────────────────────────────────────
 
-  test('toggle item "Toggle Minimap" shows checkmark when editor:minimap-enabled is true', async () => {
-    localStorage.setItem('editor:minimap-enabled', 'true');
+  test('toggle item "Toggle Minimap" shows checkmark when editor:toggle_minimap is true', async () => {
+    localStorage.setItem('editor:toggle_minimap', 'true');
     await renderMenuBar();
     openMenu(2); // View
 
@@ -340,11 +340,11 @@ describe('MenuBar', () => {
     expect(check).not.toBeNull();
     expect(check!.textContent).toBe('✓');
 
-    localStorage.removeItem('editor:minimap-enabled');
+    localStorage.removeItem('editor:toggle_minimap');
   });
 
-  test('toggle item "Toggle Minimap" hides checkmark when editor:minimap-enabled is false', async () => {
-    localStorage.setItem('editor:minimap-enabled', 'false');
+  test('toggle item "Toggle Minimap" hides checkmark when editor:toggle_minimap is false', async () => {
+    localStorage.setItem('editor:toggle_minimap', 'false');
     await renderMenuBar();
     openMenu(2); // View
 
@@ -356,11 +356,11 @@ describe('MenuBar', () => {
     expect(check).not.toBeNull();
     expect(check!.textContent).toBe('');
 
-    localStorage.removeItem('editor:minimap-enabled');
+    localStorage.removeItem('editor:toggle_minimap');
   });
 
   test('toggle item "Toggle Minimap" hides checkmark when localStorage key is absent', async () => {
-    localStorage.removeItem('editor:minimap-enabled');
+    localStorage.removeItem('editor:toggle_minimap');
     await renderMenuBar();
     openMenu(2); // View
 
@@ -641,7 +641,7 @@ describe('MenuBar', () => {
       'Find',
       'Find and Replace',
       'Select All',
-      'Command Palette...',
+      'Command Palette\u2026',
       'Toggle File Explorer',
       'Toggle Sidebar',
       'Toggle Terminal',

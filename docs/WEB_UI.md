@@ -1,6 +1,6 @@
 # Web UI
 
-`ledit` includes a built-in **React-based Web UI** that launches automatically alongside the terminal interface when you run `ledit` or `ledit agent` in interactive mode.
+`sprout` includes a built-in **React-based Web UI** that launches automatically alongside the terminal interface when you run `sprout` or `sprout agent` in interactive mode.
 
 ## Features
 
@@ -15,7 +15,7 @@
 - **Memory Management** — View, create, edit, and delete persistent memories
 - **Provider Catalog** — Browse available providers and models in settings
 - **Command Palette** — `Ctrl+Shift+P` for fast navigation (Go to File, toggle views, etc.)
-- **Multi-Instance Support** — Multiple `ledit` sessions share a single Web UI server
+- **Multi-Instance Support** — Multiple `sprout` sessions share a single Web UI server
 - **Session Management** — Save and restore chat sessions
 - **Image Upload** — Upload images for AI vision analysis
 - **Themes** — Multiple dark and light editor themes (Atom One Dark, Dracula, Solarized, etc.)
@@ -25,28 +25,28 @@
 
 ## Accessing the Web UI
 
-When you start `ledit` in interactive mode, the Web UI is available at `http://localhost:56000` (or the next available port). The terminal displays the URL on startup.
+When you start `sprout` in interactive mode, the Web UI is available at `http://localhost:56000` (or the next available port). The terminal displays the URL on startup.
 
 The Web UI binds to `127.0.0.1` (localhost) only — not directly accessible from other machines. See [SSH Tunneling](#ssh-tunneling-remote-web-ui-access) for remote access.
 
 ```bash
 # Start with Web UI (default)
-ledit
+sprout
 
 # Disable the Web UI
-ledit --no-web-ui
-ledit agent --no-web-ui "Analyze this code"
+sprout --no-web-ui
+sprout agent --no-web-ui "Analyze this code"
 
 # Custom port
-ledit agent --web-port 8080
+sprout agent --web-port 8080
 
 # Daemon mode — keep the Web UI running without an interactive prompt
-ledit agent -d
+sprout agent -d
 ```
 
 ## SSH Tunneling (Remote Web UI Access)
 
-The Web UI binds to `127.0.0.1` (localhost only) for security. To access it from your local browser when `ledit` runs on a remote server, use SSH port forwarding.
+The Web UI binds to `127.0.0.1` (localhost only) for security. To access it from your local browser when `sprout` runs on a remote server, use SSH port forwarding.
 
 ### Quick Start
 
@@ -63,7 +63,7 @@ ssh -L 56000:127.0.0.1:56000 user@remote-server
 ssh -fN -L 56000:127.0.0.1:56000 user@remote-server
 # Kill when done: kill $(lsof -t -i:56000)
 
-# Remote ledit on a custom port
+# Remote sprout on a custom port
 ssh -L 56000:127.0.0.1:8080 user@remote-server
 
 # Different local port (avoid conflicts)
@@ -72,24 +72,24 @@ ssh -L 9090:127.0.0.1:56000 user@remote-server
 # Jump host / bastion
 ssh -J bastion.example.com -L 56000:127.0.0.1:56000 user@internal-server
 
-# Attach to existing tmux session and start ledit
-ssh -t -L 56000:127.0.0.1:56000 user@remote-server "tmux attach -t ledit"
+# Attach to existing tmux session and start sprout
+ssh -t -L 56000:127.0.0.1:56000 user@remote-server "tmux attach -t sprout"
 ```
 
 ### Tips
 
 - The tunnel only works while the SSH connection is alive (unless you used `-f`)
-- Make sure `ledit` is running on the remote server before opening the URL (or use `--daemon` mode)
+- Make sure `sprout` is running on the remote server before opening the URL (or use `--daemon` mode)
 - You can simplify frequent tunnels with an SSH config entry in `~/.ssh/config`:
 
 ```ssh-config
-Host ledit-remote
+Host sprout-remote
     HostName remote-server.example.com
     User youruser
     LocalForward 56000 127.0.0.1:56000
 ```
 
-Then: `ssh -fN ledit-remote`
+Then: `ssh -fN sprout-remote`
 
 ## Development
 

@@ -41,10 +41,10 @@ Ledit Agent
 
 ```bash
 # List configured MCP servers
-./ledit mcp list
+./sprout mcp list
 
 # Test GitHub MCP server directly
-./ledit mcp test github
+./sprout mcp test github
 ```
 
 ### 2. Enable Debug Mode
@@ -53,7 +53,7 @@ The agent checks for `DEBUG` environment variable to show MCP initialization:
 
 ```bash
 # Run agent with debug output
-DEBUG=1 ./ledit agent
+DEBUG=1 ./sprout agent
 ```
 
 You should see messages like:
@@ -66,16 +66,16 @@ Try these prompts with the agent to test GitHub functionality:
 
 ```bash
 # Check notifications
-./ledit agent "What are my GitHub notifications?"
+./sprout agent "What are my GitHub notifications?"
 
 # List repositories
-./ledit agent "List my starred GitHub repositories"
+./sprout agent "List my starred GitHub repositories"
 
 # Get repository info
-./ledit agent "Show me details about the facebook/react repository"
+./sprout agent "Show me details about the facebook/react repository"
 
 # Search for issues
-./ledit agent "Search for open issues in kubernetes/kubernetes with label 'good first issue'"
+./sprout agent "Search for open issues in kubernetes/kubernetes with label 'good first issue'"
 ```
 
 ## Adding New MCP Servers
@@ -84,7 +84,7 @@ Try these prompts with the agent to test GitHub functionality:
 
 ```bash
 # Interactive setup
-./ledit mcp add
+./sprout mcp add
 
 # Or manually edit ~/.config/sprout/config.json
 ```
@@ -139,22 +139,22 @@ For example:
 
 2. **Verify server is configured:**
    ```bash
-   ./ledit mcp list
+   ./sprout mcp list
    ```
 
 3. **Test server directly:**
    ```bash
-   ./ledit mcp test <server-name>
+   ./sprout mcp test <server-name>
    ```
 
 4. **Run with debug mode:**
    ```bash
-   DEBUG=1 ./ledit agent "list your tools"
+   DEBUG=1 ./sprout agent "list your tools"
    ```
 
 ### Common Issues
 
-- **No MCP config**: Run `./ledit mcp add` to set up
+- **No MCP config**: Run `./sprout mcp add` to set up
 - **Server not starting**: Check command/args in config
 - **Missing environment variables**: Ensure tokens are set
 - **Tools not executing**: Check server logs with debug mode

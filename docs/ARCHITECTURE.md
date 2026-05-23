@@ -1,12 +1,12 @@
 # Ledit Architecture
 
-Project architecture documentation for the ledit AI-powered code editing and assistance tool.
+Project architecture documentation for the sprout AI-powered code editing and assistance tool.
 
 ---
 
 ## Package Layout
 
-The `pkg/` directory contains the core modular components of ledit:
+The `pkg/` directory contains the core modular components of sprout:
 
 ### Agent System
 
@@ -132,8 +132,8 @@ The change tracking system provides comprehensive modification management:
 - **Change Recording**: All file modifications tracked in `.sprout/changes/`
 - **Rollback Support**: Complete rollback capability for any changes
 - **Diff Logs**: Per-change diff logs with original and updated files in `.sprout/changes/`
-- **View History**: `ledit log` command to view changes
-- **Rollback**: `ledit log --raw-log` for verbose logs and rollback support
+- **View History**: `sprout log` command to view changes
+- **Rollback**: `sprout log --raw-log` for verbose logs and rollback support
 
 ---
 
@@ -146,7 +146,7 @@ Located in the project root, contains workspace-specific metadata:
 | File/Directory | Description |
 |----------------|-------------|
 | `config.json` | Local configuration overrides |
-| `leditignore` | Ignore patterns (augments `.gitignore`) |
+| `sproutignore` | Ignore patterns (augments `.gitignore`) |
 | `changes/` | Per-change diff logs with original and updated files |
 | `memories/` | Persistent memory storage (markdown files) |
 | `revisions/` | Per-session directories with instructions and LLM responses |
@@ -211,7 +211,7 @@ Configuration uses a layered approach:
 ## File Structure Summary
 
 ```
-ledit/
+sprout/
 ├── main.go                      # Entry point
 ├── cmd/                         # CLI subcommands
 │   ├── agent.go                 # Interactive AI agent

@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LocalEventsProvider } from './localEventsProvider';
 import { WebSocketService } from './websocket';
 
@@ -8,7 +10,7 @@ import { WebSocketService } from './websocket';
 // ---------------------------------------------------------------------------
 
 const mockInstance = {
-  connect: vi.fn(),
+  connect: vi.fn().mockResolvedValue(undefined),
   disconnect: vi.fn(),
   onEvent: vi.fn(),
   removeEvent: vi.fn(),

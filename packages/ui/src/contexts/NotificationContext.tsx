@@ -5,7 +5,9 @@ import {
   type NotificationEvent,
   type NotificationType as BusNotificationType,
 } from '../services/notificationBus';
-import type { NotificationData } from '../types/notification';
+import type { NotificationAction, NotificationData } from '../types/notification';
+
+export type { NotificationAction } from '../types/notification';
 
 // Re-export NotificationType for convenience
 export type NotificationType = BusNotificationType;
@@ -22,14 +24,15 @@ interface AddNotificationPayload {
   message: string;
   duration?: number;
   id?: string;
+  action?: NotificationAction;
 }
 
-type NotificationAction =
+type NotificationReducerAction =
   | { type: 'ADD_NOTIFICATION'; payload: AddNotificationPayload }
   | { type: 'REMOVE_NOTIFICATION'; payload: string }
   | { type: 'CLEAR_NOTIFICATIONS' };
 
-const notificationReducer = (state: NotificationState, action: NotificationAction): NotificationState => {
+const notificationReducer = (state: NotificationState, action: NotificationReducerAction): NotificationState => {
   switch (action.type) {
     case 'ADD_NOTIFICATION': {
       const newNotification: Notification = {
@@ -62,7 +65,13 @@ const notificationReducer = (state: NotificationState, action: NotificationActio
 
 interface NotificationContextValue {
   notifications: Notification[];
-  addNotification: (type: NotificationType, title: string, message: string, duration?: number) => string;
+  addNotification: (
+    type: NotificationType,
+    title: string,
+    message: string,
+    duration?: number,
+    action?: NotificationAction,
+  ) => string;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
 }
@@ -89,13 +98,19 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
   const [state, dispatch] = useReducer(notificationReducer, initialState);
 
   const addNotification = useCallback(
-    (type: NotificationType, title: string, message: string, duration?: number): string => {
+    (
+      type: NotificationType,
+      title: string,
+      message: string,
+      duration?: number,
+      action?: NotificationAction,
+    ): string => {
       const id = generateUUID();
       // Clamp duration between 0 and 60000ms (60 seconds)
       const clampedDuration = duration !== undefined ? Math.max(0, Math.min(duration, 60000)) : undefined;
       dispatch({
         type: 'ADD_NOTIFICATION',
-        payload: { type, title, message, duration: clampedDuration, id },
+        payload: { type, title, message, duration: clampedDuration, id, action },
       });
       return id;
     },

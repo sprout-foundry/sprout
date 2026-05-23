@@ -68,6 +68,17 @@
   color: var(--text-primary);
 }
 
+.chat-tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+.chat-tab-close:focus-visible,
+.chat-tab-new:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
 .chat-tab-name {
   overflow: hidden;
   text-overflow: ellipsis;

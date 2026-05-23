@@ -64,6 +64,11 @@
   background: var(--bg-elevated);
 }
 
+.git-history-commit-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
+}
+
 .git-history-commit-row:disabled {
   cursor: not-allowed;
   opacity: 0.7;
@@ -136,6 +141,11 @@
 
 .git-history-load-more:hover:not(:disabled) {
   background: var(--bg-elevated);
+}
+
+.git-history-load-more:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
 }
 
 .git-history-load-more:disabled {

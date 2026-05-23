@@ -62,6 +62,11 @@
   color: var(--text-primary);
 }
 
+.commit-detail-back-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 .commit-detail-commit-info {
   display: flex;
   align-items: center;
@@ -148,6 +153,11 @@
 .commit-detail-action-btn:hover:not(:disabled) {
   background: var(--bg-tertiary);
   border-color: var(--border-strong);
+}
+
+.commit-detail-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .commit-detail-action-btn:disabled {

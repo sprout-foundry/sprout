@@ -1,7 +1,7 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
-import FileTree from './FileTree';
+import { FileTree, type FileInfo } from '@sprout/ui';
 
 export interface FileTreeHandle {
   refresh: () => void;

@@ -194,6 +194,14 @@ describe('areEditorPaneFooterPropsEqual', () => {
       expect(areEditorPaneFooterPropsEqual(prev, next)).toBe(false);
     });
 
+    it('different onCycleWhitespaceRendering function', () => {
+      const fn1 = vi.fn();
+      const fn2 = vi.fn();
+      const prev = makeProps({ settings: makeSettings({ onCycleWhitespaceRendering: fn1 }) });
+      const next = makeProps({ settings: makeSettings({ onCycleWhitespaceRendering: fn2 }) });
+      expect(areEditorPaneFooterPropsEqual(prev, next)).toBe(false);
+    });
+
     it('different onZoomIn function', () => {
       const fn1 = vi.fn();
       const fn2 = vi.fn();

@@ -88,8 +88,8 @@ export function areEditorPaneFooterPropsEqual(
     pl.lspLanguage !== nl.lspLanguage ||
     pl.lspState !== nl.lspState ||
     pl.handleLanguageChange !== nl.handleLanguageChange ||
-    pl.languageInfo.languageId !== nl.languageInfo.languageId ||
-    pl.languageInfo.isAutoDetected !== nl.languageInfo.isAutoDetected
+    pl.languageInfo?.languageId !== nl.languageInfo?.languageId ||
+    pl.languageInfo?.isAutoDetected !== nl.languageInfo?.isAutoDetected
   ) {
     return false;
   }

@@ -53,7 +53,7 @@
 }
 
 .cm-rename-input:focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline: 2px solid var(--border-focus, var(--accent-primary));
   outline-offset: 2px;
 }
 

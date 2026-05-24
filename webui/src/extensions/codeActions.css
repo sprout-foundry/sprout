@@ -59,7 +59,7 @@
   width: 10px;
   height: 10px;
   border: 1.5px solid var(--text-tertiary, #5c6370);
-  border-top-color: var(--accent-primary, #61afef);
+  border-top-color: var(--accent-primary);
   border-radius: 50%;
   animation: cm-codeAction-spin 0.6s linear infinite;
 }

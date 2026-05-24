@@ -67,7 +67,22 @@ python3 test_runner.py          # Run E2E tests
 
 **Concrete risks to avoid:**
 - **Branch changes** — Tests that create or switch git branches can leave the repo on the wrong branch. Always clean up or run in isolated clones. A prior testing session accidentally created a `new-branch` that diverged from `main`, requiring manual cherry-picking to recover commits.
-- **Config/env mutation** — Tests that set environment variables (e.g., `SPROUT_CONFIG`, `LEDIT_CONFIG`) can leak between test cases. Always scope env changes with `t.Setenv()` and set *both* `SPROUT_CONFIG` and `LEDIT_CONFIG` to the same temp dir (see `test-isolation-pattern` memory for details).
+- **Config/env mutation** — Tests that set environment variables (e.g., `SPROUT_CONFIG`, `LEDIT_CONFIG`) can leak between test cases. Always scope env changes with `t.Setenv()` and set *both* `SPROUT_CONFIG` and `LEDIT_CONFIG` to the same temp dir.
+
+  **Preferred pattern: `configuration.NewTestManager(t)`.** It does all of the above in one call and ships a cleanup hook that fails the test if the real config file gets touched (Layer 5 detector). Use it for any test that reads, writes, or mutates `configuration.Config`:
+
+  ```go
+  mgr, cleanup := configuration.NewTestManager(t)
+  defer cleanup()
+  // mutate via mgr.UpdateConfig(...) — never call configuration.Load() directly
+  ```
+
+  **NEVER persist `api.TestClientType` ("test") to `LastUsedProvider` or `SubagentProvider`.** That string is an in-process sentinel for mock clients; if it reaches disk, the next CLI run picks it up and `/commit` (plus every chat) silently routes to a no-op mock. Five layers of defense exist to prevent this (see `pkg/configuration/test_isolation.go`):
+  1. `Save()` / `SaveToDir()` strip `"test"` from `LastUsedProvider` and `SubagentProvider`
+  2. `Load()` / `LoadConfigWithLayers()` self-heal a poisoned file on read
+  3. `NewManagerWithDir` no longer pre-writes `"test"` to fresh test configs
+  4. `NewTestManager(t)` is the idiomatic helper for hermetic tests
+  5. The helper's cleanup verifies the real config file is unchanged at test end and fails loudly if not
 - **Uncommitted test artifacts** — Test files created during a session (e.g., `*_test.go` files exploring codebase structure) must not be left uncommitted in the working tree. Either commit them or remove them before finishing.
 
 ## Git Operations Policy

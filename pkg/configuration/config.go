@@ -1128,11 +1128,26 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Self-heal a config that was poisoned by a leaky test run (e.g. a
+	// past version of the codebase that wrote "test" to disk before
+	// the Save-time guard existed). On the next CLI start the value
+	// gets cleared and the user is prompted normally instead of
+	// /commit silently routing to a no-op mock.
+	sanitizeTestProvider(&config)
+
 	return &config, nil
 }
 
 // Save saves the configuration to file
 func (c *Config) Save() error {
+	// Defense-in-depth: never persist "test" as the active provider.
+	// The TestClientType sentinel is for in-process test fixtures only;
+	// if it ever reaches disk, the next CLI run picks it up and tries
+	// to route requests (including /commit) to a no-op mock. Strip it
+	// here so even tests that bypass Manager.SetProvider can't poison
+	// the real config.
+	sanitizeTestProvider(c)
+
 	// Migrate any plaintext secrets in MCP server env blocks to the
 	// credential store before persisting. This is defense-in-depth: most
 	// callers already migrate before reaching here, but this ensures the
@@ -1202,6 +1217,11 @@ func (c *Config) Save() error {
 // Use this when a Manager has an explicit configDir so that saves go to
 // the correct location even after the env var has been restored.
 func (c *Config) SaveToDir(dir string) error {
+	// Same defense as Save() — refuse to persist the test sentinel even
+	// when callers bypass GetConfigPath() and target an explicit dir.
+	// See sanitizeTestProvider for context.
+	sanitizeTestProvider(c)
+
 	// Migrate any plaintext secrets in MCP server env blocks to the
 	// credential store before persisting.
 	for name := range c.MCP.Servers {

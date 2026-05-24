@@ -61,10 +61,10 @@ func (ws *ReactWebServer) incrementActiveQueriesWithQuery(clientID, currentQuery
 
 func (ws *ReactWebServer) decrementActiveQueries(clientID string) {
 	ws.mutex.Lock()
-	if ws.activeQueries > 0 {
-		ws.activeQueries--
-	}
-	if ctx := ws.clientContexts[clientID]; ctx != nil {
+	if ctx := ws.clientContexts[clientID]; ctx != nil && ctx.ActiveQuery {
+		if ws.activeQueries > 0 {
+			ws.activeQueries--
+		}
 		ctx.ActiveQuery = false
 		ctx.CurrentQuery = ""
 	}

@@ -347,6 +347,9 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// Client responded to ping - handled by read goroutine timestamp tracking
 		// The read goroutine updates lastMessage on any successful read
 
+	case AllowedMessageTypeHeartbeat:
+		ws.handleHeartbeatMessage(safeConn, clientID)
+
 	case AllowedMessageTypeSubscribe:
 		// Handle subscription requests for specific event types AND
 		// (SP-034-3b) chat-id subscriptions for multi-tab consistency.

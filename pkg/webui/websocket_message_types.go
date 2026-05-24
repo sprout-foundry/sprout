@@ -23,6 +23,8 @@ const (
 	AllowedMessageTypePing = "ping"
 	// AllowedMessageTypePong is the "pong" message type
 	AllowedMessageTypePong = "pong"
+	// AllowedMessageTypeHeartbeat is the "heartbeat" message type
+	AllowedMessageTypeHeartbeat = "heartbeat"
 	// AllowedMessageTypeSubscribe is the "subscribe" message type
 	AllowedMessageTypeSubscribe = "subscribe"
 	// AllowedMessageTypeRequestStats is the "request_stats" message type
@@ -44,6 +46,7 @@ const (
 var allowedMessageTypes = map[string]bool{
 	AllowedMessageTypePing:                     true,
 	AllowedMessageTypePong:                     true,
+	AllowedMessageTypeHeartbeat:                true,
 	AllowedMessageTypeSubscribe:                true,
 	AllowedMessageTypeRequestStats:             true,
 	AllowedMessageTypeProviderChange:          true,

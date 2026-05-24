@@ -208,12 +208,17 @@ func TestDecrementActiveQueries_AlreadyZero_DoesNotGoNegative(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Start at zero, decrement should not go below zero
+	clientID := "edge-client"
+	server.getOrCreateClientContext(clientID)
+
+	// Set ActiveQuery=true so the guard passes, but leave activeQueries at 0
+	// to test the "already zero" edge case (should not go negative).
 	server.mutex.Lock()
 	server.activeQueries = 0
+	server.clientContexts[clientID].ActiveQuery = true
 	server.mutex.Unlock()
 
-	server.decrementActiveQueries("any-client")
+	server.decrementActiveQueries(clientID)
 
 	server.mutex.Lock()
 	count := server.activeQueries

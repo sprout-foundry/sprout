@@ -44,7 +44,8 @@ export type SettingsSubTab =
   | 'mcp'
   | 'providers'
   | 'skills'
-  | 'embeddings';
+  | 'embeddings'
+  | 'roles';
 
 export interface EditorPreferences {
   autoSaveEnabled: boolean;
@@ -89,6 +90,7 @@ export type SettingsSubsection =
   | 'agent-behavior'
   | 'agent-subagents'
   | 'agent-skills'
+  | 'agent-roles'
   // Workspace (workspace scope)
   | 'workspace-embeddings'
   | 'workspace-mcp'
@@ -119,6 +121,7 @@ export const SECTION_GROUPS: SectionDef[] = [
       { id: 'agent-behavior', label: 'Security' },
       { id: 'agent-subagents', label: 'Subagents' },
       { id: 'agent-skills', label: 'Skills' },
+      { id: 'agent-roles', label: 'Roles' },
     ],
   },
   {
@@ -174,6 +177,7 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'agent-behavior': 'security',
     'agent-subagents': 'subagents',
     'agent-skills': 'skills',
+    'agent-roles': 'roles',
     'workspace-embeddings': 'embeddings',
     'workspace-mcp': 'mcp',
     'env-providers': 'providers',

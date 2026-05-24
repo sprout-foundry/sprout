@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"syscall/js"
+
+	"github.com/sprout-foundry/sprout/pkg/llmproxy"
 )
 
 // wasmStreamReader implements io.Reader by wrapping a JS ReadableStreamDefaultReader.
@@ -211,7 +213,13 @@ func (t *wasmRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 		if msg2 := extractJSErrorMessage(args[0]); msg2 != "" {
 			msg = msg2
 		}
-		ch <- fetchResult{err: fmt.Errorf("%s: %s", "fetch failed", msg)}
+		err := fmt.Errorf("fetch failed: %s", msg)
+
+		// Wrap CORS-detectable errors with user-friendly guidance.
+		if llmproxy.IsCORSError(err) {
+			err = fmt.Errorf("%s", llmproxy.CORSErrorMessage(err, req.URL.Hostname()))
+		}
+		ch <- fetchResult{err: err}
 		return nil
 	})
 

@@ -33,6 +33,9 @@ func proxyJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
 		"setPlatformEndpoint": js.FuncOf(setPlatformEndpointFunc),
 		"getPlatformEndpoint": js.FuncOf(getPlatformEndpointFunc),
+		"setCorsProxy":        js.FuncOf(setCorsProxyFunc),
+		"getCorsProxy":        js.FuncOf(getCorsProxyFunc),
+		"getProxyDiagnostics": js.FuncOf(getProxyDiagnosticsFunc),
 	}
 }
 
@@ -53,4 +56,34 @@ func setPlatformEndpointFunc(_ js.Value, args []js.Value) interface{} {
 // confirm the boot sequence wired the endpoint correctly.
 func getPlatformEndpointFunc(_ js.Value, _ []js.Value) interface{} {
 	return llmproxy.GetPlatformEndpoint()
+}
+
+// setCorsProxyFunc sets a CORS proxy URL. When configured, ALL HTTP/HTTPS
+// requests are routed through {proxyUrl}/{url-encoded original URL} before
+// any other rewriting is attempted.
+//
+// Signature: setCorsProxy(proxyUrl: string): {ok: true, proxy: string}
+func setCorsProxyFunc(_ js.Value, args []js.Value) interface{} {
+	url := argString(args, 0, "")
+	llmproxy.SetCorsProxy(url)
+	return map[string]interface{}{"ok": true, "proxy": url}
+}
+
+// getCorsProxyFunc returns the currently-configured CORS proxy URL,
+// or "" when unset.
+func getCorsProxyFunc(_ js.Value, _ []js.Value) interface{} {
+	return llmproxy.GetCorsProxy()
+}
+
+// getProxyDiagnosticsFunc returns diagnostic info about the current proxy
+// configuration. Useful for host pages to verify the boot sequence
+// configured routing correctly.
+//
+// Signature: getProxyDiagnostics(): {platformEndpoint, corsProxy, isActive}
+func getProxyDiagnosticsFunc(_ js.Value, _ []js.Value) interface{} {
+	return map[string]interface{}{
+		"platformEndpoint": llmproxy.GetPlatformEndpoint(),
+		"corsProxy":        llmproxy.GetCorsProxy(),
+		"isActive":         llmproxy.GetPlatformEndpoint() != "" || llmproxy.GetCorsProxy() != "",
+	}
 }

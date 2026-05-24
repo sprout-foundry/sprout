@@ -2,12 +2,58 @@ package console
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
+
+// pasteAction represents the user's choice for a large paste.
+type pasteAction int
+
+const (
+	actionUseInline pasteAction = iota
+	actionSaveAsFile
+	actionCancel
+)
+
+// promptLargePasteAction asks the user what to do with a large paste.
+// It accepts an io.Reader for stdin so it can be tested with a buffer.
+// Returns one of actionUseInline, actionSaveAsFile, or actionCancel.
+func promptLargePasteAction(content string, in io.Reader) pasteAction {
+	lineCount := strings.Count(content, "\n") + 1
+	byteCount := len(content)
+
+	fmt.Fprintf(os.Stderr, "\n[paste] Large paste detected (%d lines, %d bytes)\n", lineCount, byteCount)
+	fmt.Fprintf(os.Stderr, "  [%s]se — Insert inline\n", BoldText("U"))
+	fmt.Fprintf(os.Stderr, "  [%s]ave as file & reference (default)\n", BoldText("S"))
+	fmt.Fprintf(os.Stderr, "  [%s]ancel — Discard paste\n", BoldText("C"))
+	fmt.Fprintf(os.Stderr, "  Choose: ")
+
+	buf := make([]byte, 1)
+	for {
+		n, err := in.Read(buf)
+		if err != nil || n == 0 {
+			fmt.Fprintf(os.Stderr, "\n")
+			return actionSaveAsFile
+		}
+		switch buf[0] {
+		case 'u', 'U':
+			fmt.Fprintf(os.Stderr, "\n")
+			return actionUseInline
+		case 's', 'S', '\r', '\n':
+			fmt.Fprintf(os.Stderr, "\n")
+			return actionSaveAsFile
+		case 'c', 'C':
+			fmt.Fprintf(os.Stderr, "\n")
+			return actionCancel
+		default:
+			fmt.Fprintf(os.Stderr, "  Choose: ")
+		}
+	}
+}
 
 func (ir *InputReader) consumeBracketedPasteByte(b byte) bool {
 	expected := bracketedPasteEndSeq[ir.bracketedMatch]
@@ -97,38 +143,43 @@ func (ir *InputReader) finalizePaste() bool {
 		return true
 	}
 
-	// SP-048-4d: Smart paste — if the paste is large (>100 lines OR >5KB),
-	// auto-save it to .sprout/pastes/ and insert a "@path" reference at
-	// the cursor instead of dumping the raw blob into the input buffer.
-	// Mirrors the image-paste pattern (no prompt, just notify). Falls back
-	// to inline insertion if the save fails so the user doesn't lose
-	// content.
+	// SP-048-4c: Smart paste — if the paste is large (>100 lines OR >5KB),
+	// prompt the user to choose: insert inline, save as file & reference, or discard.
 	if ShouldSmartSavePaste(pastedContent) {
-		if savedPath, err := SavePastedText(pastedContent, ""); err == nil {
-			lineCount := strings.Count(pastedContent, "\n") + 1
-			fmt.Fprintf(os.Stderr, "\n[paste] %d lines · %d bytes saved to %s\n",
-				lineCount, len(pastedContent), savedPath)
-			placeholder := "@" + savedPath + " "
-			start := ir.cursorPos
-			before := ir.line[:ir.cursorPos]
-			after := ir.line[ir.cursorPos:]
-			ir.line = before + placeholder + after
-			ir.cursorPos += len(placeholder)
-			ir.shiftPasteSpans(start, len(placeholder))
-			ir.addCollapsedPaste(start, ir.cursorPos)
-			ir.hasEditedLine = true
-			ir.historyIndex = -1
-			ir.Refresh()
-			promptWidth := visibleRuneWidth(ir.prompt)
-			lineWidth := len([]rune(ir.line))
-			newLength := promptWidth + lineWidth
-			ir.lastLineLength = newLength
-			cursorPos := promptWidth + ir.cursorPos
-			ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
+		action := promptLargePasteAction(pastedContent, os.Stdin)
+		switch action {
+		case actionSaveAsFile:
+			if savedPath, err := SavePastedText(pastedContent, ""); err == nil {
+				lineCount := strings.Count(pastedContent, "\n") + 1
+				fmt.Fprintf(os.Stderr, "[paste] %d lines · %d bytes saved to %s\n",
+					lineCount, len(pastedContent), savedPath)
+				placeholder := "@" + savedPath + " "
+				start := ir.cursorPos
+				before := ir.line[:ir.cursorPos]
+				after := ir.line[ir.cursorPos:]
+				ir.line = before + placeholder + after
+				ir.cursorPos += len(placeholder)
+				ir.shiftPasteSpans(start, len(placeholder))
+				ir.addCollapsedPaste(start, ir.cursorPos)
+				ir.hasEditedLine = true
+				ir.historyIndex = -1
+				ir.Refresh()
+				promptWidth := visibleRuneWidth(ir.prompt)
+				lineWidth := len([]rune(ir.line))
+				newLength := promptWidth + lineWidth
+				ir.lastLineLength = newLength
+				cursorPos := promptWidth + ir.cursorPos
+				ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
+				return true
+			} else {
+				fmt.Fprintf(os.Stderr, "[FAIL] smart-paste save failed: %v (falling back to inline insert)\n", err)
+				// Fall through to inline insertion below
+			}
+		case actionCancel:
+			fmt.Fprintf(os.Stderr, "[paste] Discarded.\n")
 			return true
-		} else {
-			fmt.Fprintf(os.Stderr, "[FAIL] smart-paste save failed: %v (falling back to inline insert)\n", err)
-			// fall through to inline insertion below
+		case actionUseInline:
+			// Fall through to inline insertion below
 		}
 	}
 

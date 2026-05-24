@@ -59,7 +59,7 @@
 
 .queue-panel-clear:hover {
   color: var(--accent-error, #ff5555);
-  background: rgba(255, 85, 85, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
 }
 
 .queue-panel-close {
@@ -114,7 +114,7 @@
 }
 
 .queue-panel-item.editing {
-  background: rgba(108, 99, 255, 0.06);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
   border-bottom-color: var(--border-default, #2a2a3e);
 }
 
@@ -175,7 +175,7 @@
 .queue-panel-edit-textarea {
   width: 100%;
   background: var(--bg-primary, #0d0d1a);
-  border: 1px solid var(--accent-primary, #6c63ff);
+  border: 1px solid var(--accent-primary, #61afef);
   border-radius: 6px;
   color: var(--text-primary, #e0e0e0);
   padding: 6px 8px;
@@ -187,7 +187,7 @@
 }
 
 .queue-panel-edit-textarea:focus {
-  box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 25%, transparent);
 }
 
 .queue-panel-item-actions {
@@ -247,12 +247,12 @@
 
 .queue-panel-action.danger:hover {
   color: var(--accent-error, #ff5555);
-  background: rgba(255, 85, 85, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
 }
 
 .queue-panel-action.save:hover {
-  color: var(--accent-primary, #6c63ff);
-  background: rgba(108, 99, 255, 0.1);
+  color: var(--accent-primary, #61afef);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 .queue-panel-action.cancel:hover {

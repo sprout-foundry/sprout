@@ -51,6 +51,22 @@ type ConversationState struct {
 	// SessionIntentEmbedding stores the embedding of the first user prompt in a session.
 	// Used for drift detection to track conversation intent over time.
 	SessionIntentEmbedding []float32 `json:"session_intent_embedding,omitempty"`
+
+	// LastProviderError captures details about the last API error from the LLM provider.
+	// Persisted in the session file so errors can be diagnosed after the fact.
+	LastProviderError *ProviderErrorInfo `json:"last_provider_error,omitempty"`
+}
+
+// ProviderErrorInfo captures details about the last API error from the LLM provider.
+// This is persisted in the session file so errors can be diagnosed after the fact.
+type ProviderErrorInfo struct {
+	Timestamp  string `json:"timestamp"`             // ISO 8601 when the error occurred
+	Provider   string `json:"provider"`              // e.g. "zai", "openrouter"
+	Model      string `json:"model"`                 // e.g. "glm-5.1"
+	StatusCode int    `json:"status_code,omitempty"` // HTTP status code (400, 429, 500, etc.)
+	ErrorType  string `json:"error_type,omitempty"`  // e.g. "api_error_400", "streaming_response"
+	Message    string `json:"message"`               // The error message from the provider
+	Retries    int    `json:"retries,omitempty"`     // Number of retries attempted
 }
 
 // Variable to allow overriding GetStateDir for testing
@@ -239,6 +255,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		WorkingDirectory:        cleanWorkingDir,
 		ConfigOverrides:         a.state.GetConfigOverrides(),
 		SessionIntentEmbedding:  a.state.GetSessionIntentEmbedding(),
+		LastProviderError:       a.state.GetLastProviderError(),
 	}
 
 	data, err := json.MarshalIndent(state, "", "  ")
@@ -684,6 +701,9 @@ func (a *Agent) ApplyState(state *ConversationState) {
 
 	// Restore session intent embedding for drift detection
 	a.state.SetSessionIntentEmbedding(state.SessionIntentEmbedding)
+
+	// Restore last provider error info
+	a.state.SetLastProviderError(state.LastProviderError)
 
 	// Reset circuit breaker state to prevent false positives
 	if a.state.GetCircuitBreaker() != nil {

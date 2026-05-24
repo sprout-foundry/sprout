@@ -36,9 +36,38 @@ const maxProviderErrorBodyPreview = 240
 func formatProviderHTTPError(statusCode int, headers http.Header, body []byte) error {
 	message := summarizeProviderHTTPError(statusCode, headers, body)
 	if message == "" {
+		// Include response headers when body is empty — providers like ZAI
+		// sometimes return error info only in headers (e.g. X-Error-Code).
+		hdr := formatResponseHeaders(headers)
+		if hdr != "" {
+			return fmt.Errorf("HTTP %d (empty body, headers: %s)", statusCode, hdr)
+		}
 		return fmt.Errorf("HTTP %d", statusCode)
 	}
 	return fmt.Errorf("HTTP %d: %s", statusCode, message)
+}
+
+func formatResponseHeaders(headers http.Header) string {
+	// Collect known error headers first
+	var parts []string
+	for _, key := range []string{
+		"Content-Type", "X-Error-Code", "X-Error-Message",
+		"X-Request-Id", "X-Trace-Id", "Error-Code",
+		"X-Status", "Retry-After",
+	} {
+		if v := headers.Get(key); v != "" {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, v))
+		}
+	}
+	// If no known error headers found, include all headers for diagnosis
+	if len(parts) == 0 {
+		for key, vals := range headers {
+			for _, v := range vals {
+				parts = append(parts, fmt.Sprintf("%s=%s", key, v))
+			}
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func summarizeProviderHTTPError(statusCode int, headers http.Header, body []byte) string {
@@ -277,6 +306,10 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+
+		// Log response details for non-200 responses to help diagnose
+		// provider-specific errors (e.g. ZAI returning empty-body 400s).
+		_ = body // already logged by formatProviderHTTPError below
 
 		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, true, body)
 		if retried {
@@ -1059,46 +1092,104 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 	return retryBody, resp, true, nil
 }
 
-// convertMessages converts messages according to provider configuration
+// convertMessages converts messages according to provider configuration.
+// It also merges consecutive same-role messages (e.g. two user messages in a row)
+// which can occur when an API call fails and the user retries — no assistant
+// response is inserted between attempts. Most providers reject such sequences.
 func (p *GenericProvider) convertMessages(messages []api.Message, reasoning string) []map[string]interface{} {
-	converted := make([]map[string]interface{}, len(messages))
 	reasoningField := p.config.Conversion.ReasoningContentField
 	skipReasoningHistory := p.shouldSkipReasoningContentHistory()
 
-	for i, msg := range messages {
-		content := interface{}(msg.Content)
-		if len(msg.Images) > 0 {
-			content = p.buildMultiModalContent(msg.Content, msg.Images)
-		}
+	// Build converted messages, merging consecutive same-role messages.
+	// Merging accumulates content with a newline separator. For tool_calls
+	// or tool_call_id, merging is not attempted — the duplicate user messages
+	// case only involves plain text content.
+	converted := make([]map[string]interface{}, 0, len(messages))
+	var pendingRole string
+	var pendingContent string
+	var pendingReasoning string // preserved for compatible providers
 
-		convertedMsg := map[string]interface{}{
-			"role":    msg.Role,
-			"content": content,
+	flush := func() {
+		if pendingRole == "" {
+			return
 		}
-
-		// Handle tool call ID inclusion
-		if msg.ToolCallID != "" && p.config.Conversion.IncludeToolCallID {
-			convertedMsg["tool_call_id"] = msg.ToolCallID
+		entry := map[string]interface{}{
+			"role":    pendingRole,
+			"content": pendingContent,
 		}
-
-		// Handle tool role conversion
-		if msg.Role == "tool" && p.config.Conversion.ConvertToolRoleToUser {
-			convertedMsg["role"] = "user"
+		if !skipReasoningHistory && pendingReasoning != "" && reasoningField != "" {
+			entry[reasoningField] = pendingReasoning
 		}
-
-		// Preserve reasoning content from previous assistant messages
-		// This is critical for models like z-ai/glm-4.7-flash that use reasoning tokens
-		if !skipReasoningHistory && msg.ReasoningContent != "" && reasoningField != "" {
-			convertedMsg[reasoningField] = msg.ReasoningContent
-		}
-
-		// Preserve tool calls if present
-		if len(msg.ToolCalls) > 0 {
-			convertedMsg["tool_calls"] = p.convertToolCalls(msg.ToolCalls)
-		}
-
-		converted[i] = convertedMsg
+		converted = append(converted, entry)
+		pendingRole = ""
+		pendingContent = ""
+		pendingReasoning = ""
 	}
+
+	for _, msg := range messages {
+		// Tool messages carry tool_call_id and must preserve individual identity.
+		// Assistant messages with tool_calls likewise must not be merged.
+		isMergeable := (msg.Role == "user") ||
+			(msg.Role == "assistant" && len(msg.ToolCalls) == 0)
+
+		if isMergeable && msg.Role == pendingRole {
+			// Same role — append content
+			if pendingContent != "" && msg.Content != "" {
+				pendingContent += "\n"
+			}
+			pendingContent += msg.Content
+			// Keep first non-empty reasoning content on merge
+			if pendingReasoning == "" && msg.ReasoningContent != "" {
+				pendingReasoning = msg.ReasoningContent
+			}
+			continue
+		}
+
+		// Role changed or non-mergeable — flush pending and handle this message
+		flush()
+
+		if !isMergeable {
+			// Emit directly without buffering
+			content := interface{}(msg.Content)
+			if len(msg.Images) > 0 {
+				content = p.buildMultiModalContent(msg.Content, msg.Images)
+			}
+			convertedMsg := map[string]interface{}{
+				"role":    msg.Role,
+				"content": content,
+			}
+			if msg.ToolCallID != "" && p.config.Conversion.IncludeToolCallID {
+				convertedMsg["tool_call_id"] = msg.ToolCallID
+			}
+			if msg.Role == "tool" && p.config.Conversion.ConvertToolRoleToUser {
+				convertedMsg["role"] = "user"
+			}
+			if !skipReasoningHistory && msg.ReasoningContent != "" && reasoningField != "" {
+				convertedMsg[reasoningField] = msg.ReasoningContent
+			}
+			if len(msg.ToolCalls) > 0 {
+				convertedMsg["tool_calls"] = p.convertToolCalls(msg.ToolCalls)
+			}
+			converted = append(converted, convertedMsg)
+			continue
+		}
+
+		// Start buffering a mergeable message
+		pendingRole = msg.Role
+		if len(msg.Images) > 0 {
+			// Multi-modal content — emit immediately, don't buffer
+			content := p.buildMultiModalContent(msg.Content, msg.Images)
+			converted = append(converted, map[string]interface{}{
+				"role":    msg.Role,
+				"content": content,
+			})
+			pendingRole = ""
+		} else {
+			pendingContent = msg.Content
+			pendingReasoning = msg.ReasoningContent
+		}
+	}
+	flush()
 
 	_ = reasoning // reasoning effort is sent via provider/model-specific request params, not message fields
 
@@ -1108,8 +1199,19 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 func (p *GenericProvider) shouldSkipReasoningContentHistory() bool {
 	// MiniMax expects reasoning_details to be a structured array, not a plain string.
 	// Replaying historical ReasoningContent verbatim causes type mismatch 400s.
-	return strings.EqualFold(p.config.Name, "minimax") &&
-		strings.EqualFold(p.config.Conversion.ReasoningContentField, "reasoning_details")
+	if strings.EqualFold(p.config.Name, "minimax") &&
+		strings.EqualFold(p.config.Conversion.ReasoningContentField, "reasoning_details") {
+		return true
+	}
+
+	// ZAI (GLM models) may reject stale reasoning_content in message history when
+	// the current request doesn't explicitly enable thinking, causing 400 errors.
+	if strings.EqualFold(p.config.Name, "zai") &&
+		p.config.Conversion.ReasoningContentField != "" {
+		return true
+	}
+
+	return false
 }
 
 func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{} {

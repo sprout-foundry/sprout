@@ -168,16 +168,16 @@ func (r *SteerInputReader) Start() {
 	go r.readLoop(stopCh, doneCh)
 }
 
-// Stop restores cooked mode, clears the pinned line, and signals the
+// Stop restores cooked mode, clears the pinned line, and waits for the
 // read goroutine to exit. Idempotent. MUST be called on every exit
 // path (including signal-driven shutdown) or the terminal will be left
-// in raw mode.
+// in steer mode.
 //
-// Note: we do NOT wait for the read goroutine to exit. The polling
-// loop checks stopCh on every iteration with a short tick (5ms), so it
-// exits within a frame of the signal. Waiting on doneCh would
-// deadlock when the goroutine is blocked on Read — which is the
-// common case at Stop time.
+// Ordering matters: we wait for the goroutine to exit BEFORE calling
+// exitSteerMode. In steer mode VMIN=0/VTIME=0 makes Read return
+// immediately with 0 bytes, so the goroutine's poll loop observes
+// stopCh within one tick (5ms). If we restored cooked mode first, the
+// goroutine's next Read would block forever (cooked VMIN=1) and leak.
 func (r *SteerInputReader) Stop() {
 	if r == nil || !r.isTTY {
 		return
@@ -189,11 +189,15 @@ func (r *SteerInputReader) Stop() {
 	}
 	r.active = false
 	stopCh := r.stopCh
+	doneCh := r.doneCh
 	oldState := r.oldState
 	r.oldState = nil
 	r.mu.Unlock()
 
 	close(stopCh)
+	if doneCh != nil {
+		<-doneCh
+	}
 	if oldState != nil {
 		_ = exitSteerMode(r.fd, oldState)
 	}
@@ -214,21 +218,14 @@ func (r *SteerInputReader) IsActive() bool {
 	return r.active
 }
 
-// readLoop is the input-handling goroutine. Polls stdin in
-// non-blocking mode so it can observe stopCh between reads. The poll
-// interval is short enough (5ms) that typing feels instantaneous.
+// readLoop is the input-handling goroutine. Steer mode sets VMIN=0
+// and VTIME=0 on the termios (see steer_termios_*.go) so Read returns
+// immediately with 0 bytes when nothing is ready — no need for an
+// O_NONBLOCK file descriptor flag. The poll interval (5ms) is short
+// enough that typing feels instantaneous and Stop() observes the exit
+// signal within one frame.
 func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 	defer close(doneCh)
-
-	// Put stdin in non-blocking mode for the reader's lifetime. The
-	// defer restores blocking-mode so the primary InputReader's
-	// MakeRaw cycle starts from a clean state.
-	if err := setNonblock(r.fd, true); err != nil {
-		// Fall back to blocking reads — Stop()'s terminal-restore will
-		// still eventually wake us, just with one byte of latency.
-	} else {
-		defer setNonblock(r.fd, false)
-	}
 
 	var buf [1]byte
 	ticker := time.NewTicker(5 * time.Millisecond)

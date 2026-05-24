@@ -33,50 +33,50 @@
 
 ## Partially Done — SP-014: Agent Terminal Sessions
 
-- [ ] SP-014-A-sentinelExec: Create `pkg/webui/terminal_agent_exec.go` — sentinel-based synchronous command execution via PTY
-- [ ] SP-014-A-terminalTypes: Add `Hidden`, `Owner`, `ChatID`, `Name`, `AutoClose` fields to `TerminalSession`; add `CreateHiddenSession()`, `ListHiddenSessions()`
-- [ ] SP-014-A-apiEndpoints: Create `pkg/webui/api_agent_sessions.go` — REST endpoints: list hidden sessions, promote to visible, retrieve output
-- [ ] SP-014-A-lifecycle: Exclude hidden sessions from default listing; 2-hour cleanup timeout for background sessions
-- [ ] SP-014-A-routes: Register agent session API routes in `server.go`
-- [ ] SP-014-B-shellRouting: Route agent `shell_command` through hidden PTY when `TerminalManager` is available (WebUI mode)
-- [ ] SP-014-B-background: Add `background` parameter to `shell_command` tool; handle `background=true` to write to hidden PTY and return session ID immediately
-- [ ] SP-014-B-sessionID: Add `session_id` parameter for querying accumulated output of background sessions
-- [ ] SP-014-B-context: Expose `TerminalManager` accessor in `client_context.go` for agent context wiring
-- [ ] SP-014-C-backgroundPanel: Create collapsible panel showing running background sessions with status, output preview, Attach/Kill buttons
-- [ ] SP-014-C-terminalWire: Wire background tasks panel into `Terminal.tsx`; add "Agent Sessions" dropdown in `TerminalTabBar.tsx`
-- [ ] SP-014-C-attachFlow: Implement promote-to-visible flow (clear `Hidden` flag → session appears in tab bar → scrollback replay)
+- [x] SP-014-A-sentinelExec: Create `pkg/webui/terminal_agent_exec.go` — sentinel-based synchronous command execution via PTY
+- [x] SP-014-A-terminalTypes: Add `Hidden`, `Owner`, `ChatID`, `Name`, `AutoClose` fields to `TerminalSession`; add `CreateHiddenSession()`, `ListHiddenSessions()`
+- [x] SP-014-A-apiEndpoints: Create `pkg/webui/api_agent_sessions.go` — REST endpoints: list hidden sessions, promote to visible, retrieve output
+- [x] SP-014-A-lifecycle: Exclude hidden sessions from default listing; 2-hour cleanup timeout for background sessions
+- [x] SP-014-A-routes: Register agent session API routes in `server.go`
+- [x] SP-014-B-shellRouting: Route agent `shell_command` through hidden PTY when `TerminalManager` is available (WebUI mode)
+- [x] SP-014-B-background: Add `background` parameter to `shell_command` tool; handle `background=true` to write to hidden PTY and return session ID immediately
+- [x] SP-014-B-sessionID: Add `session_id` parameter for querying accumulated output of background sessions
+- [x] SP-014-B-context: Expose `TerminalManager` accessor in `client_context.go` for agent context wiring
+- [x] SP-014-C-backgroundPanel: Create collapsible panel showing running background sessions with status, output preview, Attach/Kill buttons
+- [x] SP-014-C-terminalWire: Wire background tasks panel into `Terminal.tsx`; add "Agent Sessions" dropdown in `TerminalTabBar.tsx`
+- [x] SP-014-C-attachFlow: Implement promote-to-visible flow (clear `Hidden` flag → session appears in tab bar → scrollback replay)
 
 ## Partially Done — SP-015: Cloud Platform Integration
 
-- [ ] SP-015-R1: Add WASM interception in `CloudAdapter.fetch()` — check `isWasmLocal()` and route to WASM shell methods instead of `fetch()` (17 endpoints currently fall through)
-- [ ] SP-015-R3: Audit components referencing SSH, instances, local terminal, or settings; ensure they use `supports*` flags from `mode.ts`
-- [ ] SP-015-R5: Verify WebSocket client correctly handles all three patterns (transparent reverse proxy, JSON-over-WS tunnel, SSE + MessageChannel)
-- [ ] SP-015-R6: Define canonical dist bundle layout; ensure `build-webui-dist.mjs` output matches Foundry's `browser-ide/dist/sprout-webui/` expectations
-- [ ] SP-015-R7-edgeCases: Add edge case tests for chat translation: empty query, missing chat_id, steer, stop signals
-- [ ] SP-015-R7-sharedModule: Extract chat translation logic into shared module (CloudAdapter + chat-bridge.ts both do same translation)
+- [x] SP-015-R1: Add WASM interception in `CloudAdapter.fetch()` — check `isWasmLocal()` and route to WASM shell methods instead of `fetch()` (17 endpoints currently fall through)
+- [x] SP-015-R3: Audit components referencing SSH, instances, local terminal, or settings; ensure they use `supports*` flags from `mode.ts`
+- [x] SP-015-R5: Verify WebSocket client correctly handles all three patterns (transparent reverse proxy, JSON-over-WS tunnel, SSE + MessageChannel)
+- [x] SP-015-R6: Define canonical dist bundle layout; ensure `build-webui-dist.mjs` output matches Foundry's `browser-ide/dist/sprout-webui/` expectations
+- [x] SP-015-R7-edgeCases: Add edge case tests for chat translation: empty query, missing chat_id, steer, stop signals
+- [x] SP-015-R7-sharedModule: Extract chat translation logic into shared module (CloudAdapter + chat-bridge.ts both do same translation)
 
 ## Partially Done — SP-039: UI Library Consolidation
 
-- [ ] SP-039-2a: Move `BillingPage`, `TasksPage`, `TeamPage` from `packages/ui` to `webui/src/components/`
-- [ ] SP-039-2a-imports: Update all imports across both packages after composite migration
-- [ ] SP-039-2b: Audit for any other domain-coupled components hiding in `packages/ui` primitives
-- [ ] SP-039-3: Replace duplicate component implementations in webui with imports from `@sprout/ui` (~30 components exist in both locations)
+- [x] SP-039-2a: Move `BillingPage`, `TasksPage`, `TeamPage` from `packages/ui` to `webui/src/components/`
+- [x] SP-039-2a-imports: Update all imports across both packages after composite migration
+- [x] SP-039-2b: Audit for any other domain-coupled components hiding in `packages/ui` primitives
+- [x] SP-039-3: Replace duplicate component implementations in webui with imports from `@sprout/ui` (~30 components exist in both locations)
 
 ## Partially Done — SP-045: WASM Feature Parity
 
-- [ ] SP-045-Tier1-conversationTurns: Wire conversation turn persistence to `SproutWasm` JS entry point
-- [ ] SP-045-Tier1-config: Expose `getConfig` and `setConfigValue` on `SproutWasm`
+- [x] SP-045-Tier1-conversationTurns: Wire conversation turn persistence to `SproutWasm` JS entry point
+- [x] SP-045-Tier1-config: Expose `getConfig` and `setConfigValue` on `SproutWasm`
 - [ ] SP-045-Tier1-workspaceAnalysis: Expose direct JS API for workspace file walk on `SproutWasm`
-- [ ] SP-045-Tier2a-onnxBridge: Implement `syscall/js` bridge for `onnxruntime-web` — detect `globalThis.__sproutONNX`, marshal embed/embedBatch calls
-- [ ] SP-045-Tier2b-agent: Plumb `agent` command through WASM (HTTP to LLM providers via Fetch API)
+- [x] SP-045-Tier2a-onnxBridge: Implement `syscall/js` bridge for `onnxruntime-web` — detect `globalThis.__sproutONNX`, marshal embed/embedBatch calls
+- [x] SP-045-Tier2b-agent: Plumb `agent` command through WASM (HTTP to LLM providers via Fetch API)
 - [ ] SP-045-Tier2b-llmCommands: Plumb `question`, `code`, `commit`, `review`, `plan` commands through WASM
 - [ ] SP-045-Tier2b-apiKeys: Implement WASM credential storage (localStorage / IndexedDB + Web Crypto AES-GCM / host-page injection)
 - [ ] SP-045-Tier2b-streaming: Verify `js/wasm` net/http handles SSE streaming end-to-end; adapt provider code for Fetch API streaming
 - [ ] SP-045-Tier2b-cors: Handle provider CORS restrictions; support user-supplied proxy URL
 - [ ] SP-045-Tier2b-toolExec: Route agent loop tool execution through `SproutWasm.executeCommand` JS bridge
-- [ ] SP-045-buildMatrix-pty: Tag `pkg/webui/terminal_*.go` with `!js` build constraint to avoid `creack/pty` import
+- [x] SP-045-buildMatrix-pty: Tag `pkg/webui/terminal_*.go` with `!js` build constraint to avoid `creack/pty` import
 - [ ] SP-045-buildMatrix-sweep: Replace `//go:build !windows` patterns with `unix && !js` across `pkg/`
-- [ ] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)
+- [x] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)
 - [ ] SP-045-dist-tinygo: Spike tinygo feasibility for WASM build (huge saving, compatibility risk)
 - [ ] SP-045-dist-splitModules: Investigate splitting into small shell-only WASM + larger `embedding.wasm` lazy-load
 

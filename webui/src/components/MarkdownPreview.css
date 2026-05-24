@@ -63,12 +63,19 @@
 }
 
 .markdown-preview-body a {
-  color: var(--accent-primary, #6366f1);
+  color: var(--accent-primary);
   text-decoration: none;
 }
 
 .markdown-preview-body a:hover {
   text-decoration: underline;
+}
+
+.markdown-preview-body a:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  border-radius: 2px;
 }
 
 .markdown-preview-body ul,
@@ -82,7 +89,7 @@
 }
 
 .markdown-preview-body blockquote {
-  border-left: 3px solid var(--accent-primary, #6366f1);
+  border-left: 3px solid var(--accent-primary);
   padding-left: 12px;
   margin: 8px 0;
   color: var(--text-secondary);

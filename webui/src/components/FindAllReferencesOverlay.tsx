@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { FileCode } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
 import './FindAllReferencesOverlay.css';
 
@@ -51,13 +51,31 @@ function highlightSymbol(lineText: string, startCol: number, endCol: number): Re
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-function FindAllReferencesOverlay({
+/**
+ * Custom equality check for FindAllReferencesOverlay.
+ * The `onSelectReference` and `onClose` callbacks are likely recreated by the
+ * parent on every render, so we compare them explicitly along with the
+ * primitive/array props.
+ */
+export function areFindAllReferencesPropsEqual(
+  prev: FindAllReferencesOverlayProps,
+  next: FindAllReferencesOverlayProps,
+): boolean {
+  if (prev.visible !== next.visible) return false;
+  if (prev.symbolName !== next.symbolName) return false;
+  if (prev.references !== next.references) return false;
+  if (prev.onSelectReference !== next.onSelectReference) return false;
+  if (prev.onClose !== next.onClose) return false;
+  return true;
+}
+
+const FindAllReferencesOverlayImpl = ({
   visible,
   symbolName,
   references,
   onSelectReference,
   onClose,
-}: FindAllReferencesOverlayProps): JSX.Element | null {
+}: FindAllReferencesOverlayProps): JSX.Element | null => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -274,5 +292,7 @@ function FindAllReferencesOverlay({
     </div>
   );
 }
+
+export const FindAllReferencesOverlay = React.memo(FindAllReferencesOverlayImpl, areFindAllReferencesPropsEqual);
 
 export default FindAllReferencesOverlay;

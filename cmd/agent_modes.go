@@ -937,11 +937,42 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	}
 }
 
+// shouldShowTurnStats returns true when stderr is connected to a TTY.
+// The turn-summary line is written to os.Stderr, so we must check stderr
+// (not stdout) to determine whether it will render cleanly. This matters
+// in piping scenarios like `sprout agent "query" > output.txt` where
+// stdout is piped but stderr is still the terminal. SP-048-5a.
+func shouldShowTurnStats() bool {
+	return term.IsTerminal(int(os.Stderr.Fd()))
+}
+
+// formatTurnStatsLine builds the dim single-line turn-summary string.
+// When color is disabled (NO_COLOR), ANSI dim codes are stripped.
+// SP-048-5a.
+func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed time.Duration) string {
+	var dim, reset string
+	if envutil.ResolveColorPreference(true) {
+		dim, reset = "\033[2m", "\033[0m"
+	}
+	return fmt.Sprintf("%s⎯ this turn: %s in / %s out · %s · %s ⎯%s\n",
+		dim,
+		compactTokens(promptDelta),
+		compactTokens(completionDelta),
+		compactCost(costDelta),
+		compactDuration(elapsed),
+		reset,
+	)
+}
+
 // printPerTurnSummary emits a dim single-line summary of what just happened
 // in the LLM round-trip: input/output tokens consumed, $ spent, elapsed
 // wall time. Silent when no tokens were used (e.g. the turn was a slash
-// command or zsh fast path). SP-048-5c.
+// command or zsh fast path). Only shown when stderr is a TTY (respects
+// NO_COLOR for ANSI codes). SP-048-5a.
 func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
+	if !shouldShowTurnStats() {
+		return
+	}
 	promptDelta := chatAgent.GetPromptTokens() - promptBefore
 	completionDelta := chatAgent.GetCompletionTokens() - completionBefore
 	if promptDelta <= 0 && completionDelta <= 0 {
@@ -950,18 +981,7 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	costDelta := chatAgent.GetTotalCost() - costBefore
 	elapsed := time.Since(start)
 
-	dimOn, dimOff := "\033[2m", "\033[0m"
-	if !envutil.ResolveColorPreference(true) {
-		dimOn, dimOff = "", ""
-	}
-	fmt.Fprintf(os.Stderr, "%s⎯ this turn: %s in / %s out · %s · %s ⎯%s\n",
-		dimOn,
-		compactTokens(promptDelta),
-		compactTokens(completionDelta),
-		compactCost(costDelta),
-		compactDuration(elapsed),
-		dimOff,
-	)
+	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed))
 }
 
 func compactTokens(n int) string {

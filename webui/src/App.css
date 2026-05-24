@@ -920,7 +920,7 @@ body,
 
 .panes-container.layout-split-vertical .pane-wrapper {
   flex: 1;
-  min-width: 200px;
+  min-width: calc(100% / 7); /* divisor = maxPanes+1 (7) ensures 6 side-by-side panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
 }
 
 .panes-container.layout-split-vertical .pane-wrapper:not(:first-child):not(:last-child) {
@@ -934,7 +934,7 @@ body,
 
 .panes-container.layout-split-horizontal .pane-wrapper {
   flex: 1;
-  min-height: 200px;
+  min-height: calc(100% / 7); /* divisor = maxPanes+1 (7) ensures 6 stacked panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
 }
 
 .panes-container.layout-split-horizontal .pane-wrapper:first-child {
@@ -952,7 +952,7 @@ body,
 
 .panes-container.layout-split-grid .pane-wrapper {
   flex: 1;
-  min-width: 200px;
+  min-width: calc(100% / 7); /* divisor = maxPanes+1 (7) ensures 6 side-by-side panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
   min-height: 100px;
 }
 

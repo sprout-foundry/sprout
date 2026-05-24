@@ -18,7 +18,7 @@ const toPaneFlex = (weight: number): CSSProperties => ({
   minHeight: 0,
 });
 
-/** Shape of nested split configuration for 3-pane layouts */
+/** Shape of nested split configuration for nested split layouts */
 export interface PaneLayoutManagerProps {
   panes: EditorPane[];
   paneLayout: PaneLayout;
@@ -685,7 +685,7 @@ function PaneLayoutManager({
     );
   }
 
-  // ── Nested split layout (3 panes) ─────────────────────────────
+  // ── Nested split layout ─────────────────────────────
   const hostPane = panes.find((pane) => pane.id === nestedSplit.hostPaneId);
   const nestedPane = panes.find((pane) => pane.id === nestedSplit.nestedPaneId);
   const siblingPane = panes.find((pane) => pane.id !== nestedSplit.hostPaneId && pane.id !== nestedSplit.nestedPaneId);

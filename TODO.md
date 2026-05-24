@@ -2,81 +2,81 @@
 
 ## Partially Done — SP-009: Component Library Maturation
 
-- [ ] SP-009-P1.1: Verify `npm run build` produces clean output in `packages/ui/`; create README.md and CHANGELOG.md
-- [ ] SP-009-P1.2: Publish `@sprout/ui` to npm under `@sprout` org scope; create `.github/workflows/publish-ui.yml`
-- [ ] SP-009-P1.3: Replace `file:../packages/ui` in `webui/package.json` with versioned npm dependency
-- [ ] SP-009-P1.4: Document Foundry consumption pattern (`npm install @sprout/ui`)
-- [ ] SP-009-P2.1: Install Storybook 8 in `packages/ui/` with Vite builder and React framework
-- [ ] SP-009-P2.2: Create `MockAdapter` implementing `APIAdapter`; wrap all stories in `SproutProvider` with mock
-- [ ] SP-009-P2.3: Write stories for StatusBar, FileTree, Terminal, GitPanel, CommandPalette (Tier 1)
-- [ ] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
-- [ ] SP-009-P2.3: Write stories for ContextMenu, NotificationItem, SelectionActionBar, CommandInput (Tier 3)
-- [ ] SP-009-P2.4: Connect to Chromatic for visual regression testing on PRs
-- [ ] SP-009-P2.5: Write MDX documentation pages for complex components (FileTree, ChatPanel, GitPanel)
-- [ ] SP-009-migration: Replace duplicate component implementations in webui with imports from `@sprout/ui`
+- [x] SP-009-P1.1: Verify `npm run build` produces clean output in `packages/ui/`; create README.md and CHANGELOG.md
+- [x] SP-009-P1.2: Publish `@sprout/ui` to npm under `@sprout` org scope; create `.github/workflows/publish-ui.yml`
+- [x] SP-009-P1.3: Replace `file:../packages/ui` in `webui/package.json` with versioned npm dependency
+- [x] SP-009-P1.4: Document Foundry consumption pattern (`npm install @sprout/ui`)
+- [x] SP-009-P2.1: Install Storybook 8 in `packages/ui/` with Vite builder and React framework
+- [x] SP-009-P2.2: Create `MockAdapter` implementing `APIAdapter`; wrap all stories in `SproutProvider` with mock
+- [x] SP-009-P2.3: Write stories for StatusBar, FileTree, Terminal, GitPanel, CommandPalette (Tier 1)
+[x] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
+- [x] SP-009-P2.3: Write stories for ContextMenu, NotificationItem, SelectionActionBar, CommandInput (Tier 3)
+- [x] SP-009-P2.4: Connect to Chromatic for visual regression testing on PRs
+- [x] SP-009-P2.5: Write MDX documentation pages for complex components (FileTree, ChatPanel, GitPanel)
+- [x] SP-009-migration: Replace duplicate component implementations in webui with imports from `@sprout/ui`
 
 ## Partially Done — SP-010: Editor Modernization
 
-- [ ] SP-010-P1-hooks: Extract remaining hooks: `useEditorExtensions`, `useEditorDiagnostics`, `useEditorFileIO`, `useEditorScrollSync`, `useEditorSymbols`, `useEditorCursor`
-- [ ] SP-010-P1-components: Create `EditorCore.tsx` (CodeMirror mount point) and `EditorToolbarActions.tsx`; reduce `EditorPane.tsx` to ~300-line composition root
-- [ ] SP-010-P2-errorLens: Create `webui/src/extensions/errorLens.ts` — inline diagnostic display via `Decoration.widget`
-- [ ] SP-010-P2-wordHighlights: Verify/fix `highlightSelectionMatches()` wiring and add custom styling
-- [ ] SP-010-P2-inlayHints: Create `webui/src/extensions/inlayHints.ts` — request LSP inlay hints for type/parameter annotations
-- [ ] SP-010-P2-signatureHelp: Create `webui/src/extensions/signatureHelp.ts` — function signature tooltip on `(`/`,`
-- [ ] SP-010-P2-formatOnSave: Wire existing formatter service to save action (opt-in setting)
-- [ ] SP-010-P2-goToReferences: Add dedicated go-to-references panel (hover tooltip has refs but no standalone panel)
-- [ ] SP-010-P3-memo: Add `React.memo` to EditorTabs, EditorBreadcrumb, EditorToolbar, and other child components
-- [ ] SP-010-P3-symbolKey: Fix symbol extraction to be keyed to content checksum, not cursor position
-- [ ] SP-010-P3-tabTooltips: Add `title` attribute to tab names showing full file path on hover
-- [ ] SP-010-P3-paneLimit: Remove 3-pane cap in `EditorManagerContext.tsx` — allow up to 6 configurable panes
-- [ ] SP-010-P3-tabIcons: Add file-type icons in editor tabs based on extension
+- [x] SP-010-P1-hooks: Extract remaining hooks: `useEditorExtensions`, `useEditorDiagnostics`, `useEditorFileIO`, `useEditorScrollSync`, `useEditorSymbols`, `useEditorCursor`
+- [x] SP-010-P1-components: Create `EditorCore.tsx` (CodeMirror mount point) and `EditorToolbarActions.tsx`; reduce `EditorPane.tsx` to ~300-line composition root
+- [x] SP-010-P2-errorLens: Create `webui/src/extensions/errorLens.ts` — inline diagnostic display via `Decoration.widget`
+- [x] SP-010-P2-wordHighlights: Verify/fix `highlightSelectionMatches()` wiring and add custom styling
+- [x] SP-010-P2-inlayHints: Create `webui/src/extensions/inlayHints.ts` — request LSP inlay hints for type/parameter annotations
+- [x] SP-010-P2-signatureHelp: Create `webui/src/extensions/signatureHelp.ts` — function signature tooltip on `(`/`,`
+- [x] SP-010-P2-formatOnSave: Wire existing formatter service to save action (opt-in setting)
+- [x] SP-010-P2-goToReferences: Add dedicated go-to-references panel (hover tooltip has refs but no standalone panel)
+- [x] SP-010-P3-memo: Add `React.memo` to EditorTabs, EditorBreadcrumb, EditorToolbar, and other child components
+- [x] SP-010-P3-symbolKey: Fix symbol extraction to be keyed to content checksum, not cursor position
+- [x] SP-010-P3-tabTooltips: Add `title` attribute to tab names showing full file path on hover
+- [x] SP-010-P3-paneLimit: Remove 3-pane cap in `EditorManagerContext.tsx` — allow up to 6 configurable panes
+- [x] SP-010-P3-tabIcons: Add file-type icons in editor tabs based on extension
 
 ## Partially Done — SP-014: Agent Terminal Sessions
 
-- [ ] SP-014-A-sentinelExec: Create `pkg/webui/terminal_agent_exec.go` — sentinel-based synchronous command execution via PTY
-- [ ] SP-014-A-terminalTypes: Add `Hidden`, `Owner`, `ChatID`, `Name`, `AutoClose` fields to `TerminalSession`; add `CreateHiddenSession()`, `ListHiddenSessions()`
-- [ ] SP-014-A-apiEndpoints: Create `pkg/webui/api_agent_sessions.go` — REST endpoints: list hidden sessions, promote to visible, retrieve output
-- [ ] SP-014-A-lifecycle: Exclude hidden sessions from default listing; 2-hour cleanup timeout for background sessions
-- [ ] SP-014-A-routes: Register agent session API routes in `server.go`
-- [ ] SP-014-B-shellRouting: Route agent `shell_command` through hidden PTY when `TerminalManager` is available (WebUI mode)
-- [ ] SP-014-B-background: Add `background` parameter to `shell_command` tool; handle `background=true` to write to hidden PTY and return session ID immediately
-- [ ] SP-014-B-sessionID: Add `session_id` parameter for querying accumulated output of background sessions
-- [ ] SP-014-B-context: Expose `TerminalManager` accessor in `client_context.go` for agent context wiring
-- [ ] SP-014-C-backgroundPanel: Create collapsible panel showing running background sessions with status, output preview, Attach/Kill buttons
-- [ ] SP-014-C-terminalWire: Wire background tasks panel into `Terminal.tsx`; add "Agent Sessions" dropdown in `TerminalTabBar.tsx`
-- [ ] SP-014-C-attachFlow: Implement promote-to-visible flow (clear `Hidden` flag → session appears in tab bar → scrollback replay)
+- [x] SP-014-A-sentinelExec: Create `pkg/webui/terminal_agent_exec.go` — sentinel-based synchronous command execution via PTY
+- [x] SP-014-A-terminalTypes: Add `Hidden`, `Owner`, `ChatID`, `Name`, `AutoClose` fields to `TerminalSession`; add `CreateHiddenSession()`, `ListHiddenSessions()`
+- [x] SP-014-A-apiEndpoints: Create `pkg/webui/api_agent_sessions.go` — REST endpoints: list hidden sessions, promote to visible, retrieve output
+- [x] SP-014-A-lifecycle: Exclude hidden sessions from default listing; 2-hour cleanup timeout for background sessions
+- [x] SP-014-A-routes: Register agent session API routes in `server.go`
+- [x] SP-014-B-shellRouting: Route agent `shell_command` through hidden PTY when `TerminalManager` is available (WebUI mode)
+- [x] SP-014-B-background: Add `background` parameter to `shell_command` tool; handle `background=true` to write to hidden PTY and return session ID immediately
+- [x] SP-014-B-sessionID: Add `session_id` parameter for querying accumulated output of background sessions
+- [x] SP-014-B-context: Expose `TerminalManager` accessor in `client_context.go` for agent context wiring
+- [x] SP-014-C-backgroundPanel: Create collapsible panel showing running background sessions with status, output preview, Attach/Kill buttons
+- [x] SP-014-C-terminalWire: Wire background tasks panel into `Terminal.tsx`; add "Agent Sessions" dropdown in `TerminalTabBar.tsx`
+- [x] SP-014-C-attachFlow: Implement promote-to-visible flow (clear `Hidden` flag → session appears in tab bar → scrollback replay)
 
 ## Partially Done — SP-015: Cloud Platform Integration
 
-- [ ] SP-015-R1: Add WASM interception in `CloudAdapter.fetch()` — check `isWasmLocal()` and route to WASM shell methods instead of `fetch()` (17 endpoints currently fall through)
-- [ ] SP-015-R3: Audit components referencing SSH, instances, local terminal, or settings; ensure they use `supports*` flags from `mode.ts`
-- [ ] SP-015-R5: Verify WebSocket client correctly handles all three patterns (transparent reverse proxy, JSON-over-WS tunnel, SSE + MessageChannel)
-- [ ] SP-015-R6: Define canonical dist bundle layout; ensure `build-webui-dist.mjs` output matches Foundry's `browser-ide/dist/sprout-webui/` expectations
-- [ ] SP-015-R7-edgeCases: Add edge case tests for chat translation: empty query, missing chat_id, steer, stop signals
-- [ ] SP-015-R7-sharedModule: Extract chat translation logic into shared module (CloudAdapter + chat-bridge.ts both do same translation)
+- [x] SP-015-R1: Add WASM interception in `CloudAdapter.fetch()` — check `isWasmLocal()` and route to WASM shell methods instead of `fetch()` (17 endpoints currently fall through)
+- [x] SP-015-R3: Audit components referencing SSH, instances, local terminal, or settings; ensure they use `supports*` flags from `mode.ts`
+- [x] SP-015-R5: Verify WebSocket client correctly handles all three patterns (transparent reverse proxy, JSON-over-WS tunnel, SSE + MessageChannel)
+- [x] SP-015-R6: Define canonical dist bundle layout; ensure `build-webui-dist.mjs` output matches Foundry's `browser-ide/dist/sprout-webui/` expectations
+- [x] SP-015-R7-edgeCases: Add edge case tests for chat translation: empty query, missing chat_id, steer, stop signals
+- [x] SP-015-R7-sharedModule: Extract chat translation logic into shared module (CloudAdapter + chat-bridge.ts both do same translation)
 
 ## Partially Done — SP-039: UI Library Consolidation
 
-- [ ] SP-039-2a: Move `BillingPage`, `TasksPage`, `TeamPage` from `packages/ui` to `webui/src/components/`
-- [ ] SP-039-2a-imports: Update all imports across both packages after composite migration
-- [ ] SP-039-2b: Audit for any other domain-coupled components hiding in `packages/ui` primitives
-- [ ] SP-039-3: Replace duplicate component implementations in webui with imports from `@sprout/ui` (~30 components exist in both locations)
+- [x] SP-039-2a: Move `BillingPage`, `TasksPage`, `TeamPage` from `packages/ui` to `webui/src/components/`
+- [x] SP-039-2a-imports: Update all imports across both packages after composite migration
+- [x] SP-039-2b: Audit for any other domain-coupled components hiding in `packages/ui` primitives
+- [x] SP-039-3: Replace duplicate component implementations in webui with imports from `@sprout/ui` (~30 components exist in both locations)
 
 ## Partially Done — SP-045: WASM Feature Parity
 
-- [ ] SP-045-Tier1-conversationTurns: Wire conversation turn persistence to `SproutWasm` JS entry point
-- [ ] SP-045-Tier1-config: Expose `getConfig` and `setConfigValue` on `SproutWasm`
+- [x] SP-045-Tier1-conversationTurns: Wire conversation turn persistence to `SproutWasm` JS entry point
+- [x] SP-045-Tier1-config: Expose `getConfig` and `setConfigValue` on `SproutWasm`
 - [ ] SP-045-Tier1-workspaceAnalysis: Expose direct JS API for workspace file walk on `SproutWasm`
-- [ ] SP-045-Tier2a-onnxBridge: Implement `syscall/js` bridge for `onnxruntime-web` — detect `globalThis.__sproutONNX`, marshal embed/embedBatch calls
-- [ ] SP-045-Tier2b-agent: Plumb `agent` command through WASM (HTTP to LLM providers via Fetch API)
+- [x] SP-045-Tier2a-onnxBridge: Implement `syscall/js` bridge for `onnxruntime-web` — detect `globalThis.__sproutONNX`, marshal embed/embedBatch calls
+- [x] SP-045-Tier2b-agent: Plumb `agent` command through WASM (HTTP to LLM providers via Fetch API)
 - [ ] SP-045-Tier2b-llmCommands: Plumb `question`, `code`, `commit`, `review`, `plan` commands through WASM
 - [ ] SP-045-Tier2b-apiKeys: Implement WASM credential storage (localStorage / IndexedDB + Web Crypto AES-GCM / host-page injection)
 - [ ] SP-045-Tier2b-streaming: Verify `js/wasm` net/http handles SSE streaming end-to-end; adapt provider code for Fetch API streaming
 - [ ] SP-045-Tier2b-cors: Handle provider CORS restrictions; support user-supplied proxy URL
 - [ ] SP-045-Tier2b-toolExec: Route agent loop tool execution through `SproutWasm.executeCommand` JS bridge
-- [ ] SP-045-buildMatrix-pty: Tag `pkg/webui/terminal_*.go` with `!js` build constraint to avoid `creack/pty` import
+- [x] SP-045-buildMatrix-pty: Tag `pkg/webui/terminal_*.go` with `!js` build constraint to avoid `creack/pty` import
 - [ ] SP-045-buildMatrix-sweep: Replace `//go:build !windows` patterns with `unix && !js` across `pkg/`
-- [ ] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)
+- [x] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)
 - [ ] SP-045-dist-tinygo: Spike tinygo feasibility for WASM build (huge saving, compatibility risk)
 - [ ] SP-045-dist-splitModules: Investigate splitting into small shell-only WASM + larger `embedding.wasm` lazy-load
 
@@ -96,12 +96,12 @@
 
 ## Partially Done — SP-048: CLI Delight
 
-- [ ] SP-048-4a: Honor `NO_COLOR` / `FORCE_COLOR` in `NewMarkdownFormatter`; stop unsetting `NO_COLOR` in `agent_exec_utils.go`
+- [x] SP-048-4a: Honor `NO_COLOR` / `FORCE_COLOR` in `NewMarkdownFormatter`; stop unsetting `NO_COLOR` in `agent_exec_utils.go`
 - [ ] SP-048-4b: Bold the capitalized default letter in `[y/N]` prompts and the safe default option in 4-choice secret prompt
 - [ ] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
 - [ ] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop
 - [ ] SP-048-4f: Implement `$EDITOR` escape via Ctrl-X Ctrl-E or `/edit` — open `$EDITOR` with current buffer pre-filled
-- [ ] SP-048-5a: After each assistant turn, print dim line: `⎯ this turn: 1.2k in / 4.8k out · $0.04 · 6.1s ⎯`
+- [x] SP-048-5a: After each assistant turn, print dim line: `⎯ this turn: 1.2k in / 4.8k out · $0.04 · 6.1s ⎯`
 - [ ] SP-048-5b: Implement `/help <command>` per-command usage text
 - [ ] SP-048-5c: Add short aliases: `/m` → `/models`, `/p` → `/providers`, `/x` → `/exit`, `/?` → `/help`
 - [ ] SP-048-5d: Strip ANSI from non-TTY stdout when piped
@@ -181,7 +181,7 @@
 - [ ] SP-012-U1.3-editorTabsARIA: Add `aria-label="Close {filename}"` to tab close buttons
 - [ ] SP-012-U1.3-sidebarARIA: Add `role="navigation"` to Sidebar navigation sections
 - [ ] SP-012-U1.4-focusIndicators: Add global `:focus-visible` outline styles and `:focus:not(:focus-visible)` outline removal
-- [ ] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement
+- [x] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement
 - [ ] SP-012-U2.2-sidebarPersist: Ensure `isCollapsed`, `activeTab`, and `width` in `useSidebarState.ts` all persist to localStorage
 - [ ] SP-012-U2.3-responsiveCSS: Add tablet (768-1024px) and mobile (<768px) responsive breakpoints — icons-only sidebar, vertical stacking
 - [ ] SP-012-U2.3-touchGestures: Add swipe left/right to toggle sidebar on mobile
@@ -250,20 +250,9 @@
 - [ ] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
 - [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)
 
-## Not Started — SP-047: SQLite-vec Store
+## Superseded — SP-047: SQLite-vec Store
 
-- [ ] SP-047-P1-store: Create `pkg/embedding/store_sqlite.go` — `SQLiteVecStore` implementing `VectorStore` interface via `ncruces/go-sqlite3`
-- [ ] SP-047-P1-schema: Create `vec0` virtual table with embedding columns (float[256] cosine), hash, metadata JSON
-- [ ] SP-047-P1-query: Implement `Query()` using SQL vector distance search
-- [ ] SP-047-P1-storeImpl: Implement `Store()` as SQLite upsert (INSERT OR REPLACE)
-- [ ] SP-047-P1-delete: Implement `DeleteByFile()` as SQL DELETE
-- [ ] SP-047-P1-loadAll: Implement `LoadAll()` as SQL SELECT
-- [ ] SP-047-P2-migration: On init, check for legacy `index.jsonl`; if found, load → batch insert into SQLite → rename JSONL to `.migrated`
-- [ ] SP-047-P3-init: Replace `NewJSONLFileStore` with `NewSQLiteVecStore` in init paths
-- [ ] SP-047-P3-manifest: Update manifest paths from `.index.jsonl.manifest.json` to `.index.db.manifest.json`
-- [ ] SP-047-P4-unitTests: Unit tests for `SQLiteVecStore` against `VectorStore` interface
-- [ ] SP-047-P4-migrationTest: Test JSONL → SQLite migration → verify record count and query results
-- [ ] SP-047-P5-wasmVerify: Verify `ncruces/go-sqlite3` works in WASM builds; if not, use build tags for fallback
+> Superseded by HNSW store (`store_hnsw.go`). SQLite-vec approach was abandoned in favor of `coder/hnsw` for approximate nearest neighbor search with no CGO dependency.
 
 ## Not Started — SP-049: Shell Permission Overhaul
 

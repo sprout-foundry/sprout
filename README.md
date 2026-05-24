@@ -18,6 +18,16 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 - **Dataset tracing** for training data generation
 - **Provider catalog** with model lists, costs, and recommendations
 
+## Component Library
+
+The Sprout UI component library (`@sprout/ui`) is available as a standalone npm package, providing reusable IDE-style React components — code editor, terminal, chat panel, file tree, and more — for building IDE-like applications.
+
+```bash
+npm install @sprout/ui
+```
+
+See the [Consumption Guide](docs/CONSUMPTION_GUIDE.md) for full documentation.
+
 ## Installation
 
 ### Recommended Installation
@@ -90,6 +100,7 @@ sprout log
 
 | Document | Description |
 |-----------|-------------|
+| [Component Library](docs/CONSUMPTION_GUIDE.md) | @sprout/ui npm package usage and consumption guide |
 | [CLI Reference](docs/CLI_REFERENCE.md) | All commands, flags, slash commands, personas, tools |
 | [Configuration](docs/CONFIGURATION.md) | Config files, environment variables, Zsh detection, CI/CD |
 | [Web UI](docs/WEB_UI.md) | Web UI features, SSH tunneling, remote access |

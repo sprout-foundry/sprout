@@ -42,7 +42,7 @@
     "@lezer/go": "^1.0.1",
     "@replit/codemirror-minimap": "^0.5.2",
     "@sprout/events": "file:../packages/events",
-    "@sprout/ui": "file:../packages/ui",
+    "@sprout/ui": "^0.1.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@uiw/codemirror-extensions-color": "^4.25.9",

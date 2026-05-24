@@ -1,0 +1,315 @@
+import { Meta, Description, Controls } from '@storybook/blocks';
+import GitPanelStories from './GitPanel.stories';
+
+<Meta title="Components/GitPanel" of={GitPanelStories} />
+
+# GitPanel
+
+<Description>
+A comprehensive Git integration panel providing file status sections, multi-select operations, AI-powered commit messages and code review, branch management, push/pull operations, and context menus.
+</Description>
+
+---
+
+## Overview
+
+GitPanel (exported as `GitSidebarPanel`) is the primary Git interaction component in Sprout IDE. It organizes repository status into clearly labeled sections and provides a complete workflow from viewing changes to committing and pushing.
+
+Key features:
+- **File status sections** — Staged, Modified, Untracked, and Deleted file groups
+- **Multi-select operations** — Select multiple files across sections for batch staging, unstaging, or discarding
+- **AI-powered commit messages** — Generate commit messages automatically using AI
+- **Code review** — Request AI-powered code reviews on staged changes
+- **Branch management** — View, create, and checkout branches
+- **Push/Pull** — Direct push and pull operations from the panel
+- **Context menus** — Right-click on files for additional actions
+- **Virtualized rendering** — Efficiently handles large repositories with 500+ files per section (initially loads 100)
+
+---
+
+## Props Reference
+
+<Controls of={GitPanelStories} />
+
+---
+
+## Key Types
+
+### GitStatusData
+
+The full git status response from the backend:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `branch` | `string` | Current branch name |
+| `ahead` | `number` | Commits ahead of remote |
+| `behind` | `number` | Commits behind remote |
+| `staged` | `GitFile[]` | Files staged for commit |
+| `modified` | `GitFile[]` | Modified but unstaged files |
+| `untracked` | `GitFile[]` | New untracked files |
+| `deleted` | `GitFile[]` | Deleted files |
+| `renamed` | `GitFile[]` | Renamed/moved files |
+| `clean` | `boolean` | Whether the working tree is clean |
+| `truncated` | `boolean` | Whether results were truncated due to file count limits |
+
+### GitFile
+
+A file entry in git status:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `path` | `string` | File path relative to repository root |
+| `status` | `string` | Git status string (e.g., `'M'`, `'A'`, `'D'`, `'??'`) |
+| `changes?` | `{ additions: number; deletions: number }` | Line change statistics |
+
+### FileSection
+
+A section category for organizing files:
+
+```ts
+type FileSection = 'staged' | 'modified' | 'untracked' | 'deleted';
+```
+
+The standard section order is: Staged → Modified → Untracked → Deleted.
+
+### GitBranchesState
+
+Branch management state:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `current` | `string` | Current branch name |
+| `branches` | `string[]` | List of available branch names |
+
+---
+
+## File Change List
+
+Files are organized into sections based on their git status. Each section header shows the section name and file count. Individual files display:
+
+- **Status icon** — Visual indicator matching the git status (staged, modified, untracked, deleted)
+- **File path** — Relative path from the repository root
+- **Change stats** — Additions and deletions (when available)
+- **Selection checkbox** — For multi-select operations
+
+### Virtualization
+
+Large repositories are handled efficiently:
+- **MAX_FILES_PER_SECTION = 500** — Maximum files displayed per section
+- **MAX_FILES_INITIAL = 100** — Files loaded initially per section, with "Load more" support
+
+---
+
+## Branch Management
+
+The branch selector dropdown shows the current branch and allows:
+
+- **Checkout** — Switch to an existing branch via `onCheckoutBranch`
+- **Create** — Create a new branch via `onCreateBranch`
+- **Ahead/Behind indicators** — Shows how many commits ahead/behind the remote
+
+---
+
+## Usage Examples
+
+### Basic git status display
+
+```tsx
+import { useState } from 'react';
+import { GitSidebarPanel, GitStatusData, GitBranchesState } from '@sprout/ui';
+
+function GitPanelExample() {
+  const [gitStatus, setGitStatus] = useState<GitStatusData | null>(null);
+  const [gitBranches, setGitBranches] = useState<GitBranchesState>({
+    current: 'main',
+    branches: ['main', 'develop'],
+  });
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [activeDiffSelectionKey, setActiveDiffSelectionKey] = useState<string | null>(null);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  return (
+    <GitSidebarPanel
+      gitStatus={gitStatus}
+      gitBranches={gitBranches}
+      selectedFiles={selectedFiles}
+      activeDiffSelectionKey={activeDiffSelectionKey}
+      commitMessage={commitMessage}
+      isLoading={isLoading}
+      isActing={false}
+      isGeneratingCommitMessage={false}
+      isReviewLoading={false}
+      actionError={null}
+      actionWarning={null}
+      onCommitMessageChange={setCommitMessage}
+      onGenerateCommitMessage={async () => {
+        const msg = await aiGenerateCommit();
+        setCommitMessage(msg);
+      }}
+      onCommit={async () => {
+        await gitCommit(commitMessage);
+        refreshStatus();
+      }}
+      onRunReview={async () => {
+        await runCodeReview();
+      }}
+      onCheckoutBranch={async (branch: string) => {
+        await gitCheckout(branch);
+        refreshStatus();
+      }}
+      onCreateBranch={async (name: string) => {
+        await gitCreateBranch(name);
+        refreshStatus();
+      }}
+      onPull={async () => {
+        await gitPull();
+        refreshStatus();
+      }}
+      onPush={async () => {
+        await gitPush();
+        refreshStatus();
+      }}
+      onRefresh={refreshStatus}
+      onToggleFileSelection={(key: string) => {
+        setSelectedFiles(prev => {
+          const next = new Set(prev);
+          next.has(key) ? next.delete(key) : next.add(key);
+          return next;
+        });
+      }}
+      onToggleSectionSelection={(section: string) => {
+        // Toggle all files in a section
+      }}
+      onClearSelection={() => setSelectedFiles(new Set())}
+      onStageSelected={async () => {
+        await stageFiles([...selectedFiles]);
+        refreshStatus();
+      }}
+      onUnstageSelected={async () => {
+        await unstageFiles([...selectedFiles]);
+        refreshStatus();
+      }}
+      onDiscardSelected={async () => {
+        await discardFiles([...selectedFiles]);
+        refreshStatus();
+      }}
+      onStageFile={async (key: string) => {
+        await stageFile(key);
+        refreshStatus();
+      }}
+      onUnstageFile={async (key: string) => {
+        await unstageFile(key);
+        refreshStatus();
+      }}
+      onDiscardFile={async (key: string) => {
+        await discardFile(key);
+        refreshStatus();
+      }}
+      onSectionAction={(section: string, action: string) => {
+        // Handle section-level actions (stage all, discard all)
+      }}
+    />
+  );
+}
+```
+
+### File staging/unstaging workflow
+
+The typical workflow for managing file changes:
+
+1. **View changes** — Files appear in their respective sections (Modified, Untracked, etc.)
+2. **Select files** — Click checkboxes or use "Select All" on a section header
+3. **Stage** — Click the stage button to add selected files to the staging area
+4. **Review** — Staged files appear in the "Staged" section
+5. **Unstage** — Move files back from Staged to their original section
+6. **Discard** — Permanently discard changes for selected files
+
+### AI commit message generation
+
+Click the generate button to create an AI-powered commit message based on staged changes:
+
+```tsx
+<GitSidebarPanel
+  // ... other props
+  isGeneratingCommitMessage={isGenerating}
+  onGenerateCommitMessage={async () => {
+    setIsGenerating(true);
+    try {
+      const message = await api.generateCommitMessage(stagedFiles);
+      setCommitMessage(message);
+    } finally {
+      setIsGenerating(false);
+    }
+  }}
+/>
+```
+
+### Multi-select operations
+
+Select multiple files and perform batch operations:
+
+```tsx
+<GitSidebarPanel
+  // ... other props
+  selectedFiles={selectedFiles}
+  onToggleFileSelection={(key) => toggleFile(key)}
+  onToggleSectionSelection={(section) => toggleSection(section)}
+  onClearSelection={() => setSelectedFiles(new Set())}
+  onStageSelected={() => stageSelected()}
+  onUnstageSelected={() => unstageSelected()}
+  onDiscardSelected={() => discardSelected()}
+/>
+```
+
+---
+
+## Workflow
+
+The typical git workflow in the panel:
+
+```
+Status → Select → Stage → Commit → Push
+```
+
+1. **Status** — Panel shows current git status with file sections
+2. **Select** — Choose files to stage/unstage/discard
+3. **Stage** — Add selected files to the staging area
+4. **Commit** — Write a commit message (manually or via AI) and commit
+5. **Push** — Push committed changes to the remote
+
+Additional operations like code review, branch switching, and pull are available throughout the workflow.
+
+---
+
+## Error and Warning States
+
+The panel displays action errors and warnings inline:
+
+```tsx
+<GitSidebarPanel
+  // ... other props
+  actionError="Failed to push: remote rejected"
+  actionWarning="You have uncommitted changes"
+/>
+```
+
+---
+
+## Diff Preview
+
+Click on a file to preview its diff. The `activeDiffSelectionKey` prop tracks which file's diff is currently being displayed:
+
+```tsx
+<GitSidebarPanel
+  // ... other props
+  activeDiffSelectionKey={activeDiffSelectionKey}
+  onToggleFileSelection={(key) => {
+    setActiveDiffSelectionKey(key);
+    // Also handle selection state...
+  }}
+  onOpenFile={(path) => {
+    // Open the file in the editor
+  }}
+/>
+```

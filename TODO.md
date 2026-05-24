@@ -27,7 +27,7 @@
 - [x] SP-010-P2-goToReferences: Add dedicated go-to-references panel (hover tooltip has refs but no standalone panel)
 - [x] SP-010-P3-memo: Add `React.memo` to EditorTabs, EditorBreadcrumb, EditorToolbar, and other child components
 - [x] SP-010-P3-symbolKey: Fix symbol extraction to be keyed to content checksum, not cursor position
-- [ ] SP-010-P3-tabTooltips: Add `title` attribute to tab names showing full file path on hover
+- [x] SP-010-P3-tabTooltips: Add `title` attribute to tab names showing full file path on hover
 - [ ] SP-010-P3-paneLimit: Remove 3-pane cap in `EditorManagerContext.tsx` — allow up to 6 configurable panes
 - [ ] SP-010-P3-tabIcons: Add file-type icons in editor tabs based on extension
 

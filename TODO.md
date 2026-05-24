@@ -108,13 +108,13 @@
 
 ## Not Started — SP-006: Delegate Tool
 
-- [ ] SP-006-A-types: Create `pkg/agent/delegate_types.go` — `DelegateResult`, `DelegateConfig`, `ToolCallRecord` types
-- [ ] SP-006-A-factory: Create `pkg/agent/delegate_factory.go` — `CreateDelegateAgent(parent, cfg)` via `NewAgentWithLayers` + role overlay
-- [ ] SP-006-A-streamBridge: Create `pkg/agent/delegate_stream.go` — `DelegateStreamBridge` event bus bridge
-- [ ] SP-006-A-handler: Create `pkg/agent/tool_handlers_delegate.go` — tool handler + registration
-- [ ] SP-006-A-toolDef: Register `delegate` tool in `tool_definitions.go` with params: prompt, role, provider, model, tools, context, max_iterations, files
-- [ ] SP-006-A-events: Add delegate event types to `pkg/events/events.go`
-- [ ] SP-006-A-nestingLimit: Implement max nesting depth via `SPROUT_MAX_DELEGATE_DEPTH=3` env var
+[x] SP-006-A-types: Create `pkg/agent/delegate_types.go` — `DelegateResult`, `DelegateConfig`, `ToolCallRecord` types
+[x] SP-006-A-factory: Create `pkg/agent/delegate_factory.go` — `CreateDelegateAgent(parent, cfg)` via `NewAgentWithLayers` + role overlay
+[x] SP-006-A-streamBridge: Create `pkg/agent/delegate_stream.go` — `DelegateStreamBridge` event bus bridge
+[x] SP-006-A-handler: Create `pkg/agent/tool_handlers_delegate.go` — tool handler + registration
+[x] SP-006-A-toolDef: Register `delegate` tool in `tool_definitions.go` with params: prompt, role, provider, model, tools, context, max_iterations, files
+[x] SP-006-A-events: Add delegate event types to `pkg/events/events.go`
+[x] SP-006-A-nestingLimit: Implement max nesting depth via `SPROUT_MAX_DELEGATE_DEPTH=3` env var
 - [ ] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
 - [ ] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
 - [ ] SP-006-C-followUp: Allow parent to inject follow-up messages into running delegate (future)

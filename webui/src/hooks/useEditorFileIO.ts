@@ -436,7 +436,14 @@ export function useEditorFileIO(
       saveInFlightRef.current.delete(buf.file.path);
       setSaving(false);
     }
-  }, [saveBuffer]); // eslint-disable-line react-hooks/exhaustive-deps
+  },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Safe: the only intentional dep is `saveBuffer` (stable context callback).
+    // All other non-stable values are accessed via refs (`bufferRef`, `viewRef`,
+    // `saveInFlightRef`, `fetchDiagnosticsRef`, `isExternalUpdateRef`, `apiService`)
+    // or are React state setters (which are stable by React contract).
+    [saveBuffer]
+  );
 
   // Keep saveRef in sync
   saveRef.current = handleSave;

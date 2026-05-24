@@ -1,0 +1,615 @@
+/**
+ * useEditorDiagnostics.test.ts — Unit tests for the useEditorDiagnostics hook.
+ *
+ * Covers:
+ * - isSemanticLanguage helper (semantic vs non-semantic languages)
+ * - fetchDiagnostics with no viewRef (early return)
+ * - LSP client active → skip semantic diagnostics
+ * - Semantic diagnostics success path
+ * - Semantic diagnostics with no diagnostic capabilities → fallback
+ * - Semantic diagnostics error → fallback to basic
+ * - Basic diagnostics success path
+ * - Basic diagnostics error → clear diagnostics
+ * - Empty/no diagnostics → clear existing diagnostics
+ * - fetchDiagnosticsRef stays in sync
+ * - Debounced cleanup on unmount
+ * - Unmount guard during async operations
+ */
+// @ts-nocheck
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Mocks — must come before the static import of the module under test.
+// IMPORTANT: All mock references inside vi.mock factories MUST use wrapper
+// functions (e.g. (...args) => mockFn(...args)) because the factory is hoisted
+// above const/let declarations and direct references hit the TDZ.
+// ---------------------------------------------------------------------------
+
+// Mock the log utility
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
+}));
+
+// Mock the language registry
+const mockResolveLanguageId = vi.fn();
+vi.mock('../extensions/languageRegistry', () => ({
+  resolveLanguageId: (...a) => mockResolveLanguageId(...a),
+}));
+
+// Mock the lint diagnostics
+const mockClearDiagnostics = vi.fn();
+const mockDebouncedUpdate = vi.fn();
+let debouncedInstance = null;
+vi.mock('../extensions/lintDiagnostics', () => ({
+  clearDiagnostics: (...a) => mockClearDiagnostics(...a),
+  lintDiagnostics: () => [],
+  createDebouncedDiagnosticsUpdater: vi.fn(() => {
+    debouncedInstance = {
+      update: (...a) => mockDebouncedUpdate(...a),
+      cancel: vi.fn(),
+    };
+    return debouncedInstance;
+  }),
+}));
+
+// Mock the LSP extensions
+const mockGetClientForLanguageSync = vi.fn();
+vi.mock('../extensions/lspExtensions', () => ({
+  getClientForLanguageSync: (...a) => mockGetClientForLanguageSync(...a),
+}));
+
+// Mock the API service — use wrapper functions to avoid TDZ issues
+const mockGetInstance = vi.fn();
+const mockGetSemanticDiagnostics = vi.fn();
+const mockGetDiagnostics = vi.fn();
+const mockApiService = {
+  getInstance: (...a) => mockGetInstance(...a),
+  getSemanticDiagnostics: (...a) => mockGetSemanticDiagnostics(...a),
+  getDiagnostics: (...a) => mockGetDiagnostics(...a),
+};
+vi.mock('../services/api', () => ({
+  ApiService: mockApiService,
+}));
+
+// Static imports — Vitest hoists vi.mock above all imports automatically
+import { useEditorDiagnostics } from './useEditorDiagnostics';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+let container: HTMLDivElement;
+let root: Root;
+
+function createMockView() {
+  return {
+    state: {
+      doc: {
+        toString: () => 'console.log("hello");',
+      },
+    },
+  };
+}
+
+beforeEach(() => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  vi.clearAllMocks();
+
+  // Reset mock defaults
+  mockGetInstance.mockReturnValue(mockApiService);
+  mockGetSemanticDiagnostics.mockResolvedValue({
+    capabilities: { diagnostics: true },
+    diagnostics: [],
+    duration_ms: 10,
+  });
+  mockGetDiagnostics.mockResolvedValue({ diagnostics: [] });
+  mockGetClientForLanguageSync.mockReturnValue(null);
+
+  // Default language resolution based on extension
+  mockResolveLanguageId.mockImplementation((override, ext) => {
+    if (override) return { languageId: override };
+    const extMap = {
+      ts: 'typescript',
+      go: 'go',
+      js: 'javascript',
+      jsx: 'javascript-jsx',
+      tsx: 'typescript-jsx',
+      py: 'python',
+    };
+    return { languageId: extMap[ext] || 'plaintext' };
+  });
+});
+
+afterEach(() => {
+  act(() => {
+    root?.unmount();
+  });
+  container?.remove();
+});
+
+/**
+ * Render the hook inside a minimal wrapper component so React effects fire.
+ */
+function renderTestHook(options = {}) {
+  const { buffer = undefined, viewRef = { current: createMockView() } } = options;
+
+  let hookReturn = null;
+
+  function HookWrapper() {
+    hookReturn = useEditorDiagnostics(viewRef, buffer);
+    return null;
+  }
+
+  act(() => {
+    root.render(createElement(HookWrapper));
+  });
+
+  return {
+    getReturn: () => hookReturn,
+    viewRef,
+    buffer,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests: isSemanticLanguage helper
+// ---------------------------------------------------------------------------
+
+describe('isSemanticLanguage helper', () => {
+  it('returns true for typescript', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('typescript')).toBe(true);
+  });
+
+  it('returns true for typescript-jsx', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('typescript-jsx')).toBe(true);
+  });
+
+  it('returns true for javascript', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('javascript')).toBe(true);
+  });
+
+  it('returns true for javascript-jsx', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('javascript-jsx')).toBe(true);
+  });
+
+  it('returns true for go', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('go')).toBe(true);
+  });
+
+  it('returns false for python', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('python')).toBe(false);
+  });
+
+  it('returns false for plaintext', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('plaintext')).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    const { getReturn } = renderTestHook();
+    expect(getReturn().isSemanticLanguage('')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: early returns
+// ---------------------------------------------------------------------------
+
+describe('early returns', () => {
+  it('does nothing when viewRef.current is null', async () => {
+    const { getReturn } = renderTestHook({
+      viewRef: { current: null },
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: LSP client active — skip semantic diagnostics
+// ---------------------------------------------------------------------------
+
+describe('LSP client active', () => {
+  it('skips semantic diagnostics when LSP client is connected for semantic language', async () => {
+    mockGetClientForLanguageSync.mockReturnValue({ isConnected: true });
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetSemanticDiagnostics).not.toHaveBeenCalled();
+    expect(mockGetDiagnostics).not.toHaveBeenCalled();
+    expect(mockDebouncedUpdate).not.toHaveBeenCalled();
+    expect(mockClearDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('does NOT skip when LSP client is connected for non-semantic language', async () => {
+    mockGetClientForLanguageSync.mockReturnValue({ isConnected: true });
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.py', name: 'test.py' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
+    });
+
+    // For non-semantic languages, should fall through to basic diagnostics
+    expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: semantic diagnostics success path
+// ---------------------------------------------------------------------------
+
+describe('semantic diagnostics success', () => {
+  it('fetches and applies semantic diagnostics when available', async () => {
+    mockGetSemanticDiagnostics.mockResolvedValue({
+      capabilities: { diagnostics: true },
+      diagnostics: [{ severity: 'error', message: 'Type error', from: 0, to: 10 }],
+      duration_ms: 15,
+    });
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
+      '/test/file.ts',
+      'const x = 1;',
+      'typescript',
+      'edit',
+    );
+    expect(mockDebouncedUpdate).toHaveBeenCalledWith(viewRef.current, expect.any(Array));
+  });
+
+  it('clears diagnostics when semantic returns empty array', async () => {
+    mockGetSemanticDiagnostics.mockResolvedValue({
+      capabilities: { diagnostics: true },
+      diagnostics: [],
+      duration_ms: 5,
+    });
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
+    expect(mockDebouncedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to basic diagnostics when capabilities.diagnostics is false', async () => {
+    mockGetSemanticDiagnostics.mockResolvedValue({
+      capabilities: { diagnostics: false },
+    });
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+
+  it('falls back to basic diagnostics when capabilities is undefined', async () => {
+    mockGetSemanticDiagnostics.mockResolvedValue({});
+
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: semantic diagnostics error → fallback
+// ---------------------------------------------------------------------------
+
+describe('semantic diagnostics error -> fallback', () => {
+  it('falls back to basic diagnostics when semantic throws', async () => {
+    mockGetSemanticDiagnostics.mockRejectedValue(new Error('Semantic server unavailable'));
+    mockGetDiagnostics.mockResolvedValue({
+      diagnostics: [{ severity: 'warning', message: 'Basic lint warning', from: 0, to: 5 }],
+    });
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalled();
+    expect(mockGetDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;');
+    expect(mockDebouncedUpdate).toHaveBeenCalledWith(viewRef.current, expect.any(Array));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: basic diagnostics path
+// ---------------------------------------------------------------------------
+
+describe('basic diagnostics', () => {
+  it('applies basic diagnostics when non-semantic language', async () => {
+    mockGetDiagnostics.mockResolvedValue({
+      diagnostics: [{ severity: 'warning', message: 'Lint warning', from: 0, to: 10 }],
+    });
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.py', name: 'test.py' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
+    });
+
+    expect(mockGetDiagnostics).toHaveBeenCalledWith('/test/file.py', 'x = 1');
+    expect(mockDebouncedUpdate).toHaveBeenCalled();
+  });
+
+  it('clears diagnostics when basic returns empty', async () => {
+    mockGetDiagnostics.mockResolvedValue({ diagnostics: [] });
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.py', name: 'test.py' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
+    });
+
+    expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
+  });
+
+  it('clears diagnostics when basic fetch throws', async () => {
+    mockGetDiagnostics.mockRejectedValue(new Error('Network error'));
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.py', name: 'test.py' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
+    });
+
+    expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
+  });
+
+  it('clears diagnostics when basic returns no diagnostics property', async () => {
+    mockGetDiagnostics.mockResolvedValue({});
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.py', name: 'test.py' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
+    });
+
+    expect(mockClearDiagnostics).toHaveBeenCalledWith(viewRef.current);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: trigger parameter
+// ---------------------------------------------------------------------------
+
+describe('trigger parameter', () => {
+  it('passes "edit" as default trigger for semantic diagnostics', async () => {
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
+      '/test/file.ts',
+      'const x = 1;',
+      'typescript',
+      'edit',
+    );
+  });
+
+  it('passes "save" trigger when specified', async () => {
+    const { getReturn } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;', 'save');
+    });
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
+      '/test/file.ts',
+      'const x = 1;',
+      'typescript',
+      'save',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: unmount guard during async
+// ---------------------------------------------------------------------------
+
+describe('unmount guard during async', () => {
+  it('does not apply diagnostics if viewRef becomes null during semantic fetch', async () => {
+    let resolveSemantic;
+    mockGetSemanticDiagnostics.mockReturnValue(
+      new Promise((resolve) => { resolveSemantic = resolve; }),
+    );
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.ts', name: 'test.ts' } },
+    });
+
+    let fetchPromise;
+    act(() => {
+      fetchPromise = getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    viewRef.current = null;
+
+    act(() => {
+      resolveSemantic({
+        capabilities: { diagnostics: true },
+        diagnostics: [{ severity: 'error', message: 'err' }],
+      });
+      return fetchPromise;
+    });
+
+    expect(mockDebouncedUpdate).not.toHaveBeenCalled();
+    expect(mockClearDiagnostics).not.toHaveBeenCalled();
+  });
+
+  it('does not apply diagnostics if viewRef becomes null during basic fetch', async () => {
+    mockGetSemanticDiagnostics.mockResolvedValue({});
+
+    let resolveBasic;
+    mockGetDiagnostics.mockReturnValue(
+      new Promise((resolve) => { resolveBasic = resolve; }),
+    );
+
+    const { getReturn, viewRef } = renderTestHook({
+      buffer: { file: { ext: '.py', name: 'test.py' } },
+    });
+
+    let fetchPromise;
+    act(() => {
+      fetchPromise = getReturn().fetchDiagnostics('/test/file.py', 'x = 1');
+    });
+
+    viewRef.current = null;
+
+    act(() => {
+      resolveBasic({ diagnostics: [{ severity: 'error', message: 'err' }] });
+      return fetchPromise;
+    });
+
+    expect(mockDebouncedUpdate).not.toHaveBeenCalled();
+    expect(mockClearDiagnostics).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: fetchDiagnosticsRef stays in sync
+// ---------------------------------------------------------------------------
+
+describe('fetchDiagnosticsRef', () => {
+  it('returns a ref that mirrors fetchDiagnostics', () => {
+    const { getReturn } = renderTestHook();
+
+    expect(getReturn().fetchDiagnosticsRef).toBeDefined();
+    expect(typeof getReturn().fetchDiagnosticsRef.current).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: cleanup on unmount
+// ---------------------------------------------------------------------------
+
+describe('cleanup on unmount', () => {
+  it('calls debounced updater cancel on unmount', () => {
+    renderTestHook();
+
+    act(() => {
+      root.unmount();
+    });
+
+    expect(debouncedInstance.cancel).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: no buffer
+// ---------------------------------------------------------------------------
+
+describe('no buffer', () => {
+  it('handles null buffer gracefully', async () => {
+    const { getReturn } = renderTestHook({ buffer: null });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+
+  it('handles undefined buffer gracefully', async () => {
+    const { getReturn } = renderTestHook({ buffer: undefined });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
+    });
+
+    expect(mockGetDiagnostics).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: language override
+// ---------------------------------------------------------------------------
+
+describe('language override', () => {
+  it('respects languageOverride from buffer', async () => {
+    mockResolveLanguageId.mockImplementation(() => ({ languageId: 'go' }));
+
+    const { getReturn } = renderTestHook({
+      buffer: {
+        languageOverride: 'go',
+        file: { ext: '.ts', name: 'test.ts' },
+      },
+    });
+
+    await act(async () => {
+      await getReturn().fetchDiagnostics('/test/file.ts', 'package main');
+    });
+
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
+      '/test/file.ts',
+      'package main',
+      'go',
+      'edit',
+    );
+  });
+});

@@ -84,7 +84,7 @@ export function useEditorSymbols(
     }
 
     return result;
-  }, [localContent, buffer?.cursorPosition?.line, buffer?.cursorPosition?.column, buffer?.file?.ext, allSymbols]);
+  }, [localContent, buffer?.cursorPosition?.line, buffer?.file?.ext, allSymbols]);
 
   return { enclosingSymbols };
 }

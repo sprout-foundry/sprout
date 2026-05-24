@@ -101,7 +101,7 @@
 - [ ] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
 - [ ] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop
 - [ ] SP-048-4f: Implement `$EDITOR` escape via Ctrl-X Ctrl-E or `/edit` — open `$EDITOR` with current buffer pre-filled
-- [ ] SP-048-5a: After each assistant turn, print dim line: `⎯ this turn: 1.2k in / 4.8k out · $0.04 · 6.1s ⎯`
+- [x] SP-048-5a: After each assistant turn, print dim line: `⎯ this turn: 1.2k in / 4.8k out · $0.04 · 6.1s ⎯`
 - [ ] SP-048-5b: Implement `/help <command>` per-command usage text
 - [ ] SP-048-5c: Add short aliases: `/m` → `/models`, `/p` → `/providers`, `/x` → `/exit`, `/?` → `/help`
 - [ ] SP-048-5d: Strip ANSI from non-TTY stdout when piped

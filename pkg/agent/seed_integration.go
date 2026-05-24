@@ -732,6 +732,49 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	// Bridge sprout's user-facing inputInjectionChan to seed's InjectInput.
+	// Callers (CLI prompt goroutine, webui /api/query/steer) push into the
+	// sprout channel via InjectInputContext; this forwarder drains it and
+	// hands the message to seed, which consumes it at the next natural
+	// break point in its loop (between iterations, before deciding to
+	// terminate the turn). Without this bridge the sprout channel buffers
+	// forever and "steering" silently no-ops.
+	//
+	// runCtx is scoped to this query (separate from a.interruptCtx, which
+	// outlives a single Run) so the forwarder exits cleanly when the
+	// model returns. seed.InjectInput is buffered size 1; if full we
+	// briefly sleep before retrying so we don't lose the user's steer to
+	// a transient collision with seed's own consumer.
+	runCtx, runCancel := context.WithCancel(ctx)
+	steerDone := make(chan struct{})
+	go func() {
+		defer close(steerDone)
+		ch := a.GetInputInjectionContext()
+		for {
+			select {
+			case <-runCtx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				for !seedAgent.InjectInput(msg) {
+					select {
+					case <-runCtx.Done():
+						return
+					case <-time.After(25 * time.Millisecond):
+						// retry
+					}
+				}
+			}
+		}
+	}()
+	defer func() {
+		runCancel()
+		<-steerDone
+	}()
+
 	result, err := seedAgent.Run(ctx, processedQuery)
 	if err != nil {
 		// Check if the fleet budget was exceeded mid-run

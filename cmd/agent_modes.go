@@ -592,12 +592,32 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// Set a simple streaming callback for direct terminal output of
 	// assistant text. The OutputRouter's RouteStreamChunk publishes
 	// the event AND calls this callback — no duplicate events or writes.
+	//
+	// A LineCapWriter clamps the visual length of each line so that
+	// minified files / unbroken log lines streamed into the response
+	// don't soft-wrap into hundreds of terminal rows. The clip is
+	// purely cosmetic — the LLM still sees the full content. The cap
+	// is 2× the current terminal width (with a fixed floor) so normal
+	// prose is never clipped.
 	if !agentNoStreaming {
+		lineCap := terminalLineCapChars()
+		capper := console.NewLineCapWriter(lineCap, func(s string) {
+			fmt.Print(s)
+		})
 		chatAgent.EnableStreaming(func(chunk string) {
 			indicator.Stop()
-			fmt.Print(chunk)
+			capper.Write(chunk)
 		})
 	}
+}
+
+// terminalLineCapChars decides how many characters of a single line we
+// let through before truncating. Anchored to terminal width so the
+// truncation marker lands a row or two beyond the visible area rather
+// than at an arbitrary fixed column. Floor of 200 covers narrow
+// terminals + edge cases where stdout isn't a TTY.
+func terminalLineCapChars() int {
+	return max(GetTerminalWidth()*2, 200)
 }
 
 // runQueueMode handles autonomous EA queue mode. It reads pending tasks from

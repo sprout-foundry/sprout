@@ -10,8 +10,7 @@
   },
   "defaults": {
     "model": "glm-5",
-    "temperature": 0.1,
-    "top_p": 1
+    "temperature": 0.1
   },
   "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
   "headers": {},

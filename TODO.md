@@ -66,7 +66,7 @@
 
 - [x] SP-045-Tier1-conversationTurns: Wire conversation turn persistence to `SproutWasm` JS entry point
 - [x] SP-045-Tier1-config: Expose `getConfig` and `setConfigValue` on `SproutWasm`
-- [ ] SP-045-Tier1-workspaceAnalysis: Expose direct JS API for workspace file walk on `SproutWasm`
+- [x] SP-045-Tier1-workspaceAnalysis: Expose direct JS API for workspace file walk on `SproutWasm`
 - [x] SP-045-Tier2a-onnxBridge: Implement `syscall/js` bridge for `onnxruntime-web` — detect `globalThis.__sproutONNX`, marshal embed/embedBatch calls
 - [x] SP-045-Tier2b-agent: Plumb `agent` command through WASM (HTTP to LLM providers via Fetch API)
 - [ ] SP-045-Tier2b-llmCommands: Plumb `question`, `code`, `commit`, `review`, `plan` commands through WASM

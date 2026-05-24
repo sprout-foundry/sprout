@@ -49,6 +49,9 @@ func (a *Agent) initSubManagers() {
 	if a.asyncDelegateTracker == nil {
 		a.asyncDelegateTracker = NewAsyncDelegateTracker()
 	}
+	if a.clarificationManager == nil && a.eventBus != nil {
+		a.clarificationManager = NewClarificationManager(a.eventBus)
+	}
 }
 
 type Agent struct {
@@ -142,6 +145,12 @@ type Agent struct {
 	// When non-nil, only tools whose names (lowercased) are keys in this map
 	// can be invoked. Used by the delegate tool to limit tool access for child agents.
 	allowedTools map[string]bool
+
+	// clarificationManager handles clarification requests between delegate and parent agents.
+	clarificationManager *ClarificationManager
+
+	// delegateID is the ID of this agent when acting as a delegate (empty for root agents).
+	delegateID string
 
 	// filesReadThisTurn tracks paths the agent called read_file on during
 	// the current turn. Used by the SP-046 staleness rule in

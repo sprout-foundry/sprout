@@ -39,6 +39,24 @@ func newSyncTestAgent(t *testing.T) *agent.Agent {
 	return ag
 }
 
+// newNoProviderConfig sets up a temp config directory with LastUsedProvider
+// set to "editor" so that isProviderAvailable() returns false, causing
+// getClientAgent to return ErrNoProviderConfigured. Returns the config dir.
+func newNoProviderConfig(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	// Write a minimal config.json with last_used_provider = "editor"
+	// (snake_case to match the JSON tag on Config.LastUsedProvider)
+	cfgPath := filepath.Join(tmpDir, configuration.ConfigFileName)
+	if err := os.WriteFile(cfgPath, []byte(`{"last_used_provider":"editor"}`), 0644); err != nil {
+		t.Fatalf("write config failed: %v", err)
+	}
+	return tmpDir
+}
+
 // syncRecoveryRunGit runs a git command in the specified directory.
 // Prefixed to avoid collision with runGit in git_api_test.go.
 func syncRecoveryRunGit(t *testing.T, dir string, args ...string) {
@@ -57,12 +75,13 @@ func syncRecoveryRunGit(t *testing.T, dir string, args ...string) {
 
 func TestHandleContainerRecoveryWithSeqs_NoAgent(t *testing.T) {
 	server := newTestHeartbeatServer(t)
+	newNoProviderConfig(t)
 
 	_, err := server.HandleContainerRecoveryWithSeqs(context.Background(), "client-1", map[string]int64{
 		"foo.txt": 5,
 	})
 	if err == nil {
-		t.Fatal("expected error when agent is nil, got nil")
+		t.Fatal("expected error when no provider is configured, got nil")
 	}
 	if !strings.Contains(err.Error(), "no agent found") {
 		t.Errorf("unexpected error message: %v", err)
@@ -71,10 +90,11 @@ func TestHandleContainerRecoveryWithSeqs_NoAgent(t *testing.T) {
 
 func TestHandleContainerRecovery_NoAgent(t *testing.T) {
 	server := newTestHeartbeatServer(t)
+	newNoProviderConfig(t)
 
 	_, err := server.HandleContainerRecovery(context.Background(), "client-1", 5)
 	if err == nil {
-		t.Fatal("expected error when agent is nil, got nil")
+		t.Fatal("expected error when no provider is configured, got nil")
 	}
 	if !strings.Contains(err.Error(), "no agent found") {
 		t.Errorf("unexpected error message: %v", err)
@@ -97,7 +117,8 @@ func TestHandleContainerRecoveryWithSeqs_Success(t *testing.T) {
 		LastSyncedBrowser: 2,
 		LastSyncedContainer: 2,
 	})
-	server.agent = ag
+	// Register agent in client context so getClientAgent can find it
+	server.getOrCreateClientContext("client-1").Agent = ag
 
 	browserSeqs := map[string]int64{
 		"foo.txt": 3, // container is ahead
@@ -141,7 +162,8 @@ func TestHandleContainerRecoveryWithSeqs_Success(t *testing.T) {
 func TestHandleContainerRecovery_Fallback(t *testing.T) {
 	server := newTestHeartbeatServer(t)
 	ag := newSyncTestAgent(t)
-	server.agent = ag
+	// Register agent in client context so getClientAgent can find it
+	server.getOrCreateClientContext("client-1").Agent = ag
 
 	result, err := server.HandleContainerRecovery(context.Background(), "client-1", 5)
 	if err != nil {
@@ -645,6 +667,7 @@ func TestHandleSyncRecoverMessage_SeqsNotMap(t *testing.T) {
 
 func TestHandleSyncRecoverMessage_Success_NoAgent(t *testing.T) {
 	server := newTestHeartbeatServer(t)
+	newNoProviderConfig(t)
 	pair := newTestingConnPair(t)
 
 	msg := &WebSocketMessage{
@@ -680,7 +703,8 @@ func TestHandleSyncRecoverMessage_Success_SyncOK(t *testing.T) {
 		LastSyncedBrowser: 5,
 		LastSyncedContainer: 5,
 	})
-	server.agent = ag
+	// Register agent in client context so getClientAgent can find it
+	server.getOrCreateClientContext("client-1").Agent = ag
 
 	msg := &WebSocketMessage{
 		Type: AllowedMessageTypeSyncRecover,

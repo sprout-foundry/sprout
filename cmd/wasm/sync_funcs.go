@@ -32,6 +32,13 @@ var (
 	syncHeartbeatInterval = 15 * time.Second
 )
 
+// Op queue for browser → container sync. The browser queues outbound ops
+// (edits the user made) and flushes them via HTTP POST when the WebSocket
+// is up.
+var (
+	syncOpQueue []agent.SyncOp
+)
+
 func syncJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
 		"setSyncEndpoint":   js.FuncOf(setSyncEndpointFunc),
@@ -41,6 +48,9 @@ func syncJSFuncs() map[string]interface{} {
 		"sessionMoved":      js.FuncOf(sessionMovedFunc),
 		"startHeartbeat":    js.FuncOf(startHeartbeatFunc),
 		"stopHeartbeat":     js.FuncOf(stopHeartbeatFunc),
+		"queueSyncOp":       js.FuncOf(queueSyncOpFunc),
+		"flushSyncOps":      js.FuncOf(flushSyncOpsFunc),
+		"getSyncOpQueue":    js.FuncOf(getSyncOpQueueFunc),
 	}
 }
 
@@ -233,6 +243,147 @@ func ApplyAllStashedMetadata(a *agent.Agent) {
 	for path, md := range stash {
 		a.SetFileMetadata(path, md)
 	}
+}
+
+// ─── Sync op queue ───────────────────────────────────────────────
+// The browser queues outbound ops (edits the user made) and flushes
+// them via HTTP POST when the WebSocket connects.
+
+// queueSyncOpFunc lets the platform-side sync layer push a SyncOp into the
+// outbound queue. The op will be flushed to the container when
+// flushSyncOps is called (typically when the WebSocket connects).
+//
+// Signature: queueSyncOp(opJSON: string): {ok: true, queued: number}
+//
+// opJSON is a JSON-encoded SyncOp object.
+func queueSyncOpFunc(_ js.Value, args []js.Value) interface{} {
+	raw := argString(args, 0, "")
+	if raw == "" {
+		return map[string]interface{}{"error": "op JSON is required"}
+	}
+	var op agent.SyncOp
+	if err := json.Unmarshal([]byte(raw), &op); err != nil {
+		return map[string]interface{}{"error": fmt.Sprintf("parse op: %v", err)}
+	}
+	if op.Path == "" {
+		return map[string]interface{}{"error": "op.path is required"}
+	}
+	syncMu.Lock()
+	syncOpQueue = append(syncOpQueue, op)
+	count := len(syncOpQueue)
+	syncMu.Unlock()
+	return map[string]interface{}{"ok": true, "queued": count}
+}
+
+// flushSyncOpsFunc POSTs all queued SyncOps to the server's /api/sync/batch
+// endpoint. This is called when the WebSocket connection is established.
+// After a successful flush, the queue is cleared.
+//
+// Signature: flushSyncOps(): Promise<{ok: true, flushed: number}>
+//
+// In WASM, we use js.Global().Get("fetch") to make the HTTP request since
+// net/http isn't available in the WASM environment.
+func flushSyncOpsFunc(_ js.Value, _ []js.Value) interface{} {
+	syncMu.Lock()
+	ops := make([]agent.SyncOp, len(syncOpQueue))
+	copy(ops, syncOpQueue)
+	syncOpQueue = nil
+	endpoint := syncEndpoint
+	syncMu.Unlock()
+
+	if len(ops) == 0 {
+		return js.Global().Get("Promise").Call("resolve", map[string]interface{}{
+			"ok":      true,
+			"flushed": 0,
+		})
+	}
+
+	// If no endpoint is configured, ops are silently dropped (free-tier mode).
+	if endpoint == "" {
+		return js.Global().Get("Promise").Call("resolve", map[string]interface{}{
+			"ok":      true,
+			"flushed": len(ops),
+			"note":    "no endpoint configured, ops dropped",
+		})
+	}
+
+	// Encode ops as JSON
+	payload, err := json.Marshal(map[string]interface{}{"ops": ops})
+	if err != nil {
+		// Put ops back in the queue on error
+		syncMu.Lock()
+		syncOpQueue = append(ops, syncOpQueue...)
+		syncMu.Unlock()
+		return js.Global().Get("Promise").Call("reject", fmt.Sprintf("marshal ops: %v", err))
+	}
+
+	// Build the sync batch URL from the endpoint base
+	batchURL := endpoint + "/api/sync/batch"
+
+	// Use the Fetch API via JS interop
+	handler := js.FuncOf(func(this js.Value, pArgs []js.Value) interface{} {
+		defer handler.Release()
+		resolve := pArgs[0]
+		reject := pArgs[1]
+
+		// Create fetch request
+		opts := js.Global().Get("Object").New()
+		opts.Set("method", "POST")
+		opts.Set("body", string(payload))
+		headers := js.Global().Get("Object").New()
+		headers.Set("Content-Type", "application/json")
+		opts.Set("headers", headers)
+
+		fetchPromise := js.Global().Call("fetch", batchURL, opts)
+
+		thenHandler := js.FuncOf(func(this js.Value, responseArgs []js.Value) interface{} {
+			defer thenHandler.Release()
+			response := responseArgs[0]
+			// Check if response is ok
+			if !response.Get("ok").Bool() {
+				// Put ops back on error
+				syncMu.Lock()
+				syncOpQueue = append(ops, syncOpQueue...)
+				syncMu.Unlock()
+				reject.Invoke(fmt.Sprintf("HTTP %d", response.Get("status").Int()))
+				return nil
+			}
+			// Parse response JSON
+			jsonPromise := response.Call("json")
+			jsonThenHandler := js.FuncOf(func(this js.Value, jsonArgs []js.Value) interface{} {
+				defer jsonThenHandler.Release()
+				resolve.Invoke(map[string]interface{}{
+					"ok":      true,
+					"flushed": len(ops),
+				})
+				return nil
+			})
+			jsonPromise.Call("then", jsonThenHandler)
+			return nil
+		})
+
+		catchHandler := js.FuncOf(func(this js.Value, catchArgs []js.Value) interface{} {
+			defer catchHandler.Release()
+			syncMu.Lock()
+			syncOpQueue = append(ops, syncOpQueue...)
+			syncMu.Unlock()
+			reject.Invoke(catchArgs[0].Get("message").String())
+			return nil
+		})
+
+		fetchPromise.Call("then", thenHandler).Call("catch", catchHandler)
+		return nil
+	})
+
+	return js.Global().Get("Promise").New(handler)
+}
+
+// getSyncOpQueueFunc returns the current number of ops in the queue.
+// Signature: getSyncOpQueue(): {count: number}
+func getSyncOpQueueFunc(_ js.Value, _ []js.Value) interface{} {
+	syncMu.Lock()
+	defer syncMu.Unlock()
+	return map[string]interface{}{"count": len(syncOpQueue)}
 }
 
 // Compile-time interface check — keeps the public surface stable so the

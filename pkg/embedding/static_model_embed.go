@@ -1,13 +1,13 @@
-//go:build !js
+//go:build !js && staticmodel
 
 package embedding
 
 import _ "embed"
 
-// On native builds, embed the static model blob into the binary so sprout
-// ships self-contained. The WASM build leaves staticModelData empty and
-// expects the host page to populate it via SetStaticModelData — see
-// docs/WASM_API.md.
+// When built with the "staticmodel" tag and the model blob is present, bake it
+// into the binary so sprout ships self-contained. Without the tag (the
+// default), static_model_nostub.go is compiled instead and staticModelData
+// stays empty — semantic search will return an error at runtime.
 
 //go:embed static_model.bin
 var embeddedStaticModelData []byte

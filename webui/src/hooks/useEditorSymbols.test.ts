@@ -10,6 +10,9 @@
  * - Breadcrumb depth limit (max 3 levels)
  * - File extension filtering (no extraction for unknown extensions)
  * - Re-memoization behavior (content changes vs cursor changes)
+ * - Content-key (checksum) memoization: new string references with identical content
+ *   do NOT trigger re-extraction; combined cursor-move + string-reference-change
+ *   also does NOT trigger re-extraction.
  */
 // @ts-nocheck
 import { act, createElement } from 'react';
@@ -415,6 +418,77 @@ describe('memoization behavior', () => {
     expect(mockExtractSymbols).toHaveBeenCalledTimes(2);
     // Hook passes buffer.file.ext which includes the dot prefix
     expect(mockExtractSymbols).toHaveBeenLastCalledWith(content, '.go');
+  });
+
+  it('does NOT re-call extractSymbols when a new string reference has identical content', () => {
+    // This tests the contentChecksum (djb2 hash) key behavior:
+    // When the parent re-creates a string with identical content (different reference),
+    // the computed hash is the same, so useMemo skips re-extraction.
+    // This prevents unnecessary work when e.g. a React state updater returns
+    // a new string that happens to be identical to the previous one.
+    const originalContent = 'class MyClass { method() {} }';
+    let currentContent = originalContent;
+
+    function HookWrapper() {
+      useEditorSymbols(currentContent, createBuffer({ fileExt: 'ts', cursorLine: 0 }));
+      return null;
+    }
+
+    // Initial render
+    act(() => {
+      root.render(createElement(HookWrapper));
+    });
+
+    expect(mockExtractSymbols).toHaveBeenCalledTimes(1);
+
+    // Re-render with a NEW string object that has IDENTICAL content.
+    // Simulates: setLocalContent(prev => prev) or setLocalContent(prev => prev + '')
+    act(() => {
+      currentContent = originalContent + ''; // new reference, same content
+      root.render(createElement(HookWrapper));
+    });
+
+    // extractSymbols should NOT be called again — checksum is identical
+    expect(mockExtractSymbols).toHaveBeenCalledTimes(1);
+
+    // Re-render yet again with yet another new string reference (spread trick)
+    act(() => {
+      currentContent = [...originalContent].join(''); // another new reference, same content
+      root.render(createElement(HookWrapper));
+    });
+
+    expect(mockExtractSymbols).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT re-call extractSymbols when cursor moves but string reference also changes', () => {
+    // Combined scenario: parent passes both a new string reference AND new cursor.
+    // If content is identical, extractSymbols should still not be re-called,
+    // even though the enclosingSymbols useMemo will re-run for the cursor change.
+    const content = 'class MyClass { method() {} }';
+    let currentContent = content;
+    let cursorLine = 0;
+
+    function HookWrapper() {
+      useEditorSymbols(currentContent, createBuffer({ fileExt: 'ts', cursorLine }));
+      return null;
+    }
+
+    act(() => {
+      root.render(createElement(HookWrapper));
+    });
+
+    expect(mockExtractSymbols).toHaveBeenCalledTimes(1);
+
+    // Re-render: new string reference (identical content) + new cursor line
+    act(() => {
+      currentContent = content + ''; // new reference, same content
+      cursorLine = 5;
+      root.render(createElement(HookWrapper));
+    });
+
+    // extractSymbols should NOT be called again — content checksum is the same
+    // (the enclosingSymbols stage will re-run due to cursor change, but that's cheap)
+    expect(mockExtractSymbols).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -23,6 +23,30 @@ export interface UseEditorSymbolsReturn {
 }
 
 /**
+ * Fast content checksum using a dual-hash approach (djb2 + FNV-1a).
+ * Combining two independent 32-bit hash functions dramatically reduces
+ * collision probability compared to a single hash, while remaining
+ * cheap enough to run on every content change.
+ * Returns a composite key like `"djb2:12345|fnv:67890"`.
+ */
+function contentChecksum(doc: string): string {
+  // djb2 hash
+  let djb2 = 5381;
+  for (let i = 0; i < doc.length; i++) {
+    djb2 = ((djb2 << 5) + djb2 + doc.charCodeAt(i)) | 0;
+  }
+
+  // FNV-1a hash (32-bit)
+  let fnv = 2166136261 >>> 0; // offset basis, force unsigned
+  for (let i = 0; i < doc.length; i++) {
+    fnv = (fnv ^ doc.charCodeAt(i)) >>> 0;
+    fnv = (fnv * 16777619) >>> 0; // FNV prime, force unsigned
+  }
+
+  return `djb2:${djb2}|fnv:${fnv}`;
+}
+
+/**
  * Hook that computes enclosing symbols for breadcrumb display.
  *
  * Uses a two-stage memoization strategy:
@@ -44,15 +68,25 @@ export function useEditorSymbols(
   localContent: string | undefined,
   buffer: EditorBuffer | null | undefined,
 ): UseEditorSymbolsReturn {
+  // Compute a stable content fingerprint. This ensures that symbol extraction
+  // is keyed to actual content changes, not string reference identity. If the
+  // parent passes a new string object with identical content, the hash stays
+  // the same and useMemo skips re-extraction. Wrapped in useMemo so the
+  // dual-hash is only recomputed when the string reference actually changes.
+  const contentKey = useMemo(
+    () => (localContent ? contentChecksum(localContent) : ''),
+    [localContent],
+  );
+
   // Stage 1: Extract ALL symbols from the content.
-  // Memoized on content and extension only — does NOT depend on cursor position.
+  // Memoized on content fingerprint and extension only — does NOT depend on cursor position.
   // This is the expensive regex-based parsing step that must not run on every cursor move.
   const allSymbols = useMemo(() => {
     if (!localContent || !buffer?.file?.ext) {
       return [];
     }
     return extractSymbols(localContent, buffer.file.ext);
-  }, [localContent, buffer?.file?.ext]);
+  }, [contentKey, buffer?.file?.ext]);
 
   // Stage 2: Filter extracted symbols to find those enclosing the cursor.
   // Cheap O(n) iteration over pre-computed symbols — only re-runs when cursor moves.
@@ -84,7 +118,7 @@ export function useEditorSymbols(
     }
 
     return result;
-  }, [localContent, buffer?.cursorPosition?.line, buffer?.file?.ext, allSymbols]);
+  }, [contentKey, buffer?.cursorPosition?.line, buffer?.file?.ext, allSymbols]);
 
   return { enclosingSymbols };
 }

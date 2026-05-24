@@ -131,7 +131,7 @@
 [x] SP-007-2-extendHandler: Create `pkg/agent/extend_handler.go` — guided collaborative configuration session (7-question flow)
 [x] SP-007-2-extendTests: Create `pkg/agent/extend_handler_test.go`
 [x] SP-007-2-wireCommand: Wire `/extend` into command routing in `conversation_handler.go`
-- [ ] SP-007-3-webuiSettings: Settings panel for role CRUD; visual role editor (future)
+- [x] SP-007-3-webuiSettings: Settings panel for role CRUD; visual role editor (future)
 - [ ] SP-007-3-apiEndpoints: Add REST endpoints for role CRUD: `GET/PUT/DELETE /api/settings/roles/{name}` (future)
 - [ ] SP-007-3-roleSelector: Role selector in agent persona picker (future)
 

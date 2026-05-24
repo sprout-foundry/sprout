@@ -105,7 +105,7 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"repo_map":               {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
 		"web_search":             {paramCount: 1, requiredCount: 1, requiredNames: []string{"query"}},
 		"fetch_url":              {paramCount: 1, requiredCount: 1, requiredNames: []string{"url"}},
-		"browse_url":             {paramCount: 17, requiredCount: 1, requiredNames: []string{"url"}},
+		"browse_url":             {paramCount: 20, requiredCount: 1, requiredNames: []string{"url"}},
 		"analyze_ui_screenshot":  {paramCount: 4, requiredCount: 1, requiredNames: []string{"image_path"}},
 		"analyze_image_content":  {paramCount: 3, requiredCount: 1, requiredNames: []string{"image_path"}},
 		"view_history":           {paramCount: 4, requiredCount: 0, requiredNames: []string{}},

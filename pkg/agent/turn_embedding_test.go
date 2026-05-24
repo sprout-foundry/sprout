@@ -34,6 +34,9 @@ func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
 
 	// Initialize the manager
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
 	defer mgr.Close()
@@ -109,6 +112,9 @@ func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
 
 	// Initialize the manager
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
 	defer mgr.Close()
@@ -195,6 +201,9 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
 
 	// Initialize the manager
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
 	defer mgr.Close()
@@ -285,6 +294,9 @@ func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
 	defer mgr.Close()
@@ -449,6 +461,9 @@ func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
 
 	// Initialize the manager
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
 	defer mgr.Close()

@@ -97,6 +97,7 @@ func runChatFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("create client: %w", err)
 		}
+		injectWasmStreamingClient(client)
 
 		// The factory may have substituted a default model when "" was passed.
 		// Report it back so the host page can log/display it accurately.

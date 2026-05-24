@@ -84,6 +84,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("create client: %w", err)
 		}
+		injectWasmStreamingClient(client)
 
 		configMgr, err := configuration.NewManagerSilent()
 		if err != nil {
@@ -156,6 +157,7 @@ func runPlanFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("create client: %w", err)
 		}
+		injectWasmStreamingClient(client)
 
 		configMgr, err := configuration.NewManagerSilent()
 		if err != nil {

@@ -354,6 +354,22 @@ func (p *GenericProvider) SetModel(model string) error {
 	return nil
 }
 
+// SetHTTPClient sets the HTTP client used for non-streaming requests.
+func (p *GenericProvider) SetHTTPClient(c *http.Client) {
+	if c == nil {
+		return
+	}
+	p.httpClient = c
+}
+
+// SetStreamingClient sets the HTTP client used for streaming requests.
+func (p *GenericProvider) SetStreamingClient(c *http.Client) {
+	if c == nil {
+		return
+	}
+	p.streamingClient = c
+}
+
 // RefreshAPIKey re-resolves the provider's API key from the credential store,
 // updating the cached key in p.config.Auth.Key. This is called after a rate-limit
 // rotation advances the key pool counter, so subsequent requests use the new key.
@@ -382,6 +398,18 @@ func (p *GenericProvider) GetModel() string {
 // GetProvider returns the provider name
 func (p *GenericProvider) GetProvider() string {
 	return p.config.Name
+}
+
+// GetHTTPClient returns the current HTTP client used for non-streaming requests.
+// Useful for WASM environments that need to verify client injection.
+func (p *GenericProvider) GetHTTPClient() *http.Client {
+	return p.httpClient
+}
+
+// GetStreamingClient returns the current HTTP client used for streaming requests.
+// Useful for WASM environments that need to verify client injection.
+func (p *GenericProvider) GetStreamingClient() *http.Client {
+	return p.streamingClient
 }
 
 // GetModelContextLimit returns the context limit for the current model

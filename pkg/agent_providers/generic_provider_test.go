@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -455,7 +456,7 @@ func TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable(t *testing.T) 
 		t.Fatal("expected error when no model can be discovered")
 	}
 	if got := err.Error(); got == "" || !strings.Contains(got, "did not return any models") {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error: %v", got)
 	}
 }
 
@@ -678,4 +679,182 @@ func TestRewriteMaxTokensToMaxCompletionTokens(t *testing.T) {
 	if payload["max_completion_tokens"] != float64(1234) {
 		t.Fatalf("expected max_completion_tokens=1234, got %#v", payload["max_completion_tokens"])
 	}
+}
+
+// --- Tests for SetHTTPClient / SetStreamingClient (WASM bridge support) ---
+
+func TestSetHTTPClient_ReplacesClient(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// The default client created by NewGenericProvider has a non-nil Timeout.
+	oldClient := provider.httpClient
+
+	customClient := &http.Client{Timeout: 42}
+	provider.SetHTTPClient(customClient)
+
+	if provider.httpClient != customClient {
+		t.Fatal("SetHTTPClient did not replace the internal httpClient")
+	}
+	if provider.httpClient == oldClient {
+		t.Fatal("SetHTTPClient still references the old client")
+	}
+}
+
+func TestSetStreamingClient_ReplacesClient(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	oldClient := provider.streamingClient
+
+	customClient := &http.Client{Timeout: 99}
+	provider.SetStreamingClient(customClient)
+
+	if provider.streamingClient != customClient {
+		t.Fatal("SetStreamingClient did not replace the internal streamingClient")
+	}
+	if provider.streamingClient == oldClient {
+		t.Fatal("SetStreamingClient still references the old client")
+	}
+}
+
+func TestSetHTTPClient_ClientActuallyUsed(t *testing.T) {
+	// Create a test server that responds with a known marker.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp","object":"chat.completion","created":1,"model":"test-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`))
+	}))
+	defer server.Close()
+
+	// Point the provider at our test server.
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: server.URL,
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Swap in a custom client that uses a different transport — this proves
+	// the provider actually uses the injected client.
+	customTransport := &roundTripFunc{handler: func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"id":"resp","object":"chat.completion","created":1,"model":"test-model","choices":[{"index":0,"message":{"role":"assistant","content":"custom"},"finish_reason":"stop"}]}`)),
+		}, nil
+	}}
+	customClient := &http.Client{Transport: customTransport}
+	provider.SetHTTPClient(customClient)
+
+	resp, err := provider.SendChatRequest(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	if resp.Choices[0].Message.Content != "custom" {
+		t.Fatalf("expected response from custom client, got %q", resp.Choices[0].Message.Content)
+	}
+}
+
+func TestSetStreamingClient_ClientActuallyUsed(t *testing.T) {
+	// Create a test server that returns SSE-style streaming.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("expected flusher")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.WriteHeader(http.StatusOK)
+
+		for _, chunk := range []string{"hello ", "world"} {
+			_, _ = w.Write([]byte("data: " + `{"choices":[{"delta":{"content":"` + chunk + `"}}]}` + "\n\n"))
+			flusher.Flush()
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: server.URL,
+		Auth:     AuthConfig{Type: "none"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Swap in a custom streaming client that overrides the transport.
+	customTransport := &roundTripFunc{handler: func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     "200 OK",
+			Header: http.Header{
+				"Content-Type":  []string{"text/event-stream"},
+				"Cache-Control": []string{"no-cache"},
+			},
+			Body: io.NopCloser(strings.NewReader(
+				"data: {\"choices\":[{\"delta\":{\"content\":\"custom-stream\"}}]}\n\ndata: [DONE]\n\n",
+			)),
+		}, nil
+	}}
+	customClient := &http.Client{Transport: customTransport}
+	provider.SetStreamingClient(customClient)
+
+	cb := api.StreamCallback(func(content, contentType string) {})
+	resp, err := provider.SendChatRequestStream(context.Background(), []api.Message{{Role: "user", Content: "hello"}}, nil, "", false, cb)
+	if err != nil {
+		t.Fatalf("streaming request failed: %v", err)
+	}
+	if resp.Choices[0].Message.Content != "custom-stream" {
+		t.Fatalf("expected response from custom streaming client, got %q", resp.Choices[0].Message.Content)
+	}
+}
+
+// roundTripFunc is a minimal http.RoundTripper implementation for testing.
+type roundTripFunc struct {
+	handler func(req *http.Request) (*http.Response, error)
+}
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f.handler(req)
 }

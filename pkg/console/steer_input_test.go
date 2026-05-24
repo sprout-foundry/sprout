@@ -197,3 +197,179 @@ func TestSteerPromptPrefix_NonEmpty(t *testing.T) {
 		t.Fatal("SteerPromptPrefix should not be empty")
 	}
 }
+
+// History tests (SP-055 Phase 3)
+
+func TestSteerHistory_SubmissionsAccumulate(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	for _, msg := range []string{"first", "second", "third"} {
+		for _, b := range []byte(msg) {
+			r.handlePrintable(b)
+		}
+		r.handleSubmit()
+	}
+
+	if got := len(r.history); got != 3 {
+		t.Fatalf("expected 3 history entries, got %d", got)
+	}
+	if r.history[0] != "first" || r.history[2] != "third" {
+		t.Fatalf("history not in submit order: %v", r.history)
+	}
+}
+
+func TestSteerHistory_ConsecutiveDupsCollapsed(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	for i := 0; i < 3; i++ {
+		for _, b := range []byte("same") {
+			r.handlePrintable(b)
+		}
+		r.handleSubmit()
+	}
+
+	if got := len(r.history); got != 1 {
+		t.Fatalf("consecutive dups should collapse, got %d entries: %v", got, r.history)
+	}
+}
+
+func TestSteerHistory_UpArrowRecallsMostRecent(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	for _, msg := range []string{"alpha", "beta"} {
+		for _, b := range []byte(msg) {
+			r.handlePrintable(b)
+		}
+		r.handleSubmit()
+	}
+
+	// Up arrow: should bring back "beta" (most recent).
+	r.recallHistory(-1)
+	if got := string(r.buffer); got != "beta" {
+		t.Fatalf("expected 'beta' after Up, got %q", got)
+	}
+	// Another Up: should walk to "alpha".
+	r.recallHistory(-1)
+	if got := string(r.buffer); got != "alpha" {
+		t.Fatalf("expected 'alpha' after second Up, got %q", got)
+	}
+}
+
+func TestSteerHistory_DownArrowReturnsToPendingBuffer(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	// Submit one entry.
+	for _, b := range []byte("hello") {
+		r.handlePrintable(b)
+	}
+	r.handleSubmit()
+
+	// Start typing a NEW message but don't submit.
+	for _, b := range []byte("in-progress") {
+		r.handlePrintable(b)
+	}
+
+	// Up arrow → recall "hello" (snapshots "in-progress" as pending).
+	r.recallHistory(-1)
+	if got := string(r.buffer); got != "hello" {
+		t.Fatalf("expected 'hello' after Up, got %q", got)
+	}
+	// Down arrow → return to "in-progress".
+	r.recallHistory(+1)
+	if got := string(r.buffer); got != "in-progress" {
+		t.Fatalf("expected pending buffer restored, got %q", got)
+	}
+}
+
+func TestSteerHistory_TypingExitsRecall(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	for _, b := range []byte("old message") {
+		r.handlePrintable(b)
+	}
+	r.handleSubmit()
+
+	r.recallHistory(-1) // bring back "old message"
+	r.handlePrintable('!')
+
+	if got := string(r.buffer); got != "old message!" {
+		t.Fatalf("expected edited recall, got %q", got)
+	}
+	if r.historyIndex != -1 {
+		t.Fatalf("typing should exit history nav, got index=%d", r.historyIndex)
+	}
+}
+
+func TestSteerHistory_CapBounded(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	// Submit SteerHistoryCap+5 unique messages.
+	for i := 0; i < SteerHistoryCap+5; i++ {
+		msg := []byte{'a' + byte(i%26), byte('0' + (i/26)%10)}
+		for _, b := range msg {
+			r.handlePrintable(b)
+		}
+		r.handleSubmit()
+	}
+
+	if got := len(r.history); got != SteerHistoryCap {
+		t.Fatalf("history should cap at %d, got %d", SteerHistoryCap, got)
+	}
+}
+
+func TestSteerHistory_EmptyHistoryNoOpOnArrow(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+
+	r.recallHistory(-1) // Up on empty history
+	if len(r.buffer) != 0 {
+		t.Fatalf("Up on empty history should leave buffer empty, got %q", string(r.buffer))
+	}
+}
+
+func TestSteerHistory_DispatchCSIFinal_OnlyArrowsAct(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.historyIndex = -1
+	for _, b := range []byte("entry") {
+		r.handlePrintable(b)
+	}
+	r.handleSubmit()
+
+	// Right arrow ('C') / Left arrow ('D') / Home etc. — should NOT
+	// touch the buffer.
+	r.buffer = append(r.buffer[:0], []byte("current")...)
+	r.dispatchCSIFinal('C')
+	r.dispatchCSIFinal('D')
+	r.dispatchCSIFinal('H')
+	if got := string(r.buffer); got != "current" {
+		t.Fatalf("non-arrow CSI keys should be inert, got %q", got)
+	}
+
+	// Up arrow ('A') — should now recall.
+	r.dispatchCSIFinal('A')
+	if got := string(r.buffer); got != "entry" {
+		t.Fatalf("Up arrow should recall history, got %q", got)
+	}
+}

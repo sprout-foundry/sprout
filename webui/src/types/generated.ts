@@ -84,7 +84,8 @@ export type ServerEventType =
   | 'workspace_changed'
   | 'session_terminated'
   | 'drift_detected'
-  | 'session_changed';
+  | 'session_changed'
+  | 'delegate_activity';
 
 /**
  * The envelope every event flows through. `data` shape varies per

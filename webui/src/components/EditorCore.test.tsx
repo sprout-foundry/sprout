@@ -1,8 +1,20 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { act, createElement, RefObject, MutableRefObject } from 'react';
+import { createRoot } from 'react-dom/client';
+import type { EditorView as CMEditorView } from '@codemirror/view';
 
-// ── Mocks (hoisted by vitest) ───────────────────────────────────────────────
+beforeAll(() => {
+  // @ts-expect-error — assigning to undeclared globalThis property for React act() mode
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(() => {
+  delete (globalThis as any).IS_REACT_ACT_ENVIRONMENT;
+});
+
+// ── Mocks ────────────────────────────────────────────────────────
+// All mocks return null to avoid React-version JSX issues in factories.
+
 vi.mock('../hooks/useEditorViewInit', () => ({
   useEditorViewInit: vi.fn(),
 }));
@@ -13,419 +25,391 @@ vi.mock('./useEditorReconfigure', () => ({
 
 vi.mock('./MarkdownPreview', () => ({
   __esModule: true,
-  // Return a plain string to avoid React version mismatch from JSX in mock factory.
-  // Strings are valid React children and can be queried with getByText().
-  default: () => 'markdown-preview-mock',
+  default: () => null,
 }));
 
-// ── Import mocked modules ──────────────────────────────────────────────────
+vi.mock('@sprout/ui', () => ({
+  Skeleton: () => null,
+}));
+
+vi.mock('lucide-react', () => ({
+  AlertTriangle: () => null,
+}));
+
+// ── Imports after mocks ──────────────────────────────────────────
 import { useEditorViewInit } from '../hooks/useEditorViewInit';
 import { useEditorReconfigure } from './useEditorReconfigure';
-import EditorCore from './EditorCore';
+import EditorCore, { areEditorCorePropsEqual } from './EditorCore';
+import type { EditorCoreProps } from './EditorCore';
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-function createBaseProps() {
+// ── Helpers ──────────────────────────────────────────────────────
+function createBaseProps(overrides?: Partial<EditorCoreProps>): EditorCoreProps {
   return {
-    hookOptions: {
-      ref: { current: null },
-      initialContent: '',
-      initialMode: 'text/plain',
-    },
-    hookReconfigureOptions: {
-      ref: { current: null },
-      content: '',
-      mode: 'text/plain',
-    },
+    editorRef: { current: null },
+    viewRef: { current: null },
+    initOptions: {} as EditorCoreProps['initOptions'],
+    reconfigureOptions: {} as EditorCoreProps['reconfigureOptions'],
+    loading: false,
+    error: null,
+    onContextMenu: vi.fn(),
+    markdownPreviewMode: 'off',
+    isMarkdownFile: false,
+    localContent: '',
+    markdownPreviewBodyRef: { current: null },
+    ...overrides,
   };
 }
 
-// ── Tests ───────────────────────────────────────────────────────────────────
-describe('EditorCore', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+let container: HTMLDivElement;
+let root: ReturnType<typeof createRoot>;
 
-  // ── Basic rendering ───────────────────────────────────────────────────
+beforeEach(() => {
+  vi.clearAllMocks();
+  container = document.createElement('div');
+  document.body.appendChild(container);
+});
+
+afterEach(() => {
+  act(() => {
+    root?.unmount();
+  });
+  container?.remove();
+});
+
+function renderComponent(props: EditorCoreProps) {
+  root = createRoot(container);
+  act(() => {
+    root.render(createElement(EditorCore, props));
+  });
+}
+
+// ── Tests ────────────────────────────────────────────────────────
+describe('EditorCore', () => {
+  // ── basic rendering ───
   describe('basic rendering', () => {
     it('renders editor div when not loading and no error', () => {
-      const { container } = render(<EditorCore {...createBaseProps()} />);
-
-      const editor = container.querySelector('.editor');
-      expect(editor).toBeInTheDocument();
+      renderComponent(createBaseProps());
+      expect(container.querySelector('.editor')).toBeTruthy();
     });
 
     it('renders pane-content wrapper around editor', () => {
-      const { container } = render(<EditorCore {...createBaseProps()} />);
+      renderComponent(createBaseProps());
+      expect(container.querySelector('.pane-content')).toBeTruthy();
+    });
 
-      const paneContent = container.querySelector('.pane-content');
-      expect(paneContent).toBeInTheDocument();
-      expect(paneContent?.querySelector('.editor')).toBeInTheDocument();
+    it('renders pane-content-wrapper', () => {
+      renderComponent(createBaseProps());
+      expect(container.querySelector('.pane-content-wrapper')).toBeTruthy();
     });
   });
 
-  // ── Loading state ─────────────────────────────────────────────────────
+  // ── loading state ───
   describe('loading state', () => {
-    it('renders loading skeleton when loading is true', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} loading />
-      );
-
-      const skeleton = container.querySelector('.editor-skeleton');
-      expect(skeleton).toBeInTheDocument();
+    it('renders loading skeleton container when loading is true', () => {
+      renderComponent(createBaseProps({ loading: true }));
+      expect(container.querySelector('.editor-skeleton')).toBeTruthy();
     });
 
-    it('renders three skeleton lines inside the skeleton container', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} loading />
-      );
-
-      const lines = container.querySelectorAll('.editor-skeleton-line');
-      expect(lines).toHaveLength(3);
+    it('does not render loading skeleton when loading is false', () => {
+      renderComponent(createBaseProps({ loading: false }));
+      expect(container.querySelector('.editor-skeleton')).toBeFalsy();
     });
 
-    it('does not render editor div when loading', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} loading />
-      );
-
-      expect(container.querySelector('.editor')).not.toBeInTheDocument();
-    });
-
-    it('does not render pane-content when loading', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} loading />
-      );
-
-      expect(container.querySelector('.pane-content')).not.toBeInTheDocument();
+    it('still renders editor div alongside skeleton (siblings)', () => {
+      renderComponent(createBaseProps({ loading: true }));
+      expect(container.querySelector('.editor-skeleton')).toBeTruthy();
+      expect(container.querySelector('.editor')).toBeTruthy();
     });
   });
 
-  // ── Error state ───────────────────────────────────────────────────────
+  // ── error state ───
   describe('error state', () => {
     it('renders error message element when error is set', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} error="Something went wrong" />
-      );
-
-      const errorEl = container.querySelector('.error-message');
-      expect(errorEl).toBeInTheDocument();
+      renderComponent(createBaseProps({ error: 'Oops' }));
+      expect(container.querySelector('.error-message')).toBeTruthy();
     });
 
-    it('displays the error message text', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} error="File not found" />
-      );
-
-      const errorEl = container.querySelector('.error-message');
-      expect(errorEl).toHaveTextContent('File not found');
+    it('does not render error message when error is null', () => {
+      renderComponent(createBaseProps({ error: null }));
+      expect(container.querySelector('.error-message')).toBeFalsy();
     });
 
-    it('does not render editor div when error is set', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} error="Error" />
-      );
-
-      expect(container.querySelector('.editor')).not.toBeInTheDocument();
-    });
-
-    it('does not render pane-content when error is set', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} error="Error" />
-      );
-
-      expect(container.querySelector('.pane-content')).not.toBeInTheDocument();
-    });
-
-    it('loading takes precedence over error', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          loading
-          error="This should not show"
-        />
-      );
-
-      expect(container.querySelector('.editor-skeleton')).toBeInTheDocument();
-      expect(container.querySelector('.error-message')).not.toBeInTheDocument();
+    it('renders error text content', () => {
+      renderComponent(createBaseProps({ error: 'Something went wrong' }));
+      const errorText = container.querySelector('.error-text');
+      expect(errorText).toBeTruthy();
+      expect(errorText?.textContent).toBe('Something went wrong');
     });
   });
 
-  // ── Hook calls ────────────────────────────────────────────────────────
+  // ── hook calls ───
   describe('hook calls', () => {
-    it('calls useEditorViewInit once on mount', () => {
-      render(<EditorCore {...createBaseProps()} />);
-
+    it('calls useEditorViewInit once', () => {
+      renderComponent(createBaseProps());
       expect(useEditorViewInit).toHaveBeenCalledTimes(1);
     });
 
-    it('calls useEditorReconfigure once on mount', () => {
-      render(<EditorCore {...createBaseProps()} />);
-
+    it('calls useEditorReconfigure once', () => {
+      renderComponent(createBaseProps());
       expect(useEditorReconfigure).toHaveBeenCalledTimes(1);
     });
 
-    it('calls useEditorViewInit with merged options including internal ref', () => {
+    it('passes editorRef to useEditorViewInit', () => {
       const props = createBaseProps();
-      render(<EditorCore {...props} />);
-
-      expect(useEditorViewInit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          initialContent: '',
-          initialMode: 'text/plain',
-        })
-      );
-
-      const callArgs = (useEditorViewInit as vi.Mock).mock.calls[0][0];
-      expect(callArgs.ref).toBeDefined();
-      // The ref passed to the hook should be the internal editorRef, not the one from props
-      expect(callArgs.ref).not.toBe(props.hookOptions.ref);
+      renderComponent(props);
+      const callArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
+      expect(callArgs.editorRef).toBe(props.editorRef);
     });
 
-    it('calls useEditorReconfigure with merged options including internal ref', () => {
+    it('passes viewRef to useEditorViewInit', () => {
       const props = createBaseProps();
-      render(<EditorCore {...props} />);
-
-      expect(useEditorReconfigure).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: '',
-          mode: 'text/plain',
-        })
-      );
-
-      const callArgs = (useEditorReconfigure as vi.Mock).mock.calls[0][0];
-      expect(callArgs.ref).toBeDefined();
-      // The ref passed to the hook should be the internal editorRef, not the one from props
-      expect(callArgs.ref).not.toBe(props.hookReconfigureOptions.ref);
+      renderComponent(props);
+      const callArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
+      expect(callArgs.viewRef).toBe(props.viewRef);
     });
 
-    it('passes the same internal ref to both hooks', () => {
-      render(<EditorCore {...createBaseProps()} />);
-
-      const initRef = (useEditorViewInit as vi.Mock).mock.calls[0][0].ref;
-      const reconfigureRef = (useEditorReconfigure as vi.Mock).mock.calls[0][0].ref;
-      expect(initRef).toBe(reconfigureRef);
+    it('passes viewRef to useEditorReconfigure', () => {
+      const props = createBaseProps();
+      renderComponent(props);
+      const callArgs = vi.mocked(useEditorReconfigure).mock.calls[0][0];
+      expect(callArgs.viewRef).toBe(props.viewRef);
     });
 
-    it('preserves additional hook options when merging', () => {
-      const onMount = vi.fn();
-      const onSave = vi.fn();
-      const props = {
-        ...createBaseProps(),
-        hookOptions: {
-          ...createBaseProps().hookOptions,
-          initialContent: 'hello',
-          onMount,
-        },
-        hookReconfigureOptions: {
-          ...createBaseProps().hookReconfigureOptions,
-          content: 'hello',
-          readOnly: true,
-          onSave,
-        },
-      };
+    it('shares lastInitLanguageKey ref between both hooks', () => {
+      renderComponent(createBaseProps());
+      const initArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
+      const reconfigArgs = vi.mocked(useEditorReconfigure).mock.calls[0][0];
+      expect(initArgs.lastInitLanguageKey).toBe(reconfigArgs.lastInitLanguageKey);
+    });
 
-      render(<EditorCore {...props} />);
+    it('spreads initOptions into useEditorViewInit call', () => {
+      const initOptions = { paneId: 'test-pane' };
+      renderComponent(createBaseProps({ initOptions }));
+      const callArgs = vi.mocked(useEditorViewInit).mock.calls[0][0];
+      expect(callArgs.paneId).toBe('test-pane');
+    });
 
-      const initCall = (useEditorViewInit as vi.Mock).mock.calls[0][0];
-      expect(initCall.initialContent).toBe('hello');
-      expect(initCall.onMount).toBe(onMount);
-
-      const reconfigureCall = (useEditorReconfigure as vi.Mock).mock.calls[0][0];
-      expect(reconfigureCall.content).toBe('hello');
-      expect(reconfigureCall.readOnly).toBe(true);
-      expect(reconfigureCall.onSave).toBe(onSave);
+    it('spreads reconfigureOptions into useEditorReconfigure call', () => {
+      const reconfigureOptions = { hotkeys: [] };
+      renderComponent(createBaseProps({ reconfigureOptions }));
+      const callArgs = vi.mocked(useEditorReconfigure).mock.calls[0][0];
+      expect(callArgs.hotkeys).toBe(reconfigureOptions.hotkeys);
     });
   });
 
-  // ── Markdown preview modes ────────────────────────────────────────────
-  describe('markdown preview modes', () => {
-    it('renders MarkdownPreview in full preview mode', () => {
-      render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile
-          markdownPreviewMode="preview"
-          markdownContent="# Hello"
-        />
-      );
-
-      expect(screen.getByText('markdown-preview-mock')).toBeInTheDocument();
+  // ── markdown preview ───
+  describe('markdown preview', () => {
+    it('renders only editor in off mode for markdown files', () => {
+      renderComponent(createBaseProps({
+        isMarkdownFile: true,
+        markdownPreviewMode: 'off',
+      }));
+      expect(container.querySelector('.editor')).toBeTruthy();
+      expect(container.querySelector('.pane-md-preview-split')).toBeFalsy();
     });
 
-    it('does not render editor div in full preview mode', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile
-          markdownPreviewMode="preview"
-        />
-      );
-
-      expect(container.querySelector('.editor')).not.toBeInTheDocument();
+    it('renders split layout with editor and preview pane', () => {
+      renderComponent(createBaseProps({
+        isMarkdownFile: true,
+        markdownPreviewMode: 'split',
+        localContent: '# Hello',
+      }));
+      expect(container.querySelector('.editor')).toBeTruthy();
+      expect(container.querySelector('.pane-md-preview-split')).toBeTruthy();
     });
 
-    it('wraps preview in markdown-preview-container', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile
-          markdownPreviewMode="preview"
-        />
-      );
-
-      expect(container.querySelector('.markdown-preview-container')).toBeInTheDocument();
+    it('applies md-split class to wrapper in split mode', () => {
+      renderComponent(createBaseProps({
+        isMarkdownFile: true,
+        markdownPreviewMode: 'split',
+      }));
+      expect(container.querySelector('.pane-content-wrapper-md-split')).toBeTruthy();
     });
 
-    it('renders split layout with both editor and preview', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile
-          markdownPreviewMode="split"
-          markdownContent="# Hello"
-        />
-      );
-
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(container.querySelector('.split-preview')).toBeInTheDocument();
-      expect(screen.getByText('markdown-preview-mock')).toBeInTheDocument();
+    it('applies md-editor-side class to pane-content in split mode', () => {
+      renderComponent(createBaseProps({
+        isMarkdownFile: true,
+        markdownPreviewMode: 'split',
+      }));
+      expect(container.querySelector('.pane-content-md-editor-side')).toBeTruthy();
     });
 
-    it('renders editor only when markdownPreviewMode is none', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile
-          markdownPreviewMode="none"
-        />
-      );
-
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(screen.queryByText('markdown-preview-mock')).not.toBeInTheDocument();
+    it('renders full preview mode for markdown files (no editor div)', () => {
+      renderComponent(createBaseProps({
+        isMarkdownFile: true,
+        markdownPreviewMode: 'preview',
+        localContent: '# Preview',
+      }));
+      expect(container.querySelector('.editor')).toBeFalsy();
+      expect(container.querySelector('.pane-content-md-preview-full')).toBeTruthy();
     });
 
-    it('does not render preview when not a markdown file even with preview mode', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile={false}
-          markdownPreviewMode="preview"
-        />
-      );
-
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(screen.queryByText('markdown-preview-mock')).not.toBeInTheDocument();
-    });
-
-    it('does not render preview when not a markdown file even with split mode', () => {
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          isMarkdownFile={false}
-          markdownPreviewMode="split"
-        />
-      );
-
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(screen.queryByText('markdown-preview-mock')).not.toBeInTheDocument();
-      expect(container.querySelector('.split-preview')).not.toBeInTheDocument();
+    it('does NOT render preview when not a markdown file even with preview mode', () => {
+      renderComponent(createBaseProps({
+        isMarkdownFile: false,
+        markdownPreviewMode: 'preview',
+      }));
+      expect(container.querySelector('.editor')).toBeTruthy();
+      expect(container.querySelector('.pane-content-md-preview-full')).toBeFalsy();
     });
   });
 
-  // ── Context menu handler ──────────────────────────────────────────────
+  // ── context menu ───
   describe('context menu handler', () => {
-    it('passes onContextMenu handler to pane-content div', () => {
+    it('attaches onContextMenu handler to pane-content div', () => {
       const handler = vi.fn();
-      const { container } = render(
-        <EditorCore
-          {...createBaseProps()}
-          onMarkdownContextMenu={handler}
-        />
-      );
-
-      const paneContent = container.querySelector('.pane-content');
-      fireEvent.contextMenu(paneContent!);
-
+      renderComponent(createBaseProps({ onContextMenu: handler }));
+      const paneContent = container.querySelector('.pane-content')!;
+      const mouseEvent = new MouseEvent('contextmenu', { bubbles: true });
+      paneContent.dispatchEvent(mouseEvent);
       expect(handler).toHaveBeenCalledTimes(1);
     });
+  });
 
-    it('does not throw when onContextMenu is not provided', () => {
-      const { container } = render(<EditorCore {...createBaseProps()} />);
-
-      const paneContent = container.querySelector('.pane-content');
-      // Should not throw even without a handler
-      expect(() => {
-        fireEvent.contextMenu(paneContent!);
-      }).not.toThrow();
+  // ── editor ref ───
+  describe('editor ref', () => {
+    it('passes editorRef to the editor div', () => {
+      const editorRef: RefObject<HTMLDivElement> = { current: null };
+      renderComponent(createBaseProps({ editorRef }));
+      expect(editorRef.current).toBeTruthy();
+      expect(editorRef.current?.classList.contains('editor')).toBe(true);
     });
   });
 
-  // ── Editor ref forwarding ─────────────────────────────────────────────
-  describe('editor ref forwarding', () => {
-    it('attaches ref to the editor div element', async () => {
-      const { container } = render(<EditorCore {...createBaseProps()} />);
-      await flushPromises();
+  // ── comparator ───
+  describe('areEditorCorePropsEqual', () => {
+    // Shared refs so that prev/next can be "equal" when using same defaults
+    const sharedEditorRef = { current: null } as RefObject<HTMLDivElement | null>;
+    const sharedViewRef = { current: null } as MutableRefObject<CMEditorView | null>;
+    const sharedMarkdownPreviewBodyRef = { current: null } as RefObject<HTMLDivElement | null>;
+    const sharedOnContextMenu = vi.fn();
+    const sharedInitOptions = {};
+    const sharedReconfigureOptions = {};
 
-      const editor = container.querySelector('.editor');
-      expect(editor).toBeInTheDocument();
-      expect(editor?.tagName).toBe('DIV');
+    function makeProps(overrides: Partial<EditorCoreProps> = {}): EditorCoreProps {
+      return {
+        editorRef: sharedEditorRef,
+        viewRef: sharedViewRef,
+        initOptions: sharedInitOptions,
+        reconfigureOptions: sharedReconfigureOptions,
+        loading: false,
+        error: null,
+        onContextMenu: sharedOnContextMenu,
+        markdownPreviewMode: 'off',
+        isMarkdownFile: false,
+        localContent: '',
+        markdownPreviewBodyRef: sharedMarkdownPreviewBodyRef,
+        ...overrides,
+      };
+    }
+
+    describe('returns true when props are equivalent', () => {
+      it('identical props objects', () => {
+        const props = makeProps();
+        expect(areEditorCorePropsEqual(props, props)).toBe(true);
+      });
+
+      it('two calls with same shared refs return true', () => {
+        const prev = makeProps();
+        const next = makeProps();
+        expect(areEditorCorePropsEqual(prev, next)).toBe(true);
+      });
+
+      it('same function reference for onContextMenu (explicit override)', () => {
+        const fn = vi.fn();
+        const prev = makeProps({ onContextMenu: fn });
+        const next = makeProps({ onContextMenu: fn });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(true);
+      });
+
+      it('same ref object references (explicit override)', () => {
+        const editorRef = { current: null };
+        const viewRef = { current: null };
+        const markdownPreviewBodyRef = { current: null };
+        const prev = makeProps({ editorRef, viewRef, markdownPreviewBodyRef });
+        const next = makeProps({ editorRef, viewRef, markdownPreviewBodyRef });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(true);
+      });
+
+      it('same initOptions and reconfigureOptions references (explicit override)', () => {
+        const initOptions = { paneId: 'test' };
+        const reconfigureOptions = { hotkeys: [] };
+        const prev = makeProps({ initOptions, reconfigureOptions });
+        const next = makeProps({ initOptions, reconfigureOptions });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(true);
+      });
     });
 
-    it('forwards external ref to the editor div via forwardRef', () => {
-      const externalRef = React.createRef<HTMLDivElement>();
+    describe('returns false when relevant props differ', () => {
+      it('different editorRef', () => {
+        const prev = makeProps({ editorRef: { current: null } });
+        const next = makeProps({ editorRef: { current: null } });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-      render(
-        <EditorCore {...createBaseProps()} ref={externalRef} />
-      );
+      it('different viewRef', () => {
+        const prev = makeProps({ viewRef: { current: null } });
+        const next = makeProps({ viewRef: { current: null } });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-      expect(externalRef.current).toBeDefined();
-      expect(externalRef.current?.className).toBe('editor');
-    });
+      it('different markdownPreviewBodyRef', () => {
+        const prev = makeProps({ markdownPreviewBodyRef: { current: null } });
+        const next = makeProps({ markdownPreviewBodyRef: { current: null } });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-    it('forwards external ref in split preview mode', () => {
-      const externalRef = React.createRef<HTMLDivElement>();
+      it('different loading', () => {
+        const prev = makeProps({ loading: false });
+        const next = makeProps({ loading: true });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-      render(
-        <EditorCore
-          {...createBaseProps()}
-          ref={externalRef}
-          isMarkdownFile
-          markdownPreviewMode="split"
-        />
-      );
+      it('different error', () => {
+        const prev = makeProps({ error: null });
+        const next = makeProps({ error: 'Oops' });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-      expect(externalRef.current).toBeDefined();
-      expect(externalRef.current?.className).toBe('editor');
-    });
-  });
+      it('different onContextMenu function', () => {
+        const fn1 = vi.fn();
+        const fn2 = vi.fn();
+        const prev = makeProps({ onContextMenu: fn1 });
+        const next = makeProps({ onContextMenu: fn2 });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-  // ── Default values ────────────────────────────────────────────────────
-  describe('default values', () => {
-    it('defaults loading to false', () => {
-      const { container } = render(<EditorCore {...createBaseProps()} />);
+      it('different markdownPreviewMode', () => {
+        const prev = makeProps({ markdownPreviewMode: 'off' });
+        const next = makeProps({ markdownPreviewMode: 'split' });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(container.querySelector('.editor-skeleton')).not.toBeInTheDocument();
-    });
+      it('different isMarkdownFile', () => {
+        const prev = makeProps({ isMarkdownFile: false });
+        const next = makeProps({ isMarkdownFile: true });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-    it('defaults markdownPreviewMode to none', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} isMarkdownFile />
-      );
+      it('different localContent', () => {
+        const prev = makeProps({ localContent: '' });
+        const next = makeProps({ localContent: 'hello' });
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(screen.queryByText('markdown-preview-mock')).not.toBeInTheDocument();
-    });
+      it('different initOptions reference', () => {
+        const prev = makeProps({ initOptions: { paneId: 'a' } });
+        const next = makeProps({ initOptions: { paneId: 'a' } });
+        // Same values but different object references — should be false
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
 
-    it('defaults isMarkdownFile to false', () => {
-      const { container } = render(
-        <EditorCore {...createBaseProps()} markdownPreviewMode="preview" />
-      );
-
-      expect(container.querySelector('.editor')).toBeInTheDocument();
-      expect(screen.queryByText('markdown-preview-mock')).not.toBeInTheDocument();
+      it('different reconfigureOptions reference', () => {
+        const prev = makeProps({ reconfigureOptions: { hotkeys: [] } });
+        const next = makeProps({ reconfigureOptions: { hotkeys: [] } });
+        // Same values but different object references — should be false
+        expect(areEditorCorePropsEqual(prev, next)).toBe(false);
+      });
     });
   });
 });

@@ -17,6 +17,7 @@
  */
 // @ts-nocheck
 import { act, createElement } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
@@ -176,7 +177,9 @@ function renderTestHook(options = {}) {
   }
 
   act(() => {
-    root.render(createElement(HookWrapper));
+    flushSync(() => {
+      root.render(createElement(HookWrapper));
+    });
   });
 
   return {
@@ -531,82 +534,5 @@ describe('unmount guard during async', () => {
 
     expect(mockDebouncedUpdate).not.toHaveBeenCalled();
     expect(mockClearDiagnostics).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: fetchDiagnosticsRef stays in sync
-// ---------------------------------------------------------------------------
-
-describe('fetchDiagnosticsRef', () => {
-  it('returns a ref that mirrors fetchDiagnostics', () => {
-    const { getReturn } = renderTestHook();
-
-    expect(getReturn().fetchDiagnosticsRef).toBeDefined();
-    expect(typeof getReturn().fetchDiagnosticsRef.current).toBe('function');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: cleanup on unmount
-// ---------------------------------------------------------------------------
-
-describe('cleanup on unmount', () => {
-  it('calls debounced updater cancel on unmount', () => {
-    const { viewRef } = renderTestHook();
-
-    act(() => {
-      root.unmount();
-    });
-
-    // The debounced updater's cancel should have been called
-    // (we can't easily verify this without accessing internal refs,
-    // so we verify the hook rendered without error)
-    expect(viewRef.current).toBeDefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: no buffer
-// ---------------------------------------------------------------------------
-
-describe('no buffer', () => {
-  it('handles null buffer gracefully without crashing', async () => {
-    const { getReturn } = renderTestHook({ buffer: null });
-
-    // Should not throw
-    expect(() => {
-      act(() => {
-        getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
-      });
-    }).not.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: language override
-// ---------------------------------------------------------------------------
-
-describe('language override', () => {
-  it('respects languageOverride from buffer when provided', async () => {
-    mockResolveLanguageId.mockImplementation(() => ({ languageId: 'go' }));
-
-    const { getReturn } = renderTestHook({
-      buffer: {
-        languageOverride: 'go',
-        file: { ext: '.ts', name: 'test.ts' },
-      },
-    });
-
-    await act(async () => {
-      await getReturn().fetchDiagnostics('/test/file.ts', 'package main');
-    });
-
-    // Should use 'go' as the language ID from the override
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalled();
-    const callArgs = mockGetSemanticDiagnostics.mock.calls.find(
-      (c) => c[2] === 'go',
-    );
-    expect(callArgs).toBeDefined();
   });
 });

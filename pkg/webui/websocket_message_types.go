@@ -41,6 +41,9 @@ const (
 	AllowedMessageTypeSecurityPromptResponse = "security_prompt_response"
 	// AllowedMessageTypeAskUserResponse is the "ask_user_response" message type
 	AllowedMessageTypeAskUserResponse = "ask_user_response"
+
+	// AllowedMessageTypeSessionTakeover is the "session_takeover" message type (SP-046)
+	AllowedMessageTypeSessionTakeover = "session_takeover"
 )
 
 var allowedMessageTypes = map[string]bool{
@@ -55,6 +58,7 @@ var allowedMessageTypes = map[string]bool{
 	AllowedMessageTypeSecurityApprovalResponse: true,
 	AllowedMessageTypeSecurityPromptResponse:   true,
 	AllowedMessageTypeAskUserResponse:          true,
+	AllowedMessageTypeSessionTakeover:          true,
 }
 
 // WebSocketMessage is the envelope for all incoming WebSocket messages.

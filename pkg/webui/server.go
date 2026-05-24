@@ -51,6 +51,7 @@ type ReactWebServer struct {
 	isRunning                       bool
 	mutex                           sync.RWMutex
 	startTime                       time.Time
+	activeWSByUserID                sync.Map // map[string]*activeWSConn — SP-046: tracks single active WS per user
 	queryCount                      int
 	activeQueries                   int
 	activeQueryClientID             string

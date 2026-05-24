@@ -38,6 +38,8 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	"session_restored":           {},      // terminal reattach
 	wsMessageTypeChatRunRestored: {},      // SP-034-2d
 	"connection_state":           {},
+	"session_conflict":           {},      // SP-046: sent to new device on conflict
+	"session_displaced":          {},      // SP-046: sent to old device being evicted
 
 	// UI events (events.EventType*) — note: events.EventTypeError ==
 	// "error", so it's the canonical entry for the error envelope used

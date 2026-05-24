@@ -876,6 +876,22 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			}
 
 			query = strings.TrimSpace(query)
+			// SP-055 Phase 3b: drain any messages the user queued via
+			// Tab+Enter in the steer panel during the previous turn.
+			// They prepend to the typed prompt, joined as separate
+			// blockquote-style lines so the LLM reads them as ordered
+			// context the user wants addressed this turn.
+			if queued := chatAgent.DrainDeferredMessages(); len(queued) > 0 {
+				prefix := "Queued from prior turn:\n"
+				for _, msg := range queued {
+					prefix += "  • " + msg + "\n"
+				}
+				if query == "" {
+					query = strings.TrimSpace(prefix)
+				} else {
+					query = prefix + "\n" + query
+				}
+			}
 			if query == "" {
 				continue
 			}

@@ -66,8 +66,14 @@ type SteerInputReader struct {
 	mu sync.Mutex
 
 	footer      *StatusFooter
-	submitFn    func(string)
+	submitFn    func(string) // STEER mode: mid-turn injection
+	queueFn     func(string) // QUEUE mode: deferred to next user turn
 	interruptFn func()
+
+	// submitMode controls how Enter is interpreted. Tab toggles. The
+	// rendered prefix changes accordingly so the user always sees
+	// which mode will fire on submit.
+	submitMode SteerSubmitMode
 
 	isTTY  bool
 	fd     int
@@ -106,20 +112,41 @@ type SteerInputReader struct {
 // session-level value. Exposed for testing / config.
 const SteerHistoryCap = 50
 
+// SteerSubmitMode controls what happens on Enter (SP-055 Phase 3b).
+// STEER (default) injects mid-turn via the submit callback (typically
+// Agent.InjectInputContext → seed.InjectInput). QUEUE buffers the
+// message into the agent's deferred queue, which the REPL drains and
+// prepends to the next user-typed prompt.
+type SteerSubmitMode int
+
+const (
+	SteerSubmitModeNow   SteerSubmitMode = iota // mid-turn injection (default)
+	SteerSubmitModeQueue                        // hold until next turn
+)
+
 // SteerPromptPrefix is the visible glyph + space rendered at the start
-// of the pinned input line. Exposed for testing / theming.
-const SteerPromptPrefix = "⇄ steer › "
+// of the pinned input line in STEER mode. QueuePromptPrefix is the
+// alternative shown after the user toggles via Tab. Both exposed for
+// testing / theming.
+const (
+	SteerPromptPrefix = "⇄ steer › "
+	QueuePromptPrefix = "⏸ queue › "
+)
 
 // NewSteerInputReader builds a reader that draws into the given footer
 // and reports submitted/interrupt events via the callbacks. The
 // callbacks fire on the reader's read goroutine — keep them quick or
 // dispatch to another goroutine to avoid blocking the input loop.
-func NewSteerInputReader(footer *StatusFooter, submitFn, interruptFn func(string)) *SteerInputReader {
-	// submitFn is the natural callback; interruptFn takes no string but
-	// uses the same signature so callers can use a single closure shape.
+//
+// queueFn is optional: when nil the user has no way to switch into
+// queue mode (Tab becomes a no-op). When non-nil, Tab toggles between
+// STEER and QUEUE submit modes; pressing Enter in QUEUE mode calls
+// queueFn(text) instead of submitFn(text).
+func NewSteerInputReader(footer *StatusFooter, submitFn, queueFn, interruptFn func(string)) *SteerInputReader {
 	r := &SteerInputReader{
 		footer:   footer,
 		submitFn: submitFn,
+		queueFn:  queueFn,
 		interruptFn: func() {
 			if interruptFn != nil {
 				interruptFn("")
@@ -259,6 +286,8 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 		case b == 0x03: // Ctrl+C
 			r.handleInterrupt()
 		case b == 0x04: // Ctrl+D — ignore (no EOF on a steer channel)
+		case b == 0x09: // Tab — toggle submit mode (SP-055 Phase 3b)
+			r.toggleSubmitMode()
 		case b == 0x0D, b == 0x0A: // Enter (CR or LF)
 			r.handleSubmit()
 		case b == 0x1B: // Escape — could be plain ESC or sequence prefix
@@ -267,10 +296,12 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			r.handleBackspace()
 		case b >= 0x20 && b < 0x7F: // printable ASCII
 			r.handlePrintable(b)
+		case b >= 0xC0: // UTF-8 lead byte (multi-byte rune)
+			r.handleUTF8Lead(b)
 		default:
-			// Other control bytes: ignore. UTF-8 multi-byte sequences
-			// are not yet supported in v1 — printable ASCII covers the
-			// common case (English typing). Future polish.
+			// Lone continuation bytes (0x80..0xBF) and other control
+			// bytes are dropped — they shouldn't arrive standalone in
+			// a well-formed UTF-8 stream.
 		}
 	}
 }
@@ -291,25 +322,59 @@ func (r *SteerInputReader) handleInterrupt() {
 	}
 }
 
-// handleSubmit fires the submit callback with the current buffer and
-// clears the line. Empty submissions are dropped (no-op) so users can
-// hit Enter on an empty line without sending noise to the agent.
-// Non-empty submissions are appended to the steer history ring so
-// up-arrow recall works.
+// handleSubmit fires the appropriate callback for the current submit
+// mode and clears the line. Empty submissions are dropped (no-op) so
+// users can hit Enter on an empty line without sending noise to the
+// agent. Non-empty submissions are appended to the steer history ring
+// regardless of mode so up-arrow recall works across both.
 func (r *SteerInputReader) handleSubmit() {
 	r.mu.Lock()
 	text := string(r.buffer)
 	r.buffer = r.buffer[:0]
-	cb := r.submitFn
+	mode := r.submitMode
+	submit := r.submitFn
+	queue := r.queueFn
 	r.mu.Unlock()
 	r.renderLine()
 	if text == "" {
 		return
 	}
 	r.appendHistory(text)
-	if cb != nil {
-		cb(text)
+	if mode == SteerSubmitModeQueue && queue != nil {
+		queue(text)
+		return
 	}
+	if submit != nil {
+		submit(text)
+	}
+}
+
+// toggleSubmitMode flips between STEER and QUEUE modes (Tab key).
+// No-op when no queueFn is wired — the reader is built without queue
+// support in that case and the user shouldn't see a Tab affordance.
+func (r *SteerInputReader) toggleSubmitMode() {
+	r.mu.Lock()
+	if r.queueFn == nil {
+		r.mu.Unlock()
+		return
+	}
+	if r.submitMode == SteerSubmitModeNow {
+		r.submitMode = SteerSubmitModeQueue
+	} else {
+		r.submitMode = SteerSubmitModeNow
+	}
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// SubmitMode reports the current Enter-binding. Exposed for tests.
+func (r *SteerInputReader) SubmitMode() SteerSubmitMode {
+	if r == nil {
+		return SteerSubmitModeNow
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.submitMode
 }
 
 // handleEscapeOrSequence handles three cases:
@@ -466,13 +531,24 @@ func (r *SteerInputReader) appendHistory(text string) {
 	r.pendingBuffer = nil
 }
 
-// handleBackspace removes the last byte from the buffer if any, then
-// redraws the line. Also exits history navigation: editing a recalled
-// entry treats it as a fresh in-progress message.
+// handleBackspace removes the last RUNE (not byte) from the buffer
+// so a single backspace on a multi-byte character — Greek "α", Han
+// "字", emoji "🚀" — deletes the whole glyph rather than corrupting
+// it. Walks backward from the end skipping UTF-8 continuation bytes
+// (10xxxxxx) until it finds a lead byte (or ASCII) to drop.
+//
+// Also exits history navigation: editing a recalled entry treats it
+// as a fresh in-progress message.
 func (r *SteerInputReader) handleBackspace() {
 	r.mu.Lock()
 	if n := len(r.buffer); n > 0 {
-		r.buffer = r.buffer[:n-1]
+		// Find the start of the last rune by walking back over
+		// continuation bytes (0x80..0xBF).
+		i := n - 1
+		for i > 0 && r.buffer[i]&0xC0 == 0x80 {
+			i--
+		}
+		r.buffer = r.buffer[:i]
 	}
 	r.historyIndex = -1
 	r.pendingBuffer = nil
@@ -492,15 +568,74 @@ func (r *SteerInputReader) handlePrintable(b byte) {
 	r.renderLine()
 }
 
+// handleUTF8Lead handles the start of a multi-byte UTF-8 sequence
+// (SP-055 Phase 3c). The lead byte's high bits encode the total
+// sequence length: 110xxxxx → 2 bytes, 1110xxxx → 3 bytes,
+// 11110xxx → 4 bytes. We read the remaining continuation bytes
+// (which all begin with 10xxxxxx) and only commit the rune to the
+// buffer once it's complete — so partial reads never render a
+// half-character on screen.
+//
+// Reads the continuation bytes via the same VMIN=0 polling stdin
+// the main loop uses. If a continuation never arrives within a short
+// window (malformed input, paste interrupted), the partial sequence
+// is dropped.
+func (r *SteerInputReader) handleUTF8Lead(lead byte) {
+	var need int
+	switch {
+	case lead&0xE0 == 0xC0:
+		need = 1 // total 2 bytes
+	case lead&0xF0 == 0xE0:
+		need = 2 // total 3 bytes
+	case lead&0xF8 == 0xF0:
+		need = 3 // total 4 bytes
+	default:
+		return // invalid lead byte
+	}
+
+	seq := make([]byte, 0, need+1)
+	seq = append(seq, lead)
+
+	deadline := time.Now().Add(20 * time.Millisecond)
+	for len(seq) < need+1 && time.Now().Before(deadline) {
+		var b [1]byte
+		n, _ := os.Stdin.Read(b[:])
+		if n == 0 {
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
+		// Continuation bytes must be 10xxxxxx.
+		if b[0]&0xC0 != 0x80 {
+			return // malformed; drop the whole sequence
+		}
+		seq = append(seq, b[0])
+	}
+	if len(seq) != need+1 {
+		return // timed out
+	}
+
+	r.mu.Lock()
+	r.buffer = append(r.buffer, seq...)
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
 // renderLine asks the footer to repaint the pinned input row with the
-// current buffer. The prefix glyph is included here so the footer
-// stays content-agnostic.
+// current buffer and a mode-specific prefix. The prefix is included
+// here (not in the footer) so the footer stays content-agnostic and
+// any future modes don't require footer changes.
 func (r *SteerInputReader) renderLine() {
 	if r.footer == nil {
 		return
 	}
 	r.mu.Lock()
 	text := string(r.buffer)
+	prefix := SteerPromptPrefix
+	if r.submitMode == SteerSubmitModeQueue {
+		prefix = QueuePromptPrefix
+	}
 	r.mu.Unlock()
-	r.footer.SetSteerLine(fmt.Sprintf("%s%s", SteerPromptPrefix, text))
+	r.footer.SetSteerLine(fmt.Sprintf("%s%s", prefix, text))
 }

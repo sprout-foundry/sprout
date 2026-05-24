@@ -65,6 +65,7 @@ func runQuestionFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("create client: %w", err)
 		}
+		injectWasmStreamingClient(client)
 
 		configMgr, err := configuration.NewManagerSilent()
 		if err != nil {
@@ -138,6 +139,7 @@ func runCommitFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("create client: %w", err)
 		}
+		injectWasmStreamingClient(client)
 
 		configMgr, err := configuration.NewManagerSilent()
 		if err != nil {
@@ -224,6 +226,7 @@ func runReviewFunc(_ js.Value, args []js.Value) interface{} {
 		if err != nil {
 			return nil, fmt.Errorf("create client: %w", err)
 		}
+		injectWasmStreamingClient(client)
 
 		configMgr, err := configuration.NewManagerSilent()
 		if err != nil {

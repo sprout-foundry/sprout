@@ -3,12 +3,15 @@
 package webui
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -38,6 +41,21 @@ var excludedBinaryExtensions = map[string]bool{
 	".sqlite": true, ".db":   true,
 }
 
+// sensitiveFileNames lists filenames that should never be transmitted during
+// hydration because they may contain secrets or credentials.
+var sensitiveFileNames = map[string]bool{
+	".env": true, ".env.local": true, ".env.production": true, ".env.development": true,
+	".env.staging": true, ".env.test": true,
+	".npmrc": true, ".pypirc": true, ".netrc": true,
+}
+
+// sensitiveFileExts lists file extensions that indicate the file contains
+// secrets or credentials and should be excluded from hydration.
+var sensitiveFileExts = map[string]bool{
+	".pem": true, ".key": true, ".p12": true, ".pfx": true,
+	".keystore": true, ".jks": true,
+}
+
 const (
 	// maxFileSize is the maximum size of a single file that will be
 	// transferred during hydration. Files larger than this are skipped.
@@ -53,6 +71,10 @@ const (
 
 	// hydrateBatchPause is the pause between file batches during hydration.
 	hydrateBatchPause = 50 * time.Millisecond
+
+	// estimatedThroughputBytesPerSecond is the assumed transfer rate for
+	// ETA calculations during workspace hydration.
+	estimatedThroughputBytesPerSecond = 2 * 1024 * 1024 // 2 MB/s
 )
 
 // hydrateFileInfo collects metadata about a single file during the scan
@@ -80,6 +102,25 @@ func isExcludedDir(relPath string) bool {
 func isHydrateBinaryFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return excludedBinaryExtensions[ext]
+}
+
+// isSensitiveFile reports whether the given path refers to a file that
+// may contain secrets or credentials and should be excluded from hydration.
+// Checks both the base filename against a known list and the extension
+// against a set of secret-related file types.
+func isSensitiveFile(relPath string) bool {
+	base := filepath.Base(relPath)
+	if sensitiveFileNames[base] {
+		return true
+	}
+	// Catch any .env.* variant (e.g., .env.production.local)
+	if strings.HasPrefix(base, ".env.") {
+		return true
+	}
+	if sensitiveFileExts[strings.ToLower(filepath.Ext(relPath))] {
+		return true
+	}
+	return false
 }
 
 // handleColdHydrateRequest scans the workspace root and streams all
@@ -120,7 +161,8 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	}
 
 	startTime := time.Now()
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// --- Phase 1: Scan workspace ---
 	var files []hydrateFileInfo
@@ -138,6 +180,11 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 			if relErr == nil && isExcludedDir(rel) {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+
+		// Skip symlinks to prevent path traversal attacks
+		if fi.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
 
@@ -165,6 +212,11 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 			return nil
 		}
 
+		// Skip sensitive files that may contain secrets
+		if isSensitiveFile(rel) {
+			return nil
+		}
+
 		files = append(files, hydrateFileInfo{
 			path:    rel,
 			size:    fileSize,
@@ -183,13 +235,17 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		return
 	}
 
+	// Sort files for deterministic ordering across scans
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].path < files[j].path
+	})
+
 	totalFiles := int64(len(files))
 
 	// --- Phase 2: Send manifest ---
-	// Estimate ~2MB/s throughput for ETA calculation
 	estimateSeconds := int64(0)
 	if totalSize > 0 {
-		estimateSeconds = totalSize / (2 * 1024 * 1024)
+		estimateSeconds = int64(totalSize) / estimatedThroughputBytesPerSecond
 		if estimateSeconds < 1 {
 			estimateSeconds = 1
 		}
@@ -215,6 +271,13 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	filesSent := int64(0)
 	var bytesSent int64
 
+	// Resolve the workspace root once for path validation
+	absRoot, rootErr := filepath.Abs(workspaceRoot)
+	if rootErr != nil {
+		log.Printf("[hydrate] cannot resolve workspace root: %v", rootErr)
+		absRoot = workspaceRoot
+	}
+
 	for i, fi := range files {
 		select {
 		case <-ctx.Done():
@@ -223,16 +286,34 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		default:
 		}
 
-		// Read file content
+		// Resolve full path and validate it stays within workspace root
 		fullPath := filepath.Join(workspaceRoot, fi.path)
-		content, readErr := os.ReadFile(fullPath)
-		if readErr != nil {
-			log.Printf("[hydrate] Failed to read file %s: %v", fi.path, readErr)
+		resolvedPath, evalErr := filepath.EvalSymlinks(fullPath)
+		if evalErr != nil {
+			log.Printf("[hydrate] skipping %s: cannot resolve path: %v", fi.path, evalErr)
+			continue
+		}
+		if !strings.HasPrefix(resolvedPath, absRoot+string(filepath.Separator)) && resolvedPath != absRoot {
+			log.Printf("[hydrate] skipping %s: path escapes workspace root", fi.path)
 			continue
 		}
 
-		// Base64 encode
-		contentB64 := base64.StdEncoding.EncodeToString(content)
+		// Stream file through base64 encoder to avoid double memory allocation
+		var buf bytes.Buffer
+		f, openErr := os.Open(fullPath)
+		if openErr != nil {
+			log.Printf("[hydrate] failed to open file %s: %v", fi.path, openErr)
+			continue
+		}
+		encoder := base64.NewEncoder(base64.StdEncoding, &buf)
+		if _, err := io.Copy(encoder, f); err != nil {
+			f.Close()
+			log.Printf("[hydrate] failed to read file %s: %v", fi.path, err)
+			continue
+		}
+		encoder.Close()
+		f.Close()
+		contentB64 := buf.String()
 
 		// Calculate progress
 		progressPct := float64(i+1) / float64(totalFiles) * 100.0
@@ -256,9 +337,14 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 		filesSent++
 		bytesSent += fi.size
 
-		// Batch pause every hydrateFileBatchSize files
+		// Batch pause every hydrateFileBatchSize files (context-aware)
 		if (i+1)%hydrateFileBatchSize == 0 {
-			time.Sleep(hydrateBatchPause)
+			select {
+			case <-ctx.Done():
+				log.Printf("[hydrate] cancelled during batch pause after %d files", filesSent)
+				return
+			case <-time.After(hydrateBatchPause):
+			}
 		}
 	}
 

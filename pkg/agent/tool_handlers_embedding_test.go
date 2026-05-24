@@ -154,9 +154,15 @@ func TestHandleSemanticSearch_WithResults(t *testing.T) {
 	// Set up embedding manager with a temp directory.
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
+	if err := em.Init(context.Background()); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer em.Close()
 	agent.embeddingMgr = em
 
-	// With StaticProvider, Init succeeds without ORT.
 	// QuerySimilar runs on an empty index and returns a "no results" message.
 	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{
 		"query": "user authentication",
@@ -454,6 +460,13 @@ func TestHandleSemanticSearch_NoResultsMessage(t *testing.T) {
 	// Set up embedding manager with StaticProvider (no ORT needed).
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
+	if err := em.Init(context.Background()); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer em.Close()
 	agent.embeddingMgr = em
 
 	// Query on empty index returns "no results" message.
@@ -479,6 +492,13 @@ func TestHandleSemanticSearch_QueryInNoResults(t *testing.T) {
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
+	if err := em.Init(context.Background()); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
+		t.Fatalf("failed to initialize embedding manager: %v", err)
+	}
+	defer em.Close()
 	agent.embeddingMgr = em
 
 	result, err := handleSemanticSearch(context.Background(), agent, map[string]interface{}{

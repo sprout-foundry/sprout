@@ -53,6 +53,7 @@ func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *
 	c.reader = console.NewSteerInputReader(
 		footer,
 		c.handleSteerSubmit,
+		c.handleQueueSubmit,
 		c.handleSteerInterrupt,
 	)
 	return c
@@ -107,4 +108,17 @@ func (c *SteerCoordinator) handleSteerInterrupt(_ string) {
 		return
 	}
 	c.agent.TriggerInterrupt()
+}
+
+// handleQueueSubmit is the QUEUE-mode counterpart to handleSteerSubmit.
+// The message is enqueued on the agent's deferred queue and will be
+// joined with the user's next typed prompt when the REPL drains it
+// (SP-055 Phase 3b). Mid-turn streaming is unaffected — nothing is
+// injected into the active turn.
+func (c *SteerCoordinator) handleQueueSubmit(text string) {
+	if c.agent == nil || text == "" {
+		return
+	}
+	c.agent.EnqueueDeferredMessage(text)
+	fmt.Fprintf(os.Stderr, "\n[queued] %s\n", text)
 }

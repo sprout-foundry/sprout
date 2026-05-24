@@ -73,7 +73,7 @@
 - [x] SP-045-Tier2b-apiKeys: Implement WASM credential storage (localStorage / IndexedDB + Web Crypto AES-GCM / host-page injection)
 - [x] SP-045-Tier2b-streaming: Verify `js/wasm` net/http handles SSE streaming end-to-end; adapt provider code for Fetch API streaming
 - [x] SP-045-Tier2b-cors: Handle provider CORS restrictions; support user-supplied proxy URL
-- [ ] SP-045-Tier2b-toolExec: Route agent loop tool execution through `SproutWasm.executeCommand` JS bridge
+- [x] SP-045-Tier2b-toolExec: Route agent loop tool execution through `SproutWasm.executeCommand` JS bridge
 - [x] SP-045-buildMatrix-pty: Tag `pkg/webui/terminal_*.go` with `!js` build constraint to avoid `creack/pty` import
 - [ ] SP-045-buildMatrix-sweep: Replace `//go:build !windows` patterns with `unix && !js` across `pkg/`
 - [x] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)

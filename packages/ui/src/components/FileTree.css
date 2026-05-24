@@ -94,7 +94,7 @@
 
 .file-tree .file-tree-header .create-input:focus {
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 22%, transparent);
 }
 
 .file-tree .file-tree-header .create-actions {
@@ -176,7 +176,7 @@
 .file-tree .file-tree-header .toggle-ignored-btn.active:hover {
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.08);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
 }
 
 .file-tree .current-path {
@@ -543,7 +543,7 @@
 
 @keyframes file-reveal-flash {
   0% {
-    background-color: rgba(99, 102, 241, 0.3);
+    background-color: color-mix(in srgb, var(--accent-primary) 32%, transparent);
   }
   100% {
     background-color: transparent;
@@ -567,7 +567,7 @@
 .file-tree .file-tree-filter-wrapper.focused {
   border-color: var(--accent-primary);
   background: var(--bg-elevated);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .file-tree .file-tree-filter-icon {
@@ -625,7 +625,7 @@
 
 /* Highlight matched text in filter */
 .file-tree .file-tree-name mark {
-  background: rgba(99, 102, 241, 0.3);
+  background: color-mix(in srgb, var(--accent-primary) 32%, transparent);
   color: var(--text-primary);
   border-radius: 2px;
   padding: 0 1px;
@@ -709,11 +709,11 @@
 
 /* Multi-selected item highlight */
 .file-tree .file-tree-item.multi-selected {
-  background: rgba(99, 102, 241, 0.1);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 .file-tree .file-tree-item.multi-selected:hover {
-  background: rgba(99, 102, 241, 0.16);
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
 }
 
 /* Selection action bar */

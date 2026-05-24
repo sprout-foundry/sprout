@@ -74,6 +74,7 @@ function createDefaultState(): Record<string, unknown> {
     currentTodos: [],
     fileEdits: [],
     subagentActivities: [],
+  delegateActivities: [],
     activeChatId: null,
     chatSessions: [],
     perChatCache: {},

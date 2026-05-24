@@ -1080,8 +1080,19 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 func (p *GenericProvider) shouldSkipReasoningContentHistory() bool {
 	// MiniMax expects reasoning_details to be a structured array, not a plain string.
 	// Replaying historical ReasoningContent verbatim causes type mismatch 400s.
-	return strings.EqualFold(p.config.Name, "minimax") &&
-		strings.EqualFold(p.config.Conversion.ReasoningContentField, "reasoning_details")
+	if strings.EqualFold(p.config.Name, "minimax") &&
+		strings.EqualFold(p.config.Conversion.ReasoningContentField, "reasoning_details") {
+		return true
+	}
+
+	// ZAI (GLM models) may reject stale reasoning_content in message history when
+	// the current request doesn't explicitly enable thinking, causing 400 errors.
+	if strings.EqualFold(p.config.Name, "zai") &&
+		p.config.Conversion.ReasoningContentField != "" {
+		return true
+	}
+
+	return false
 }
 
 func (p *GenericProvider) convertToolCalls(toolCalls []api.ToolCall) interface{} {

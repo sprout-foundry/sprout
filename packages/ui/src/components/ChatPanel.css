@@ -244,7 +244,7 @@
 
 .status-dot-indicator.active {
   background: var(--accent-primary);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 25%, transparent);
   animation: status-pulse 1.5s ease-in-out infinite;
 }
 

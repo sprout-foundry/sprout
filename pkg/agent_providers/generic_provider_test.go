@@ -495,16 +495,16 @@ func TestConvertMessagesSkipsMinimaxReasoningDetailsHistory(t *testing.T) {
 
 func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testing.T) {
 	config := &ProviderConfig{
-		Name:     "zai",
+		Name:     "openai", // OpenAI-compatible provider preserves reasoning_content
 		Endpoint: "https://example.com",
 		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
-		Defaults: RequestDefaults{Model: "GLM-4.6"},
+		Defaults: RequestDefaults{Model: "gpt-4"},
 		Conversion: MessageConversion{
 			ReasoningContentField: "reasoning_content",
 		},
 		Models: ModelConfig{
 			DefaultContextLimit: 4096,
-			DefaultModel:        "GLM-4.6",
+			DefaultModel:        "gpt-4",
 		},
 	}
 
@@ -528,6 +528,41 @@ func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testi
 	}
 	if value != "preserve me" {
 		t.Fatalf("unexpected reasoning_content value: %v", value)
+	}
+}
+
+func TestConvertMessagesSkipsReasoningContentForZAI(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "zai",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "glm-5.1"},
+		Conversion: MessageConversion{
+			ReasoningContentField: "reasoning_content",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 200000,
+			DefaultModel:        "glm-5.1",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []api.Message{
+		{
+			Role:             "assistant",
+			Content:          "answer",
+			ReasoningContent: "stale reasoning that should be stripped",
+		},
+	}
+
+	converted := provider.convertMessages(messages, "")
+	_, exists := converted[0]["reasoning_content"]
+	if exists {
+		t.Fatalf("expected reasoning_content to be stripped for ZAI provider, but it was present: %v", converted[0])
 	}
 }
 

@@ -24,8 +24,6 @@ import '../src/components/StatusBar.css';
 import '../src/components/Terminal.css';
 import '../src/components/TerminalTabBar.css';
 
-const mockAdapter = new MockAdapter();
-
 const preview: Preview = {
   parameters: {
     controls: {
@@ -44,7 +42,7 @@ const preview: Preview = {
   },
   decorators: [
     (Story) => (
-      <SproutProvider adapter={mockAdapter}>
+      <SproutProvider adapter={new MockAdapter()}>
         <Story />
       </SproutProvider>
     ),

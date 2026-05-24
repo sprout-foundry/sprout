@@ -23,7 +23,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/sprout-foundry/seed v1.1.2
+require github.com/sprout-foundry/seed v1.1.3
 
 require github.com/odvcencio/gotreesitter v0.16.0
 
@@ -118,5 +118,3 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 )
-
-replace github.com/sprout-foundry/seed => ../seed

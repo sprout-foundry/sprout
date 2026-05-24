@@ -105,6 +105,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register edit command
 	registry.Register(&EditCommand{})
 
+	// Register extend command
+	registry.Register(&ExtendCommand{})
+
 	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
 	// to canonical names during dispatch and appear in tab completion.
 	registry.RegisterAlias("m", "model")

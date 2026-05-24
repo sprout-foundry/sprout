@@ -115,22 +115,22 @@
 [x] SP-006-A-toolDef: Register `delegate` tool in `tool_definitions.go` with params: prompt, role, provider, model, tools, context, max_iterations, files
 [x] SP-006-A-events: Add delegate event types to `pkg/events/events.go`
 [x] SP-006-A-nestingLimit: Implement max nesting depth via `SPROUT_MAX_DELEGATE_DEPTH=3` env var
-- [ ] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
-- [ ] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
+[x] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
+[x] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
 - [ ] SP-006-C-followUp: Allow parent to inject follow-up messages into running delegate (future)
 - [ ] SP-006-C-interactive: Support interactive delegation — not just blocking (future)
 - [ ] SP-006-C-clarification: Allow delegate to request clarification from parent via event bus (future)
 
 ## Not Started — SP-007: Extend Configuration
 
-- [ ] SP-007-1-roleSchema: Create `pkg/configuration/role.go` — `RoleConfig`, `RoleMeta`, `RoleToolsConfig`, `RoleSkillsConfig`, `RoleConstraints` types + `MergeRoleConfig()`
-- [ ] SP-007-1-roleManager: Create `pkg/configuration/role_manager.go` — `RoleManager` with resolution chain, `Resolve()`, `List()`, `Save()`, `Delete()`
-- [ ] SP-007-1-roleTests: Create `pkg/configuration/role_test.go` — unit tests for resolution, merge, save
-- [ ] SP-007-1-configModify: Modify `pkg/configuration/config.go` — add `~/.sprout/roles/` and `{workspace}/.sprout/roles/` support
-- [ ] SP-007-1-personaModify: Extend `GetSubagentType()` to check RoleManager before falling back to existing `subagent_types`
-- [ ] SP-007-2-extendHandler: Create `pkg/agent/extend_handler.go` — guided collaborative configuration session (7-question flow)
-- [ ] SP-007-2-extendTests: Create `pkg/agent/extend_handler_test.go`
-- [ ] SP-007-2-wireCommand: Wire `/extend` into command routing in `conversation_handler.go`
+[x] SP-007-1-roleSchema: Create `pkg/configuration/role.go` — `RoleConfig`, `RoleMeta`, `RoleToolsConfig`, `RoleSkillsConfig`, `RoleConstraints` types + `MergeRoleConfig()`
+[x] SP-007-1-roleManager: Create `pkg/configuration/role_manager.go` — `RoleManager` with resolution chain, `Resolve()`, `List()`, `Save()`, `Delete()`
+[x] SP-007-1-roleTests: Create `pkg/configuration/role_test.go` — unit tests for resolution, merge, save
+[x] SP-007-1-configModify: Modify `pkg/configuration/config.go` — add `~/.sprout/roles/` and `{workspace}/.sprout/roles/` support
+[x] SP-007-1-personaModify: Extend `GetSubagentType()` to check RoleManager before falling back to existing `subagent_types`
+[x] SP-007-2-extendHandler: Create `pkg/agent/extend_handler.go` — guided collaborative configuration session (7-question flow)
+[x] SP-007-2-extendTests: Create `pkg/agent/extend_handler_test.go`
+[x] SP-007-2-wireCommand: Wire `/extend` into command routing in `conversation_handler.go`
 - [ ] SP-007-3-webuiSettings: Settings panel for role CRUD; visual role editor (future)
 - [ ] SP-007-3-apiEndpoints: Add REST endpoints for role CRUD: `GET/PUT/DELETE /api/settings/roles/{name}` (future)
 - [ ] SP-007-3-roleSelector: Role selector in agent persona picker (future)
@@ -142,7 +142,7 @@
 - [ ] SP-008-A3-raceDefault: Add `-race` to default `make test` target
 - [ ] SP-008-A3-raceTests: Create `pkg/agent/concurrency_test.go` — focused race detection tests
 - [ ] SP-008-A3-ciRace: Remove `-short` from CI race detector step
-- [ ] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
+[x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
 - [ ] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods
 - [ ] SP-008-B3-migrateLifecycle: Migrate agent lifecycle event logging to structured logger
 - [ ] SP-008-B3-migrateToolExec: Migrate tool execution lifecycle logging to structured logger

@@ -139,7 +139,7 @@
 
 - [ ] SP-008-A1: Replace direct method-call-from-goroutine patterns with channel-based communication for `ProcessQuery` → tool executor feedback loop
 - [ ] SP-008-A2: Systematic audit of every field access in concurrent code paths — verify correct mutex, document invariant
-- [ ] SP-008-A3-raceDefault: Add `-race` to default `make test` target
+[x] SP-008-A3-raceDefault: Add `-race` to default `make test` target
 - [ ] SP-008-A3-raceTests: Create `pkg/agent/concurrency_test.go` — focused race detection tests
 - [ ] SP-008-A3-ciRace: Remove `-short` from CI race detector step
 [x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
@@ -148,8 +148,8 @@
 - [ ] SP-008-B3-migrateToolExec: Migrate tool execution lifecycle logging to structured logger
 - [ ] SP-008-B3-migrateConversation: Migrate conversation flow logging to structured logger
 - [ ] SP-008-B3-migrateRemaining: Migrate all remaining `fmt.Printf` calls in `pkg/agent/` to structured logger
-- [ ] SP-008-B4-retryLogic: Create `pkg/agent/retry.go` — `handleToolError()` with typed error classification
-- [ ] SP-008-B4-apiTypedErrors: Replace string matching in `ErrorHandler.HandleAPIFailure()` with typed errors
+[x] SP-008-B4-retryLogic: Create `pkg/agent/retry.go` — `handleToolError()` with typed error classification
+[x] SP-008-B4-apiTypedErrors: Replace string matching in `ErrorHandler.HandleAPIFailure()` with typed errors
 
 ## Not Started — SP-011: Terminal Parity
 

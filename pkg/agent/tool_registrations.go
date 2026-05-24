@@ -181,6 +181,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"context", "string", false, []string{}, "Additional context to pass to the delegate"},
 			{"max_iterations", "integer", false, []string{}, "Maximum number of tool-call iterations for the delegate"},
 			{"files", "array", false, []string{}, "List of relevant file paths for the delegate"},
+			{"follow_up", "array", false, []string{}, "List of follow-up messages to inject into the delegate during execution (array of strings)"},
 		},
 		Handler: handleDelegate,
 		Timeout: 10 * time.Minute,

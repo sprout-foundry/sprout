@@ -51,6 +51,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeSubagentActivity:        {},
 	events.EventTypeTodoUpdate:              {},
 	events.EventTypeFileChanged:             {},
+	events.EventTypeWorkspacePatch:          {},
 	events.EventTypeFileContentChanged:      {},
 	events.EventTypeStreamChunk:             {},
 	events.EventTypeMetricsUpdate:           {},

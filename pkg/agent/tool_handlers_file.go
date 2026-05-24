@@ -465,6 +465,11 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
 		a.debugLog("Published file_changed event: %s (write)\n", path)
 
+		// Publish workspace_patch for real-time browser sync
+		seq := nextPatchSeq()
+		a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq))
+		a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+
 		// Check for security concerns in the written content
 		a.CheckFileContentSecurity(path, content)
 	}
@@ -586,9 +591,20 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		if eventContent, err = tools.ReadFile(ctx, path); err == nil {
 			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", eventContent))
 			a.debugLog("Published file_changed event: %s (edit)\n", path)
+
+			// Publish workspace_patch for real-time browser sync
+			seq := nextPatchSeq()
+			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, eventContent, "edit", seq))
+			a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
 		} else {
 			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
 			a.debugLog("Published file_changed event: %s (edit, no content)\n", path)
+
+			// Publish workspace_patch for real-time browser sync (empty content since
+			// the post-edit read failed).
+			seq := nextPatchSeq()
+			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, "", "edit", seq))
+			a.debugLog("Published workspace_patch event: %s (seq=%d, empty content)\n", path, seq)
 		}
 
 		// Start async validation (fire-and-forget)

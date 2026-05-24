@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -65,6 +66,18 @@ var (
 	ErrWriteStale            = errors.New("write refused: file may be stale")
 	ErrWriteHasUnsyncedEdits = errors.New("write refused: user has unsynced edits to this file")
 )
+
+// patchSeqNum is a monotonically increasing atomic counter used to assign
+// unique sequence numbers to workspace_patch events emitted during tool-call
+// writes. The sequence ensures the browser can detect and order patches even
+// when events arrive out of order.
+var patchSeqNum int64
+
+// nextPatchSeq returns the next patch sequence number. Thread-safe via
+// atomic increment.
+func nextPatchSeq() int64 {
+	return atomic.AddInt64(&patchSeqNum, 1)
+}
 
 // stalenessFreshnessWindow is the "modified recently" cutoff for the
 // staleness rule. Files written this recently are considered possibly-

@@ -25,6 +25,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerFileRoutes(mux)
 	ws.registerSettingsRoutes(mux)
 	ws.registerWorkspaceRoutes(mux)
+	ws.registerSyncRoutes(mux)
 	ws.registerGitRoutes(mux)
 	ws.registerSessionRoutes(mux)
 	ws.registerSearchRoutes(mux)
@@ -127,6 +128,12 @@ func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/instances/ssh-browse", ws.handleAPISSHBrowse)
 	mux.HandleFunc("/api/instances/ssh-sessions", ws.handleAPISSHSessions)
 	mux.HandleFunc("/api/instances/ssh-close", ws.handleAPISSHSessionDelete)
+}
+
+func (ws *ReactWebServer) registerSyncRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/sync/op", ws.handleAPISyncOp)
+	mux.HandleFunc("/api/sync/batch", ws.handleAPISyncBatch)
+	mux.HandleFunc("/api/sync/status", ws.handleAPISyncStatus)
 }
 
 func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {

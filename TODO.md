@@ -17,7 +17,7 @@
 
 ## Partially Done — SP-010: Editor Modernization
 
-- [ ] SP-010-P1-hooks: Extract remaining hooks: `useEditorExtensions`, `useEditorDiagnostics`, `useEditorFileIO`, `useEditorScrollSync`, `useEditorSymbols`, `useEditorCursor`
+- [x] SP-010-P1-hooks: Extract remaining hooks: `useEditorExtensions`, `useEditorDiagnostics`, `useEditorFileIO`, `useEditorScrollSync`, `useEditorSymbols`, `useEditorCursor`
 - [ ] SP-010-P1-components: Create `EditorCore.tsx` (CodeMirror mount point) and `EditorToolbarActions.tsx`; reduce `EditorPane.tsx` to ~300-line composition root
 - [ ] SP-010-P2-errorLens: Create `webui/src/extensions/errorLens.ts` — inline diagnostic display via `Decoration.widget`
 - [ ] SP-010-P2-wordHighlights: Verify/fix `highlightSelectionMatches()` wiring and add custom styling

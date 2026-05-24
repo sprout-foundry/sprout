@@ -38,7 +38,7 @@ func handleDelegate(ctx context.Context, a *Agent, args map[string]interface{}) 
 	bridge.PublishActivity("started", truncateSummary(cfg.Prompt, 200), a.delegateDepth+1)
 
 	// 6. Run the delegate's query
-	result, err := runDelegateQuery(ctx, delegate, cfg.Prompt, bridge)
+	result, err := runDelegateQuery(ctx, delegate, cfg.Prompt, bridge, &cfg)
 
 	// 7. Build and return the result
 	var delegateResult *DelegateResult
@@ -99,12 +99,48 @@ func parseDelegateConfig(args map[string]interface{}) (DelegateConfig, error) {
 			}
 		}
 	}
+	if v, ok := args["follow_up"].([]interface{}); ok {
+		for _, m := range v {
+			if s, ok := m.(string); ok {
+				cfg.FollowUpMessages = append(cfg.FollowUpMessages, s)
+			}
+		}
+	}
 
 	return cfg, nil
 }
 
+const followUpInjectionDelay = 500 * time.Millisecond
+
 // runDelegateQuery runs the delegate agent's query and collects results
-func runDelegateQuery(ctx context.Context, delegate *Agent, prompt string, bridge *DelegateStreamBridge) (string, error) {
+func runDelegateQuery(ctx context.Context, delegate *Agent, prompt string, bridge *DelegateStreamBridge, cfg *DelegateConfig) (string, error) {
+	// Start a goroutine to inject follow-up messages while the delegate is processing.
+	// This must be started before ProcessQuery so messages are injected during execution.
+	if len(cfg.FollowUpMessages) > 0 {
+		go func() {
+			for i, msg := range cfg.FollowUpMessages {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				if i > 0 {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(followUpInjectionDelay):
+					}
+				}
+				if err := delegate.InjectInputContext(msg); err != nil {
+					// Log the error and continue — don't fail the whole delegate.
+					delegate.PrintLineAsync(fmt.Sprintf("[warn] Failed to inject follow-up message: %v", err))
+					continue
+				}
+				bridge.RecordFollowUpInjection(msg)
+			}
+		}()
+	}
+
 	// Use the delegate agent's ProcessQuery method to run the prompt.
 	// ProcessQuery handles the full agent loop (tool calls, iterations, etc.)
 	response, err := delegate.ProcessQuery(prompt)

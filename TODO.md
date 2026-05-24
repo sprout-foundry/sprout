@@ -6,11 +6,11 @@
 - [x] SP-009-P1.2: Publish `@sprout/ui` to npm under `@sprout` org scope; create `.github/workflows/publish-ui.yml`
 - [x] SP-009-P1.3: Replace `file:../packages/ui` in `webui/package.json` with versioned npm dependency
 - [x] SP-009-P1.4: Document Foundry consumption pattern (`npm install @sprout/ui`)
-- [ ] SP-009-P2.1: Install Storybook 8 in `packages/ui/` with Vite builder and React framework
-- [ ] SP-009-P2.2: Create `MockAdapter` implementing `APIAdapter`; wrap all stories in `SproutProvider` with mock
-- [ ] SP-009-P2.3: Write stories for StatusBar, FileTree, Terminal, GitPanel, CommandPalette (Tier 1)
-- [ ] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
-- [ ] SP-009-P2.3: Write stories for ContextMenu, NotificationItem, SelectionActionBar, CommandInput (Tier 3)
+- [x] SP-009-P2.1: Install Storybook 8 in `packages/ui/` with Vite builder and React framework
+- [x] SP-009-P2.2: Create `MockAdapter` implementing `APIAdapter`; wrap all stories in `SproutProvider` with mock
+- [x] SP-009-P2.3: Write stories for StatusBar, FileTree, Terminal, GitPanel, CommandPalette (Tier 1)
+[x] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
+- [x] SP-009-P2.3: Write stories for ContextMenu, NotificationItem, SelectionActionBar, CommandInput (Tier 3)
 - [ ] SP-009-P2.4: Connect to Chromatic for visual regression testing on PRs
 - [ ] SP-009-P2.5: Write MDX documentation pages for complex components (FileTree, ChatPanel, GitPanel)
 - [ ] SP-009-migration: Replace duplicate component implementations in webui with imports from `@sprout/ui`

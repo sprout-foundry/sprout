@@ -60,6 +60,12 @@ const (
 	// (name, pin state, active state) changed and tabs viewing that chat
 	// should reconcile. SP-034-3e.
 	EventTypeSessionChanged          = "session_changed"
+	// EventTypeDelegateClarificationRequested is published when a delegate
+	// agent requests clarification from its parent agent.
+	EventTypeDelegateClarificationRequested = "delegate_clarification_requested"
+	// EventTypeDelegateClarificationResponded is published when a parent
+	// agent responds to a delegate's clarification request.
+	EventTypeDelegateClarificationResponded = "delegate_clarification_responded"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -423,6 +429,26 @@ func DelegateAsyncEvent(delegateID, action, summary string, depth int) map[strin
 		"action":      action,
 		"summary":     summary,
 		"depth":       depth,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// DelegateClarificationRequestedEvent creates a delegate_clarification_requested event payload.
+func DelegateClarificationRequestedEvent(delegateID, requestID, question string) map[string]interface{} {
+	return map[string]interface{}{
+		"delegate_id": delegateID,
+		"request_id":  requestID,
+		"question":    question,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// DelegateClarificationRespondedEvent creates a delegate_clarification_responded event payload.
+func DelegateClarificationRespondedEvent(delegateID, requestID, response string) map[string]interface{} {
+	return map[string]interface{}{
+		"delegate_id": delegateID,
+		"request_id":  requestID,
+		"response":    response,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	}
 }

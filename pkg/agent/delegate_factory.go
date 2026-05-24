@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
@@ -103,7 +104,15 @@ func CreateDelegateAgent(parent *Agent, cfg DelegateConfig) (*Agent, error) {
 		agent.rootPersonaID = parent.rootPersonaID
 	}
 
-	// 9. Restrict tools if specified in cfg.Tools
+	// 9. Set delegate ID (unique identifier for this delegate agent)
+	agent.delegateID = fmt.Sprintf("delegate-%d-%d", parent.delegateDepth+1, time.Now().UnixNano())
+
+	// 10. Share the parent's clarification manager so delegate can request clarification
+	if parent.clarificationManager != nil {
+		agent.clarificationManager = parent.clarificationManager
+	}
+
+	// 11. Restrict tools if specified in cfg.Tools
 	if len(cfg.Tools) > 0 {
 		restrictTools(agent, cfg.Tools)
 	}

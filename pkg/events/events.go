@@ -200,10 +200,13 @@ func QueryCompletedEvent(query, response string, tokensUsed int, cost float64, d
 
 // ErrorEvent creates an error event
 func ErrorEvent(message string, err error) map[string]interface{} {
-	return map[string]interface{}{
+	data := map[string]interface{}{
 		"message": message,
-		"error":   err.Error(),
 	}
+	if err != nil {
+		data["error"] = err.Error()
+	}
+	return data
 }
 
 // ToolExecutionEvent creates a tool execution event
@@ -237,15 +240,28 @@ func FileContentChangedEvent(filePath string, modTime int64, size int64) map[str
 	}
 }
 
+// PatchConflictInfo holds optional conflict metadata for a workspace_patch event.
+type PatchConflictInfo struct {
+	Conflict   bool
+	TheirsPath string
+}
+
 // WorkspacePatchEvent creates a workspace_patch event payload for real-time
 // file content synchronization from the agent to the browser.
-func WorkspacePatchEvent(filePath, content, action string, seqNum int64) map[string]interface{} {
-	return map[string]interface{}{
+// The optional conflictInfo parameter enriches the event with conflict
+// metadata when the container patch conflicts with unsynced browser edits.
+func WorkspacePatchEvent(filePath, content, action string, seqNum int64, conflictInfo ...PatchConflictInfo) map[string]interface{} {
+	payload := map[string]interface{}{
 		"file_path": filePath,
 		"content":   content,
 		"action":    action, // "write", "edit"
 		"seq":       seqNum,
 	}
+	if len(conflictInfo) > 0 && conflictInfo[0].Conflict {
+		payload["conflict"] = true
+		payload["theirs_path"] = conflictInfo[0].TheirsPath
+	}
+	return payload
 }
 
 // StreamChunkEvent creates a stream chunk event with content type

@@ -378,3 +378,194 @@ func TestWriteFileEmitsBothEventsInOrder(t *testing.T) {
 	assert.Equal(t, "write", data2["action"])
 	assert.Equal(t, content, data2["content"])
 }
+
+// expectWorkspacePatchConflict checks the workspace_patch event data for
+// conflict-related fields. When expectConflict is true, it asserts that
+// the event contains conflict=true and the given theirs_path. When false,
+// it asserts that conflict and theirs_path keys are absent.
+func expectWorkspacePatchConflict(t *testing.T, data map[string]interface{}, expectConflict bool, expectedTheirsPath string) {
+	t.Helper()
+
+	if expectConflict {
+		assert.Contains(t, data, "conflict", "workspace_patch event should contain conflict key when browser has unsynced edits")
+		assert.Equal(t, true, data["conflict"], "conflict should be true")
+		assert.Contains(t, data, "theirs_path", "workspace_patch event should contain theirs_path key when browser has unsynced edits")
+		assert.Equal(t, expectedTheirsPath, data["theirs_path"], "theirs_path should match expected value")
+	} else {
+		assert.NotContains(t, data, "conflict", "workspace_patch event should NOT contain conflict key when browser has no unsynced edits")
+		assert.NotContains(t, data, "theirs_path", "workspace_patch event should NOT contain theirs_path key when browser has no unsynced edits")
+	}
+}
+
+// TestWriteFileWithConflictRefused verifies that handleWriteFile REFUSES to
+// write when the file has unsynced browser edits (checkWriteStaleness blocks
+// it), so no workspace_patch event is emitted with conflict metadata. This
+// is correct: the agent must ask the user before overwriting. The conflict
+// detection via CheckPatchConflict in writeFileContent is only reachable when
+// the write succeeds (no staleness block).
+func TestWriteFileWithConflictRefused(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_write_refused_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "refused.txt")
+	content := "conflict content\n"
+
+	// Set up metadata showing the browser has unsynced edits
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        10,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 5,
+	})
+
+	// Write should be REFUSED because of unsynced browser edits
+	_, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.Error(t, err, "write should be refused when browser has unsynced edits")
+	assert.Contains(t, err.Error(), "unsynced edits", "error should mention unsynced edits")
+
+	// No events should be published since the write was refused
+	select {
+	case event := <-ch:
+		t.Fatalf("no events expected after refused write, got %s", event.Type)
+	case <-time.After(200 * time.Millisecond):
+		// OK — no event published
+	}
+}
+
+// TestWriteFileWithoutConflictEmitsNoConflictFields verifies that when
+// a workspace_patch event is published for a file that has NO unsynced
+// browser edits (BrowserSeq == LastSyncedBrowser), the event does NOT
+// include conflict or theirs_path keys.
+func TestWriteFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_no_conflict_write_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "noconflict.txt")
+	content := "no conflict content\n"
+
+	// Set up metadata showing browser is fully synced
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 5, // Equal to BrowserSeq → fully synced
+	})
+
+	result, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, filePath, "result should mention the file path")
+
+	// Expect the workspace_patch event WITHOUT conflict metadata
+	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
+
+	// Verify conflict fields are NOT present
+	expectWorkspacePatchConflict(t, data, false, "")
+}
+
+// TestWriteFileNoMetadataEmitsNoConflictFields verifies that when there
+// is NO metadata for a file at all, the workspace_patch event does NOT
+// include conflict or theirs_path keys.
+func TestWriteFileNoMetadataEmitsNoConflictFields(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_no_metadata_test")
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "nometa.txt")
+	content := "no metadata content\n"
+
+	// Do NOT set any metadata — file has no entry in the metadata store
+	result, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"content": content,
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, filePath, "result should mention the file path")
+
+	data := expectWorkspacePatchEvent(t, ch, filePath, "write")
+	expectWorkspacePatchConflict(t, data, false, "")
+}
+
+// TestEditFileWithConflictEmitsConflictPatch verifies that when
+// handleEditFile publishes a workspace_patch event for a file with
+// unsynced browser edits, the event includes conflict metadata.
+// Unlike handleWriteFile (which is blocked by checkWriteStaleness),
+// handleEditFile does NOT call checkWriteStaleness, so edits can
+// succeed and the conflict detection in the event emission path runs.
+func TestEditFileWithConflictEmitsConflictPatch(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_conflict_edit_test")
+
+	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
+	filePath := filepath.Join(tmpDir, "edit_conflict.txt")
+
+	// Create initial file
+	initialContent := "old line\nkeep this\n"
+	err := os.WriteFile(filePath, []byte(initialContent), 0644)
+	require.NoError(t, err)
+
+	// Set up metadata showing the browser has unsynced edits
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        8,
+		ContainerSeq:      2,
+		LastSyncedBrowser: 3,
+	})
+
+	result, err := handleEditFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"old_str": "old line",
+		"new_str": "new line",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event with conflict metadata
+	data := expectWorkspacePatchEvent(t, ch, filePath, "edit")
+
+	// Verify conflict fields are present
+	expectWorkspacePatchConflict(t, data, true, filePath+".theirs")
+}
+
+// TestEditFileWithoutConflictEmitsNoConflictFields verifies that when
+// handleEditFile publishes a workspace_patch event for a file with NO
+// unsynced browser edits, the event does NOT include conflict fields.
+func TestEditFileWithoutConflictEmitsNoConflictFields(t *testing.T) {
+	agent, bus := newTestAgentWithEventBus(t)
+	ch := bus.Subscribe("patch_no_conflict_edit_test")
+
+	tmpDir := t.TempDir()
+	agent.SetWorkspaceRoot(tmpDir)
+	filePath := filepath.Join(tmpDir, "edit_noconflict.txt")
+
+	// Create initial file
+	initialContent := "original value\nsome data\n"
+	err := os.WriteFile(filePath, []byte(initialContent), 0644)
+	require.NoError(t, err)
+
+	// Set up metadata showing browser is fully synced
+	agent.SetFileMetadata(filePath, WorkspaceFileMetadata{
+		BrowserSeq:        4,
+		ContainerSeq:      2,
+		LastSyncedBrowser: 4,
+	})
+
+	result, err := handleEditFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"old_str": "original value",
+		"new_str": "updated value",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result)
+
+	// Expect the workspace_patch event WITHOUT conflict metadata
+	data := expectWorkspacePatchEvent(t, ch, filePath, "edit")
+
+	// Verify conflict fields are NOT present
+	expectWorkspacePatchConflict(t, data, false, "")
+}

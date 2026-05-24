@@ -119,7 +119,7 @@
 }
 
 .file-tree .file-tree-header .create-btn.create-confirm:hover {
-  background: rgba(16, 185, 129, 0.1);
+  background: color-mix(in srgb, var(--accent-success) 10%, transparent);
 }
 
 .file-tree .file-tree-header .create-btn.create-cancel {
@@ -127,7 +127,7 @@
 }
 
 .file-tree .file-tree-header .create-btn.create-cancel:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }
 
 .file-tree .file-tree-header .create-btn:disabled {
@@ -335,7 +335,7 @@
 }
 
 .file-tree .file-tree-delete:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }
 
 .file-tree .file-tree-icon {
@@ -415,7 +415,7 @@
 }
 
 .file-tree .create-btn.create-confirm:hover {
-  background: rgba(16, 185, 129, 0.1);
+  background: color-mix(in srgb, var(--accent-success) 10%, transparent);
 }
 
 .file-tree .create-btn.create-cancel {
@@ -423,7 +423,7 @@
 }
 
 .file-tree .create-btn.create-cancel:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }
 
 .file-tree .create-btn:disabled {

@@ -124,7 +124,7 @@
 }
 
 .file-tree .file-tree-header .create-btn.create-confirm:hover {
-  background: rgba(16, 185, 129, 0.1);
+  background: color-mix(in srgb, var(--accent-success) 10%, transparent);
 }
 
 .file-tree .file-tree-header .create-btn.create-cancel {
@@ -386,7 +386,7 @@
 }
 
 .file-tree .create-btn.create-confirm:hover {
-  background: rgba(16, 185, 129, 0.1);
+  background: color-mix(in srgb, var(--accent-success) 10%, transparent);
 }
 
 .file-tree .create-btn.create-cancel {

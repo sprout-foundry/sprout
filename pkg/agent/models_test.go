@@ -629,10 +629,13 @@ func TestSetProvider_DoesNotPersistToConfig(t *testing.T) {
 		t.Fatalf("failed to save custom provider: %v", err)
 	}
 
-	// Create a minimal config file to establish a known baseline
-	// This prevents auto-selection logic from changing the LastUsedProvider
+	// Create a minimal config file to establish a known baseline.
+	// Use "no-persist-provider" (our custom-provider name) as the
+	// baseline — older versions of this test used "test", which the
+	// Load-time sanitizer now strips since it's the in-process
+	// sentinel for mocks.
 	configPath := filepath.Join(configDir, "config.json")
-	configContent := `{"last_used_provider":"test","custom_providers":{}}`
+	configContent := `{"last_used_provider":"no-persist-provider","custom_providers":{}}`
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write initial config: %v", err)
 	}
@@ -680,10 +683,14 @@ func TestSetProvider_DoesNotPersistToConfig(t *testing.T) {
 		t.Fatalf("failed to reload config: %v", err)
 	}
 
-	// Config should still have the initial provider (or test client)
-	// because SetProvider is session-scoped and doesn't persist
-	if reloadedCfg.LastUsedProvider != "test" && reloadedCfg.LastUsedProvider != initialProvider {
-		t.Errorf("Expected config provider NOT to change after SetProvider (session-scoped), got %q", reloadedCfg.LastUsedProvider)
+	// Config should still have the initial provider because SetProvider
+	// is session-scoped and doesn't persist. (Older versions of this
+	// test allowed "test" as a fallback baseline — that string is now
+	// sanitized at Load time, so the only valid pass is matching
+	// initialProvider exactly.)
+	if reloadedCfg.LastUsedProvider != initialProvider {
+		t.Errorf("Expected config provider NOT to change after SetProvider (session-scoped), got %q, want %q",
+			reloadedCfg.LastUsedProvider, initialProvider)
 	}
 }
 

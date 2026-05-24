@@ -75,7 +75,7 @@
 - [x] SP-045-Tier2b-cors: Handle provider CORS restrictions; support user-supplied proxy URL
 - [x] SP-045-Tier2b-toolExec: Route agent loop tool execution through `SproutWasm.executeCommand` JS bridge
 - [x] SP-045-buildMatrix-pty: Tag `pkg/webui/terminal_*.go` with `!js` build constraint to avoid `creack/pty` import
-- [ ] SP-045-buildMatrix-sweep: Replace `//go:build !windows` patterns with `unix && !js` across `pkg/`
+- [x] SP-045-buildMatrix-sweep: Replace `//go:build !windows` patterns with `unix && !js` across `pkg/`
 - [x] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)
 - [ ] SP-045-dist-tinygo: Spike tinygo feasibility for WASM build (huge saving, compatibility risk)
 - [ ] SP-045-dist-splitModules: Investigate splitting into small shell-only WASM + larger `embedding.wasm` lazy-load

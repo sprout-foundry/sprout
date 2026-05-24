@@ -6,6 +6,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -570,6 +572,13 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			ws.handleColdHydrateRequest(safeConn, ws.workspaceRoot)
 		})
 
+	case AllowedMessageTypeSyncRecover:
+		// SP-046: client requests sync recovery after container death or browser crash.
+		// Runs in a goroutine so the read loop stays responsive.
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+			ws.handleSyncRecoverMessage(safeConn, sessionID, msg, clientID)
+		})
+
 	case AllowedMessageTypeSessionTakeover:
 		// SP-046: session_takeover is expected only during the conflict
 		// wait loop. If it arrives during normal message dispatch, log
@@ -697,4 +706,119 @@ func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
 
 	log.Printf("[SP-046] Session %s evicted for user %s", active.sessionID, trackingKey)
 	return true
+}
+
+// handleSyncRecoverMessage processes a sync_recover message from the browser
+// after container death or browser crash recovery.
+func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID string, msg *WebSocketMessage, clientID string) {
+	// Unmarshal the data payload
+	var data map[string]interface{}
+	if len(msg.Data) == 0 {
+		log.Printf("[SP-046] sync_recover: empty data from %s", sessionID)
+		safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "invalid sync_recover data"},
+		})
+		return
+	}
+	if err := json.Unmarshal(msg.Data, &data); err != nil {
+		log.Printf("[SP-046] sync_recover: invalid JSON from %s: %v", sessionID, err)
+		safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "invalid sync_recover data"},
+		})
+		return
+	}
+
+	// Extract browser seq map from data
+	seqsRaw, ok := data["seqs"]
+	if !ok {
+		log.Printf("[SP-046] sync_recover: missing seqs from %s", sessionID)
+		safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "missing seqs in sync_recover"},
+		})
+		return
+	}
+
+	seqsMap, ok := seqsRaw.(map[string]interface{})
+	if !ok {
+		log.Printf("[SP-046] sync_recover: seqs is not a map from %s", sessionID)
+		safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": "seqs must be a map"},
+		})
+		return
+	}
+
+	browserSeqs := make(map[string]int64)
+	for path, seqVal := range seqsMap {
+		switch v := seqVal.(type) {
+		case float64:
+			browserSeqs[path] = int64(v)
+		case int64:
+			browserSeqs[path] = v
+		default:
+			log.Printf("[SP-046] sync_recover: unexpected seq type for %s: %T", path, seqVal)
+		}
+	}
+
+	log.Printf("[SP-046] sync_recover from client %s: %d files", clientID, len(browserSeqs))
+
+	// Run container death recovery with per-file seqs
+	result, err := ws.HandleContainerRecoveryWithSeqs(context.Background(), clientID, browserSeqs)
+	if err != nil {
+		log.Printf("[SP-046] sync_recover reconciliation failed: %v", err)
+		safeConn.WriteJSON(map[string]interface{}{
+			"type": "error",
+			"data": map[string]string{"message": fmt.Sprintf("reconciliation failed: %v", err)},
+		})
+		return
+	}
+
+	// Send reconciliation plan back to browser
+	if err := ws.SendSyncReconcile(safeConn, result); err != nil {
+		log.Printf("[SP-046] sync_recover: failed to send reconcile plan: %v", err)
+		return
+	}
+
+	// For container_ahead files, replay the patches
+	filesToReplay := 0
+	for _, action := range result.Plan {
+		if action.Action == "container_ahead" {
+			filesToReplay++
+		}
+	}
+
+	if filesToReplay > 0 {
+		ag := ws.agent
+		if ag != nil {
+			if err := ws.SendSyncReplayStart(safeConn, clientID, filesToReplay); err != nil {
+				log.Printf("[SP-046] sync_recover: failed to send replay start: %v", err)
+				return
+			}
+
+			for _, action := range result.Plan {
+				if action.Action != "container_ahead" {
+					continue
+				}
+				// Read the file content from container
+				content, err := ag.ReadFileContent(action.FilePath)
+				if err != nil {
+					log.Printf("[SP-046] sync_recover: failed to read %s: %v", action.FilePath, err)
+					continue
+				}
+				if err := ws.SendSyncReplayFile(safeConn, clientID, action.FilePath, content, action.ContainerSeq); err != nil {
+					log.Printf("[SP-046] sync_recover: failed to replay %s: %v", action.FilePath, err)
+					return
+				}
+			}
+
+			if err := ws.SendSyncReplayComplete(safeConn, clientID); err != nil {
+				log.Printf("[SP-046] sync_recover: failed to send replay complete: %v", err)
+			}
+		}
+	}
+
+	log.Printf("[SP-046] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
 }

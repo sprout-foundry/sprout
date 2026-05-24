@@ -73,6 +73,12 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	AllowedMessageTypeHydrateManifest: {},
 	AllowedMessageTypeHydrateFile:     {},
 	AllowedMessageTypeHydrateComplete: {},
+
+	// Sync recovery (SP-046) — server-side failure recovery paths
+	"sync_reconcile":      {},
+	"sync_replay_start":   {},
+	"sync_replay_file":    {},
+	"sync_replay_complete": {},
 }
 
 // devModeCached caches the SPROUT_DEV env check so we don't re-parse it

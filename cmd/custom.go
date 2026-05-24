@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
@@ -83,7 +84,7 @@ func runCustomModelAdd() error {
 
 	existingProviders := cfg.CustomProviders
 	if _, exists := existingProviders[strings.ToLower(strings.TrimSpace(name))]; exists {
-		answer, err := promptLine(reader, "Provider exists. Replace it? [y/N]: ")
+		answer, err := promptLine(reader, "Provider exists. Replace it? "+console.FormatYesNoPromptStdout(false)+": ")
 		if err != nil {
 			return fmt.Errorf("failed to prompt for replace confirmation: %w", err)
 		}
@@ -179,7 +180,7 @@ func runCustomModelAdd() error {
 		provider.ContextSize = provider.ModelContextSizes[provider.ModelName]
 	}
 
-	visionAnswer, err := promptLine(reader, "Does this provider/model support vision (multimodal images)? [y/N]: ")
+	visionAnswer, err := promptLine(reader, "Does this provider/model support vision (multimodal images)? "+console.FormatYesNoPromptStdout(false)+": ")
 	if err != nil {
 		return fmt.Errorf("failed to prompt for vision support: %w", err)
 	}
@@ -294,7 +295,7 @@ func runCustomModelRemove(providerName string) error {
 		return fmt.Errorf("custom provider '%s' not found", providerName)
 	}
 
-	answer, err := promptLine(reader, fmt.Sprintf("Remove provider '%s'? [y/N]: ", providerName))
+	answer, err := promptLine(reader, fmt.Sprintf("Remove provider '%s'? %s: ", providerName, console.FormatYesNoPromptStdout(false)))
 	if err != nil {
 		return fmt.Errorf("failed to prompt for removal confirmation: %w", err)
 	}

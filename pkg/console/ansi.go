@@ -1,6 +1,11 @@
 package console
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+
+	"golang.org/x/term"
+)
 
 // ANSI escape sequence helpers for consistent terminal control.
 
@@ -71,3 +76,54 @@ func ClearScreenSeq() string { return "\033[2J" }
 
 // ClearToEndOfScreenSeq returns the escape sequence to clear from cursor to end of screen.
 func ClearToEndOfScreenSeq() string { return "\033[J" }
+
+// StdoutIsTerminal returns true if os.Stdout is connected to a terminal.
+func StdoutIsTerminal() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// StderrIsTerminal returns true if os.Stderr is connected to a terminal.
+func StderrIsTerminal() bool {
+	return term.IsTerminal(int(os.Stderr.Fd()))
+}
+
+// BoldText wraps text with bold formatting using ANSI codes.
+func BoldText(text string) string {
+	return ColorBold + text + ColorReset
+}
+
+// FormatYesNoPrompt returns a [y/N] or [Y/n] prompt string with the default
+// letter bolded. When yesDefault is true, the Y is bolded ([Y/n]).
+// When yesDefault is false, the N is bolded ([y/N]).
+//
+// ANSI codes are only applied when the stderr is a TTY. When stderr is
+// not a terminal (e.g., piped to a file), the plain text is returned
+// without any escape codes.
+func FormatYesNoPrompt(yesDefault bool) string {
+	if !StderrIsTerminal() {
+		if yesDefault {
+			return "[Y/n]"
+		}
+		return "[y/N]"
+	}
+	if yesDefault {
+		return "[" + ColorBold + "Y" + ColorReset + "/n]"
+	}
+	return "[y/" + ColorBold + "N" + ColorReset + "]"
+}
+
+// FormatYesNoPromptStdout returns a [y/N] or [Y/n] prompt string with the default
+// letter bolded, checking stdout for terminal status (same logic as
+// FormatYesNoPrompt but uses os.Stdout instead of os.Stderr for the TTY check).
+func FormatYesNoPromptStdout(yesDefault bool) string {
+	if !StdoutIsTerminal() {
+		if yesDefault {
+			return "[Y/n]"
+		}
+		return "[y/N]"
+	}
+	if yesDefault {
+		return "[" + ColorBold + "Y" + ColorReset + "/n]"
+	}
+	return "[y/" + ColorBold + "N" + ColorReset + "]"
+}

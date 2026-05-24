@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -204,8 +205,8 @@ func TestSecretPrompterAdapter_CommitSource(t *testing.T) {
 	if len(receivedOptions) < 1 {
 		t.Fatal("expected at least one option")
 	}
-	if receivedOptions[0].Label != "Allow with Warning" {
-		t.Errorf("expected first label 'Allow with Warning' for commit source, got %q", receivedOptions[0].Label)
+	if receivedOptions[0].Label != console.BoldText("Allow with Warning") {
+		t.Errorf("expected first label 'Allow with Warning' (bolded), got %q", receivedOptions[0].Label)
 	}
 }
 
@@ -234,8 +235,8 @@ func TestSecretPrompterAdapter_NonCommitSource(t *testing.T) {
 	if len(receivedOptions) < 1 {
 		t.Fatal("expected at least one option")
 	}
-	if receivedOptions[0].Label != "Redact & Continue" {
-		t.Errorf("expected first label 'Redact & Continue', got %q", receivedOptions[0].Label)
+	if receivedOptions[0].Label != console.BoldText("Redact & Continue") {
+		t.Errorf("expected first label 'Redact & Continue' (bolded), got %q", receivedOptions[0].Label)
 	}
 }
 

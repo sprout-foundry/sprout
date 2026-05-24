@@ -182,9 +182,20 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"max_iterations", "integer", false, []string{}, "Maximum number of tool-call iterations for the delegate"},
 			{"files", "array", false, []string{}, "List of relevant file paths for the delegate"},
 			{"follow_up", "array", false, []string{}, "List of follow-up messages to inject into the delegate during execution (array of strings)"},
+			{"async", "boolean", false, []string{}, "If true, run the delegate asynchronously and return immediately with a delegate_id to check status later"},
 		},
 		Handler: handleDelegate,
 		Timeout: 10 * time.Minute,
+	})
+
+	// Register delegate_status tool - for checking on async delegates
+	registry.RegisterTool(ToolConfig{
+		Name:        "delegate_status",
+		Description: "Check the status of an asynchronously running delegate. Returns the current status (running/completed/failed) and any available results.",
+		Parameters: []ParameterConfig{
+			{"delegate_id", "string", true, []string{}, "The ID of the async delegate to check (returned by the delegate tool when async=true)"},
+		},
+		Handler: handleDelegateStatus,
 	})
 
 	// Register search_files tool (cross-platform file content search)

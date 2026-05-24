@@ -653,8 +653,34 @@ func GetToolDefinitions() []Tool {
 								"type": "string",
 							},
 						},
+						"async": map[string]interface{}{
+							"type":        "boolean",
+							"description": "If true, run the delegate asynchronously and return immediately with a delegate_id to check status later",
+						},
 					},
 					"required":             []string{"prompt"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "delegate_status",
+				Description: "Check the status of an asynchronously running delegate. Returns the current status (running/completed/failed) and any available results.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"delegate_id": map[string]interface{}{
+							"type":        "string",
+							"description": "The ID of the async delegate to check (returned by the delegate tool when async=true)",
+						},
+					},
+					"required":             []string{"delegate_id"},
 					"additionalProperties": false,
 				},
 			},

@@ -4,11 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
+// asyncDelegateIDCounter provides a monotonically increasing counter to
+// guarantee unique delegate IDs even when multiple delegates are started
+// within the same nanosecond (fixes SHOULD_FIX #4 — delegate ID collision).
+var asyncDelegateIDCounter int64
+
 // handleDelegate is the tool handler for the delegate tool.
 // It creates a child delegate agent, runs the query, and returns results.
+// When cfg.Async is true, the delegate runs in the background and the
+// handler returns immediately with a delegate_id for later status checks.
 func handleDelegate(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	// 1. Parse DelegateConfig from args
 	cfg, err := parseDelegateConfig(args)
@@ -21,26 +29,85 @@ func handleDelegate(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("delegate prompt is required")
 	}
 
-	// 3. Create the delegate agent
+	// 3. Validate agent is not nil
+	if a == nil {
+		return "", fmt.Errorf("agent is required")
+	}
+
+	// 4. Initialize async tracker if needed
+	a.initSubManagers()
+
+	// 4. If async mode, start in background and return immediately
+	if cfg.Async {
+		// 4a. Create the delegate agent
+		delegate, err := CreateDelegateAgent(a, cfg)
+		if err != nil {
+			return "", fmt.Errorf("failed to create delegate: %w", err)
+		}
+
+		delegateID := fmt.Sprintf("delegate-%d-%d", time.Now().UnixNano(), atomic.AddInt64(&asyncDelegateIDCounter, 1))
+
+		// 4b. Start the async delegate
+		if err := a.asyncDelegateTracker.Start(delegateID, cfg, a, func(ctx context.Context) (*DelegateResult, error) {
+			defer delegate.interruptCancel()
+
+			// Set up stream bridge for the async delegate
+			bridge := NewDelegateStreamBridge(a, delegateID)
+			bridge.Start()
+			defer bridge.Stop()
+
+			// Publish delegate started event
+			bridge.PublishActivity("started", truncateSummary(cfg.Prompt, 200), a.delegateDepth+1)
+
+			// Run the delegate's query
+			result, err := runDelegateQuery(ctx, delegate, cfg.Prompt, bridge, &cfg)
+
+			if err != nil {
+				delegateResult := bridge.GetResult("", "error", err.Error())
+				bridge.PublishActivity("error", err.Error(), a.delegateDepth+1)
+				return delegateResult, err
+			}
+
+			delegateResult := bridge.GetResult(truncateSummary(result, 500), "success", "")
+			bridge.PublishActivity("completed", truncateSummary(result, 200), a.delegateDepth+1)
+			return delegateResult, nil
+		}); err != nil {
+			return "", fmt.Errorf("failed to start async delegate: %w", err)
+		}
+
+		// 4c. Return immediately with the delegate ID
+		resultJSON, err := json.Marshal(map[string]interface{}{
+			"status":  "running",
+			"delegate_id": delegateID,
+			"message": "Delegate is running asynchronously. Use the delegate_status tool with the delegate_id to check on progress.",
+		})
+		if err != nil {
+			return fmt.Sprintf("Delegate started with ID: %s", delegateID), nil
+		}
+		return string(resultJSON), nil
+	}
+
+	// 5. Synchronous path (existing behavior - DO NOT MODIFY)
+	// 5a. Create the delegate agent
 	delegate, err := CreateDelegateAgent(a, cfg)
 	if err != nil {
 		return "", fmt.Errorf("failed to create delegate: %w", err)
 	}
 	defer delegate.interruptCancel()
 
-	// 4. Set up stream bridge
+	// 5b. Set up stream bridge
 	delegateID := fmt.Sprintf("delegate-%d", time.Now().UnixNano())
 	bridge := NewDelegateStreamBridge(a, delegateID)
 	bridge.Start()
 	defer bridge.Stop()
 
-	// 5. Publish delegate started event
+	// 5c. Publish delegate started event
 	bridge.PublishActivity("started", truncateSummary(cfg.Prompt, 200), a.delegateDepth+1)
 
-	// 6. Run the delegate's query
+	// 5d. Run the delegate's query
 	result, err := runDelegateQuery(ctx, delegate, cfg.Prompt, bridge, &cfg)
 
-	// 7. Build and return the result
+	// 5e. Build and return the result
 	var delegateResult *DelegateResult
 	if err != nil {
 		delegateResult = bridge.GetResult("", "error", err.Error())
@@ -50,7 +117,7 @@ func handleDelegate(ctx context.Context, a *Agent, args map[string]interface{}) 
 		bridge.PublishActivity("completed", truncateSummary(result, 200), a.delegateDepth+1)
 	}
 
-	// 8. Format result as JSON
+	// 5f. Format result as JSON
 	resultJSON, err := json.Marshal(delegateResult)
 	if err != nil {
 		return fmt.Sprintf("Delegate completed with output: %s", result), nil
@@ -105,6 +172,13 @@ func parseDelegateConfig(args map[string]interface{}) (DelegateConfig, error) {
 				cfg.FollowUpMessages = append(cfg.FollowUpMessages, s)
 			}
 		}
+	}
+	if v, ok := args["async"].(bool); ok {
+		cfg.Async = v
+	}
+	// Also support numeric true/false from JSON parsing (some LLM clients send 1/0)
+	if v, ok := args["async"].(float64); ok && v == 1 {
+		cfg.Async = true
 	}
 
 	return cfg, nil

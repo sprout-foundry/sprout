@@ -46,6 +46,9 @@ func (a *Agent) initSubManagers() {
 	if a.mcpSub == nil {
 		a.mcpSub = NewAgentMCPManager()
 	}
+	if a.asyncDelegateTracker == nil {
+		a.asyncDelegateTracker = NewAsyncDelegateTracker()
+	}
 }
 
 type Agent struct {
@@ -160,6 +163,10 @@ type Agent struct {
 	fleetBudgetTracker *atomic.Int64
 	fleetBudgetLimit   int64
 	fleetBudgetTrunc   atomic.Bool
+
+	// asyncDelegateTracker manages the lifecycle of asynchronous delegates.
+	// Lazy-initialized in initSubManagers.
+	asyncDelegateTracker *AsyncDelegateTracker
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

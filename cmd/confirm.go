@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"golang.org/x/term"
 )
 
@@ -30,8 +31,10 @@ func StdinIsTerminal() bool {
 // (case-insensitive). Any other input (including empty) returns false.
 // If reading from stdin fails (e.g., not a TTY), it returns false.
 // The prompt is written to stderr so it doesn't interfere with stdout capture.
+// The msg should NOT include the [y/N] suffix — it is appended automatically
+// with the default letter bolded when stderr is a terminal.
 func ConfirmPrompt(msg string) bool {
-	fmt.Fprint(os.Stderr, msg)
+	fmt.Fprintf(os.Stderr, "%s %s\n", msg, console.FormatYesNoPrompt(false))
 	reader := bufio.NewReader(os.Stdin)
 	line, err := reader.ReadString('\n')
 	if err != nil {

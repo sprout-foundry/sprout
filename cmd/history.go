@@ -87,7 +87,7 @@ func runHistoryClear() error {
 		if !StdinIsTerminal() {
 			return fmt.Errorf("this command requires confirmation. Pass --yes to skip confirmation or run interactively")
 		}
-		if !ConfirmPrompt("This will clear ALL history for " + workspace + ". Continue? [y/N] ") {
+		if !ConfirmPrompt("This will clear ALL history for " + workspace + ". Continue") {
 			return fmt.Errorf("aborted by user")
 		}
 	}

@@ -13,6 +13,10 @@ Sprout uses a two-library architecture for UI components:
 
 **Decision**: Option B from SP-039 — keep `packages/ui` as the canonical shared library. See [`roadmap/SP-039-DECISION.md`](../roadmap/SP-039-DECISION.md) for full rationale.
 
+## Consumption Guide
+
+For developers consuming `@sprout/ui` from an external project, see the **[Consumption Guide](CONSUMPTION_GUIDE.md)** — it covers installation, peer dependencies, component usage examples, TypeScript support, and more.
+
 ## Import Direction
 
 ```

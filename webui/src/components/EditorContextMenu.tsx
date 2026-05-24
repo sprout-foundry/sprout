@@ -6,6 +6,7 @@
  * Target: ~80 lines
  */
 
+import React from 'react';
 import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
 import type { FC } from 'react';
 import { ContextMenu } from '@sprout/ui';
@@ -30,9 +31,36 @@ export interface EditorContextMenuProps {
 }
 
 /**
+ * Custom equality check for EditorContextMenu.
+ * The `contextMenu` prop is a bag-of-functions object recreated by the parent on
+ * every render, so we must compare each property individually.
+ */
+export function areContextMenuEqual(
+  prev: EditorContextMenuProps,
+  next: EditorContextMenuProps,
+): boolean {
+  const pc = prev.contextMenu;
+  const nc = next.contextMenu;
+
+  if (pc.contextMenu !== nc.contextMenu) return false;
+  if (pc.workspaceRoot !== nc.workspaceRoot) return false;
+  if (pc.hideContextMenu !== nc.hideContextMenu) return false;
+  if (pc.handleCopySelection !== nc.handleCopySelection) return false;
+  if (pc.handleGoToDefinitionFromMenu !== nc.handleGoToDefinitionFromMenu) return false;
+  if (pc.handleFindAllReferencesFromMenu !== nc.handleFindAllReferencesFromMenu) return false;
+  if (pc.handleRevealInExplorer !== nc.handleRevealInExplorer) return false;
+  if (pc.handleCopyRelativePath !== nc.handleCopyRelativePath) return false;
+  if (pc.handleCopyAbsolutePath !== nc.handleCopyAbsolutePath) return false;
+
+  if (prev.isSemanticLanguage !== next.isSemanticLanguage) return false;
+
+  return true;
+}
+
+/**
  * Component that renders the editor context menu.
  */
-export const EditorContextMenu: FC<EditorContextMenuProps> = ({ contextMenu: ctx, isSemanticLanguage }) => {
+const EditorContextMenuImpl: FC<EditorContextMenuProps> = ({ contextMenu: ctx, isSemanticLanguage }) => {
   const { contextMenu, workspaceRoot } = ctx;
 
   return (
@@ -80,5 +108,7 @@ export const EditorContextMenu: FC<EditorContextMenuProps> = ({ contextMenu: ctx
     </ContextMenu>
   );
 };
+
+export const EditorContextMenu = React.memo(EditorContextMenuImpl, areContextMenuEqual);
 
 export default EditorContextMenu;

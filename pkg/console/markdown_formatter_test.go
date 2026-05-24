@@ -121,3 +121,33 @@ func TestCIOutputHandler_Integration(t *testing.T) {
 
 	// Markdown should be passed through unchanged (no processing)
 }
+
+func TestMarkdownFormatter_NO_COLOR_SuppressesANSI(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "")
+	formatter := NewMarkdownFormatter(true, true)
+	result := formatter.Format("# Title\n**bold** text")
+	if strings.Contains(result, "\033[") {
+		t.Errorf("NO_COLOR=1 should suppress all ANSI, but got: %q", result)
+	}
+}
+
+func TestMarkdownFormatter_FORCE_COLOR_EnablesANSI(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	formatter := NewMarkdownFormatter(false, true)
+	result := formatter.Format("# Title\n**bold** text")
+	if !strings.Contains(result, "\033[") {
+		t.Errorf("FORCE_COLOR=1 should enable ANSI even when formatter created with false, but got: %q", result)
+	}
+}
+
+func TestMarkdownFormatter_NO_COLOR_beats_FORCE_COLOR(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "1")
+	formatter := NewMarkdownFormatter(true, true)
+	result := formatter.Format("# Title\n**bold** text")
+	if strings.Contains(result, "\033[") {
+		t.Errorf("NO_COLOR should win over FORCE_COLOR, but got ANSI in: %q", result)
+	}
+}

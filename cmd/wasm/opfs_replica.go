@@ -610,7 +610,9 @@ func getPersistedSeqNumbers() map[string]int64 {
 		key := keys.Index(i).String()
 		val := opfsMeta.Get(key)
 		if seq := val.Get("browserSeq"); seq.Truthy() {
-			seqs[key] = int64(seq.Int())
+			if seq.Type() == js.TypeNumber {
+				seqs[key] = seq.Int64()
+			}
 		}
 	}
 

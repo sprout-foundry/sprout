@@ -89,7 +89,7 @@ func runEmbeddingsClear() error {
 		if !StdinIsTerminal() {
 			return fmt.Errorf("this command requires confirmation. Pass --yes to skip confirmation or run interactively")
 		}
-		if !ConfirmPrompt("This will clear embedding files of type " + embeddingsClearType + " from " + indexDir + ". Continue? [y/N] ") {
+		if !ConfirmPrompt("This will clear embedding files of type " + embeddingsClearType + " from " + indexDir + ". Continue") {
 			return fmt.Errorf("aborted by user")
 		}
 	}

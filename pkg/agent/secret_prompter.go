@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
@@ -37,8 +38,16 @@ func (a *secretPrompterAdapter) PromptSecretAction(secrets []security.DetectedSe
 		redactLabel = "Allow with Warning"
 	}
 
+	// Bold the safe default when running in an interactive terminal.
+	var safeLabel string
+	if a.agent.ui != nil && a.agent.ui.IsInteractive() {
+		safeLabel = console.BoldText(redactLabel)
+	} else {
+		safeLabel = redactLabel
+	}
+
 	choices := []ChoiceOption{
-		{Label: redactLabel, Value: "redact"},
+		{Label: safeLabel, Value: "redact"},
 		{Label: "Allow this batch only", Value: "allow"},
 		{Label: allowSourceLabel(source), Value: "allow_source"},
 		{Label: "Block", Value: "block"},

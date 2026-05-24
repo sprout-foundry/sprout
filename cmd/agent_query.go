@@ -77,7 +77,7 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	// Ask for confirmation (unless auto-execute)
 	if !shouldAutoExecute {
 		_, _ = os.Stdout.Write([]byte(displayMsg.String()))
-		_, _ = os.Stdout.Write([]byte("Execute directly? [Y/n] "))
+		_, _ = os.Stdout.Write([]byte("Execute directly? " + console.FormatYesNoPromptStdout(true) + " "))
 
 		// Read response
 		reader := bufio.NewReader(os.Stdin)
@@ -141,7 +141,7 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 			err,
 		)))
 		// Command execution failed - ask user if they want to send to LLM instead
-		_, _ = os.Stdout.Write([]byte("The command failed. Send this query to the Assistant instead? [Y/n] "))
+		_, _ = os.Stdout.Write([]byte("The command failed. Send this query to the Assistant instead? " + console.FormatYesNoPromptStdout(true) + " "))
 
 		// Read response
 		reader := bufio.NewReader(os.Stdin)

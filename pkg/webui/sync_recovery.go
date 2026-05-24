@@ -55,9 +55,9 @@ type SyncReplayFileData struct {
 // browser's last-known state and the container's current state.
 func (ws *ReactWebServer) HandleContainerRecovery(ctx context.Context, clientID string, lastKnownSeq int64) (*SyncReconcileData, error) {
 	// Get the agent for this client
-	ag := ws.agent
-	if ag == nil {
-		return nil, fmt.Errorf("no agent found for client %s", clientID)
+	_, err := ws.getClientAgent(clientID)
+	if err != nil {
+		return nil, fmt.Errorf("no agent found for client %s: %w", clientID, err)
 	}
 
 	// For a simple container death scenario, we don't have per-file browser seqs.
@@ -76,9 +76,9 @@ func (ws *ReactWebServer) HandleContainerRecovery(ctx context.Context, clientID 
 // HandleContainerRecoveryWithSeqs handles full per-file reconciliation
 // after container death, given the browser's per-file sequence numbers.
 func (ws *ReactWebServer) HandleContainerRecoveryWithSeqs(ctx context.Context, clientID string, browserSeqs map[string]int64) (*SyncReconcileData, error) {
-	ag := ws.agent
-	if ag == nil {
-		return nil, fmt.Errorf("no agent found for client %s", clientID)
+	ag, err := ws.getClientAgent(clientID)
+	if err != nil {
+		return nil, fmt.Errorf("no agent found for client %s: %w", clientID, err)
 	}
 
 	plan, err := agent.ReconcileSeqNumbers(ag, browserSeqs)

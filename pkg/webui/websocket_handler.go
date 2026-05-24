@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -791,32 +792,39 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	}
 
 	if filesToReplay > 0 {
-		ag := ws.agent
-		if ag != nil {
-			if err := ws.SendSyncReplayStart(safeConn, clientID, filesToReplay); err != nil {
-				log.Printf("[SP-046] sync_recover: failed to send replay start: %v", err)
+		ag, err := ws.getClientAgent(clientID)
+		if err != nil {
+			log.Printf("[SP-046] sync_recover: failed to get agent for %s: %v", clientID, err)
+			return
+		}
+		if err := ws.SendSyncReplayStart(safeConn, clientID, filesToReplay); err != nil {
+			log.Printf("[SP-046] sync_recover: failed to send replay start: %v", err)
+			return
+		}
+
+		for _, action := range result.Plan {
+			if action.Action != "container_ahead" {
+				continue
+			}
+			// Validate path to prevent traversal attacks
+			if filepath.IsAbs(action.FilePath) || strings.Contains(action.FilePath, "..") {
+				log.Printf("[SP-046] sync_recover: skipping invalid path: %s", action.FilePath)
+				continue
+			}
+			// Read the file content from container
+			content, err := ag.ReadFileContent(action.FilePath)
+			if err != nil {
+				log.Printf("[SP-046] sync_recover: failed to read %s: %v", action.FilePath, err)
+				continue
+			}
+			if err := ws.SendSyncReplayFile(safeConn, clientID, action.FilePath, content, action.ContainerSeq); err != nil {
+				log.Printf("[SP-046] sync_recover: failed to replay %s: %v", action.FilePath, err)
 				return
 			}
+		}
 
-			for _, action := range result.Plan {
-				if action.Action != "container_ahead" {
-					continue
-				}
-				// Read the file content from container
-				content, err := ag.ReadFileContent(action.FilePath)
-				if err != nil {
-					log.Printf("[SP-046] sync_recover: failed to read %s: %v", action.FilePath, err)
-					continue
-				}
-				if err := ws.SendSyncReplayFile(safeConn, clientID, action.FilePath, content, action.ContainerSeq); err != nil {
-					log.Printf("[SP-046] sync_recover: failed to replay %s: %v", action.FilePath, err)
-					return
-				}
-			}
-
-			if err := ws.SendSyncReplayComplete(safeConn, clientID); err != nil {
-				log.Printf("[SP-046] sync_recover: failed to send replay complete: %v", err)
-			}
+		if err := ws.SendSyncReplayComplete(safeConn, clientID); err != nil {
+			log.Printf("[SP-046] sync_recover: failed to send replay complete: %v", err)
 		}
 	}
 

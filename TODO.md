@@ -143,7 +143,7 @@
 - [ ] SP-008-A3-raceTests: Create `pkg/agent/concurrency_test.go` — focused race detection tests
 - [ ] SP-008-A3-ciRace: Remove `-short` from CI race detector step
 [x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
-- [ ] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods
+[x] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods
 - [ ] SP-008-B3-migrateLifecycle: Migrate agent lifecycle event logging to structured logger
 - [ ] SP-008-B3-migrateToolExec: Migrate tool execution lifecycle logging to structured logger
 - [ ] SP-008-B3-migrateConversation: Migrate conversation flow logging to structured logger

@@ -623,7 +623,33 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
 
+		// Check if there's a role matching this persona name (SP-007-1).
+		// Roles are user-defined YAML configs that can override persona defaults.
+		// Resolution order: workspace → global.
+		roleFound := false
 		if persona != "" {
+			if rm := a.configManager.GetRoleManager(); rm != nil {
+				if role, err := rm.Resolve(persona); err == nil && role != nil {
+					// Use role config to set provider/model/system prompt
+					if role.Provider != "" {
+						provider = role.Provider
+					}
+					if role.Model != "" {
+						model = role.Model
+					}
+					if role.SystemPrompt != "" {
+						systemPromptText = role.SystemPrompt
+					}
+					a.debugLog("Using role '%s': provider=%s model=%s\n", persona, role.Provider, role.Model)
+					if role.Provider != "" || role.Model != "" {
+						explicitSubagentConfig = true
+					}
+					roleFound = true
+				}
+			}
+		}
+
+		if !roleFound && persona != "" {
 			// Get persona-specific configuration
 			subagentType := config.GetSubagentType(persona)
 			if subagentType != nil {
@@ -668,13 +694,14 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				model = config.GetSubagentModel()
 				a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			}
-		} else {
+		} else if persona == "" {
 			// No persona specified, use default subagent config
 			provider = config.GetSubagentProvider()
 			model = config.GetSubagentModel()
 			a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
 			a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
+		// If roleFound is true, skip persona resolution — the role already set provider/model.
 
 		// If no explicit subagent config is set (SubagentProvider and SubagentModel are empty
 		// and persona doesn't have explicit provider/model), inherit from parent agent.

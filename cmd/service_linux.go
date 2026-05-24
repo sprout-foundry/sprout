@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 func init() {
@@ -140,7 +142,7 @@ func (m *systemdManager) Uninstall() error {
 	if count > 0 {
 		fmt.Printf("Warning: %d active agent session(s) detected. Uninstalling will stop the daemon and terminate these sessions.\n", count)
 		if !forceConfirm {
-			fmt.Print("Continue? [y/N] ")
+			fmt.Printf("Continue? %s ", console.FormatYesNoPromptStdout(false))
 			reader := bufio.NewReader(os.Stdin)
 			resp, _ := reader.ReadString('\n')
 			resp = strings.TrimSpace(strings.ToLower(resp))

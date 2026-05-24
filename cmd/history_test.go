@@ -893,7 +893,7 @@ func TestConfirmPrompt_AcceptsY(t *testing.T) {
 	cleanup := pipeStdin(t, "y\n")
 	defer cleanup()
 
-	if !ConfirmPrompt("Continue? [y/N] ") {
+	if !ConfirmPrompt("Continue?") {
 		t.Error("ConfirmPrompt should return true for 'y'")
 	}
 }
@@ -902,7 +902,7 @@ func TestConfirmPrompt_AcceptsYes(t *testing.T) {
 	cleanup := pipeStdin(t, "yes\n")
 	defer cleanup()
 
-	if !ConfirmPrompt("Continue? [y/N] ") {
+	if !ConfirmPrompt("Continue?") {
 		t.Error("ConfirmPrompt should return true for 'yes'")
 	}
 }
@@ -911,7 +911,7 @@ func TestConfirmPrompt_RejectsN(t *testing.T) {
 	cleanup := pipeStdin(t, "n\n")
 	defer cleanup()
 
-	if ConfirmPrompt("Continue? [y/N] ") {
+	if ConfirmPrompt("Continue?") {
 		t.Error("ConfirmPrompt should return false for 'n'")
 	}
 }
@@ -920,7 +920,7 @@ func TestConfirmPrompt_RejectsNo(t *testing.T) {
 	cleanup := pipeStdin(t, "no\n")
 	defer cleanup()
 
-	if ConfirmPrompt("Continue? [y/N] ") {
+	if ConfirmPrompt("Continue?") {
 		t.Error("ConfirmPrompt should return false for 'no'")
 	}
 }
@@ -929,7 +929,7 @@ func TestConfirmPrompt_RejectsEmpty(t *testing.T) {
 	cleanup := pipeStdin(t, "\n")
 	defer cleanup()
 
-	if ConfirmPrompt("Continue? [y/N] ") {
+	if ConfirmPrompt("Continue?") {
 		t.Error("ConfirmPrompt should return false for empty input")
 	}
 }
@@ -938,7 +938,7 @@ func TestConfirmPrompt_RejectsRandom(t *testing.T) {
 	cleanup := pipeStdin(t, "abc\n")
 	defer cleanup()
 
-	if ConfirmPrompt("Continue? [y/N] ") {
+	if ConfirmPrompt("Continue?") {
 		t.Error("ConfirmPrompt should return false for random input")
 	}
 }
@@ -960,7 +960,7 @@ func TestConfirmPrompt_CaseInsensitive(t *testing.T) {
 			cleanup := pipeStdin(t, tc.input)
 			defer cleanup()
 
-			got := ConfirmPrompt("Continue? [y/N] ")
+			got := ConfirmPrompt("Continue?")
 			if got != tc.expect {
 				t.Errorf("ConfirmPrompt(%q) = %v, want %v", tc.input, got, tc.expect)
 			}

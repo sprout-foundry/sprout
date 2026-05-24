@@ -123,3 +123,13 @@ func (b *DelegateStreamBridge) PublishActivity(action, summary string, depth int
 	event := events.DelegateActivityEvent(b.delegateID, action, summary, depth)
 	b.parentAgent.eventBus.Publish(events.EventTypeDelegateActivity, event)
 }
+
+// RecordFollowUpInjection records that a follow-up message was injected and
+// publishes a delegate_activity event for observability.
+func (b *DelegateStreamBridge) RecordFollowUpInjection(message string) {
+	depth := 0
+	if b.parentAgent != nil {
+		depth = b.parentAgent.delegateDepth + 1
+	}
+	b.PublishActivity("follow_up_injected", truncateSummary(message, 100), depth)
+}

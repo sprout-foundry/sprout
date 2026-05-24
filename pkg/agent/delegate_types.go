@@ -99,6 +99,11 @@ type DelegateConfig struct {
 
 	// Files is a list of file paths the delegate should have access to.
 	Files []string `json:"files,omitempty"`
+
+	// FollowUpMessages is a list of follow-up messages to inject into the delegate
+	// during execution via the input injection channel. Messages are injected with
+	// a small delay between them to avoid overwhelming the channel.
+	FollowUpMessages []string `json:"follow_up,omitempty"`
 }
 
 // Validate checks that the DelegateConfig has all required fields set properly.

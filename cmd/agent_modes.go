@@ -841,6 +841,12 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		return matches
 	})
 
+// SP-055: steer coordinator owns the pinned steer-input panel for
+	// the lifetime of this REPL. Constructed once with the agent +
+	// footer references; StartTurn / EndTurn drive the per-iteration
+	// lifecycle below.
+	steerCoord := NewSteerCoordinator(chatAgent, footer)
+
 	// SP-048-1c + 3: Subscribe to tool start/end events so the activity
 	// indicator can render a per-tool timeline AND the footer can refresh
 	// cost/context after each tool. Runs until ctx is cancelled.
@@ -926,26 +932,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// also Stop() defensively after ProcessQuery returns.
 			indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
 
-			// SP-055: spawn the steer input panel for the duration of the
-			// turn. It pins a single editable line above the status
-			// footer; the user can type while the model is working and
-			// hit Enter to inject a steering message that seed consumes
-			// at the next iteration boundary. Stops are matched with
-			// Starts via the defer immediately below.
-			steerReader := console.NewSteerInputReader(
-				footer,
-				func(text string) {
-					if err := chatAgent.InjectInputContext(text); err != nil {
-						// Steer dropped — log to stderr but don't fail the
-						// turn. The channel's full state is transient.
-						fmt.Fprintf(os.Stderr, "\n[steer] dropped: %v\n", err)
-						return
-					}
-					fmt.Fprintf(os.Stderr, "\n[steer →] %s\n", text)
-				},
-				func(_ string) { chatAgent.TriggerInterrupt() },
-			)
-			steerReader.Start()
+			// SP-055: turn the steer panel on for the duration of the
+			// ProcessQuery call. The coordinator (constructed once at
+			// session start) owns the SteerInputReader and the callback
+			// wiring to InjectInputContext / TriggerInterrupt.
+			steerCoord.StartTurn()
 
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
@@ -966,9 +957,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			}
 			// SP-055: tear down the steer panel before the indicator so
 			// the terminal exits raw mode while the spinner / streaming
-			// callbacks are still safe to write. ClearSteerLine resets
-			// the scroll region back to 2 reserved rows.
-			steerReader.Stop()
+			// callbacks are still safe to write. EndTurn resets the
+			// scroll region back to 2 reserved rows.
+			steerCoord.EndTurn()
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()

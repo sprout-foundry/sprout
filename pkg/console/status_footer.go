@@ -38,6 +38,14 @@ type StatusFooter struct {
 	// fresh scroll region for the new dimensions.
 	lastRows int
 
+	// SP-055: optional steer input line. When steerActive is true the
+	// footer reserves a THIRD pinned row (N-2) above the existing rule
+	// (N-1) and content (N), and scroll region shrinks to 1..N-3.
+	// steerLine is the text to render on that row (with cursor marker
+	// already baked in by the SteerInputReader).
+	steerActive bool
+	steerLine   string
+
 	winchStop chan struct{}
 	winchDone chan struct{}
 
@@ -148,12 +156,19 @@ func (f *StatusFooter) Resize() {
 
 	// Reset the scroll region temporarily so we can address rows by
 	// absolute number without the terminal clamping us inside the OLD
-	// (now-stale) scroll area. Then clear the previous footer rows.
+	// (now-stale) scroll area. Then clear the previous footer rows —
+	// 2 rows by default (rule + content), 3 when steer was active.
 	if oldRows > 1 {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows)
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-1)
+		f.mu.Lock()
+		steerWasActive := f.steerActive
+		f.mu.Unlock()
+		if steerWasActive && oldRows > 2 {
+			fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-2)
+		}
 		fmt.Fprint(f.w, "\0338")
 	}
 
@@ -188,20 +203,31 @@ func (f *StatusFooter) Stop() {
 
 	_, rows := f.terminalSize()
 	if rows > 1 {
-		// Clear both footer rows (N-1 hr + N content) before resetting
-		// the scroll region so we don't leave residual chrome in the
-		// scrollback. Order matters: bottom-up so the cursor ends near
-		// the top of where the footer was, which is more useful for the
-		// outgoing rendering context than the absolute bottom.
+		// Clear all pinned rows (N + N-1, plus N-2 if steer was active)
+		// before resetting the scroll region so we don't leave residual
+		// chrome in the scrollback. Order matters: bottom-up so the
+		// cursor ends near the top of where the footer was, which is
+		// more useful for the outgoing rendering context than the
+		// absolute bottom.
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows)
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-1)
+		if f.steerActive && rows > 2 {
+			fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-2)
+		}
 	}
 	// Reset scroll region to full screen.
 	fmt.Fprint(f.w, "\033[r")
-	// Restore cursor to a sensible position (where the hr used to be).
+	// Restore cursor to a sensible position (where the topmost pinned
+	// row used to be) so subsequent output lands somewhere sensible.
 	if rows > 1 {
-		fmt.Fprintf(f.w, "\033[%d;1H", rows-1)
+		topPinned := rows - 1
+		if f.steerActive {
+			topPinned = rows - 2
+		}
+		fmt.Fprintf(f.w, "\033[%d;1H", topPinned)
 	}
+	f.steerActive = false
+	f.steerLine = ""
 }
 
 // watchResize listens for SIGWINCH (or the platform equivalent) and
@@ -239,39 +265,118 @@ const (
 	footerResetFgKeepBase = "\033[39m" + footerBaseColor // pop fg back to cyan
 )
 
-// applyScrollRegion sets the scroll region to rows 1..(rows-2) so the
-// bottom two rows are reserved for the footer: row N-1 is a horizontal
-// rule and row N is the content. No-op when the terminal is too short
-// for both the footer and any usable scroll area.
+// reservedRows returns the number of bottom-pinned rows the footer is
+// holding. Always at least 2 (rule + content). When the steer input is
+// active, an additional row is reserved at N-2 above the rule.
+func (f *StatusFooter) reservedRows() int {
+	if f.steerActive {
+		return 3
+	}
+	return 2
+}
+
+// applyScrollRegion sets the scroll region to rows 1..(rows-reserved) so the
+// bottom pinned rows are excluded. Reserves 2 rows by default (rule + content),
+// 3 rows when a steer input is active (steer + rule + content). No-op when
+// the terminal is too short for both the footer and any usable scroll area.
 func (f *StatusFooter) applyScrollRegion() {
 	_, rows := f.terminalSize()
-	if rows < 3 {
+	reserved := f.reservedRows()
+	if rows < reserved+1 {
 		return
 	}
 	// DECSTBM: set scroll region. After setting, cursor moves to the
 	// home position of the new region (row 1, col 1) per VT100 spec.
 	// We then move it just above the footer so subsequent prints land
 	// where the user expects (at the bottom of the active scroll area).
-	fmt.Fprintf(f.w, "\033[1;%dr", rows-2)
-	fmt.Fprintf(f.w, "\033[%d;1H", rows-2)
+	fmt.Fprintf(f.w, "\033[1;%dr", rows-reserved)
+	fmt.Fprintf(f.w, "\033[%d;1H", rows-reserved)
 }
 
-// draw renders the two-row footer: the horizontal rule on row N-1 and
-// the content on row N. Uses save/restore cursor (DEC private mode
+// SetSteerLine reserves an extra pinned row above the rule and renders
+// the supplied text there. Called by SteerInputReader as the user types
+// — each keystroke replaces the prior content. Safe to call repeatedly;
+// idempotent on the region change once active. SP-055.
+func (f *StatusFooter) SetSteerLine(text string) {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	wasActive := f.steerActive
+	f.steerActive = true
+	f.steerLine = text
+	active := f.active
+	f.mu.Unlock()
+	if !active {
+		return
+	}
+	if !wasActive {
+		// First call activates the third reserved row — re-apply region.
+		f.applyScrollRegion()
+	}
+	f.draw()
+}
+
+// ClearSteerLine drops the extra pinned row, clears it from the
+// terminal, and contracts the scroll region back to 2 reserved rows.
+// Called when the SteerInputReader stops (e.g. ProcessQuery returned).
+// SP-055.
+func (f *StatusFooter) ClearSteerLine() {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	wasActive := f.steerActive
+	f.steerActive = false
+	f.steerLine = ""
+	active := f.active
+	f.mu.Unlock()
+	if !active || !wasActive {
+		return
+	}
+	// Reset region, blank the row we just freed, then re-apply with one
+	// fewer reserved row. Order: reset region first so we can address
+	// the previously-reserved row by absolute number.
+	_, rows := f.terminalSize()
+	if rows > 2 {
+		fmt.Fprint(f.w, "\033[r")
+		fmt.Fprint(f.w, "\0337")
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-2)
+		fmt.Fprint(f.w, "\0338")
+	}
+	f.applyScrollRegion()
+	f.draw()
+}
+
+// draw renders the pinned footer rows. Always: row N-1 horizontal rule,
+// row N content. When a steer line is active: row N-2 steer input,
+// row N-1 rule, row N content. Uses save/restore cursor (DEC private mode
 // \0337/\0338) so any in-flight prompt rendering above the footer is
 // not perturbed.
 func (f *StatusFooter) draw() {
 	cols, rows := f.terminalSize()
-	if rows < 3 {
+	if rows < f.reservedRows()+1 {
 		return
 	}
 	line := f.composeLine(cols)
 	rule := strings.Repeat("─", cols)
 
-	// \0337 save cursor; draw rule at N-1; draw content at N; \0338
+	f.mu.Lock()
+	steerActive := f.steerActive
+	steerLine := f.steerLine
+	f.mu.Unlock()
+
+	// \0337 save cursor; draw chrome rows from top-to-bottom; \0338
 	// restore. Color codes wrap each row so the chrome reads as "system
 	// UI" without leaking color into surrounding output.
 	fmt.Fprint(f.w, "\0337")
+	if steerActive {
+		// Render the steer input at N-2 above the rule. The steer line
+		// uses a slightly different color (bright cyan + bold) so it
+		// reads as "active input" vs the muted status footer below.
+		steerRow := steerLineWithCursor(steerLine, cols)
+		fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-2, steerColor, steerRow, footerResetAll)
+	}
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s\0338", rows, footerBaseColor, line, footerResetAll)
 
@@ -280,6 +385,32 @@ func (f *StatusFooter) draw() {
 	f.mu.Lock()
 	f.lastRows = rows
 	f.mu.Unlock()
+}
+
+// steerColor is the ANSI prefix for the active steer input row —
+// brighter than the cyan footer chrome so the user can tell at a
+// glance that this row is interactive.
+const steerColor = "\033[1;96m" // bold bright-cyan
+
+// steerLineWithCursor pads the steer text to the terminal width and
+// appends a visible cursor caret. The caret tells the user "your
+// keystrokes are landing here" even when the terminal's blinking
+// cursor is parked elsewhere (which is common after our cursor
+// save/restore juggling).
+func steerLineWithCursor(text string, cols int) string {
+	const caret = "▏"
+	if visibleLen(text)+visibleLen(caret) >= cols {
+		// Truncate the text — keep the prefix, trim the tail, then add
+		// caret + ellipsis so it's clear the input goes beyond what's
+		// visible.
+		text = truncWithEllipsis(text, cols-visibleLen(caret)-1)
+	}
+	body := text + caret
+	pad := cols - visibleLen(body)
+	if pad < 0 {
+		pad = 0
+	}
+	return body + strings.Repeat(" ", pad)
 }
 
 // composeLine builds the content row of the footer, padded/truncated to

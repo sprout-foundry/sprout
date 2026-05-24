@@ -1,0 +1,223 @@
+import { Meta, Description, Controls } from '@storybook/blocks';
+import FileTreeStories from './FileTree.stories';
+
+<Meta title="Components/FileTree" of={FileTreeStories} />
+
+# FileTree
+
+<Description>
+A feature-rich file explorer component for browsing, navigating, and managing files in a directory tree. Supports lazy loading, context menus, inline rename/create, drag-and-drop, multi-select, git status badges, fuzzy search, and keyboard navigation.
+</Description>
+
+---
+
+## Overview
+
+FileTree provides two data loading modes:
+
+- **Uncontrolled (lazy loading)** — Provide `onFetchFiles` and the component fetches directories on demand as the user expands nodes.
+- **Controlled (pre-loaded)** — Provide `files` directly and the component renders the given tree.
+
+In both modes, `onFileSelect` is required to receive the selected file.
+
+Key features:
+- **Lazy loading** — Only fetches directories when expanded via `onFetchFiles`
+- **Context menu** — Right-click for rename, delete, copy path, new file/folder
+- **Inline rename & create** — Double-click to rename, inline forms for new files/folders
+- **Drag and drop** — Drag files/folders to reorder or move
+- **Multi-select** — Ctrl/Cmd+click or Shift+click, with a selection action bar
+- **Git status badges** — Shows modified, untracked, ignored indicators on files
+- **Fuzzy search** — Type to filter visible entries with highlighting
+- **Keyboard navigation** — Arrow keys, Enter, Escape, Backspace for tree navigation
+
+---
+
+## Props Reference
+
+<Controls of={FileTreeStories} />
+
+---
+
+## Key Types
+
+### FileInfo
+
+The core data structure representing a file or directory entry:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | File or directory name |
+| `path` | `string` | Full path from the root |
+| `isDir` | `boolean` | Whether this entry is a directory |
+| `size` | `number` | File size in bytes (0 for directories) |
+| `modified` | `number` | Last modified timestamp (Unix epoch ms) |
+| `ext?` | `string` | File extension (e.g., `'ts'`, `'tsx'`) |
+| `gitStatus?` | `'modified' \| 'untracked' \| 'ignored'` | Git status indicator |
+| `children?` | `FileInfo[]` | Child entries (for pre-loaded trees) |
+
+### FileTreeHandle
+
+Imperative handle for controlling the tree externally:
+
+| Method | Description |
+|--------|-------------|
+| `refresh()` | Refresh the file tree from scratch |
+| `revealFile(filePath)` | Expand the tree to reveal the given file path |
+
+---
+
+## Usage Examples
+
+### Basic file tree with lazy loading
+
+The most common pattern — let the component fetch files on demand:
+
+```tsx
+import { FileTree, FileInfo } from '@sprout/ui';
+
+function MyExplorer() {
+  const handleSelect = (file: FileInfo) => {
+    console.log('Selected:', file.path);
+  };
+
+  const handleFetch = async (path: string) => {
+    // Fetch files from your backend or file system
+    const files = await fetch(`/api/files?path=${path}`).then(r => r.json());
+    return files;
+  };
+
+  return (
+    <FileTree
+      onFileSelect={handleSelect}
+      onFetchFiles={handleFetch}
+    />
+  );
+}
+```
+
+### Controlled mode with pre-loaded files
+
+Pass the file tree data directly for full control:
+
+```tsx
+import { FileTree, FileInfo } from '@sprout/ui';
+
+const files: FileInfo[] = [
+  {
+    name: 'src',
+    path: 'src',
+    isDir: true,
+    size: 0,
+    modified: Date.now(),
+    children: [
+      {
+        name: 'App.tsx',
+        path: 'src/App.tsx',
+        isDir: false,
+        size: 1234,
+        modified: Date.now(),
+        ext: 'tsx',
+      },
+    ],
+  },
+];
+
+function MyExplorer() {
+  return (
+    <FileTree
+      files={files}
+      onFileSelect={(file) => console.log(file.path)}
+    />
+  );
+}
+```
+
+### Imperative handle usage
+
+Use a ref to refresh or reveal files programmatically:
+
+```tsx
+import { useRef } from 'react';
+import { FileTree, FileTreeHandle, FileInfo } from '@sprout/ui';
+
+function MyExplorer() {
+  const treeRef = useRef<FileTreeHandle>(null);
+
+  const handleOpen = (path: string) => {
+    // Expand the tree to reveal the file
+    treeRef.current?.revealFile(path);
+  };
+
+  return (
+    <FileTree
+      ref={treeRef}
+      onFileSelect={(file) => console.log(file.path)}
+      onFetchFiles={async (path) => []}
+    />
+  );
+}
+```
+
+### File operations
+
+Wire up create, delete, and rename handlers for full file management:
+
+```tsx
+import { FileTree, FileInfo } from '@sprout/ui';
+
+function MyExplorer() {
+  return (
+    <FileTree
+      onFileSelect={(file) => console.log(file.path)}
+      onFetchFiles={async (path) => []}
+      onCreateFile={async (parentPath, name) => {
+        // Create a new file
+        await fs.writeFile(`${parentPath}/${name}`, '');
+      }}
+      onCreateFolder={async (parentPath, name) => {
+        // Create a new directory
+        await fs.mkdir(`${parentPath}/${name}`, { recursive: true });
+      }}
+      onDeletePath={async (path, isDir) => {
+        if (isDir) {
+          await fs.rm(path, { recursive: true });
+        } else {
+          await fs.rm(path);
+        }
+      }}
+      onRenamePath={async (oldPath, newPath) => {
+        await fs.rename(oldPath, newPath);
+      }}
+    />
+  );
+}
+```
+
+---
+
+## Integration
+
+### Multi-select
+
+FileTree uses the `useMultiSelect` hook internally to support Ctrl/Cmd+click and Shift+click range selection. A selection action bar appears at the top when items are selected, providing bulk actions.
+
+### Fuzzy search
+
+Type in the search box to filter visible entries. Matching entries are highlighted using `fuzzyScore` and `highlightMatches` from the shared utility module.
+
+### Git status
+
+Files with `gitStatus` set display a colored badge next to their name:
+- `modified` — shown as a modified indicator
+- `untracked` — shown as an untracked indicator
+- `ignored` — shown as an ignored indicator
+
+### Workspace root
+
+Set `workspaceRoot` to enable "Copy absolute path" in the context menu. The component prepends the workspace root to relative paths.
+
+---
+
+## Accessibility
+
+FileTree provides keyboard navigation with arrow keys, Enter to select/expand, Escape to cancel inline edits, and Backspace to collapse folders. All interactive elements include appropriate ARIA attributes.

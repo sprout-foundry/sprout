@@ -55,7 +55,7 @@ help:
 test-unit:
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
-	go test -tags "browser" ./pkg/... ./cmd/... -v -timeout=60s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
+	go test -race -tags "browser" ./pkg/... ./cmd/... -v -timeout=120s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

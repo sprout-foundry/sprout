@@ -66,6 +66,9 @@ func main() {
 	for name, fn := range workspaceJSFuncs() {
 		apiSurface[name] = fn
 	}
+	for name, fn := range llmJSFuncs() {
+		apiSurface[name] = fn
+	}
 
 	js.Global().Set("SproutWasm", js.ValueOf(apiSurface))
 

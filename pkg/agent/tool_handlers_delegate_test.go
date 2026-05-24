@@ -439,10 +439,10 @@ func TestHandleDelegate_WhitespaceOnlyPrompt(t *testing.T) {
 	}
 
 	// This should NOT error from handleDelegate since it only checks ""
+	// The nil agent check runs first and returns "agent is required"
 	_, err := handleDelegate(context.Background(), nil, args)
-	// Will error from CreateDelegateAgent (nil agent) not from prompt check
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create delegate")
+	assert.Contains(t, err.Error(), "agent is required")
 	assert.NotContains(t, err.Error(), "prompt is required")
 }
 

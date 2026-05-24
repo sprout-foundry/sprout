@@ -716,6 +716,24 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		opts.InitialMessages = msgs
 	}
 
+	// Restore turn checkpoints so that the message pipeline can apply
+	// checkpoint compaction before sending to the provider. Without this,
+	// restored sessions send the entire raw history (potentially hundreds of
+	// messages with tool calls) instead of the compacted summary, causing
+	// provider 400 errors due to mismatched tool calls/responses.
+	if cps := a.state.GetTurnCheckpoints(); len(cps) > 0 {
+		seedCPs := make([]core.TurnCheckpoint, len(cps))
+		for i, cp := range cps {
+			seedCPs[i] = core.TurnCheckpoint{
+				StartIndex:        cp.StartIndex,
+				EndIndex:          cp.EndIndex,
+				Summary:           cp.Summary,
+				ActionableSummary: cp.ActionableSummary,
+			}
+		}
+		opts.InitialCheckpoints = seedCPs
+	}
+
 	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {

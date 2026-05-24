@@ -18,13 +18,13 @@
 ## Partially Done — SP-010: Editor Modernization
 
 - [x] SP-010-P1-hooks: Extract remaining hooks: `useEditorExtensions`, `useEditorDiagnostics`, `useEditorFileIO`, `useEditorScrollSync`, `useEditorSymbols`, `useEditorCursor`
-- [ ] SP-010-P1-components: Create `EditorCore.tsx` (CodeMirror mount point) and `EditorToolbarActions.tsx`; reduce `EditorPane.tsx` to ~300-line composition root
-- [ ] SP-010-P2-errorLens: Create `webui/src/extensions/errorLens.ts` — inline diagnostic display via `Decoration.widget`
-- [ ] SP-010-P2-wordHighlights: Verify/fix `highlightSelectionMatches()` wiring and add custom styling
-- [ ] SP-010-P2-inlayHints: Create `webui/src/extensions/inlayHints.ts` — request LSP inlay hints for type/parameter annotations
-- [ ] SP-010-P2-signatureHelp: Create `webui/src/extensions/signatureHelp.ts` — function signature tooltip on `(`/`,`
-- [ ] SP-010-P2-formatOnSave: Wire existing formatter service to save action (opt-in setting)
-- [ ] SP-010-P2-goToReferences: Add dedicated go-to-references panel (hover tooltip has refs but no standalone panel)
+- [x] SP-010-P1-components: Create `EditorCore.tsx` (CodeMirror mount point) and `EditorToolbarActions.tsx`; reduce `EditorPane.tsx` to ~300-line composition root
+- [x] SP-010-P2-errorLens: Create `webui/src/extensions/errorLens.ts` — inline diagnostic display via `Decoration.widget`
+- [x] SP-010-P2-wordHighlights: Verify/fix `highlightSelectionMatches()` wiring and add custom styling
+- [x] SP-010-P2-inlayHints: Create `webui/src/extensions/inlayHints.ts` — request LSP inlay hints for type/parameter annotations
+- [x] SP-010-P2-signatureHelp: Create `webui/src/extensions/signatureHelp.ts` — function signature tooltip on `(`/`,`
+- [x] SP-010-P2-formatOnSave: Wire existing formatter service to save action (opt-in setting)
+- [x] SP-010-P2-goToReferences: Add dedicated go-to-references panel (hover tooltip has refs but no standalone panel)
 - [ ] SP-010-P3-memo: Add `React.memo` to EditorTabs, EditorBreadcrumb, EditorToolbar, and other child components
 - [ ] SP-010-P3-symbolKey: Fix symbol extraction to be keyed to content checksum, not cursor position
 - [ ] SP-010-P3-tabTooltips: Add `title` attribute to tab names showing full file path on hover

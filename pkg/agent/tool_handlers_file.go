@@ -467,8 +467,14 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 
 		// Publish workspace_patch for real-time browser sync
 		seq := nextPatchSeq()
-		a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq))
-		a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+		conflict, theirsPath := a.CheckPatchConflict(path)
+		if conflict {
+			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
+			a.debugLog("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
+		} else {
+			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq))
+			a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+		}
 
 		// Check for security concerns in the written content
 		a.CheckFileContentSecurity(path, content)
@@ -594,8 +600,14 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 
 			// Publish workspace_patch for real-time browser sync
 			seq := nextPatchSeq()
-			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, eventContent, "edit", seq))
-			a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+			conflict, theirsPath := a.CheckPatchConflict(path)
+			if conflict {
+				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, eventContent, "edit", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
+				a.debugLog("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
+			} else {
+				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, eventContent, "edit", seq))
+				a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+			}
 		} else {
 			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
 			a.debugLog("Published file_changed event: %s (edit, no content)\n", path)
@@ -603,8 +615,14 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			// Publish workspace_patch for real-time browser sync (empty content since
 			// the post-edit read failed).
 			seq := nextPatchSeq()
-			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, "", "edit", seq))
-			a.debugLog("Published workspace_patch event: %s (seq=%d, empty content)\n", path, seq)
+			conflict, theirsPath := a.CheckPatchConflict(path)
+			if conflict {
+				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, "", "edit", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
+				a.debugLog("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s, empty content)\n", path, seq, theirsPath)
+			} else {
+				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, "", "edit", seq))
+				a.debugLog("Published workspace_patch event: %s (seq=%d, empty content)\n", path, seq)
+			}
 		}
 
 		// Start async validation (fire-and-forget)

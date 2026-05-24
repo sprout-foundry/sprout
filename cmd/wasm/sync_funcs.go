@@ -41,16 +41,17 @@ var (
 
 func syncJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
-		"setSyncEndpoint":   js.FuncOf(setSyncEndpointFunc),
-		"getSyncEndpoint":   js.FuncOf(getSyncEndpointFunc),
-		"applyFileMetadata": js.FuncOf(applyFileMetadataFunc),
-		"onSessionMoved":    js.FuncOf(onSessionMovedFunc),
-		"sessionMoved":      js.FuncOf(sessionMovedFunc),
-		"startHeartbeat":    js.FuncOf(startHeartbeatFunc),
-		"stopHeartbeat":     js.FuncOf(stopHeartbeatFunc),
-		"queueSyncOp":       js.FuncOf(queueSyncOpFunc),
-		"flushSyncOps":      js.FuncOf(flushSyncOpsFunc),
-		"getSyncOpQueue":    js.FuncOf(getSyncOpQueueFunc),
+		"setSyncEndpoint":              js.FuncOf(setSyncEndpointFunc),
+		"getSyncEndpoint":              js.FuncOf(getSyncEndpointFunc),
+		"applyFileMetadata":            js.FuncOf(applyFileMetadataFunc),
+		"onSessionMoved":               js.FuncOf(onSessionMovedFunc),
+		"sessionMoved":                 js.FuncOf(sessionMovedFunc),
+		"startHeartbeat":               js.FuncOf(startHeartbeatFunc),
+		"stopHeartbeat":                js.FuncOf(stopHeartbeatFunc),
+		"queueSyncOp":                  js.FuncOf(queueSyncOpFunc),
+		"flushSyncOps":                 js.FuncOf(flushSyncOpsFunc),
+		"getSyncOpQueue":               js.FuncOf(getSyncOpQueueFunc),
+		"handleWorkspacePatchConflict": js.FuncOf(handleWorkspacePatchConflictFunc),
 	}
 }
 
@@ -201,6 +202,65 @@ func stopHeartbeatFunc(_ js.Value, _ []js.Value) interface{} {
 	}
 	syncHeartbeatActive = false
 	return map[string]interface{}{"ok": true, "was_running": true}
+}
+
+// ─── Theirs content stash ─────────────────────────────────────────
+// When a workspace_patch carries conflict metadata, the browser stores
+// the container's content under a .theirs path so the UI can render
+// a git-style diff. This is a process-level snapshot for free-tier WASM;
+// when the agent is wired up (Tier 2b), it routes through the agent.
+
+var (
+	theirsStashMu sync.RWMutex
+	theirsStash   = map[string]string{}
+)
+
+// stashTheirsContent stores the "theirs" content for a conflict path.
+// callers MUST pass a normalized absolute path that matches the format
+// produced by the container-side CheckPatchConflict (see
+// pkg/agent/workspace_sync.go). Passing relative or unnormalized paths
+// will cause lookups in the UI layer to fail silently.
+func stashTheirsContent(theirsPath, content string) {
+	theirsStashMu.Lock()
+	defer theirsStashMu.Unlock()
+	theirsStash[theirsPath] = content
+}
+
+// peekTheirsContent is used by the test harness to verify a conflict
+// stash landed correctly. Not exported to JS — internal only.
+func peekTheirsContent(theirsPath string) (string, bool) {
+	theirsStashMu.RLock()
+	defer theirsStashMu.RUnlock()
+	content, ok := theirsStash[theirsPath]
+	return content, ok
+}
+
+// handleWorkspacePatchConflictFunc processes an incoming workspace_patch
+// that carries conflict metadata. When conflict is true, it writes the
+// container's content to the .theirs sibling file in the virtual
+// filesystem so the browser can show a git-style diff/conflict UI.
+//
+// IMPORTANT: the `theirsPath` parameter must be a normalized absolute
+// path that matches the format produced by the container-side
+// CheckPatchConflict (see pkg/agent/workspace_sync.go). This ensures
+// the browser can locate the file in the virtual filesystem for the
+// diff UI. Passing a relative or unnormalized path will cause the
+// conflict UI to fail silently.
+//
+// Signature: handleWorkspacePatchConflict(path: string, content: string, theirsPath: string): {ok: true}
+func handleWorkspacePatchConflictFunc(_ js.Value, args []js.Value) interface{} {
+	path := argString(args, 0, "")
+	content := argString(args, 1, "")
+	theirsPath := argString(args, 2, "")
+	if path == "" || theirsPath == "" {
+		return map[string]interface{}{"error": "path and theirsPath are required"}
+	}
+	// Store the theirs content so the UI can retrieve it for a git-style diff
+	stashFileMetadata(theirsPath, agent.WorkspaceFileMetadata{
+		ContainerSeq: 0, // marker: this is a theirs file, not a synced container write
+	})
+	stashTheirsContent(theirsPath, content)
+	return map[string]interface{}{"ok": true, "theirs_path": theirsPath}
 }
 
 // ─── Metadata stash ──────────────────────────────────────────────

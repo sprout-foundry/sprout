@@ -164,6 +164,23 @@ func (a *Agent) GetFileMetadata(path string) (WorkspaceFileMetadata, bool) {
 	return store.get(path)
 }
 
+// CheckPatchConflict checks whether a container patch to the given path
+// conflicts with unsynced browser edits. Returns (conflict bool, theirsPath string).
+// theirsPath is "<path>.theirs" when conflict is true, empty otherwise.
+func (a *Agent) CheckPatchConflict(path string) (bool, string) {
+	if a == nil {
+		return false, ""
+	}
+	md, ok := a.GetFileMetadata(path)
+	if !ok {
+		return false, ""
+	}
+	if md.HasUnsyncedBrowserEdits() {
+		return true, path + ".theirs"
+	}
+	return false, ""
+}
+
 // turnFileTracker records which files the agent has called read_file on
 // during the current turn. Used by the staleness rule's "must read before
 // write this turn" check.

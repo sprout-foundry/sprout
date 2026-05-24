@@ -181,7 +181,7 @@
 - [ ] SP-012-U1.3-editorTabsARIA: Add `aria-label="Close {filename}"` to tab close buttons
 - [ ] SP-012-U1.3-sidebarARIA: Add `role="navigation"` to Sidebar navigation sections
 - [ ] SP-012-U1.4-focusIndicators: Add global `:focus-visible` outline styles and `:focus:not(:focus-visible)` outline removal
-- [ ] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement
+- [x] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement
 - [ ] SP-012-U2.2-sidebarPersist: Ensure `isCollapsed`, `activeTab`, and `width` in `useSidebarState.ts` all persist to localStorage
 - [ ] SP-012-U2.3-responsiveCSS: Add tablet (768-1024px) and mobile (<768px) responsive breakpoints — icons-only sidebar, vertical stacking
 - [ ] SP-012-U2.3-touchGestures: Add swipe left/right to toggle sidebar on mobile

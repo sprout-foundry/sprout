@@ -34,13 +34,16 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  vi.useFakeTimers();
   vi.clearAllMocks();
   latestContext = undefined;
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   localStorage.removeItem('sprout.editor.layoutState');
+  localStorage.removeItem('editor.max-panes');
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => {
     root?.unmount();
   });
@@ -60,6 +63,7 @@ function renderProvider() {
 }
 
 const actAndUpdate = async (fn: () => void) => {
+  vi.advanceTimersByTime(1);
   act(() => {
     fn();
   });
@@ -730,9 +734,11 @@ describe('Configurable maxPanes via settings', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
+    localStorage.setItem('editor.max-panes', '4');
+
     act(() => {
       root.render(
-        createElement(EditorManagerProvider, { maxPanes: 4 }, createElement(TestConsumer)),
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
       );
     });
 
@@ -779,9 +785,11 @@ describe('Configurable maxPanes via settings', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
+    localStorage.setItem('editor.max-panes', '2');
+
     act(() => {
       root.render(
-        createElement(EditorManagerProvider, { maxPanes: 2 }, createElement(TestConsumer)),
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
       );
     });
 
@@ -814,9 +822,11 @@ describe('Configurable maxPanes via settings', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
+    localStorage.setItem('editor.max-panes', '3');
+
     act(() => {
       root.render(
-        createElement(EditorManagerProvider, { maxPanes: 3 }, createElement(TestConsumer)),
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
       );
     });
 
@@ -839,6 +849,70 @@ describe('Configurable maxPanes via settings', () => {
     });
     expect(paneId).toBeNull();
     expect(ctx().panes.length).toBe(3);
+  });
+
+  it('setMaxPanes updates maxPanes state and persists to localStorage', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // Start with default maxPanes
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    // Default should be MAX_PANES (6)
+    expect(ctx().maxPanes).toBe(MAX_PANES);
+
+    // Test setMaxPanes for values 2 through 6
+    for (let n = 2; n <= 6; n++) {
+      act(() => {
+        ctx().setMaxPanes(n);
+      });
+      expect(ctx().maxPanes).toBe(n);
+      // Verify it persisted to localStorage
+      expect(localStorage.getItem('editor.max-panes')).toBe(String(n));
+    }
+  });
+
+  it('setMaxPanes clamps values below 2 and above MAX_PANES', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    // Clamp below minimum
+    act(() => {
+      ctx().setMaxPanes(1);
+    });
+    expect(ctx().maxPanes).toBe(2);
+    expect(localStorage.getItem('editor.max-panes')).toBe('2');
+
+    // Clamp above maximum
+    act(() => {
+      ctx().setMaxPanes(10);
+    });
+    expect(ctx().maxPanes).toBe(MAX_PANES);
+    expect(localStorage.getItem('editor.max-panes')).toBe(String(MAX_PANES));
   });
 });
 

@@ -13,6 +13,40 @@ vi.mock('../contexts/EditorManagerContext', () => ({
   useEditorManager: vi.fn(),
 }));
 
+// Mock lucide-react icons — return null to avoid SVG rendering issues in jsdom.
+// EditorTabs passes props like `size` and `fill` that these mocks safely ignore.
+vi.mock('lucide-react', () => {
+  const mockComponent = (props: any) => null;
+  const icons = [
+    'X', 'AlertTriangle', 'FolderOpen', 'FileCode', 'FileText', 'File',
+    'Code2', 'Globe', 'Palette', 'Settings', 'Terminal', 'Braces',
+    'MessageSquareText', 'GitCompareArrows', 'ShieldCheck', 'ArrowRightLeft',
+    'PanelRightOpen', 'Eye', 'Sparkles', 'Pin', 'Plus', 'GitBranch',
+    'Pencil', 'Trash2', 'ImageIcon', 'Video', 'Headphones', 'FileWarning',
+  ];
+  const result: Record<string, any> = {};
+  icons.forEach((name) => {
+    result[name] = mockComponent;
+  });
+  result.default = mockComponent;
+  return result;
+});
+
+vi.mock('@sprout/ui', () => ({
+  ContextMenu: ({ children, isOpen, onClose, className, zIndex }: any) => {
+    if (!isOpen) return null;
+    return (
+      <div className={className || 'context-menu'} style={{ position: 'fixed', zIndex }} onClick={onClose}>
+        {children}
+      </div>
+    );
+  },
+}));
+
+vi.mock('./ThemedDialog', () => ({
+  showThemedConfirm: vi.fn().mockResolvedValue(true),
+}));
+
 let rafId = 0;
 beforeAll(() => {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
@@ -775,5 +809,96 @@ describe('EditorTabs chat tab close behavior', () => {
       Array.from(m.querySelectorAll('.context-menu-item')).some((item) => item.textContent?.includes('Close')),
     );
     expect(hasClose).toBe(true);
+  });
+});
+
+describe('EditorTabs tab title tooltip', () => {
+  test('outer tab element has title attribute with full file path', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', {
+      file: { path: 'src/components/App.tsx', name: 'App.tsx', ext: '.tsx', isDir: false, size: 42, modified: 0 },
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    expect(tab).not.toBeNull();
+    expect(tab.title).toBe('src/components/App.tsx');
+  });
+
+  test('inner tab-name span has title attribute with full file path', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', {
+      file: { path: 'src/components/App.tsx', name: 'App.tsx', ext: '.tsx', isDir: false, size: 42, modified: 0 },
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-1', buf1]]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tabName = container!.querySelector('.tab-name') as HTMLElement;
+    expect(tabName).not.toBeNull();
+    expect(tabName.title).toBe('src/components/App.tsx');
+  });
+
+  test('multiple tabs each show their own file path in title', () => {
+    const buf1 = makeMockBuffer('buf-1', 'pane-1', {
+      file: { path: 'src/components/App.tsx', name: 'App.tsx', ext: '.tsx', isDir: false, size: 42, modified: 0 },
+    });
+    const buf2 = makeMockBuffer('buf-2', 'pane-1', {
+      file: { path: 'src/utils/helpers.ts', name: 'helpers.ts', ext: '.ts', isDir: false, size: 99, modified: 0 },
+    });
+    const buf3 = makeMockBuffer('buf-3', 'pane-1', {
+      file: { path: 'src/index.ts', name: 'index.ts', ext: '.ts', isDir: false, size: 55, modified: 0 },
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([
+        ['buf-1', buf1],
+        ['buf-2', buf2],
+        ['buf-3', buf3],
+      ]),
+      activeBufferId: 'buf-1',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tabs = Array.from(container!.querySelectorAll('.tab[data-buffer-id]'));
+    expect(tabs).toHaveLength(3);
+
+    // Each outer tab div has the correct title
+    expect(tabs.find((t) => t.dataset.bufferId === 'buf-1')!.title).toBe('src/components/App.tsx');
+    expect(tabs.find((t) => t.dataset.bufferId === 'buf-2')!.title).toBe('src/utils/helpers.ts');
+    expect(tabs.find((t) => t.dataset.bufferId === 'buf-3')!.title).toBe('src/index.ts');
+
+    // Each inner tab-name span also has the correct title
+    const tabNames = Array.from(container!.querySelectorAll('.tab-name'));
+    expect(tabNames).toHaveLength(3);
+    expect(tabNames[0].title).toBe('src/components/App.tsx');
+    expect(tabNames[1].title).toBe('src/utils/helpers.ts');
+    expect(tabNames[2].title).toBe('src/index.ts');
+  });
+
+  test('title tooltip works for chat buffers', () => {
+    const chatBuf = makeMockBuffer('buf-chat', 'pane-1', {
+      kind: 'chat',
+      file: { path: '__workspace/chat/abc-123', name: 'Chat', ext: '.chat', isDir: false, size: 0, modified: 0 },
+    });
+    mockUseEditorManager.mockReturnValue({
+      ...defaultMockEditorManager,
+      buffers: new Map([['buf-chat', chatBuf]]),
+      activeBufferId: 'buf-chat',
+    });
+    renderEditorTabs({ paneId: 'pane-1' });
+
+    const tab = container!.querySelector('.tab') as HTMLElement;
+    expect(tab).not.toBeNull();
+    expect(tab.title).toBe('__workspace/chat/abc-123');
+
+    const tabName = container!.querySelector('.tab-name') as HTMLElement;
+    expect(tabName.title).toBe('__workspace/chat/abc-123');
   });
 });

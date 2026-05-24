@@ -1,6 +1,4 @@
 import type { EditorView as CMEditorView } from '@codemirror/view';
-import { Skeleton } from '@sprout/ui';
-import { AlertTriangle } from 'lucide-react';
 import { useRef, useState, useMemo, useCallback } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -19,11 +17,11 @@ import { useEditorSemantic } from '../hooks/useEditorSemantic';
 import { useEditorSettings } from '../hooks/useEditorSettings';
 import { useEditorSymbols } from '../hooks/useEditorSymbols';
 import { useEditorUpdate } from '../hooks/useEditorUpdate';
-import { useEditorViewInit } from '../hooks/useEditorViewInit';
 import { useLivePreview } from '../hooks/useLivePreview';
 import type { EditorBuffer } from '../types/editor';
 import BinaryFileViewer from './BinaryFileViewer';
 import EditorContextMenu from './EditorContextMenu';
+import EditorCore from './EditorCore';
 import EditorPaneFooter from './EditorPaneFooter';
 import EditorToolbar from './EditorToolbar';
 import FindAllReferencesOverlay from './FindAllReferencesOverlay';
@@ -32,7 +30,6 @@ import ImageViewer from './ImageViewer';
 import LivePreview from './LivePreview';
 import MarkdownPreview from './MarkdownPreview';
 import MediaViewer from './MediaViewer';
-import { useEditorReconfigure } from './useEditorReconfigure';
 import { useEditorToolbarActions } from './useEditorToolbarActions';
 import WelcomeTab from './WelcomeTab';
 import './EditorPane.css';
@@ -45,7 +42,6 @@ interface EditorPaneProps {
 function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Element {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<CMEditorView | null>(null);
-  const lastInitLanguageKey = useRef<string | null>(null);
   const markdownPreviewBodyRef = useRef<HTMLDivElement>(null);
 
   const { compartments, buildExtensions } = useEditorExtensions();
@@ -247,44 +243,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     paneId,
   );
 
-  useEditorViewInit({
-    paneId,
-    editorRef,
-    viewRef,
-    buffer,
-    localContent,
-    compartments,
-    buildExtensions,
-    themePack,
-    customHighlightStyle,
-    lastInitLanguageKey,
-    keymapsRef,
-    localContentRef,
-    openWorkspaceBuffer,
-    onCancelPendingFlush: cancelPendingFlush,
-    onUpdateRef,
-    settingsRef,
-    actionsRef,
-  });
-
-  useEditorReconfigure({
-    viewRef,
-    buffer,
-    lastInitLanguageKey,
-    compartments,
-    hotkeys,
-    keymapsRef,
-    editorFontSize: settings.editorFontSize,
-    editorTabSize: settings.editorTabSize,
-    editorUsesTabs: settings.editorUsesTabs,
-    wordWrapEnabled: settings.wordWrapEnabled,
-    minimapEnabled: settings.minimapEnabled,
-    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-    whitespaceRenderingMode,
-    inlayHintsEnabled: settings.inlayHintsEnabled,
-    signatureHelpEnabled: settings.signatureHelpEnabled,
-  });
-
   const handleFormatDocument = useCallback(() => {
     document.dispatchEvent(new CustomEvent('editor-format-document'));
   }, []);
@@ -391,50 +349,48 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
         }}
       />
 
-      {loading && (
-        <div className="editor-skeleton" role="status" aria-label="Loading file">
-          <div className="editor-skeleton-line-numbers">
-            {Array.from({ length: 25 }, (_, i) => (
-              <Skeleton key={i} width="32px" height="14px" />
-            ))}
-          </div>
-          <div className="editor-skeleton-content">
-            {Array.from({ length: 25 }, (_, i) => (
-              <Skeleton key={i} width={`${40 + Math.floor((i * 53) % 60)}%`} height="14px" />
-            ))}
-          </div>
-          <span className="sr-only">Loading file...</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="error-message">
-          <AlertTriangle size={16} className="error-icon" />
-          <span className="error-text">{error}</span>
-        </div>
-      )}
-
-      <div className={`pane-content-wrapper${markdownPreviewMode === 'split' ? ' pane-content-wrapper-md-split' : ''}`}>
-        {fileType.isMarkdownFile && markdownPreviewMode === 'preview' ? (
-          <div className="pane-content pane-content-md-preview-full">
-            <MarkdownPreview content={localContent} scrollRef={markdownPreviewBodyRef} />
-          </div>
-        ) : (
-          <>
-            <div
-              className={`pane-content${markdownPreviewMode === 'split' ? ' pane-content-md-editor-side' : ''}`}
-              onContextMenu={contextMenu.handleEditorContextMenu}
-            >
-              <div ref={editorRef} className="editor" />
-            </div>
-            {markdownPreviewMode === 'split' && (
-              <div className="pane-md-preview-split">
-                <MarkdownPreview content={localContent} scrollRef={markdownPreviewBodyRef} />
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <EditorCore
+        editorRef={editorRef}
+        viewRef={viewRef}
+        initOptions={{
+          paneId,
+          buffer,
+          localContent,
+          compartments,
+          buildExtensions,
+          themePack,
+          customHighlightStyle,
+          keymapsRef,
+          localContentRef,
+          openWorkspaceBuffer,
+          onCancelPendingFlush: cancelPendingFlush,
+          onUpdateRef,
+          settingsRef,
+          actionsRef,
+        }}
+        reconfigureOptions={{
+          buffer,
+          compartments,
+          hotkeys,
+          keymapsRef,
+          editorFontSize: settings.editorFontSize,
+          editorTabSize: settings.editorTabSize,
+          editorUsesTabs: settings.editorUsesTabs,
+          wordWrapEnabled: settings.wordWrapEnabled,
+          minimapEnabled: settings.minimapEnabled,
+          relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+          whitespaceRenderingMode,
+          inlayHintsEnabled: settings.inlayHintsEnabled,
+          signatureHelpEnabled: settings.signatureHelpEnabled,
+        }}
+        loading={loading}
+        error={error}
+        onContextMenu={contextMenu.handleEditorContextMenu}
+        markdownPreviewMode={markdownPreviewMode}
+        isMarkdownFile={fileType.isMarkdownFile}
+        localContent={localContent}
+        markdownPreviewBodyRef={markdownPreviewBodyRef}
+      />
 
       <EditorPaneFooter
         buffer={buffer}

@@ -82,29 +82,29 @@
 
 ## Partially Done — SP-046: Workspace Sync Model
 
-- [ ] SP-046-sync-protocol-ws: Implement WebSocket patch stream (Container → Browser) — each tool-call write emits one patch event
-- [ ] SP-046-sync-protocol-http: Implement HTTP POST per op (Browser → Container) — browser queues outbound ops in OPFS, flushes when WS is up
-- [ ] SP-046-sync-heartbeat: Implement 15s heartbeat ping; container terminates job after 60s missed heartbeat
-- [ ] SP-046-conflict-browserWriteOnContainerPatch: On receiving container patch with unsynced browser edits, write as `<path>.theirs` and show git-style conflict marker UI
-- [ ] SP-046-conflict-agentWriteRefusal: Agent's `write_file` tool wrapper refuses write if `browser_seq > last_synced_browser`
-- [ ] SP-046-opfs-replica: Implement OPFS browser-side replica with file-level metadata
-- [ ] SP-046-multiDevice: Implement single-active-session enforcement — second device gets "Take over?" prompt
-- [ ] SP-046-firstLoad: Implement cold-hydrate progress bar for new device first-load (container → browser via WS)
-- [ ] SP-046-stalenessRule: Implement 30s re-read invariant in `write_file` tool wrapper
-- [ ] SP-046-freeTierDegradation: Ensure sync protocol degenerates cleanly for free-tier (browser is sole authority, WASM-side tool handlers write directly to OPFS)
-- [ ] SP-046-failureModes: Implement recovery paths: container death (reconnect + seq reconciliation), browser crash (OPFS persist + seq replay), volume corruption (git clone + replay)
+[x] SP-046-sync-protocol-ws: Implement WebSocket patch stream (Container → Browser) — each tool-call write emits one patch event
+[x] SP-046-sync-protocol-http: Implement HTTP POST per op (Browser → Container) — browser queues outbound ops in OPFS, flushes when WS is up
+[x] SP-046-sync-heartbeat: Implement 15s heartbeat ping; container terminates job after 60s missed heartbeat
+[x] SP-046-conflict-browserWriteOnContainerPatch: On receiving container patch with unsynced browser edits, write as `<path>.theirs` and show git-style conflict marker UI
+[x] SP-046-conflict-agentWriteRefusal: Agent's `write_file` tool wrapper refuses write if `browser_seq > last_synced_browser`
+[x] SP-046-opfs-replica: Implement OPFS browser-side replica with file-level metadata
+[x] SP-046-multiDevice: Implement single-active-session enforcement — second device gets "Take over?" prompt
+[x] SP-046-firstLoad: Implement cold-hydrate progress bar for new device first-load (container → browser via WS)
+[x] SP-046-stalenessRule: Implement 30s re-read invariant in `write_file` tool wrapper
+[x] SP-046-freeTierDegradation: Ensure sync protocol degenerates cleanly for free-tier (browser is sole authority, WASM-side tool handlers write directly to OPFS)
+[x] SP-046-failureModes: Implement recovery paths: container death (reconnect + seq reconciliation), browser crash (OPFS persist + seq replay), volume corruption (git clone + replay)
 
 ## Partially Done — SP-048: CLI Delight
 
 - [x] SP-048-4a: Honor `NO_COLOR` / `FORCE_COLOR` in `NewMarkdownFormatter`; stop unsetting `NO_COLOR` in `agent_exec_utils.go`
-- [ ] SP-048-4b: Bold the capitalized default letter in `[y/N]` prompts and the safe default option in 4-choice secret prompt
-- [ ] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
-- [ ] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop
-- [ ] SP-048-4f: Implement `$EDITOR` escape via Ctrl-X Ctrl-E or `/edit` — open `$EDITOR` with current buffer pre-filled
+[x] SP-048-4b: Bold the capitalized default letter in `[y/N]` prompts and the safe default option in 4-choice secret prompt
+[x] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
+[x] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop
+[x] SP-048-4f: Implement `$EDITOR` escape via Ctrl-X Ctrl-E or `/edit` — open `$EDITOR` with current buffer pre-filled
 - [x] SP-048-5a: After each assistant turn, print dim line: `⎯ this turn: 1.2k in / 4.8k out · $0.04 · 6.1s ⎯`
-- [ ] SP-048-5b: Implement `/help <command>` per-command usage text
-- [ ] SP-048-5c: Add short aliases: `/m` → `/models`, `/p` → `/providers`, `/x` → `/exit`, `/?` → `/help`
-- [ ] SP-048-5d: Strip ANSI from non-TTY stdout when piped
+[x] SP-048-5b: Implement `/help <command>` per-command usage text
+[x] SP-048-5c: Add short aliases: `/m` → `/models`, `/p` → `/providers`, `/x` → `/exit`, `/?` → `/help`
+[x] SP-048-5d: Strip ANSI from non-TTY stdout when piped
 
 ## Not Started — SP-006: Delegate Tool
 
@@ -302,3 +302,16 @@
 - [ ] SP-054-3.2: Rust semantic adapter — diagnostics via `cargo check`, hover/def/refs via LSP proxy
 - [ ] SP-054-3.3: C/C++ semantic adapter — diagnostics via `clang-tidy`, hover/def/refs via LSP proxy
 - [ ] SP-054-3.4: Shared `lsp_query.go` helper in `pkg/lsp/semantic/` for routing adapter queries through the LSP proxy
+
+## Not Started — SP-056: Remove Static Embedding Provider
+_Spec: roadmap/SP-056-remove-static-embeddings.md_
+- [ ] SP-056-P1-deleteStatic: Delete 9 static provider files (~1,532 lines + 55 MB model blob): `static_provider.go`, `static_tokenizer.go`, `static_loader.go`, `static_model_embed.go`, `static_model_nostub.go`, `static_model_js_testmain_test.go`, `static_test.go`, `compare_embed.go`, `static_model.bin`
+- [ ] SP-056-P2a-managerFields: Simplify `EmbeddingManager` struct — replace `provider *StaticProvider` + `onnxProvider` with single `provider EmbeddingProvider`; remove `onnxStore`/`onnxConvoStore`/`onnxBuilding`/`onnxBuildCancel`/`onnxBuildWG`/`onnxReady`/`onnxError`/`onnxInitWG` fields
+- [ ] SP-056-P2b-initLocked: Rewrite `initLocked()` to create ONNX provider synchronously as the sole provider; remove background ONNX init goroutine; fail fast with clear error if ONNX unavailable
+- [ ] SP-056-P2c-removeRRF: Remove `RRFMergeResults` function and `GetONNXConversationStore` method from `manager.go`; simplify `SearchSemantic` to query single store directly
+- [ ] SP-056-P2d-closeProviderInfo: Simplify `Close()` to close single provider + store; update `ProviderInfo` to remove primary/secondary distinction
+- [ ] SP-056-P3-wasmExports: Remove `setStaticModel` JS export and `setStaticModelFunc` from `cmd/wasm/embedding_funcs.go`; keep ONNX bridge exports (`buildSemanticIndex`, `searchSemantic`, etc.)
+- [ ] SP-056-P4-memoryEmbed: Simplify `pkg/agent/memory_embedding.go` — remove dual-write in `EmbedMemory`/`DeleteMemoryEmbedding`, delete `BackfillMemoryONNX`, simplify `MigrateMemories` to single store
+- [ ] SP-056-P5-memorySearch: Simplify `queryMemoriesAcrossStores` in `pkg/agent/memory_search_handler.go` to single-store query (no RRF merge)
+- [ ] SP-056-P6-tests: Remove static provider tests (`static_test.go` already deleted in P1); remove RRF merge tests from `manager_test.go`; update memory embedding tests for single-store behavior; verify all ONNX tests still pass
+- [ ] SP-056-P7-buildDocs: Remove `staticmodel` build tag from Makefile/build scripts; update `docs/WASM_API.md` to remove `setStaticModel` section and document ONNX-only path; update error messages to be provider-agnostic

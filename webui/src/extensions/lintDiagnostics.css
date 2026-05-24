@@ -29,7 +29,7 @@
 }
 
 .cm-diagnostic-info {
-  text-decoration-color: var(--accent-primary, #61afef);
+  text-decoration-color: var(--accent-primary);
 }
 
 .cm-diagnostic-hint {
@@ -61,7 +61,7 @@
 }
 
 .cm-diagnosticText.cm-diagnosticText-info {
-  border-left: 3px solid var(--accent-primary, #61afef);
+  border-left: 3px solid var(--accent-primary);
 }
 
 .cm-diagnosticText.cm-diagnosticText-hint {
@@ -71,7 +71,7 @@
 /* ── Action buttons inside tooltip ─────────────────────────────── */
 
 .cm-diagnosticAction-subtle {
-  color: var(--accent-primary, #61afef);
+  color: var(--accent-primary);
   background: transparent;
   border: none;
   padding: 2px 6px;
@@ -85,7 +85,7 @@
 
 .cm-diagnosticAction-subtle:hover {
   background-color: var(--accent-primary-alpha, rgba(97, 175, 239, 0.2));
-  color: var(--accent-primary, #61afef);
+  color: var(--accent-primary);
 }
 
 /* ── Lint panel ────────────────────────────────────────────────── */
@@ -147,7 +147,7 @@
 }
 
 .cm-lint-lint-item.cm-lint-lint-item-info {
-  border-left: 3px solid var(--accent-primary, #61afef);
+  border-left: 3px solid var(--accent-primary);
 }
 
 .cm-lint-lint-item.cm-lint-lint-item-hint {

@@ -34,8 +34,13 @@
 }
 
 .workspace-diff-view-btn.active {
-  color: var(--text-primary);
+  color: var(--accent-fg);
   background: var(--accent-primary);
+}
+
+.workspace-diff-view-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 /* Collapse unchanged toggle */
@@ -70,6 +75,11 @@
   background: var(--bg-surface);
   border-color: var(--border-strong);
   color: var(--text-primary);
+}
+
+.workspace-diff-collapse-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 .workspace-diff-collapse-btn.active {

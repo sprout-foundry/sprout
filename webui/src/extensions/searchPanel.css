@@ -34,8 +34,8 @@
 
 .cm-search .cm-textfield:focus-visible {
   outline: none;
-  border-color: var(--accent-primary, #6366f1);
-  box-shadow: 0 0 0 1px var(--accent-primary, #6366f1);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px var(--accent-primary);
 }
 
 .cm-search .cm-textfield::placeholder {
@@ -80,8 +80,8 @@
 
 /* Active toggle state - styled like VS Code search toggles */
 .cm-search .cm-search-toggle-active {
-  background-color: var(--accent-primary, #6366f1);
-  border-color: var(--accent-primary, #6366f1);
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
   color: #fff;
 }
 

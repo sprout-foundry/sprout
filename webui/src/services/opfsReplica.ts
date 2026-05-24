@@ -32,7 +32,7 @@ export interface OPFSFileMetadata {
   browserSeq: number;
   /** Container sequence counter */
   containerSeq: number;
-  /** Timestamp (ms since epoch) of last sync */
+  /** Timestamp in milliseconds since Unix epoch when the file was last synced */
   lastSynced: number;
   /** File size in bytes */
   size: number;
@@ -48,7 +48,7 @@ export interface OPFSReplicaStatus {
   fileCount: number;
   /** Total size of all files in bytes */
   totalSize: number;
-  /** ISO 8601 timestamp of the last sync, or `null` if never synced */
+  /** ISO 8601 string representing the most recent `lastSynced` value across all files, or `null` if no files have been synced */
   lastSyncTimestamp: string | null;
 }
 
@@ -101,12 +101,18 @@ const METADATA_INDEX_PATH = '.opfs-meta/index.json';
 
 /**
  * Decode a base64 string to a UTF-8 string.
+ *
+ * @throws Error if the input is not valid base64.
  */
 function base64Decode(base64: string): string {
-  const binary = atob(base64);
-  return new TextDecoder().decode(
-    Uint8Array.from(binary, (c) => c.charCodeAt(0)),
-  );
+  try {
+    const binary = atob(base64);
+    return new TextDecoder().decode(
+      Uint8Array.from(binary, (c) => c.charCodeAt(0)),
+    );
+  } catch (e) {
+    throw new Error(`invalid base64 content: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /**
@@ -126,7 +132,7 @@ function splitPath(filePath: string): { dirPath: string; fileName: string } {
 function defaultMetadata(partial: Partial<OPFSFileMetadata> = {}): OPFSFileMetadata {
   const now = Date.now();
   return {
-    browserSeq: partial.browserSeq ?? now,
+    browserSeq: partial.browserSeq ?? 0,
     containerSeq: partial.containerSeq ?? 0,
     lastSynced: partial.lastSynced ?? 0,
     size: partial.size ?? 0,
@@ -242,11 +248,12 @@ export class OPFSReplicaService {
 
       this.metadataIndex.set(
         patch.path,
-        defaultMetadata({
-          ...this.metadataIndex.get(patch.path),
-          ...patch.metadata,
-          size: bytes,
-        }),
+        defaultMetadata(
+          this.mergeMetadata(this.metadataIndex.get(patch.path) ?? defaultMetadata(), {
+            ...patch.metadata,
+            size: bytes,
+          }),
+        ),
       );
     }
 
@@ -318,8 +325,47 @@ export class OPFSReplicaService {
     if (!this.isReady()) return;
 
     const existing = this.metadataIndex.get(path);
-    this.metadataIndex.set(path, defaultMetadata({ ...existing, ...metadata }));
+    if (!existing) {
+      this.metadataIndex.set(path, defaultMetadata(metadata));
+      await this.persistMetadataIndex();
+      return;
+    }
+
+    this.metadataIndex.set(
+      path,
+      defaultMetadata(this.mergeMetadata(existing, metadata)),
+    );
     await this.persistMetadataIndex();
+  }
+
+  /**
+   * Merges `partial` into `existing` using a non-zero-gate pattern aligned
+   * with the Go sync protocol. Only fields that are explicitly present in
+   * `partial` AND non-zero (for numbers) or non-empty (for strings) will
+   * overwrite the existing value. This prevents accidental zeroing of
+   * sequence counters and preserves untouched metadata fields.
+   */
+  private mergeMetadata(
+    existing: OPFSFileMetadata,
+    partial: Partial<OPFSFileMetadata>,
+  ): OPFSFileMetadata {
+    const result = { ...existing };
+    if (partial.browserSeq !== undefined && partial.browserSeq !== 0) {
+      result.browserSeq = partial.browserSeq;
+    }
+    if (partial.containerSeq !== undefined && partial.containerSeq !== 0) {
+      result.containerSeq = partial.containerSeq;
+    }
+    if (partial.lastSynced !== undefined && partial.lastSynced !== 0) {
+      result.lastSynced = partial.lastSynced;
+    }
+    if (partial.size !== undefined && partial.size !== 0) {
+      result.size = partial.size;
+    }
+    if (partial.modifiedAt !== undefined && partial.modifiedAt !== '') {
+      result.modifiedAt = partial.modifiedAt;
+    }
+    return result;
   }
 
   // ------------------------------------------------------------------

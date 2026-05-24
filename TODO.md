@@ -2,10 +2,10 @@
 
 ## Partially Done — SP-009: Component Library Maturation
 
-- [ ] SP-009-P1.1: Verify `npm run build` produces clean output in `packages/ui/`; create README.md and CHANGELOG.md
-- [ ] SP-009-P1.2: Publish `@sprout/ui` to npm under `@sprout` org scope; create `.github/workflows/publish-ui.yml`
-- [ ] SP-009-P1.3: Replace `file:../packages/ui` in `webui/package.json` with versioned npm dependency
-- [ ] SP-009-P1.4: Document Foundry consumption pattern (`npm install @sprout/ui`)
+- [x] SP-009-P1.1: Verify `npm run build` produces clean output in `packages/ui/`; create README.md and CHANGELOG.md
+- [x] SP-009-P1.2: Publish `@sprout/ui` to npm under `@sprout` org scope; create `.github/workflows/publish-ui.yml`
+- [x] SP-009-P1.3: Replace `file:../packages/ui` in `webui/package.json` with versioned npm dependency
+- [x] SP-009-P1.4: Document Foundry consumption pattern (`npm install @sprout/ui`)
 - [ ] SP-009-P2.1: Install Storybook 8 in `packages/ui/` with Vite builder and React framework
 - [ ] SP-009-P2.2: Create `MockAdapter` implementing `APIAdapter`; wrap all stories in `SproutProvider` with mock
 - [ ] SP-009-P2.3: Write stories for StatusBar, FileTree, Terminal, GitPanel, CommandPalette (Tier 1)
@@ -250,20 +250,9 @@
 - [ ] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
 - [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)
 
-## Not Started — SP-047: SQLite-vec Store
+## Superseded — SP-047: SQLite-vec Store
 
-- [ ] SP-047-P1-store: Create `pkg/embedding/store_sqlite.go` — `SQLiteVecStore` implementing `VectorStore` interface via `ncruces/go-sqlite3`
-- [ ] SP-047-P1-schema: Create `vec0` virtual table with embedding columns (float[256] cosine), hash, metadata JSON
-- [ ] SP-047-P1-query: Implement `Query()` using SQL vector distance search
-- [ ] SP-047-P1-storeImpl: Implement `Store()` as SQLite upsert (INSERT OR REPLACE)
-- [ ] SP-047-P1-delete: Implement `DeleteByFile()` as SQL DELETE
-- [ ] SP-047-P1-loadAll: Implement `LoadAll()` as SQL SELECT
-- [ ] SP-047-P2-migration: On init, check for legacy `index.jsonl`; if found, load → batch insert into SQLite → rename JSONL to `.migrated`
-- [ ] SP-047-P3-init: Replace `NewJSONLFileStore` with `NewSQLiteVecStore` in init paths
-- [ ] SP-047-P3-manifest: Update manifest paths from `.index.jsonl.manifest.json` to `.index.db.manifest.json`
-- [ ] SP-047-P4-unitTests: Unit tests for `SQLiteVecStore` against `VectorStore` interface
-- [ ] SP-047-P4-migrationTest: Test JSONL → SQLite migration → verify record count and query results
-- [ ] SP-047-P5-wasmVerify: Verify `ncruces/go-sqlite3` works in WASM builds; if not, use build tags for fallback
+> Superseded by HNSW store (`store_hnsw.go`). SQLite-vec approach was abandoned in favor of `coder/hnsw` for approximate nearest neighbor search with no CGO dependency.
 
 ## Not Started — SP-049: Shell Permission Overhaul
 

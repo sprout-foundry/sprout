@@ -118,7 +118,7 @@
 [x] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
 [x] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
 - [x] SP-006-C-followUp: Allow parent to inject follow-up messages into running delegate (future)
-- [ ] SP-006-C-interactive: Support interactive delegation — not just blocking (future)
+- [x] SP-006-C-interactive: Support interactive delegation — not just blocking (future)
 - [ ] SP-006-C-clarification: Allow delegate to request clarification from parent via event bus (future)
 
 ## Not Started — SP-007: Extend Configuration

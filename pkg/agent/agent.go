@@ -131,6 +131,15 @@ type Agent struct {
 	// based on the root persona (e.g., EA gets 3 levels, orchestrator gets 2).
 	rootPersonaID string
 
+	// delegateDepth tracks how deep this agent is in the delegate nesting chain.
+	// 0 = top-level agent, 1 = first-level delegate, etc.
+	delegateDepth int
+
+	// allowedTools restricts which tools this agent may use.
+	// When non-nil, only tools whose names (lowercased) are keys in this map
+	// can be invoked. Used by the delegate tool to limit tool access for child agents.
+	allowedTools map[string]bool
+
 	// filesReadThisTurn tracks paths the agent called read_file on during
 	// the current turn. Used by the SP-046 staleness rule in
 	// checkWriteStaleness — see workspace_sync.go. Reset at turn boundaries

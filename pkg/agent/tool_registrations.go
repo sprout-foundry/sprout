@@ -168,6 +168,24 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Timeout: 30 * time.Minute,
 	})
 
+	// Register delegate tool - for spawning a child agent with configurable provider/model and tool restrictions
+	registry.RegisterTool(ToolConfig{
+		Name:        "delegate",
+		Description: "Delegate a task to a child agent. The child agent inherits your provider and model, runs autonomously, and returns results. Use this for parallelizable subtasks that benefit from a focused role or restricted tool set.",
+		Parameters: []ParameterConfig{
+			{"prompt", "string", true, []string{}, "The task prompt for the delegate agent (required)"},
+			{"role", "string", false, []string{}, "Role description for the delegate agent (e.g., 'coder', 'researcher')"},
+			{"provider", "string", false, []string{}, "Provider override for the delegate (optional, inherits parent if not set)"},
+			{"model", "string", false, []string{}, "Model override for the delegate (optional, inherits parent if not set)"},
+			{"tools", "array", false, []string{}, "List of tool names to make available to the delegate (e.g., ['read_file', 'write_file', 'shell_command'])"},
+			{"context", "string", false, []string{}, "Additional context to pass to the delegate"},
+			{"max_iterations", "integer", false, []string{}, "Maximum number of tool-call iterations for the delegate"},
+			{"files", "array", false, []string{}, "List of relevant file paths for the delegate"},
+		},
+		Handler: handleDelegate,
+		Timeout: 10 * time.Minute,
+	})
+
 	// Register search_files tool (cross-platform file content search)
 	registry.RegisterTool(ToolConfig{
 		Name:        "search_files",

@@ -29,6 +29,27 @@ func newTestReader(submitted *[]string, interrupted *int) *SteerInputReader {
 	}
 }
 
+// newTestReaderWithQueue is like newTestReader but also wires a queue
+// callback so SP-055 Phase 3b (Tab toggle → queue submit) can be
+// tested in isolation from the agent.
+func newTestReaderWithQueue(submitted, queued *[]string) *SteerInputReader {
+	var mu sync.Mutex
+	return &SteerInputReader{
+		fd: -1,
+		submitFn: func(s string) {
+			mu.Lock()
+			defer mu.Unlock()
+			*submitted = append(*submitted, s)
+		},
+		queueFn: func(s string) {
+			mu.Lock()
+			defer mu.Unlock()
+			*queued = append(*queued, s)
+		},
+		interruptFn: func() {},
+	}
+}
+
 func TestSteerInputReader_PrintableAccumulates(t *testing.T) {
 	var submitted []string
 	var interrupted int
@@ -344,6 +365,114 @@ func TestSteerHistory_EmptyHistoryNoOpOnArrow(t *testing.T) {
 	r.recallHistory(-1) // Up on empty history
 	if len(r.buffer) != 0 {
 		t.Fatalf("Up on empty history should leave buffer empty, got %q", string(r.buffer))
+	}
+}
+
+// Done-queue mode (SP-055 Phase 3b)
+
+func TestSteerSubmitMode_DefaultIsNow(t *testing.T) {
+	var submitted, queued []string
+	r := newTestReaderWithQueue(&submitted, &queued)
+	if r.SubmitMode() != SteerSubmitModeNow {
+		t.Fatalf("expected default SubmitMode = Now, got %v", r.SubmitMode())
+	}
+}
+
+func TestSteerSubmitMode_TabTogglesWhenQueueFnWired(t *testing.T) {
+	var submitted, queued []string
+	r := newTestReaderWithQueue(&submitted, &queued)
+
+	r.toggleSubmitMode()
+	if r.SubmitMode() != SteerSubmitModeQueue {
+		t.Fatalf("first toggle should be Queue, got %v", r.SubmitMode())
+	}
+	r.toggleSubmitMode()
+	if r.SubmitMode() != SteerSubmitModeNow {
+		t.Fatalf("second toggle should be Now, got %v", r.SubmitMode())
+	}
+}
+
+func TestSteerSubmitMode_TabNoopWithoutQueueFn(t *testing.T) {
+	// Reader built WITHOUT a queueFn (e.g. tests that didn't opt in).
+	// Tab should be inert.
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	r.toggleSubmitMode()
+	if r.SubmitMode() != SteerSubmitModeNow {
+		t.Fatalf("toggle without queueFn must stay Now, got %v", r.SubmitMode())
+	}
+}
+
+func TestSteerSubmitMode_EnterRoutesToActiveCallback(t *testing.T) {
+	var submitted, queued []string
+	r := newTestReaderWithQueue(&submitted, &queued)
+
+	// First submit in Now mode → goes to submitFn.
+	for _, b := range []byte("inline steer") {
+		r.handlePrintable(b)
+	}
+	r.handleSubmit()
+	if len(submitted) != 1 || submitted[0] != "inline steer" {
+		t.Fatalf("expected submitFn fired with 'inline steer', got submitted=%v", submitted)
+	}
+	if len(queued) != 0 {
+		t.Fatalf("queueFn should NOT have fired, got queued=%v", queued)
+	}
+
+	// Toggle then submit → goes to queueFn.
+	r.toggleSubmitMode()
+	for _, b := range []byte("save for later") {
+		r.handlePrintable(b)
+	}
+	r.handleSubmit()
+	if len(queued) != 1 || queued[0] != "save for later" {
+		t.Fatalf("expected queueFn fired with 'save for later', got queued=%v", queued)
+	}
+	// submitFn should NOT have fired again.
+	if len(submitted) != 1 {
+		t.Fatalf("submitFn fired a second time; got %v", submitted)
+	}
+}
+
+func TestSteerSubmitMode_PromptPrefixesAreDistinct(t *testing.T) {
+	if SteerPromptPrefix == QueuePromptPrefix {
+		t.Fatal("steer and queue prefixes must differ visually")
+	}
+}
+
+// UTF-8 input (SP-055 Phase 3c)
+
+func TestSteerBackspace_RemovesFullMultibyteRune(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+
+	// Manually load a buffer with "hi 字" (4-byte UTF-8 string —
+	// ASCII "hi " is 3 bytes, "字" is 3 bytes = 6 total).
+	r.buffer = []byte("hi 字")
+	r.handleBackspace()
+	got := string(r.buffer)
+	if got != "hi " {
+		t.Fatalf("backspace should remove the whole rune '字', got %q (%d bytes)", got, len(r.buffer))
+	}
+
+	// Another backspace removes the trailing space.
+	r.handleBackspace()
+	if got := string(r.buffer); got != "hi" {
+		t.Fatalf("expected 'hi', got %q", got)
+	}
+}
+
+func TestSteerBackspace_RemovesFourByteEmoji(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+	// Rocket emoji is 4 bytes in UTF-8.
+	r.buffer = []byte("ok 🚀")
+	r.handleBackspace()
+	if got := string(r.buffer); got != "ok " {
+		t.Fatalf("expected 'ok ' after emoji backspace, got %q", got)
 	}
 }
 

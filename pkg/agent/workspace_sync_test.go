@@ -939,3 +939,390 @@ func TestGetSyncStatus_NilAgent(t *testing.T) {
 		t.Errorf("expected nil for nil agent, got %v", status)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ReconcileSeqNumbers & determineReconcileAction tests
+// ---------------------------------------------------------------------------
+
+func TestReconcileSeqNumbers_SyncOK(t *testing.T) {
+	ag := newTestAgent(t)
+
+	ag.SetFileMetadata("a.txt", WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      5,
+		LastSyncedBrowser: 5,
+		LastSyncedContainer: 5,
+	})
+	ag.SetFileMetadata("b.txt", WorkspaceFileMetadata{
+		BrowserSeq:        3,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 3,
+		LastSyncedContainer: 3,
+	})
+
+	browserSeqs := map[string]int64{
+		"a.txt": 5,
+		"b.txt": 3,
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for _, r := range results {
+		if r.Action != ReconcileSyncOK {
+			t.Errorf("file %s: expected sync_ok, got %s", r.FilePath, r.Action)
+		}
+	}
+}
+
+func TestReconcileSeqNumbers_ContainerAhead(t *testing.T) {
+	ag := newTestAgent(t)
+
+	ag.SetFileMetadata("foo.txt", WorkspaceFileMetadata{
+		BrowserSeq:        2,
+		ContainerSeq:      5,
+		LastSyncedBrowser: 2,
+		LastSyncedContainer: 2, // container has written past what browser saw
+	})
+
+	browserSeqs := map[string]int64{
+		"foo.txt": 2,
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+	if r.Action != ReconcileContainerAhead {
+		t.Errorf("expected container_ahead, got %s", r.Action)
+	}
+	if r.ContainerSeq != 5 {
+		t.Errorf("expected container_seq=5, got %d", r.ContainerSeq)
+	}
+	if r.BrowserSeq != 2 {
+		t.Errorf("expected browser_seq=2, got %d", r.BrowserSeq)
+	}
+}
+
+func TestReconcileSeqNumbers_BrowserAhead(t *testing.T) {
+	ag := newTestAgent(t)
+
+	ag.SetFileMetadata("bar.txt", WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      3,
+		LastSyncedBrowser: 3, // browser has edits container hasn't synced
+		LastSyncedContainer: 3,
+	})
+
+	browserSeqs := map[string]int64{
+		"bar.txt": 5,
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+	if r.Action != ReconcileBrowserAhead {
+		t.Errorf("expected browser_ahead, got %s", r.Action)
+	}
+	if r.BrowserSeq != 5 {
+		t.Errorf("expected browser_seq=5, got %d", r.BrowserSeq)
+	}
+	if r.ContainerSeq != 3 {
+		t.Errorf("expected container_seq=3, got %d", r.ContainerSeq)
+	}
+}
+
+func TestReconcileSeqNumbers_Diverged(t *testing.T) {
+	ag := newTestAgent(t)
+
+	// Both sides have changes the other hasn't seen:
+	// - Browser has edits past last_synced_browser (5 > 3)
+	// - Container has writes past last_synced_container (7 > 3)
+	ag.SetFileMetadata("conflict.txt", WorkspaceFileMetadata{
+		BrowserSeq:        5,
+		ContainerSeq:      7,
+		LastSyncedBrowser: 3,
+		LastSyncedContainer: 3,
+	})
+
+	browserSeqs := map[string]int64{
+		"conflict.txt": 5,
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	r := results[0]
+	if r.Action != ReconcileDiverged {
+		t.Errorf("expected diverged, got %s", r.Action)
+	}
+}
+
+func TestReconcileSeqNumbers_NilAgent(t *testing.T) {
+	var ag *Agent
+	_, err := ReconcileSeqNumbers(ag, map[string]int64{"a.txt": 1})
+	if err == nil {
+		t.Fatal("expected error for nil agent, got nil")
+	}
+	if !strings.Contains(err.Error(), "agent is nil") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestReconcileSeqNumbers_NilMetadata(t *testing.T) {
+	ag := newTestAgent(t)
+	// Do NOT set any file metadata — metadata store stays nil/empty
+
+	browserSeqs := map[string]int64{
+		"new.txt": 5,
+		"zero.txt": 0,
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Only files with seq > 0 produce results when metadata is nil
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result (zero-seq file excluded), got %d", len(results))
+	}
+	r := results[0]
+	if r.FilePath != "new.txt" {
+		t.Errorf("expected new.txt, got %s", r.FilePath)
+	}
+	if r.Action != ReconcileBrowserAhead {
+		t.Errorf("expected browser_ahead, got %s", r.Action)
+	}
+	if r.ContainerSeq != 0 {
+		t.Errorf("expected container_seq=0, got %d", r.ContainerSeq)
+	}
+}
+
+func TestReconcileSeqNumbers_EmptySeqs(t *testing.T) {
+	ag := newTestAgent(t)
+	ag.SetFileMetadata("a.txt", WorkspaceFileMetadata{
+		BrowserSeq:    5,
+		ContainerSeq:  5,
+	})
+
+	results, err := ReconcileSeqNumbers(ag, map[string]int64{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty seqs, got %d", len(results))
+	}
+}
+
+func TestReconcileSeqNumbers_FileNotInMetadata(t *testing.T) {
+	ag := newTestAgent(t)
+	// Set metadata for one file but NOT the other
+	ag.SetFileMetadata("known.txt", WorkspaceFileMetadata{
+		BrowserSeq:    2,
+		ContainerSeq:  2,
+		LastSyncedBrowser: 2,
+		LastSyncedContainer: 2,
+	})
+
+	browserSeqs := map[string]int64{
+		"known.txt": 2,
+		"unknown.txt": 3, // no metadata — browser is ahead
+		"zero_unknown.txt": 0, // seq 0 — should be excluded
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for _, r := range results {
+		switch r.FilePath {
+		case "known.txt":
+			if r.Action != ReconcileSyncOK {
+				t.Errorf("known.txt: expected sync_ok, got %s", r.Action)
+			}
+		case "unknown.txt":
+			if r.Action != ReconcileBrowserAhead {
+				t.Errorf("unknown.txt: expected browser_ahead, got %s", r.Action)
+			}
+			if r.ContainerSeq != 0 {
+				t.Errorf("unknown.txt: expected container_seq=0, got %d", r.ContainerSeq)
+			}
+		default:
+			t.Errorf("unexpected file: %s", r.FilePath)
+		}
+	}
+}
+
+func TestReconcileSeqResults_Sorted(t *testing.T) {
+	ag := newTestAgent(t)
+	// Set metadata for files in any order
+	ag.SetFileMetadata("z.txt", WorkspaceFileMetadata{ContainerSeq: 1})
+	ag.SetFileMetadata("a.txt", WorkspaceFileMetadata{ContainerSeq: 1})
+	ag.SetFileMetadata("m.txt", WorkspaceFileMetadata{ContainerSeq: 1})
+
+	browserSeqs := map[string]int64{
+		"z.txt": 1,
+		"a.txt": 1,
+		"m.txt": 1,
+	}
+
+	results, err := ReconcileSeqNumbers(ag, browserSeqs)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	expectedOrder := []string{"a.txt", "m.txt", "z.txt"}
+	for i, expected := range expectedOrder {
+		if results[i].FilePath != expected {
+			t.Errorf("result[%d].file_path = %q, want %q", i, results[i].FilePath, expected)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// determineReconcileAction edge-case tests
+// ---------------------------------------------------------------------------
+
+func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		browserSeq int64
+		md         WorkspaceFileMetadata
+		want       ReconciliationActionType
+	}{
+		{
+			name: "exact_match_sync_ok",
+			browserSeq: 10,
+			md: WorkspaceFileMetadata{
+				ContainerSeq: 10,
+			},
+			want: ReconcileSyncOK,
+		},
+		{
+			name: "both_zero_sync_ok",
+			browserSeq: 0,
+			md: WorkspaceFileMetadata{
+				ContainerSeq: 0,
+			},
+			want: ReconcileSyncOK,
+		},
+		{
+			name: "browser_has_unsynced_edits_only",
+			browserSeq: 10,
+			md: WorkspaceFileMetadata{
+				ContainerSeq:      5,
+				LastSyncedBrowser: 5,
+				LastSyncedContainer: 5,
+			},
+			want: ReconcileBrowserAhead,
+		},
+		{
+			name: "container_ahead_with_acknowledged_browser",
+			browserSeq: 5,
+			md: WorkspaceFileMetadata{
+				ContainerSeq: 10,
+				LastSyncedBrowser: 5,
+				LastSyncedContainer: 5,
+			},
+			want: ReconcileContainerAhead,
+		},
+		{
+			name: "diverged_both_sides_unsynced",
+			browserSeq: 10,
+			md: WorkspaceFileMetadata{
+				ContainerSeq: 12,
+				LastSyncedBrowser: 5,
+				LastSyncedContainer: 5,
+			},
+			want: ReconcileDiverged,
+		},
+		{
+			name: "fallback_browser_less_than_container_no_sync_state",
+			browserSeq: 3,
+			md: WorkspaceFileMetadata{
+				ContainerSeq:      7,
+				LastSyncedBrowser: 3,
+				LastSyncedContainer: 7,
+			},
+			want: ReconcileContainerAhead,
+		},
+		{
+			name: "fallback_browser_greater_than_container_no_sync_state",
+			browserSeq: 7,
+			md: WorkspaceFileMetadata{
+				ContainerSeq:      3,
+				LastSyncedBrowser: 7,
+				LastSyncedContainer: 3,
+			},
+			want: ReconcileBrowserAhead,
+		},
+		{
+			name: "negative_seqs_sync_ok",
+			browserSeq: -1,
+			md: WorkspaceFileMetadata{
+				ContainerSeq: -1,
+			},
+			want: ReconcileSyncOK,
+		},
+		{
+			name: "negative_browser_less_than_container",
+			browserSeq: -5,
+			md: WorkspaceFileMetadata{
+				ContainerSeq: 0,
+			},
+			want: ReconcileContainerAhead,
+		},
+		{
+			name: "only_browser_has_edits_no_container_writes",
+			browserSeq: 8,
+			md: WorkspaceFileMetadata{
+				ContainerSeq:      5,
+				LastSyncedBrowser: 5,
+				LastSyncedContainer: 5,
+			},
+			want: ReconcileBrowserAhead,
+		},
+		{
+			name: "only_container_has_writes_no_browser_edits",
+			browserSeq: 5,
+			md: WorkspaceFileMetadata{
+				ContainerSeq:      8,
+				LastSyncedBrowser: 5,
+				LastSyncedContainer: 5,
+			},
+			want: ReconcileContainerAhead,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := determineReconcileAction(tc.browserSeq, tc.md)
+			if got != tc.want {
+				t.Errorf("determineReconcileAction(%d, %+v) = %s, want %s",
+					tc.browserSeq, tc.md, got, tc.want)
+			}
+		})
+	}
+}

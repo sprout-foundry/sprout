@@ -48,6 +48,9 @@ const (
 	// AllowedMessageTypeHydrateRequest is the "hydrate_request" message type (SP-046)
 	AllowedMessageTypeHydrateRequest = "hydrate_request"
 
+	// AllowedMessageTypeSyncRecover is the "sync_recover" message type (SP-046)
+	AllowedMessageTypeSyncRecover = "sync_recover"
+
 	// Outbound-only hydration message types (SP-046) — server→client
 	AllowedMessageTypeHydrateManifest = "hydrate_manifest"
 	AllowedMessageTypeHydrateFile     = "hydrate_file"
@@ -68,6 +71,7 @@ var allowedMessageTypes = map[string]bool{
 	AllowedMessageTypeAskUserResponse:          true,
 	AllowedMessageTypeSessionTakeover:          true,
 	AllowedMessageTypeHydrateRequest:           true,
+	AllowedMessageTypeSyncRecover:              true,
 }
 
 // HydrateManifestData is the data payload for "hydrate_manifest" messages.

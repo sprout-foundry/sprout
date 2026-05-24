@@ -1441,3 +1441,198 @@ func TestHandleColdHydrateRequest_EmptyFile(t *testing.T) {
 		}
 	}
 }
+
+// --- Symlink security tests ---
+
+func TestHandleColdHydrateRequest_SymlinkSkipped(t *testing.T) {
+	ws := &ReactWebServer{eventBus: events.NewEventBus()}
+	pair := newTestingConnPair(t)
+	defer pair.server.Close()
+
+	dir := t.TempDir()
+
+	// Create a regular file
+	os.WriteFile(filepath.Join(dir, "normal.txt"), []byte("hello"), 0644)
+
+	// Create a file outside the workspace that the symlink will target
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "secret.txt")
+	os.WriteFile(outsideFile, []byte("secret data"), 0644)
+
+	// Create a symlink inside the workspace pointing outside
+	symlinkPath := filepath.Join(dir, "link_to_secret.txt")
+	err := os.Symlink(outsideFile, symlinkPath)
+	if err != nil {
+		// Symlinks may not work on all platforms (e.g., Windows CI)
+		// Skip the symlink-specific assertions but still verify normal files work
+		t.Logf("skipping symlink test: cannot create symlink: %v", err)
+
+		messages := runHydrateAndWait(t, ws, pair, dir)
+		// Should have: manifest + 1 file (normal.txt) + complete = 3
+		if len(messages) != 3 {
+			t.Fatalf("expected 3 messages, got %d", len(messages))
+		}
+		manifest, err := getManifestData(messages[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if manifest.TotalFiles != 1 {
+			t.Errorf("total_files = %d, want 1", manifest.TotalFiles)
+		}
+		return
+	}
+
+	messages := runHydrateAndWait(t, ws, pair, dir)
+
+	// Should have: manifest + 1 file (normal.txt) + complete = 3
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 messages (manifest + 1 file + complete), got %d", len(messages))
+	}
+
+	manifest, err := getManifestData(messages[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.TotalFiles != 1 {
+		t.Errorf("manifest total_files = %d, want 1 (symlink should be excluded)", manifest.TotalFiles)
+	}
+
+	// Verify the only file transferred is normal.txt
+	fileData, err := getFileData(messages[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileData.Path != "normal.txt" {
+		t.Errorf("file path = %q, want %q", fileData.Path, "normal.txt")
+	}
+}
+
+// --- Sensitive file exclusion tests ---
+
+func TestIsSensitiveFile(t *testing.T) {
+	tests := []struct {
+		path       string
+		isSensitive bool
+	}{
+		// Sensitive by name
+		{".env", true},
+		{".env.local", true},
+		{".env.production", true},
+		{".env.development", true},
+		{".env.staging", true},
+		{".env.test", true},
+		{".npmrc", true},
+		{".pypirc", true},
+		{".netrc", true},
+
+		// .env.* pattern (catches arbitrary variants)
+		{".env.production.local", true},
+		{".env.custom", true},
+
+		// Sensitive by extension
+		{"secret.pem", true},
+		{"cert.key", true},
+		{"archive.p12", true},
+		{"archive.pfx", true},
+		{"app.keystore", true},
+		{"app.jks", true},
+
+		// Nested paths with sensitive names
+		{"project/.env", true},
+		{"subdir/secret.pem", true},
+
+		// Not sensitive
+		{"main.go", false},
+		{"readme.md", false},
+		{"package.json", false},
+		{"Makefile", false},
+		{".gitignore", false},
+		{"config.yaml", false},
+		{"data.csv", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result := isSensitiveFile(tt.path)
+			if result != tt.isSensitive {
+				t.Errorf("isSensitiveFile(%q) = %v, want %v", tt.path, result, tt.isSensitive)
+			}
+		})
+	}
+}
+
+func TestHandleColdHydrateRequest_SensitiveFilesExcluded(t *testing.T) {
+	ws := &ReactWebServer{eventBus: events.NewEventBus()}
+	pair := newTestingConnPair(t)
+	defer pair.server.Close()
+
+	dir := t.TempDir()
+
+	// Normal file that should be included
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main"), 0644)
+
+	// Sensitive files that should be excluded
+	os.WriteFile(filepath.Join(dir, ".env"), []byte("SECRET=123"), 0644)
+	os.WriteFile(filepath.Join(dir, ".env.local"), []byte("LOCAL=456"), 0644)
+	os.WriteFile(filepath.Join(dir, "secret.pem"), []byte("-----BEGIN CERTIFICATE-----"), 0644)
+	os.WriteFile(filepath.Join(dir, "cert.key"), []byte("-----BEGIN RSA KEY-----"), 0644)
+
+	messages := runHydrateAndWait(t, ws, pair, dir)
+
+	// Should have: manifest + 1 file (main.go) + complete = 3
+	if len(messages) != 3 {
+		t.Fatalf("expected 3 messages (manifest + 1 file + complete), got %d", len(messages))
+	}
+
+	manifest, err := getManifestData(messages[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.TotalFiles != 1 {
+		t.Errorf("manifest total_files = %d, want 1 (sensitive files should be excluded)", manifest.TotalFiles)
+	}
+
+	// Verify the only file transferred is main.go
+	fileData, err := getFileData(messages[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileData.Path != "main.go" {
+		t.Errorf("file path = %q, want %q", fileData.Path, "main.go")
+	}
+}
+
+// --- Deterministic ordering test ---
+
+func TestHandleColdHydrateRequest_DeterministicOrder(t *testing.T) {
+	ws := &ReactWebServer{eventBus: events.NewEventBus()}
+	pair := newTestingConnPair(t)
+	defer pair.server.Close()
+
+	dir := t.TempDir()
+
+	// Create files in reverse alphabetical order
+	// (filesystem ordering is non-deterministic, so we create them in reverse)
+	files := []string{"z.txt", "m.txt", "a.txt"}
+	for _, name := range files {
+		os.WriteFile(filepath.Join(dir, name), []byte("content"), 0644)
+	}
+
+	messages := runHydrateAndWait(t, ws, pair, dir)
+
+	// Should have: manifest + 3 files + complete = 5
+	if len(messages) != 5 {
+		t.Fatalf("expected 5 messages, got %d", len(messages))
+	}
+
+	// Verify files arrive in sorted order: a.txt, m.txt, z.txt
+	expectedOrder := []string{"a.txt", "m.txt", "z.txt"}
+	for i, expected := range expectedOrder {
+		fileData, err := getFileData(messages[i+1])
+		if err != nil {
+			t.Fatalf("failed to parse file data for message %d: %v", i+1, err)
+		}
+		if fileData.Path != expected {
+			t.Errorf("file %d path = %q, want %q", i+1, fileData.Path, expected)
+		}
+	}
+}

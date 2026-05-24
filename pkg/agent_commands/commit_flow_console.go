@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // executeConsoleFlow runs the commit flow using simple console prompts
@@ -94,10 +96,7 @@ func (cf *CommitFlow) promptForFiles(files []string, prompt string) ([]string, e
 
 // promptYesNo asks a yes/no question
 func (cf *CommitFlow) promptYesNo(question string, defaultYes bool) (bool, error) {
-	defaultStr := "y/N"
-	if defaultYes {
-		defaultStr = "Y/n"
-	}
+	defaultStr := utils.DefaultChoiceHint(defaultYes)
 
 	fmt.Printf("\r\n%s (%s): ", question, defaultStr)
 

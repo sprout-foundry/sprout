@@ -34,13 +34,16 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  vi.useFakeTimers();
   vi.clearAllMocks();
   latestContext = undefined;
   localStorage.setItem('sprout-welcome-dismissed', 'true');
   localStorage.removeItem('sprout.editor.layoutState');
+  localStorage.removeItem('editor.max-panes');
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => {
     root?.unmount();
   });
@@ -60,9 +63,11 @@ function renderProvider() {
 }
 
 const actAndUpdate = async (fn: () => void) => {
+  vi.advanceTimersByTime(1);
   act(() => {
     fn();
   });
+  vi.advanceTimersByTime(1);
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
@@ -334,5 +339,783 @@ describe('getRightmostPane helper with 6 panes', () => {
     panes.forEach((pane) => {
       expect(positionOrder[pane.position]).toBeDefined();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Pane size distribution for all pane counts (2 through 6)
+// ---------------------------------------------------------------------------
+
+describe('Pane size distribution across all pane counts', () => {
+  it('2 panes each get 50%', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => {
+      ctx().splitPane(paneId1, 'vertical');
+    });
+
+    expect(ctx().panes.length).toBe(2);
+    expect(ctx().paneSizes[paneId1]).toBe(50);
+    expect(ctx().paneSizes[ctx().panes[1].id]).toBe(50);
+  });
+
+  it('3 panes each get 33.33%', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => {
+      ctx().splitPane(paneId1, 'vertical');
+    });
+    await actAndUpdate(() => {
+      ctx().splitPane(paneId1, 'horizontal');
+    });
+
+    expect(ctx().panes.length).toBe(3);
+    const expectedSize = 100 / 3;
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBeCloseTo(expectedSize, 5);
+    });
+  });
+
+  it('5 panes each get 20%', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 5 panes total — use explicit calls to avoid Date.now() collisions
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBe(20);
+    });
+  });
+
+  it('6 panes each get 16.67%', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes total — use explicit calls to avoid Date.now() collisions
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    const expectedSize = 100 / 6;
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBeCloseTo(expectedSize, 5);
+    });
+  });
+
+  it('4 panes each get 25%', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+
+    expect(ctx().panes.length).toBe(4);
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBe(25);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: closePane with 4-6 panes
+// ---------------------------------------------------------------------------
+
+describe('closePane with 4-6 panes', () => {
+  it('closing a pane from 6 leaves 5 with rebalanced sizes', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes using explicit calls to avoid Date.now() collisions
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    // Close the last pane (senary)
+    const senaryPane = ctx().panes.find((p) => p.position === 'senary');
+    const paneToClose = senaryPane!.id;
+
+    await actAndUpdate(() => {
+      ctx().closePane(paneToClose);
+    });
+
+    expect(ctx().panes.length).toBe(5);
+
+    // Sizes should be rebalanced to 100/5 = 20% each
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBe(20);
+    });
+
+    // Layout should remain split-vertical (not revert to single)
+    expect(ctx().paneLayout).toBe('split-vertical');
+  });
+
+  it('closing a pane from 4 leaves 3 with rebalanced sizes', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+
+    expect(ctx().panes.length).toBe(4);
+
+    // Close the last pane (quaternary)
+    const paneToClose = ctx().panes.find((p) => p.position === 'quaternary')!.id;
+
+    await actAndUpdate(() => {
+      ctx().closePane(paneToClose);
+    });
+
+    expect(ctx().panes.length).toBe(3);
+
+    // Sizes should be rebalanced to 100/3 each
+    const expectedSize = 100 / 3;
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBeCloseTo(expectedSize, 5);
+    });
+  });
+
+  it('closing panes one by one from 6 down to 1 works correctly', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes using explicit calls
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    // Close panes one at a time using position-based lookups to avoid ID collisions
+    const positionsToRemove = ['senary', 'quinary', 'quaternary', 'tertiary', 'secondary'];
+    for (let i = 0; i < positionsToRemove.length; i++) {
+      const expectedCount = 6 - i - 1;
+      const pos = positionsToRemove[i];
+      const paneToClose = ctx().panes.find((p) => p.position === pos)!;
+      await actAndUpdate(() => {
+        ctx().closePane(paneToClose.id);
+      });
+
+      expect(ctx().panes.length).toBe(expectedCount);
+      // All remaining panes should have equal sizes
+      const expectedSize = 100 / expectedCount;
+      ctx().panes.forEach((pane) => {
+        expect(ctx().paneSizes[pane.id]).toBeCloseTo(expectedSize, 5);
+      });
+    }
+
+    // Final state: only primary pane remains, layout is single
+    expect(ctx().panes.length).toBe(1);
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().panes[0].position).toBe('primary');
+  });
+
+  it('closing a non-last pane from 6 works correctly', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes using explicit calls
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    // Close the tertiary pane (index 2)
+    const tertiaryPane = ctx().panes.find((p) => p.position === 'tertiary')!;
+
+    await actAndUpdate(() => {
+      ctx().closePane(tertiaryPane.id);
+    });
+
+    expect(ctx().panes.length).toBe(5);
+
+    // Remaining panes should still have valid positions
+    const remainingPositions = ctx().panes.map((p) => p.position);
+    expect(remainingPositions).not.toContain('tertiary');
+    expect(remainingPositions).toContain('primary');
+    expect(remainingPositions).toContain('secondary');
+
+    // Sizes should be rebalanced
+    ctx().panes.forEach((pane) => {
+      expect(ctx().paneSizes[pane.id]).toBe(20);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: closeSplit behavior at various pane counts
+// ---------------------------------------------------------------------------
+
+describe('closeSplit at various pane counts', () => {
+  it('closeSplit from 6 panes returns to single pane', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes using explicit calls
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+    expect(ctx().paneLayout).toBe('split-vertical');
+
+    await actAndUpdate(() => {
+      ctx().closeSplit();
+    });
+
+    expect(ctx().panes.length).toBe(1);
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().panes[0].position).toBe('primary');
+    expect(ctx().paneSizes[ctx().panes[0].id]).toBe(100);
+  });
+
+  it('closeSplit from 3 panes returns to single pane', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+
+    await actAndUpdate(() => {
+      ctx().closeSplit();
+    });
+
+    expect(ctx().panes.length).toBe(1);
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().paneSizes[ctx().panes[0].id]).toBe(100);
+  });
+
+  it('closeSplit from 2 panes returns to single pane', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    expect(ctx().paneLayout).toBe('split-vertical');
+
+    await actAndUpdate(() => {
+      ctx().closeSplit();
+    });
+
+    expect(ctx().panes.length).toBe(1);
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().paneSizes[ctx().panes[0].id]).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Pane layout transitions as pane count changes
+// ---------------------------------------------------------------------------
+
+describe('Pane layout transitions', () => {
+  it('starts with single layout', () => {
+    renderProvider();
+
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().panes.length).toBe(1);
+  });
+
+  it('transitions to split-vertical on first vertical split', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    expect(ctx().paneLayout).toBe('single');
+
+    await actAndUpdate(() => {
+      ctx().splitPane(paneId1, 'vertical');
+    });
+
+    expect(ctx().paneLayout).toBe('split-vertical');
+    expect(ctx().panes.length).toBe(2);
+  });
+
+  it('transitions to split-horizontal on first horizontal split', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    expect(ctx().paneLayout).toBe('single');
+
+    await actAndUpdate(() => {
+      ctx().splitPane(paneId1, 'horizontal');
+    });
+
+    expect(ctx().paneLayout).toBe('split-horizontal');
+    expect(ctx().panes.length).toBe(2);
+  });
+
+  it('maintains split layout after adding more panes', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().paneLayout).toBe('split-vertical');
+
+    // Adding more panes should not revert to single
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+
+    expect(ctx().panes.length).toBe(5);
+    expect(ctx().paneLayout).not.toBe('single');
+  });
+
+  it('reverts to single layout when last non-primary pane is closed', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().paneLayout).toBe('split-vertical');
+
+    // Close the secondary pane (only non-primary)
+    await actAndUpdate(() => {
+      ctx().closePane(ctx().panes[1].id);
+    });
+
+    expect(ctx().paneLayout).toBe('single');
+    expect(ctx().panes.length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Configurable maxPanes via settings (4 and other values)
+// ---------------------------------------------------------------------------
+
+describe('Configurable maxPanes via settings', () => {
+  it('maxPanes set to 4 prevents creating 5th pane', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    localStorage.setItem('editor.max-panes', '4');
+
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    const paneId1 = ctx().panes[0].id;
+
+    // Create 2nd pane
+    let paneId: string;
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'vertical');
+    });
+    expect(paneId).toBeTruthy();
+    expect(ctx().panes.length).toBe(2);
+
+    // Create 3rd pane
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'horizontal');
+    });
+    expect(paneId).toBeTruthy();
+    expect(ctx().panes.length).toBe(3);
+
+    // Create 4th pane
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'vertical');
+    });
+    expect(paneId).toBeTruthy();
+    expect(ctx().panes.length).toBe(4);
+
+    // Try to create 5th pane — should be rejected
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'horizontal');
+    });
+    expect(paneId).toBeNull();
+    expect(ctx().panes.length).toBe(4);
+  });
+
+  it('maxPanes set to 2 prevents creating 3rd pane', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    localStorage.setItem('editor.max-panes', '2');
+
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    const paneId1 = ctx().panes[0].id;
+    let paneId: string;
+
+    // Create 2nd pane — should work
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'vertical');
+    });
+    expect(paneId).toBeTruthy();
+    expect(ctx().panes.length).toBe(2);
+
+    // Try to create 3rd pane — should be rejected
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'horizontal');
+    });
+    expect(paneId).toBeNull();
+    expect(ctx().panes.length).toBe(2);
+  });
+
+  it('maxPanes respects lower limit when set below MAX_PANES', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    localStorage.setItem('editor.max-panes', '3');
+
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    const paneId1 = ctx().panes[0].id;
+    let paneId: string;
+
+    // Create 3 panes
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'vertical');
+    });
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'horizontal');
+    });
+
+    expect(ctx().panes.length).toBe(3);
+
+    // 4th pane should be rejected at limit of 3
+    await actAndUpdate(() => {
+      paneId = ctx().splitPane(paneId1, 'vertical');
+    });
+    expect(paneId).toBeNull();
+    expect(ctx().panes.length).toBe(3);
+  });
+
+  it('setMaxPanes updates maxPanes state and persists to localStorage', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // Start with default maxPanes
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    // Default should be MAX_PANES (6)
+    expect(ctx().maxPanes).toBe(MAX_PANES);
+
+    // Test setMaxPanes for values 2 through 6
+    for (let n = 2; n <= 6; n++) {
+      act(() => {
+        ctx().setMaxPanes(n);
+      });
+      expect(ctx().maxPanes).toBe(n);
+      // Verify it persisted to localStorage
+      expect(localStorage.getItem('editor.max-panes')).toBe(String(n));
+    }
+  });
+
+  it('setMaxPanes clamps values below 2 and above MAX_PANES', async () => {
+    const TestConsumer = () => {
+      const ctx = useEditorManager();
+      latestContext = ctx;
+      return null;
+    };
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root.render(
+        createElement(EditorManagerProvider, null, createElement(TestConsumer)),
+      );
+    });
+
+    // Clamp below minimum
+    act(() => {
+      ctx().setMaxPanes(1);
+    });
+    expect(ctx().maxPanes).toBe(2);
+    expect(localStorage.getItem('editor.max-panes')).toBe('2');
+
+    // Clamp above maximum
+    act(() => {
+      ctx().setMaxPanes(10);
+    });
+    expect(ctx().maxPanes).toBe(MAX_PANES);
+    expect(localStorage.getItem('editor.max-panes')).toBe(String(MAX_PANES));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: splitPane rejects beyond configurable limit at different thresholds
+// ---------------------------------------------------------------------------
+
+describe('splitPane rejection at various configurable limits', () => {
+  it('default maxPanes allows exactly 6 panes then rejects 7th', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+
+    // Create exactly 6 panes using explicit calls
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    // 7th should be null
+    let result: string | null;
+    await actAndUpdate(() => {
+      result = ctx().splitPane(paneId1, 'vertical');
+    });
+    expect(result).toBeNull();
+    expect(ctx().panes.length).toBe(6);
+  });
+
+  it('splitPane returns null without mutating state when at limit', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+
+    // Create 6 panes using explicit calls
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    const panesBefore = ctx().panes.map((p) => p.id);
+    const layoutBefore = ctx().paneLayout;
+
+    // Attempt 7th split
+    await actAndUpdate(() => {
+      const result = ctx().splitPane(paneId1, 'vertical');
+      expect(result).toBeNull();
+    });
+
+    // State should be unchanged
+    expect(ctx().panes.map((p) => p.id)).toEqual(panesBefore);
+    expect(ctx().paneLayout).toBe(layoutBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: 4-6 pane creation and state verification
+// ---------------------------------------------------------------------------
+
+describe('4-6 pane creation edge cases', () => {
+  it('creating 4 panes assigns quaternary position to the 4th pane', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+
+    const fourthPane = ctx().panes.find((p) => p.position === 'quaternary');
+    expect(fourthPane).toBeDefined();
+    expect(fourthPane.id).toBeTruthy();
+    expect(ctx().panes.length).toBe(4);
+  });
+
+  it('creating 5 panes assigns quinary position to the 5th pane', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+
+    const fifthPane = ctx().panes.find((p) => p.position === 'quinary');
+    expect(fifthPane).toBeDefined();
+    expect(fifthPane.id).toBeTruthy();
+    expect(ctx().panes.length).toBe(5);
+  });
+
+  it('each pane has a unique id after creating 6 panes', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes using explicit calls to avoid Date.now() collisions
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    const ids = ctx().panes.map((p) => p.id);
+    expect(new Set(ids).size).toBe(6);
+    ids.forEach((id) => {
+      expect(id).toBeTruthy();
+      expect(typeof id).toBe('string');
+    });
+  });
+
+  it('all 6 panes have valid position values', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+    // Create 6 panes using explicit calls
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(2);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(3);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(4);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'horizontal'));
+    expect(ctx().panes.length).toBe(5);
+    await actAndUpdate(() => ctx().splitPane(paneId1, 'vertical'));
+    expect(ctx().panes.length).toBe(6);
+
+    const validPositions = ['primary', 'secondary', 'tertiary', 'quaternary', 'quinary', 'senary'];
+    ctx().panes.forEach((pane) => {
+      expect(validPositions).toContain(pane.position);
+    });
+
+    // Each position appears exactly once
+    const positionCounts: Record<string, number> = {};
+    ctx().panes.forEach((pane) => {
+      positionCounts[pane.position] = (positionCounts[pane.position] || 0) + 1;
+    });
+    validPositions.forEach((pos) => {
+      expect(positionCounts[pos]).toBe(1);
+    });
+  });
+
+  it('activePaneId is set to the newly created pane after split', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+
+    let newPaneId: string;
+    await actAndUpdate(() => {
+      newPaneId = ctx().splitPane(paneId1, 'vertical');
+    });
+
+    expect(ctx().activePaneId).toBe(newPaneId);
+
+    // Continue splitting — active should update each time
+    let newPaneId2: string;
+    await actAndUpdate(() => {
+      newPaneId2 = ctx().splitPane(paneId1, 'horizontal');
+    });
+
+    expect(ctx().activePaneId).toBe(newPaneId2);
+  });
+
+  it('newly created panes start with null bufferId', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+
+    let newPaneId: string;
+    await actAndUpdate(() => {
+      newPaneId = ctx().splitPane(paneId1, 'vertical');
+    });
+
+    const newPane = ctx().panes.find((p) => p.id === newPaneId);
+    expect(newPane).toBeDefined();
+    expect(newPane.bufferId).toBeNull();
+  });
+
+  it('newly created panes start with isActive = false', async () => {
+    renderProvider();
+
+    const paneId1 = ctx().panes[0].id;
+
+    let newPaneId: string;
+    await actAndUpdate(() => {
+      newPaneId = ctx().splitPane(paneId1, 'vertical');
+    });
+
+    const newPane = ctx().panes.find((p) => p.id === newPaneId);
+    expect(newPane).toBeDefined();
+    expect(newPane.isActive).toBe(false);
   });
 });

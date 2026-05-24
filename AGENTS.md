@@ -52,6 +52,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-024** Context Management — File Read Optimization (proposed)
 - **SP-049** Shell Permission Overhaul — Tiered Allow-Lists & User Policy (proposed)
 - **SP-054** LSP Language Coverage Expansion (proposed)
+- **SP-055** CLI Pinned Input — Always-On Steering Panel (proposed)
 
 ## Testing
 
@@ -131,6 +132,127 @@ When a merge produces conflicts:
 | `git checkout`, `git switch`, `git restore`, `git reset` | Git tool only | Requires explicit user approval |
 | `git push --force` (any variant) | **FORBIDDEN** | Never allowed |
 | `git rebase` (onto remote) | **FORBIDDEN** | Use merge instead |
+
+## Design System
+
+The webui is built on a token-driven design system rooted in `webui/src/App.css`
+(canonical definitions for both themes) and mirrored in
+`packages/ui/.storybook/tokens.css` (for Storybook isolation). Every component
+that ships visual style — webui-local or `@sprout/ui` shared — must honor these
+rules so the UI theme-switches cleanly and stays brand-consistent.
+
+### Token catalogue (don't reinvent these)
+
+**Surfaces** — `--bg-primary`, `--bg-secondary`, `--bg-tertiary`,
+`--bg-elevated`, `--bg-surface`, `--bg-hover` (alias for elevated).
+**Status-tinted surfaces** — `--bg-error`, `--bg-success`, `--bg-warning`,
+`--bg-info` (12% accent-tinted via color-mix; use for inline alert panels).
+**Text** — `--text-primary`, `--text-secondary`, `--text-tertiary`, `--text-muted`.
+**Accents** — `--accent-primary`, `--accent-secondary`, `--accent-success`,
+`--accent-warning`, `--accent-error`, `--accent-info` (alias for primary).
+**Accent foregrounds** — `--accent-fg` (white text on accent surfaces),
+`--accent-warning-fg` (#1a1a2e dark text on amber/warning — white-on-yellow
+fails contrast), `--accent-on-primary` (alias for `--accent-fg`).
+**Borders** — `--border-subtle`, `--border-default`, `--border-strong`,
+`--border-focus`.
+**Brand** — `--brand-teal`, `--brand-frost`, `--brand-active-cyan`,
+`--brand-navy` (sprout brand, not generic accents).
+**Other** — `--radius-{sm,md,lg,xl}`, `--space-{1..12}`, `--text-{xs..3xl}`,
+`--shadow-{subtle,elevated,float}`, `--font-{sans,mono}`, `--ease-{out,in-out}`.
+
+### Hard rules
+
+1. **No raw hex/rgba in CSS or inline `style={{}}`.** Use a token.
+   - Pure black/white scrims (modal overlays at `rgba(0,0,0,0.5)`) are the
+     only exception — they're theme-neutral by intent.
+   - HTML preview iframes that need a true white background (so user HTML
+     renders correctly) are also exempt.
+   - File-type / language icons (JS yellow, TS blue, Go cyan) are intentional
+     brand identifiers — leave them as literal hex.
+2. **No hex fallbacks on defined tokens.** Write `var(--accent-primary)`,
+   not `var(--accent-primary, #6366f1)`. The token is canonical; a
+   wrong-color fallback (especially the indigo `#6366f1` Tailwind default)
+   silently renders off-brand if anything goes sideways.
+3. **Status-tinted backgrounds use `color-mix`, not literal rgba.**
+   `color-mix(in srgb, var(--accent-error) 12%, transparent)` over
+   `rgba(224, 108, 117, 0.12)` — the latter doesn't theme-switch.
+4. **Text on a colored background uses the matching foreground token.**
+   - On `--accent-primary|success|error|secondary` surfaces → `var(--accent-fg)`.
+   - On `--accent-warning` surfaces → `var(--accent-warning-fg)` (dark navy,
+     because white-on-amber fails WCAG contrast).
+   - Don't use `var(--text-primary)` on accent backgrounds — it's tuned for
+     `--bg-*` surfaces and will be low-contrast.
+5. **Every interactive element gets `:focus-visible`.** Keyboard users must
+   see where focus is. Pattern:
+   ```css
+   .button:focus-visible {
+     outline: none;
+     box-shadow: 0 0 0 2px var(--accent-primary);
+   }
+   ```
+   For tab-strip / chrome items, use `outline: 2px solid var(--accent-primary);
+   outline-offset: -2px` instead so the ring sits inside the tab bounds.
+6. **Don't `@media (prefers-color-scheme: dark)` for theming.** This app
+   toggles via `:root[data-theme='light']`. A `prefers-color-scheme` rule
+   fights the user's explicit choice. The token system already theme-switches —
+   write rules once using tokens.
+7. **`transition: all` is an anti-pattern.** List the properties you actually
+   animate (`background, color, border-color, box-shadow`). Animating `all`
+   includes layout properties and can jank.
+8. **No hardcoded white-alpha `rgba(255, 255, 255, X)` inset highlights**
+   on themable surfaces. They become invisible in light theme. Use
+   `color-mix(var(--accent-fg) X%, transparent)` if you need the highlight
+   to theme-switch, or accept that it's a dark-theme-only flourish and put
+   it inside a dark-theme guard.
+
+### When you add a new token
+
+Add it to **both**:
+- `webui/src/App.css` — in both `:root` (dark) and `:root[data-theme='light']`
+  (or define it once at `:root` if the value is theme-neutral, e.g.
+  `--accent-fg: #ffffff`).
+- `packages/ui/.storybook/tokens.css` — so shared-package Storybook still
+  renders correctly.
+
+If you don't add it to the storybook file, components in `@sprout/ui` that
+use the new token will render unstyled in Storybook even though they look
+fine in the live webui.
+
+### When you touch shared-package CSS (`packages/ui/src/components/*.css`)
+
+The shared package ships to both webui and sprout-foundry. Its tokens are
+resolved by the **consumer's** stylesheet, not the package's own. Pattern:
+
+- **Always use tokens.** Same rules as webui-local CSS.
+- **Fallbacks are allowed and encouraged** here, since consumers may define
+  tokens differently: `var(--accent-primary, #61afef)`. Use brand-correct
+  fallbacks — `#61afef` (Atom-One blue) for primary, not `#6366f1` (indigo).
+- **Don't duplicate webui CSS into the shared package.** If both `webui/src/
+  components/Chat.css` and `packages/ui/src/components/ChatPanel.css` define
+  `.chat-container`, the cascade order matters and drift creates ghosts.
+  The webui-local copy should hold only webui-specific overrides; the shared
+  package is the source of truth for base styles.
+
+### Quick verification before declaring "done"
+
+```bash
+# Find raw hex/rgba leaks introduced in your branch
+git diff origin/main -- 'webui/src/**/*.css' 'packages/ui/src/**/*.css' \
+  | grep -E '^\+.*(#[0-9a-fA-F]{3,6}|rgba\([0-9])' \
+  | grep -vE 'rgba\(0, 0, 0|var\(--'
+
+# Find undefined token references in webui CSS
+grep -rohE 'var\(--[a-z-]+' webui/src/components/ | sort -u \
+  | while read tok; do
+      name="${tok#var(--}"
+      grep -q "^\s*--${name}:" webui/src/App.css || echo "UNDEFINED: $tok"
+    done
+```
+
+Run `make build-all` after CSS changes — Lightning CSS will warn on
+invalid syntax like unescaped `?` in selectors (real issue we hit) or
+`color-mix()` with malformed percentage strings (also a real issue —
+sed regex bug produced `252%` mid-refactor).
 
 ## Code Quality
 

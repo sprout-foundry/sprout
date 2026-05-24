@@ -496,16 +496,16 @@ func TestConvertMessagesSkipsMinimaxReasoningDetailsHistory(t *testing.T) {
 
 func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testing.T) {
 	config := &ProviderConfig{
-		Name:     "zai",
+		Name:     "openai", // OpenAI-compatible provider preserves reasoning_content
 		Endpoint: "https://example.com",
 		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
-		Defaults: RequestDefaults{Model: "GLM-4.6"},
+		Defaults: RequestDefaults{Model: "gpt-4"},
 		Conversion: MessageConversion{
 			ReasoningContentField: "reasoning_content",
 		},
 		Models: ModelConfig{
 			DefaultContextLimit: 4096,
-			DefaultModel:        "GLM-4.6",
+			DefaultModel:        "gpt-4",
 		},
 	}
 
@@ -529,6 +529,41 @@ func TestConvertMessagesPreservesReasoningContentForCompatibleProviders(t *testi
 	}
 	if value != "preserve me" {
 		t.Fatalf("unexpected reasoning_content value: %v", value)
+	}
+}
+
+func TestConvertMessagesSkipsReasoningContentForZAI(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "zai",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "glm-5.1"},
+		Conversion: MessageConversion{
+			ReasoningContentField: "reasoning_content",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 200000,
+			DefaultModel:        "glm-5.1",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []api.Message{
+		{
+			Role:             "assistant",
+			Content:          "answer",
+			ReasoningContent: "stale reasoning that should be stripped",
+		},
+	}
+
+	converted := provider.convertMessages(messages, "")
+	_, exists := converted[0]["reasoning_content"]
+	if exists {
+		t.Fatalf("expected reasoning_content to be stripped for ZAI provider, but it was present: %v", converted[0])
 	}
 }
 
@@ -857,4 +892,156 @@ type roundTripFunc struct {
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f.handler(req)
+}
+
+func TestConvertMessagesMergesConsecutiveUserMessages(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Conversion: MessageConversion{
+			IncludeToolCallID: true,
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Simulate: user sent "continue", API errored (no response), user sent "continue" again
+	messages := []api.Message{
+		{Role: "user", Content: "fix the bug"},
+		{Role: "assistant", Content: "I'll fix it", ToolCalls: []api.ToolCall{
+			{ID: "call_1", Type: "function"},
+		}},
+		{Role: "tool", Content: "fix applied", ToolCallID: "call_1"},
+		{Role: "user", Content: "continue"},     // first retry
+		{Role: "user", Content: "continue"},     // second retry (duplicate due to API error)
+	}
+
+	converted := provider.convertMessages(messages, "")
+
+	// Should have 4 messages: user, assistant(+tool_calls), tool, user(merged)
+	if len(converted) != 4 {
+		t.Fatalf("expected 4 messages after merge, got %d", len(converted))
+	}
+
+	// Last message should be a single merged user message
+	last := converted[3]
+	if last["role"] != "user" {
+		t.Fatalf("expected last message role=user, got %v", last["role"])
+	}
+	content, ok := last["content"].(string)
+	if !ok {
+		t.Fatalf("expected string content, got %T", last["content"])
+	}
+	if content != "continue\ncontinue" {
+		t.Fatalf("expected merged content 'continue\\ncontinue', got %q", content)
+	}
+
+	// Tool message should still have tool_call_id (not merged)
+	toolMsg := converted[2]
+	if toolMsg["role"] != "tool" {
+		t.Fatalf("expected tool message, got role=%v", toolMsg["role"])
+	}
+	if toolMsg["tool_call_id"] != "call_1" {
+		t.Fatalf("expected tool_call_id=call_1, got %v", toolMsg["tool_call_id"])
+	}
+}
+
+func TestConvertMessagesDoesNotMergeToolMessagesWithSameRole(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Conversion: MessageConversion{
+			IncludeToolCallID: true,
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	// Parallel tool calls produce consecutive tool messages — these must NOT be merged
+	messages := []api.Message{
+		{Role: "user", Content: "run two commands"},
+		{Role: "assistant", Content: "", ToolCalls: []api.ToolCall{
+			{ID: "call_a", Type: "function"},
+			{ID: "call_b", Type: "function"},
+		}},
+		{Role: "tool", Content: "result a", ToolCallID: "call_a"},
+		{Role: "tool", Content: "result b", ToolCallID: "call_b"},
+	}
+
+	converted := provider.convertMessages(messages, "")
+
+	// All 4 messages should be preserved (no merging of tool messages)
+	if len(converted) != 4 {
+		t.Fatalf("expected 4 messages (tool messages must not merge), got %d", len(converted))
+	}
+
+	if converted[2]["tool_call_id"] != "call_a" {
+		t.Fatalf("first tool message lost tool_call_id")
+	}
+	if converted[3]["tool_call_id"] != "call_b" {
+		t.Fatalf("second tool message lost tool_call_id")
+	}
+}
+
+func TestConvertMessagesMergesConsecutiveAssistantMessagesWithoutToolCalls(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test",
+		Endpoint: "https://example.com",
+		Auth:     AuthConfig{Type: "bearer", EnvVar: "API_KEY"},
+		Defaults: RequestDefaults{Model: "test-model"},
+		Conversion: MessageConversion{
+			ReasoningContentField: "reasoning_content",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 4096,
+			DefaultModel:        "test-model",
+		},
+	}
+
+	provider, err := NewGenericProvider(config)
+	if err != nil {
+		t.Fatalf("failed to create provider: %v", err)
+	}
+
+	messages := []api.Message{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", Content: "Let me", ReasoningContent: "thinking step 1"},
+		{Role: "assistant", Content: "think about this", ReasoningContent: "thinking step 2"},
+	}
+
+	converted := provider.convertMessages(messages, "")
+
+	// Should have 2 messages: user, assistant(merged)
+	if len(converted) != 2 {
+		t.Fatalf("expected 2 messages after merge, got %d", len(converted))
+	}
+
+	merged := converted[1]
+	content, _ := merged["content"].(string)
+	if content != "Let me\nthink about this" {
+		t.Fatalf("expected merged content, got %q", content)
+	}
+
+	// Reasoning from first message should be preserved
+	if merged["reasoning_content"] != "thinking step 1" {
+		t.Fatalf("expected first reasoning preserved, got %v", merged["reasoning_content"])
+	}
 }

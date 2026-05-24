@@ -156,6 +156,10 @@ type StateManager interface {
 	// currently nil. Returns true if the embedding was set, false if it already
 	// had a value. Used to capture the first-turn intent without TOCTOU races.
 	SetSessionIntentEmbeddingIfNil(emb []float32) bool
+
+	// Last provider error
+	GetLastProviderError() *ProviderErrorInfo
+	SetLastProviderError(*ProviderErrorInfo)
 }
 
 // AgentStateManager implements StateManager with simple field-backed getters/setters.
@@ -204,6 +208,7 @@ type AgentStateManager struct {
 	configOverrides             map[string]interface{}
 	currentIteration             int
 	sessionIntentEmbedding      []float32
+	lastProviderError           *ProviderErrorInfo
 }
 
 // NewAgentStateManager creates a new AgentStateManager with sensible defaults.
@@ -711,4 +716,18 @@ func (s *AgentStateManager) SetSessionIntentEmbeddingIfNil(emb []float32) bool {
 	s.sessionIntentEmbedding = make([]float32, len(emb))
 	copy(s.sessionIntentEmbedding, emb)
 	return true
+}
+
+// GetLastProviderError returns the last provider error info
+func (s *AgentStateManager) GetLastProviderError() *ProviderErrorInfo {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastProviderError
+}
+
+// SetLastProviderError sets the last provider error info
+func (s *AgentStateManager) SetLastProviderError(err *ProviderErrorInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastProviderError = err
 }

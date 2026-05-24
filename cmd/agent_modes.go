@@ -592,12 +592,32 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// Set a simple streaming callback for direct terminal output of
 	// assistant text. The OutputRouter's RouteStreamChunk publishes
 	// the event AND calls this callback — no duplicate events or writes.
+	//
+	// A LineCapWriter clamps the visual length of each line so that
+	// minified files / unbroken log lines streamed into the response
+	// don't soft-wrap into hundreds of terminal rows. The clip is
+	// purely cosmetic — the LLM still sees the full content. The cap
+	// is 2× the current terminal width (with a fixed floor) so normal
+	// prose is never clipped.
 	if !agentNoStreaming {
+		lineCap := terminalLineCapChars()
+		capper := console.NewLineCapWriter(lineCap, func(s string) {
+			fmt.Print(s)
+		})
 		chatAgent.EnableStreaming(func(chunk string) {
 			indicator.Stop()
-			fmt.Print(chunk)
+			capper.Write(chunk)
 		})
 	}
+}
+
+// terminalLineCapChars decides how many characters of a single line we
+// let through before truncating. Anchored to terminal width so the
+// truncation marker lands a row or two beyond the visible area rather
+// than at an arbitrary fixed column. Floor of 200 covers narrow
+// terminals + edge cases where stdout isn't a TTY.
+func terminalLineCapChars() int {
+	return max(GetTerminalWidth()*2, 200)
 }
 
 // runQueueMode handles autonomous EA queue mode. It reads pending tasks from
@@ -906,6 +926,27 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// also Stop() defensively after ProcessQuery returns.
 			indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
 
+			// SP-055: spawn the steer input panel for the duration of the
+			// turn. It pins a single editable line above the status
+			// footer; the user can type while the model is working and
+			// hit Enter to inject a steering message that seed consumes
+			// at the next iteration boundary. Stops are matched with
+			// Starts via the defer immediately below.
+			steerReader := console.NewSteerInputReader(
+				footer,
+				func(text string) {
+					if err := chatAgent.InjectInputContext(text); err != nil {
+						// Steer dropped — log to stderr but don't fail the
+						// turn. The channel's full state is transient.
+						fmt.Fprintf(os.Stderr, "\n[steer] dropped: %v\n", err)
+						return
+					}
+					fmt.Fprintf(os.Stderr, "\n[steer →] %s\n", text)
+				},
+				func(_ string) { chatAgent.TriggerInterrupt() },
+			)
+			steerReader.Start()
+
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				indicator.Stop()
@@ -923,6 +964,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 					}
 				}
 			}
+			// SP-055: tear down the steer panel before the indicator so
+			// the terminal exits raw mode while the spinner / streaming
+			// callbacks are still safe to write. ClearSteerLine resets
+			// the scroll region back to 2 reserved rows.
+			steerReader.Stop()
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()

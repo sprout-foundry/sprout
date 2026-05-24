@@ -43,6 +43,18 @@ const maxRecentSessionsShown = 3
 // Up/down arrows are NOT used for selection — those stay reserved for
 // command history. Selection is by number, intentionally simple.
 func maybeOfferSessionResume(chatAgent *agent.Agent) {
+	// If the user explicitly chose a session via flag, the picker is
+	// redundant — and worse, picking a different number would stomp
+	// the state we just loaded. Same applies when the agent already
+	// has a conversation loaded (covers the workflow restore path
+	// where state arrives via Orchestration.ConversationSessionID).
+	if strings.TrimSpace(agentSessionID) != "" || agentLastSession {
+		return
+	}
+	if chatAgent != nil && len(chatAgent.GetMessages()) > 0 {
+		return
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return

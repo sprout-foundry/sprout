@@ -33,6 +33,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	"connection_status":          {},
 	"ping":                       {},
 	"pong":                       {},
+	"heartbeat_ack":              {},
 	"stats_update":               {},
 	"session_restored":           {},      // terminal reattach
 	wsMessageTypeChatRunRestored: {},      // SP-034-2d

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -162,6 +163,123 @@ func (a *Agent) GetFileMetadata(path string) (WorkspaceFileMetadata, bool) {
 		return WorkspaceFileMetadata{}, false
 	}
 	return store.get(path)
+}
+
+// ReconciliationActionType enumerates the possible outcomes of comparing
+// browser and container sequence numbers for a single file.
+type ReconciliationActionType string
+
+const (
+	// ReconcileSyncOK means browser and container are at the same seq.
+	ReconcileSyncOK ReconciliationActionType = "sync_ok"
+	// ReconcileContainerAhead means the container has patches the browser hasn't seen.
+	ReconcileContainerAhead ReconciliationActionType = "container_ahead"
+	// ReconcileBrowserAhead means the browser has edits the container hasn't applied.
+	ReconcileBrowserAhead ReconciliationActionType = "browser_ahead"
+	// ReconcileDiverged means both sides have diverged and conflict resolution is needed.
+	ReconcileDiverged ReconciliationActionType = "diverged"
+)
+
+// ReconciliationActionResult is the per-file reconciliation outcome.
+type ReconciliationActionResult struct {
+	FilePath     string                  `json:"file_path"`
+	Action       ReconciliationActionType `json:"action"`
+	ContainerSeq int64                   `json:"container_seq"`
+	BrowserSeq   int64                   `json:"browser_seq"`
+}
+
+// ReconcileSeqNumbers compares browser-supplied per-file sequence numbers
+// against the container's stored metadata and returns a reconciliation plan.
+// The browser sends {file_path: browser_seq}; for each file, we compare
+// the browser's seq with the container's seq to determine the action.
+//
+// Rules:
+//   - browser_seq == container_seq → sync_ok
+//   - browser_seq == last_synced_container AND container_seq > browser_seq → container_ahead
+//   - browser_seq > last_synced_browser → browser_ahead (unsynced browser edits)
+//   - both sides diverged → diverged
+func ReconcileSeqNumbers(ag *Agent, browserSeqs map[string]int64) ([]ReconciliationActionResult, error) {
+	if ag == nil {
+		return nil, fmt.Errorf("agent is nil")
+	}
+	if ag.fileMetadata == nil {
+		// No metadata store means no files tracked — everything is browser_ahead
+		results := make([]ReconciliationActionResult, 0, len(browserSeqs))
+		for path, bSeq := range browserSeqs {
+			if bSeq > 0 {
+				results = append(results, ReconciliationActionResult{
+					FilePath:     path,
+					Action:       ReconcileBrowserAhead,
+					BrowserSeq:   bSeq,
+					ContainerSeq: 0,
+				})
+			}
+		}
+		return results, nil
+	}
+
+	results := make([]ReconciliationActionResult, 0, len(browserSeqs))
+	for path, bSeq := range browserSeqs {
+		md, exists := ag.GetFileMetadata(path)
+		if !exists {
+			// Container has no record of this file — browser is ahead
+			if bSeq > 0 {
+				results = append(results, ReconciliationActionResult{
+					FilePath:     path,
+					Action:       ReconcileBrowserAhead,
+					BrowserSeq:   bSeq,
+					ContainerSeq: 0,
+				})
+			}
+			continue
+		}
+
+		action := determineReconcileAction(bSeq, md)
+		results = append(results, ReconciliationActionResult{
+			FilePath:     path,
+			Action:       action,
+			BrowserSeq:   bSeq,
+			ContainerSeq: md.ContainerSeq,
+		})
+	}
+	// Sort results by file path for deterministic output
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].FilePath < results[j].FilePath
+	})
+	return results, nil
+}
+
+// determineReconcileAction decides the recovery action for one file.
+func determineReconcileAction(browserSeq int64, md WorkspaceFileMetadata) ReconciliationActionType {
+	// If both agree on the same seq, we're in sync
+	if browserSeq == md.ContainerSeq {
+		return ReconcileSyncOK
+	}
+
+	// Browser has unsynced edits AND container has patches browser hasn't seen
+	browserHasEdits := browserSeq > md.LastSyncedBrowser
+	containerAhead := md.ContainerSeq > md.LastSyncedContainer
+
+	if browserHasEdits && containerAhead {
+		return ReconcileDiverged
+	}
+	if containerAhead {
+		return ReconcileContainerAhead
+	}
+	if browserHasEdits {
+		return ReconcileBrowserAhead
+	}
+
+	// Fallback: if browser seq doesn't match container seq but neither
+	// has explicit unsynced state, compare directly
+	if browserSeq < md.ContainerSeq {
+		return ReconcileContainerAhead
+	}
+	if browserSeq > md.ContainerSeq {
+		return ReconcileBrowserAhead
+	}
+
+	return ReconcileSyncOK
 }
 
 // CheckPatchConflict checks whether a container patch to the given path

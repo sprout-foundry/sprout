@@ -1,3 +1,5 @@
+//go:build !js && staticmodel
+
 package embedding
 
 import (

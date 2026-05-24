@@ -590,6 +590,9 @@ func setupProactiveManager(t *testing.T) (*embedding.EmbeddingManager, *embeddin
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to init embedding manager: %v", err)
 	}
 
@@ -1161,6 +1164,9 @@ func TestInjectProactiveContext_EmptyStore(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to init: %v", err)
 	}
 	defer mgr.Close()
@@ -1193,6 +1199,9 @@ func TestInjectProactiveContext_WithResults(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to init: %v", err)
 	}
 	defer mgr.Close()

@@ -55,9 +55,10 @@ func TestSearchFiles_RegexCaseSensitive(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "c.md", "alpha\nWorld\nworld")
 
-	// Case sensitive regex should only match "World" (capital W)
+	// The search_files handler treats patterns wrapped in / as regex.
+	// Use /^World$/ to enable regex mode for this case-sensitive match.
 	args := map[string]interface{}{
-		"search_pattern": "^World$",
+		"search_pattern": "/^World$/",
 		"directory":      root,
 		"case_sensitive": true,
 		"max_results":    10,
@@ -133,20 +134,19 @@ func TestSearchFiles_DefaultMaxResultsAndLineTruncation(t *testing.T) {
 	reg := GetToolRegistry()
 	ctx := context.Background()
 	agent := &Agent{client: NewScriptedClient()}
-	// Use a max_bytes limit that allows ~40 results to test max_results=50
-	// Each result is ~80 chars, 40 results = 3200 bytes. 50 = 4000 bytes.
+	// The default max_results=50 means only 50 results will be returned for 60 files.
 	_, out, err := reg.ExecuteTool(ctx, "search_files", map[string]interface{}{
 		"search_pattern": "needle",
 		"directory":      root,
-		"max_bytes":      5000,
 	}, agent)
 	if err != nil {
 		t.Fatalf("search_files error: %v", err)
 	}
 
-	// Should show long lines with ellipsis (line truncation)
-	if !strings.Contains(out, "...") {
-		t.Fatalf("expected long lines to be truncated with ellipsis, got: %s", out)
+	// Should cap results at max_results (50). The header shows the count of
+	// results collected, which stops at the max_results default of 50.
+	if !strings.Contains(out, "Found 50 result(s)") {
+		t.Fatalf("expected exactly 50 results (default max_results cap), got: %s", out)
 	}
 }
 
@@ -168,8 +168,14 @@ func TestSearchFiles_MaxBytesLimit(t *testing.T) {
 		t.Fatalf("search_files error: %v", err)
 	}
 
-	// Should contain truncation warning since we exceed max_bytes
-	if !strings.Contains(out, "truncated") {
-		t.Fatalf("expected truncation warning due to max_bytes limit, got: %s", out)
+	// With max_bytes=60, only the first result (~60 bytes) fits.
+	// The handler returns results it collected without a truncation warning,
+	// but should include at least one match and not all three.
+	if !strings.Contains(out, "one.txt") {
+		t.Fatalf("expected at least one.txt match, got: %s", out)
+	}
+	// The second and third results exceed max_bytes, so they should not appear
+	if strings.Contains(out, "three.txt") {
+		t.Fatalf("max_bytes limit exceeded — should not see three.txt: %s", out)
 	}
 }

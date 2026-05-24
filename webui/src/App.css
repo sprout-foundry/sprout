@@ -903,7 +903,7 @@ body,
   flex: 1;
   gap: 1px;
   background: var(--bg-elevated);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .panes-container.layout-single {
@@ -920,7 +920,7 @@ body,
 
 .panes-container.layout-split-vertical .pane-wrapper {
   flex: 1;
-  min-width: 200px;
+  min-width: calc(100% / 7);
 }
 
 .panes-container.layout-split-vertical .pane-wrapper:not(:first-child):not(:last-child) {
@@ -952,7 +952,7 @@ body,
 
 .panes-container.layout-split-grid .pane-wrapper {
   flex: 1;
-  min-width: 200px;
+  min-width: calc(100% / 7);
   min-height: 100px;
 }
 

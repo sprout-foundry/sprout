@@ -1,0 +1,322 @@
+import { Meta, Description, Controls } from '@storybook/blocks';
+import ChatPanelStories from './ChatPanel.stories';
+
+<Meta title="Components/ChatPanel" of={ChatPanelStories} />
+
+# ChatPanel
+
+<Description>
+A full-featured chat interface component for the Sprout IDE. Supports virtualized message rendering (via react-virtuoso), auto-scroll, tool execution pills, subagent activity tracking, message queuing, and an integrated persona system. Designed to handle streaming messages with real-time log display.
+</Description>
+
+---
+
+## Overview
+
+ChatPanel is the core messaging component in Sprout IDE. It renders a scrollable chat history with rich message types, tool execution indicators, and subagent activity cards. Key capabilities include:
+
+- **Virtualized rendering** — Uses `react-virtuoso` to efficiently render large message lists
+- **Auto-scroll** — Automatically scrolls to the latest message, with smart pausing when the user scrolls up
+- **Tool execution pills** — Clickable pills showing tool calls within messages
+- **Subagent activity tracking** — Expandable cards showing real-time subagent output
+- **Message queuing** — Queue messages for later processing when the agent is busy
+- **Streaming support** — Handles streamed/progressive message content with real-time updates
+- **Persona system** — Displays persona information on assistant messages
+- **Reasoning display** — Collapsible reasoning/thinking sections on assistant messages
+- **Todo integration** — Displays todo item updates within the message flow
+
+---
+
+## Props Reference
+
+<Controls of={ChatPanelStories} />
+
+---
+
+## Key Types
+
+### Message
+
+The core unit of the chat conversation:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique message identifier |
+| `type` | `'user' \| 'assistant'` | Message sender type |
+| `content` | `string` | Message text content |
+| `timestamp` | `number` | Unix epoch timestamp |
+| `reasoning?` | `string` | Collapsible reasoning/thinking text (assistant only) |
+| `toolRefs?` | `ToolRef[]` | References to tool calls within this message |
+| `persona?` | `string` | Persona name for assistant messages |
+| `subagentDepth?` | `number` | Depth level for nested subagent messages |
+
+### ToolRef
+
+A reference to a tool call within a message:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `toolId` | `string` | Unique tool call ID |
+| `toolName` | `string` | Name of the tool (e.g., `'read_file'`, `'shell_command'`) |
+| `label` | `string` | Display label for the tool execution |
+| `parallel?` | `boolean` | Whether this tool ran in parallel |
+| `toolIndex?` | `number` | Index among parallel tool calls |
+
+### ToolExecution
+
+Tracks the lifecycle of a tool execution:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique execution ID |
+| `tool` | `string` | Tool name |
+| `status` | `'started' \| 'running' \| 'completed' \| 'error'` | Current execution status |
+| `output?` | `string` | Tool output (when completed or error) |
+| `toolId?` | `string` | Reference to the originating tool call |
+| `startTime?` | `number` | Start timestamp |
+| `endTime?` | `number` | End timestamp |
+| `parallel?` | `boolean` | Whether this ran in parallel |
+| `toolIndex?` | `number` | Index among parallel executions |
+| `label?` | `string` | Display label |
+
+### SubagentActivity
+
+Tracks real-time subagent execution:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique activity ID |
+| `toolCallId` | `string` | Associated tool call ID |
+| `toolName` | `string` | Tool name (e.g., `'run_subagent'`) |
+| `phase` | `'spawn' \| 'output' \| 'complete' \| 'step'` | Current phase |
+| `output?` | `string` | Accumulated output |
+| `title?` | `string` | Activity title |
+| `persona?` | `string` | Persona used by the subagent |
+| `step?` | `string` | Current step description (for 'step' phase) |
+
+### TodoItem
+
+A todo item tracked during a session:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Unique todo ID |
+| `content` | `string` | Todo description |
+| `status` | `'pending' \| 'in_progress' \| 'completed' \| 'cancelled'` | Current status |
+
+---
+
+## Streaming Message Handling
+
+Messages are rendered via a virtualized list using `react-virtuoso` for performance. The component handles several streaming scenarios:
+
+- **Progressive content** — As new content arrives, the message grows in real-time
+- **Tool executions** — Appear as clickable pill elements within messages. Clicking a pill can navigate to the full execution details via `onToolPillClick`
+- **Subagent activities** — Show as expandable cards with real-time output streaming. The phase indicator shows whether the subagent is spawning, outputting, completing, or stepping through work
+- **Auto-scroll** — The viewport automatically follows new messages. When the user scrolls up, auto-scroll pauses until they scroll back to the bottom
+
+---
+
+## Usage Examples
+
+### Basic chat with messages and sending
+
+```tsx
+import { useState } from 'react';
+import { ChatPanel, Message } from '@sprout/ui';
+
+function ChatExample() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      type: 'assistant',
+      content: 'Hello! How can I help you today?',
+      timestamp: Date.now(),
+    },
+  ]);
+  const [inputValue, setInputValue] = useState('');
+  const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
+
+  const handleSendMessage = (message: string) => {
+    const userMsg: Message = {
+      id: `msg-${Date.now()}`,
+      type: 'user',
+      content: message,
+      timestamp: Date.now(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    // Send to backend...
+  };
+
+  const handleQueueMessage = (message: string) => {
+    setQueuedMessagesCount(prev => prev + 1);
+    // Queue for later processing...
+  };
+
+  return (
+    <ChatPanel
+      messages={messages}
+      onSendMessage={handleSendMessage}
+      onQueueMessage={handleQueueMessage}
+      queuedMessagesCount={queuedMessagesCount}
+      inputValue={inputValue}
+      onInputChange={setInputValue}
+    />
+  );
+}
+```
+
+### Tool execution display
+
+Show tool execution pills within messages:
+
+```tsx
+import { ChatPanel, Message, ToolExecution } from '@sprout/ui';
+
+function ChatWithTools() {
+  const toolExecutions: ToolExecution[] = [
+    {
+      id: 'exec-1',
+      tool: 'read_file',
+      status: 'completed',
+      output: 'File contents...',
+      label: 'Read package.json',
+    },
+  ];
+
+  const messages: Message[] = [
+    {
+      id: 'msg-1',
+      type: 'assistant',
+      content: 'I read the file. Here is what I found...',
+      timestamp: Date.now(),
+      toolRefs: [
+        { toolId: 'exec-1', toolName: 'read_file', label: 'Read package.json' },
+      ],
+    },
+  ];
+
+  return (
+    <ChatPanel
+      messages={messages}
+      onSendMessage={(msg) => console.log(msg)}
+      onQueueMessage={(msg) => console.log('queued:', msg)}
+      queuedMessagesCount={0}
+      inputValue=""
+      onInputChange={() => {}}
+      toolExecutions={toolExecutions}
+      onToolPillClick={(toolId) => console.log('Pill clicked:', toolId)}
+    />
+  );
+}
+```
+
+### Subagent activity tracking
+
+Display real-time subagent progress:
+
+```tsx
+import { ChatPanel, SubagentActivity } from '@sprout/ui';
+
+function ChatWithSubagents() {
+  const subagentActivities: SubagentActivity[] = [
+    {
+      id: 'sub-1',
+      toolCallId: 'exec-2',
+      toolName: 'run_subagent',
+      phase: 'output',
+      output: 'Processing file changes...\n  - Read 3 files\n  - Generated diff',
+      title: 'File analysis',
+      persona: 'coder',
+    },
+  ];
+
+  return (
+    <ChatPanel
+      messages={[]}
+      onSendMessage={(msg) => console.log(msg)}
+      onQueueMessage={(msg) => console.log('queued:', msg)}
+      queuedMessagesCount={0}
+      inputValue=""
+      onInputChange={() => {}}
+      subagentActivities={subagentActivities}
+    />
+  );
+}
+```
+
+### Message queuing
+
+Handle message queuing when the agent is busy:
+
+```tsx
+<ChatPanel
+  messages={messages}
+  onSendMessage={handleSendMessage}
+  onQueueMessage={handleQueueMessage}
+  queuedMessagesCount={queuedMessagesCount}
+  inputValue={inputValue}
+  onInputChange={setInputValue}
+  isProcessing={true}
+  onStopProcessing={() => console.log('Stop requested')}
+/>
+```
+
+---
+
+## Context Menu Integration
+
+The `ChatMessageContextMenu` component provides context-sensitive actions on messages, such as "Insert at cursor" for copying content into the chat input. It is used internally by the ChatPanel component.
+
+---
+
+## Worktree Support
+
+For multi-worktree scenarios, use these props:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `chatId?` | `string` | Unique chat identifier for the worktree |
+| `worktreePath?` | `string` | Path to the worktree |
+| `workspaceRoot?` | `string` | Workspace root for resolving paths |
+
+These are used to scope chat interactions to specific worktrees in multi-repo setups.
+
+---
+
+## Provider Setup
+
+When an AI provider is not configured, the panel can display a setup prompt:
+
+```tsx
+<ChatPanel
+  // ... other props
+  providerAvailable={false}
+  onRequestProviderSetup={() => openSettings()}
+/>
+```
+
+## Connection Status
+
+Display connection state indicators:
+
+```tsx
+<ChatPanel
+  // ... other props
+  isConnected={connectionState}
+  stats={{ messagesProcessed: 42, tokensUsed: 12345 }}
+/>
+```
+
+---
+
+## Error Handling
+
+Use `lastError` to display error states within the chat panel:
+
+```tsx
+<ChatPanel
+  // ... other props
+  lastError="Failed to generate response. Please try again."
+/>
+```

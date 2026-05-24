@@ -3,7 +3,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Simulate } from 'react-dom/test-utils';
-import FileTree, { type FileInfo } from './FileTree';
+import { FileTree, type FileInfo } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Mocks

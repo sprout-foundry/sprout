@@ -33,6 +33,9 @@ const (
 	EventTypeToolEnd                 = "tool_end"
 	EventTypeSubagentActivity        = "subagent_activity"
 	EventTypeDelegateActivity        = "delegate_activity"
+	EventTypeDelegateAsyncStarted  = "delegate_async_started"
+	EventTypeDelegateAsyncCompleted = "delegate_async_completed"
+	EventTypeDelegateAsyncFailed    = "delegate_async_failed"
 	EventTypeTodoUpdate              = "todo_update"
 	EventTypeFileChanged            = "file_changed"
 	EventTypeWorkspacePatch         = "workspace_patch"
@@ -403,6 +406,18 @@ func SubagentActivityEvent(toolCallID, toolName, phase, message string, details 
 // DelegateActivityEvent creates a delegate_activity event payload.
 // action is typically "started", "completed", "error", or "tool_call".
 func DelegateActivityEvent(delegateID, action, summary string, depth int) map[string]interface{} {
+	return map[string]interface{}{
+		"delegate_id": delegateID,
+		"action":      action,
+		"summary":     summary,
+		"depth":       depth,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// DelegateAsyncEvent creates a delegate async event payload.
+// action is typically "started", "completed", or "failed".
+func DelegateAsyncEvent(delegateID, action, summary string, depth int) map[string]interface{} {
 	return map[string]interface{}{
 		"delegate_id": delegateID,
 		"action":      action,

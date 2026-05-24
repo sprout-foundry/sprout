@@ -104,6 +104,11 @@ type DelegateConfig struct {
 	// during execution via the input injection channel. Messages are injected with
 	// a small delay between them to avoid overwhelming the channel.
 	FollowUpMessages []string `json:"follow_up,omitempty"`
+
+	// Async indicates the delegate should run asynchronously. When true, the
+	// parent returns immediately with a delegate_id and the delegate runs in
+	// the background. Use delegate_status to check progress.
+	Async bool `json:"async"`
 }
 
 // Validate checks that the DelegateConfig has all required fields set properly.

@@ -28,6 +28,7 @@ require github.com/sprout-foundry/seed v1.1.2
 require github.com/odvcencio/gotreesitter v0.16.0
 
 require (
+	github.com/coder/hnsw v0.6.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1
@@ -47,7 +48,6 @@ require (
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/charmbracelet/lipgloss v0.5.0 // indirect
 	github.com/chewxy/math32 v1.11.0 // indirect
-	github.com/coder/hnsw v0.6.1 // indirect
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/fatih/semgroup v1.2.0 // indirect
 	github.com/gitleaks/go-gitdiff v0.9.1 // indirect
@@ -118,3 +118,5 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/sys v0.44.0 // indirect
 )
+
+replace github.com/sprout-foundry/seed => ../seed

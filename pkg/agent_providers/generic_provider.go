@@ -36,9 +36,38 @@ const maxProviderErrorBodyPreview = 240
 func formatProviderHTTPError(statusCode int, headers http.Header, body []byte) error {
 	message := summarizeProviderHTTPError(statusCode, headers, body)
 	if message == "" {
+		// Include response headers when body is empty — providers like ZAI
+		// sometimes return error info only in headers (e.g. X-Error-Code).
+		hdr := formatResponseHeaders(headers)
+		if hdr != "" {
+			return fmt.Errorf("HTTP %d (empty body, headers: %s)", statusCode, hdr)
+		}
 		return fmt.Errorf("HTTP %d", statusCode)
 	}
 	return fmt.Errorf("HTTP %d: %s", statusCode, message)
+}
+
+func formatResponseHeaders(headers http.Header) string {
+	// Collect known error headers first
+	var parts []string
+	for _, key := range []string{
+		"Content-Type", "X-Error-Code", "X-Error-Message",
+		"X-Request-Id", "X-Trace-Id", "Error-Code",
+		"X-Status", "Retry-After",
+	} {
+		if v := headers.Get(key); v != "" {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, v))
+		}
+	}
+	// If no known error headers found, include all headers for diagnosis
+	if len(parts) == 0 {
+		for key, vals := range headers {
+			for _, v := range vals {
+				parts = append(parts, fmt.Sprintf("%s=%s", key, v))
+			}
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func summarizeProviderHTTPError(statusCode int, headers http.Header, body []byte) string {
@@ -277,6 +306,10 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+
+		// Log response details for non-200 responses to help diagnose
+		// provider-specific errors (e.g. ZAI returning empty-body 400s).
+		_ = body // already logged by formatProviderHTTPError below
 
 		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, true, body)
 		if retried {

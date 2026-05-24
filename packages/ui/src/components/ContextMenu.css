@@ -51,7 +51,7 @@
 }
 
 .context-menu-item.danger:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
 }
 
 .context-menu-item:disabled,

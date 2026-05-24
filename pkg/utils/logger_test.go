@@ -118,11 +118,11 @@ func TestDefaultChoiceHint(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("FORCE_COLOR", "")
 
-	if got := defaultChoiceHint(true); got != "[Y/n]" {
-		t.Errorf("defaultChoiceHint(true) without color = %q, want %q", got, "[Y/n]")
+	if got := DefaultChoiceHint(true); got != "[Y/n]" {
+		t.Errorf("DefaultChoiceHint(true) without color = %q, want %q", got, "[Y/n]")
 	}
-	if got := defaultChoiceHint(false); got != "[y/N]" {
-		t.Errorf("defaultChoiceHint(false) without color = %q, want %q", got, "[y/N]")
+	if got := DefaultChoiceHint(false); got != "[y/N]" {
+		t.Errorf("DefaultChoiceHint(false) without color = %q, want %q", got, "[y/N]")
 	}
 }
 
@@ -132,7 +132,7 @@ func TestDefaultChoiceHint_BoldsDefaultWhenColorAllowed(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
 
-	gotYes := defaultChoiceHint(true)
+	gotYes := DefaultChoiceHint(true)
 	if !strings.Contains(gotYes, "\033[1mY\033[0m") {
 		t.Errorf("default=yes should bold Y, got %q", gotYes)
 	}
@@ -140,11 +140,34 @@ func TestDefaultChoiceHint_BoldsDefaultWhenColorAllowed(t *testing.T) {
 		t.Errorf("default=yes should not bold n, got %q", gotYes)
 	}
 
-	gotNo := defaultChoiceHint(false)
+	gotNo := DefaultChoiceHint(false)
 	if !strings.Contains(gotNo, "\033[1mN\033[0m") {
 		t.Errorf("default=no should bold N, got %q", gotNo)
 	}
 	if strings.Contains(gotNo, "\033[1my\033[0m") {
 		t.Errorf("default=no should not bold y, got %q", gotNo)
+	}
+}
+
+func TestDefaultChoiceHint_NO_COLOR_Beats_FORCE_COLOR(t *testing.T) {
+	// When both NO_COLOR and FORCE_COLOR are set, NO_COLOR must win
+	// (per no-color.org precedence). The hint should have no ANSI escapes.
+	t.Setenv("NO_COLOR", "1")
+	t.Setenv("FORCE_COLOR", "1")
+
+	got := DefaultChoiceHint(true)
+	if strings.Contains(got, "\033[") {
+		t.Errorf("NO_COLOR=1 with FORCE_COLOR=1 must suppress ANSI, got %q", got)
+	}
+	if got != "[Y/n]" {
+		t.Errorf("NO_COLOR=1 with FORCE_COLOR=1 should produce plain hint, got %q", got)
+	}
+
+	got = DefaultChoiceHint(false)
+	if strings.Contains(got, "\033[") {
+		t.Errorf("NO_COLOR=1 with FORCE_COLOR=1 must suppress ANSI (default=no), got %q", got)
+	}
+	if got != "[y/N]" {
+		t.Errorf("NO_COLOR=1 with FORCE_COLOR=1 should produce plain hint (default=no), got %q", got)
 	}
 }

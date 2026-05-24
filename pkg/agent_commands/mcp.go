@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // MCPCommand implements the /mcp slash command
@@ -170,7 +171,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 
 	// Check if server already exists
 	if _, exists := mcpConfig.Servers[serverName]; exists {
-		fmt.Printf("Server '%s' already exists. Reconfigure? (y/N): ", serverName)
+		fmt.Printf("Server '%s' already exists. Reconfigure? %s: ", serverName, utils.DefaultChoiceHint(false))
 		confirm, _ := reader.ReadString('\n')
 		if strings.ToLower(strings.TrimSpace(confirm)) != "y" {
 			fmt.Println("Setup cancelled.")
@@ -339,7 +340,7 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	}
 
 	// Confirm removal
-	fmt.Printf("Are you sure you want to remove server '%s'? (y/N): ", serverName)
+	fmt.Printf("Are you sure you want to remove server '%s'? %s: ", serverName, utils.DefaultChoiceHint(false))
 	confirm, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)

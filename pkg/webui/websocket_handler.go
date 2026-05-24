@@ -16,6 +16,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// activeWSConn tracks a single active WebSocket connection for a user
+// to enforce single-active-session policy (SP-046).
+type activeWSConn struct {
+	safeConn    *SafeConn
+	conn        *websocket.Conn
+	sessionID   string
+	connectedAt time.Time
+	closed      chan struct{} // closed when the connection is closed
+}
+
 // handleWebSocket handles WebSocket connections for real-time events
 func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
@@ -62,6 +72,65 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	if reattachChatID != "" {
 		chatID = reattachChatID
 	}
+
+	// --- SP-046: Single-active-session conflict detection ---
+	// Determine the tracking key: use userID if present (service mode),
+	// otherwise fall back to clientID (local mode). This identifies the
+	// "user" for single-session enforcement.
+	trackingKey := userID
+	if trackingKey == "" {
+		trackingKey = clientID
+	}
+
+	// Check whether there is already an active connection for this user.
+	if existingVal, loaded := ws.activeWSByUserID.Load(trackingKey); loaded {
+		existingActive := existingVal.(*activeWSConn)
+
+		// Conflict! Notify the NEW connection that an existing session
+		// is active and wait for the client to confirm takeover.
+		log.Printf("[SP-046] Session conflict for user %s: new session %s vs existing %s",
+			trackingKey, sessionID, existingActive.sessionID)
+
+		safeConn.WriteJSON(map[string]interface{}{
+			"type": "session_conflict",
+			"data": map[string]interface{}{
+				"existing_session_id": existingActive.sessionID,
+				"connected_at":        existingActive.connectedAt.Unix(),
+			},
+		})
+
+		// Block here until the client either confirms takeover or disconnects.
+		if !ws.waitForTakeover(conn, sessionID) {
+			log.Printf("[SP-046] New session %s disconnected without confirming takeover for user %s",
+				sessionID, trackingKey)
+			return
+		}
+
+		// Client confirmed — evict the old connection.
+		ws.evictExistingConnection(trackingKey)
+	}
+
+	// Store as the active connection for this user.
+	activeConn := &activeWSConn{
+		safeConn:    safeConn,
+		conn:        conn,
+		sessionID:   sessionID,
+		connectedAt: time.Now(),
+		closed:      make(chan struct{}),
+	}
+	ws.activeWSByUserID.Store(trackingKey, activeConn)
+	// Remove from activeWSByUserID when this connection exits.
+	defer func() {
+		// Only clean up if we're still the active connection for this
+		// key.  During takeover, evictExistingConnection already removed
+		// us and a new entry was stored; we must not delete the new entry.
+		if val, ok := ws.activeWSByUserID.Load(trackingKey); ok {
+			if existing, ok := val.(*activeWSConn); ok && existing == activeConn {
+				ws.activeWSByUserID.Delete(trackingKey)
+			}
+		}
+		close(activeConn.closed)
+	}()
 
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
@@ -474,6 +543,12 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
 			ws.handleAskUserResponse(safeConn, data, clientID)
 		})
+
+	case AllowedMessageTypeSessionTakeover:
+		// SP-046: session_takeover is expected only during the conflict
+		// wait loop. If it arrives during normal message dispatch, log
+		// and ignore — there is nothing to do.
+		log.Printf("[SP-046] session_takeover received for session %s outside of conflict state, ignoring", sessionID)
 	}
 }
 
@@ -535,4 +610,62 @@ func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
 		"code":       "internal_panic",
 		"message":    "Session terminated due to internal error",
 	})
+}
+
+// waitForTakeover blocks on the raw WebSocket connection waiting for a
+// session_takeover message from the client. This is used during conflict
+// resolution (SP-046) — the new connection is in a "pending" state where
+// only the takeover message is accepted. Returns true if the client
+// confirmed takeover, false if it disconnected without confirming.
+func (ws *ReactWebServer) waitForTakeover(conn *websocket.Conn, sessionID string) bool {
+	// Set a generous read deadline so the client has time to decide.
+	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_, rawMsg, err := conn.ReadMessage()
+	if err != nil {
+		return false
+	}
+
+	msg, err := parseAndValidateMessage(rawMsg)
+	if err != nil {
+		log.Printf("[SP-046] Session %s: invalid message during takeover wait: %v", sessionID, err)
+		return false
+	}
+
+	if msg.Type != AllowedMessageTypeSessionTakeover {
+		log.Printf("[SP-046] Session %s: unexpected message type %q during takeover wait (expected %q)",
+			sessionID, msg.Type, AllowedMessageTypeSessionTakeover)
+		return false
+	}
+
+	log.Printf("[SP-046] Session %s confirmed takeover", sessionID)
+	return true
+}
+
+// evictExistingConnection sends a session_displaced message to the
+// current active connection for the given key, closes it, and removes
+// it from the active registry. Returns true if eviction happened,
+// false if no existing connection was found.
+func (ws *ReactWebServer) evictExistingConnection(trackingKey string) bool {
+	val, loaded := ws.activeWSByUserID.LoadAndDelete(trackingKey)
+	if !loaded {
+		return false
+	}
+	active, ok := val.(*activeWSConn)
+	if !ok {
+		log.Printf("[SP-046] unexpected type in activeWSByUserID for key %s", trackingKey)
+		return false
+	}
+
+	// Send displacement notification, then close.
+	active.safeConn.WriteJSON(map[string]interface{}{
+		"type": "session_displaced",
+		"data": map[string]interface{}{
+			"reason":  "session_taken_over",
+			"message": "This session has been moved to another device",
+		},
+	})
+	active.safeConn.Close()
+
+	log.Printf("[SP-046] Session %s evicted for user %s", active.sessionID, trackingKey)
+	return true
 }

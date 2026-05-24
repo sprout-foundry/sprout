@@ -6,7 +6,7 @@
  * Target: ~100 lines
  */
 
-import type { FC, KeyboardEvent } from 'react';
+import React, { type FC, type KeyboardEvent } from 'react';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { EditorBuffer } from '../types/editor';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -49,9 +49,58 @@ export interface EditorPaneFooterProps {
 }
 
 /**
+ * Shallow equality helper for EditorPaneFooter props.
+ * Compares primitive props directly and does shallow comparison on the
+ * `settings` and `lsp` objects (including their function properties) so that
+ * React.memo skips re-renders when the parent recreates these wrapper objects
+ * with the same underlying values/functions.
+ */
+export function areEditorPaneFooterPropsEqual(
+  prev: EditorPaneFooterProps,
+  next: EditorPaneFooterProps,
+): boolean {
+  if (prev.buffer !== next.buffer) return false;
+  if (prev.selectionInfo !== next.selectionInfo) return false;
+  if (prev.whitespaceRenderingMode !== next.whitespaceRenderingMode) return false;
+  if (prev.setWhitespaceRenderingMode !== next.setWhitespaceRenderingMode) return false;
+
+  // Shallow compare settings object properties
+  const ps = prev.settings;
+  const ns = next.settings;
+  if (
+    ps.editorFontSize !== ns.editorFontSize ||
+    ps.editorTabSize !== ns.editorTabSize ||
+    ps.editorUsesTabs !== ns.editorUsesTabs ||
+    ps.lineEnding !== ns.lineEnding ||
+    ps.onCycleTabSize !== ns.onCycleTabSize ||
+    ps.onCycleWhitespaceRendering !== ns.onCycleWhitespaceRendering ||
+    ps.onZoomIn !== ns.onZoomIn ||
+    ps.onZoomOut !== ns.onZoomOut ||
+    ps.onResetZoom !== ns.onResetZoom
+  ) {
+    return false;
+  }
+
+  // Shallow compare lsp object properties (languageInfo is nested one level)
+  const pl = prev.lsp;
+  const nl = next.lsp;
+  if (
+    pl.lspLanguage !== nl.lspLanguage ||
+    pl.lspState !== nl.lspState ||
+    pl.handleLanguageChange !== nl.handleLanguageChange ||
+    pl.languageInfo.languageId !== nl.languageInfo.languageId ||
+    pl.languageInfo.isAutoDetected !== nl.languageInfo.isAutoDetected
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Component that renders the editor footer with file stats and language switcher.
  */
-export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
+const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
   buffer,
   selectionInfo,
   whitespaceRenderingMode,
@@ -197,5 +246,7 @@ export const EditorPaneFooter: FC<EditorPaneFooterProps> = ({
     </div>
   );
 };
+
+export const EditorPaneFooter = React.memo(EditorPaneFooterImpl, areEditorPaneFooterPropsEqual);
 
 export default EditorPaneFooter;

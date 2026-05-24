@@ -1,7 +1,7 @@
 import type { EditorView as CMEditorView } from '@codemirror/view';
 import { Skeleton } from '@sprout/ui';
 import { AlertTriangle } from 'lucide-react';
-import { useRef } from 'react';
+import React, { useRef } from 'react';
 import { useEditorViewInit } from '../hooks/useEditorViewInit';
 import MarkdownPreview from './MarkdownPreview';
 import { useEditorReconfigure } from './useEditorReconfigure';
@@ -24,7 +24,37 @@ export interface EditorCoreProps {
   markdownPreviewBodyRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export default function EditorCore(props: EditorCoreProps): JSX.Element {
+/**
+ * Custom equality check for EditorCore.
+ * Uses reference equality for `initOptions` and `reconfigureOptions` (the
+ * parent is responsible for keeping these stable), and reference equality for
+ * ref objects and function props.  Primitive props are compared by value.
+ */
+export function areEditorCorePropsEqual(
+  prev: EditorCoreProps,
+  next: EditorCoreProps,
+): boolean {
+  // ref objects are stable by definition
+  if (prev.editorRef !== next.editorRef) return false;
+  if (prev.viewRef !== next.viewRef) return false;
+  if (prev.markdownPreviewBodyRef !== next.markdownPreviewBodyRef) return false;
+
+  // primitives
+  if (prev.loading !== next.loading) return false;
+  if (prev.error !== next.error) return false;
+  if (prev.onContextMenu !== next.onContextMenu) return false;
+  if (prev.markdownPreviewMode !== next.markdownPreviewMode) return false;
+  if (prev.isMarkdownFile !== next.isMarkdownFile) return false;
+  if (prev.localContent !== next.localContent) return false;
+
+  // reference equality for the two option objects (parent must keep these stable)
+  if (prev.initOptions !== next.initOptions) return false;
+  if (prev.reconfigureOptions !== next.reconfigureOptions) return false;
+
+  return true;
+}
+
+const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
   const {
     editorRef,
     viewRef,
@@ -100,4 +130,8 @@ export default function EditorCore(props: EditorCoreProps): JSX.Element {
       </div>
     </>
   );
-}
+};
+
+const EditorCore = React.memo(EditorCoreImpl, areEditorCorePropsEqual);
+
+export default EditorCore;

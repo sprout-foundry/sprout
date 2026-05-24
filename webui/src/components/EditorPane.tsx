@@ -309,9 +309,43 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     );
   }
 
+  const editorCoreInitOptions = useMemo(() => ({
+    paneId,
+    buffer,
+    localContent,
+    compartments,
+    buildExtensions,
+    themePack,
+    customHighlightStyle,
+    keymapsRef,
+    localContentRef,
+    openWorkspaceBuffer,
+    onCancelPendingFlush: cancelPendingFlush,
+    onUpdateRef,
+    settingsRef,
+    actionsRef,
+  }), [paneId, buffer, localContent, compartments, buildExtensions, themePack, customHighlightStyle, openWorkspaceBuffer, cancelPendingFlush, onUpdateRef, settingsRef, actionsRef]);
+
+  const editorCoreReconfigureOptions = useMemo(() => ({
+    buffer,
+    compartments,
+    hotkeys,
+    keymapsRef,
+    editorFontSize: settings.editorFontSize,
+    editorTabSize: settings.editorTabSize,
+    editorUsesTabs: settings.editorUsesTabs,
+    wordWrapEnabled: settings.wordWrapEnabled,
+    minimapEnabled: settings.minimapEnabled,
+    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+    whitespaceRenderingMode,
+    inlayHintsEnabled: settings.inlayHintsEnabled,
+    signatureHelpEnabled: settings.signatureHelpEnabled,
+  }), [buffer, compartments, hotkeys, settings.editorFontSize, settings.editorTabSize, settings.editorUsesTabs, settings.wordWrapEnabled, settings.minimapEnabled, settings.relativeLineNumbersEnabled, whitespaceRenderingMode, settings.inlayHintsEnabled, settings.signatureHelpEnabled]);
+
   return (
     <div className="editor-pane">
       <EditorToolbar
+
         onSave={handleSave}
         saving={saving}
         breadcrumbProps={{
@@ -352,37 +386,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
       <EditorCore
         editorRef={editorRef}
         viewRef={viewRef}
-        initOptions={{
-          paneId,
-          buffer,
-          localContent,
-          compartments,
-          buildExtensions,
-          themePack,
-          customHighlightStyle,
-          keymapsRef,
-          localContentRef,
-          openWorkspaceBuffer,
-          onCancelPendingFlush: cancelPendingFlush,
-          onUpdateRef,
-          settingsRef,
-          actionsRef,
-        }}
-        reconfigureOptions={{
-          buffer,
-          compartments,
-          hotkeys,
-          keymapsRef,
-          editorFontSize: settings.editorFontSize,
-          editorTabSize: settings.editorTabSize,
-          editorUsesTabs: settings.editorUsesTabs,
-          wordWrapEnabled: settings.wordWrapEnabled,
-          minimapEnabled: settings.minimapEnabled,
-          relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-          whitespaceRenderingMode,
-          inlayHintsEnabled: settings.inlayHintsEnabled,
-          signatureHelpEnabled: settings.signatureHelpEnabled,
-        }}
+        initOptions={editorCoreInitOptions}
+        reconfigureOptions={editorCoreReconfigureOptions}
         loading={loading}
         error={error}
         onContextMenu={contextMenu.handleEditorContextMenu}

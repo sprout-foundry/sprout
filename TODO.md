@@ -117,7 +117,7 @@
 [x] SP-006-A-nestingLimit: Implement max nesting depth via `SPROUT_MAX_DELEGATE_DEPTH=3` env var
 [x] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
 [x] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
-- [ ] SP-006-C-followUp: Allow parent to inject follow-up messages into running delegate (future)
+- [x] SP-006-C-followUp: Allow parent to inject follow-up messages into running delegate (future)
 - [ ] SP-006-C-interactive: Support interactive delegation — not just blocking (future)
 - [ ] SP-006-C-clarification: Allow delegate to request clarification from parent via event bus (future)
 

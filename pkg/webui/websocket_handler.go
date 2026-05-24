@@ -82,9 +82,21 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		trackingKey = clientID
 	}
 
-	// Check whether there is already an active connection for this user.
-	if existingVal, loaded := ws.activeWSByUserID.Load(trackingKey); loaded {
-		existingActive := existingVal.(*activeWSConn)
+	// Pre-create the activeConn so we can use it in LoadOrStore below.
+	activeConn := &activeWSConn{
+		safeConn:    safeConn,
+		conn:        conn,
+		sessionID:   sessionID,
+		connectedAt: time.Now(),
+		closed:      make(chan struct{}),
+	}
+
+	// Atomically check for existing connection and register ourselves.
+	// LoadOrStore eliminates the TOCTOU race between checking and storing.
+	actualVal, loaded := ws.activeWSByUserID.LoadOrStore(trackingKey, activeConn)
+	if loaded {
+		// Another connection is already active. Our activeConn was NOT stored.
+		existingActive := actualVal.(*activeWSConn)
 
 		// Conflict! Notify the NEW connection that an existing session
 		// is active and wait for the client to confirm takeover.
@@ -107,18 +119,25 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		}
 
 		// Client confirmed — evict the old connection.
-		ws.evictExistingConnection(trackingKey)
-	}
+		// Use CompareAndDelete to atomically remove the old entry only if
+		// it hasn't been replaced by yet another connection in the meantime.
+		if ws.activeWSByUserID.CompareAndDelete(trackingKey, existingActive) {
+			existingActive.safeConn.WriteJSON(map[string]interface{}{
+				"type": "session_displaced",
+				"data": map[string]interface{}{
+					"reason":  "session_taken_over",
+					"message": "This session has been moved to another device",
+				},
+			})
+			existingActive.safeConn.Close()
+			log.Printf("[SP-046] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
+		}
 
-	// Store as the active connection for this user.
-	activeConn := &activeWSConn{
-		safeConn:    safeConn,
-		conn:        conn,
-		sessionID:   sessionID,
-		connectedAt: time.Now(),
-		closed:      make(chan struct{}),
+		// Now store ourselves as the active connection.
+		ws.activeWSByUserID.Store(trackingKey, activeConn)
 	}
-	ws.activeWSByUserID.Store(trackingKey, activeConn)
+	// When loaded == false, LoadOrStore already stored our activeConn — nothing more to do.
+
 	// Remove from activeWSByUserID when this connection exits.
 	defer func() {
 		// Only clean up if we're still the active connection for this
@@ -544,6 +563,13 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			ws.handleAskUserResponse(safeConn, data, clientID)
 		})
 
+	case AllowedMessageTypeHydrateRequest:
+		// SP-046: client requests cold-hydrate of workspace files.
+		// Runs in a goroutine so the read loop stays responsive.
+		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
+			ws.handleColdHydrateRequest(safeConn, ws.workspaceRoot)
+		})
+
 	case AllowedMessageTypeSessionTakeover:
 		// SP-046: session_takeover is expected only during the conflict
 		// wait loop. If it arrives during normal message dispatch, log
@@ -618,6 +644,9 @@ func (ws *ReactWebServer) cleanupAfterPanic(clientID, sessionID string) {
 // only the takeover message is accepted. Returns true if the client
 // confirmed takeover, false if it disconnected without confirming.
 func (ws *ReactWebServer) waitForTakeover(conn *websocket.Conn, sessionID string) bool {
+	// Limit frame size to prevent a malicious client from sending a
+	// multi-gigabyte WebSocket frame during the takeover window.
+	conn.SetReadLimit(512 * 1024)
 	// Set a generous read deadline so the client has time to decide.
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	_, rawMsg, err := conn.ReadMessage()

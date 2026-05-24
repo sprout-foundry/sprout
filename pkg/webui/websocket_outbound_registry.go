@@ -68,6 +68,11 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeSessionTerminated:       {},
 	events.EventTypeDriftDetected:           {},
 	events.EventTypeSessionChanged:          {}, // SP-034-3e
+
+	// Cold hydration (SP-046) — server streams workspace files on first-load
+	AllowedMessageTypeHydrateManifest: {},
+	AllowedMessageTypeHydrateFile:     {},
+	AllowedMessageTypeHydrateComplete: {},
 }
 
 // devModeCached caches the SPROUT_DEV env check so we don't re-parse it

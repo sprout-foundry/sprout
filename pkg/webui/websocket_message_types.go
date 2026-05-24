@@ -44,6 +44,14 @@ const (
 
 	// AllowedMessageTypeSessionTakeover is the "session_takeover" message type (SP-046)
 	AllowedMessageTypeSessionTakeover = "session_takeover"
+
+	// AllowedMessageTypeHydrateRequest is the "hydrate_request" message type (SP-046)
+	AllowedMessageTypeHydrateRequest = "hydrate_request"
+
+	// Outbound-only hydration message types (SP-046) — server→client
+	AllowedMessageTypeHydrateManifest = "hydrate_manifest"
+	AllowedMessageTypeHydrateFile     = "hydrate_file"
+	AllowedMessageTypeHydrateComplete = "hydrate_complete"
 )
 
 var allowedMessageTypes = map[string]bool{
@@ -59,6 +67,44 @@ var allowedMessageTypes = map[string]bool{
 	AllowedMessageTypeSecurityPromptResponse:   true,
 	AllowedMessageTypeAskUserResponse:          true,
 	AllowedMessageTypeSessionTakeover:          true,
+	AllowedMessageTypeHydrateRequest:           true,
+}
+
+// HydrateManifestData is the data payload for "hydrate_manifest" messages.
+// Sent after the workspace scan, before file streaming begins, so the
+// client can display a progress bar with ETA.
+type HydrateManifestData struct {
+	TotalFiles      int64 `json:"total_files"`
+	TotalSize       int64 `json:"total_size"`
+	EstimateSeconds int64 `json:"estimate_seconds"`
+}
+
+// HydrateFileData is the data payload for "hydrate_file" messages.
+// Carries a single file's base64-encoded content and metadata.
+type HydrateFileData struct {
+	Path          string  `json:"path"`
+	ContentBase64 string  `json:"content_base64"`
+	Size          int64   `json:"size"`
+	ModifiedAt    string  `json:"modified_at"`
+	ProgressPct   float64 `json:"progress_pct"`
+}
+
+// HydrateCompleteData is the data payload for "hydrate_complete" messages.
+// Sent after all files have been streamed, summarizing the transfer.
+type HydrateCompleteData struct {
+	FilesTransferred int64 `json:"files_transferred"`
+	TotalBytes       int64 `json:"total_bytes"`
+	DurationMs       int64 `json:"duration_ms"`
+}
+
+// HydrateRequestData is the data payload for inbound "hydrate_request" messages.
+// The body is empty — the client just signals it wants hydration.
+type HydrateRequestData struct{}
+
+// Validate performs field-level validation on HydrateRequestData.
+// Empty body is always valid — the client just requests hydration.
+func (d *HydrateRequestData) Validate() error {
+	return nil
 }
 
 // WebSocketMessage is the envelope for all incoming WebSocket messages.

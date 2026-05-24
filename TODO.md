@@ -96,7 +96,7 @@
 
 ## Partially Done — SP-048: CLI Delight
 
-- [ ] SP-048-4a: Honor `NO_COLOR` / `FORCE_COLOR` in `NewMarkdownFormatter`; stop unsetting `NO_COLOR` in `agent_exec_utils.go`
+- [x] SP-048-4a: Honor `NO_COLOR` / `FORCE_COLOR` in `NewMarkdownFormatter`; stop unsetting `NO_COLOR` in `agent_exec_utils.go`
 - [ ] SP-048-4b: Bold the capitalized default letter in `[y/N]` prompts and the safe default option in 4-choice secret prompt
 - [ ] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
 - [ ] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop

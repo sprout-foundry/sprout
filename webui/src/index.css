@@ -69,21 +69,21 @@ code {
 
 /* Keyboard focus ring on all interactive elements */
 :focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline: 2px solid var(--border-focus, var(--accent-primary));
   outline-offset: 2px;
 }
 
 /* Buttons */
 button:focus-visible,
 [role='button']:focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline: 2px solid var(--border-focus, var(--accent-primary));
   outline-offset: 2px;
 }
 
 /* Links */
 a:focus-visible,
 [role='link']:focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline: 2px solid var(--border-focus, var(--accent-primary));
   outline-offset: 2px;
 }
 
@@ -91,13 +91,13 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline: 2px solid var(--border-focus, var(--accent-primary));
   outline-offset: 1px;
 }
 
 /* Summary/details */
 summary:focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline: 2px solid var(--border-focus, var(--accent-primary));
   outline-offset: 2px;
 }
 

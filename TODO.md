@@ -12,7 +12,7 @@
 [x] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
 - [x] SP-009-P2.3: Write stories for ContextMenu, NotificationItem, SelectionActionBar, CommandInput (Tier 3)
 - [x] SP-009-P2.4: Connect to Chromatic for visual regression testing on PRs
-- [ ] SP-009-P2.5: Write MDX documentation pages for complex components (FileTree, ChatPanel, GitPanel)
+- [x] SP-009-P2.5: Write MDX documentation pages for complex components (FileTree, ChatPanel, GitPanel)
 - [ ] SP-009-migration: Replace duplicate component implementations in webui with imports from `@sprout/ui`
 
 ## Partially Done — SP-010: Editor Modernization

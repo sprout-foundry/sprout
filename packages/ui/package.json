@@ -112,7 +112,7 @@
   "repository": {
     "directory": "packages/ui",
     "type": "git",
-    "url": "https://github.com/sprout-foundry/sprout.git"
+    "url": "git+https://github.com/sprout-foundry/sprout.git"
   },
   "scripts": {
     "build": "vite build",
@@ -121,9 +121,7 @@
     "test": "vitest run",
     "type-check": "tsc --noEmit"
   },
-  "sideEffects": [
-    "**/*.css"
-  ],
+  "sideEffects": false,
   "types": "dist/index.d.ts",
   "version": "0.1.0"
 }

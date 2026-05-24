@@ -602,6 +602,63 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "delegate",
+				Description: "Delegate a task to a child agent. The child agent inherits your provider and model, runs autonomously, and returns results. Use this for parallelizable subtasks that benefit from a focused role or restricted tool set.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"prompt": map[string]interface{}{
+							"type":        "string",
+							"description": "The task prompt for the delegate agent (required)",
+							"minLength":   1,
+						},
+						"role": map[string]interface{}{
+							"type":        "string",
+							"description": "Role description for the delegate agent (e.g., 'coder', 'researcher')",
+						},
+						"provider": map[string]interface{}{
+							"type":        "string",
+							"description": "Provider override for the delegate (optional, inherits parent if not set)",
+						},
+						"model": map[string]interface{}{
+							"type":        "string",
+							"description": "Model override for the delegate (optional, inherits parent if not set)",
+						},
+						"tools": map[string]interface{}{
+							"type":        "array",
+							"description": "List of tool names to make available to the delegate",
+							"items": map[string]interface{}{
+								"type": "string",
+							},
+						},
+						"context": map[string]interface{}{
+							"type":        "string",
+							"description": "Additional context to pass to the delegate",
+						},
+						"max_iterations": map[string]interface{}{
+							"type":        "integer",
+							"description": "Maximum number of tool-call iterations for the delegate",
+						},
+						"files": map[string]interface{}{
+							"type":        "array",
+							"description": "List of relevant file paths for the delegate",
+							"items": map[string]interface{}{
+								"type": "string",
+							},
+						},
+					},
+					"required":             []string{"prompt"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "search_files",
 				Description: "Search text in files using patterns",
 				Parameters: map[string]interface{}{

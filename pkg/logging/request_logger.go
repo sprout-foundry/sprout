@@ -3,9 +3,12 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -55,8 +58,8 @@ func LogRequestPayload(payload []byte, provider, model string, streaming bool) {
 func LogRequestPayloadOnError(payload []byte, provider, model string, streaming bool, errorType string, err error) {
 	payload = redact.Apply(payload)
 
-	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir := getErrorLogDir()
+	if dir == "" {
 		return
 	}
 
@@ -68,13 +71,15 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 	WriteLocalCopyRequest("lastRequest.json", payload)
 
 	entry := map[string]interface{}{
-		"timestamp":  time.Now().Format(time.RFC3339Nano),
-		"provider":   provider,
-		"model":      model,
-		"streaming":  streaming,
-		"error_type": errorType,
-		"error":      err.Error(),
-		"request":    json.RawMessage(payload),
+		"timestamp":       time.Now().Format(time.RFC3339Nano),
+		"provider":        provider,
+		"model":           model,
+		"streaming":       streaming,
+		"error_type":      errorType,
+		"error_message":   err.Error(),
+		"error":           err.Error(),
+		"error_details":   formatErrorDetails(err),
+		"request":         json.RawMessage(payload),
 	}
 
 	data, err := json.MarshalIndent(entry, "", "  ")
@@ -87,6 +92,74 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 		return
 	}
 	WriteLocalCopyRequest(filename, data)
+
+	// Rotate old error logs to prevent unbounded growth
+	cleanupOldErrorLogs(dir)
+}
+
+// getErrorLogDir returns the .sprout directory used for error logs.
+// Returns empty string if it cannot be created.
+func getErrorLogDir() string {
+	dir := filepath.Join(os.Getenv("HOME"), ".sprout")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return ""
+	}
+	return dir
+}
+
+// formatErrorDetails returns a string with any additional error context.
+func formatErrorDetails(err error) string {
+	if err == nil {
+		return ""
+	}
+	// Check for wrapped errors
+	var wrapped error
+	for unwrapped := err; unwrapped != nil; unwrapped = wrapped {
+		if e, ok := unwrapped.(interface{ Unwrap() error }); ok {
+			wrapped = e.Unwrap()
+			if wrapped != nil && wrapped.Error() != unwrapped.Error() {
+				return fmt.Sprintf("%s (caused by: %s)", unwrapped.Error(), wrapped.Error())
+			}
+			wrapped = nil
+		} else {
+			break
+		}
+	}
+	return err.Error()
+}
+
+const maxErrorLogFiles = 100
+
+// cleanupOldErrorLogs removes old error log files, keeping only the most recent maxErrorLogFiles.
+// Files are sorted by name (which contains timestamps), so lexicographic sort = chronological.
+func cleanupOldErrorLogs(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+
+	// Filter to error_request_ files only
+	var errorFiles []fs.DirEntry
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "error_request_") {
+			errorFiles = append(errorFiles, entry)
+		}
+	}
+
+	if len(errorFiles) <= maxErrorLogFiles {
+		return
+	}
+
+	// Sort by name (timestamps in names make this chronological)
+	sort.Slice(errorFiles, func(i, j int) bool {
+		return errorFiles[i].Name() < errorFiles[j].Name()
+	})
+
+	// Delete oldest
+	toDelete := len(errorFiles) - maxErrorLogFiles
+	for i := 0; i < toDelete; i++ {
+		os.Remove(filepath.Join(dir, errorFiles[i].Name()))
+	}
 }
 
 // WriteLocalCopy optionally mirrors log files to the current working directory.

@@ -77,7 +77,7 @@ python3 test_runner.py          # Run E2E tests
   // mutate via mgr.UpdateConfig(...) — never call configuration.Load() directly
   ```
 
-  **NEVER persist `api.TestClientType` ("test") to `LastUsedProvider` or `SubagentProvider`.** That string is an in-process sentinel for mock clients; if it reaches disk, the next CLI run picks it up and `/commit` (plus every chat) silently routes to a no-op mock. Five layers of defense exist to prevent this (see `pkg/configuration/test_isolation.go`):
+  **NEVER persist `api.TestClientType` ("test") to `LastUsedProvider` or `SubagentProvider`.** That string is an in-process sentinel for mock clients; if it reaches disk, the next CLI run picks it up and `/commit` (plus every chat) silently routes to a no-op mock. Five layers of defense exist to prevent this (see `pkg/configuration/testing_isolation.go`):
   1. `Save()` / `SaveToDir()` strip `"test"` from `LastUsedProvider` and `SubagentProvider`
   2. `Load()` / `LoadConfigWithLayers()` self-heal a poisoned file on read
   3. `NewManagerWithDir` no longer pre-writes `"test"` to fresh test configs

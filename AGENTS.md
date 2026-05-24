@@ -52,6 +52,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-024** Context Management — File Read Optimization (proposed)
 - **SP-049** Shell Permission Overhaul — Tiered Allow-Lists & User Policy (proposed)
 - **SP-054** LSP Language Coverage Expansion (proposed)
+- **SP-055** CLI Pinned Input — Always-On Steering Panel (proposed)
 
 ## Testing
 

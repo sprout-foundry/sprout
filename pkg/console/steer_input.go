@@ -78,9 +78,33 @@ type SteerInputReader struct {
 	// buffer accumulates the in-progress steer message.
 	buffer []byte
 
-	// oldState is the pre-MakeRaw termios state, restored on Stop.
-	oldState *term.State
+	// oldState is the pre-steer-mode termios snapshot, restored on Stop.
+	// Use steerTermiosState (NOT term.State) because we run a "cbreak"-
+	// like mode that keeps OPOST intact — otherwise streaming output
+	// staircases. See pkg/console/steer_termios_*.go.
+	oldState *steerTermiosState
+
+	// history is the ring of previously-submitted steer messages
+	// (SP-055 Phase 3). Up arrow recalls the most recent; subsequent
+	// Ups walk further back; Down walks forward toward the in-progress
+	// buffer. Capped at SteerHistoryCap to stay bounded; oldest entries
+	// drop off the front.
+	history []string
+
+	// historyIndex tracks the cursor into history during recall. -1
+	// means "at the live buffer" (not navigating). 0..len-1 means
+	// "showing history[len-1-i]". Reset to -1 on submit or text-edit.
+	historyIndex int
+
+	// pendingBuffer is the live buffer snapshotted when the user
+	// starts navigating history so they can Down-arrow back to what
+	// they were typing. Nil when not navigating.
+	pendingBuffer []byte
 }
+
+// SteerHistoryCap bounds the in-memory steer history to a sensible
+// session-level value. Exposed for testing / config.
+const SteerHistoryCap = 50
 
 // SteerPromptPrefix is the visible glyph + space rendered at the start
 // of the pinned input line. Exposed for testing / theming.
@@ -127,11 +151,11 @@ func (r *SteerInputReader) Start() {
 	doneCh := r.doneCh
 	r.mu.Unlock()
 
-	st, err := term.MakeRaw(r.fd)
+	st, err := enterSteerMode(r.fd)
 	if err != nil {
-		// Couldn't enter raw mode — degrade to no-op rather than fight
-		// the terminal. Caller's session continues to work, just without
-		// the steer affordance.
+		// Couldn't enter steer mode — degrade to no-op rather than
+		// fight the terminal. Caller's session continues to work,
+		// just without the steer affordance.
 		r.mu.Lock()
 		r.active = false
 		r.mu.Unlock()
@@ -171,7 +195,7 @@ func (r *SteerInputReader) Stop() {
 
 	close(stopCh)
 	if oldState != nil {
-		_ = term.Restore(r.fd, oldState)
+		_ = exitSteerMode(r.fd, oldState)
 	}
 	// Clear the pinned line via the footer.
 	if r.footer != nil {
@@ -260,6 +284,8 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 func (r *SteerInputReader) handleInterrupt() {
 	r.mu.Lock()
 	r.buffer = r.buffer[:0]
+	r.historyIndex = -1
+	r.pendingBuffer = nil
 	cb := r.interruptFn
 	r.mu.Unlock()
 	r.renderLine()
@@ -271,6 +297,8 @@ func (r *SteerInputReader) handleInterrupt() {
 // handleSubmit fires the submit callback with the current buffer and
 // clears the line. Empty submissions are dropped (no-op) so users can
 // hit Enter on an empty line without sending noise to the agent.
+// Non-empty submissions are appended to the steer history ring so
+// up-arrow recall works.
 func (r *SteerInputReader) handleSubmit() {
 	r.mu.Lock()
 	text := string(r.buffer)
@@ -281,15 +309,20 @@ func (r *SteerInputReader) handleSubmit() {
 	if text == "" {
 		return
 	}
+	r.appendHistory(text)
 	if cb != nil {
 		cb(text)
 	}
 }
 
-// handleEscapeOrSequence handles both plain ESC (clear buffer) and ESC
-// `[` sequences (arrow keys, function keys). Plain ESC is the v1 "clear
-// what I'm typing" affordance; arrow-key sequences are swallowed so they
-// don't insert literal `[A` etc. into the buffer.
+// handleEscapeOrSequence handles three cases:
+//  1. Plain ESC (no follow-up byte) → clear the buffer (cancel typing).
+//  2. ESC `[` <final-byte> (CSI sequence) → dispatch to history
+//     navigation for arrow keys (`A` up, `B` down) and drain anything
+//     else (left/right, function keys, etc.).
+//  3. Bracketed-paste markers (ESC [ 200 ~ ... ESC [ 201 ~) — drained
+//     as ordinary CSI sequences; the inner content arrives as
+//     printable bytes that go through handlePrintable.
 //
 // Stdin is already non-blocking (set in readLoop), so a quick Read
 // returns immediately. If the next byte isn't ready within a short
@@ -298,6 +331,8 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 	clearBuffer := func() {
 		r.mu.Lock()
 		r.buffer = r.buffer[:0]
+		r.historyIndex = -1
+		r.pendingBuffer = nil
 		r.mu.Unlock()
 		r.renderLine()
 	}
@@ -328,9 +363,10 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 		clearBuffer()
 		return
 	}
-	// ESC `[` — drain until a final byte (0x40..0x7E) which terminates
-	// CSI sequences per ECMA-48. Cap the drain at a few bytes so a
-	// malformed sequence can't hang us.
+	// ESC `[` — read bytes until a final byte (0x40..0x7E) terminates
+	// the CSI sequence per ECMA-48. Cap the drain at a few bytes so
+	// a malformed sequence can't hang us. The final byte determines
+	// the action.
 	drainDeadline := time.Now().Add(20 * time.Millisecond)
 	for i := 0; i < 8 && time.Now().Before(drainDeadline); i++ {
 		var b [1]byte
@@ -340,27 +376,121 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 			continue
 		}
 		if b[0] >= 0x40 && b[0] <= 0x7E {
-			return // terminator byte
+			r.dispatchCSIFinal(b[0])
+			return
 		}
+		// Parameter/intermediate bytes (0x30..0x3F, 0x20..0x2F) keep
+		// the sequence going; we don't care about the parameters for
+		// the limited set of keys we react to.
 	}
 }
 
+// dispatchCSIFinal acts on the terminator byte of a CSI sequence we
+// just drained. Only arrow keys are wired today; other final bytes are
+// swallowed silently.
+func (r *SteerInputReader) dispatchCSIFinal(final byte) {
+	switch final {
+	case 'A': // Up arrow — recall previous history entry.
+		r.recallHistory(-1)
+	case 'B': // Down arrow — advance toward in-progress buffer.
+		r.recallHistory(+1)
+	default:
+		// Left/right/Home/End/Pg... not yet wired.
+	}
+}
+
+// recallHistory walks the steer-history index by delta. Negative steps
+// backward (toward older), positive steps forward (toward newer / the
+// live buffer). At the live-buffer boundary it restores the pending
+// buffer the user was typing when they started navigating.
+func (r *SteerInputReader) recallHistory(delta int) {
+	r.mu.Lock()
+	if len(r.history) == 0 {
+		r.mu.Unlock()
+		return
+	}
+
+	if r.historyIndex == -1 && delta < 0 {
+		// First Up while at live buffer — snapshot current text so we
+		// can return to it on later Down.
+		snap := make([]byte, len(r.buffer))
+		copy(snap, r.buffer)
+		r.pendingBuffer = snap
+	}
+
+	newIdx := r.historyIndex + delta
+	switch {
+	case newIdx < 0:
+		// Already at oldest — clamp.
+		newIdx = len(r.history) - 1
+		if r.historyIndex < 0 {
+			// First Up press from the live buffer.
+			newIdx = 0
+		}
+	case newIdx >= len(r.history):
+		// Walked past the newest entry → back to the live buffer.
+		newIdx = -1
+	}
+
+	if newIdx == -1 {
+		// Restore the pending buffer the user was typing.
+		if r.pendingBuffer != nil {
+			r.buffer = append(r.buffer[:0], r.pendingBuffer...)
+		} else {
+			r.buffer = r.buffer[:0]
+		}
+	} else {
+		// history is ordered oldest→newest. UI walks newest-first, so
+		// index `i` maps to history[len-1-i].
+		entry := r.history[len(r.history)-1-newIdx]
+		r.buffer = append(r.buffer[:0], entry...)
+	}
+	r.historyIndex = newIdx
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// appendHistory pushes a submitted message onto the history ring,
+// deduplicating consecutive repeats and capping at SteerHistoryCap.
+func (r *SteerInputReader) appendHistory(text string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if text == "" {
+		return
+	}
+	if n := len(r.history); n > 0 && r.history[n-1] == text {
+		return // consecutive dup
+	}
+	r.history = append(r.history, text)
+	if over := len(r.history) - SteerHistoryCap; over > 0 {
+		r.history = r.history[over:]
+	}
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+}
+
 // handleBackspace removes the last byte from the buffer if any, then
-// redraws the line.
+// redraws the line. Also exits history navigation: editing a recalled
+// entry treats it as a fresh in-progress message.
 func (r *SteerInputReader) handleBackspace() {
 	r.mu.Lock()
 	if n := len(r.buffer); n > 0 {
 		r.buffer = r.buffer[:n-1]
 	}
+	r.historyIndex = -1
+	r.pendingBuffer = nil
 	r.mu.Unlock()
 	r.renderLine()
 }
 
 // handlePrintable appends a printable ASCII byte to the buffer and
-// redraws.
+// redraws. Typing exits "history navigation" mode: the buffer becomes
+// editable from the recalled state and the next Up arrow starts fresh.
 func (r *SteerInputReader) handlePrintable(b byte) {
 	r.mu.Lock()
 	r.buffer = append(r.buffer, b)
+	r.historyIndex = -1
+	r.pendingBuffer = nil
 	r.mu.Unlock()
 	r.renderLine()
 }

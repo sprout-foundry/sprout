@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -97,6 +98,52 @@ func isRetryableError(err error) bool {
 	return false
 }
 
+// extractHTTPStatusCode parses common HTTP error patterns to extract the status code.
+// Handles formats like "HTTP 400: msg", "HTTP 400", "400 Bad Request", "error 429", etc.
+func extractHTTPStatusCode(msg string) int {
+	lower := strings.ToLower(msg)
+	// "HTTP 400: ..." or "HTTP 400"
+	if idx := strings.Index(lower, "http "); idx >= 0 {
+		rest := msg[idx+5:]
+		if i, err := strconv.Atoi(strings.TrimSpace(rest)); err == nil && i >= 100 && i < 1000 {
+			return i
+		}
+	}
+	// "error 429" or "response error: 400" — look for a standalone 3-digit number
+	for _, word := range strings.FieldsFunc(lower, func(r rune) bool { return !((r >= '0' && r <= '9') || r == '_') }) {
+		if len(word) == 3 {
+			if i, err := strconv.Atoi(word); err == nil && i >= 100 && i < 1000 {
+				return i
+			}
+		}
+	}
+	return 0
+}
+
+// recordProviderError stores error info in the agent's state for observability.
+func (sp *sproutProvider) recordProviderError(err error, retries int) {
+	if sp.agent == nil || err == nil {
+		return
+	}
+	msg := err.Error()
+	sp.agent.state.SetLastProviderError(&ProviderErrorInfo{
+		Timestamp:  time.Now().Format(time.RFC3339),
+		Provider:   sp.agent.GetProvider(),
+		Model:      sp.agent.GetModel(),
+		StatusCode: extractHTTPStatusCode(msg),
+		Message:    msg,
+		Retries:    retries,
+	})
+}
+
+// clearProviderError clears the last provider error (on success).
+func (sp *sproutProvider) clearProviderError() {
+	if sp.agent == nil {
+		return
+	}
+	sp.agent.state.SetLastProviderError(nil)
+}
+
 // doChatWithRetry executes a chat request with exponential backoff retry.
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	var lastErr error
@@ -117,6 +164,8 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 
 		resp, err := sp.doChatOnce(ctx, req)
 		if err == nil {
+			// Clear any previous provider error on success
+			sp.clearProviderError()
 			// Fleet budget tracking: debit tokens after each LLM call.
 			// If budget is exceeded, propagate the error so the conversation loop stops.
 			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
@@ -127,12 +176,14 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 		lastErr = err
 
 		if !isRetryableError(err) {
-			// Non-retryable error — return immediately
+			// Non-retryable error — record and return immediately
+			sp.recordProviderError(err, attempt)
 			return nil, err
 		}
 	}
 
-	// Max retries exhausted
+	// Max retries exhausted — record the error
+	sp.recordProviderError(lastErr, defaultMaxRetries)
 	return nil, fmt.Errorf("transient error during chat (%s): %w", sp.GetModel(), lastErr)
 }
 
@@ -328,6 +379,8 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 
 		resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
 		if err == nil {
+			// Clear any previous provider error on success
+			sp.clearProviderError()
 			// Fleet budget tracking: debit tokens after each LLM call
 			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
 				return nil, budgetErr
@@ -337,10 +390,14 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 		lastErr = err
 
 		if !isRetryableError(err) {
+			// Non-retryable error — record and return immediately
+			sp.recordProviderError(err, attempt)
 			return nil, err
 		}
 	}
 
+	// Max retries exhausted — record the error
+	sp.recordProviderError(lastErr, defaultMaxRetries)
 	return nil, fmt.Errorf("transient error during chat (%s): %w", sp.GetModel(), lastErr)
 }
 
@@ -659,6 +716,24 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		opts.InitialMessages = msgs
 	}
 
+	// Restore turn checkpoints so that the message pipeline can apply
+	// checkpoint compaction before sending to the provider. Without this,
+	// restored sessions send the entire raw history (potentially hundreds of
+	// messages with tool calls) instead of the compacted summary, causing
+	// provider 400 errors due to mismatched tool calls/responses.
+	if cps := a.state.GetTurnCheckpoints(); len(cps) > 0 {
+		seedCPs := make([]core.TurnCheckpoint, len(cps))
+		for i, cp := range cps {
+			seedCPs[i] = core.TurnCheckpoint{
+				StartIndex:        cp.StartIndex,
+				EndIndex:          cp.EndIndex,
+				Summary:           cp.Summary,
+				ActionableSummary: cp.ActionableSummary,
+			}
+		}
+		opts.InitialCheckpoints = seedCPs
+	}
+
 	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {
@@ -675,6 +750,49 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	// Bridge sprout's user-facing inputInjectionChan to seed's InjectInput.
+	// Callers (CLI prompt goroutine, webui /api/query/steer) push into the
+	// sprout channel via InjectInputContext; this forwarder drains it and
+	// hands the message to seed, which consumes it at the next natural
+	// break point in its loop (between iterations, before deciding to
+	// terminate the turn). Without this bridge the sprout channel buffers
+	// forever and "steering" silently no-ops.
+	//
+	// runCtx is scoped to this query (separate from a.interruptCtx, which
+	// outlives a single Run) so the forwarder exits cleanly when the
+	// model returns. seed.InjectInput is buffered size 1; if full we
+	// briefly sleep before retrying so we don't lose the user's steer to
+	// a transient collision with seed's own consumer.
+	runCtx, runCancel := context.WithCancel(ctx)
+	steerDone := make(chan struct{})
+	go func() {
+		defer close(steerDone)
+		ch := a.GetInputInjectionContext()
+		for {
+			select {
+			case <-runCtx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				for !seedAgent.InjectInput(msg) {
+					select {
+					case <-runCtx.Done():
+						return
+					case <-time.After(25 * time.Millisecond):
+						// retry
+					}
+				}
+			}
+		}
+	}()
+	defer func() {
+		runCancel()
+		<-steerDone
+	}()
+
 	result, err := seedAgent.Run(ctx, processedQuery)
 	if err != nil {
 		// Check if the fleet budget was exceeded mid-run

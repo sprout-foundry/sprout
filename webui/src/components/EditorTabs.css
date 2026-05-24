@@ -493,7 +493,7 @@
 
 .tab.new-chat:hover {
   color: var(--text-primary);
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--bg-elevated);
 }
 
 /* New Chat in Worktree button (GitBranch icon) */
@@ -518,7 +518,7 @@
 }
 
 .tab.new-worktree:hover {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--bg-elevated);
   color: var(--accent-primary);
 }
 

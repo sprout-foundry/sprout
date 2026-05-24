@@ -277,3 +277,219 @@ func TestMatchProvider_AllRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestRoundTrip_CorsProxy_RewritesURL(t *testing.T) {
+	rt, cap := newRewriteWithCapture(t)
+	rt.corsProxy.Store("https://cors-proxy.example.com")
+
+	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+
+	expected := "https://cors-proxy.example.com/https%3A%2F%2Fapi.openai.com%2Fv1%2Fchat%2Fcompletions"
+	if got := cap.lastReq.URL.String(); got != expected {
+		t.Errorf("URL = %q, want %q", got, expected)
+	}
+	if cap.lastReq.Host != "cors-proxy.example.com" {
+		t.Errorf("Host = %q, want cors-proxy.example.com", cap.lastReq.Host)
+	}
+}
+
+func TestRoundTrip_CorsProxy_RewritesAllURLs(t *testing.T) {
+	cases := []struct {
+		name      string
+		inputURL  string
+		expectURL string
+	}{
+		{
+			name:      "openai",
+			inputURL:  "https://api.openai.com/v1/chat/completions",
+			expectURL: "https://cors-proxy.example.com/https%3A%2F%2Fapi.openai.com%2Fv1%2Fchat%2Fcompletions",
+		},
+		{
+			name:      "anthropic",
+			inputURL:  "https://api.anthropic.com/v1/messages",
+			expectURL: "https://cors-proxy.example.com/https%3A%2F%2Fapi.anthropic.com%2Fv1%2Fmessages",
+		},
+		{
+			name:      "openrouter with path prefix",
+			inputURL:  "https://openrouter.ai/api/v1/chat/completions",
+			expectURL: "https://cors-proxy.example.com/https%3A%2F%2Fopenrouter.ai%2Fapi%2Fv1%2Fchat%2Fcompletions",
+		},
+		{
+			name:      "unknown provider still rewritten",
+			inputURL:  "https://custom-llm.example.com/v1/chat",
+			expectURL: "https://cors-proxy.example.com/https%3A%2F%2Fcustom-llm.example.com%2Fv1%2Fchat",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			rt, cap := newRewriteWithCapture(t)
+			rt.corsProxy.Store("https://cors-proxy.example.com")
+
+			req, _ := http.NewRequest("POST", c.inputURL, nil)
+			if _, err := rt.RoundTrip(req); err != nil {
+				t.Fatalf("RoundTrip: %v", err)
+			}
+			if got := cap.lastReq.URL.String(); got != c.expectURL {
+				t.Errorf("URL = %q, want %q", got, c.expectURL)
+			}
+		})
+	}
+}
+
+func TestRoundTrip_CorsProxy_PriorityOverPlatformEndpoint(t *testing.T) {
+	rt, cap := newRewriteWithCapture(t)
+	rt.platformBase.Store("https://platform.example.com")
+	rt.corsProxy.Store("https://cors-proxy.example.com")
+
+	req, _ := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+
+	// Should go through CORS proxy, NOT platform endpoint
+	expected := "https://cors-proxy.example.com/https%3A%2F%2Fapi.openai.com%2Fv1%2Fchat%2Fcompletions"
+	if got := cap.lastReq.URL.String(); got != expected {
+		t.Errorf("URL = %q, want %q (cors proxy should take priority over platform endpoint)", got, expected)
+	}
+	// Verify it did NOT route through the platform proxy
+	if strings.Contains(cap.lastReq.URL.String(), "platform.example.com") {
+		t.Error("URL should NOT contain platform endpoint when cors proxy is set")
+	}
+}
+
+func TestRoundTrip_CorsProxy_Disabled_PassesThrough(t *testing.T) {
+	rt, cap := newRewriteWithCapture(t)
+	// corsProxy not set (empty string)
+
+	req, _ := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+
+	if got := cap.lastReq.URL.String(); got != "https://api.openai.com/v1/models" {
+		t.Errorf("URL = %q, want unchanged when cors proxy is disabled", got)
+	}
+}
+
+func TestRoundTrip_CorsProxy_HTTPRequest(t *testing.T) {
+	rt, cap := newRewriteWithCapture(t)
+	rt.corsProxy.Store("https://cors-proxy.example.com")
+
+	req, _ := http.NewRequest("GET", "http://localhost:8080/v1/chat", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+
+	expected := "https://cors-proxy.example.com/http%3A%2F%2Flocalhost%3A8080%2Fv1%2Fchat"
+	if got := cap.lastReq.URL.String(); got != expected {
+		t.Errorf("URL = %q, want %q", got, expected)
+	}
+}
+
+func TestRoundTrip_CorsProxy_NonHTTP_PassesThrough(t *testing.T) {
+	rt, cap := newRewriteWithCapture(t)
+	rt.corsProxy.Store("https://cors-proxy.example.com")
+
+	req, _ := http.NewRequest("GET", "ws://localhost:8080/ws", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+
+	if got := cap.lastReq.URL.String(); got != "ws://localhost:8080/ws" {
+		t.Errorf("URL = %q, want unchanged for non-HTTP(S) URLs", got)
+	}
+}
+
+func TestRoundTrip_CorsProxy_TrailingSlashNormalized(t *testing.T) {
+	rt, cap := newRewriteWithCapture(t)
+	// SetCorsProxy strips trailing slashes; mimic that here since we
+	// store directly on the transport.
+	rt.corsProxy.Store(strings.TrimRight("https://cors-proxy.example.com/", "/"))
+
+	req, _ := http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip: %v", err)
+	}
+
+	expected := "https://cors-proxy.example.com/https%3A%2F%2Fapi.openai.com%2Fv1%2Fmodels"
+	if got := cap.lastReq.URL.String(); got != expected {
+		t.Errorf("URL = %q, want %q (trailing slash should be normalized)", got, expected)
+	}
+}
+
+func TestSetCorsProxy_GetCorsProxy_RoundTrip(t *testing.T) {
+	SetCorsProxy("")
+	defer SetCorsProxy("")
+
+	if got := GetCorsProxy(); got != "" {
+		t.Errorf("initial value = %q, want empty", got)
+	}
+
+	SetCorsProxy("https://cors-proxy.example.com")
+	if got := GetCorsProxy(); got != "https://cors-proxy.example.com" {
+		t.Errorf("GetCorsProxy = %q, want https://cors-proxy.example.com", got)
+	}
+
+	SetCorsProxy("https://cors-proxy.example.com/")
+	if got := GetCorsProxy(); got != "https://cors-proxy.example.com" {
+		t.Errorf("GetCorsProxy after trailing slash = %q, want trailing slash stripped", got)
+	}
+
+	SetCorsProxy("")
+	if got := GetCorsProxy(); got != "" {
+		t.Errorf("GetCorsProxy after clear = %q, want empty", got)
+	}
+}
+
+func TestSetCorsProxy_Concurrent(t *testing.T) {
+	SetCorsProxy("")
+	defer SetCorsProxy("")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			SetCorsProxy("https://cors-proxy.example.com")
+			_ = GetCorsProxy()
+		}(i)
+	}
+	wg.Wait()
+	if GetCorsProxy() != "https://cors-proxy.example.com" {
+		t.Errorf("unexpected final value: %q", GetCorsProxy())
+	}
+}
+
+func TestSetCorsProxy_RejectsInvalidURLs(t *testing.T) {
+	SetCorsProxy("")
+	defer SetCorsProxy("")
+
+	cases := []struct {
+		name  string
+		input string
+	}{
+		{"ftp scheme", "ftp://proxy.example.com"},
+		{"javascript scheme", "javascript:alert(1)"},
+		{"random string", "not-a-url"},
+		{"just hostname", "proxy.example.com"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			SetCorsProxy(c.input)
+			if got := GetCorsProxy(); got != "" {
+				t.Errorf("SetCorsProxy(%q) stored %q, want rejected (empty)", c.input, got)
+			}
+		})
+	}
+
+	// Verify valid URLs are accepted
+	SetCorsProxy("https://cors-proxy.example.com")
+	if got := GetCorsProxy(); got != "https://cors-proxy.example.com" {
+		t.Errorf("valid https URL not stored: got %q", got)
+	}
+	SetCorsProxy("")
+}
+

@@ -692,6 +692,54 @@ func GetToolDefinitions() []Tool {
 				Description string      `json:"description"`
 				Parameters  interface{} `json:"parameters"`
 			}{
+				Name:        "request_clarification",
+				Description: "Request clarification from the parent agent when you encounter ambiguity or need additional context during execution. The parent will receive your question and can respond with guidance. This tool will block until a response is received or a timeout expires.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"question": map[string]interface{}{
+							"type":        "string",
+							"description": "What you need clarification on",
+						},
+					},
+					"required":             []string{"question"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
+				Name:        "respond_clarification",
+				Description: "Respond to a clarification request from a delegate agent. Provide the request_id and your response to give the delegate additional context or guidance.",
+				Parameters: map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"request_id": map[string]interface{}{
+							"type":        "string",
+							"description": "The ID of the clarification request to respond to",
+						},
+						"response": map[string]interface{}{
+							"type":        "string",
+							"description": "Your clarification response",
+						},
+					},
+					"required":             []string{"request_id", "response"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: struct {
+				Name        string      `json:"name"`
+				Description string      `json:"description"`
+				Parameters  interface{} `json:"parameters"`
+			}{
 				Name:        "search_files",
 				Description: "Search text in files using patterns",
 				Parameters: map[string]interface{}{

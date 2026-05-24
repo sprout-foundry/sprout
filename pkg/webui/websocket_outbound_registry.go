@@ -56,6 +56,8 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeDelegateAsyncStarted:  {},
 	events.EventTypeDelegateAsyncCompleted: {},
 	events.EventTypeDelegateAsyncFailed:    {},
+	events.EventTypeDelegateClarificationRequested: {},
+	events.EventTypeDelegateClarificationResponded: {},
 	events.EventTypeTodoUpdate:              {},
 	events.EventTypeFileChanged:             {},
 	events.EventTypeWorkspacePatch:          {},

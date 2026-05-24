@@ -343,7 +343,8 @@ describe('buildExtensions — array structure', () => {
   it('includes base editor extensions', () => {
     const ext = renderHook().buildExtensions(buildOpts());
     expect(ext).toContain('cm-allowMultiple(true)');
-    expect(ext).toContain('cm-lineNumbers');
+    // lineNumbers is wrapped by compartment — check via mock call or partial match
+    expect(mockLineNumbers).toHaveBeenCalled();
     expect(ext).toContain('cm-indentOnInput');
     expect(ext).toContain('cm-bracketMatching');
     expect(ext).toContain('cm-history');
@@ -382,37 +383,38 @@ describe('buildExtensions — array structure', () => {
 
 describe('tab size handling', () => {
   it('uses spaces when editorUsesTabs is false', () => {
-    const ext = renderHook().buildExtensions(buildOpts({ editorTabSize: 2, editorUsesTabs: false }));
-    // indentUnit is wrapped by compartments.tabSize.of()
-    expect(ext.some(e => typeof e === 'string' && e.includes('indentUnit') && e.includes('  '))).toBe(true);
+    renderHook().buildExtensions(buildOpts({ editorTabSize: 2, editorUsesTabs: false }));
+    // When usesTabs=false, indentUnit receives spaces
+    expect(mockIndentUnit).toHaveBeenCalledWith('  ');
   });
 
   it('uses tabs when editorUsesTabs is true', () => {
-    const ext = renderHook().buildExtensions(buildOpts({ editorTabSize: 4, editorUsesTabs: true }));
-    // indentUnit is wrapped by compartments.tabSize.of()
-    expect(ext.some(e => typeof e === 'string' && e.includes('indentUnit') && e.includes('\\t'))).toBe(true);
+    renderHook().buildExtensions(buildOpts({ editorTabSize: 4, editorUsesTabs: true }));
+    // When usesTabs=true, indentUnit receives a tab character
+    expect(mockIndentUnit).toHaveBeenCalledWith('\t');
   });
 
   it('converts TAB_SIZE_TABS_MODE (0) to TAB_SIZE_DEFAULT', () => {
-    const ext = renderHook().buildExtensions(buildOpts({ editorTabSize: 0 }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('tabSize(4)'))).toBe(true);
+    renderHook().buildExtensions(buildOpts({ editorTabSize: 0 }));
+    // When tabSize=0 (tabs mode), effective tab size is TAB_SIZE_DEFAULT (4)
+    expect(mockTabSizeOf).toHaveBeenCalledWith(4);
   });
 
   it('uses numeric tabSize as-is for positive numbers', () => {
-    const ext = renderHook().buildExtensions(buildOpts({ editorTabSize: 2 }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('tabSize(2)'))).toBe(true);
+    renderHook().buildExtensions(buildOpts({ editorTabSize: 2 }));
+    expect(mockTabSizeOf).toHaveBeenCalledWith(2);
   });
 });
 
 describe('line wrapping', () => {
   it('includes lineWrapping when enabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ wordWrapEnabled: true }));
-    expect(ext).toContain('cm-lineWrapping');
+    expect(ext.some(e => typeof e === 'string' && e.includes('cm-lineWrapping'))).toBe(true);
   });
 
   it('excludes lineWrapping when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ wordWrapEnabled: false }));
-    expect(ext).not.toContain('cm-lineWrapping');
+    expect(ext.some(e => typeof e === 'string' && e.includes('cm-lineWrapping'))).toBe(false);
   });
 });
 

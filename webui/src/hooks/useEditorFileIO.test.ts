@@ -119,7 +119,12 @@ const mockApiService = {
   getGitDiff: (...a) => mockGetGitDiff(...a),
 };
 vi.mock('../services/api', () => ({
-  ApiService: mockApiService,
+  ApiService: {
+    getInstance: (...a) => mockGetInstance(...a),
+    getSemanticDiagnostics: (...a) => mockGetSemanticDiagnostics(...a),
+    getDiagnostics: (...a) => mockGetDiagnostics(...a),
+    getGitDiff: (...a) => mockGetGitDiff(...a),
+  },
 }));
 
 // File access
@@ -132,7 +137,7 @@ vi.mock('../services/fileAccess', () => ({
 const mockNotify = vi.fn();
 const mockNotificationBus = { notify: (...a) => mockNotify(...a) };
 vi.mock('../services/notificationBus', () => ({
-  notificationBus: mockNotificationBus,
+  notificationBus: { notify: (...a) => mockNotify(...a) },
 }));
 
 // Log utilities
@@ -260,7 +265,11 @@ beforeEach(() => {
   root = createRoot(container);
   vi.clearAllMocks();
 
-  mockGetInstance.mockReturnValue(mockApiService);
+  mockGetInstance.mockReturnValue({
+    getSemanticDiagnostics: (...a) => mockGetSemanticDiagnostics(...a),
+    getDiagnostics: (...a) => mockGetDiagnostics(...a),
+    getGitDiff: (...a) => mockGetGitDiff(...a),
+  });
   mockGetGitDiff.mockResolvedValue({ diff: '' });
   mockReadFileWithConsent.mockResolvedValue({
     ok: true,

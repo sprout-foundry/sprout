@@ -78,7 +78,7 @@
 - [x] SP-045-buildMatrix-sweep: Replace `//go:build !windows` patterns with `unix && !js` across `pkg/`
 - [x] SP-045-dist-ldflags: Add `ldflags="-s -w"` to strip symbols (~25% size saving)
 - [x] SP-045-dist-tinygo: Spike tinygo feasibility for WASM build (huge saving, compatibility risk) — **NOT FEASIBLE**. 480 deps (194 3rd-party), heavy syscall/js + reflect + net/http usage incompatible with TinyGo. Better: gzip compression (59→24MB), lazy module splitting (see SP-045-dist-splitModules).
-- [ ] SP-045-dist-splitModules: Investigate splitting into small shell-only WASM + larger `embedding.wasm` lazy-load
+- [x] SP-045-dist-splitModules: Investigate splitting into small shell-only WASM + larger `embedding.wasm` lazy-load — **FEASIBLE but complex**. Go WASM lacks dynamic linking; requires 2 separate compiled modules communicating via JS bridge. Shell-only (~5-10MB estimated) vs full (~60MB). Recommend: defer to post-MVP; start with gzip'd full module (~24MB); add shell-only entry point if initial load time is problematic.
 
 ## Partially Done — SP-046: Workspace Sync Model
 

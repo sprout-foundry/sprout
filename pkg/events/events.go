@@ -33,8 +33,9 @@ const (
 	EventTypeToolEnd                 = "tool_end"
 	EventTypeSubagentActivity        = "subagent_activity"
 	EventTypeTodoUpdate              = "todo_update"
-	EventTypeFileChanged             = "file_changed"
-	EventTypeFileContentChanged      = "file_content_changed"
+	EventTypeFileChanged            = "file_changed"
+	EventTypeWorkspacePatch         = "workspace_patch"
+	EventTypeFileContentChanged     = "file_content_changed"
 	EventTypeStreamChunk             = "stream_chunk"
 	EventTypeMetricsUpdate           = "metrics_update"
 	EventTypeValidation              = "validation"
@@ -233,6 +234,17 @@ func FileContentChangedEvent(filePath string, modTime int64, size int64) map[str
 		"file_path": filePath,
 		"mod_time":  modTime,
 		"size":      size,
+	}
+}
+
+// WorkspacePatchEvent creates a workspace_patch event payload for real-time
+// file content synchronization from the agent to the browser.
+func WorkspacePatchEvent(filePath, content, action string, seqNum int64) map[string]interface{} {
+	return map[string]interface{}{
+		"file_path": filePath,
+		"content":   content,
+		"action":    action, // "write", "edit"
+		"seq":       seqNum,
 	}
 }
 

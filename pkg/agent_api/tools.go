@@ -646,6 +646,13 @@ func GetToolDefinitions() []Tool {
 								"type": "string",
 							},
 						},
+						"follow_up": map[string]interface{}{
+							"type":        "array",
+							"description": "List of follow-up messages to inject into the delegate during execution",
+							"items": map[string]interface{}{
+								"type": "string",
+							},
+						},
 					},
 					"required":             []string{"prompt"},
 					"additionalProperties": false,

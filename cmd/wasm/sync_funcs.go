@@ -40,7 +40,7 @@ var (
 )
 
 func syncJSFuncs() map[string]interface{} {
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		"setSyncEndpoint":              js.FuncOf(setSyncEndpointFunc),
 		"getSyncEndpoint":              js.FuncOf(getSyncEndpointFunc),
 		"applyFileMetadata":            js.FuncOf(applyFileMetadataFunc),
@@ -53,6 +53,11 @@ func syncJSFuncs() map[string]interface{} {
 		"getSyncOpQueue":               js.FuncOf(getSyncOpQueueFunc),
 		"handleWorkspacePatchConflict": js.FuncOf(handleWorkspacePatchConflictFunc),
 	}
+	// Include OPFS replica functions.
+	for name, fn := range opfsReplicaJSFuncs() {
+		m[name] = fn
+	}
+	return m
 }
 
 // setSyncEndpointFunc records the WebSocket URL the host page wants the

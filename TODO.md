@@ -70,7 +70,7 @@
 - [x] SP-045-Tier2a-onnxBridge: Implement `syscall/js` bridge for `onnxruntime-web` — detect `globalThis.__sproutONNX`, marshal embed/embedBatch calls
 - [x] SP-045-Tier2b-agent: Plumb `agent` command through WASM (HTTP to LLM providers via Fetch API)
 - [x] SP-045-Tier2b-llmCommands: Plumb `question`, `code`, `commit`, `review`, `plan` commands through WASM
-- [ ] SP-045-Tier2b-apiKeys: Implement WASM credential storage (localStorage / IndexedDB + Web Crypto AES-GCM / host-page injection)
+- [x] SP-045-Tier2b-apiKeys: Implement WASM credential storage (localStorage / IndexedDB + Web Crypto AES-GCM / host-page injection)
 - [ ] SP-045-Tier2b-streaming: Verify `js/wasm` net/http handles SSE streaming end-to-end; adapt provider code for Fetch API streaming
 - [ ] SP-045-Tier2b-cors: Handle provider CORS restrictions; support user-supplied proxy URL
 - [ ] SP-045-Tier2b-toolExec: Route agent loop tool execution through `SproutWasm.executeCommand` JS bridge

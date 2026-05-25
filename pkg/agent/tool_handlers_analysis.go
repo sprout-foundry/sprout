@@ -260,17 +260,18 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 			{Label: "Skip", Value: "no"},
 		}
 
-		a.PrintLine(fmt.Sprintf("\n[*] %s\n", prompt))
+		a.PrintLine("")
+		a.PrintLine(console.GlyphAction.Prefix() + prompt)
 
 		choice, promptErr := a.PromptChoice(prompt, choices)
 		if promptErr != nil {
-			a.PrintLine(fmt.Sprintf("[WARN] Could not prompt for choice: %v", promptErr))
+			a.PrintLine(fmt.Sprintf("%sCould not prompt for choice: %v", console.GlyphWarning.Prefix(), promptErr))
 			return result, fmt.Errorf("prompt choice failed: %w", promptErr)
 		}
 
 		if choice == "yes" {
 			// The simplified PDF processing doesn't require model downloads
-			a.PrintLine("[~] Processing PDF with simplified approach...")
+			a.PrintLine(console.GlyphDim.Prefix() + "Processing PDF with simplified approach...")
 			result, err = tools.AnalyzeImage(imagePath, analysisPrompt, analysisMode)
 		}
 	}

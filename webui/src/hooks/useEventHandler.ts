@@ -319,6 +319,7 @@ export function useEventHandler({
           const subagentType: ToolExecution['subagentType'] =
             eventData?.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
           const toolIndex = typeof eventData?.tool_index === 'number' ? (eventData.tool_index as number) : undefined;
+          const depth = Number(eventData?.subagent_depth ?? 0);
 
           // Check if we already have this tool from a legacy tool_execution event
           const existingIdx = prev.toolExecutions.findIndex((t) => {
@@ -342,6 +343,7 @@ export function useEventHandler({
               subagentType: updated[existingIdx].subagentType || subagentType,
               queryId: updated[existingIdx].queryId ?? prev.queryCount,
               toolIndex: updated[existingIdx].toolIndex ?? toolIndex,
+              depth: updated[existingIdx].depth ?? (depth > 0 ? depth : undefined),
             };
             const messages = [...prev.messages];
             for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -381,6 +383,7 @@ export function useEventHandler({
             subagentType,
             queryId: prev.queryCount,
             toolIndex,
+            depth: depth > 0 ? depth : undefined,
           };
           const messages = [...prev.messages];
           for (let i = messages.length - 1; i >= 0; i -= 1) {

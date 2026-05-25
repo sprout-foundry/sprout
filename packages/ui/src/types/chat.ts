@@ -52,7 +52,10 @@ export interface ToolExecution {
   persona?: string;
   subagentType?: 'single' | 'parallel';
   queryId?: number;
+  /** Index of tool within its query's tool list */
   toolIndex?: number;
+  /** Nesting depth: 0=primary, 1=orchestrator, 2=specialist */
+  depth?: number;
 }
 
 export interface SubagentActivity {

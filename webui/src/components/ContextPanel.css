@@ -85,6 +85,18 @@
   font-size: 11px;
 }
 
+.tool-depth-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  line-height: 16px;
+  color: #fff;
+}
+
 .tool-query-tools {
   /* wrapper for tool cards within an expanded query group */
 }

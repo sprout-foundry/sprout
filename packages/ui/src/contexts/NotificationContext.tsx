@@ -30,7 +30,8 @@ interface AddNotificationPayload {
 type NotificationReducerAction =
   | { type: 'ADD_NOTIFICATION'; payload: AddNotificationPayload }
   | { type: 'REMOVE_NOTIFICATION'; payload: string }
-  | { type: 'CLEAR_NOTIFICATIONS' };
+  | { type: 'CLEAR_NOTIFICATIONS' }
+  | { type: 'MARK_ALL_READ' };
 
 const notificationReducer = (state: NotificationState, action: NotificationReducerAction): NotificationState => {
   switch (action.type) {
@@ -39,6 +40,7 @@ const notificationReducer = (state: NotificationState, action: NotificationReduc
         ...action.payload,
         id: action.payload.id ?? generateUUID(),
         createdAt: Date.now(),
+        read: false,
       };
       return {
         ...state,
@@ -58,6 +60,12 @@ const notificationReducer = (state: NotificationState, action: NotificationReduc
         notifications: [],
       };
 
+    case 'MARK_ALL_READ':
+      return {
+        ...state,
+        notifications: state.notifications.map((n) => ({ ...n, read: true })),
+      };
+
     default:
       return state;
   }
@@ -74,6 +82,7 @@ interface NotificationContextValue {
   ) => string;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
+  markAllRead: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -125,6 +134,10 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
     dispatch({ type: 'CLEAR_NOTIFICATIONS' });
   }, []);
 
+  const markAllRead = useCallback(() => {
+    dispatch({ type: 'MARK_ALL_READ' });
+  }, []);
+
   // Subscribe to external notificationBus events
   useEffect(() => {
     const unsubscribe = notificationBus.onNotification((event: NotificationEvent) => {
@@ -151,6 +164,7 @@ export function NotificationProvider({ children }: NotificationProviderProps): J
     addNotification,
     removeNotification,
     clearNotifications,
+    markAllRead,
   };
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;

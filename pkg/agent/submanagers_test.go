@@ -303,15 +303,18 @@ func TestAgentSecurityManagerBypassApproved(t *testing.T) {
 		t.Error("should not be approved initially")
 	}
 
-	m.SetSecurityBypassApproved()
+	m.AddSessionAllowedFolder("/tmp/audited-folder")
 	if !m.IsSecurityBypassApproved() {
-		t.Error("should be approved after SetSecurityBypassApproved()")
+		t.Error("should be approved after AddSessionAllowedFolder")
 	}
 
-	// Calling again should still be true (idempotent)
-	m.SetSecurityBypassApproved()
+	// Adding the same folder is a no-op (dedup).
+	m.AddSessionAllowedFolder("/tmp/audited-folder")
 	if !m.IsSecurityBypassApproved() {
-		t.Error("should still be approved after second call")
+		t.Error("should still be approved after duplicate add")
+	}
+	if got := len(m.SnapshotSessionAllowedFolders()); got != 1 {
+		t.Errorf("expected 1 folder after duplicate add, got %d", got)
 	}
 }
 

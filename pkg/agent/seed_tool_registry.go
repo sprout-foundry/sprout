@@ -601,6 +601,18 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 
 		isSubagent := agent.IsSubagent()
 
+		// Persistent allowlist: shell commands the user previously chose
+		// "Always approve" for short-circuit BEFORE any prompt UI fires.
+		// Critical-tier ops are evaluated separately in tool_handlers_shell.go
+		// and cannot be allowlisted, so this is safe.
+		if name == "shell_command" {
+			if cmd, ok := args["command"].(string); ok && cmd != "" && agent.IsShellCommandAllowlisted(cmd) {
+				// Mark so Gate 2 also sees it as approved.
+				agent.markShellCommandApproved(cmd)
+				return nil
+			}
+		}
+
 		// WebUI approval path
 		if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
 			if agent.debug {
@@ -610,10 +622,15 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			if secResult.RiskType != "" {
 				extras["risk_type"] = formatRiskType(secResult.RiskType)
 			}
+			var shellCommand string
 			switch name {
 			case "shell_command":
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
 					extras["command"] = cmd
+					shellCommand = cmd
+					// Signal the frontend that this prompt supports the
+					// 4-option dialog (Approve / Deny / Always / Elevate).
+					extras["allow_options"] = "true"
 				}
 			case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 				if path, ok := args["path"].(string); ok && path != "" {
@@ -623,6 +640,15 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 				if op, ok := args["operation"].(string); ok && op != "" {
 					extras["target"] = fmt.Sprintf("git %s", op)
 				}
+			}
+			if name == "shell_command" && shellCommand != "" {
+				decision := mgr.RequestToolApprovalDecision(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras)
+				if !decision.Approved() {
+					return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
+				}
+				agent.applyApprovalDecision(decision, shellCommand)
+				agent.markShellCommandApproved(shellCommand)
+				return nil
 			}
 			if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras) {
 				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
@@ -636,6 +662,22 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
 
 		if canPrompt {
+			// shell_command gets the 4-option dialog so the user can
+			// allowlist or elevate inline. Other tools stay on the
+			// classic yes/no path until the dialog is generalized.
+			if name == "shell_command" {
+				if cmd, ok := args["command"].(string); ok && cmd != "" {
+					prompt := buildSecurityPrompt(name, args, secResult)
+					choice := logger.AskForApprovalWithOptions(prompt, cmd)
+					decision := approvalDecisionFromCLIChoice(choice)
+					if !decision.Approved() {
+						return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
+					}
+					agent.applyApprovalDecision(decision, cmd)
+					agent.markShellCommandApproved(cmd)
+					return nil
+				}
+			}
 			prompt := buildSecurityPrompt(name, args, secResult)
 			if !logger.AskForConfirmation(prompt, false, false) {
 				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)

@@ -94,14 +94,25 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
-	// Risk cascade for personas with auto-approve rules (e.g., Executive Assistant).
-	// High-risk operations (including any -f/--force flag) are auto-rejected.
-	// Medium-risk operations are allowed but the persona's system prompt guides reasoning.
-	// Low-risk operations are auto-approved (no interception needed).
-	if risk := a.EvaluateOperationRisk(command); risk == configuration.RiskLevelHigh {
+	// Risk cascade for personas / risk profiles (SP-058).
+	// Resolution:
+	//   Critical → ALWAYS reject (rm -rf root, fork bomb). No persona,
+	//              profile, or interactive prompt can override this.
+	//   High     → if EA persona: auto-approve (EA reasons via prompt);
+	//              else if interactive: prompt the user;
+	//              else: reject (non-interactive can't ask).
+	//   Medium   → allow; persona system prompt guides reasoning.
+	//   Low      → allow.
+	if risk := a.EvaluateOperationRisk(command); risk == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
-			fmt.Sprintf("high-risk operation rejected by persona risk cascade: %s (command: '%s')", risk, command), nil,
+			fmt.Sprintf("critical operation blocked (cannot be approved by any profile or persona): '%s'", command), nil,
 		)
+	} else if risk == configuration.RiskLevelHigh {
+		if !a.highRiskApprovedForCommand(ctx, command) {
+			return "", agenterrors.NewSecurityError(
+				fmt.Sprintf("high-risk operation rejected by persona risk cascade: %s (command: '%s')", risk, command), nil,
+			)
+		}
 	}
 
 	// Block git checkout/switch commands from shell_command for ALL personas.

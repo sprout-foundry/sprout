@@ -255,24 +255,79 @@ func TestEvaluateOperationRisk_NoPersonaReturnsLow(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// With no active persona, EvaluateOperationRisk should return Low
+	// Clear any auto-activated persona so we exercise the truly
+	// no-persona path (Agent.EvaluateOperationRisk short-circuits to
+	// Low when GetActivePersona returns "").
+	agent.state.SetActivePersona("")
+
+	// With no active persona at all, EvaluateOperationRisk skips
+	// the cascade and returns Low (no gating).
 	risk := agent.EvaluateOperationRisk("rm -rf /tmp")
 	if risk != configuration.RiskLevelLow {
 		t.Errorf("EvaluateOperationRisk with no persona = %q, want %q", risk, configuration.RiskLevelLow)
 	}
 }
 
-func TestEvaluateOperationRisk_PersonaWithoutAutoApproveRulesReturnsLow(t *testing.T) {
+func TestEvaluateOperationRisk_PersonaWithoutAutoApproveRulesAppliesProfile(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Activate a persona that has no AutoApproveRules (e.g., "coder")
+	// Activate a persona that has no AutoApproveRules (e.g., "coder").
 	agent.state.SetActivePersona("coder")
 
-	// Personas without auto-approve rules return Low
+	// SP-058 contract: personas without their own rules now fall
+	// through to the active risk profile (default = EA-style rules).
+	// "rm -rf /tmp" hits rm_recursive in the default profile's
+	// HighRiskNever list and returns High.
 	risk := agent.EvaluateOperationRisk("rm -rf /tmp")
-	if risk != configuration.RiskLevelLow {
-		t.Errorf("EvaluateOperationRisk with persona without rules = %q, want %q", risk, configuration.RiskLevelLow)
+	if risk != configuration.RiskLevelHigh {
+		t.Errorf("EvaluateOperationRisk with rules-less persona + default profile = %q, want %q", risk, configuration.RiskLevelHigh)
+	}
+
+	// And a benign command stays Medium under the default profile.
+	if got := agent.EvaluateOperationRisk("echo hello"); got != configuration.RiskLevelMedium {
+		t.Errorf("EvaluateOperationRisk(\"echo hello\") = %q, want %q", got, configuration.RiskLevelMedium)
+	}
+}
+
+func TestEvaluateOperationRisk_CriticalAlwaysBlocks(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Even with no persona, Critical patterns return Critical.
+	agent.state.SetActivePersona("")
+	if got := agent.EvaluateOperationRisk("rm -rf /"); got != configuration.RiskLevelCritical {
+		t.Errorf("rm -rf / = %q, want %q", got, configuration.RiskLevelCritical)
+	}
+
+	// Unrestricted profile cannot override Critical.
+	agent.SetRiskProfileOverride(configuration.RiskProfileUnrestricted)
+	agent.state.SetActivePersona("coder")
+	if got := agent.EvaluateOperationRisk("rm -rf /"); got != configuration.RiskLevelCritical {
+		t.Errorf("unrestricted+coder rm -rf / = %q, want %q", got, configuration.RiskLevelCritical)
+	}
+}
+
+func TestEvaluateOperationRisk_ProfileOverrideTakesEffect(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+	agent.state.SetActivePersona("coder") // rules-less; falls through to profile
+
+	// Default profile classifies `git push` as Medium.
+	if got := agent.EvaluateOperationRisk("git push origin main"); got != configuration.RiskLevelMedium {
+		t.Errorf("default profile git push = %q, want Medium", got)
+	}
+
+	// Permissive profile classifies `git push` as Low.
+	agent.SetRiskProfileOverride(configuration.RiskProfilePermissive)
+	if got := agent.EvaluateOperationRisk("git push origin main"); got != configuration.RiskLevelLow {
+		t.Errorf("permissive profile git push = %q, want Low", got)
+	}
+
+	// Cautious profile classifies `git push` as High (prompt path).
+	agent.SetRiskProfileOverride(configuration.RiskProfileCautious)
+	if got := agent.EvaluateOperationRisk("git push origin main"); got != configuration.RiskLevelHigh {
+		t.Errorf("cautious profile git push = %q, want High", got)
 	}
 }
 

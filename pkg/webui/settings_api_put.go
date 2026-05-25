@@ -553,6 +553,41 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		}
 		cfg.HistoryScope = s
 	}
+	if v, ok := patch["risk_profile"]; ok {
+		knownKeys["risk_profile"] = true
+		s, _ := v.(string)
+		// Allow empty (= unset → resolves to "default") and any
+		// built-in profile name. User-defined names in
+		// cfg.RiskProfiles are also accepted. Reject names that
+		// match neither so a typo in the dropdown doesn't silently
+		// fall back to default.
+		if s != "" && !configuration.IsValidRiskProfile(s) {
+			if _, ok := cfg.RiskProfiles[s]; !ok {
+				return nil, fmt.Errorf("validate risk_profile: unknown profile %q (built-in: readonly, cautious, default, permissive, unrestricted; or define your own in risk_profiles)", s)
+			}
+		}
+		cfg.RiskProfile = s
+	}
+	if v, ok := patch["risk_profiles"]; ok {
+		knownKeys["risk_profiles"] = true
+		// Accept a map[name]AutoApproveRules. Round-trip via JSON so
+		// we get type-safe decoding without depending on map[string]any
+		// gymnastics for the nested struct. nil clears the override
+		// map and falls back to baked-in defaults for all profiles.
+		if v == nil {
+			cfg.RiskProfiles = nil
+		} else {
+			raw, mErr := json.Marshal(v)
+			if mErr != nil {
+				return nil, fmt.Errorf("validate risk_profiles: encode incoming value: %w", mErr)
+			}
+			var decoded map[string]configuration.AutoApproveRules
+			if uErr := json.Unmarshal(raw, &decoded); uErr != nil {
+				return nil, fmt.Errorf("validate risk_profiles: %w", uErr)
+			}
+			cfg.RiskProfiles = decoded
+		}
+	}
 	if v, ok := patch["self_review_gate_mode"]; ok {
 		knownKeys["self_review_gate_mode"] = true
 		s, _ := v.(string)

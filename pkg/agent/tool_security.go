@@ -207,7 +207,10 @@ func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult
 	}
 
 	sb.WriteString(fmt.Sprintf("Reasoning: %s\n\n", secResult.Reasoning))
-	sb.WriteString("Do you want to proceed? (yes/no): ")
+	// Trailing question only — AskForConfirmation appends the
+	// "[y/N]" hint itself. Including "(yes/no):" here used to
+	// produce "...(yes/no):  [y/N]:" (duplicate suffix).
+	sb.WriteString("Do you want to proceed?")
 
 	return sb.String()
 }
@@ -292,7 +295,9 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	canPrompt := logger != nil && logger.IsInteractive()
 
 	if canPrompt {
-		prompt := fmt.Sprintf("[WARN] Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this? (yes/no): ", toolName, filePath)
+		// AskForConfirmation appends the "[y/N]" hint; the body
+		// ends with the question only.
+		prompt := fmt.Sprintf("⚠  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this?", toolName, filePath)
 		if logger.AskForConfirmation(prompt, false, false) {
 			agent.debugLog("[APPROVAL] User approved file access outside working directory: %s\n", filePath)
 			agent.SetSecurityBypassApproved()

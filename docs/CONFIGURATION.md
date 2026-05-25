@@ -126,6 +126,23 @@ Separate provider/model configuration for subagents. Leave empty to use the main
 
 PDF analysis settings for OCR processing. When enabled, uses the specified provider and model for PDF text extraction.
 
+#### `risk_profile` and `risk_profiles`
+
+Selects the shell-command risk cascade preset and (optionally) customizes its rules. See [`docs/SECURITY.md#risk-profiles`](SECURITY.md#risk-profiles) for the full table of profiles, behavior, and override format.
+
+Short version:
+
+```json
+{
+  "risk_profile": "default",
+  "risk_profiles": {
+    "default": { "low_risk": [...], "medium_risk": [...], "high_risk_never": [...], "default_risk": "medium" }
+  }
+}
+```
+
+Five built-in profiles: `readonly`, `cautious`, `default`, `permissive`, `unrestricted`. Override any of them, or add your own named profile. CLI flag `--risk-profile` and workflow JSON `risk_profile` field both override this value per-session / per-step.
+
 ## Zsh Command Detection
 
 When using zsh as your shell, `sprout` automatically detects commands available in your environment (external commands, builtins, aliases, and functions) and executes them directly instead of sending them to the AI. This feature is **enabled by default** when using zsh.

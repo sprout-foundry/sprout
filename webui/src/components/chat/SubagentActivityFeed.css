@@ -339,3 +339,32 @@
   color: var(--text-primary, #e2e8f0);
   font-family: var(--font-mono, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace);
 }
+
+/* ── View Toggle (Flat / Tree) ─────────────────────────────────────── */
+
+.subagent-feed-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--border-color, #334155);
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-left: 6px;
+}
+
+.subagent-feed-view-toggle:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-primary, #e2e8f0);
+}
+
+.subagent-feed-view-toggle--active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  border-color: rgba(99, 102, 241, 0.3);
+}

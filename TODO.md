@@ -232,22 +232,22 @@
 
 ## Not Started — SP-025: Tree-Sitter Integration
 
-- [ ] SP-025-P1-deps: Add `odvcencio/gotreesitter` to go.mod
-- [ ] SP-025-P1-parser: Create `pkg/ast/parser.go` — `ParseFile(path, content) (*ASTResult, error)`
-- [ ] SP-025-P1-grammarBlobs: Pre-compile grammar blobs for Go, TypeScript, JavaScript, Python
-- [ ] SP-025-P1-symbols: Create `pkg/ast/symbols.go` — walk AST, extract top-level symbols with line numbers, scopes, kinds
-- [ ] SP-025-P1-cache: Create `pkg/ast/cache.go` — grammar blob caching
-- [ ] SP-025-P1-tests: Test parsing Go, TS, JS, Python; verify symbol names, line numbers, scopes
-- [ ] SP-025-P1-wasmBuild: Verify `GOOS=js GOARCH=wasm go build ./cmd/wasm/` still works
-- [ ] SP-025-P2-repoMap: Update `repo_map.go` to use `pkg/ast` for Go, TS, JS, Python
+- [x] SP-025-P1-deps: Add `odvcencio/gotreesitter` to go.mod
+- [x] SP-025-P1-parser: Create `pkg/ast/parser.go` — `ParseFile(path, content) (*ASTResult, error)`
+- [x] SP-025-P1-grammarBlobs: Pre-compile grammar blobs for Go, TypeScript, JavaScript, Python
+- [x] SP-025-P1-symbols: Create `pkg/ast/symbols.go` — walk AST, extract top-level symbols with line numbers, scopes, kinds
+- [x] SP-025-P1-cache: Create `pkg/ast/cache.go` — grammar blob caching
+- [x] SP-025-P1-tests: Test parsing Go, TS, JS, Python; verify symbol names, line numbers, scopes
+- [x] SP-025-P1-wasmBuild: Verify `GOOS=js GOARCH=wasm go build ./cmd/wasm/` still works
+- [x] SP-025-P2-repoMap: Update `repo_map.go` to use `pkg/ast` for Go, TS, JS, Python
 - [ ] SP-025-P2-removeRegex: Remove regex patterns from repo_map.go
-- [ ] SP-025-P2-tests: Update repo map tests with AST-derived expected line numbers
-- [ ] SP-025-P3-symbolIndex: Update `pkg/index/symbols.go` to use `pkg/ast` for all supported languages
-- [ ] SP-025-P4-wasmVerify: Ensure `pkg/ast` compiles for GOOS=js GOARCH=wasm
-- [ ] SP-025-P4-grammarCacheWasm: Implement grammar blob caching for WASM browser storage
+- [x] SP-025-P2-tests: Update repo map tests with AST-derived expected line numbers
+- [x] SP-025-P3-symbolIndex: Update `pkg/index/symbols.go` to use `pkg/ast` for all supported languages
+- [x] SP-025-P4-wasmVerify: Ensure `pkg/ast` compiles for GOOS=js GOARCH=wasm
+- [x] SP-025-P4-grammarCacheWasm: Implement grammar blob caching for WASM browser storage
 - [ ] SP-025-P4-wasmShell: Add `pkg/ast` to WASM shell for code intelligence features
 - [ ] SP-025-P4-sizeCheck: Verify WASM binary size impact; set acceptable threshold
-- [ ] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
+- [x] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
 - [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)
 
 ## Not Started — SP-049: Shell Permission Overhaul

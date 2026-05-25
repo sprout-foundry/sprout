@@ -1,0 +1,188 @@
+/* ── SubagentTree ──────────────────────────────────────────────────── */
+
+.subagent-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+/* ── Tree Node ─────────────────────────────────────────────────────── */
+
+.subagent-tree-node {
+  position: relative;
+}
+
+.subagent-tree-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary, #e2e8f0);
+  text-align: left;
+  border-radius: 4px;
+  border-left: 3px solid var(--st-color, #6366f1);
+  transition: background 0.15s ease;
+}
+
+.subagent-tree-node-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.subagent-tree-node-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.subagent-tree-node-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Chevron ───────────────────────────────────────────────────────── */
+
+.subagent-tree-chevron {
+  color: var(--text-secondary, #94a3b8);
+  flex-shrink: 0;
+}
+
+.subagent-tree-chevron-placeholder {
+  width: 13px;
+  display: inline-block;
+}
+
+/* ── Status Icons ──────────────────────────────────────────────────── */
+
+.subagent-tree-spinner {
+  color: var(--st-color, #6366f1);
+  animation: subagent-tree-spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes subagent-tree-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.subagent-tree-status-ok {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+.subagent-tree-status-error {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+/* ── Persona ───────────────────────────────────────────────────────── */
+
+.subagent-tree-persona-icon {
+  color: var(--st-persona-color, #6366f1);
+  flex-shrink: 0;
+}
+
+.subagent-tree-persona {
+  font-weight: 600;
+  color: var(--st-persona-color, #6366f1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* ── Badges ─────────────────────────────────────────────────────────── */
+
+.subagent-tree-depth-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #a855f7;
+  white-space: nowrap;
+}
+
+.subagent-tree-parallel-badge {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  white-space: nowrap;
+}
+
+/* ── Metrics ────────────────────────────────────────────────────────── */
+
+.subagent-tree-duration {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.subagent-tree-metric {
+  color: var(--text-secondary, #94a3b8);
+}
+
+/* ── Completion Message ─────────────────────────────────────────────── */
+
+.subagent-tree-completion-msg {
+  padding: 2px 8px 4px 37px;
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Children Container with Connector ─────────────────────────────── */
+
+.subagent-tree-children {
+  position: relative;
+  margin-left: 16px;
+  padding-left: 12px;
+}
+
+.subagent-tree-connector {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border-color, #334155);
+  border-radius: 1px;
+}
+
+/* ── Depth-based color overrides via data-depth ────────────────────── */
+
+.subagent-tree-node[data-depth="0"] > .subagent-tree-node-header {
+  border-left-color: var(--subagent-depth-0, #6366f1);
+}
+
+.subagent-tree-node[data-depth="1"] > .subagent-tree-node-header {
+  border-left-color: var(--subagent-depth-1, #8b5cf6);
+}
+
+.subagent-tree-node[data-depth="2"] > .subagent-tree-node-header {
+  border-left-color: var(--subagent-depth-2, #a855f7);
+}
+
+.subagent-tree-node[data-depth="3"] > .subagent-tree-node-header {
+  border-left-color: var(--subagent-depth-3, #c084fc);
+}
+
+/* ── Active (running) node highlight ───────────────────────────────── */
+
+.subagent-tree-node[data-running="true"] > .subagent-tree-node-header {
+  background: rgba(99, 102, 241, 0.04);
+}

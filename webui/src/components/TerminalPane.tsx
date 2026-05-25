@@ -357,6 +357,11 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
           <div ref={xtermContainerRef} className="terminal-xterm" />
           {!wasmActive && <ReverseSearchOverlay query={reverseSearchQuery} visible={reverseSearchVisible} />}
         </div>
+        {isExited && (
+          <div className="terminal-status-inline terminal-status-inline--exited">
+            Session ended.
+          </div>
+        )}
         {!paneConnected && !wasmActive && !wasmLoading && (
           <div className="terminal-status-inline">
             <TriangleAlert size={14} className="inline-block mr-1 align-text-bottom" />

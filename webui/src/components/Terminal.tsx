@@ -470,7 +470,7 @@ function Terminal({
     [updatePane],
   );
 
-  const handleProcessExit = useCallback(
+  const handlePaneExit = useCallback(
     (paneId: string, sessionId: string) => {
       const pane = panesRef.current.find((p) => p.id === paneId);
       if (!pane) return;
@@ -481,17 +481,32 @@ function Terminal({
       }
 
       const isSecondaryPane = panesRef.current.length > 1 && panesRef.current[1]?.id === paneId;
+      const isOnlyTwoPanes = panesRef.current.length === 2;
 
+      // Case 1: Multi-session pane — close the specific tab
       if (pane.sessions.length > 1) {
         closeSessionInPane(paneId, sessionId);
         notificationBus.notify('info', 'Terminal', 'Terminal process exited — session closed.');
         return;
       }
 
+      // Clean up the exited session's resources
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
 
+      // Case 2: Single-session secondary pane with only 2 panes — auto-close the split
+      if (isSecondaryPane && isOnlyTwoPanes) {
+        // Remove the secondary pane entirely
+        setPanes((prev) => prev.filter((p) => p.id !== paneId));
+        splitDirectionRef.current = 'none';
+        setSplitDirection('none');
+        setFocusedPaneId(panesRef.current[0].id);
+        notificationBus.notify('info', 'Terminal', 'Split pane closed after process exited.');
+        return;
+      }
+
+      // Case 3: Single-session pane — auto-restart with a fresh session
       const sessionNum2 = sessionCounterRef.current++;
       const newSessionId = `session-${sessionNum2}`;
       const newSession: TerminalSession = {
@@ -936,7 +951,7 @@ function Terminal({
                         reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
                         fontSize={fontSize}
                         copyOnSelect={copyOnSelect}
-                        onProcessExit={() => handleProcessExit(pane.id, session.id)}
+                        onProcessExit={() => handlePaneExit(pane.id, session.id)}
                       />
                     </div>
                   );

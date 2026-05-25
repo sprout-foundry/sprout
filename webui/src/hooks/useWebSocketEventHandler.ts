@@ -258,6 +258,8 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
     .toLowerCase();
   const completedResponse = data.response;
   const wasClearCommand = completedQuery === '/clear';
+  const tokensUsed = typeof data.tokens_used === 'number' ? data.tokens_used : undefined;
+  const cost = typeof data.cost === 'number' ? data.cost : undefined;
 
   setState((prev) => {
     let nextMessages = wasClearCommand
@@ -278,6 +280,18 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
         lastMsg.content === lastMsg.reasoning
       ) {
         nextMessages = [...nextMessages.slice(0, -1), { ...lastMsg, reasoning: undefined }];
+      }
+    }
+
+    // SP-053-perTurnCost: annotate last assistant message with per-turn cost
+    if (!wasClearCommand && (tokensUsed != null || cost != null) && nextMessages.length > 0) {
+      const lastIdx = nextMessages.length - 1;
+      const lastMsg = nextMessages[lastIdx] as Message;
+      if (lastMsg.type === 'assistant') {
+        const annotated: Message = { ...lastMsg };
+        if (tokensUsed != null) annotated.tokensUsed = tokensUsed;
+        if (cost != null) annotated.cost = cost;
+        nextMessages = [...nextMessages.slice(0, -1), annotated];
       }
     }
 

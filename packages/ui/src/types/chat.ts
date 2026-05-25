@@ -37,6 +37,21 @@ export interface Message {
    * primary agent (no indent).
    */
   subagentDepth?: number;
+  /**
+   * SP-053-perTurnCost: tokens consumed for this turn (input + output).
+   * Populated from query_completed event. Only shown for assistant messages.
+   */
+  tokensUsed?: number;
+  /**
+   * SP-053-perTurnCost: cost in dollars for this turn.
+   * Populated from query_completed event. Only shown for assistant messages.
+   */
+  cost?: number;
+  /**
+   * SP-053-perTurnCost: model used for this turn (e.g. "gpt-4o").
+   * Populated from query_completed or metrics_update event.
+   */
+  model?: string;
 }
 
 export interface ToolExecution {

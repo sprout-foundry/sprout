@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,6 +173,25 @@ func isWithinWorkspace(path, workspaceRoot string) bool {
 		return true
 	}
 	return !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".."
+}
+
+// allowExternalAccessForRequest reports whether the request can touch
+// `canonicalPath` even though it's outside the workspace. Returns true
+// only when the active chat agent has the path on its session folder
+// allowlist (set via the filesystem approval dialog). Callers should
+// use this AFTER isWithinWorkspace returns false but BEFORE writing
+// the "path outside workspace" error response — it's the bridge that
+// lets file_ops / list_directory / etc. honor the same allowlist as
+// the agent's read_file/write_file tools.
+func (ws *ReactWebServer) allowExternalAccessForRequest(r *http.Request, canonicalPath string) bool {
+	if canonicalPath == "" {
+		return false
+	}
+	a := ws.getActiveAgentForRequest(r)
+	if a == nil {
+		return false
+	}
+	return a.IsFolderSessionAllowed(canonicalPath)
 }
 
 // isAppConfigPath returns true if the path is inside the sprout configuration

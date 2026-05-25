@@ -171,7 +171,7 @@
 
 - [ ] SP-012-U0-inlineBadges: Implement inline tool call badges in assistant messages — `display: inline-flex`, 11px font, click opens tool in context sidebar
 - [ ] SP-012-U1.1-notificationCenter: Create `NotificationCenter.tsx` — history panel with bell icon in StatusBar, dismiss individual/all, copy message
-- [ ] SP-012-U1.1-markAllRead: Add `markAllRead()` method to notification bus
+- [x] SP-012-U1.1-markAllRead: Add `markAllRead()` method to notification bus
 - [ ] SP-012-U1.1-statusBarBell: Add bell icon with unread count badge to `StatusBar.tsx`
 - [x] SP-012-U1.2-reducedMotion: Add `@media (prefers-reduced-motion: reduce)` CSS block — force zero animation/transition duration
 - [x] SP-012-U1.3-fileTreeARIA: Add `role="treeitem"` and `aria-expanded` to FileTree items
@@ -186,7 +186,7 @@
 - [ ] SP-012-U2.3-responsiveCSS: Add tablet (768-1024px) and mobile (<768px) responsive breakpoints — icons-only sidebar, vertical stacking
 - [ ] SP-012-U2.3-touchGestures: Add swipe left/right to toggle sidebar on mobile
 - [ ] SP-012-U2.4-skeletons: Create skeleton placeholder components for FileTree, Chat history, Editor, Settings panel loading states
-- [ ] SP-012-U2.5-panelAnimation: Add `transition: width 200ms, opacity 150ms` to sidebar collapse, context panel resize, terminal toggle
+- [x] SP-012-U2.5-panelAnimation: Add `transition: width 200ms, opacity 150ms` to sidebar collapse, context panel resize, terminal toggle
 
 ## Not Started — SP-013: Agent Settings Management Tool
 

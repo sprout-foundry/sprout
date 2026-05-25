@@ -50,8 +50,13 @@ func (ws *ReactWebServer) handleAPIFileCheckModified(w http.ResponseWriter, r *h
 			continue // skip unresolvable paths
 		}
 
-		// Only check files within the workspace (or app config paths).
-		if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
+		// Only check files within the workspace, the app config dir,
+		// or a folder the user has approved for this session. Without
+		// the allowlist check, a user with an external file open in
+		// the editor would never receive change notifications for it.
+		if !isWithinWorkspace(canonicalPath, workspaceRoot) &&
+			!isAppConfigPath(canonicalPath) &&
+			!ws.allowExternalAccessForRequest(r, canonicalPath) {
 			continue
 		}
 

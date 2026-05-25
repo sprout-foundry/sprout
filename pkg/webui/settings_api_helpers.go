@@ -20,6 +20,74 @@ import (
 const maxSettingsBodyBytes = 2 << 20 // 2 MiB
 
 // ---------------------------------------------------------------------------
+// Auto-truncation limits for settings string values
+// ---------------------------------------------------------------------------
+//
+// When the frontend (or any API client) sends a settings value that exceeds
+// the corresponding limit below, the server silently truncates it rather than
+// rejecting the request.  This prevents accidentally saving megabytes of text
+// into the config file (e.g. pasting a whole file into the system-prompt
+// textarea) while keeping the UX smooth — the user's edit is accepted; only
+// the tail is dropped.
+
+const (
+	// maxSettingEnumLength applies to fields that hold a small set of
+	// predefined values (reasoning_effort, history_scope, etc.).
+	maxSettingEnumLength = 64
+
+	// maxSettingNameLength applies to identifiers and short labels
+	// (provider name, model id, skill id/name).
+	maxSettingNameLength = 256
+
+	// maxSettingPathLength applies to filesystem paths.
+	maxSettingPathLength = 4096
+
+	// maxSettingPromptLength applies to large free-text fields such as
+	// system_prompt_text.
+	maxSettingPromptLength = 100_000
+
+	// maxSettingDescriptionLength applies to medium free-text fields
+	// (skill description, persona description).
+	maxSettingDescriptionLength = 10_000
+
+	// maxSettingURLLength applies to URLs and endpoint strings.
+	maxSettingURLLength = 4096
+
+	// maxSettingCommandLength applies to shell command strings.
+	maxSettingCommandLength = 4096
+
+	// maxSettingArgLength applies to individual CLI arguments.
+	maxSettingArgLength = 4096
+
+	// maxSettingGenericLength is the fallback for any string field that
+	// doesn't have a more specific limit.
+	maxSettingGenericLength = 1000
+
+	// truncationEllipsis is appended when a value is truncated so that
+	// the user (and logs) can see the cut happened.
+	truncationEllipsis = "\n...[truncated]"
+)
+
+// truncateString clips s to maxLen characters.  If truncation occurs the
+// returned string ends with truncationEllipsis (which is counted toward
+// maxLen so the result is always ≤ maxLen runes).
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	// Work in runes to avoid breaking multi-byte characters.
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	ell := []rune(truncationEllipsis)
+	if maxLen <= len(ell) {
+		return string(runes[:maxLen])
+	}
+	return string(runes[:maxLen-len(ell)]) + truncationEllipsis
+}
+
+// ---------------------------------------------------------------------------
 // Validation sets
 // ---------------------------------------------------------------------------
 
@@ -268,4 +336,99 @@ func asInt(v interface{}) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Auto-truncation for config structs
+// ---------------------------------------------------------------------------
+
+// truncateConfigStrings applies per-field truncation limits to every string
+// field on cfg that could originate from user input.  The function mutates
+// cfg in place and returns it for convenience.
+func truncateConfigStrings(cfg *configuration.Config) *configuration.Config {
+	// --- Top-level scalar strings ---
+	cfg.ReasoningEffort = truncateString(cfg.ReasoningEffort, maxSettingEnumLength)
+	cfg.HistoryScope = truncateString(cfg.HistoryScope, maxSettingEnumLength)
+	cfg.SelfReviewGateMode = truncateString(cfg.SelfReviewGateMode, maxSettingEnumLength)
+	cfg.ResourceDirectory = truncateString(cfg.ResourceDirectory, maxSettingPathLength)
+	cfg.SystemPromptText = truncateString(cfg.SystemPromptText, maxSettingPromptLength)
+	cfg.LastUsedProvider = truncateString(cfg.LastUsedProvider, maxSettingNameLength)
+	cfg.SubagentProvider = truncateString(cfg.SubagentProvider, maxSettingNameLength)
+	cfg.SubagentModel = truncateString(cfg.SubagentModel, maxSettingNameLength)
+	cfg.CommitProvider = truncateString(cfg.CommitProvider, maxSettingNameLength)
+	cfg.CommitModel = truncateString(cfg.CommitModel, maxSettingNameLength)
+
+	// --- Custom providers ---
+	for i, p := range cfg.CustomProviders {
+		cfg.CustomProviders[i] = truncateCustomProvider(p)
+	}
+
+	// --- Subagent types ---
+	for name, st := range cfg.SubagentTypes {
+		st.Provider = truncateString(st.Provider, maxSettingNameLength)
+		st.Model = truncateString(st.Model, maxSettingNameLength)
+		st.SystemPrompt = truncateString(st.SystemPrompt, maxSettingPathLength)
+		st.SystemPromptText = truncateString(st.SystemPromptText, maxSettingPromptLength)
+		st.SystemPromptAppend = truncateString(st.SystemPromptAppend, maxSettingPromptLength)
+		st.Name = truncateString(st.Name, maxSettingNameLength)
+		st.Description = truncateString(st.Description, maxSettingDescriptionLength)
+		for i, a := range st.AllowedTools {
+			st.AllowedTools[i] = truncateString(a, maxSettingNameLength)
+		}
+		for i, a := range st.Aliases {
+			st.Aliases[i] = truncateString(a, maxSettingNameLength)
+		}
+		cfg.SubagentTypes[name] = st
+	}
+
+	// --- MCP ---
+	truncateMCPConfig(&cfg.MCP)
+
+	return cfg
+}
+
+// truncateCustomProvider truncates string fields of a CustomProviderConfig.
+func truncateCustomProvider(p configuration.CustomProviderConfig) configuration.CustomProviderConfig {
+	p.Name = truncateString(p.Name, maxSettingNameLength)
+	p.Endpoint = truncateString(p.Endpoint, maxSettingURLLength)
+	p.EnvVar = truncateString(p.EnvVar, maxSettingNameLength)
+	p.ModelName = truncateString(p.ModelName, maxSettingNameLength)
+	p.ReasoningEffort = truncateString(p.ReasoningEffort, maxSettingEnumLength)
+	p.VisionModel = truncateString(p.VisionModel, maxSettingNameLength)
+	p.VisionFallbackProvider = truncateString(p.VisionFallbackProvider, maxSettingNameLength)
+	p.VisionFallbackModel = truncateString(p.VisionFallbackModel, maxSettingNameLength)
+	for i, m := range p.ToolCalls {
+		p.ToolCalls[i] = truncateString(m, maxSettingNameLength)
+	}
+	return p
+}
+
+// truncateMCPConfig truncates string fields of MCP server configs.
+func truncateMCPConfig(mc *mcp.MCPConfig) {
+	for name, srv := range mc.Servers {
+		srv.Name = truncateString(srv.Name, maxSettingNameLength)
+		srv.Command = truncateString(srv.Command, maxSettingCommandLength)
+		srv.URL = truncateString(srv.URL, maxSettingURLLength)
+		srv.WorkingDir = truncateString(srv.WorkingDir, maxSettingPathLength)
+		for i, a := range srv.Args {
+			srv.Args[i] = truncateString(a, maxSettingArgLength)
+		}
+		for k, v := range srv.Env {
+			srv.Env[k] = truncateString(v, maxSettingGenericLength)
+		}
+		mc.Servers[name] = srv
+	}
+}
+
+// truncateSkill truncates string fields of a Skill.
+func truncateSkill(s configuration.Skill) configuration.Skill {
+	s.ID = truncateString(s.ID, maxSettingNameLength)
+	s.Name = truncateString(s.Name, maxSettingNameLength)
+	s.Description = truncateString(s.Description, maxSettingDescriptionLength)
+	s.Path = truncateString(s.Path, maxSettingPathLength)
+	s.AllowedTools = truncateString(s.AllowedTools, maxSettingGenericLength)
+	for k, v := range s.Metadata {
+		s.Metadata[k] = truncateString(v, maxSettingGenericLength)
+	}
+	return s
 }

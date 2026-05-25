@@ -273,6 +273,19 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 		cs.ConfigOverrides = make(map[string]interface{})
 	}
 	for k, v := range incoming {
+		// Auto-truncate string values before storing
+		if s, ok := v.(string); ok {
+			switch k {
+			case "provider", "model", "subagent_provider", "subagent_model":
+				v = truncateString(s, maxSettingNameLength)
+			case "reasoning_effort":
+				v = truncateString(s, maxSettingEnumLength)
+			case "system_prompt_text":
+				v = truncateString(s, maxSettingPromptLength)
+			default:
+				v = truncateString(s, maxSettingGenericLength)
+			}
+		}
 		if v == nil || v == "" || v == 0 || v == false {
 			delete(cs.ConfigOverrides, k)
 		} else {
@@ -507,6 +520,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["reasoning_effort"]; ok {
 		knownKeys["reasoning_effort"] = true
 		s, _ := v.(string)
+		s = truncateString(s, maxSettingEnumLength)
 		if err := validateReasoningEffort(s); err != nil {
 			return nil, fmt.Errorf("validate reasoning_effort: %w", err)
 		}
@@ -515,7 +529,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["system_prompt_text"]; ok {
 		knownKeys["system_prompt_text"] = true
 		s, _ := v.(string)
-		cfg.SystemPromptText = s
+		cfg.SystemPromptText = truncateString(s, maxSettingPromptLength)
 	}
 	if v, ok := patch["skip_prompt"]; ok {
 		knownKeys["skip_prompt"] = true
@@ -528,11 +542,12 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["resource_directory"]; ok {
 		knownKeys["resource_directory"] = true
 		s, _ := v.(string)
-		cfg.ResourceDirectory = s
+		cfg.ResourceDirectory = truncateString(s, maxSettingPathLength)
 	}
 	if v, ok := patch["history_scope"]; ok {
 		knownKeys["history_scope"] = true
 		s, _ := v.(string)
+		s = truncateString(s, maxSettingEnumLength)
 		if err := validateHistoryScope(s); err != nil {
 			return nil, fmt.Errorf("validate history_scope: %w", err)
 		}
@@ -541,6 +556,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["self_review_gate_mode"]; ok {
 		knownKeys["self_review_gate_mode"] = true
 		s, _ := v.(string)
+		s = truncateString(s, maxSettingEnumLength)
 		if err := validateSelfReviewGateMode(s); err != nil {
 			return nil, fmt.Errorf("validate self_review_gate_mode: %w", err)
 		}
@@ -549,12 +565,12 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["subagent_provider"]; ok {
 		knownKeys["subagent_provider"] = true
 		s, _ := v.(string)
-		cfg.SubagentProvider = s
+		cfg.SubagentProvider = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["subagent_model"]; ok {
 		knownKeys["subagent_model"] = true
 		s, _ := v.(string)
-		cfg.SubagentModel = s
+		cfg.SubagentModel = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["subagent_max_parallel"]; ok {
 		knownKeys["subagent_max_parallel"] = true
@@ -573,22 +589,22 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["commit_provider"]; ok {
 		knownKeys["commit_provider"] = true
 		s, _ := v.(string)
-		cfg.CommitProvider = s
+		cfg.CommitProvider = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["commit_model"]; ok {
 		knownKeys["commit_model"] = true
 		s, _ := v.(string)
-		cfg.CommitModel = s
+		cfg.CommitModel = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["review_provider"]; ok {
 		knownKeys["review_provider"] = true
 		s, _ := v.(string)
-		cfg.ReviewProvider = s
+		cfg.ReviewProvider = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["review_model"]; ok {
 		knownKeys["review_model"] = true
 		s, _ := v.(string)
-		cfg.ReviewModel = s
+		cfg.ReviewModel = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["pdf_ocr_enabled"]; ok {
 		knownKeys["pdf_ocr_enabled"] = true
@@ -597,12 +613,12 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	if v, ok := patch["pdf_ocr_provider"]; ok {
 		knownKeys["pdf_ocr_provider"] = true
 		s, _ := v.(string)
-		cfg.PDFOCRProvider = s
+		cfg.PDFOCRProvider = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["pdf_ocr_model"]; ok {
 		knownKeys["pdf_ocr_model"] = true
 		s, _ := v.(string)
-		cfg.PDFOCRModel = s
+		cfg.PDFOCRModel = truncateString(s, maxSettingNameLength)
 	}
 	if v, ok := patch["enable_zsh_command_detection"]; ok {
 		knownKeys["enable_zsh_command_detection"] = true
@@ -673,7 +689,8 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		if m, ok := v.(map[string]interface{}); ok {
 			pm := make(map[string]string, len(m))
 			for k, val := range m {
-				pm[k], _ = val.(string)
+				s, _ := val.(string)
+				pm[truncateString(k, maxSettingNameLength)] = truncateString(s, maxSettingNameLength)
 			}
 			cfg.ProviderModels = pm
 		}
@@ -684,7 +701,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			pp := make([]string, 0, len(arr))
 			for _, item := range arr {
 				if s, ok := item.(string); ok {
-					pp = append(pp, s)
+					pp = append(pp, truncateString(s, maxSettingNameLength))
 				}
 			}
 			cfg.ProviderPriority = pp
@@ -694,13 +711,15 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 	// Version
 	if v, ok := patch["version"]; ok {
 		knownKeys["version"] = true
-		cfg.Version, _ = v.(string)
+		s, _ := v.(string)
+		cfg.Version = truncateString(s, maxSettingGenericLength)
 	}
 
 	// LastUsedProvider
 	if v, ok := patch["last_used_provider"]; ok {
 		knownKeys["last_used_provider"] = true
-		cfg.LastUsedProvider, _ = v.(string)
+		s, _ := v.(string)
+		cfg.LastUsedProvider = truncateString(s, maxSettingNameLength)
 	}
 
 	// MCP — complex struct, use JSON marshal/unmarshal
@@ -714,6 +733,7 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		if err := json.Unmarshal(raw, &mcpCfg); err != nil {
 			return nil, fmt.Errorf("invalid mcp config: %w", err)
 		}
+		truncateMCPConfig(&mcpCfg)
 		cfg.MCP = mcpCfg
 	}
 
@@ -727,6 +747,9 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		var providers map[string]configuration.CustomProviderConfig
 		if err := json.Unmarshal(raw, &providers); err != nil {
 			return nil, fmt.Errorf("invalid custom_providers config: %w", err)
+		}
+		for i, p := range providers {
+			providers[i] = truncateCustomProvider(p)
 		}
 		cfg.CustomProviders = providers
 	}
@@ -742,6 +765,11 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		if err := json.Unmarshal(raw, &ei); err != nil {
 			return nil, fmt.Errorf("invalid embedding_index config: %w", err)
 		}
+		for i, p := range ei.ExcludePaths {
+			ei.ExcludePaths[i] = truncateString(p, maxSettingPathLength)
+		}
+		ei.Provider = truncateString(ei.Provider, maxSettingNameLength)
+		ei.IndexDir = truncateString(ei.IndexDir, maxSettingPathLength)
 		cfg.EmbeddingIndex = &ei
 	}
 
@@ -756,6 +784,22 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		if err := json.Unmarshal(raw, &types); err != nil {
 			return nil, fmt.Errorf("invalid subagent_types config: %w", err)
 		}
+		for name, st := range types {
+			st.Provider = truncateString(st.Provider, maxSettingNameLength)
+			st.Model = truncateString(st.Model, maxSettingNameLength)
+			st.SystemPrompt = truncateString(st.SystemPrompt, maxSettingPathLength)
+			st.SystemPromptText = truncateString(st.SystemPromptText, maxSettingPromptLength)
+			st.SystemPromptAppend = truncateString(st.SystemPromptAppend, maxSettingPromptLength)
+			st.Name = truncateString(st.Name, maxSettingNameLength)
+			st.Description = truncateString(st.Description, maxSettingDescriptionLength)
+			for i, a := range st.AllowedTools {
+				st.AllowedTools[i] = truncateString(a, maxSettingNameLength)
+			}
+			for i, a := range st.Aliases {
+				st.Aliases[i] = truncateString(a, maxSettingNameLength)
+			}
+			types[name] = st
+		}
 		cfg.SubagentTypes = types
 	}
 
@@ -769,6 +813,9 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		var skills map[string]configuration.Skill
 		if err := json.Unmarshal(raw, &skills); err != nil {
 			return nil, fmt.Errorf("invalid skills config: %w", err)
+		}
+		for name, s := range skills {
+			skills[name] = truncateSkill(s)
 		}
 		cfg.Skills = skills
 	}

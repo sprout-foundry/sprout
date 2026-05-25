@@ -99,7 +99,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesPut(w http.ResponseWrite
 				return fmt.Errorf("provider must be a string")
 			}
 			// Empty string means "inherit from default subagent settings"
-			existing.Provider = strings.TrimSpace(s)
+			existing.Provider = truncateString(strings.TrimSpace(s), maxSettingNameLength)
 		}
 		if v, ok := raw["model"]; ok {
 			s, ok := v.(string)
@@ -107,7 +107,7 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesPut(w http.ResponseWrite
 				return fmt.Errorf("model must be a string")
 			}
 			// Empty string means "inherit from default subagent settings"
-			existing.Model = strings.TrimSpace(s)
+			existing.Model = truncateString(strings.TrimSpace(s), maxSettingNameLength)
 		}
 		cfg.SubagentTypes[name] = existing
 		return nil

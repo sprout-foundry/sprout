@@ -74,6 +74,9 @@ func (ws *ReactWebServer) handleAPISettingsSkillsPut(w http.ResponseWriter, r *h
 
 		// Apply full skill entries
 		for id, skill := range incoming.Skills {
+			// Auto-truncate skill fields that exceed backend limits.
+			skill = truncateSkill(skill)
+			skill.ID = id
 			existing, exists := cfg.Skills[id]
 			if exists {
 				// Preserve existing metadata that wasn't provided

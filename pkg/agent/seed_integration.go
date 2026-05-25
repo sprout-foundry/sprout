@@ -537,7 +537,20 @@ func wrapError(err error) string {
 		msg = matches[1]
 	}
 
-	// Check for various error types and generate user-friendly messages
+	// Use typed error classification first, then fall back to string matching
+	// for errors that aren't AgentError types (backward compat bridge).
+	if agenterrors.IsProviderError(err) {
+		return fmt.Sprintf("Authentication failed: %s. Please check your API key and configuration.", msg)
+	}
+	if agenterrors.IsRateLimited(err) {
+		return fmt.Sprintf("Rate limit exceeded: %s. Please wait before making more requests.", msg)
+	}
+	if agenterrors.IsTransient(err) {
+		return fmt.Sprintf("The AI service encountered a temporary error and could not recover after several attempts: %s", msg)
+	}
+
+	// Fallback: string matching for errors that aren't typed AgentErrors.
+	// This maintains backward compatibility with legacy error sources.
 	if strings.Contains(msg, "authentication") || strings.Contains(msg, "invalid API key") || strings.Contains(msg, "unauthorized") {
 		return fmt.Sprintf("Authentication failed: %s. Please check your API key and configuration.", msg)
 	}
@@ -558,6 +571,12 @@ func wrapError(err error) string {
 // ---------------------------------------------------------------------------
 // Integration entry point
 // ---------------------------------------------------------------------------
+
+// injectInputMsg carries a user-steer message from the forwarder goroutine
+// into the injector goroutine in processQueryWithSeed.
+type injectInputMsg struct {
+	content string
+}
 
 // processQueryWithSeed runs the conversation loop through seed's core.Agent
 // instead of sprout's native ConversationHandler.
@@ -765,9 +784,12 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// briefly sleep before retrying so we don't lose the user's steer to
 	// a transient collision with seed's own consumer.
 	runCtx, runCancel := context.WithCancel(ctx)
+	injectChan := make(chan injectInputMsg, 8)
 	steerDone := make(chan struct{})
+
+	// Forwarder: reads from sprout's input channel and sends to injectChan
 	go func() {
-		defer close(steerDone)
+		defer close(injectChan)
 		ch := a.GetInputInjectionContext()
 		for {
 			select {
@@ -777,13 +799,24 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 				if !ok {
 					return
 				}
-				for !seedAgent.InjectInput(msg) {
-					select {
-					case <-runCtx.Done():
-						return
-					case <-time.After(25 * time.Millisecond):
-						// retry
-					}
+				select {
+				case injectChan <- injectInputMsg{content: msg}:
+				case <-runCtx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	// Injector: reads from injectChan and applies to seed agent
+	go func() {
+		defer close(steerDone)
+		for msg := range injectChan {
+			for !seedAgent.InjectInput(msg.content) {
+				select {
+				case <-runCtx.Done():
+					return
+				case <-time.After(25 * time.Millisecond):
 				}
 			}
 		}

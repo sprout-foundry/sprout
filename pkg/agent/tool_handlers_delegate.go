@@ -186,15 +186,39 @@ func parseDelegateConfig(args map[string]interface{}) (DelegateConfig, error) {
 
 const followUpInjectionDelay = 500 * time.Millisecond
 
-// runDelegateQuery runs the delegate agent's query and collects results
+// followUpCommand carries a single follow-up message from the scheduling
+// goroutine to the injection goroutine so that all direct method calls on
+// delegate and bridge happen in one goroutine (no shared-object access from
+// the scheduler goroutine).
+type followUpCommand struct {
+	message string
+}
+
+// runDelegateQuery runs the delegate agent's query and collects results.
 func runDelegateQuery(ctx context.Context, delegate *Agent, prompt string, bridge *DelegateStreamBridge, cfg *DelegateConfig) (string, error) {
-	// Start a goroutine to inject follow-up messages while the delegate is processing.
-	// This must be started before ProcessQuery so messages are injected during execution.
+	// Create a feedback channel for follow-up injection commands.
+	feedbackChan := make(chan followUpCommand, len(cfg.FollowUpMessages))
+
+	// Track when the scheduler goroutine exits so we don't close feedbackChan
+	// prematurely and cause a "send on closed channel" panic.
+	schedulerDone := make(chan struct{})
+
+	// schedulerStop signals the scheduler to stop when ProcessQuery returns.
+	// Without this, if ProcessQuery returns early (before all follow-up
+	// messages are scheduled), the scheduler can deadlock: it tries to send
+	// on feedbackChan which is full (injector hasn't consumed yet), the
+	// injector is blocked in range waiting for more or close, and nobody
+	// can proceed. Closing schedulerStop breaks this cycle.
+	schedulerStop := make(chan struct{})
+
 	if len(cfg.FollowUpMessages) > 0 {
 		go func() {
+			defer close(schedulerDone)
 			for i, msg := range cfg.FollowUpMessages {
 				select {
 				case <-ctx.Done():
+					return
+				case <-schedulerStop:
 					return
 				default:
 				}
@@ -202,22 +226,67 @@ func runDelegateQuery(ctx context.Context, delegate *Agent, prompt string, bridg
 					select {
 					case <-ctx.Done():
 						return
+					case <-schedulerStop:
+						return
 					case <-time.After(followUpInjectionDelay):
 					}
 				}
-				if err := delegate.InjectInputContext(msg); err != nil {
-					// Log the error and continue — don't fail the whole delegate.
-					delegate.PrintLineAsync(fmt.Sprintf("[warn] Failed to inject follow-up message: %v", err))
-					continue
+				select {
+				case feedbackChan <- followUpCommand{message: msg}:
+				case <-ctx.Done():
+					return
+				case <-schedulerStop:
+					return
 				}
-				bridge.RecordFollowUpInjection(msg)
 			}
 		}()
+	} else {
+		close(schedulerDone)
 	}
+
+	// Process follow-up commands from the channel and inject them into the
+	// delegate. This keeps all direct method calls on delegate and bridge in
+	// a single goroutine instead of the scheduler goroutine above.
+	followUpDone := make(chan struct{})
+	go func() {
+		defer close(followUpDone)
+		for cmd := range feedbackChan {
+			if err := delegate.InjectInputContext(cmd.message); err != nil {
+				delegate.PrintLineAsync(fmt.Sprintf("[warn] Failed to inject follow-up message: %v", err))
+				continue
+			}
+			bridge.RecordFollowUpInjection(cmd.message)
+		}
+	}()
 
 	// Use the delegate agent's ProcessQuery method to run the prompt.
 	// ProcessQuery handles the full agent loop (tool calls, iterations, etc.)
 	response, err := delegate.ProcessQuery(prompt)
+
+	// Wait for the scheduler to finish sending all follow-up messages.
+	// In the normal case, the scheduler exits on its own after scheduling
+	// all messages. If a deadlock occurs (e.g., the injector stalls and
+	// the channel fills), schedulerStop provides a safety valve to break
+	// the cycle after a timeout. With the channel sized to
+	// len(FollowUpMessages), the scheduler can always send without
+	// blocking, so the timeout should never fire in practice.
+	if len(cfg.FollowUpMessages) > 0 {
+		// Max time for the scheduler to finish: (N-1) delays of
+		// followUpInjectionDelay plus a 1s safety margin.
+		maxWait := time.Duration(len(cfg.FollowUpMessages)-1) * followUpInjectionDelay + time.Second
+		select {
+		case <-schedulerDone:
+			// Scheduler exited normally.
+		case <-time.After(maxWait):
+			// Safety valve: force the scheduler to stop to prevent deadlock.
+			close(schedulerStop)
+			<-schedulerDone
+		}
+	}
+	// If no follow-up messages, schedulerDone is already closed above.
+	close(feedbackChan)
+	<-followUpDone
+
 	if err != nil {
 		return "", err
 	}

@@ -44,6 +44,7 @@ var (
 	agentNoConnectionCheck     bool
 	agentTraceDatasetDir       string
 	agentPromptStdin           bool
+	agentRiskProfile           string
 )
 
 // runStartupPermissionCheck performs a security check on config file permissions
@@ -145,6 +146,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSessionID, "session-id", "", "Resume a specific session ID in the current working directory scope")
 	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
 	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, code_reviewer, researcher, web_scraper)")
+	agentCmd.Flags().StringVar(&agentRiskProfile, "risk-profile", "", "Shell-command risk cascade profile: readonly | cautious | default | permissive | unrestricted. Overrides config.risk_profile for this session. Persona-defined rules still win.")
 	agentCmd.Flags().StringVar(&agentEAMode, "ea-mode", "", "Executive Assistant startup mode: 'interactive' (default) or 'queue' (autonomous task processing)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "Maximum iterations per prompt before stopping (default: 0 = unlimited)")
@@ -306,6 +308,28 @@ Examples:
 
 		// Set unsafe mode if flag is provided
 		chatAgent.SetUnsafeMode(agentUnsafe)
+
+		// Apply --risk-profile flag (SP-058). Accepts either a
+		// built-in profile name OR a user-defined name from
+		// config.risk_profiles. Empty string preserves the config
+		// setting; unrecognized names (no built-in AND no override)
+		// are warned about but still set — the resolver will fall
+		// back to the Default profile when it can't find rules.
+		if agentRiskProfile != "" {
+			cfg := chatAgent.GetConfig()
+			_, hasUserOverride := func() (configuration.AutoApproveRules, bool) {
+				if cfg == nil || cfg.RiskProfiles == nil {
+					return configuration.AutoApproveRules{}, false
+				}
+				v, ok := cfg.RiskProfiles[agentRiskProfile]
+				return v, ok
+			}()
+			if configuration.IsValidRiskProfile(agentRiskProfile) || hasUserOverride {
+				chatAgent.SetRiskProfileOverride(configuration.RiskProfile(agentRiskProfile))
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: unknown --risk-profile %q. Built-in: readonly, cautious, default, permissive, unrestricted. Define custom profiles in config.risk_profiles. Falling back to default for this session.\n", agentRiskProfile)
+			}
+		}
 
 		// Disable subagents if flag is set
 		if agentNoSubagents {

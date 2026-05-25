@@ -96,6 +96,37 @@ sprout shell "backup all .go files to a timestamped archive"
 sprout log
 ```
 
+## Permissions & Risk Profiles
+
+Before sprout runs a shell command it consults a **risk cascade** that decides whether to run, prompt, or block. The cascade is driven by a named profile — five ship out of the box, you can override any of them in config:
+
+| Profile | Effect | Use when |
+|---|---|---|
+| `readonly` | Only reads (`git status/log/diff`, `read_file`). Everything else is **blocked outright** (no prompt). | Audits, code review, untrusted agents. |
+| `cautious` | Reads auto-approve. Everything else prompts you. | Sensitive workspaces. |
+| `default` | Reads + common edits auto-approve. Destructive ops (force flags, `rm -rf`, lossy git) prompt. | Daily driver. ← *the default* |
+| `permissive` | Almost everything auto-approves; only force-flagged or recursive-destructive patterns prompt. | High-trust agents in recoverable workspaces. |
+| `unrestricted` | Nothing prompts. Only catastrophic patterns (rm-rf-root, fork bombs) block. | Sandboxed runs. |
+
+```bash
+# Pick a profile for one session
+sprout agent --risk-profile=cautious "review this PR"
+sprout agent --risk-profile=permissive "rebuild the integration tests"
+
+# Or set a persistent default in ~/.config/sprout/config.json
+{ "risk_profile": "default" }
+
+# Or override profile rules entirely — see docs/SECURITY.md#risk-profiles
+{
+  "risk_profile": "default",
+  "risk_profiles": {
+    "default": { "low_risk": [...], "high_risk_never": [...], "default_risk": "medium" }
+  }
+}
+```
+
+When the active persona spawns subagents (e.g. EA delegating to `coder`), the subagent's high-risk prompts auto-approve under the root's authority — you set the policy once and orchestration runs without prompts piling up. Catastrophic patterns (`rm -rf /`, fork bombs) stay blocked at every depth regardless of profile. **Full reference: [docs/SECURITY.md#risk-profiles](docs/SECURITY.md#risk-profiles).**
+
 ## Documentation
 
 | Document | Description |

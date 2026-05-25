@@ -5,6 +5,8 @@ export type {
   Message,
   ToolExecution,
   SubagentActivity,
+  DelegateToolCallInfo,
+  DelegateActivity,
   LogEntry,
   TodoStatus,
   TodoItem,

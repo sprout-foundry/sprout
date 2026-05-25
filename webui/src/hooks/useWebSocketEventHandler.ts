@@ -517,9 +517,26 @@ function handleDelegateActivity(ctx: EventHandlerContext): void {
         action: data.action,
         summary: data.summary ?? current.summary,
         depth: data.depth ?? current.depth,
+        // Backend sends cumulative totals only in "completed" events;
+        // intermediate events omit these fields. Use ?? to preserve previous value.
         tokensUsed: data.tokens_used ?? current.tokensUsed,
         cost: data.cost ?? current.cost,
-        toolsCalled: toolsCalled.length > 0 ? [...current.toolsCalled, ...toolsCalled] : current.toolsCalled,
+        toolsCalled: toolsCalled.length > 0
+          ? (() => {
+              const merged = [...current.toolsCalled];
+              for (const tc of toolsCalled) {
+                const dupIdx = merged.findIndex(
+                  (e) => e.tool_name === tc.tool_name && e.timestamp === tc.timestamp,
+                );
+                if (dupIdx >= 0) {
+                  merged[dupIdx] = { ...merged[dupIdx], ...tc };
+                } else {
+                  merged.push(tc);
+                }
+              }
+              return merged;
+            })()
+          : current.toolsCalled,
         status: status === 'running' ? current.status : status,
       };
     } else {
@@ -538,7 +555,7 @@ function handleDelegateActivity(ctx: EventHandlerContext): void {
       ];
     }
 
-    return { delegateActivities: updated };
+    return { delegateActivities: updated.slice(-500) };
   });
 }
 

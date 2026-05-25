@@ -32,6 +32,17 @@ vi.mock('../extensions/languageRegistry', () => {
 
 vi.mock('lucide-react', () => ({
   GitBranch: (props: any) => <svg data-testid="git-branch-icon" {...props} />,
+  FolderOpen: (props: any) => <svg data-testid="folder-open-icon" {...props} />,
+}));
+
+vi.mock('../contexts/NotificationContext', () => ({
+  NotificationProvider: ({ children }: { children: React.ReactNode }) => children,
+  useNotifications: () => ({
+    notifications: [] as Array<{ id: string; read: boolean; message: string }>,
+    addNotification: () => {},
+    removeNotification: () => {},
+    clearNotifications: () => {},
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -355,5 +366,81 @@ describe('StatusBar', () => {
     });
 
     expect(getByText(container, 'Tabs: 4')).toBeTruthy();
+  });
+
+  // ---- 18. Workspace indicator ----
+  describe('Workspace indicator', () => {
+    test('renders workspace indicator when workspacePath is provided', async () => {
+      await act(async () => {
+        root.render(<StatusBar workspacePath="/home/user/myproject" />);
+      });
+
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('myproject');
+    });
+
+    test('does not render workspace indicator without workspacePath', async () => {
+      await act(async () => {
+        root.render(<StatusBar />);
+      });
+
+      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+
+      await act(async () => {
+        root.render(<StatusBar workspacePath="" />);
+      });
+
+      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+    });
+
+    test('extracts basename from path with trailing slash', async () => {
+      await act(async () => {
+        root.render(<StatusBar workspacePath="/home/user/myproject/" />);
+      });
+
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('myproject');
+    });
+
+    test('does not render for root path', async () => {
+      await act(async () => {
+        root.render(<StatusBar workspacePath="/" />);
+      });
+
+      expect(container.querySelector('.statusbar-item-workspace')).toBeNull();
+    });
+
+    test('calls onWorkspaceClick when clicked', async () => {
+      const handleClick = vi.fn();
+
+      await act(async () => {
+        root.render(
+          <StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />,
+        );
+      });
+
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator).toBeTruthy();
+
+      await act(async () => {
+        indicator?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(handleClick).toHaveBeenCalledTimes(1);
+    });
+
+    test('has proper accessibility attributes', async () => {
+      await act(async () => {
+        root.render(<StatusBar workspacePath="/home/user/myproject" />);
+      });
+
+      const indicator = container.querySelector('.statusbar-item-workspace');
+      expect(indicator).toBeTruthy();
+      expect(indicator?.getAttribute('role')).toBe('button');
+      expect(indicator?.getAttribute('title')).toContain('/home/user/myproject');
+      expect(indicator?.getAttribute('aria-label')).toContain('myproject');
+    });
   });
 });

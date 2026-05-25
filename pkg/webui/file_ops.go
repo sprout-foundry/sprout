@@ -66,7 +66,7 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, workspaceRoot) {
+	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -183,7 +183,7 @@ func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(canonicalPath, workspaceRoot) {
+	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalPath) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -273,7 +273,10 @@ func (ws *ReactWebServer) handleAPIRenameItem(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if !isWithinWorkspace(oldCanonicalPath, workspaceRoot) || !isWithinWorkspace(newCanonicalPath, workspaceRoot) {
+	oldExternal := !isWithinWorkspace(oldCanonicalPath, workspaceRoot)
+	newExternal := !isWithinWorkspace(newCanonicalPath, workspaceRoot)
+	if (oldExternal && !ws.allowExternalAccessForRequest(r, oldCanonicalPath)) ||
+		(newExternal && !ws.allowExternalAccessForRequest(r, newCanonicalPath)) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{

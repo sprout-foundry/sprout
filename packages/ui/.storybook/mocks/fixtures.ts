@@ -248,6 +248,7 @@ export const mockNotifications: NotificationData[] = [
     message: 'This is an informational notification.',
     createdAt: Date.now() - 5000,
     duration: 5000,
+    read: false,
   },
   {
     id: '2',
@@ -256,6 +257,7 @@ export const mockNotifications: NotificationData[] = [
     message: 'Your changes have been saved successfully.',
     createdAt: Date.now() - 10000,
     duration: 4000,
+    read: false,
   },
   {
     id: '3',
@@ -264,6 +266,7 @@ export const mockNotifications: NotificationData[] = [
     message: 'You have unsaved changes that may be lost.',
     createdAt: Date.now() - 15000,
     duration: 6000,
+    read: false,
   },
   {
     id: '4',
@@ -272,6 +275,7 @@ export const mockNotifications: NotificationData[] = [
     message: 'Failed to save file. Please try again.',
     createdAt: Date.now() - 20000,
     duration: 8000,
+    read: false,
   },
 ];
 
@@ -286,6 +290,7 @@ export const singleInfoNotification: NotificationData[] = [
     message: 'This is an informational notification.',
     createdAt: Date.now(),
     duration: 5000,
+    read: false,
   },
 ];
 
@@ -297,6 +302,7 @@ export const singleSuccessNotification: NotificationData[] = [
     message: 'Your changes have been saved successfully.',
     createdAt: Date.now(),
     duration: 4000,
+    read: false,
   },
 ];
 
@@ -308,6 +314,7 @@ export const singleWarningNotification: NotificationData[] = [
     message: 'You have unsaved changes that may be lost.',
     createdAt: Date.now(),
     duration: 6000,
+    read: false,
   },
 ];
 
@@ -319,6 +326,7 @@ export const singleErrorNotification: NotificationData[] = [
     message: 'Failed to save file. Please try again.',
     createdAt: Date.now(),
     duration: 8000,
+    read: false,
   },
 ];
 

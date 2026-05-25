@@ -257,7 +257,7 @@
 - [x] SP-049-approvals: Implement tiered approval: Safe=auto, Caution=auto-with-log, Danger=user-prompt, Custom=user-configurable threshold
 - [x] SP-049-ui-visual: Visual risk indicators in tool call rendering (green/yellow/red)
 - [x] SP-049-workspacePolicy: Per-workspace security policies (`.sprout/security-policy.json`)
-- [ ] SP-049-auditLog: Audit log of all security decisions (`~/.sprout/audit.log`)
+- [x] SP-049-auditLog: Audit log of all security decisions (`~/.sprout/audit.log`)
 
 ## Not Started — SP-050: Orchestrator Persona Collapse
 

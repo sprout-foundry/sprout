@@ -273,7 +273,7 @@
 
 - [x] SP-051-depthIndicator: Add visual depth indicator to `SubagentActivityFeed` — show nesting depth next to each entry
 - [x] SP-051-treeView: Implement tree/nested view for subagent activity — parent-child grouping, collapsible nesting levels
-- [ ] SP-051-resourceUsage: Display per-depth-level resource usage: tokens consumed, time elapsed, cost
+- [x] SP-051-resourceUsage: Display per-depth-level resource usage: tokens consumed, time elapsed, cost
 - [ ] SP-051-contextSidebar: Add depth information to tool execution entries in context sidebar
 - [ ] SP-051-subagentTreeComponent: Create `SubagentTree` component showing hierarchical relationship
 - [ ] SP-051-statusIcons: Different status icons/colors for different depth levels
@@ -282,7 +282,7 @@
 
 - [ ] SP-053-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. Verify `pgrep` returns empty within 15s
 - [ ] SP-053-perTurnCost: Show per-turn cost line in WebUI after each assistant turn
-- [ ] SP-053-modelInPrompt: Show active model name in WebUI chat input area or status bar
+- [x] SP-053-modelInPrompt: Show active model name in WebUI chat input area or status bar
 - [ ] SP-053-NO_COLOR: Add `NO_COLOR` support for programmatic WebUI output consumption
 
 ## Not Started — SP-054: LSP Language Coverage Expansion

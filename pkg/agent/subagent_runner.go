@@ -706,6 +706,18 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		agent.rootPersonaID = r.parentAgent.rootPersonaID
 	}
 
+	// SP-058: propagate the active risk-profile override so the user's
+	// session-level --risk-profile (or per-step workflow override)
+	// continues to apply inside subagents. Without this the subagent
+	// would fall back to the config-level setting and a user who set
+	// --risk-profile=readonly would find subagents running under the
+	// config default instead — silently bypassing their intent. The
+	// readonly profile's DefaultRisk=Critical still blocks subagent
+	// writes (Critical is checked before the IsSubagent auto-approve),
+	// so this propagation is what makes readonly actually readonly
+	// during delegation.
+	agent.riskProfileOverride = r.parentAgent.riskProfileOverride
+
 	// SP-051: tag every event this subagent publishes with depth + persona
 	// so the CLI tool-timeline can indent and color-badge by who's running.
 	// Merge (not replace) so parent-set chat/client/user routing keys still

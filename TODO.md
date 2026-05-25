@@ -230,7 +230,7 @@
 - [x] SP-022-W2.5-welcomeTab: Show workspace picker in `WelcomeTab.tsx` when no workspace detected
 - [x] SP-022-W2.6-workspaceApi: Add new API calls in `workspaceApi.ts` and types in `types.ts`
 
-## Not Started — SP-025: Tree-Sitter Integration
+## Mostly Complete — SP-025: Tree-Sitter Integration
 
 - [x] SP-025-P1-deps: Add `odvcencio/gotreesitter` to go.mod
 - [x] SP-025-P1-parser: Create `pkg/ast/parser.go` — `ParseFile(path, content) (*ASTResult, error)`
@@ -250,7 +250,7 @@
 - [x] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
 - [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)
 
-## Not Started — SP-049: Shell Permission Overhaul
+## Completed — SP-049: Shell Permission Overhaul
 
 - [x] SP-049-riskCategories: Define granular risk categories beyond Safe/Caution/Dangerous: read-only, file-write, network, process-management, destructive, privileged
 - [x] SP-049-allowlist: Implement user-configurable tool allow-list (`allowed_tools` per persona/workspace)
@@ -285,7 +285,7 @@
 - [x] SP-053-modelInPrompt: Show active model name in WebUI chat input area or status bar
 - [x] SP-053-NO_COLOR: Add `NO_COLOR` support for programmatic WebUI output consumption
 
-## Not Started — SP-054: LSP Language Coverage Expansion
+## Completed — SP-054: LSP Language Coverage Expansion
 
 - [x] SP-054-1.1: Add `LanguageServerConfig` entries for Python, Rust, C/C++, C#, Java, Ruby, PHP, Swift, Kotlin, Dart, Lua, Shell to `DefaultLanguageServers()`
 - [x] SP-054-1.2: Add all new language IDs to `LSP_SUPPORTED_LANGUAGES` in `lspClientService.ts`

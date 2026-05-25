@@ -5,6 +5,7 @@ import { useState, useMemo } from 'react';
 import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';
 import './SubagentActivityFeed.css';
+import { SubagentTree } from './SubagentTree';
 
 // SP-053-1a: getPersonaColor + PERSONA_COLORS now live in @sprout/ui so the
 // chat-bubble badges, the tool timeline, and this activity feed all read
@@ -145,6 +146,8 @@ interface SubagentActivityFeedProps {
 export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps): JSX.Element | null {
   const [visible, setVisible] = useState(true);
 
+  const [viewMode, setViewMode] = useState<'flat' | 'tree'>('flat');
+
   const runs = useMemo(() => groupSubagentRuns(activities), [activities]);
 
   const activeRuns = useMemo(() => runs.filter((r) => !r.isComplete), [runs]);
@@ -169,6 +172,15 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
               {activeRuns.length === 1 ? '1 active' : `${activeRuns.length} active`}
             </span>
           )}
+          <span
+            className={`subagent-feed-view-toggle ${viewMode === 'tree' ? 'subagent-feed-view-toggle--active' : ''}`}
+            onClick={(e) => { e.stopPropagation(); setViewMode((v) => v === 'flat' ? 'tree' : 'flat'); }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setViewMode((v) => v === 'flat' ? 'tree' : 'flat'); } }}
+          >
+            {viewMode === 'flat' ? 'Tree' : 'List'}
+          </span>
         </span>
         <span className="subagent-feed-toggle-right">
           {visible ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -177,12 +189,18 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
 
       {visible && (
         <div className="subagent-feed-body">
-          {activeRuns.map((run) => (
-            <ActiveSubagentCard key={run.toolCallId} run={run} />
-          ))}
-          {completedRuns.map((run) => (
-            <CompletedSubagentCard key={run.toolCallId} run={run} />
-          ))}
+          {viewMode === 'tree' ? (
+            <SubagentTree runs={runs} />
+          ) : (
+            <>
+              {activeRuns.map((run) => (
+                <ActiveSubagentCard key={run.toolCallId} run={run} />
+              ))}
+              {completedRuns.map((run) => (
+                <CompletedSubagentCard key={run.toolCallId} run={run} />
+              ))}
+            </>
+          )}
 
           {/* Total resource summary */}
           {(() => {

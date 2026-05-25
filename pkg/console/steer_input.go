@@ -106,6 +106,14 @@ type SteerInputReader struct {
 	// starts navigating history so they can Down-arrow back to what
 	// they were typing. Nil when not navigating.
 	pendingBuffer []byte
+
+	// pasteActive is true while we are between a bracketed-paste
+	// start (ESC [ 200~) and end (ESC [ 201~). All bytes in that
+	// window go straight into pasteBuf, bypassing the normal
+	// keystroke dispatch — Enter inside a paste shouldn't submit,
+	// for example. SP-057 follow-up: rich paste in steer.
+	pasteActive bool
+	pasteBuf    []byte
 }
 
 // SteerHistoryCap bounds the in-memory steer history to a sensible
@@ -191,6 +199,13 @@ func (r *SteerInputReader) Start() {
 	}
 	r.oldState = st
 
+	// Enable bracketed paste so multi-line / large pastes arrive as
+	// a single ESC [ 200~ ... ESC [ 201~ wrapped chunk that we can
+	// accumulate verbatim instead of dispatching each byte through
+	// the normal keystroke handlers. Stop() emits the matching
+	// disable sequence.
+	fmt.Fprint(os.Stderr, bracketedPasteEnable)
+
 	r.renderLine()
 	go r.readLoop(stopCh, doneCh)
 }
@@ -225,6 +240,10 @@ func (r *SteerInputReader) Stop() {
 	if doneCh != nil {
 		<-doneCh
 	}
+	// Disable bracketed paste before restoring termios so the
+	// terminal returns to its prior paste mode (some apps run
+	// without bracketed paste enabled).
+	fmt.Fprint(os.Stderr, bracketedPasteDisable)
 	if oldState != nil {
 		_ = exitSteerMode(r.fd, oldState)
 	}
@@ -282,6 +301,26 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 		}
 
 		b := buf[0]
+
+		// While a bracketed paste is in flight, ALL bytes go into
+		// pasteBuf verbatim — including newlines and what would
+		// otherwise be control characters. The only escape is the
+		// "ESC [ 201~" terminator, which we detect inline.
+		r.mu.Lock()
+		inPaste := r.pasteActive
+		r.mu.Unlock()
+		if inPaste {
+			if b == 0x1B {
+				// Likely the start of the paste-end sequence
+				// (ESC [ 201~). Let the escape handler peek at
+				// the follow-up bytes to confirm.
+				r.handleEscapeOrSequence()
+				continue
+			}
+			r.appendPasteByte(b)
+			continue
+		}
+
 		switch {
 		case b == 0x03: // Ctrl+C
 			r.handleInterrupt()

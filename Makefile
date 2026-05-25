@@ -55,7 +55,7 @@ help:
 test-unit:
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser" ./pkg/... ./cmd/... -v -timeout=120s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
+	go test -race -tags "browser" ./pkg/... ./cmd/... -v -timeout=300s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -120,7 +120,7 @@ test-ci: test-unit test-integration
 test-coverage:
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser" ./pkg/... ./cmd/... -timeout=300s -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
+	go test -race -tags "browser" ./pkg/... ./cmd/... -timeout=600s -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

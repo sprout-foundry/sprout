@@ -5,6 +5,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // SubagentConfigCommand implements the /subagent-provider and /subagent-model commands
@@ -50,17 +51,17 @@ func (s *SubagentConfigCommand) showStatus(config *configuration.Config) error {
 	provider := config.GetSubagentProvider()
 	model := config.GetSubagentModel()
 
-	fmt.Println("\n[tool] Subagent Configuration:")
-	fmt.Println("========================")
-	fmt.Printf("[pkg] **Provider**: %s\n", formatValue(provider))
-	fmt.Printf("[bot] **Model**: %s\n", formatValue(model))
 	fmt.Println()
-	fmt.Println("[i] Usage:")
+	console.GlyphInfo.Print("Subagent Configuration:")
+	fmt.Printf("Provider: %s\n", formatValue(provider))
+	fmt.Printf("Model:    %s\n", formatValue(model))
+	fmt.Println()
+	console.GlyphInfo.Print("Usage:")
 	fmt.Println("  /subagent-provider <provider>  - Set subagent provider")
 	fmt.Println("  /subagent-model <model>        - Set subagent model")
 	fmt.Println()
-	fmt.Println("[i] Subagents will use these settings instead of the parent agent's configuration.")
-	fmt.Println("[i] Leave empty to use the parent agent's provider/model.")
+	console.GlyphInfo.Print("Subagents will use these settings instead of the parent agent's configuration.")
+	console.GlyphInfo.Print("Leave empty to use the parent agent's provider/model.")
 	return nil
 }
 
@@ -77,8 +78,9 @@ func (s *SubagentConfigCommand) setProvider(provider string, configManager *conf
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n[OK] Subagent provider set to: %s\n", provider)
-	fmt.Println("[i] Subagents will now use this provider for all executions.")
+	fmt.Println()
+	console.GlyphSuccess.Printf("Subagent provider set to: %s", provider)
+	console.GlyphInfo.Print("Subagents will now use this provider for all executions.")
 	return nil
 }
 
@@ -91,8 +93,9 @@ func (s *SubagentConfigCommand) setModel(model string, configManager *configurat
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n[OK] Subagent model set to: %s\n", model)
-	fmt.Println("[i] Subagents will now use this model for all executions.")
+	fmt.Println()
+	console.GlyphSuccess.Printf("Subagent model set to: %s", model)
+	console.GlyphInfo.Print("Subagents will now use this model for all executions.")
 	return nil
 }
 

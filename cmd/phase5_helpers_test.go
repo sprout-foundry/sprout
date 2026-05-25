@@ -150,7 +150,7 @@ func TestFormatTurnStatsLine_Color(t *testing.T) {
 	// With color enabled (default): should contain ANSI dim codes.
 	os.Unsetenv("NO_COLOR")
 	os.Unsetenv("FORCE_COLOR")
-	out := formatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond)
+	out := formatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond, 0)
 	if !strings.Contains(out, "\033[2m") {
 		t.Errorf("with color, expected ANSI dim code in output: %q", out)
 	}
@@ -169,12 +169,56 @@ func TestFormatTurnStatsLine_Color(t *testing.T) {
 
 	// With color disabled: no ANSI codes.
 	os.Setenv("NO_COLOR", "1")
-	out = formatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond)
+	out = formatTurnStatsLine(1200, 4800, 0.04, 6*time.Second+100*time.Millisecond, 0)
 	if strings.Contains(out, "\033[2m") || strings.Contains(out, "\033[0m") {
 		t.Errorf("without color, no ANSI codes expected: %q", out)
 	}
 	if !strings.Contains(out, "1.2k in / 4.8k out") {
 		t.Errorf("expected token summary in output: %q", out)
+	}
+}
+
+// Time-to-first-token tests.
+
+func TestFormatTurnStatsLine_TTFT_Hidden_WhenZero(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	out := formatTurnStatsLine(100, 200, 0.01, 1*time.Second, 0)
+	if strings.Contains(out, "ttft") {
+		t.Errorf("zero ttft should not render segment, got %q", out)
+	}
+}
+
+func TestFormatTurnStatsLine_TTFT_Shown_WhenNonZero(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	out := formatTurnStatsLine(100, 200, 0.01, 2*time.Second, 800*time.Millisecond)
+	if !strings.Contains(out, "ttft 800ms") {
+		t.Errorf("expected 'ttft 800ms' segment, got %q", out)
+	}
+}
+
+func TestFormatTurnStatsLine_TTFT_YellowAbove2s(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	out := formatTurnStatsLine(100, 200, 0.01, 3*time.Second, 3*time.Second)
+	if !strings.Contains(out, "\033[33m") {
+		t.Errorf("ttft >2s should render yellow; got %q", out)
+	}
+}
+
+func TestFormatTurnStatsLine_TTFT_RedAbove5s(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	out := formatTurnStatsLine(100, 200, 0.01, 6*time.Second, 6*time.Second)
+	if !strings.Contains(out, "\033[31m") {
+		t.Errorf("ttft >5s should render red; got %q", out)
+	}
+}
+
+func TestFormatTurnStatsLine_TTFT_NoColorWhenDisabled(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	out := formatTurnStatsLine(100, 200, 0.01, 6*time.Second, 6*time.Second)
+	if strings.Contains(out, "\033[31m") || strings.Contains(out, "\033[33m") {
+		t.Errorf("NO_COLOR should suppress threshold colors; got %q", out)
 	}
 }
 
@@ -185,19 +229,19 @@ func TestFormatTurnStatsLine_Durations(t *testing.T) {
 	os.Setenv("NO_COLOR", "1") // strip ANSI for easier assertions
 
 	// Sub-second
-	out := formatTurnStatsLine(100, 200, 0.0023, 450*time.Millisecond)
+	out := formatTurnStatsLine(100, 200, 0.0023, 450*time.Millisecond, 0)
 	if !strings.Contains(out, "450ms") {
 		t.Errorf("expected '450ms' in %q", out)
 	}
 
 	// Seconds
-	out = formatTurnStatsLine(50, 60, 0.001, 3*time.Second)
+	out = formatTurnStatsLine(50, 60, 0.001, 3*time.Second, 0)
 	if !strings.Contains(out, "3.0s") {
 		t.Errorf("expected '3.0s' in %q", out)
 	}
 
 	// Minutes
-	out = formatTurnStatsLine(500, 600, 0.12, 1*time.Minute+30*time.Second)
+	out = formatTurnStatsLine(500, 600, 0.12, 1*time.Minute+30*time.Second, 0)
 	if !strings.Contains(out, "1m30s") {
 		t.Errorf("expected '1m30s' in %q", out)
 	}
@@ -211,14 +255,14 @@ func TestFormatTurnStatsLine_EdgeCases(t *testing.T) {
 
 	// Zero deltas still produce output (the caller is responsible for
 	// filtering out zero-token turns).
-	out := formatTurnStatsLine(0, 0, 0, 0)
+	out := formatTurnStatsLine(0, 0, 0, 0, 0)
 	if !strings.Contains(out, "0 in / 0 out") {
 		t.Errorf("expected zero stats in %q", out)
 	}
 
 	// Negative cost (shouldn't happen, but formatTurnStatsLine delegates
 	// to compactCost which clamps to $0.00).
-	out = formatTurnStatsLine(100, 200, -0.5, 2*time.Second)
+	out = formatTurnStatsLine(100, 200, -0.5, 2*time.Second, 0)
 	if !strings.Contains(out, "$0.00") {
 		t.Errorf("expected clamped cost in %q", out)
 	}
@@ -355,7 +399,7 @@ func TestFormatTurnStatsLine_ExactFormat(t *testing.T) {
 	defer os.Setenv("NO_COLOR", old)
 	os.Setenv("NO_COLOR", "1")
 
-	out := formatTurnStatsLine(100, 200, 0.05, 3*time.Second)
+	out := formatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
 
 	// Verify the line format: "⎯ this turn: X in / Y out · $Z · Ts ⎯\n"
 	// Strip trailing newline for assertions
@@ -440,7 +484,7 @@ func TestFormatTurnStatsLine_LargeValues(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out := formatTurnStatsLine(c.prompt, c.completion, c.cost, c.elapsed)
+			out := formatTurnStatsLine(c.prompt, c.completion, c.cost, c.elapsed, 0)
 			for _, want := range c.wants {
 				if !strings.Contains(out, want) {
 					t.Errorf("expected %q in output: %q", want, out)
@@ -463,7 +507,7 @@ func TestFormatTurnStatsLine_ForceColor(t *testing.T) {
 	// When both are set, output should NOT contain ANSI codes.
 	os.Setenv("NO_COLOR", "1")
 	os.Setenv("FORCE_COLOR", "1")
-	out := formatTurnStatsLine(100, 200, 0.05, 3*time.Second)
+	out := formatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
 	if strings.Contains(out, "\033[2m") {
 		t.Errorf("NO_COLOR should win over FORCE_COLOR, expected no ANSI codes in: %q", out)
 	}
@@ -471,7 +515,7 @@ func TestFormatTurnStatsLine_ForceColor(t *testing.T) {
 	// FORCE_COLOR alone (no NO_COLOR) should enable ANSI codes.
 	os.Setenv("NO_COLOR", "")
 	os.Setenv("FORCE_COLOR", "1")
-	out = formatTurnStatsLine(100, 200, 0.05, 3*time.Second)
+	out = formatTurnStatsLine(100, 200, 0.05, 3*time.Second, 0)
 	if !strings.Contains(out, "\033[2m") {
 		t.Errorf("FORCE_COLOR alone should enable ANSI codes, expected dim code in: %q", out)
 	}
@@ -495,7 +539,7 @@ func TestFormatTurnStatsLine_CostThresholds(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			out := formatTurnStatsLine(100, 200, c.cost, 1*time.Second)
+			out := formatTurnStatsLine(100, 200, c.cost, 1*time.Second, 0)
 			if !strings.Contains(out, c.want) {
 				t.Errorf("expected %q in output: %q", c.want, out)
 			}

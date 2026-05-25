@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // readInput reads a line of input from stdin without conflicting with other input systems
@@ -58,20 +60,19 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 
 // showProviderStatus displays current provider information
 func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manager, chatAgent *agent.Agent) error {
-	fmt.Println("\n[tool] Provider Status:")
-	fmt.Println("===================")
+	fmt.Println()
+	console.GlyphInfo.Print("Provider Status:")
 
 	// Show current active provider
 	currentProvider := chatAgent.GetProviderType()
 	currentModel := chatAgent.GetModel()
-	fmt.Printf("[OK] **Active Provider**: %s\n", getProviderDisplayName(currentProvider))
-	fmt.Printf("[bot] **Current Model**: %s\n", currentModel)
+	console.GlyphSuccess.Printf("Active Provider: %s", getProviderDisplayName(currentProvider))
+	console.GlyphInfo.Printf("Current Model: %s", currentModel)
 	fmt.Println()
 
 	// Show all supported providers
 	available := configManager.GetAvailableProviders()
-	fmt.Println("[list] Supported Providers:")
-	fmt.Println("------------------")
+	console.GlyphInfo.Print("Supported Providers:")
 
 	for _, provider := range available {
 		displayName := getProviderDisplayName(provider)
@@ -80,18 +81,18 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 		// Check if provider is ready to use
 		isReady := p.isProviderReady(configManager, provider)
 
-		icon := "[FAIL]"
+		statusGlyph := console.GlyphError
 		statusText := "(API key required)"
 		if isReady {
-			icon = "[OK]"
+			statusGlyph = console.GlyphSuccess
 			statusText = "(configured)"
 			if provider == currentProvider {
-				icon = "[*]"
+				statusGlyph = console.GlyphAction
 				statusText = "(active)"
 			}
 		}
 
-		fmt.Printf("%s **%s** %s\n", icon, displayName, statusText)
+		fmt.Printf("%s**%s** %s\n", statusGlyph.Prefix(), displayName, statusText)
 		fmt.Printf("   Model: %s\n", model)
 		fmt.Println()
 	}
@@ -109,8 +110,8 @@ func (p *ProvidersCommand) showProviderStatus(configManager *configuration.Manag
 func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) error {
 	available := configManager.GetAvailableProviders()
 
-	fmt.Println("\n[list] All Providers:")
-	fmt.Println("=================")
+	fmt.Println()
+	console.GlyphInfo.Print("All Providers:")
 
 	for i, provider := range available {
 		name := getProviderDisplayName(provider)
@@ -119,9 +120,9 @@ func (p *ProvidersCommand) listProviders(configManager *configuration.Manager) e
 		// Check if provider is ready
 		isReady := p.isProviderReady(configManager, provider)
 
-		status := "[FAIL] (API key required)"
+		status := console.GlyphError.Prefix() + "(API key required)"
 		if isReady {
-			status = "[OK] (ready)"
+			status = console.GlyphSuccess.Prefix() + "(ready)"
 		}
 
 		fmt.Printf("%d. **%s** %s - %s\n", i+1, name, status, model)
@@ -154,33 +155,54 @@ func (p *ProvidersCommand) isProviderReady(configManager *configuration.Manager,
 	return configManager.HasAPIKey(provider)
 }
 
-// selectProvider allows interactive provider selection
+// selectProvider drives the interactive provider picker. SP-057
+// Phase 5 — replaces the prior "Interactive provider selection not
+// available" stub with a SelectList over the configured providers.
+// The Detail column shows credential readiness so the picker doubles
+// as a configuration overview. Picking a provider that needs an API
+// key chains into setProvider, which already handles the EnsureAPIKey
+// prompt flow.
 func (p *ProvidersCommand) selectProvider(configManager *configuration.Manager, chatAgent *agent.Agent) error {
-	// Get all available providers
 	providers := configManager.GetAvailableProviders()
-
-	// UI not available - show provider list with help
-	fmt.Println("Interactive provider selection not available.")
-	fmt.Println("\n[list] Available Providers:")
-	fmt.Println("======================")
-
-	for i, provider := range providers {
-		// Check if provider is ready
-		isReady := p.isProviderReady(configManager, provider)
-
-		status := ""
-		if !isReady {
-			status = " (API key required)"
-		} else if provider == chatAgent.GetProviderType() {
-			status = " [ok]"
-		}
-
-		fmt.Printf("%d. %s%s\n", i+1, getProviderDisplayName(provider), status)
+	if len(providers) == 0 {
+		console.GlyphInfo.Print("No providers configured.")
+		return nil
 	}
 
-	fmt.Println("\n[i] To select a provider, use: /provider <provider_name>")
-	fmt.Println("   Example: /provider openai")
-	return nil
+	current := chatAgent.GetProviderType()
+	items := make([]console.SelectItem, 0, len(providers))
+	for _, provider := range providers {
+		isReady := p.isProviderReady(configManager, provider)
+		var detail string
+		switch {
+		case provider == current:
+			detail = "active"
+		case !isReady:
+			detail = "needs API key"
+		default:
+			detail = "ready"
+		}
+		items = append(items, console.SelectItem{
+			Label:  getProviderDisplayName(provider),
+			Detail: detail,
+			Value:  string(provider),
+		})
+	}
+
+	picker := console.NewSelectList(console.SelectListOptions{
+		Title:    "Select provider",
+		Items:    items,
+		PageSize: 12,
+	})
+	chosen, ok, err := picker.Run(context.Background())
+	if err != nil {
+		return fmt.Errorf("provider picker: %w", err)
+	}
+	if !ok || chosen == "" {
+		fmt.Println("Provider selection cancelled.")
+		return nil
+	}
+	return p.setProvider(chosen, configManager, chatAgent)
 }
 
 // providerDropdownItem implements agent.DropdownItem for providers
@@ -232,7 +254,7 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	}
 
 	// Switch to the provider
-	fmt.Printf("[~] Switching to %s...\n", getProviderDisplayName(provider))
+	console.GlyphDim.Printf("Switching to %s...", getProviderDisplayName(provider))
 
 	// Switch the agent to the new provider (persisted for CLI use)
 	err = chatAgent.SetProviderPersisted(provider)
@@ -243,10 +265,11 @@ func (p *ProvidersCommand) setProvider(providerName string, configManager *confi
 	// Get the model that was set
 	model := chatAgent.GetModel()
 
-	fmt.Printf("[OK] Provider switched to: %s\n", getProviderDisplayName(provider))
-	fmt.Printf("[bot] Using model: %s\n", model)
+	console.GlyphSuccess.Printf("Provider switched to: %s", getProviderDisplayName(provider))
+	console.GlyphInfo.Printf("Using model: %s", model)
 	if note := chatAgent.ConsumePendingStrictSwitchNotice(); note != "" {
-		fmt.Printf("\n[info] %s\n", note)
+		fmt.Println()
+		console.GlyphInfo.Print(note)
 	}
 
 	return nil
@@ -265,7 +288,8 @@ func selectModelFromList(models []api.ModelInfo, preferredModel string) (string,
 		}
 	}
 
-	fmt.Printf("\n[WARN] Preferred model '%s' not found.\n", preferredModel)
+	fmt.Println()
+	console.GlyphWarning.Printf("Preferred model '%s' not found.", preferredModel)
 	fmt.Println("Available models:")
 	for i, model := range models {
 		fmt.Printf("  %d) %s\n", i+1, model.ID)
@@ -277,26 +301,26 @@ func selectModelFromList(models []api.ModelInfo, preferredModel string) (string,
 	if input == "" {
 		// Default to first model
 		selectedModel := models[0].ID
-		fmt.Printf("[~] Selected first available model: %s\n", selectedModel)
+		console.GlyphDim.Printf("Selected first available model: %s", selectedModel)
 		return selectedModel, nil
 	}
 
 	// Try to parse as number
 	if selection, err := strconv.Atoi(input); err == nil && selection >= 1 && selection <= len(models) {
 		selectedModel := models[selection-1].ID
-		fmt.Printf("[OK] Selected model: %s\n", selectedModel)
+		console.GlyphSuccess.Printf("Selected model: %s", selectedModel)
 		return selectedModel, nil
 	}
 
 	// Try to find exact match
 	for _, model := range models {
 		if strings.EqualFold(model.ID, input) {
-			fmt.Printf("[OK] Selected model: %s\n", model.ID)
+			console.GlyphSuccess.Printf("Selected model: %s", model.ID)
 			return model.ID, nil
 		}
 	}
 
-	fmt.Printf("[FAIL] Invalid selection. Using first available model: %s\n", models[0].ID)
+	console.GlyphError.Printf("Invalid selection. Using first available model: %s", models[0].ID)
 	return models[0].ID, nil
 }
 

@@ -73,6 +73,15 @@ type activeSubagentsSource interface {
 	ActiveSubagents() int
 }
 
+// queuedMessagesSource is an optional addition to ContentSource for
+// sources that can report how many SP-055 deferred ("queued") steer
+// messages are waiting for the next user-prompted turn. The footer
+// renders a "⏸ N queued" badge when N > 0, otherwise the segment is
+// hidden. SP-055 Phase 3b.
+type queuedMessagesSource interface {
+	QueuedMessages() int
+}
+
 // NewStatusFooter constructs a footer that writes to w. If w is nil
 // os.Stderr is used (the same channel the spinner uses). Non-TTY writers
 // produce a no-op footer.
@@ -254,15 +263,31 @@ func (f *StatusFooter) watchResize(stopCh, doneCh chan struct{}) {
 	}
 }
 
-// footerBaseColor is the ANSI escape used to colorize the entire footer
-// (top horizontal rule + content row). Cyan reads as "informational" in
-// most terminal themes and stays legible on both dark and light
-// backgrounds. The "39" code in resetToFooterColor below resets just the
-// foreground while preserving the colored context.
+// footerBaseColor is the ANSI escape used to colorize the rule row and
+// the separator characters between badges. Cyan reads as "informational"
+// in most terminal themes and stays legible on both dark and light
+// backgrounds. The "39" code in footerResetFgKeepBase resets just the
+// foreground while preserving the colored context — used between
+// segments so the `·` separators stay cyan even after a colored badge.
+//
+// Per-segment colors (badgeColor*) replace the previous "all cyan"
+// rendering: each piece of footer state carries its own semantic color
+// so a glance tells you *what* is hot, not just *that* something is.
 const (
-	footerBaseColor       = "\033[36m" // cyan
+	footerBaseColor       = "\033[36m" // cyan — rule + separators
 	footerResetAll        = "\033[0m"
 	footerResetFgKeepBase = "\033[39m" + footerBaseColor // pop fg back to cyan
+
+	// Per-badge palette. Bright variants (9X) read as foreground on
+	// most terminal themes; the cyan/yellow/red threshold colors
+	// already used for cost are preserved unchanged.
+	badgeColorModel    = "\033[1;96m" // bold bright-cyan — brand identity
+	badgeColorCtxOK    = "\033[32m"   // green — context <50%
+	badgeColorCtxWarn  = "\033[33m"   // yellow — context 50–80%
+	badgeColorCtxAlert = "\033[31m"   // red — context >80%
+	badgeColorCwd      = "\033[2;36m" // dim cyan — ambient, low priority
+	badgeColorSubagent = "\033[95m"   // bright magenta — persona-coded
+	badgeColorQueue    = "\033[33m"   // yellow — needs attention soon
 )
 
 // reservedRows returns the number of bottom-pinned rows the footer is
@@ -414,9 +439,14 @@ func steerLineWithCursor(text string, cols int) string {
 }
 
 // composeLine builds the content row of the footer, padded/truncated to
-// cols width. Costs above WarnCost/AlertCost render in yellow/red
-// respectively, with the surrounding cyan restored after each colored
-// span so the line stays visually consistent.
+// cols width. Each badge applies its own semantic color and resets back
+// to the footer base (cyan) so the `·` separators stay visually
+// consistent. The pattern is:
+//
+//	<badgeColor> <text> <footerResetFgKeepBase>
+//
+// Any badge can change without affecting its neighbors. Cost thresholds
+// (existing behavior) are preserved.
 func (f *StatusFooter) composeLine(cols int) string {
 	if f.source == nil {
 		return ""
@@ -427,17 +457,27 @@ func (f *StatusFooter) composeLine(cols int) string {
 	cwd := shortPath(f.source.WorkingDir())
 	branch := gitBranchOf(cwd)
 
-	ctxStr := formatCtx(used, limit)
-	costStr := formatCost(cost)
-	costStyled := f.styleCost(cost, costStr)
-
-	parts := []string{model, ctxStr, costStyled, cwdSegment(cwd, branch)}
+	parts := []string{
+		styleSegment(badgeColorModel, model),
+		styleSegment(styleCtxColor(used, limit), formatCtx(used, limit)),
+		f.styleCost(cost, formatCost(cost)),
+		styleSegment(badgeColorCwd, cwdSegment(cwd, branch)),
+	}
 	// SP-051-2d: append " · N sub" when subagents are active. Optional
 	// interface — sources that don't implement it (e.g. WebUI) get the
 	// baseline footer with no change.
 	if asc, ok := f.source.(activeSubagentsSource); ok {
 		if n := asc.ActiveSubagents(); n > 0 {
-			parts = append(parts, fmt.Sprintf("%d sub", n))
+			parts = append(parts, styleSegment(badgeColorSubagent, fmt.Sprintf("%d sub", n)))
+		}
+	}
+	// SP-055 Phase 3b: append "⏸ N queued" when deferred steer messages
+	// are waiting for the next user turn. Tells the user at a glance
+	// that they'll see queued-from-prior-turn content on their next
+	// prompt.
+	if qms, ok := f.source.(queuedMessagesSource); ok {
+		if n := qms.QueuedMessages(); n > 0 {
+			parts = append(parts, styleSegment(badgeColorQueue, fmt.Sprintf("⏸ %d queued", n)))
 		}
 	}
 	body := " " + strings.Join(parts, " · ") + " "
@@ -448,6 +488,32 @@ func (f *StatusFooter) composeLine(cols int) string {
 	// the content row stays light. \033[K isn't enough here because the
 	// surrounding color codes need to extend through the padding too.
 	return body + strings.Repeat(" ", cols-visibleLen(body))
+}
+
+// styleSegment wraps a badge body with its color prefix and a reset
+// back to the footer base color so the next separator stays cyan.
+// Centralized here so adding new badges is a one-liner at the callsite.
+func styleSegment(color, text string) string {
+	return color + text + footerResetFgKeepBase
+}
+
+// styleCtxColor picks a threshold color for the context badge based on
+// how full the context window is. Thresholds: <50% green, 50–80%
+// yellow, >80% red. Unknown limits (limit ≤ 0) render in the base
+// footer color so we don't lie about pressure.
+func styleCtxColor(used, limit int) string {
+	if limit <= 0 {
+		return footerBaseColor
+	}
+	pct := float64(used) / float64(limit)
+	switch {
+	case pct >= 0.80:
+		return badgeColorCtxAlert
+	case pct >= 0.50:
+		return badgeColorCtxWarn
+	default:
+		return badgeColorCtxOK
+	}
 }
 
 // styleCost colorizes a cost string against the threshold fields. The

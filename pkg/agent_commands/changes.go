@@ -2,24 +2,26 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func getChangeTrackingStatus(chatAgent *agent.Agent) string {
 	if chatAgent == nil {
-		return "[FAIL] Disabled"
+		return console.GlyphError.Prefix() + "Disabled"
 	}
 	if chatAgent.IsChangeTrackingEnabled() {
-		return "[OK] Enabled"
+		return console.GlyphSuccess.Prefix() + "Enabled"
 	}
 	if chatAgent.GetChangeTracker() == nil {
-		return "[i] Idle (no tracked session yet)"
+		return console.GlyphInfo.Prefix() + "Idle (no tracked session yet)"
 	}
-	return "[FAIL] Disabled"
+	return console.GlyphError.Prefix() + "Disabled"
 }
 
 // ChangesCommand shows tracked file changes in the current session
@@ -39,26 +41,25 @@ func (c *ChangesCommand) Description() string {
 func (c *ChangesCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
 		// Gracefully handle nil agent in tests or non-interactive contexts
-		fmt.Print("[edit] No active tracked session\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No active tracked session")
 		return nil
 	}
 	if !chatAgent.IsChangeTrackingEnabled() {
 		if chatAgent.GetChangeTracker() == nil {
-			fmt.Print("[edit] No tracked session has started yet\r\n")
+			console.GlyphInfo.Fprintf(os.Stdout, "No tracked session has started yet")
 		} else {
-			fmt.Print("[edit] Change tracking is disabled for this session\r\n")
+			console.GlyphInfo.Fprintf(os.Stdout, "Change tracking is disabled for this session")
 		}
 		return nil
 	}
 
 	changeCount := chatAgent.GetChangeCount()
 	if changeCount == 0 {
-		fmt.Print("[edit] No file changes have been tracked in this session yet\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No file changes have been tracked in this session yet")
 		return nil
 	}
 
-	fmt.Printf("[edit] Session Changes (Revision: %s)\r\n", chatAgent.GetRevisionID())
-	fmt.Print("=" + fmt.Sprintf("%*s", 50, "=") + "\r\n")
+	console.GlyphInfo.Fprintf(os.Stdout, "Session Changes (Revision: %s)", chatAgent.GetRevisionID())
 
 	summary := chatAgent.GetChangesSummary()
 	fmt.Print(summary + "\r\n")
@@ -82,23 +83,21 @@ func (s *StatusCommand) Description() string {
 // Execute shows the current status
 func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
-		fmt.Print("[chart] Agent Session Status\n")
-		fmt.Println("========================")
+		console.GlyphInfo.Fprintln(os.Stdout, "Agent Session Status")
 		fmt.Printf("Change Tracking: %s\n", getChangeTrackingStatus(chatAgent))
 		return nil
 	}
 
-	fmt.Print("[chart] Agent Session Status\n")
-	fmt.Println("========================")
+	console.GlyphInfo.Fprintln(os.Stdout, "Agent Session Status")
 
 	// Provider and Model (critical)
 	fmt.Printf("Provider: %s\n", chatAgent.GetProvider())
 	fmt.Printf("Model: %s\n", chatAgent.GetModel())
 	fmt.Printf("Persona: %s\n", chatAgent.GetActivePersona())
 	if tools.HasVisionCapability() {
-		fmt.Println("Vision Capability: [OK] Available")
+		fmt.Printf("Vision Capability: %sAvailable\n", console.GlyphSuccess.Prefix())
 	} else {
-		fmt.Println("Vision Capability: [FAIL] Not configured")
+		fmt.Printf("Vision Capability: %sNot configured\n", console.GlyphError.Prefix())
 	}
 
 	toolNames := chatAgent.GetAvailableToolNames()
@@ -116,7 +115,8 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Token usage
-	fmt.Println("\n[up] Token Usage:")
+	fmt.Println()
+	console.GlyphInfo.Print("Token Usage:")
 	fmt.Printf("  Prompt Tokens: %d\n", chatAgent.GetPromptTokens())
 	fmt.Printf("  Completion Tokens: %d\n", chatAgent.GetCompletionTokens())
 	fmt.Printf("  Total Tokens: %d\n", chatAgent.GetTotalTokens())
@@ -127,7 +127,8 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Printf("\n$ Cost: $%.6f\n", cost)
 
 	// Change tracking and files
-	fmt.Println("\n[edit] Changes:")
+	fmt.Println()
+	console.GlyphInfo.Print("Changes:")
 	if chatAgent.IsChangeTrackingEnabled() {
 		fmt.Printf("Tracking: %s\n", getChangeTrackingStatus(chatAgent))
 		fmt.Printf("Revision: %s\n", chatAgent.GetRevisionID())
@@ -145,7 +146,8 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Session
-	fmt.Printf("\n[tag] Session: %s\n", chatAgent.GetSessionID())
+	fmt.Println()
+	console.GlyphInfo.Printf("Session: %s", chatAgent.GetSessionID())
 
 	return nil
 }
@@ -186,21 +188,21 @@ func (r *RollbackCommand) Description() string {
 // Execute performs a rollback
 func (r *RollbackCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) == 0 {
-		fmt.Print("[doc] Available revisions for rollback:\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "Available revisions for rollback:")
 		fmt.Print("Use /log to see the revision history, then use /rollback <revision-id>\r\n")
 		return nil
 	}
 
 	revisionID := args[0]
-	fmt.Printf("[~] Attempting to rollback revision: %s\r\n", revisionID)
+	console.GlyphDim.Fprintf(os.Stdout, "Attempting to rollback revision: %s", revisionID)
 
 	err := history.RevertChangeByRevisionID(revisionID)
 	if err != nil {
 		return fmt.Errorf("rollback failed: %w", err)
 	}
 
-	fmt.Printf("[OK] Successfully rolled back revision: %s\r\n", revisionID)
-	fmt.Print("[i] Tip: Use /changes to see if there are new changes in this session\r\n")
+	console.GlyphSuccess.Fprintf(os.Stdout, "Successfully rolled back revision: %s", revisionID)
+	console.GlyphInfo.Fprintf(os.Stdout, "Tip: Use /changes to see if there are new changes in this session")
 
 	return nil
 }

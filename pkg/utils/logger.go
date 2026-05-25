@@ -146,6 +146,14 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 	// SP-048 follow-up: stop any active CLI spinner so the prompt isn't
 	// overwritten by spinner frames on stderr.
 	clihooks.SuspendIndicator()
+	// SP-057 follow-up: pause the SP-055 SteerInputReader so it releases
+	// stdin back to cooked mode. Without this, the bufio.Reader below
+	// hits EOF immediately (the steer reader is holding raw-mode stdin),
+	// trips the consecutive-error guard, and auto-rejects the prompt
+	// with "stdin unavailable - rejecting for safety". No-op when no
+	// turn is in flight.
+	clihooks.PauseSteer()
+	defer clihooks.ResumeSteer()
 	reader := bufio.NewReader(os.Stdin)
 	consecutiveErrors := 0
 	const maxConsecutiveErrors = 3

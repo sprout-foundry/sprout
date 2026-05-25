@@ -112,10 +112,12 @@ func runCustomModelAdd() error {
 
 	models, discoverErr := configuration.DiscoverCustomProviderModels(provider)
 	if discoverErr != nil {
-		fmt.Printf("\n[WARN] Model discovery failed: %v\n", discoverErr)
+		fmt.Println()
+		console.GlyphWarning.Printf("Model discovery failed: %v", discoverErr)
 		fmt.Println("The provider can still be saved, but model selection will rely on runtime discovery.")
 	} else {
-		fmt.Printf("\n[OK] Discovered %d model(s)\n", len(models))
+		fmt.Println()
+		console.GlyphSuccess.Printf("Discovered %d model(s)", len(models))
 		maxShow := len(models)
 		if maxShow > 10 {
 			maxShow = 10
@@ -138,7 +140,8 @@ func runCustomModelAdd() error {
 			}
 			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
 			if err != nil {
-				fmt.Printf("\n[WARN] %v\n", err)
+				fmt.Println()
+				console.GlyphWarning.Printf("%v", err)
 				continue
 			}
 			provider.ModelName = selectedModel
@@ -199,7 +202,8 @@ func runCustomModelAdd() error {
 			if len(models) > 0 {
 				selectedVisionModel, err := resolvePreferredCustomProviderModel(trimmed, models)
 				if err != nil {
-					fmt.Printf("\n[WARN] %v\n", err)
+					fmt.Println()
+				console.GlyphWarning.Printf("%v", err)
 					continue
 				}
 				provider.VisionModel = selectedVisionModel

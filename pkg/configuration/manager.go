@@ -178,10 +178,17 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 	}
 
 	// Ensure a config file exists so we can load from it.
+	//
+	// Note: do NOT preload LastUsedProvider with "test" here, even
+	// though this is a test-oriented helper. Older versions did, and
+	// the literal string used to leak into the user's real config
+	// whenever a misbehaving test bypassed isolation. The sentinel is
+	// for in-memory test fixtures only; tests that need a specific
+	// provider should set it explicitly on the returned Manager via
+	// the type-safe SetProvider API (which rejects api.TestClientType).
 	configPath := filepath.Join(configDir, ConfigFileName)
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		cfg := NewConfig()
-		cfg.LastUsedProvider = "test" // predictable default for tests
 		if err := cfg.SaveToDir(configDir); err != nil {
 			return nil, fmt.Errorf("failed to write default config to %q: %w", configDir, err)
 		}
@@ -352,6 +359,10 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 			}
 		}
 	}
+
+	// Same self-heal as Load() — a stale "test" sentinel on disk
+	// shouldn't drive the real CLI.
+	sanitizeTestProvider(result)
 
 	return result, nil
 }

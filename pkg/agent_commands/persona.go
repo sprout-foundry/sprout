@@ -11,6 +11,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
@@ -50,7 +51,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	if strings.EqualFold(args[0], "none") || strings.EqualFold(args[0], "clear") {
 		chatAgent.ClearActivePersona()
-		fmt.Println("[OK] Cleared active persona; restored base system prompt")
+		console.GlyphSuccess.Print("Cleared active persona; restored base system prompt")
 		return nil
 	}
 
@@ -71,7 +72,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 			return fmt.Errorf("persona apply: %w", err)
 		}
 		provider, model, _ := chatAgent.GetPersonaProviderModel(personaID)
-		fmt.Printf("[OK] Active persona: %s (%s)\n", persona.Name, personaID)
+		console.GlyphSuccess.Printf("Active persona: %s (%s)", persona.Name, personaID)
 		fmt.Printf("   Provider: %s\n", provider)
 		fmt.Printf("   Model: %s\n", model)
 		return nil
@@ -92,7 +93,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		fmt.Printf("[OK] Enabled persona %s\n", personaID)
+		console.GlyphSuccess.Printf("Enabled persona %s", personaID)
 		return nil
 	case "disable":
 		persona.Enabled = false
@@ -105,7 +106,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
-		fmt.Printf("[OK] Disabled persona %s\n", personaID)
+		console.GlyphSuccess.Printf("Disabled persona %s", personaID)
 		return nil
 	case "provider":
 		if len(args) < 3 {
@@ -139,7 +140,7 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		} else {
 			persona.AllowedTools = parseCommaList(toolsArg)
 			if unknown := configuration.UnknownPersonaTools(persona.AllowedTools); len(unknown) > 0 {
-				fmt.Fprintf(os.Stderr, "[WARN] Unknown tools in allowlist: %s\n", strings.Join(unknown, ", "))
+				console.GlyphWarning.Fprintf(os.Stderr, "Unknown tools in allowlist: %s", strings.Join(unknown, ", "))
 			}
 		}
 	case "prompt":
@@ -179,14 +180,14 @@ func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("[OK] Updated persona %s\n", personaID)
-	fmt.Println("[i] Activate it with: /persona " + personaID)
+	console.GlyphSuccess.Printf("Updated persona %s", personaID)
+	console.GlyphInfo.Print("Activate it with: /persona " + personaID)
 	return nil
 }
 
 func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *agent.Agent) error {
-	fmt.Println("\n[role] Personas")
-	fmt.Println("===========")
+	fmt.Println()
+	console.GlyphInfo.Print("Personas")
 	active := chatAgent.GetActivePersona()
 	if active == "" {
 		active = "<none>"
@@ -222,7 +223,8 @@ func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *a
 
 func (p *PersonaCommand) showPersona(personaID string, persona configuration.SubagentType, chatAgent *agent.Agent) error {
 	provider, model, _ := chatAgent.GetPersonaProviderModel(personaID)
-	fmt.Printf("\n[role] %s (%s)\n", persona.Name, personaID)
+	fmt.Println()
+	console.GlyphInfo.Printf("%s (%s)", persona.Name, personaID)
 	fmt.Printf("Description: %s\n", persona.Description)
 	fmt.Printf("Enabled: %t\n", persona.Enabled)
 	fmt.Printf("Provider: %s\n", provider)
@@ -261,8 +263,8 @@ func (p *PersonaCommand) createPersona(personaID string, config *configuration.C
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("[OK] Created persona %s\n", personaID)
-	fmt.Printf("[i] Configure it with: /persona %s show\n", personaID)
+	console.GlyphSuccess.Printf("Created persona %s", personaID)
+	console.GlyphInfo.Printf("Configure it with: /persona %s show", personaID)
 	return nil
 }
 

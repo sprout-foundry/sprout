@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -398,5 +399,102 @@ func TestFormatToolEndLine_Depth1_Badged(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, " · 0.2s") {
 		t.Errorf("end line should preserve duration suffix, got %q", got)
+	}
+}
+
+// Phase 3 collapsed-run formatter tests.
+
+func TestFormatToolRunLine_IncludesCountAndArgsTrail(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := formatToolRunLine(0, "", "✓ ", "read_file", 3,
+		[]string{"(foo.go)", "(bar.go)", "(baz.go)"}, 0.4)
+	if !strings.Contains(got, "× 3") {
+		t.Errorf("collapsed line should show count, got %q", got)
+	}
+	if !strings.Contains(got, "(foo.go), (bar.go), (baz.go)") {
+		t.Errorf("collapsed line should join args trail, got %q", got)
+	}
+	if !strings.HasSuffix(got, " · 0.4s") {
+		t.Errorf("collapsed line should keep total duration suffix, got %q", got)
+	}
+}
+
+func TestFormatToolRunLine_EmptyArgsTrail_NoEmptyParens(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	got := formatToolRunLine(0, "", "✓ ", "ping", 5, nil, 0.0)
+	if strings.Contains(got, "()") {
+		t.Errorf("empty args trail should produce no parens, got %q", got)
+	}
+	if !strings.Contains(got, "× 5") {
+		t.Errorf("count should still appear, got %q", got)
+	}
+}
+
+// `?` keyboard help tests.
+
+func TestWriteKeyboardHelp_IncludesSteerKeys(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var buf bytes.Buffer
+	writeKeyboardHelp(&buf)
+	got := buf.String()
+	for _, want := range []string{
+		"Steer panel",
+		"Tab",
+		"toggle steer ↔ queue mode",
+		"↑ / ↓",
+		"recall prior steer messages",
+		"Ctrl+C",
+		"interrupt the current turn",
+		"Idle prompt",
+		"slash command",
+		"exit / quit",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("help should contain %q, got:\n%s", want, got)
+		}
+	}
+}
+
+func TestWriteKeyboardHelp_NoColorStripsANSI(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var buf bytes.Buffer
+	writeKeyboardHelp(&buf)
+	got := buf.String()
+	if strings.Contains(got, "\033[") {
+		t.Errorf("NO_COLOR should suppress ANSI escapes, got %q", got)
+	}
+}
+
+func TestWriteKeyboardHelp_ColorAddsBoldHeaders(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("FORCE_COLOR", "1")
+	var buf bytes.Buffer
+	writeKeyboardHelp(&buf)
+	got := buf.String()
+	if !strings.Contains(got, "\033[1m") {
+		t.Errorf("color mode should bold section headers, got:\n%s", got)
+	}
+	if !strings.Contains(got, "\033[2m") {
+		t.Errorf("color mode should dim descriptions, got:\n%s", got)
+	}
+}
+
+func TestToolRunState_MatchesAndAppend(t *testing.T) {
+	r := &toolRunState{name: "read_file", depth: 0, persona: ""}
+	if !r.matches("read_file", 0, "") {
+		t.Error("matches should return true for identical (name, depth, persona)")
+	}
+	if r.matches("write_file", 0, "") {
+		t.Error("matches should return false for different tool")
+	}
+	if r.matches("read_file", 1, "") {
+		t.Error("matches should return false at different depth")
+	}
+	// appendArg should cap the trail at maxArgsTrail.
+	for i := 0; i < maxArgsTrail+3; i++ {
+		r.appendArg("preview")
+	}
+	if len(r.argsTrail) != maxArgsTrail {
+		t.Errorf("expected argsTrail capped at %d, got %d", maxArgsTrail, len(r.argsTrail))
 	}
 }

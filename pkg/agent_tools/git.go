@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -88,10 +89,17 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 	return executeGitCommand(ctx, op.Operation, op.Args)
 }
 
-// PromptForGitApprovalStdin prompts for git approval using stdin
+// PromptForGitApprovalStdin prompts for git approval using stdin.
+// Fires mid-turn during git tool execution, so it pauses the
+// SteerInputReader to release stdin back to cooked mode (otherwise
+// the bufio.Reader hits EOF immediately while steer holds the raw-
+// mode fd).
 func PromptForGitApprovalStdin(command string) (bool, error) {
+	clihooks.SuspendIndicator()
+	clihooks.PauseSteer()
+	defer clihooks.ResumeSteer()
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("\n[LOCK] Git Operation Requires Approval\n")
+	fmt.Printf("\n⚠ Git Operation Requires Approval\n")
 	fmt.Printf("Command: %s\n", command)
 	fmt.Printf("\n")
 	fmt.Printf("Approve? (y/n): ")

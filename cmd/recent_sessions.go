@@ -3,15 +3,15 @@
 package cmd
 
 import (
-	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"golang.org/x/term"
 )
 
@@ -95,48 +95,60 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		recent = recent[:maxRecentSessionsShown]
 	}
 
-	fmt.Fprintln(os.Stderr, "[chart] Recent sessions in this workspace:")
-	for i, s := range recent {
+	// Skip the interactive prompt when stdin isn't a TTY (e.g. `sprout < script`).
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		console.GlyphInfo.Fprintf(os.Stderr, "Recent sessions in this workspace:")
+		for i, s := range recent {
+			label := s.Name
+			if label == "" {
+				label = s.SessionID
+			}
+			fmt.Fprintf(os.Stderr, "  %d) %-9s  %s\n",
+				i+1,
+				humanizeAge(time.Since(s.LastUpdated)),
+				truncateLabel(label, 56),
+			)
+		}
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+
+	items := make([]console.SelectItem, 0, len(recent))
+	for _, s := range recent {
 		label := s.Name
 		if label == "" {
 			label = s.SessionID
 		}
-		fmt.Fprintf(os.Stderr, "  %d) %-9s  %s\n",
-			i+1,
-			humanizeAge(time.Since(s.LastUpdated)),
-			truncateLabel(label, 56),
-		)
+		items = append(items, console.SelectItem{
+			Label:  truncateLabel(label, 56),
+			Detail: humanizeAge(time.Since(s.LastUpdated)),
+			Value:  s.SessionID,
+		})
 	}
-
-	// Skip the interactive prompt when stdin isn't a TTY (e.g. `sprout < script`).
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		fmt.Fprintln(os.Stderr)
+	picker := console.NewSelectList(console.SelectListOptions{
+		Title:    "Recent sessions in this workspace",
+		Items:    items,
+		PageSize: maxRecentSessionsShown,
+		Footer:   "↑↓ select · enter resume · esc start fresh",
+	})
+	chosenID, ok, _ := picker.Run(context.Background())
+	if !ok || chosenID == "" {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "  Resume one? [1-%d or Enter to start fresh]: ", len(recent))
-
-	reader := bufio.NewReader(os.Stdin)
-	raw, readErr := reader.ReadString('\n')
-	if readErr != nil {
-		// Stdin closed / interrupted — proceed with fresh session.
-		fmt.Fprintln(os.Stderr)
+	var chosen agent.SessionInfo
+	for _, s := range recent {
+		if s.SessionID == chosenID {
+			chosen = s
+			break
+		}
+	}
+	if chosen.SessionID == "" {
 		return
 	}
-	choice := strings.TrimSpace(raw)
-	if choice == "" {
-		return
-	}
-	idx, parseErr := strconv.Atoi(choice)
-	if parseErr != nil || idx < 1 || idx > len(recent) {
-		fmt.Fprintf(os.Stderr, "  [skip] %q is not a valid choice, starting fresh\n", choice)
-		return
-	}
-
-	chosen := recent[idx-1]
 	state, err := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "  [FAIL] could not load session %s: %v\n", chosen.SessionID, err)
+		console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, err)
 		return
 	}
 	chatAgent.ApplyState(state)
@@ -146,7 +158,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 	if label == "" {
 		label = chosen.SessionID
 	}
-	fmt.Fprintf(os.Stderr, "[OK] Resumed: %s\n", truncateLabel(label, 64))
+	console.GlyphSuccess.Fprintf(os.Stderr, "Resumed: %s", truncateLabel(label, 64))
 }
 
 // humanizeAge renders a duration as a short, friendly relative time

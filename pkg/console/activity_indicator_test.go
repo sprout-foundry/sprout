@@ -42,6 +42,45 @@ func TestIndicator_ReplaceWritesLineEvenOnNonTTY(t *testing.T) {
 	}
 }
 
+func TestIndicator_ReplaceLast_NonTTY_PrintsLineWithoutEscapes(t *testing.T) {
+	// On non-TTY, ReplaceLast degenerates to plain Fprintln so logs
+	// still see each iteration. No ANSI escapes should appear.
+	w := &nonTTYWriter{}
+	a := NewActivityIndicator(w)
+	a.ReplaceLast("✓ collapsed × 3")
+	got := w.String()
+	if got != "✓ collapsed × 3\n" {
+		t.Errorf("expected plain line, got %q", got)
+	}
+	if strings.Contains(got, "\033[") {
+		t.Errorf("non-TTY output should not contain ANSI escapes; got %q", got)
+	}
+}
+
+func TestIndicator_ReplaceLastN_NonTTYDegradesToFprintln(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := NewActivityIndicator(w)
+	a.ReplaceLastN("collapsed line", 5)
+	got := w.String()
+	if got != "collapsed line\n" {
+		t.Errorf("expected single Fprintln on non-TTY; got %q", got)
+	}
+}
+
+func TestIndicator_ReplaceLastN_ClampsBelowOne(t *testing.T) {
+	// n<1 should be treated as 1 (or no-op-equivalent) — we just
+	// verify it doesn't panic and produces deterministic output. On a
+	// non-TTY this collapses to Fprintln anyway, so the assertion is
+	// just "no panic + line printed".
+	w := &nonTTYWriter{}
+	a := NewActivityIndicator(w)
+	a.ReplaceLastN("line", 0)
+	a.ReplaceLastN("line", -3)
+	if !strings.Contains(w.String(), "line") {
+		t.Errorf("expected line output despite n<1; got %q", w.String())
+	}
+}
+
 func TestIndicator_NilSafe(t *testing.T) {
 	var a *ActivityIndicator
 	// None of these should panic.

@@ -858,3 +858,193 @@ func TestAsyncDelegateTracker_ContextCancellation_StopsRunFn(t *testing.T) {
 	require.True(t, found)
 	assert.Equal(t, "failed", status)
 }
+
+// ---------------------------------------------------------------------------
+// Close
+// ---------------------------------------------------------------------------
+
+func TestAsyncDelegateTracker_Close_ShutsDownProcessResults(t *testing.T) {
+	tracker := NewAsyncDelegateTracker()
+
+	cfg := DelegateConfig{Prompt: "test"}
+	runFn := func(ctx context.Context) (*DelegateResult, error) {
+		return &DelegateResult{Summary: "done", ExitStatus: "success"}, nil
+	}
+
+	require.NoError(t, tracker.Start("close-test", cfg, nil, runFn))
+
+	// Wait for completion
+	time.Sleep(50 * time.Millisecond)
+
+	status, _, found := tracker.GetStatus("close-test")
+	require.True(t, found)
+	assert.Equal(t, "completed", status)
+
+	// Close should not hang — processResults should exit cleanly
+	done := make(chan struct{})
+	go func() {
+		tracker.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good — Close() returned
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() hung — processResults goroutine did not exit")
+	}
+}
+
+func TestAsyncDelegateTracker_Close_EmptyTracker(t *testing.T) {
+	tracker := NewAsyncDelegateTracker()
+
+	// Close on an empty tracker should not hang
+	done := make(chan struct{})
+	go func() {
+		tracker.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() on empty tracker hung")
+	}
+}
+
+func TestAsyncDelegateTracker_Close_WaitsForPendingResults(t *testing.T) {
+	tracker := NewAsyncDelegateTracker()
+
+	// Slow delegate that takes time to produce a result
+	slowStarted := make(chan struct{})
+	slowDone := make(chan struct{})
+	runFn := func(ctx context.Context) (*DelegateResult, error) {
+		close(slowStarted)
+		// Block until we're told to finish or context is cancelled
+		select {
+		case <-slowDone:
+			return &DelegateResult{Summary: "slow-done", ExitStatus: "success"}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	require.NoError(t, tracker.Start("slow-close", DelegateConfig{Prompt: "slow"}, nil, runFn))
+
+	// Wait for the goroutine to start
+	select {
+	case <-slowStarted:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for slow goroutine to start")
+	}
+
+	// Signal the slow delegate to finish
+	close(slowDone)
+
+	// Give it a moment to send its result to resultChan
+	time.Sleep(50 * time.Millisecond)
+
+	// Now Close() should wait for the pending result to be processed
+	// before returning
+	done := make(chan struct{})
+	go func() {
+		tracker.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good — Close() waited for the pending result
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close() hung or timed out")
+	}
+
+	// Verify the result was processed correctly
+	status, result, found := tracker.GetStatus("slow-close")
+	require.True(t, found)
+	assert.Equal(t, "completed", status)
+	require.NotNil(t, result)
+	assert.Equal(t, "slow-done", result.Summary)
+}
+
+func TestAsyncDelegateTracker_ProcessResults_UnknownID(t *testing.T) {
+	// Verify that if a result arrives for an unknown delegateID,
+	// processResults handles it gracefully (no panic).
+	tracker := NewAsyncDelegateTracker()
+
+	// Send a result directly to resultChan for an unknown ID.
+	// processResults should silently drop it.
+	tracker.resultChan <- delegateResultMsg{
+		delegateID: "nonexistent-unknown",
+		result:     &DelegateResult{Summary: "ghost", ExitStatus: "success"},
+		err:        nil,
+	}
+
+	// Give processResults time to drain the message
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify no panic and the ID is not in entries
+	_, _, found := tracker.GetStatus("nonexistent-unknown")
+	assert.False(t, found, "unknown ID should not be stored")
+
+	// Verify no panic and the ID is not in entries (error path)
+	tracker.resultChan <- delegateResultMsg{
+		delegateID: "another-unknown",
+		result:     nil,
+		err:        errors.New("ghost error"),
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	_, _, found = tracker.GetStatus("another-unknown")
+	assert.False(t, found, "unknown error ID should not be stored")
+
+	// Cleanup
+	tracker.Close()
+}
+
+func TestAsyncDelegateTracker_ConcurrentStartAndClose(t *testing.T) {
+	tracker := NewAsyncDelegateTracker()
+
+	const numDelegates = 10
+
+	// Start many fast delegates
+	for i := 0; i < numDelegates; i++ {
+		id := fmt.Sprintf("conc-%d", i)
+		idx := i
+		runFn := func(ctx context.Context) (*DelegateResult, error) {
+			// Vary completion times slightly
+			time.Sleep(time.Duration(idx%5) * 5 * time.Millisecond)
+			return &DelegateResult{
+				Summary:    fmt.Sprintf("result-%d", idx),
+				ExitStatus: "success",
+			}, nil
+		}
+		require.NoError(t, tracker.Start(id, DelegateConfig{Prompt: "test"}, nil, runFn))
+	}
+
+	// Close immediately — processResults should still handle all pending results
+	// without panicking (sending on closed channel)
+	done := make(chan struct{})
+	go func() {
+		tracker.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Good — Close() returned
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close() hung")
+	}
+
+	// All delegates should have completed successfully
+	for i := 0; i < numDelegates; i++ {
+		id := fmt.Sprintf("conc-%d", i)
+		status, result, found := tracker.GetStatus(id)
+		require.True(t, found, "ID %s should exist", id)
+		assert.Equal(t, "completed", status, "ID %s should be completed", id)
+		require.NotNil(t, result)
+		assert.Equal(t, fmt.Sprintf("result-%d", i), result.Summary)
+	}
+}

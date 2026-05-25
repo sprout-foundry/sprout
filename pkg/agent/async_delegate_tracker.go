@@ -24,18 +24,91 @@ type asyncDelegateEntry struct {
 	Cancel    context.CancelFunc
 }
 
+// delegateResultMsg carries the outcome of a delegate execution from the
+// worker goroutine into processResults, so that all mutation of entry
+// state happens in a single goroutine.
+type delegateResultMsg struct {
+	delegateID string
+	result     *DelegateResult
+	err        error
+	eventBus   *events.EventBus
+	depth      int
+}
+
 // AsyncDelegateTracker manages the lifecycle of asynchronous delegate agents.
 // Each agent instance gets its own tracker, initialized lazily via initSubManagers.
 type AsyncDelegateTracker struct {
-	mu      sync.RWMutex
-	entries map[string]*asyncDelegateEntry
+	mu         sync.RWMutex
+	entries    map[string]*asyncDelegateEntry
+	resultChan chan delegateResultMsg
+	done       chan struct{}
+	wg         sync.WaitGroup // Tracks in-flight goroutines for safe Close()
+	closed     bool          // Prevents Start() calls after Close()
 }
 
 // NewAsyncDelegateTracker creates a new, empty AsyncDelegateTracker.
 func NewAsyncDelegateTracker() *AsyncDelegateTracker {
-	return &AsyncDelegateTracker{
-		entries: make(map[string]*asyncDelegateEntry),
+	t := &AsyncDelegateTracker{
+		entries:    make(map[string]*asyncDelegateEntry),
+		resultChan: make(chan delegateResultMsg, 16),
+		done:       make(chan struct{}),
 	}
+	go t.processResults()
+	return t
+}
+
+// processResults drains resultChan and updates entries under the write lock.
+// This serializes all mutations of entry state into a single goroutine.
+func (t *AsyncDelegateTracker) processResults() {
+	defer close(t.done)
+	for msg := range t.resultChan {
+		t.mu.Lock()
+		entry, exists := t.entries[msg.delegateID]
+		if !exists {
+			t.mu.Unlock()
+			continue
+		}
+		if msg.err != nil {
+			entry.Status = "failed"
+			entry.Result = &DelegateResult{
+				Summary:      fmt.Sprintf("Delegate failed: %s", msg.err.Error()),
+				ExitStatus:   "error",
+				ErrorMessage: msg.err.Error(),
+			}
+			if msg.eventBus != nil {
+				event := events.DelegateAsyncEvent(msg.delegateID, "failed", msg.err.Error(), msg.depth)
+				msg.eventBus.Publish(events.EventTypeDelegateAsyncFailed, event)
+			}
+		} else {
+			entry.Status = "completed"
+			entry.Result = msg.result
+			if msg.eventBus != nil {
+				summary := ""
+				if msg.result != nil {
+					summary = msg.result.Summary
+				}
+				event := events.DelegateAsyncEvent(msg.delegateID, "completed", summary, msg.depth)
+				msg.eventBus.Publish(events.EventTypeDelegateAsyncCompleted, event)
+			}
+		}
+		close(entry.Done)
+		t.mu.Unlock()
+	}
+}
+
+// Close shuts down the tracker by waiting for all in-flight goroutines to
+// finish sending their results, then closing resultChan and waiting for
+// processResults to drain and exit. This prevents a "send on closed channel"
+// panic that would occur if a goroutine tries to send after resultChan is closed.
+func (t *AsyncDelegateTracker) Close() {
+	t.mu.Lock()
+	t.closed = true
+	t.mu.Unlock()
+	// Wait for all in-flight goroutines to finish sending their results.
+	// This ensures no goroutine will try to send on resultChan after we close it.
+	t.wg.Wait()
+	close(t.resultChan)
+	<-t.done
 }
 
 // delegateRunFunc is the function signature for executing a delegate in the
@@ -69,6 +142,11 @@ func (t *AsyncDelegateTracker) Start(delegateID string, cfg DelegateConfig, agen
 	}
 
 	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		cancel()
+		return fmt.Errorf("tracker is closed")
+	}
 	if _, exists := t.entries[delegateID]; exists {
 		t.mu.Unlock()
 		cancel()
@@ -84,36 +162,16 @@ func (t *AsyncDelegateTracker) Start(delegateID string, cfg DelegateConfig, agen
 	}
 
 	// Run the delegate in a background goroutine.
+	t.wg.Add(1)
 	go func() {
-		defer close(entry.Done)
-
+		defer t.wg.Done()
 		result, err := runFn(ctx)
-
-		t.mu.Lock()
-		defer t.mu.Unlock()
-
-		if err != nil {
-			entry.Status = "failed"
-			entry.Result = &DelegateResult{
-				Summary:      fmt.Sprintf("Delegate failed: %s", err.Error()),
-				ExitStatus:   "error",
-				ErrorMessage: err.Error(),
-			}
-			if eventBus != nil {
-				event := events.DelegateAsyncEvent(delegateID, "failed", err.Error(), depth)
-				eventBus.Publish(events.EventTypeDelegateAsyncFailed, event)
-			}
-		} else {
-			entry.Status = "completed"
-			entry.Result = result
-			if eventBus != nil {
-				summary := ""
-				if result != nil {
-					summary = result.Summary
-				}
-				event := events.DelegateAsyncEvent(delegateID, "completed", summary, depth)
-				eventBus.Publish(events.EventTypeDelegateAsyncCompleted, event)
-			}
+		t.resultChan <- delegateResultMsg{
+			delegateID: delegateID,
+			result:     result,
+			err:        err,
+			eventBus:   eventBus,
+			depth:      depth,
 		}
 	}()
 	return nil
@@ -176,18 +234,26 @@ func (t *AsyncDelegateTracker) Cleanup(ttl time.Duration) {
 // WaitFor blocks until the delegate finishes (up to the context deadline)
 // and returns its status and result. Returns an error if the context is
 // cancelled or the delegate is not found.
+//
+// Memory ordering: processResults sets entry.Status and entry.Result under
+// mu.Lock BEFORE closing entry.Done. After <-entry.Done fires, the caller
+// re-acquires mu.RLock to read the now-stable fields. This guarantees that
+// the read sees the final values.
 func (t *AsyncDelegateTracker) WaitFor(ctx context.Context, delegateID string) (status string, result *DelegateResult, err error) {
 	t.mu.RLock()
 	entry, ok := t.entries[delegateID]
-	t.mu.RUnlock()
-
 	if !ok {
+		t.mu.RUnlock()
 		return "", nil, fmt.Errorf("delegate %q not found", delegateID)
 	}
 
 	if entry.Status != "running" {
-		return entry.Status, entry.Result, nil
+		status = entry.Status
+		result = entry.Result
+		t.mu.RUnlock()
+		return status, result, nil
 	}
+	t.mu.RUnlock()
 
 	select {
 	case <-entry.Done:

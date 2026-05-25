@@ -4,6 +4,7 @@
   align-items: stretch;
   flex-shrink: 0;
   position: relative;
+  overflow: hidden;
 }
 
 .statusbar-wrapper .statusbar {
@@ -52,6 +53,33 @@
 
 .statusbar-item-git {
   color: var(--accent-primary);
+}
+
+/* SP-022-W2.3: Workspace indicator item */
+.statusbar-item-workspace {
+  cursor: pointer;
+  color: var(--accent-primary);
+  padding: 2px 8px;
+  user-select: none;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.statusbar-item-workspace:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.statusbar-item-workspace:focus {
+  outline: none;
+}
+
+.statusbar-item-workspace:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-primary, #61afef));
+  outline-offset: 1px;
+  background: var(--bg-tertiary);
 }
 
 .statusbar-text {
@@ -137,7 +165,8 @@
 
   .statusbar-item-encoding,
   .statusbar-item-line-ending,
-  .statusbar-item-indentation {
+  .statusbar-item-indentation,
+  .statusbar-item-workspace {
     display: none;
   }
 }

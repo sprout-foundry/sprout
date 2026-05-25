@@ -299,15 +299,15 @@
 - [ ] SP-054-3.3: C/C++ semantic adapter — diagnostics via `clang-tidy`, hover/def/refs via LSP proxy
 - [ ] SP-054-3.4: Shared `lsp_query.go` helper in `pkg/lsp/semantic/` for routing adapter queries through the LSP proxy
 
-## Not Started — SP-056: Remove Static Embedding Provider
+## Completed — SP-056: Remove Static Embedding Provider
 _Spec: roadmap/SP-056-remove-static-embeddings.md_
-- [ ] SP-056-P1-deleteStatic: Delete 9 static provider files (~1,532 lines + 55 MB model blob): `static_provider.go`, `static_tokenizer.go`, `static_loader.go`, `static_model_embed.go`, `static_model_nostub.go`, `static_model_js_testmain_test.go`, `static_test.go`, `compare_embed.go`, `static_model.bin`
-- [ ] SP-056-P2a-managerFields: Simplify `EmbeddingManager` struct — replace `provider *StaticProvider` + `onnxProvider` with single `provider EmbeddingProvider`; remove `onnxStore`/`onnxConvoStore`/`onnxBuilding`/`onnxBuildCancel`/`onnxBuildWG`/`onnxReady`/`onnxError`/`onnxInitWG` fields
-- [ ] SP-056-P2b-initLocked: Rewrite `initLocked()` to create ONNX provider synchronously as the sole provider; remove background ONNX init goroutine; fail fast with clear error if ONNX unavailable
-- [ ] SP-056-P2c-removeRRF: Remove `RRFMergeResults` function and `GetONNXConversationStore` method from `manager.go`; simplify `SearchSemantic` to query single store directly
-- [ ] SP-056-P2d-closeProviderInfo: Simplify `Close()` to close single provider + store; update `ProviderInfo` to remove primary/secondary distinction
-- [ ] SP-056-P3-wasmExports: Remove `setStaticModel` JS export and `setStaticModelFunc` from `cmd/wasm/embedding_funcs.go`; keep ONNX bridge exports (`buildSemanticIndex`, `searchSemantic`, etc.)
-- [ ] SP-056-P4-memoryEmbed: Simplify `pkg/agent/memory_embedding.go` — remove dual-write in `EmbedMemory`/`DeleteMemoryEmbedding`, delete `BackfillMemoryONNX`, simplify `MigrateMemories` to single store
-- [ ] SP-056-P5-memorySearch: Simplify `queryMemoriesAcrossStores` in `pkg/agent/memory_search_handler.go` to single-store query (no RRF merge)
-- [ ] SP-056-P6-tests: Remove static provider tests (`static_test.go` already deleted in P1); remove RRF merge tests from `manager_test.go`; update memory embedding tests for single-store behavior; verify all ONNX tests still pass
-- [ ] SP-056-P7-buildDocs: Remove `staticmodel` build tag from Makefile/build scripts; update `docs/WASM_API.md` to remove `setStaticModel` section and document ONNX-only path; update error messages to be provider-agnostic
+- [x] SP-056-P1-deleteStatic: Delete 9 static provider files (~1,532 lines + 55 MB model blob): `static_provider.go`, `static_tokenizer.go`, `static_loader.go`, `static_model_embed.go`, `static_model_nostub.go`, `static_model_js_testmain_test.go`, `static_test.go`, `compare_embed.go`, `static_model.bin`
+- [x] SP-056-P2a-managerFields: Simplify `EmbeddingManager` struct — replace `provider *StaticProvider` + `onnxProvider` with single `provider EmbeddingProvider`; remove `onnxStore`/`onnxConvoStore`/`onnxBuilding`/`onnxBuildCancel`/`onnxBuildWG`/`onnxReady`/`onnxError`/`onnxInitWG` fields
+- [x] SP-056-P2b-initLocked: Rewrite `initLocked()` to create ONNX provider synchronously as the sole provider; remove background ONNX init goroutine; fail fast with clear error if ONNX unavailable
+- [x] SP-056-P2c-removeRRF: Remove `RRFMergeResults` function and `GetONNXConversationStore` method from `manager.go`; simplify `SearchSemantic` to query single store directly
+- [x] SP-056-P2d-closeProviderInfo: Simplify `Close()` to close single provider + store; update `ProviderInfo` to remove primary/secondary distinction
+- [x] SP-056-P3-wasmExports: Remove `setStaticModel` JS export and `setStaticModelFunc` from `cmd/wasm/embedding_funcs.go`; keep ONNX bridge exports (`buildSemanticIndex`, `searchSemantic`, etc.)
+- [x] SP-056-P4-memoryEmbed: Simplify `pkg/agent/memory_embedding.go` — remove dual-write in `EmbedMemory`/`DeleteMemoryEmbedding`, delete `BackfillMemoryONNX`, simplify `MigrateMemories` to single store
+- [x] SP-056-P5-memorySearch: Simplify `queryMemoriesAcrossStores` in `pkg/agent/memory_search_handler.go` to single-store query (no RRF merge)
+- [x] SP-056-P6-tests: Remove static provider tests (`static_test.go` already deleted in P1); remove RRF merge tests from `manager_test.go`; update memory embedding tests for single-store behavior; verify all ONNX tests still pass
+- [x] SP-056-P7-buildDocs: Remove `staticmodel` build tag from Makefile/build scripts; update `docs/WASM_API.md` to remove `setStaticModel` section and document ONNX-only path; update error messages to be provider-agnostic

@@ -290,6 +290,12 @@
   min-width: 0;
 }
 
+/* Exited session tab — dims the tab to signal the process has ended */
+.terminal-tab.exited {
+  opacity: 0.5;
+  font-style: italic;
+}
+
 .terminal-pane-dot {
   width: 7px;
   height: 7px;
@@ -422,6 +428,13 @@
   background: color-mix(in srgb, var(--accent-success) 12%, transparent);
   border-color: var(--accent-success);
   color: var(--accent-success);
+}
+
+.terminal-status-inline--exited {
+  background: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .terminal-status-inline code {

@@ -64,11 +64,11 @@ func (a *Agent) captureWebText(kind, source, text string) {
 	base := captureBaseName(kind, source)
 	path := filepath.Join(dir, base+".txt")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		a.debugLog("resource capture: failed to create directory %s: %v\n", dir, err)
+		a.Logger().Debug("resource capture: failed to create directory %s: %v\n", dir, err)
 		return
 	}
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		a.debugLog("resource capture: failed writing %s: %v\n", path, err)
+		a.Logger().Debug("resource capture: failed writing %s: %v\n", path, err)
 		return
 	}
 	a.appendResourceCaptureLog("saved_text", source, path, int64(len(text)), "")
@@ -80,12 +80,12 @@ func (a *Agent) captureVisionInputAndOutput(imagePath, rawResult string) {
 		return
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		a.debugLog("resource capture: failed to create directory %s: %v\n", dir, err)
+		a.Logger().Debug("resource capture: failed to create directory %s: %v\n", dir, err)
 		return
 	}
 
 	if savedPath, size, err := a.captureVisionAsset(imagePath, dir); err != nil {
-		a.debugLog("resource capture: failed asset capture for %s: %v\n", imagePath, err)
+		a.Logger().Debug("resource capture: failed asset capture for %s: %v\n", imagePath, err)
 	} else if savedPath != "" {
 		a.appendResourceCaptureLog("saved_asset", imagePath, savedPath, size, "")
 	}
@@ -94,7 +94,7 @@ func (a *Agent) captureVisionInputAndOutput(imagePath, rawResult string) {
 	if strings.TrimSpace(extracted) != "" {
 		textPath := filepath.Join(dir, captureBaseName("vision_text", imagePath)+".txt")
 		if err := os.WriteFile(textPath, []byte(extracted), 0o644); err != nil {
-			a.debugLog("resource capture: failed writing OCR text %s: %v\n", textPath, err)
+			a.Logger().Debug("resource capture: failed writing OCR text %s: %v\n", textPath, err)
 		} else {
 			logMeta := map[string]interface{}{}
 			if meta.OutputTruncated {
@@ -205,7 +205,7 @@ func (a *Agent) appendResourceCaptureLogWithMeta(action, source, path string, si
 		return
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		a.debugLog("resource capture: failed to create log directory %s: %v\n", dir, err)
+		a.Logger().Debug("resource capture: failed to create log directory %s: %v\n", dir, err)
 		return
 	}
 	entry := map[string]interface{}{
@@ -223,7 +223,7 @@ func (a *Agent) appendResourceCaptureLogWithMeta(action, source, path string, si
 	logPath := filepath.Join(dir, "resource_capture.log")
 	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		a.debugLog("resource capture: failed opening log %s: %v\n", logPath, err)
+		a.Logger().Debug("resource capture: failed opening log %s: %v\n", logPath, err)
 		return
 	}
 	defer f.Close()

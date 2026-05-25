@@ -18,6 +18,11 @@ import (
 // previously spammed stderr on every turn.
 var debugLogEnabled atomic.Bool
 
+// packageLogger is an optional structured logger used by package-level
+// functions that don't have direct access to an *Agent instance.
+// Set via SetPackageLogger during agent initialization.
+var packageLogger atomic.Pointer[AgentLogger]
+
 func init() {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("SPROUT_DEBUG"))) {
 	case "1", "true", "yes", "on":
@@ -31,11 +36,62 @@ func SetPackageDebugLogging(enabled bool) {
 	debugLogEnabled.Store(enabled)
 }
 
+// SetPackageLogger sets the package-level AgentLogger that package-level
+// functions (without an *Agent receiver) use for structured logging.
+// Called during agent initialization so embedding, proactive context, etc.
+// all route through the same logger with session context.
+func SetPackageLogger(l *AgentLogger) {
+	if l != nil {
+		packageLogger.Store(l)
+	}
+}
+
 // debugLogf is a leveled wrapper around log.Printf that fires only when
 // debug logging is enabled. Use this for routine operational logs that
 // should not spam stderr in production.
+//
+// When a packageLogger is set (via SetPackageLogger), debug messages are
+// routed through it for structured output with session context.
 func debugLogf(format string, args ...any) {
-	if debugLogEnabled.Load() {
-		log.Printf(format, args...)
+	if !debugLogEnabled.Load() {
+		return
 	}
+	if pl := packageLogger.Load(); pl != nil {
+		pl.Debug(format, args...)
+		return
+	}
+	log.Printf(format, args...)
+}
+
+// packageLogf logs an info-level message through the package logger when
+// available, otherwise falls back to log.Printf. Use this for informational
+// messages from package-level functions.
+func packageLogf(format string, args ...any) {
+	if pl := packageLogger.Load(); pl != nil {
+		pl.Info(format, args...)
+		return
+	}
+	log.Printf(format, args...)
+}
+
+// packageLogWarnf logs a warning-level message through the package logger when
+// available, otherwise falls back to log.Printf. Use this for warning messages
+// from package-level functions.
+func packageLogWarnf(format string, args ...any) {
+	if pl := packageLogger.Load(); pl != nil {
+		pl.Warn(format, args...)
+		return
+	}
+	log.Printf(format, args...)
+}
+
+// packageLogErrorf logs an error-level message through the package logger when
+// available, otherwise falls back to log.Printf. Use this for error messages
+// from package-level functions.
+func packageLogErrorf(format string, args ...any) {
+	if pl := packageLogger.Load(); pl != nil {
+		pl.Error(format, args...)
+		return
+	}
+	log.Printf(format, args...)
 }

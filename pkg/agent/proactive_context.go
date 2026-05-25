@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 	"time"
@@ -124,20 +123,20 @@ func RetrieveProactiveContext(
 
 	// Ensure the embedding manager is initialized
 	if err := mgr.Init(ctx); err != nil {
-		log.Printf("[proactive-context] init failed: %v", err)
+		packageLogErrorf("[proactive-context] init failed: %v", err)
 		return nil, nil
 	}
 
 	// Acquire the conversation store (lazy-created by the manager)
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		log.Printf("[proactive-context] conversation store unavailable: %v", err)
+		packageLogErrorf("[proactive-context] conversation store unavailable: %v", err)
 		return nil, nil
 	}
 
 	provider := store.Provider()
 	if provider == nil {
-		log.Printf("[proactive-context] provider unexpectedly nil")
+		packageLogErrorf("[proactive-context] provider unexpectedly nil")
 		return nil, nil
 	}
 
@@ -145,21 +144,21 @@ func RetrieveProactiveContext(
 	queryEmb, err := provider.Embed(ctx, query)
 	if err != nil {
 		if ctx.Err() != nil {
-			log.Printf("[proactive-context] embedding cancelled: %v", ctx.Err())
+			packageLogErrorf("[proactive-context] embedding cancelled: %v", ctx.Err())
 		} else {
-			log.Printf("[proactive-context] query embedding failed: %v", err)
+			packageLogErrorf("[proactive-context] query embedding failed: %v", err)
 		}
 		return nil, nil
 	}
 	if len(queryEmb) == 0 {
-		log.Printf("[proactive-context] query embedding returned empty vector")
+		packageLogErrorf("[proactive-context] query embedding returned empty vector")
 		return nil, nil
 	}
 
 	// Load all records and filter to conversation turns
 	allRecords, err := store.LoadAll()
 	if err != nil {
-		log.Printf("[proactive-context] failed to load records: %v", err)
+		packageLogErrorf("[proactive-context] failed to load records: %v", err)
 		return nil, nil
 	}
 
@@ -362,7 +361,7 @@ func (a *Agent) InjectProactiveContext(ctx context.Context, query string) error 
 
 	mgr := a.GetEmbeddingManager()
 	if mgr == nil {
-		a.debugLog("[proactive-context] skipping: no embedding manager\n")
+		a.Logger().Debug("[proactive-context] skipping: no embedding manager\n")
 		return nil
 	}
 
@@ -372,7 +371,7 @@ func (a *Agent) InjectProactiveContext(ctx context.Context, query string) error 
 
 	results, err := RetrieveProactiveContext(ctx, mgr, config, query, workingDir, now)
 	if err != nil {
-		a.debugLog("[proactive-context] retrieval failed: %v\n", err)
+		a.Logger().Debug("[proactive-context] retrieval failed: %v\n", err)
 		return nil // graceful degradation
 	}
 

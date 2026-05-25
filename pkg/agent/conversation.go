@@ -26,20 +26,20 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 	defer func() {
 		// Only commit if we have changes and they haven't been committed yet
 		if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
-			a.debugLog("DEFER: Attempting to commit %d tracked changes\n", a.GetChangeCount())
+			a.Logger().Debug("DEFER: Attempting to commit %d tracked changes\n", a.GetChangeCount())
 			// Check if changes are already committed by trying to commit (it's safe due to committed flag)
 			if commitErr := a.CommitChanges("Session cleanup - ensuring changes are not lost"); commitErr != nil {
-				a.debugLog("Warning: Failed to commit tracked changes during cleanup: %v\n", commitErr)
+				a.Logger().Debug("Warning: Failed to commit tracked changes during cleanup: %v\n", commitErr)
 			} else {
-				a.debugLog("DEFER: Successfully committed tracked changes during cleanup\n")
+				a.Logger().Debug("DEFER: Successfully committed tracked changes during cleanup\n")
 			}
 		} else {
-			a.debugLog("DEFER: No changes to commit (enabled: %v, count: %d)\n", a.IsChangeTrackingEnabled(), a.GetChangeCount())
+			a.Logger().Debug("DEFER: No changes to commit (enabled: %v, count: %d)\n", a.IsChangeTrackingEnabled(), a.GetChangeCount())
 		}
 
 		// Auto-save memory state after every successful turn
 		a.autoSaveState()
-		a.debugLog("DEFER: Auto-saved memory state\n")
+		a.Logger().Debug("DEFER: Auto-saved memory state\n")
 	}()
 
 	// Load previous state if available
@@ -187,7 +187,7 @@ func (a *Agent) ClearConversationHistory() {
 	a.state.SetCurrentIteration(0)
 	a.state.SetPreviousSummary("")
 
-	a.debugLog("[clean] Conversation history cleared\n")
+	a.Logger().Debug("[clean] Conversation history cleared\n")
 }
 
 // SetConversationOptimization enables or disables conversation optimization
@@ -195,9 +195,9 @@ func (a *Agent) SetConversationOptimization(enabled bool) {
 	if a.state.GetOptimizer() != nil {
 		a.state.GetOptimizer().SetEnabled(enabled)
 		if enabled {
-			a.debugLog("[*] Conversation optimization enabled\n")
+			a.Logger().Debug("[*] Conversation optimization enabled\n")
 		} else {
-			a.debugLog("[tool] Conversation optimization disabled\n")
+			a.Logger().Debug("[tool] Conversation optimization disabled\n")
 		}
 	}
 }
@@ -336,26 +336,26 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 		// matching the placeholder pattern.
 		relToExpected, err := filepath.Rel(expectedDir, filePath)
 		if err != nil || strings.HasPrefix(relToExpected, "..") {
-			a.debugLog("[WARN] Skipping image %s: not in pasted images directory\n", filePath)
+			a.Logger().Debug("[WARN] Skipping image %s: not in pasted images directory\n", filePath)
 			continue
 		}
 
 		imgData, imgSize, err := readImageAsImageData(filePath)
 		if err != nil {
-			a.debugLog("[WARN] Skipping image %s: %v\n", filePath, err)
+			a.Logger().Debug("[WARN] Skipping image %s: %v\n", filePath, err)
 			continue
 		}
 
 		// Enforce per-image size cap (should already be enforced by console, but be safe).
 		if imgSize > console.MaxPastedImageSize {
-			a.debugLog("[WARN] Skipping image %s: exceeds per-image size cap (%d > %d)\n",
+			a.Logger().Debug("[WARN] Skipping image %s: exceeds per-image size cap (%d > %d)\n",
 				filePath, imgSize, console.MaxPastedImageSize)
 			continue
 		}
 
 		// Enforce total payload cap.
 		if totalBytes+imgSize > maxTotalImagePayloadBytes {
-			a.debugLog("[WARN] Skipping image %s: total payload would exceed cap (%d bytes)\n",
+			a.Logger().Debug("[WARN] Skipping image %s: total payload would exceed cap (%d bytes)\n",
 				filePath, maxTotalImagePayloadBytes)
 			continue
 		}
@@ -365,7 +365,7 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	}
 
 	if len(images) > 0 {
-		a.debugLog("[img] Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
+		a.Logger().Debug("[img] Attached %d image(s) as multimodal content (%d bytes)\n", len(images), totalBytes)
 	}
 
 	return images, cleanedQuery, nil
@@ -395,9 +395,9 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 
 	// If images were processed, log the enhancement
 	if len(analyses) > 0 {
-		a.debugLog("[img] Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
+		a.Logger().Debug("[img] Processed %d image(s) and enhanced query with vision analysis\n", len(analyses))
 		for _, analysis := range analyses {
-			a.debugLog("  - %s: %s\n", analysis.ImagePath, analysis.Description[:min(100, len(analysis.Description))])
+			a.Logger().Debug("  - %s: %s\n", analysis.ImagePath, analysis.Description[:min(100, len(analysis.Description))])
 		}
 	}
 

@@ -115,7 +115,7 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	providerFactory := providers.NewProviderFactory()
 	if err := providerFactory.LoadEmbeddedConfigs(); err != nil {
 		if a.debug {
-			a.debugLog("[WARN] Failed to load provider factory configs: %v\n", err)
+			a.Logger().Debug("[WARN] Failed to load provider factory configs: %v\n", err)
 		}
 		return ""
 	}
@@ -124,7 +124,7 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	config, err := providerFactory.GetProviderConfig(providerName)
 	if err != nil {
 		if a.debug {
-			a.debugLog("[WARN] No factory config found for provider %s: %v\n", providerName, err)
+			a.Logger().Debug("[WARN] No factory config found for provider %s: %v\n", providerName, err)
 		}
 		return ""
 	}
@@ -152,7 +152,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 		if defaultModel := a.getDefaultModelFromFactory(provider); defaultModel != "" {
 			model = defaultModel
 			if a.debug {
-				a.debugLog("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
+				a.Logger().Debug("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
@@ -160,7 +160,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				// Find a suitable default model
 				model = a.selectDefaultModel(availableModels, provider)
 				if a.debug {
-					a.debugLog("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
+					a.Logger().Debug("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
 			} else {
 				// No models available from API and no model specified
@@ -213,7 +213,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	}
 
 	if a.debug {
-		a.debugLog("[OK] Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
+		a.Logger().Debug("[OK] Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
 	}
 
 	return nil
@@ -238,7 +238,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 		if defaultModel := a.getDefaultModelFromFactory(provider); defaultModel != "" {
 			model = defaultModel
 			if a.debug {
-				a.debugLog("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
+				a.Logger().Debug("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
@@ -246,7 +246,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				// Find a suitable default model
 				model = a.selectDefaultModel(availableModels, provider)
 				if a.debug {
-					a.debugLog("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
+					a.Logger().Debug("[search] Auto-selected model %s from API for provider %s\n", model, api.GetProviderName(provider))
 				}
 			} else {
 				// No models available from API and no model specified
@@ -302,7 +302,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	}
 
 	if a.debug {
-		a.debugLog("[OK] Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
+		a.Logger().Debug("[OK] Switched to provider %s with model %s\n", api.GetProviderName(provider), actualModel)
 	}
 
 	return nil

@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -56,11 +55,11 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		a.updatePreviousShellCommandMessage(prevResult)
 	}
 
-	a.debugLog("Executing shell command: %s\n", command)
+	a.Logger().Debug("Executing shell command: %s\n", command)
 
 	fullResult, err := tools.ExecuteShellCommand(ctx, command)
 
-	a.debugLog("Shell command result: %s, error: %v\n", fullResult, err)
+	a.Logger().Debug("Shell command result: %s, error: %v\n", fullResult, err)
 
 	// Determine what to return (truncated or full)
 	returnResult := fullResult
@@ -92,7 +91,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		var saveErr error
 		if outputPath, err := a.saveShellOutputToFile(fullResult); err != nil {
 			saveErr = err
-			a.debugLog("Warning: failed to save full shell output: %v\n", err)
+			a.Logger().Debug("Warning: failed to save full shell output: %v\n", err)
 		} else {
 			fullOutputPath = outputPath
 		}
@@ -121,7 +120,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 				"command": command,
 			})
 			if len(result.Secrets) > 0 {
-				log.Printf("[redaction] Shell output redacted: %d -> %d chars", len(returnResult), len(result.Content))
+				a.Logger().Info("Shell output redacted: %d -> %d chars", len(returnResult), len(result.Content))
 			}
 			returnResult = result.Content
 		}
@@ -251,10 +250,10 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 		ctx = tools.WithTerminalManager(ctx, tm)
 	}
 
-	a.debugLog("Executing shell command in background: %s\n", command)
+	a.Logger().Debug("Executing shell command in background: %s\n", command)
 
 	result, err := tools.ExecuteShellCommandBackground(ctx, command, a.GetSessionID())
-	a.debugLog("Background shell command result: %s, error: %v\n", result, err)
+	a.Logger().Debug("Background shell command result: %s, error: %v\n", result, err)
 
 	// Record as a task action for conversation summary
 	a.AddTaskAction("command_background_executed", fmt.Sprintf("Started background command: %s", command), command)

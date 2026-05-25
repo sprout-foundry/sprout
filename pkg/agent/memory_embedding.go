@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -34,12 +33,12 @@ func EmbedMemory(ctx context.Context, mgr *embedding.EmbeddingManager, name stri
 
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		log.Printf("[memory-embedding] failed to get conversation store: %v", err)
+		packageLogErrorf("[memory-embedding] failed to get conversation store: %v", err)
 		return nil
 	}
 
 	if err := store.StoreMemory(ctx, name, content); err != nil {
-		log.Printf("[memory-embedding] failed to store memory embedding for '%s': %v", name, err)
+		packageLogErrorf("[memory-embedding] failed to store memory embedding for '%s': %v", name, err)
 		return fmt.Errorf("failed to store memory embedding: %w", err)
 	}
 
@@ -74,12 +73,12 @@ func DeleteMemoryEmbedding(mgr *embedding.EmbeddingManager, name string) error {
 	ctx := context.Background()
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		log.Printf("[memory-embedding] failed to get conversation store for delete: %v", err)
+		packageLogErrorf("[memory-embedding] failed to get conversation store for delete: %v", err)
 		return nil
 	}
 
 	if err := store.DeleteMemoryByName(name); err != nil {
-		log.Printf("[memory-embedding] failed to delete memory embedding for '%s': %v", name, err)
+		packageLogErrorf("[memory-embedding] failed to delete memory embedding for '%s': %v", name, err)
 		return fmt.Errorf("failed to delete memory embedding: %w", err)
 	}
 
@@ -109,7 +108,7 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 
 		memories, err := LoadAllMemories()
 		if err != nil {
-			log.Printf("[memory-embedding] migration: failed to list memories: %v", err)
+			packageLogErrorf("[memory-embedding] migration: failed to list memories: %v", err)
 			return
 		}
 
@@ -120,14 +119,14 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 
 		store, err := mgr.GetConversationStore(ctx)
 		if err != nil {
-			log.Printf("[memory-embedding] migration: failed to get conversation store: %v", err)
+			packageLogErrorf("[memory-embedding] migration: failed to get conversation store: %v", err)
 			return
 		}
 
 		// Load existing records to skip already-migrated memories
 		existing, err := store.LoadAll()
 		if err != nil {
-			log.Printf("[memory-embedding] migration: failed to load existing records: %v", err)
+			packageLogErrorf("[memory-embedding] migration: failed to load existing records: %v", err)
 			return
 		}
 
@@ -158,7 +157,7 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 			}
 
 			if err := store.StoreMemory(ctx, mem.Name, mem.Content); err != nil {
-				log.Printf("[memory-embedding] migration: failed to embed '%s': %v", mem.Name, err)
+				packageLogErrorf("[memory-embedding] migration: failed to embed '%s': %v", mem.Name, err)
 				continue
 			}
 			if onnxStore != nil {
@@ -223,12 +222,12 @@ func BackfillMemoryONNX(ctx context.Context, mgr *embedding.EmbeddingManager) in
 
 	staticRecords, err := staticStore.LoadAll()
 	if err != nil {
-		log.Printf("[memory-backfill] failed to load static records: %v", err)
+		packageLogErrorf("[memory-backfill] failed to load static records: %v", err)
 		return 0
 	}
 	onnxRecords, err := onnxStore.LoadAll()
 	if err != nil {
-		log.Printf("[memory-backfill] failed to load onnx records: %v", err)
+		packageLogErrorf("[memory-backfill] failed to load onnx records: %v", err)
 		return 0
 	}
 
@@ -243,7 +242,7 @@ func BackfillMemoryONNX(ctx context.Context, mgr *embedding.EmbeddingManager) in
 	// per-record because the memories directory is usually small.
 	diskMemories, err := LoadAllMemories()
 	if err != nil {
-		log.Printf("[memory-backfill] failed to list memories on disk: %v", err)
+		packageLogErrorf("[memory-backfill] failed to list memories on disk: %v", err)
 		return 0
 	}
 	contentByName := make(map[string]string, len(diskMemories))

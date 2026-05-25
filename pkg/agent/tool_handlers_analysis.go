@@ -30,7 +30,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	imagePath := args["image_path"].(string)
-	a.debugLog("Analyzing UI screenshot: %s\n", imagePath)
+	a.Logger().Debug("Analyzing UI screenshot: %s\n", imagePath)
 
 	// Extract optional parameters
 	analysisPrompt := ""
@@ -55,7 +55,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	fallbackCleanup := func() {}
 	defer fallbackCleanup()
 	if resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(a, imagePath); usedFallback {
-		a.debugLog("[img] Falling back to attached image for UI screenshot analysis: %s -> %s\n", imagePath, resolvedPath)
+		a.Logger().Debug("[img] Falling back to attached image for UI screenshot analysis: %s -> %s\n", imagePath, resolvedPath)
 		effectiveImagePath = resolvedPath
 		fallbackCleanup = cleanup
 	}
@@ -65,12 +65,12 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	if !filepath.IsAbs(effectiveImagePath) && effectiveImagePath != "" && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
 		resolved := filepath.Join(a.currentWorkspaceRoot(), effectiveImagePath)
 		if info, err := os.Stat(resolved); err == nil && !info.IsDir() {
-			a.debugLog("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
+			a.Logger().Debug("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
 			effectiveImagePath = resolved
 		}
 	}
 	if isLocalHTMLFile(effectiveImagePath) || tools.IsHTMLInput(effectiveImagePath) {
-		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
+		a.Logger().Debug("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, err := renderHTMLContent(ctx, a, imagePath, viewportWidth, viewportHeight)
 		if err != nil {
 			return "", fmt.Errorf("failed to render HTML content: %w", err)
@@ -80,7 +80,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, "frontend")
-	a.debugLog("Analyze UI screenshot error: %v\n", err)
+	a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
 	if err != nil {
 		return result, fmt.Errorf("failed to analyze UI screenshot %s: %w", imagePath, err)
 	}
@@ -150,26 +150,26 @@ func screenshotHTMLFile(ctx context.Context, a *Agent, htmlPath string, viewport
 	}()
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", port, filepath.Base(absPath))
-	a.debugLog("Serving HTML file at temporary URL: %s\n", url)
+	a.Logger().Debug("Serving HTML file at temporary URL: %s\n", url)
 
 	screenshotPath, screenshotErr := captureScreenshot(ctx, a, url, viewportWidth, viewportHeight)
 	if screenshotErr != nil {
 		return "", screenshotErr
 	}
 
-	a.debugLog("HTML screenshot saved to: %s\n", screenshotPath)
+	a.Logger().Debug("HTML screenshot saved to: %s\n", screenshotPath)
 	return screenshotPath, nil
 }
 
 // screenshotRemoteURL screenshots a remote URL using the headless browser.
 func screenshotRemoteURL(ctx context.Context, a *Agent, targetURL string, viewportWidth, viewportHeight int) (string, error) {
-	a.debugLog("Screenshotting remote URL: %s\n", targetURL)
+	a.Logger().Debug("Screenshotting remote URL: %s\n", targetURL)
 	screenshotPath, err := captureScreenshot(ctx, a, targetURL, viewportWidth, viewportHeight)
 	if err != nil {
 		return "", fmt.Errorf("failed to screenshot URL %s: %w", targetURL, err)
 	}
 
-	a.debugLog("URL screenshot saved to: %s\n", screenshotPath)
+	a.Logger().Debug("URL screenshot saved to: %s\n", screenshotPath)
 	return screenshotPath, nil
 }
 
@@ -217,14 +217,14 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		analysisMode = v
 	}
 
-	a.debugLog("Analyzing image: %s (mode=%s)\n", imagePath, analysisMode)
+	a.Logger().Debug("Analyzing image: %s (mode=%s)\n", imagePath, analysisMode)
 
 	// Detect HTML content and render via headless browser before vision analysis.
 	effectiveImagePath := imagePath
 	fallbackCleanup := func() {}
 	defer fallbackCleanup()
 	if resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(a, imagePath); usedFallback {
-		a.debugLog("[img] Falling back to attached image for image analysis: %s -> %s\n", imagePath, resolvedPath)
+		a.Logger().Debug("[img] Falling back to attached image for image analysis: %s -> %s\n", imagePath, resolvedPath)
 		effectiveImagePath = resolvedPath
 		fallbackCleanup = cleanup
 	}
@@ -234,12 +234,12 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 	if !filepath.IsAbs(effectiveImagePath) && effectiveImagePath != "" && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
 		resolved := filepath.Join(a.currentWorkspaceRoot(), effectiveImagePath)
 		if info, err := os.Stat(resolved); err == nil && !info.IsDir() {
-			a.debugLog("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
+			a.Logger().Debug("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
 			effectiveImagePath = resolved
 		}
 	}
 	if isLocalHTMLFile(imagePath) || tools.IsHTMLInput(imagePath) {
-		a.debugLog("HTML content detected, rendering via headless browser: %s\n", imagePath)
+		a.Logger().Debug("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, screenshotErr := renderHTMLContent(ctx, a, imagePath, 1280, 720)
 		if screenshotErr != nil {
 			return "", screenshotErr
@@ -249,7 +249,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, analysisMode)
-	a.debugLog("Analyze image content error: %v\n", err)
+	a.Logger().Debug("Analyze image content error: %v\n", err)
 
 	// Check if model download is needed
 	if err != nil && strings.Contains(err.Error(), tools.ErrModelDownloadNeeded) {
@@ -311,7 +311,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	// For PDFs, use multimodal pipeline
 	lowerPath := strings.ToLower(imagePath)
 	if strings.HasSuffix(lowerPath, ".pdf") {
-		a.debugLog("[doc] PDF detected, processing via multimodal pipeline\n")
+		a.Logger().Debug("[doc] PDF detected, processing via multimodal pipeline\n")
 		return handleAnalyzePDFWithImages(ctx, a, imagePath, args)
 	}
 
@@ -320,7 +320,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	fallbackCleanup := func() {}
 	defer fallbackCleanup()
 	if resolvedPath, cleanup, usedFallback := resolveVisionToolInputPath(a, imagePath); usedFallback {
-		a.debugLog("[img] Falling back to attached image for multimodal analysis: %s -> %s\n", imagePath, resolvedPath)
+		a.Logger().Debug("[img] Falling back to attached image for multimodal analysis: %s -> %s\n", imagePath, resolvedPath)
 		effectiveImagePath = resolvedPath
 		fallbackCleanup = cleanup
 	}
@@ -330,12 +330,12 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	if !filepath.IsAbs(effectiveImagePath) && effectiveImagePath != "" && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "http://") && !strings.HasPrefix(strings.ToLower(effectiveImagePath), "https://") {
 		resolved := filepath.Join(a.currentWorkspaceRoot(), effectiveImagePath)
 		if info, err := os.Stat(resolved); err == nil && !info.IsDir() {
-			a.debugLog("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
+			a.Logger().Debug("[img] Resolved relative image path against workspace root: %s -> %s\n", effectiveImagePath, resolved)
 			effectiveImagePath = resolved
 		}
 	}
 	if isLocalHTMLFile(effectiveImagePath) || tools.IsHTMLInput(effectiveImagePath) {
-		a.debugLog("HTML content detected, rendering via headless browser: %s\n", effectiveImagePath)
+		a.Logger().Debug("HTML content detected, rendering via headless browser: %s\n", effectiveImagePath)
 		screenshotPath, screenshotErr := renderHTMLContent(ctx, a, effectiveImagePath, 1280, 720)
 		if screenshotErr != nil {
 			// Fall back to standard OCR pipeline
@@ -388,7 +388,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	// Validate image via magic bytes
 	_, mimeType := console.DetectImageMagic(data)
 	if mimeType == "" {
-		a.debugLog("[WARN] File is not a valid image, falling back to OCR pipeline: %s\n", imagePath)
+		a.Logger().Debug("[WARN] File is not a valid image, falling back to OCR pipeline: %s\n", imagePath)
 		result, err := handleAnalyzeImageContent(ctx, a, args)
 		return nil, result, utils.WrapError(err, "analyze image content")
 	}
@@ -396,7 +396,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 	// Optimize/resize if needed
 	optimizedData, optimizedMIME, optErr := tools.OptimizeImageData(resolvedPath, data)
 	if optErr != nil {
-		a.debugLog("[WARN] Image optimization failed: %v, using original\n", optErr)
+		a.Logger().Debug("[WARN] Image optimization failed: %v, using original\n", optErr)
 	} else if len(optimizedData) > 0 {
 		data = optimizedData
 		if optimizedMIME != "" {
@@ -406,7 +406,7 @@ func handleAnalyzeImageContentWithImages(ctx context.Context, a *Agent, args map
 
 	// Check size after optimization
 	if len(data) > console.MaxPastedImageSize {
-		a.debugLog("[WARN] Optimized image still too large (%d bytes), falling back to OCR\n", len(data))
+		a.Logger().Debug("[WARN] Optimized image still too large (%d bytes), falling back to OCR\n", len(data))
 		result, err := handleAnalyzeImageContent(ctx, a, args)
 		return nil, result, utils.WrapError(err, "analyze image content")
 	}
@@ -455,7 +455,7 @@ func resolveVisionToolInputPath(a *Agent, imagePath string) (string, func(), boo
 	resolvedPath, cleanup, err := materializeImageDataForVisionTool(img)
 	if err != nil {
 		if a != nil {
-			a.debugLog("[WARN] Failed to materialize attached image fallback for %s: %v\n", imagePath, err)
+			a.Logger().Debug("[WARN] Failed to materialize attached image fallback for %s: %v\n", imagePath, err)
 		}
 		return imagePath, func() {}, false
 	}
@@ -615,7 +615,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 	if strings.HasPrefix(strings.ToLower(path), "http://") || strings.HasPrefix(strings.ToLower(path), "https://") {
 		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(path)
 		if resolveErr != nil || resolvedPath == "" {
-			a.debugLog("[WARN] Failed to resolve remote PDF: %v\n", resolveErr)
+			a.Logger().Debug("[WARN] Failed to resolve remote PDF: %v\n", resolveErr)
 			// Fall back to text-only pipeline
 			result, err := handleAnalyzeImageContent(ctx, a, args)
 			return nil, result, utils.WrapError(err, "analyze image content")
@@ -639,7 +639,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 
 	if err != nil {
 		// Fall back to full OCR pipeline (existing behavior)
-		a.debugLog("[WARN] Multimodal PDF processing failed: %v, falling back to OCR pipeline\n", err)
+		a.Logger().Debug("[WARN] Multimodal PDF processing failed: %v, falling back to OCR pipeline\n", err)
 		result, err := handleAnalyzeImageContent(ctx, a, args)
 		return nil, result, utils.WrapError(err, "analyze image content")
 	}

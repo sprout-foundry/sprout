@@ -55,12 +55,12 @@ func (a *Agent) HandleInterrupt() string {
 	// Interrupt handling is deterministic:
 	// any interrupt request stops the current task immediately without prompting.
 	if a.IsSubagent() {
-		a.debugLog("Subagent interrupt detected, stopping task\n")
+		a.Logger().Debug("Subagent interrupt detected, stopping task\n")
 	}
 	pauseState.IsPaused = false
 	a.state.SetPauseState(pauseState)
 	a.ClearInterrupt()
-	a.debugLog("HandleInterrupt: Returning STOP\n")
+	a.Logger().Debug("HandleInterrupt: Returning STOP\n")
 	return "STOP"
 }
 

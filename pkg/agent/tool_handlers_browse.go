@@ -108,7 +108,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 		}
 	}
 
-	a.debugLog("Browsing URL: %s action=%s viewport=%dx%d\n", url, action, opts.ViewportWidth, opts.ViewportHeight)
+	a.Logger().Debug("Browsing URL: %s action=%s viewport=%dx%d\n", url, action, opts.ViewportWidth, opts.ViewportHeight)
 
 	result, err := webcontent.BrowseURL(url, opts)
 	if err != nil {

@@ -45,7 +45,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	if hasRange {
-		a.debugLog("Reading file: %s (lines %d-%d)\n", path, startLine, endLine)
+		a.Logger().Debug("Reading file: %s (lines %d-%d)\n", path, startLine, endLine)
 		result, err := tools.ReadFileWithRange(ctx, path, startLine, endLine)
 
 		if err != nil {
@@ -54,7 +54,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			}
 		}
 
-		a.debugLog("Read file result: %s, error: %v\n", result, err)
+		a.Logger().Debug("Read file result: %s, error: %v\n", result, err)
 
 		if err == nil {
 			a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s (lines %d-%d)", path, startLine, endLine), path)
@@ -72,7 +72,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return result, nil
 	}
 
-	a.debugLog("Reading file: %s\n", path)
+	a.Logger().Debug("Reading file: %s\n", path)
 	result, err := tools.ReadFile(ctx, path)
 
 	if err != nil {
@@ -81,7 +81,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	a.debugLog("Read file result: %s, error: %v\n", result, err)
+	a.Logger().Debug("Read file result: %s, error: %v\n", result, err)
 
 	if err == nil {
 		a.AddTaskAction("file_read", fmt.Sprintf("Read file: %s", path), path)
@@ -260,7 +260,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	// Optimize/resize if needed (using existing vision_types.go function)
 	optimizedData, optimizedMIME, optErr := tools.OptimizeImageData(cleanPath, data)
 	if optErr != nil {
-		a.debugLog("[WARN] Image optimization failed for %s: %v, using original data\n", cleanPath, optErr)
+		a.Logger().Debug("[WARN] Image optimization failed for %s: %v, using original data\n", cleanPath, optErr)
 		// Use original data if optimization fails
 	} else if optimizedData != nil && len(optimizedData) > 0 {
 		data = optimizedData
@@ -287,7 +287,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 // When the PDF contains extractable text, returns it directly. Otherwise renders
 // pages as images so the model can visually analyze them.
 func handleReadPDFFileMultimodal(ctx context.Context, a *Agent, filePath string) ([]api.ImageData, string, error) {
-	a.debugLog("[doc] PDF detected, processing via multimodal pipeline: %s\n", filePath)
+	a.Logger().Debug("[doc] PDF detected, processing via multimodal pipeline: %s\n", filePath)
 
 	result, err := tools.ProcessPDFForMultimodal(filePath)
 	if err != nil {
@@ -435,13 +435,13 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	}
 
 	if warning := validateJSONContent(content, path); warning != "" {
-		a.debugLog("%s\n", warning)
+		a.Logger().Debug("%s\n", warning)
 	}
 
-	a.debugLog("Writing file: %s\n", path)
+	a.Logger().Debug("Writing file: %s\n", path)
 
 	if trackErr := a.TrackFileWrite(path, content); trackErr != nil {
-		a.debugLog("Warning: Failed to track file write: %v\n", trackErr)
+		a.Logger().Debug("Warning: Failed to track file write: %v\n", trackErr)
 	}
 
 	result, err := tools.WriteFile(ctx, path, content)
@@ -452,7 +452,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		}
 	}
 
-	a.debugLog("Write file result: %s, error: %v\n", result, err)
+	a.Logger().Debug("Write file result: %s, error: %v\n", result, err)
 
 	// Invalidate cached file metadata when file is successfully written
 	// This prevents stale line counts from misleading the model
@@ -463,17 +463,17 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	// Publish file change event for web UI auto-sync
 	if err == nil {
 		a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "write", content))
-		a.debugLog("Published file_changed event: %s (write)\n", path)
+		a.Logger().Debug("Published file_changed event: %s (write)\n", path)
 
 		// Publish workspace_patch for real-time browser sync
 		seq := nextPatchSeq()
 		conflict, theirsPath := a.CheckPatchConflict(path)
 		if conflict {
 			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
-			a.debugLog("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
+			a.Logger().Debug("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
 		} else {
 			a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, content, "write", seq))
-			a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+			a.Logger().Debug("Published workspace_patch event: %s (seq=%d)\n", path, seq)
 		}
 
 		// Check for security concerns in the written content
@@ -508,7 +508,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	if warning := validateJSONContent(newStr, path); warning != "" {
-		a.debugLog("%s\n", warning)
+		a.Logger().Debug("%s\n", warning)
 	}
 
 	// Read original for diff, handling filesystem security errors
@@ -523,12 +523,12 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("failed to read original file for diff: %w", err)
 	}
 
-	a.debugLog("Editing file: %s\n", path)
-	a.debugLog("Old string: %s\n", oldStr)
-	a.debugLog("New string: %s\n", newStr)
+	a.Logger().Debug("Editing file: %s\n", path)
+	a.Logger().Debug("Old string: %s\n", oldStr)
+	a.Logger().Debug("New string: %s\n", newStr)
 
 	if trackErr := a.TrackFileEdit(path, oldStr, newStr); trackErr != nil {
-		a.debugLog("Warning: Failed to track file edit: %v\n", trackErr)
+		a.Logger().Debug("Warning: Failed to track file edit: %v\n", trackErr)
 	}
 
 	result, err := tools.EditFile(ctx, path, oldStr, newStr)
@@ -544,7 +544,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	a.debugLog("Edit file result: %s, error: %v\n", result, err)
+	a.Logger().Debug("Edit file result: %s, error: %v\n", result, err)
 
 	// Check for security concerns in the edited content
 	if err == nil {
@@ -596,21 +596,21 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		var eventContent string
 		if eventContent, err = tools.ReadFile(ctx, path); err == nil {
 			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", eventContent))
-			a.debugLog("Published file_changed event: %s (edit)\n", path)
+			a.Logger().Debug("Published file_changed event: %s (edit)\n", path)
 
 			// Publish workspace_patch for real-time browser sync
 			seq := nextPatchSeq()
 			conflict, theirsPath := a.CheckPatchConflict(path)
 			if conflict {
 				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, eventContent, "edit", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
-				a.debugLog("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
+				a.Logger().Debug("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s)\n", path, seq, theirsPath)
 			} else {
 				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, eventContent, "edit", seq))
-				a.debugLog("Published workspace_patch event: %s (seq=%d)\n", path, seq)
+				a.Logger().Debug("Published workspace_patch event: %s (seq=%d)\n", path, seq)
 			}
 		} else {
 			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", ""))
-			a.debugLog("Published file_changed event: %s (edit, no content)\n", path)
+			a.Logger().Debug("Published file_changed event: %s (edit, no content)\n", path)
 
 			// Publish workspace_patch for real-time browser sync (empty content since
 			// the post-edit read failed).
@@ -618,10 +618,10 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			conflict, theirsPath := a.CheckPatchConflict(path)
 			if conflict {
 				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, "", "edit", seq, events.PatchConflictInfo{Conflict: true, TheirsPath: theirsPath}))
-				a.debugLog("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s, empty content)\n", path, seq, theirsPath)
+				a.Logger().Debug("Published workspace_patch event with conflict: %s (seq=%d, theirs=%s, empty content)\n", path, seq, theirsPath)
 			} else {
 				a.publishEvent(events.EventTypeWorkspacePatch, events.WorkspacePatchEvent(path, "", "edit", seq))
-				a.debugLog("Published workspace_patch event: %s (seq=%d, empty content)\n", path, seq)
+				a.Logger().Debug("Published workspace_patch event: %s (seq=%d, empty content)\n", path, seq)
 			}
 		}
 

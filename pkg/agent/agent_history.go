@@ -184,7 +184,7 @@ func (a *Agent) saveHistoryToConfig() {
 		}
 		return nil
 	}); err != nil && a.debug {
-		a.debugLog("Failed to save command history to config: %v\n", err)
+		a.Logger().Debug("Failed to save command history to config: %v\n", err)
 	}
 }
 

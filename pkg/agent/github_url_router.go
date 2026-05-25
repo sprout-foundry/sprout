@@ -49,27 +49,27 @@ func (a *Agent) tryRouteGitHubToMCP(ctx context.Context, rawURL string) (string,
 	// Check if the GitHub MCP server is available and running.
 	server, exists := a.mcpSub.GetManager().GetServer("github")
 	if !exists || !server.IsRunning() {
-		a.debugLog("GitHub MCP server not available, falling back to normal fetch\n")
+		a.Logger().Debug("GitHub MCP server not available, falling back to normal fetch\n")
 		return "", false, nil
 	}
 
 	// Build MCP tool arguments based on resource type.
 	args, err := buildGitHubMCPArgs(info)
 	if err != nil {
-		a.debugLog("Failed to build GitHub MCP args: %v\n", err)
+		a.Logger().Debug("Failed to build GitHub MCP args: %v\n", err)
 		return "", false, nil
 	}
 
 	// Call the MCP tool.
 	result, callErr := a.mcpSub.GetManager().CallTool(ctx, "github", mcpTool, args)
 	if callErr != nil {
-		a.debugLog("GitHub MCP CallTool failed: %v, falling back to normal fetch\n", callErr)
+		a.Logger().Debug("GitHub MCP CallTool failed: %v, falling back to normal fetch\n", callErr)
 		return "", false, nil
 	}
 
 	// If the MCP result itself indicates an error, fall through gracefully.
 	if result != nil && result.IsError {
-		a.debugLog("GitHub MCP returned error result, falling back to normal fetch\n")
+		a.Logger().Debug("GitHub MCP returned error result, falling back to normal fetch\n")
 		return "", false, nil
 	}
 

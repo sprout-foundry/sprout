@@ -352,14 +352,14 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", fmt.Errorf("failed to convert prompt parameter: %w", err)
 	}
 
-	a.debugLog("Spawning subagent with task: %s\n", truncateString(prompt, 100))
+	a.Logger().Debug("Spawning subagent with task: %s\n", truncateString(prompt, 100))
 
 	// Parse optional context parameter
 	var context string
 	if ctxVal, ok := args["context"]; ok && ctxVal != nil {
 		if ctxStr, ok := ctxVal.(string); ok && ctxStr != "" {
 			context = ctxStr
-			a.debugLog("Subagent context provided: %s\n", truncateString(context, 100))
+			a.Logger().Debug("Subagent context provided: %s\n", truncateString(context, 100))
 		}
 	}
 
@@ -376,7 +376,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				}
 			}
 			filesStr = strings.Join(files, ",")
-			a.debugLog("Subagent files provided: %s\n", filesStr)
+			a.Logger().Debug("Subagent files provided: %s\n", filesStr)
 		}
 	}
 
@@ -385,7 +385,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if wdVal, ok := args["working_dir"]; ok && wdVal != nil {
 		if wdStr, ok := wdVal.(string); ok && wdStr != "" {
 			workingDir = wdStr
-			a.debugLog("Subagent working_dir specified: %s\n", workingDir)
+			a.Logger().Debug("Subagent working_dir specified: %s\n", workingDir)
 		}
 	}
 
@@ -445,14 +445,14 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if personaVal, ok := args["persona"]; ok && personaVal != nil {
 		if personaStr, ok := personaVal.(string); ok && personaStr != "" {
 			persona = personaStr
-			a.debugLog("Subagent persona specified: %s\n", persona)
+			a.Logger().Debug("Subagent persona specified: %s\n", persona)
 		}
 	}
 
 	// Default to "general" persona if not specified
 	if persona == "" {
 		persona = "general"
-		a.debugLog("No persona specified, using default: general\n")
+		a.Logger().Debug("No persona specified, using default: general\n")
 	}
 	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
 
@@ -496,7 +496,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			return "", fmt.Errorf("failed to access file %s: %w", filePath, err)
 		}
 
-		a.debugLog("Validated file path: %s -> %s\n", filePath, absPath)
+		a.Logger().Debug("Validated file path: %s -> %s\n", filePath, absPath)
 	}
 
 	// If there are files outside the workspace, prompt for user approval
@@ -515,7 +515,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
 			// because stdin is /dev/null. Instead, we must reject the request.
 			if a.IsSubagent() {
-				a.debugLog("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
+				a.Logger().Debug("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
 				return "", fmt.Errorf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths)
 			}
 
@@ -535,33 +535,33 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 					"target":    outsidePathsStr,
 				}
 				if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), "run_subagent", "CAUTION", prompt, extras) {
-					a.debugLog("User rejected subagent access to external workspace\n")
+					a.Logger().Debug("User rejected subagent access to external workspace\n")
 					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
 				}
-				a.debugLog("User approved subagent access to external workspace via webui\n")
+				a.Logger().Debug("User approved subagent access to external workspace via webui\n")
 			} else if canPrompt {
 				// CLI: prompt user interactively via terminal stdin
 				cliPrompt := "[WARN] Subagent External Workspace\n\n" + prompt + "\n\nAllow? (yes/no): "
 				if !logger.AskForConfirmation(cliPrompt, false, false) {
-					a.debugLog("User rejected subagent access to external workspace\n")
+					a.Logger().Debug("User rejected subagent access to external workspace\n")
 					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
 				}
-				a.debugLog("User approved subagent access to external workspace via CLI\n")
+				a.Logger().Debug("User approved subagent access to external workspace via CLI\n")
 			} else {
 				// No prompting available (non-interactive): reject
-				a.debugLog("Cannot prompt for subagent external workspace approval (non-interactive)\n")
+				a.Logger().Debug("Cannot prompt for subagent external workspace approval (non-interactive)\n")
 				return "", fmt.Errorf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths)
 			}
 
 			// Mark that user has approved filesystem access this session
 			a.SetSecurityBypassApproved()
 		} else {
-			a.debugLog("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
+			a.Logger().Debug("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
 		}
 
 		// Compute common parent directory of all files as the new workspace root
 		subagentWorkspaceRoot = commonParent(absFilePaths)
-		a.debugLog("Computed subagent workspace root: %s (from %d file paths)\n", subagentWorkspaceRoot, len(absFilePaths))
+		a.Logger().Debug("Computed subagent workspace root: %s (from %d file paths)\n", subagentWorkspaceRoot, len(absFilePaths))
 	}
 
 	// If working_dir is explicitly specified, override the subagent workspace root
@@ -569,11 +569,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		// Warn if any referenced files fall outside the working_dir scope
 		for _, absPath := range absFilePaths {
 			if !isPathInWorkspace(absPath, workingDir) && !isPathInTmp(absPath) {
-				a.debugLog("Warning: file %s is outside working_dir %s; subagent may not be able to access it\n", absPath, workingDir)
+				a.Logger().Debug("Warning: file %s is outside working_dir %s; subagent may not be able to access it\n", absPath, workingDir)
 			}
 		}
 		subagentWorkspaceRoot = workingDir
-		a.debugLog("Overriding subagent workspace root with working_dir: %s\n", subagentWorkspaceRoot)
+		a.Logger().Debug("Overriding subagent workspace root with working_dir: %s\n", subagentWorkspaceRoot)
 	}
 
 	// Build enhanced prompt with context and files
@@ -594,7 +594,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			content, err := tools.ReadFile(ctx, filePath)
 			if err != nil {
 				enhancedPrompt.WriteString(fmt.Sprintf("[Error reading file: %v]\n\n", err))
-				a.debugLog("Failed to read file %s for subagent context: %v\n", filePath, err)
+				a.Logger().Debug("Failed to read file %s for subagent context: %v\n", filePath, err)
 			} else {
 				enhancedPrompt.WriteString(content)
 				enhancedPrompt.WriteString("\n\n")
@@ -607,7 +607,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	enhancedPrompt.WriteString("# Your Task\n\n")
 	enhancedPrompt.WriteString(prompt)
 
-	a.debugLog("Spawning subagent with enhanced prompt (length: %d)\n", enhancedPrompt.Len())
+	a.Logger().Debug("Spawning subagent with enhanced prompt (length: %d)\n", enhancedPrompt.Len())
 
 	// Validate enhanced prompt size
 	if enhancedPrompt.Len() > MAX_SUBAGENT_CONTEXT_SIZE {
@@ -640,7 +640,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 					if role.SystemPrompt != "" {
 						systemPromptText = role.SystemPrompt
 					}
-					a.debugLog("Using role '%s': provider=%s model=%s\n", persona, role.Provider, role.Model)
+					a.Logger().Debug("Using role '%s': provider=%s model=%s\n", persona, role.Provider, role.Model)
 					if role.Provider != "" || role.Model != "" {
 						explicitSubagentConfig = true
 					}
@@ -685,11 +685,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				if subagentType.Provider != "" || subagentType.Model != "" {
 					explicitSubagentConfig = true
 				}
-				a.debugLog("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
+				a.Logger().Debug("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
 					persona, provider, model, systemPromptPath)
 				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), provider, model)
 			} else {
-				a.debugLog("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
+				a.Logger().Debug("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
 				provider = config.GetSubagentProvider()
 				model = config.GetSubagentModel()
 				a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
@@ -698,7 +698,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			// No persona specified, use default subagent config
 			provider = config.GetSubagentProvider()
 			model = config.GetSubagentModel()
-			a.debugLog("Using subagent provider=%s model=%s from config\n", provider, model)
+			a.Logger().Debug("Using subagent provider=%s model=%s from config\n", provider, model)
 			a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
 		// If roleFound is true, skip persona resolution — the role already set provider/model.
@@ -715,10 +715,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			if parentModel != "" && parentModel != "unknown" {
 				model = parentModel
 			}
-			a.debugLog("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
+			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
 		}
 	} else {
-		a.debugLog("Warning: No config manager available, using parent agent defaults\n")
+		a.Logger().Debug("Warning: No config manager available, using parent agent defaults\n")
 		provider = a.GetProvider()
 		model = a.GetModel()
 		a.warnSubagentFallback("missing config manager", "", "", provider, model)
@@ -735,9 +735,9 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		promptBytes, err := os.ReadFile(absPromptPath)
 		if err == nil {
 			systemPromptText = string(promptBytes)
-			a.debugLog("Loaded system prompt from %s\n", absPromptPath)
+			a.Logger().Debug("Loaded system prompt from %s\n", absPromptPath)
 		} else {
-			a.debugLog("Failed to load system prompt from %s: %v\n", absPromptPath, err)
+			a.Logger().Debug("Failed to load system prompt from %s: %v\n", absPromptPath, err)
 		}
 	}
 
@@ -783,7 +783,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	if result.Error != nil {
 		resultMap["exit_code"] = "1"
 		resultMap["stderr"] = result.Error.Error()
-		a.debugLog("Subagent error: %v\n", result.Error)
+		a.Logger().Debug("Subagent error: %v\n", result.Error)
 	}
 
 	// Truncate output if it exceeds size limit
@@ -803,11 +803,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		summary := extractSubagentSummary(stdout)
 		summaryJSON, err := json.MarshalIndent(summary, "", "  ")
 		if err != nil {
-			a.debugLog("Failed to marshal summary: %v\n", err)
+			a.Logger().Debug("Failed to marshal summary: %v\n", err)
 			resultMap["summary"] = fmt.Sprintf("Error creating summary: %v", err)
 		} else {
 			resultMap["summary"] = string(summaryJSON)
-			a.debugLog("Extracted subagent summary: %s\n", string(summaryJSON))
+			a.Logger().Debug("Extracted subagent summary: %s\n", string(summaryJSON))
 		}
 
 		// Track subagent costs in parent agent's totals
@@ -829,7 +829,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 				// Add to parent agent's totals using TrackMetricsFromResponse
 				a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
-				a.debugLog("Tracked subagent costs: %d tokens, $%.6f\n", totalTokens, totalCost)
+				a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", totalTokens, totalCost)
 			}
 		}
 	}
@@ -880,7 +880,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				"Instead, inform the user about the error and ask for guidance on how to proceed.",
 				exitCode, stderr, resultMap["stdout"])
 
-			a.debugLog("Subagent failed with security error, delegating to primary agent\n")
+			a.Logger().Debug("Subagent failed with security error, delegating to primary agent\n")
 			return errorMsg, nil
 		}
 	}
@@ -943,7 +943,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			"Partial subagent output:\n%s",
 			tokensUsed, DefaultSubagentTokenBudget, stdout)
 
-		a.debugLog("Subagent exceeded token budget, returning partial output to primary agent\n")
+		a.Logger().Debug("Subagent exceeded token budget, returning partial output to primary agent\n")
 		return errorMsg, nil
 	}
 
@@ -966,13 +966,13 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				"Instead, report the error to the user and ask for guidance.",
 				exitCode, stderr)
 
-			a.debugLog("Subagent failed with security error, stopping retry loop\n")
+			a.Logger().Debug("Subagent failed with security error, stopping retry loop\n")
 			return errorMsg, nil
 		}
 
 		// For other errors, add a warning but don't prevent retries entirely
 		// The agent may still retry, but we add tracking to prevent infinite loops
-		a.debugLog("Subagent failed with exit code %s\n", exitCode)
+		a.Logger().Debug("Subagent failed with exit code %s\n", exitCode)
 		// Add error indicator to result map
 		resultMap["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
 	}
@@ -983,7 +983,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		return "", fmt.Errorf("failed to marshal subagent result: %w", jsonErr)
 	}
 
-	a.debugLog("Subagent spawn result: %s\n", string(jsonBytes))
+	a.Logger().Debug("Subagent spawn result: %s\n", string(jsonBytes))
 	return string(jsonBytes), nil
 }
 
@@ -1007,7 +1007,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		return "", agenterrors.NewInvalidInputError("tasks/prompts must be an array", nil)
 	}
 
-	a.debugLog("Spawning %d parallel subagents\n", len(tasksSlice))
+	a.Logger().Debug("Spawning %d parallel subagents\n", len(tasksSlice))
 
 	var parallelTasks []SubagentTask
 	for i, taskRaw := range tasksSlice {
@@ -1089,7 +1089,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 
-	a.debugLog("Spawning %d parallel subagents\n", len(parallelTasks))
+	a.Logger().Debug("Spawning %d parallel subagents\n", len(parallelTasks))
 
 	// Print the provider/model being used for these parallel subagents
 	displayProvider := subagentProvider
@@ -1192,7 +1192,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 					// Add to parent agent's totals using TrackMetricsFromResponse
 					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
-					a.debugLog("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
+					a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
 				}
 			}
 		}
@@ -1224,7 +1224,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 					"Instead, inform the user about the error and ask for guidance on how to proceed.",
 					taskID, exitCode, stderr, result["stdout"])
 
-				a.debugLog("Parallel subagent [%s] failed with security error, delegating to primary agent\n", taskID)
+				a.Logger().Debug("Parallel subagent [%s] failed with security error, delegating to primary agent\n", taskID)
 				return errorMsg, nil
 			}
 		}
@@ -1270,7 +1270,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			"Instead, report the errors to the user and ask for guidance.",
 			strings.Join(securityErrors, "\n"))
 
-		a.debugLog("Parallel subagents failed with security errors, stopping retry loop\n")
+		a.Logger().Debug("Parallel subagents failed with security errors, stopping retry loop\n")
 		return errorMsg, nil
 	}
 
@@ -1280,7 +1280,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		return "", fmt.Errorf("failed to marshal parallel subagents result: %w", jsonErr)
 	}
 
-	a.debugLog("Parallel subagents spawn result: %s\n", string(jsonBytes))
+	a.Logger().Debug("Parallel subagents spawn result: %s\n", string(jsonBytes))
 
 	return string(jsonBytes), nil
 }

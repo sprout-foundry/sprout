@@ -18,7 +18,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"sync"
@@ -550,7 +549,7 @@ func (r *SubagentRunner) runTask(
 		select {
 		case result = <-done:
 		case <-time.After(5 * time.Second):
-			log.Printf("[subagent] %s did not honor cancellation within 5s — goroutine leaked", taskID)
+			packageLogWarnf("[subagent] %s did not honor cancellation within 5s — goroutine leaked", taskID)
 			result = &SubagentResult{
 				ID:      taskID,
 				Error:   fmt.Errorf("subagent did not respond to cancellation"),

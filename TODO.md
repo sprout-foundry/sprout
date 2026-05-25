@@ -261,13 +261,13 @@
 
 ## Not Started — SP-050: Orchestrator Persona Collapse
 
-- [ ] SP-050-legacyAliases: Fully collapse `repo_orchestrator` alias to `orchestrator` — remove all code paths that treat them as distinct
-- [ ] SP-050-unifiedPrompt: Write unified `orchestrator.md` system prompt that handles both repo-scoped and project-scoped coordination
-- [ ] SP-050-gitWrite: Merge `allow_orchestrator_git_write` and `allow_repo_orchestrator_git_write` into single config
-- [ ] SP-050-personaRemoval: Remove `repo_orchestrator` from persona registry; update all references
-- [ ] SP-050-uiUpdate: Update all WebUI references (status bar, session labels, persona selector) to use only `orchestrator`
-- [ ] SP-050-configMigration: Auto-migrate existing configs that reference `repo_orchestrator` to `orchestrator`
-- [ ] SP-050-defaultPersona: Set `orchestrator` as default persona in all contexts where `repo_orchestrator` was default
+- [x] SP-050-legacyAliases: Fully collapse `repo_orchestrator` alias to `orchestrator` — remove all code paths that treat them as distinct
+- [x] SP-050-unifiedPrompt: Write unified `orchestrator.md` system prompt that handles both repo-scoped and project-scoped coordination
+- [x] SP-050-gitWrite: Merge `allow_orchestrator_git_write` and `allow_repo_orchestrator_git_write` into single config
+- [x] SP-050-personaRemoval: Remove `repo_orchestrator` from persona registry; update all references
+- [x] SP-050-uiUpdate: Update all WebUI references (status bar, session labels, persona selector) to use only `orchestrator`
+- [x] SP-050-configMigration: Auto-migrate existing configs that reference `repo_orchestrator` to `orchestrator`
+- [x] SP-050-defaultPersona: Set `orchestrator` as default persona in all contexts where `repo_orchestrator` was default
 
 ## Not Started — SP-051: Depth-Aware Subagent UI
 

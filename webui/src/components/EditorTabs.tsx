@@ -671,6 +671,7 @@ function EditorTabs({
                         className="tab-close"
                         onClick={(e) => handleTabClose(e, buffer)}
                         title={`Close ${buffer.file.name}`}
+                        aria-label={`Close ${buffer.file.name}`}
                       >
                         <X size={14} />
                       </button>

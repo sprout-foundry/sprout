@@ -1,0 +1,301 @@
+/* ── SubagentActivityFeed ────────────────────────────────────────────── */
+
+/* ── Container ────────────────────────────────────────────────────────── */
+
+.subagent-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 8px;
+  background: var(--bg-card, rgba(30, 41, 59, 0.5));
+  overflow: hidden;
+}
+
+.subagent-feed--collapsed {
+  gap: 0;
+}
+
+/* ── Toggle Bar (expand/collapse header) ─────────────────────────────── */
+
+.subagent-feed-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary, #e2e8f0);
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.subagent-feed-toggle-bar:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.subagent-feed-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subagent-feed-toggle-right {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.subagent-feed-toggle-label {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.subagent-feed-active-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  padding: 2px 7px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+/* ── Body ─────────────────────────────────────────────────────────────── */
+
+.subagent-feed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+}
+
+/* ── Card Base (shared between active & completed) ───────────────────── */
+
+.subagent-feed-card {
+  position: relative;
+  border-radius: 6px;
+  border-left: 3px solid var(--card-border-color, #6366f1);
+  background: var(--bg-card, rgba(30, 41, 59, 0.4));
+  overflow: hidden;
+  transition: background 0.15s ease;
+}
+
+.subagent-feed-card:hover {
+  background: rgba(40, 50, 70, 0.6);
+}
+
+/* ── Active Card ─────────────────────────────────────────────────────── */
+
+.subagent-feed-card--active {
+  border-left-color: var(--card-border-color, #6366f1);
+}
+
+.subagent-feed-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-primary, #e2e8f0);
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.subagent-feed-card-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.subagent-feed-card-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.subagent-feed-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Completed Card ──────────────────────────────────────────────────── */
+
+.subagent-feed-card--completed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-left-color: var(--card-border-color, #94a3b8);
+  opacity: 0.85;
+}
+
+/* ── Status Dot ───────────────────────────────────────────────────────── */
+
+.subagent-feed-status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.subagent-feed-status-dot--active {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+  animation: subagent-pulse 2s ease-in-out infinite;
+}
+
+.subagent-feed-status-dot--completed {
+  color: var(--card-border-color, #94a3b8);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+@keyframes subagent-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Icon & Persona ───────────────────────────────────────────────────── */
+
+.subagent-feed-card-icon {
+  color: var(--text-secondary, #94a3b8);
+  flex-shrink: 0;
+}
+
+.subagent-feed-persona {
+  font-weight: 600;
+  font-size: 12px;
+  font-family: var(--font-mono, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace);
+  color: var(--feed-persona-color, var(--text-primary, #e2e8f0));
+}
+
+/* ── Badges ───────────────────────────────────────────────────────────── */
+
+.subagent-feed-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+  background: rgba(148, 163, 184, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+.subagent-feed-depth-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--card-border-color, #8b5cf6);
+  background: rgba(139, 92, 246, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+}
+
+/* ── Metrics (line-count, duration) ───────────────────────────────────── */
+
+.subagent-feed-line-count {
+  font-size: 10px;
+  color: var(--text-secondary, #94a3b8);
+  font-family: var(--font-mono, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace);
+}
+
+.subagent-feed-duration {
+  font-size: 10px;
+  color: var(--text-secondary, #94a3b8);
+  font-family: var(--font-mono, 'SF Mono', 'Cascadia Code', 'Fira Code', monospace);
+}
+
+/* ── Expand/Collapse Chevron ──────────────────────────────────────────── */
+
+.subagent-feed-toggle {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary, #94a3b8);
+  transition: color 0.15s ease;
+}
+
+.subagent-feed-card-header:hover .subagent-feed-toggle {
+  color: var(--text-primary, #e2e8f0);
+}
+
+/* ── Separator & Result (completed cards) ─────────────────────────────── */
+
+.subagent-feed-sep {
+  font-size: 10px;
+  color: var(--text-secondary, #94a3b8);
+  opacity: 0.5;
+}
+
+.subagent-feed-result {
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.subagent-feed-result--fail {
+  color: #ef4444;
+}
+
+/* ── Depth-based left border colors ───────────────────────────────────── */
+
+.subagent-feed-card[data-depth="0"] {
+  --card-border-color: #6366f1;
+  border-left-color: #6366f1;
+}
+
+.subagent-feed-card[data-depth="1"] {
+  --card-border-color: #8b5cf6;
+  border-left-color: #8b5cf6;
+  padding-left: 16px;
+}
+
+.subagent-feed-card[data-depth="2"] {
+  --card-border-color: #a855f7;
+  border-left-color: #a855f7;
+  padding-left: 32px;
+}
+
+.subagent-feed-card[data-depth="3"] {
+  --card-border-color: #d946ef;
+  border-left-color: #d946ef;
+  padding-left: 48px;
+}
+
+/* Depth connector line (vertical bar inside the indent area) */
+.subagent-feed-card[data-depth="1"]::before,
+.subagent-feed-card[data-depth="2"]::before,
+.subagent-feed-card[data-depth="3"]::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--card-border-color, #6366f1);
+  opacity: 0.3;
+}
+
+.subagent-feed-card[data-depth="2"]::before {
+  left: 24px;
+}
+
+.subagent-feed-card[data-depth="3"]::before {
+  left: 40px;
+}

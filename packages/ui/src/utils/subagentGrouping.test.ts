@@ -462,4 +462,147 @@ describe('groupSubagentRuns', () => {
       expect(result.find(r => r.toolCallId === 'call-2')?.isParallel).toBe(false);
     });
   });
+
+  describe('depth propagation', () => {
+    it('defaults depth to 0 when activities have no depth', () => {
+      const activities: SubagentActivity[] = [
+        {
+          id: '1',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn',
+          timestamp: new Date(),
+        },
+      ];
+
+      const result = groupSubagentRuns(activities);
+      expect(result[0].depth).toBe(0);
+    });
+
+    it('uses depth from first activity that has it', () => {
+      const activities: SubagentActivity[] = [
+        {
+          id: '1',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn',
+          timestamp: new Date(),
+          depth: 2,
+        },
+        {
+          id: '2',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'output',
+          message: 'Output',
+          timestamp: new Date(),
+          depth: 2,
+        },
+      ];
+
+      const result = groupSubagentRuns(activities);
+      expect(result[0].depth).toBe(2);
+    });
+
+    it('handles mixed depth values across activities in same run (uses first one)', () => {
+      const activities: SubagentActivity[] = [
+        {
+          id: '1',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn',
+          timestamp: new Date(),
+          depth: 1,
+        },
+        {
+          id: '2',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'output',
+          message: 'Output',
+          timestamp: new Date(),
+          depth: 3,
+        },
+        {
+          id: '3',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'complete',
+          message: 'Complete',
+          timestamp: new Date(),
+          depth: 0,
+        },
+      ];
+
+      const result = groupSubagentRuns(activities);
+      // The run's depth is determined by the first activity that creates it
+      expect(result[0].depth).toBe(1);
+    });
+
+    it('defaults to 0 when first activity has undefined depth but later ones have depth', () => {
+      const activities: SubagentActivity[] = [
+        {
+          id: '1',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn',
+          timestamp: new Date(),
+          // no depth
+        },
+        {
+          id: '2',
+          toolCallId: 'call-123',
+          toolName: 'subagent',
+          phase: 'output',
+          message: 'Output',
+          timestamp: new Date(),
+          depth: 2,
+        },
+      ];
+
+      const result = groupSubagentRuns(activities);
+      // First activity had no depth, so the run defaults to 0
+      expect(result[0].depth).toBe(0);
+    });
+
+    it('preserves distinct depth values across multiple runs', () => {
+      const activities: SubagentActivity[] = [
+        {
+          id: '1',
+          toolCallId: 'call-1',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn 1',
+          timestamp: new Date(),
+          depth: 1,
+        },
+        {
+          id: '2',
+          toolCallId: 'call-2',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn 2',
+          timestamp: new Date(),
+          depth: 2,
+        },
+        {
+          id: '3',
+          toolCallId: 'call-3',
+          toolName: 'subagent',
+          phase: 'spawn',
+          message: 'Spawn 3',
+          timestamp: new Date(),
+        },
+      ];
+
+      const result = groupSubagentRuns(activities);
+      expect(result.find(r => r.toolCallId === 'call-1')?.depth).toBe(1);
+      expect(result.find(r => r.toolCallId === 'call-2')?.depth).toBe(2);
+      expect(result.find(r => r.toolCallId === 'call-3')?.depth).toBe(0);
+    });
+  });
 });

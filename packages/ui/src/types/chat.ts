@@ -78,6 +78,8 @@ export interface SubagentActivity {
   tokensUsed?: number;
   /** Duration in milliseconds */
   elapsedMs?: number;
+  /** Nesting depth: 0=primary, 1=orchestrator, 2=specialist */
+  depth?: number;
 }
 
 export interface LogEntry {
@@ -127,6 +129,8 @@ export interface SubagentRun {
   spawnActivity: SubagentActivity | null;
   completeActivity: SubagentActivity | null;
   outputLines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
+  /** Nesting depth: 0=primary, 1=orchestrator, 2=specialist */
+  depth: number;
 }
 
 // ── Delegate Types ───────────────────────────────────────────────────

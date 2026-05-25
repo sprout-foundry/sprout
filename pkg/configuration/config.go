@@ -53,6 +53,9 @@ type Config struct {
 	ProviderModels   map[string]string `json:"provider_models"`
 	ProviderPriority []string          `json:"provider_priority"`
 
+	// Language Server Override Configuration
+	LanguageServers []LanguageServerOverride `json:"language_servers,omitempty"`
+
 	// MCP Configuration
 	MCP mcp.MCPConfig `json:"mcp"`
 
@@ -207,6 +210,18 @@ type APITimeoutConfig struct {
 // Import from there: github.com/sprout-foundry/sprout/pkg/mcp
 
 type APIKeys map[string]string
+
+// LanguageServerOverride allows users to customize or add language server
+// configurations beyond the built-in defaults. When a matching ID exists
+// in the default set, this override replaces it entirely. New IDs are
+// appended to the merged list.
+type LanguageServerOverride struct {
+	ID          string   `json:"id" yaml:"id"`                              // Unique server ID (e.g. "go", "typescript")
+	Binary      string   `json:"binary" yaml:"binary"`                      // Path to the binary (e.g. "gopls", "typescript-language-server")
+	Args        []string `json:"args,omitempty" yaml:"args,omitempty"`      // Command-line arguments (e.g. ["--stdio"])
+	LanguageIDs []string `json:"language_ids,omitempty" yaml:"language_ids,omitempty"` // Language IDs this server handles (e.g. ["go"])
+	InstallHint string   `json:"install_hint,omitempty" yaml:"install_hint,omitempty"` // Installation instructions
+}
 
 // CustomProviderConfig represents a custom model provider configuration
 type CustomProviderConfig struct {

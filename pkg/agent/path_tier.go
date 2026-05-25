@@ -67,6 +67,18 @@ func (t PathTier) String() string {
 // homeDir and cwd are passed explicitly so tests can drive each
 // branch deterministically. Production callers use os.UserHomeDir
 // and the agent's effective CWD.
+//
+// Symlinks: this classifier compares cleaned path strings; it does
+// NOT call filepath.EvalSymlinks. The filesystem layer
+// (pkg/filesystem) resolves symlinks before returning
+// ErrOutsideWorkingDirectory, so the path we receive here is
+// already the symlink-resolved target — the comparison is correct
+// for cases where the filesystem layer hands us a real path.
+// For non-filesystem callers (e.g. the WebUI file API consulting
+// IsFolderSessionAllowed), the path is whatever the caller resolved.
+// The classifier is therefore advisory: if you've crafted a clever
+// symlink to dodge tier classification, the filesystem layer still
+// enforces its own checks at write time.
 func ClassifyPathAccess(path, workspaceRoot, homeDir, cwd string) PathTier {
 	if path == "" {
 		return PathTierUnknown

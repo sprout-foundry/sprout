@@ -20,19 +20,21 @@ func (ws *ReactWebServer) handleLSPStatus(w http.ResponseWriter, r *http.Request
 	configs := lspproxy.DefaultLanguageServers()
 
 	type serverInfo struct {
-		ID         string   `json:"id"`
-		Languages  []string `json:"languages"`
-		Binary     string   `json:"binary"`
-		Available  bool     `json:"available"`
-		BinaryPath string   `json:"binaryPath,omitempty"`
+		ID          string   `json:"id"`
+		Languages   []string `json:"languages"`
+		Binary      string   `json:"binary"`
+		Available   bool     `json:"available"`
+		BinaryPath  string   `json:"binaryPath,omitempty"`
+		InstallHint string   `json:"installHint,omitempty"`
 	}
 
 	servers := make([]serverInfo, 0, len(configs))
 	for _, cfg := range configs {
 		info := serverInfo{
-			ID:        cfg.ID,
-			Languages: cfg.LanguageIDs,
-			Binary:    cfg.Binary,
+			ID:          cfg.ID,
+			Languages:   cfg.LanguageIDs,
+			Binary:      cfg.Binary,
+			InstallHint: cfg.InstallHint,
 		}
 		path, err := lspproxy.ResolveBinaryPath(cfg.Binary)
 		if err == nil {

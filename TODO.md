@@ -253,7 +253,7 @@
 ## Not Started — SP-049: Shell Permission Overhaul
 
 - [x] SP-049-riskCategories: Define granular risk categories beyond Safe/Caution/Dangerous: read-only, file-write, network, process-management, destructive, privileged
-- [ ] SP-049-allowlist: Implement user-configurable tool allow-list (`allowed_tools` per persona/workspace)
+- [x] SP-049-allowlist: Implement user-configurable tool allow-list (`allowed_tools` per persona/workspace)
 - [ ] SP-049-approvals: Implement tiered approval: Safe=auto, Caution=auto-with-log, Danger=user-prompt, Custom=user-configurable threshold
 - [ ] SP-049-ui-visual: Visual risk indicators in tool call rendering (green/yellow/red)
 - [ ] SP-049-workspacePolicy: Per-workspace security policies (`.sprout/security-policy.json`)

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"golang.org/x/term"
 )
 
@@ -95,7 +96,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		recent = recent[:maxRecentSessionsShown]
 	}
 
-	fmt.Fprintln(os.Stderr, "[chart] Recent sessions in this workspace:")
+	console.GlyphInfo.Fprintf(os.Stderr, "Recent sessions in this workspace:")
 	for i, s := range recent {
 		label := s.Name
 		if label == "" {
@@ -129,14 +130,14 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 	}
 	idx, parseErr := strconv.Atoi(choice)
 	if parseErr != nil || idx < 1 || idx > len(recent) {
-		fmt.Fprintf(os.Stderr, "  [skip] %q is not a valid choice, starting fresh\n", choice)
+		console.GlyphDim.Fprintf(os.Stderr, "  %q is not a valid choice, starting fresh", choice)
 		return
 	}
 
 	chosen := recent[idx-1]
 	state, err := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "  [FAIL] could not load session %s: %v\n", chosen.SessionID, err)
+		console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, err)
 		return
 	}
 	chatAgent.ApplyState(state)
@@ -146,7 +147,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 	if label == "" {
 		label = chosen.SessionID
 	}
-	fmt.Fprintf(os.Stderr, "[OK] Resumed: %s\n", truncateLabel(label, 64))
+	console.GlyphSuccess.Fprintf(os.Stderr, "Resumed: %s", truncateLabel(label, 64))
 }
 
 // humanizeAge renders a duration as a short, friendly relative time

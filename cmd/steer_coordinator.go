@@ -36,6 +36,7 @@ import (
 type SteerCoordinator struct {
 	agent  *agent.Agent
 	reader *console.SteerInputReader
+	footer *console.StatusFooter
 }
 
 // NewSteerCoordinator constructs the coordinator with the SteerInputReader's
@@ -46,7 +47,7 @@ type SteerCoordinator struct {
 // chatAgent and footer may be nil for tests; in that case StartTurn and
 // EndTurn are no-ops.
 func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *SteerCoordinator {
-	c := &SteerCoordinator{agent: chatAgent}
+	c := &SteerCoordinator{agent: chatAgent, footer: footer}
 	if chatAgent == nil || footer == nil {
 		return c
 	}
@@ -89,10 +90,12 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		return
 	}
 	if err := c.agent.InjectInputContext(text); err != nil {
-		fmt.Fprintf(os.Stderr, "\n[steer] dropped: %v\n", err)
+		fmt.Fprintln(os.Stderr)
+		console.GlyphError.Fprintf(os.Stderr, "steer dropped: %v", err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "\n[steer →] %s\n", text)
+	fmt.Fprintln(os.Stderr)
+	console.GlyphAction.Fprintf(os.Stderr, "steer: %s", text)
 }
 
 // handleSteerInterrupt routes Ctrl+C-while-steering to the same
@@ -120,5 +123,12 @@ func (c *SteerCoordinator) handleQueueSubmit(text string) {
 		return
 	}
 	c.agent.EnqueueDeferredMessage(text)
-	fmt.Fprintf(os.Stderr, "\n[queued] %s\n", text)
+	fmt.Fprintln(os.Stderr)
+	console.GlyphPaused.Fprintf(os.Stderr, "queued: %s", text)
+	// Refresh the footer so the new "⏸ N queued" badge appears in the
+	// same frame the user submitted. Without this nudge the badge
+	// would lag until the next tool/cost event fires.
+	if c.footer != nil {
+		c.footer.Refresh()
+	}
 }

@@ -26,13 +26,15 @@ import (
 func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool) *term.State {
 	editor := chooseExternalEditor()
 	if editor == "" {
-		fmt.Fprintf(os.Stderr, "\r\n[editor] no $VISUAL or $EDITOR set and no fallback available\r\n")
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: no $VISUAL or $EDITOR set and no fallback available")
 		return nil
 	}
 
 	tmpPath, err := writeBufferToTempFile(ir.line)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\r\n[editor] failed to stage buffer: %v\r\n", err)
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to stage buffer: %v", err)
 		return nil
 	}
 	defer os.Remove(tmpPath)
@@ -66,7 +68,8 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 	fmt.Print(MouseTrackingSGR)
 
 	if runErr != nil {
-		fmt.Fprintf(os.Stderr, "\r\n[editor] %s exited: %v\r\n", editor, runErr)
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: %s exited: %v", editor, runErr)
 		if mErr != nil {
 			return nil
 		}
@@ -75,7 +78,8 @@ func (ir *InputReader) runExternalEditor(prevState *term.State, nonBlocking bool
 
 	content, readErr := os.ReadFile(tmpPath)
 	if readErr != nil {
-		fmt.Fprintf(os.Stderr, "\r\n[editor] failed to read back buffer: %v\r\n", readErr)
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to read back buffer: %v", readErr)
 		if mErr != nil {
 			return nil
 		}

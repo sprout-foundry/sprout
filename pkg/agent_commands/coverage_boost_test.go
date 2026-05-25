@@ -531,7 +531,10 @@ func TestBoost_StageFiles_NonExistentFiles(t *testing.T) {
 
 	mock := &mockPrintfHelper{}
 	stageFiles(mock, []string{"nonexistent.go"})
-	assert.Contains(t, mock.output.String(), "FAIL")
+	// Failure rendering migrated from "[FAIL]" to GlyphError ("✗");
+	// assert against the readable suffix so the test stays stable
+	// across color/no-color environments.
+	assert.Contains(t, mock.output.String(), "Failed to stage")
 }
 
 // =====================================================================

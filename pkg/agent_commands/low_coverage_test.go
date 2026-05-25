@@ -807,7 +807,8 @@ func TestGetChangeTrackingStatus_WithTestAgent(t *testing.T) {
 
 func TestGetChangeTrackingStatus_NilAgent(t *testing.T) {
 	status := getChangeTrackingStatus(nil)
-	assert.Equal(t, "[FAIL] Disabled", status)
+	// Glyph-prefixed (SP-057 Phase 1); assert on the text suffix.
+	assert.Contains(t, status, "Disabled")
 }
 
 // =====================================================================

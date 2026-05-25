@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // InitCommand implements the /init slash command
@@ -23,8 +24,8 @@ func (i *InitCommand) Description() string {
 
 // Execute runs the init command using the LLM to analyze the codebase
 func (i *InitCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Println("[tool] Analyzing codebase and generating AGENTS.md...")
-	fmt.Println("[read] The agent will explore your project and create/update AGENTS.md")
+	console.GlyphAction.Print("Analyzing codebase and generating AGENTS.md...")
+	console.GlyphInfo.Print("The agent will explore your project and create/update AGENTS.md")
 	fmt.Println()
 
 	// Check for existing context files to include as reference

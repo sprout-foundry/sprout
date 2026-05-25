@@ -22,6 +22,11 @@ func isValidRoleName(name string) bool {
 	return name != "" && validRoleNamePattern.MatchString(name)
 }
 
+// IsValidRoleName is the exported version of isValidRoleName for use by other packages.
+func IsValidRoleName(name string) bool {
+	return isValidRoleName(name)
+}
+
 // RoleToolsConfig controls which tools a role can use.
 type RoleToolsConfig struct {
 	AllowedTools []string `json:"allowed_tools,omitempty" yaml:"allowed_tools,omitempty"`

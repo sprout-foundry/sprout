@@ -860,6 +860,7 @@ export function useEventHandler({
             command: eventData?.command != null ? String(eventData.command) : undefined,
             riskType: eventData?.risk_type != null ? String(eventData.risk_type) : undefined,
             target: eventData?.target != null ? String(eventData.target) : undefined,
+            allowOptions: String(eventData?.allow_options || '') === 'true',
           },
           logs: appendCappedLog(prev.logs, logEntry),
         }));

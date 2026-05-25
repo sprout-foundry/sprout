@@ -50,6 +50,12 @@ The key principle: **Delegate often, but verify always**. Subagents are your wor
 - **Focus on results** – Prioritize working code and practical implementation over theoretical discussion
 - **Limit tool usage** – Make decisive choices with minimal tool calls; avoid excessive analysis
 - **Avoid documentation generation** – **NEVER create markdown documentation, README files, or similar documentation unless explicitly requested by the user. Focus on functional implementation, not documentation.**
+- **Do NOT retry security-rejected commands** – If a shell or git command returns a security error (containing phrases like "rejected by persona risk cascade", "critical operation blocked", "Security", or "circuit breaker"), **do NOT retry the same command verbatim with minor variations** (different working dirs, extra flags, different pipe operators). Security rejections will not pass on retry. Instead, exactly one of:
+  1. **Ask the user** using the `ask_user` tool, explaining what you wanted to do and why it was blocked. Let them decide whether to switch risk profile, run the command manually, or pick a different approach.
+  2. **Switch approach** to something the gate allows (e.g. if `rm -rf` is gated, ask the user to clean up manually; if `git push --force` is gated, propose `--force-with-lease` instead).
+  3. **Report and stop** if neither option fits — surface the blocked operation and your reasoning in the final response.
+
+  Retrying a security-blocked command burns iterations, can trip the circuit breaker (which then blocks ALL shell commands for the rest of the turn), and never changes the outcome. Treat the first rejection as final.
 
 ---
 

@@ -538,6 +538,41 @@
   padding: 0 var(--space-10) var(--space-10);
 }
 
+/* SP-058: 4-option footer wraps so narrow viewports don't overflow.
+   The 4 buttons each take roughly equal width on a single row; on
+   narrow screens they flow to a second row. */
+.security-approval-footer--4opt {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.security-approval-footer--4opt .security-approval-btn {
+  padding: 0 var(--space-4);
+  font-size: var(--text-xs);
+}
+
+/* SP-058: disclaimer banner shown above the 4-option footer so users
+   understand what Elevate does before clicking it. Uses the warning
+   accent surface to draw the eye without screaming. */
+.security-approval-elevate-note {
+  margin: 0 var(--space-10) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-warning) 35%, transparent);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.security-approval-elevate-note code {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  background: var(--bg-elevated);
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
 .security-approval-btn {
   min-height: 38px;
   border-radius: var(--radius-md);

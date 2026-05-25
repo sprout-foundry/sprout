@@ -72,6 +72,39 @@ A persona that defines its own `AutoApproveRules` (today: only `executive_assist
 
 > **Gotcha**: this means `sprout agent --persona executive_assistant --risk-profile=readonly` does NOT make EA readonly — EA uses its own rules. If you want to lock EA down to readonly, edit `~/.config/sprout/config.json` and override EA's persona rules under `subagent_types.executive_assistant.auto_approve_rules`. The `/status` slash command shows the active risk profile so you can verify which set is in effect.
 
+### Approval dialog: Approve / Deny / Always / Elevate
+
+When a shell command trips the high-risk cascade and there's an interactive
+surface (CLI prompt or WebUI tab), you get four options instead of yes/no:
+
+| Choice | Effect | Persistence |
+|---|---|---|
+| **Approve once** | Runs this single invocation. | None — next run prompts again. |
+| **Deny** | Rejects with a security error. | None. |
+| **Always approve** | Runs and adds this exact command to `config.approved_shell_commands`. Future runs (across restarts) skip the prompt for the literal string. | Persistent. Edit `config.json` to revoke. |
+| **Elevate (session)** | Runs and bumps the session risk profile to `permissive`. No more high-risk prompts until restart. | Session only. Use `/risk-profile permissive` if you want this to survive restart. |
+
+The allowlist is **literal-match** — allowlisting `rm -rf /tmp/build` does
+NOT cover `rm -rf /tmp/build-cache` or anything else. The Critical tier
+(`rm -rf /`, fork bombs) blocks regardless of allowlist or profile.
+
+### Behavior change for non-EA personas (SP-058)
+
+Before SP-058, the high-risk persona cascade only fired for personas that
+declared `AutoApproveRules` (in practice: EA). Other personas — including
+`orchestrator` and unset/default sessions — had no second gate, so a
+high-risk command that cleared the static security classifier ran without
+prompting.
+
+With SP-058, every session runs under a profile (default = `default`),
+which means non-EA personas now get prompted (interactive) or rejected
+(non-interactive) on high-risk shell operations like `rm_recursive` and
+`force_flag`. If you used to rely on the previous ungated behavior for
+non-interactive automation, switch the session to `--risk-profile=permissive`
+or define a custom profile that allows the categories you need. The CLI
+flag and the `/risk-profile` slash command set the same field; see
+[CLI_REFERENCE.md](CLI_REFERENCE.md) for the matrix.
+
 ### EA & subagent delegation
 
 The Executive Assistant persona, when running **as the root agent**, follows the profile like anyone else: high-risk commands prompt you interactively, get rejected non-interactively, and Critical is blocked.

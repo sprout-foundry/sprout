@@ -102,6 +102,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register indexing command
 	registry.Register(&IndexCommand{})
 
+	// SP-058: risk profile management
+	registry.Register(&RiskProfileCommand{})
+
 	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
 	// to canonical names during dispatch and appear in tab completion.
 	registry.RegisterAlias("m", "model")

@@ -1,6 +1,11 @@
 package configuration
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // TestRiskProfile_AllNamesValid sanity-checks that every named
 // profile is recognized by IsValidRiskProfile and that AutoApproveRulesForProfile
@@ -273,4 +278,131 @@ func TestEvaluateOperationRisk_CriticalShortCircuits(t *testing.T) {
 	if got := st2.EvaluateOperationRisk("rm -rf /"); got != RiskLevelCritical {
 		t.Errorf("default rm -rf / = %s, want Critical", got)
 	}
+}
+
+// TestPerWorkspaceRiskProfileOverride verifies that a workspace-local
+// .sprout/config.json with a risk_profile field overrides the global
+// user setting via LoadConfigWithLayers + MergeConfig. This is the
+// per-workspace override pattern documented in the README and SECURITY.md.
+func TestPerWorkspaceRiskProfileOverride(t *testing.T) {
+	tmpRoot := t.TempDir()
+	globalDir := filepath.Join(tmpRoot, "global")
+	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	if err := os.MkdirAll(globalDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Global config: permissive everywhere
+	globalCfg := Config{
+		RiskProfile: "permissive",
+		RiskProfiles: map[string]AutoApproveRules{
+			"my_custom": {
+				LowRiskOps:    []string{"read_file"},
+				HighRiskNever: []string{"rm_recursive"},
+				DefaultRisk:   RiskLevelMedium,
+			},
+		},
+	}
+	globalData, _ := json.Marshal(globalCfg)
+	globalPath := filepath.Join(globalDir, "config.json")
+	if err := os.WriteFile(globalPath, globalData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Workspace config: locked down to readonly + adds another custom profile
+	workspaceCfg := Config{
+		RiskProfile: "readonly",
+		RiskProfiles: map[string]AutoApproveRules{
+			"sandbox": {
+				LowRiskOps:  []string{"shell_command"},
+				DefaultRisk: RiskLevelLow,
+			},
+		},
+	}
+	workspaceData, _ := json.Marshal(workspaceCfg)
+	workspacePath := filepath.Join(workspaceDir, "config.json")
+	if err := os.WriteFile(workspacePath, workspaceData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	merged, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	if err != nil {
+		t.Fatalf("LoadConfigWithLayers: %v", err)
+	}
+
+	// Workspace overrides the single-value RiskProfile selector.
+	if merged.RiskProfile != "readonly" {
+		t.Errorf("merged RiskProfile = %q, want %q (workspace should override global)", merged.RiskProfile, "readonly")
+	}
+
+	// RiskProfiles map should contain BOTH custom entries (global +
+	// workspace are merged per-key, not replaced).
+	if _, ok := merged.RiskProfiles["my_custom"]; !ok {
+		t.Errorf("merged RiskProfiles missing global entry 'my_custom': %v", keys(merged.RiskProfiles))
+	}
+	if _, ok := merged.RiskProfiles["sandbox"]; !ok {
+		t.Errorf("merged RiskProfiles missing workspace entry 'sandbox': %v", keys(merged.RiskProfiles))
+	}
+	if merged.RiskProfiles["sandbox"].DefaultRisk != RiskLevelLow {
+		t.Errorf("workspace 'sandbox' DefaultRisk = %q, want Low", merged.RiskProfiles["sandbox"].DefaultRisk)
+	}
+}
+
+// TestPerWorkspaceRiskProfileSameKey verifies that when the same
+// profile key exists in BOTH global and workspace, the workspace
+// version wins.
+func TestPerWorkspaceRiskProfileSameKey(t *testing.T) {
+	tmpRoot := t.TempDir()
+	globalDir := filepath.Join(tmpRoot, "global")
+	workspaceDir := filepath.Join(tmpRoot, "workspace", ".sprout")
+	if err := os.MkdirAll(globalDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Global: default profile overridden to be permissive-ish
+	globalCfg := Config{
+		RiskProfiles: map[string]AutoApproveRules{
+			"default": {DefaultRisk: RiskLevelLow},
+		},
+	}
+	globalData, _ := json.Marshal(globalCfg)
+	globalPath := filepath.Join(globalDir, "config.json")
+	if err := os.WriteFile(globalPath, globalData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Workspace: default profile overridden to be strict
+	workspaceCfg := Config{
+		RiskProfiles: map[string]AutoApproveRules{
+			"default": {DefaultRisk: RiskLevelHigh},
+		},
+	}
+	workspaceData, _ := json.Marshal(workspaceCfg)
+	workspacePath := filepath.Join(workspaceDir, "config.json")
+	if err := os.WriteFile(workspacePath, workspaceData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	merged, err := LoadConfigWithLayers(globalPath, workspacePath, "", globalDir)
+	if err != nil {
+		t.Fatalf("LoadConfigWithLayers: %v", err)
+	}
+
+	if got := merged.RiskProfiles["default"].DefaultRisk; got != RiskLevelHigh {
+		t.Errorf("workspace should override global for same key: got DefaultRisk=%q, want High", got)
+	}
+}
+
+func keys(m map[string]AutoApproveRules) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

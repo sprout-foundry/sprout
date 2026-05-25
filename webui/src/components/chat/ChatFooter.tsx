@@ -3,12 +3,14 @@ import { Zap, AlertTriangle } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
 import { ToolTimelineBar } from './ToolTimelineBar';
+import { DelegateActivityTree } from './DelegateActivityTree';
 import './ToolTimelineBar.css';
-import type { ToolExecution, SubagentActivity } from './types';
+import type { ToolExecution, SubagentActivity, DelegateActivity } from './types';
 
 interface ChatFooterProps {
   hasSubagentActivity: boolean;
   subagentActivities: SubagentActivity[];
+  delegateActivities?: DelegateActivity[];
   queryProgress: QueryProgress | null;
   isProcessing: boolean;
   filteredToolExecutions: ToolExecution[];
@@ -20,6 +22,7 @@ interface ChatFooterProps {
 export function ChatFooter({
   hasSubagentActivity,
   subagentActivities,
+  delegateActivities = [],
   queryProgress,
   isProcessing,
   filteredToolExecutions,
@@ -40,6 +43,16 @@ export function ChatFooter({
 
   if (hasSubagentActivity) {
     elements.push(<SubagentActivityFeed key="subagent" activities={subagentActivities} />);
+  }
+
+  if (delegateActivities.length > 0) {
+    elements.push(
+      <div key="delegate-activities" className="delegate-activities-container">
+        {delegateActivities.map((da) => (
+          <DelegateActivityTree key={da.delegateId} activity={da} />
+        ))}
+      </div>,
+    );
   }
 
   if (queryProgress) {

@@ -105,6 +105,7 @@ export function useChatSessionManager({
                 toolExecutions: prev.toolExecutions,
                 fileEdits: prev.fileEdits,
                 subagentActivities: prev.subagentActivities,
+                delegateActivities: prev.delegateActivities,
                 currentTodos: prev.currentTodos,
                 queryProgress: prev.queryProgress,
                 lastError: prev.lastError,
@@ -268,6 +269,7 @@ export function useChatSessionManager({
           toolExecutions: [],
           fileEdits: [],
           subagentActivities: [],
+          delegateActivities: [],
           currentTodos: [],
         }));
 
@@ -409,6 +411,7 @@ export function useChatSessionManager({
           toolExecutions: [],
           fileEdits: [],
           subagentActivities: [],
+          delegateActivities: [],
           currentTodos: [],
           queryProgress: null,
           lastError: null,

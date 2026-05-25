@@ -312,6 +312,7 @@ function CommandPalette({
           id={resultsListId}
           role="listbox"
           aria-label="Search results"
+          aria-live="polite"
         >
           {results.length === 0 && query && (
             <div className="command-palette-empty">

@@ -10,6 +10,12 @@ interface TruncationDetails {
 
 const hasTruncation = (d: unknown): d is TruncationDetails =>
   d != null && typeof d === 'object' && 'result_truncated' in d;
+
+/** Depth badge color: amber for deep nesting, purple for orchestrator. */
+const getDepthBadgeColor = (depth: number): string => {
+  if (depth >= 2) return '#f59e0b';
+  return '#a78bfa';
+};
 import {
   isSubagentTool,
   getSubagentPrompt,
@@ -51,7 +57,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
       onClick={() => onToggleExpansion(tool.id)}
     >
       <>
-        <div className="tool-summary">
+        <div className="tool-summary" style={{ paddingLeft: tool.depth ? `${(tool.depth - 1) * 16}px` : undefined }}>
           <span className="tool-icon">
             {isSub ? (
               <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
@@ -71,6 +77,11 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
               : tool.tool}
             {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
           </span>
+          {tool.depth && tool.depth > 0 && (
+            <span className="tool-depth-badge" style={{ backgroundColor: getDepthBadgeColor(tool.depth) }}>
+              D{tool.depth}
+            </span>
+          )}
           <span className="tool-status">{getStatusIcon(tool.status)}</span>
           <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
           <span className="tool-expand">

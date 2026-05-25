@@ -53,14 +53,14 @@ func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{
 		logParts = append(logParts, "with_content")
 	}
 
-	a.debugLog("Executing view_history with limit=%d, file_filter=%q, since=%s, show_content=%v\n", limit, fileFilter, sinceDisplay, showContent)
+	a.Logger().Debug("Executing view_history with limit=%d, file_filter=%q, since=%s, show_content=%v\n", limit, fileFilter, sinceDisplay, showContent)
 
 	res, err := tools.ViewHistory(limit, fileFilter, sincePtr, showContent)
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to view history", err)
 	}
 
-	a.debugLog("view_history metadata: %+v\n", res.Metadata)
+	a.Logger().Debug("view_history metadata: %+v\n", res.Metadata)
 	return res.Output, nil
 }
 
@@ -80,14 +80,14 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 		confirm = v
 	}
 
-	a.debugLog("Executing rollback_changes with revision_id=%q, file_path=%q, confirm=%v\n", revisionID, filePath, confirm)
+	a.Logger().Debug("Executing rollback_changes with revision_id=%q, file_path=%q, confirm=%v\n", revisionID, filePath, confirm)
 
 	res, err := tools.RollbackChanges(revisionID, filePath, confirm)
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to rollback changes", err)
 	}
 
-	a.debugLog("rollback_changes success=%v metadata=%+v\n", res.Success, res.Metadata)
+	a.Logger().Debug("rollback_changes success=%v metadata=%+v\n", res.Success, res.Metadata)
 
 	// Emit file_changed events for restored files so the WebUI stays in sync
 	if res.Success {
@@ -101,7 +101,7 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 				} else {
 					a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(fp, "write", ""))
 				}
-				a.debugLog("Published file_changed event: %s (rollback)\n", fp)
+				a.Logger().Debug("Published file_changed event: %s (rollback)\n", fp)
 			}
 		case "revision_rollback":
 			// Full revision rollback — emit events for all restored files
@@ -113,7 +113,7 @@ func handleRollbackChanges(ctx context.Context, a *Agent, args map[string]interf
 						a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(fp, "write", ""))
 					}
 				}
-				a.debugLog("Published file_changed events for %d files (revision rollback)\n", len(paths))
+				a.Logger().Debug("Published file_changed events for %d files (revision rollback)\n", len(paths))
 			}
 		}
 	}

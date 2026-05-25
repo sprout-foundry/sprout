@@ -47,7 +47,7 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 		return "", fmt.Errorf("directory %q is outside workspace root", rootDir)
 	}
 
-	a.debugLog("Generating repo map for directory: %s\n", rootDir)
+	a.Logger().Debug("Generating repo map for directory: %s\n", rootDir)
 
 	result, err := tools.GenerateRepoMap(ctx, rootDir)
 	if err != nil {

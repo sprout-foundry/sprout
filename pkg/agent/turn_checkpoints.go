@@ -272,7 +272,7 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 			compacted[lastSummaryIdx+1].Role == "assistant" && len(compacted[lastSummaryIdx+1].ToolCalls) == 0 {
 			// Remove the duplicate assistant message (keep the summary, remove the original)
 			if a.debug {
-				a.debugLog("[clean] Removed consecutive assistant at compaction boundary\n")
+				a.Logger().Debug("[clean] Removed consecutive assistant at compaction boundary\n")
 			}
 			compacted = append(compacted[:lastSummaryIdx+1], compacted[lastSummaryIdx+2:]...)
 		}

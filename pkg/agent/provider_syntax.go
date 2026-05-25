@@ -333,7 +333,7 @@ func (a *Agent) normalizeConversationForCurrentModelSyntax(fromProvider, fromMod
 			report.removedToolMessages, report.strippedAssistantToolCallBlocks, report.beforeTokens, report.afterTokens,
 		))
 		if a.debug {
-			a.debugLog("[clean] Strict syntax switch normalization report: %+v\n", report)
+			a.Logger().Debug("[clean] Strict syntax switch normalization report: %+v\n", report)
 		}
 	}
 }

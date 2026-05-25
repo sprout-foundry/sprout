@@ -87,7 +87,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	a.debugLog("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
+	a.Logger().Debug("Searching files: pattern=%q, root=%s, max_results=%d\n", pattern, root, maxResults)
 
 	// Prepare matcher: try regex first, then fallback to substring
 	var re *regexp.Regexp
@@ -220,14 +220,14 @@ func handleWebSearch(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 
 	query := args["query"].(string)
-	a.debugLog("Performing web search: %s\n", query)
+	a.Logger().Debug("Performing web search: %s\n", query)
 
 	if a.configManager == nil {
 		return "", agenterrors.NewPermanentError("configuration manager not initialized for web search", nil)
 	}
 
 	result, err := tools.WebSearch(query, a.configManager)
-	a.debugLog("Web search error: %v\n", err)
+	a.Logger().Debug("Web search error: %v\n", err)
 	if err == nil {
 		a.captureWebText("web_search", query, result)
 	}
@@ -270,12 +270,12 @@ func handleFetchURLWithImages(ctx context.Context, a *Agent, args map[string]int
 		return nil, result, utils.WrapError(err, "fetch URL")
 	}
 
-	a.debugLog("[img] fetch_url detected binary content (%v), processing for multimodal: %s\n", kind, url)
+	a.Logger().Debug("[img] fetch_url detected binary content (%v), processing for multimodal: %s\n", kind, url)
 
 	result, err := tools.FetchBinaryURL(url, kind)
 	if err != nil {
 		// Fall back to text handler on binary processing failure
-		a.debugLog("[WARN] Binary fetch failed: %v, falling back to text handler\n", err)
+		a.Logger().Debug("[WARN] Binary fetch failed: %v, falling back to text handler\n", err)
 		result, ferr := handleFetchURL(ctx, a, args)
 		return nil, result, utils.WrapError(ferr, "fetch URL")
 	}
@@ -300,7 +300,7 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	url := args["url"].(string)
-	a.debugLog("Fetching URL: %s\n", url)
+	a.Logger().Debug("Fetching URL: %s\n", url)
 
 	if a.configManager == nil {
 		return "", agenterrors.NewPermanentError("configuration manager not initialized for URL fetch", nil)
@@ -310,13 +310,13 @@ func handleFetchURL(ctx context.Context, a *Agent, args map[string]interface{}) 
 	// This gives structured data for issues, PRs, and repos instead of
 	// scraping JS-heavy GitHub pages.
 	if result, handled, err := a.tryRouteGitHubToMCP(ctx, url); handled {
-		a.debugLog("GitHub URL routed to MCP\n")
+		a.Logger().Debug("GitHub URL routed to MCP\n")
 		a.captureWebText("fetch_url", url, result)
 		return result, utils.WrapError(err, "fetch URL")
 	}
 
 	result, err := tools.FetchURL(url, a.configManager)
-	a.debugLog("Fetch URL error: %v\n", err)
+	a.Logger().Debug("Fetch URL error: %v\n", err)
 	if err == nil {
 		a.captureWebText("fetch_url", url, result)
 	}

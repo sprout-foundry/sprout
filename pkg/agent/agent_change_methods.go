@@ -5,19 +5,19 @@ import "fmt"
 // EnableChangeTracking enables change tracking for this agent session
 func (a *Agent) EnableChangeTracking(instructions string) {
 	if a.debug {
-		a.debugLog("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
+		a.Logger().Debug("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
 	}
 
 	if a.changeTracker == nil {
 		a.changeTracker = NewChangeTracker(a, instructions)
 		if a.debug {
-			a.debugLog("DEBUG: Created new change tracker and enabled it\n")
+			a.Logger().Debug("DEBUG: Created new change tracker and enabled it\n")
 		}
 	} else {
 		a.changeTracker.Reset(instructions)
 		a.changeTracker.Enable()
 		if a.debug {
-			a.debugLog("DEBUG: Reset existing change tracker and enabled it\n")
+			a.Logger().Debug("DEBUG: Reset existing change tracker and enabled it\n")
 		}
 	}
 }
@@ -37,7 +37,7 @@ func (a *Agent) IsChangeTrackingEnabled() bool {
 		if a.changeTracker != nil {
 			trackerEnabled = a.changeTracker.IsEnabled()
 		}
-		a.debugLog("DEBUG: IsChangeTrackingEnabled = %v (tracker nil: %v, tracker enabled: %v)\n",
+		a.Logger().Debug("DEBUG: IsChangeTrackingEnabled = %v (tracker nil: %v, tracker enabled: %v)\n",
 			enabled, a.changeTracker == nil, trackerEnabled)
 	}
 	return enabled

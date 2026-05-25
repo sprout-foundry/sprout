@@ -4,7 +4,6 @@ package agent
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -27,7 +26,7 @@ func formatToolCall(toolCall api.ToolCall) string {
 	// Example: [read_file] "path/to/file.go"
 	args, _, err := parseToolArgumentsWithRepair(toolCall.Function.Arguments)
 	if err != nil {
-		log.Printf("Warning: Failed to parse tool arguments for tool '%s': %v", toolCall.Function.Name, err)
+		packageLogWarnf("Warning: Failed to parse tool arguments for tool '%s': %v", toolCall.Function.Name, err)
 		return fmt.Sprintf("[%s]", toolCall.Function.Name)
 	}
 

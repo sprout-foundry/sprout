@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"log"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
@@ -39,14 +38,14 @@ func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, tur
 	// mismatch) and stay at info level so operators can see them.
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		log.Printf("[turn-embedding] failed to get conversation store: %v", err)
+		packageLogErrorf("[turn-embedding] failed to get conversation store: %v", err)
 		return nil
 	}
 
 	// Get the provider from the store
 	provider := store.Provider()
 	if provider == nil {
-		log.Printf("[turn-embedding] ERROR: provider unexpectedly nil after successful store init")
+		packageLogErrorf("[turn-embedding] ERROR: provider unexpectedly nil after successful store init")
 		return nil
 	}
 
@@ -63,9 +62,9 @@ func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, tur
 	embeddings, err := provider.EmbedBatch(ctx, texts)
 	if err != nil {
 		if ctx.Err() != nil {
-			log.Printf("[turn-embedding] embedding cancelled: %v", ctx.Err())
+			packageLogErrorf("[turn-embedding] embedding cancelled: %v", ctx.Err())
 		} else {
-			log.Printf("[turn-embedding] failed to embed texts: %v", err)
+			packageLogErrorf("[turn-embedding] failed to embed texts: %v", err)
 		}
 		return nil
 	}
@@ -97,7 +96,7 @@ func EmbedAndStoreTurn(ctx context.Context, mgr *embedding.EmbeddingManager, tur
 
 	// Store in conversation store
 	if err := store.Store([]embedding.VectorRecord{record}); err != nil {
-		log.Printf("[turn-embedding] failed to store vector record: %v", err)
+		packageLogErrorf("[turn-embedding] failed to store vector record: %v", err)
 		return nil
 	}
 

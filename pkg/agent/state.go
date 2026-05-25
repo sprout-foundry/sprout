@@ -166,14 +166,14 @@ func (a *Agent) LoadSummaryFromFile(filename string) error {
 	if state.CompactSummary != "" {
 		a.state.SetPreviousSummary(state.CompactSummary)
 		if a.debug {
-			a.debugLog("[doc] Loaded compact summary (%d chars)\n", len(state.CompactSummary))
+			a.Logger().Debug("[doc] Loaded compact summary (%d chars)\n", len(state.CompactSummary))
 		}
 	} else {
 		// Fallback to legacy summary if compact summary not available
 		if state.PreviousSummary != "" {
 			a.state.SetPreviousSummary(state.PreviousSummary)
 			if a.debug {
-				a.debugLog("[doc] Loaded legacy summary (%d chars)\n", len(state.PreviousSummary))
+				a.Logger().Debug("[doc] Loaded legacy summary (%d chars)\n", len(state.PreviousSummary))
 			}
 		}
 	}
@@ -193,7 +193,7 @@ func (a *Agent) SaveConversationSummary() error {
 	}
 
 	if a.debug {
-		a.debugLog("[save] Saved conversation summary to %s\n", stateFile)
+		a.Logger().Debug("[save] Saved conversation summary to %s\n", stateFile)
 	}
 
 	return nil
@@ -287,13 +287,13 @@ func (a *Agent) autoSaveState() {
 
 	if err := a.SaveStateScoped(a.state.GetSessionID(), a.currentWorkspaceRoot()); err != nil {
 		if a.debug {
-			a.debugLog("[WARN] Failed to write state file for auto-save: %v\n", err)
+			a.Logger().Debug("[WARN] Failed to write state file for auto-save: %v\n", err)
 		}
 		return
 	}
 
 	if a.debug {
-		a.debugLog("[save] Auto-saved scoped conversation state for session %s\n", a.state.GetSessionID())
+		a.Logger().Debug("[save] Auto-saved scoped conversation state for session %s\n", a.state.GetSessionID())
 	}
 }
 

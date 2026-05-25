@@ -70,7 +70,7 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	expectedProcessed := a.state.GetTotalTokens() - a.state.GetCachedTokens()
 	if expectedProcessed != processedTokens {
 		// Log discrepancy for debugging (only in debug mode)
-		a.debugLog("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
+		a.Logger().Debug("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
 	}
 
 	// Token usage section
@@ -149,7 +149,7 @@ func (a *Agent) PrintConciseSummary() {
 	// Verify consistency: total - cached should approximately equal prompt-processed + completion
 	expectedProcessed := a.state.GetTotalTokens() - a.state.GetCachedTokens()
 	if expectedProcessed != processedTokens {
-		a.debugLog("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
+		a.Logger().Debug("Token count discrepancy: computed %d vs expected %d\n", processedTokens, expectedProcessed)
 	}
 
 	costStr := fmt.Sprintf("$%.6f", a.state.GetTotalCost())

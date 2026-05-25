@@ -174,6 +174,10 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 	agent.changeTracker = NewChangeTracker(agent, "")
 	agent.changeTracker.Enable() // Start enabled by default
 
+	// Wire the package-level logger so package-level functions (embedding,
+	// proactive context, etc.) can use structured logging with session context.
+	SetPackageLogger(agent.Logger())
+
 	// Restore embedding index if previously enabled for this workspace
 	agent.RestoreEmbeddingIndex()
 

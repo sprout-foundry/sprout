@@ -604,7 +604,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		webUISup.cleanupHostRecordIfOwned()
 	}
 	if webServer != nil && webServer.IsRunning() {
-		fmt.Printf("[~] Shutting down web server...\n")
+		console.GlyphDim.Print("Shutting down web server...")
 
 		if webErr := webServer.Shutdown(); webErr != nil {
 			console.GlyphWarning.Fprintf(os.Stderr, "Error shutting down web server: %v", webErr)
@@ -1322,6 +1322,14 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 	// the previous end qualify for the collapse).
 	var run *toolRunState
 
+	// pendingArgs caches the `arguments` JSON string from ToolStart
+	// events keyed by tool_call_id so the corresponding ToolEnd can
+	// recover the args for preview rendering. ToolEndEvent (in
+	// pkg/events/events.go) does NOT carry arguments — so without this
+	// cache the collapsed-run line rendered as "× N (, , )" with empty
+	// parens. Entries clear on the matching ToolEnd to bound growth.
+	pendingArgs := map[string]string{}
+
 	go func() {
 		defer eventBus.Unsubscribe(subName)
 		for {
@@ -1343,6 +1351,9 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						continue
 					}
 					args, _ := data["arguments"].(string)
+					if id, _ := data["tool_call_id"].(string); id != "" && args != "" {
+						pendingArgs[id] = args
+					}
 					depth := readEventDepth(data)
 					persona := readEventPersona(data)
 					// SP-051-2c: announce subagent spawn once per (depth,
@@ -1384,7 +1395,18 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					if status != "completed" {
 						icon = console.GlyphError.Prefix()
 					}
+					// ToolEnd doesn't carry arguments; recover them from
+					// the ToolStart cache so the collapse-line preview
+					// shows real paths instead of empty parens.
 					args, _ := data["arguments"].(string)
+					if args == "" {
+						if id, _ := data["tool_call_id"].(string); id != "" {
+							if cached, ok := pendingArgs[id]; ok {
+								args = cached
+								delete(pendingArgs, id)
+							}
+						}
+					}
 					depth := readEventDepth(data)
 					persona := readEventPersona(data)
 					preview := formatToolPreview(chatAgent, name, args)
@@ -1567,7 +1589,20 @@ func (r *toolRunState) matches(name string, depth int, persona string) bool {
 }
 
 func (r *toolRunState) appendArg(preview string) {
-	r.argsTrail = append(r.argsTrail, preview)
+	// formatToolPreview returns its result already wrapped in " (...)"
+	// so that the start/end lines render as "tool (arg)". For the
+	// collapsed run line we re-wrap argsTrail as a single parenthesised
+	// list ("(a, b, c)"), so strip the per-arg wrap here. Otherwise
+	// the line read "tool × N ( (a),  (b))" with doubled parens.
+	stripped := strings.TrimPrefix(preview, " (")
+	stripped = strings.TrimSuffix(stripped, ")")
+	stripped = strings.TrimSpace(stripped)
+	if stripped == "" {
+		// No useful arg captured — skip rather than append "" which
+		// renders as a stray comma-space ("× N (, , foo)").
+		return
+	}
+	r.argsTrail = append(r.argsTrail, stripped)
 	if len(r.argsTrail) > maxArgsTrail {
 		r.argsTrail = r.argsTrail[len(r.argsTrail)-maxArgsTrail:]
 	}

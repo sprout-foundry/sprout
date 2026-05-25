@@ -613,7 +613,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		}
 		a.state.GetCircuitBreaker().mu.Unlock()
 		if a.debug {
-			a.debugLog("DEBUG: Reset circuit breaker for new query\n")
+			a.Logger().Debug("DEBUG: Reset circuit breaker for new query\n")
 		}
 	}
 
@@ -638,7 +638,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if shouldInjectProactiveContext {
 		injectCtx, injectCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := a.InjectProactiveContext(injectCtx, processedQuery); err != nil {
-			a.debugLog("[proactive-context] injection failed: %v\n", err)
+			a.Logger().Debug("[proactive-context] injection failed: %v\n", err)
 		}
 		injectCancel()
 	}
@@ -879,7 +879,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Commit tracked changes
 	if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
 		if commitErr := a.CommitChanges("Task completed"); commitErr != nil {
-			a.debugLog("Warning: Failed to commit changes: %v\n", commitErr)
+			a.Logger().Debug("Warning: Failed to commit changes: %v\n", commitErr)
 		}
 	}
 
@@ -1026,7 +1026,7 @@ func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message
 	}
 
 	if a.debug {
-		a.debugLog("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
+		a.Logger().Debug("[sync] Seed sync complete: msgCount=%d, assistantCount=%d, terminationReason=%s, iteration=%d\n",
 			len(seedMsgs), assistantCount, terminationReason, a.state.GetCurrentIteration())
 	}
 }

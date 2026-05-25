@@ -30,7 +30,7 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 	pythonExec, err := getPythonDiffExecutable()
 	if err != nil {
 		if a.debug {
-			a.debugLog("Python 3 runtime not available, falling back to Go diff implementation: %v", err)
+			a.Logger().Debug("Python 3 runtime not available, falling back to Go diff implementation: %v", err)
 		}
 		return false
 	}
@@ -39,7 +39,7 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 	tmpDir, err := ioutil.TempDir("", "coder_diff_")
 	if err != nil {
 		if a.debug {
-			a.debugLog("Failed to create temporary directory for diff: %v", err)
+			a.Logger().Debug("Failed to create temporary directory for diff: %v", err)
 		}
 		return false
 	}
@@ -51,13 +51,13 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 	// Write content to temporary files
 	if err := ioutil.WriteFile(oldFile, []byte(oldContent), 0644); err != nil {
 		if a.debug {
-			a.debugLog("Failed to write old content to temporary file: %v", err)
+			a.Logger().Debug("Failed to write old content to temporary file: %v", err)
 		}
 		return false
 	}
 	if err := ioutil.WriteFile(newFile, []byte(newContent), 0644); err != nil {
 		if a.debug {
-			a.debugLog("Failed to write new content to temporary file: %v", err)
+			a.Logger().Debug("Failed to write new content to temporary file: %v", err)
 		}
 		return false
 	}
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 	scriptFile := filepath.Join(tmpDir, "diff_script.py")
 	if err := ioutil.WriteFile(scriptFile, []byte(pythonScript), 0644); err != nil {
 		if a.debug {
-			a.debugLog("Failed to write Python diff script: %v", err)
+			a.Logger().Debug("Failed to write Python diff script: %v", err)
 		}
 		return false
 	}
@@ -146,7 +146,7 @@ if __name__ == "__main__":
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if a.debug {
-			a.debugLog("python diff execution failed: %v, falling back to Go diff", err)
+			a.Logger().Debug("python diff execution failed: %v, falling back to Go diff", err)
 		}
 		return false
 	}

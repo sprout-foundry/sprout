@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -55,7 +54,7 @@ func handleEmbeddingIndexBuild(ctx context.Context, a *Agent, em *embedding.Embe
 	go func() {
 		result := <-resultCh
 		if result.Err != nil {
-			log.Printf("embedding: index build failed: %v", result.Err)
+			a.Logger().Error("embedding: index build failed: %v", result.Err)
 			a.PublishToolExecution("embedding_index", "build_failed", map[string]interface{}{
 				"error": result.Err.Error(),
 			})

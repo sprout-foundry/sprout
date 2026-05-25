@@ -42,8 +42,8 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	hasActiveWebUI := eventBus != nil && askUserMgr != nil && a.HasActiveWebUIClients()
 
 	if a.debug {
-		a.debugLog("[ask_user] Prompting user: %s\n", question)
-		a.debugLog("[ask_user] eventBus=%v askUserMgr=%v hasActiveWebUI=%v clientID=%q userID=%q chatID=%q\n",
+		a.Logger().Debug("[ask_user] Prompting user: %s\n", question)
+		a.Logger().Debug("[ask_user] eventBus=%v askUserMgr=%v hasActiveWebUI=%v clientID=%q userID=%q chatID=%q\n",
 			eventBus != nil, askUserMgr != nil, hasActiveWebUI, clientID, userID, chatID)
 	}
 
@@ -58,13 +58,13 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	}
 	if err != nil {
 		if a.debug {
-			a.debugLog("[ask_user] Error: %v\n", err)
+			a.Logger().Debug("[ask_user] Error: %v\n", err)
 		}
 		return "", fmt.Errorf("ask_user failed: %w", err)
 	}
 
 	if a.debug {
-		a.debugLog("[ask_user] User response: %s\n", response)
+		a.Logger().Debug("[ask_user] User response: %s\n", response)
 	}
 
 	return response, nil

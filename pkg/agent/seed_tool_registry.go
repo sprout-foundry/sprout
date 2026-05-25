@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
@@ -433,23 +432,46 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	}
 	safeMsg := sanitizeToolFailureMessage(err.Error())
 
-	// Security caution requires a special LLM verification signal.
-	if strings.Contains(err.Error(), "security caution:") {
+	// Use typed error classification first to decide behavior.
+	action := ClassifyError(err)
+
+	switch action {
+	case ActionEscalate:
+		// Security error (typed) — escalate to user/LLM.
 		if agent != nil {
 			agent.PrintLine("")
 			agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
 			agent.PrintLine("")
 		}
 		return fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeMsg), err
-	}
 
-	if agent != nil {
-		agent.PrintLine("")
-		agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", toolName, safeMsg))
-		agent.PrintLine("")
-	}
+	case ActionFail:
+		// Permanent/invalid input/context overflow — no retry.
+		if agent != nil {
+			agent.PrintLine("")
+			agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", toolName, safeMsg))
+			agent.PrintLine("")
+		}
+		return fmt.Sprintf("Error: %s", safeMsg), err
 
-	return fmt.Sprintf("Error: %s", safeMsg), err
+	default:
+		// ActionRetry — transient/rate-limited/unknown errors.
+		// Log and return as normal error for potential retry.
+		// Sub-classify so the LLM gets more context for its retry decision.
+		if agent != nil {
+			agent.PrintLine("")
+			switch {
+			case agenterrors.IsRateLimited(err):
+				agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed (rate limited): %s", toolName, safeMsg))
+			case agenterrors.IsProviderError(err):
+				agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed (provider): %s", toolName, safeMsg))
+			default:
+				agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed (transient): %s", toolName, safeMsg))
+			}
+			agent.PrintLine("")
+		}
+		return fmt.Sprintf("Error: %s", safeMsg), err
+	}
 }
 // isLocalProvider returns true if the provider runs locally and never sends
 // data outside the user's network. Secret redaction is skipped for these

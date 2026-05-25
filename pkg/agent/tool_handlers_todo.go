@@ -68,14 +68,14 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 		todos = append(todos, todo)
 	}
 
-	a.debugLog("TodoWrite: processing %d todos\n", len(todos))
+	a.Logger().Debug("TodoWrite: processing %d todos\n", len(todos))
 	result := a.GetTodoManager().Write(todos)
-	a.debugLog("TodoWrite result: %s\n", result)
+	a.Logger().Debug("TodoWrite result: %s\n", result)
 	return result, nil
 }
 
 func handleTodoRead(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	a.debugLog("TodoRead: returning current todo list\n")
+	a.Logger().Debug("TodoRead: returning current todo list\n")
 	todos := a.GetTodoManager().Read()
 	if len(todos) == 0 {
 		return "No todos", nil

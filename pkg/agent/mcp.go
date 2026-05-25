@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
@@ -135,7 +134,7 @@ func (a *Agent) initializeMCP() error {
 
 				// Migrate secrets BEFORE adding to manager
 				if _, err := mcp.MigrateEnvSecretsFromServer("github", &githubServer); err != nil {
-					log.Printf("[mcp-secrets] Warning: failed to migrate secrets for auto-discovered GitHub server: %v", err)
+					a.Logger().Warn("[mcp-secrets] failed to migrate secrets for auto-discovered GitHub server: %v", err)
 				}
 
 				if err := a.mcpSub.GetManager().AddServer(githubServer); err == nil {
@@ -175,7 +174,7 @@ func (a *Agent) RefreshMCPTools() error {
 func (a *Agent) getMCPTools() []api.Tool {
 	if a.mcpSub == nil || a.mcpSub.GetManager() == nil {
 		if a.debug {
-			a.debugLog("[WARN] Warning: MCP manager is nil\n")
+			a.Logger().Debug("[WARN] Warning: MCP manager is nil\n")
 		}
 		return nil
 	}
@@ -186,13 +185,13 @@ func (a *Agent) getMCPTools() []api.Tool {
 
 	if !a.mcpSub.IsInitialized() {
 		if a.debug {
-			a.debugLog("[cfg] Initializing MCP (first use)...\n")
+			a.Logger().Debug("[cfg] Initializing MCP (first use)...\n")
 		}
 		if err := a.initializeMCP(); err != nil {
 			// Non-fatal - MCP is optional
 			a.mcpSub.SetInitError(err)
 			if a.debug {
-				a.debugLog("[WARN] MCP initialization failed: %v\n", err)
+				a.Logger().Debug("[WARN] MCP initialization failed: %v\n", err)
 			}
 			// Don't set mcpInitialized to allow retry
 			a.mcpSub.SetInitialized(false)
@@ -201,7 +200,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 			a.mcpSub.SetInitialized(true)
 			a.mcpSub.SetInitError(nil)
 			if a.debug {
-				a.debugLog("[OK] MCP initialized\n")
+				a.Logger().Debug("[OK] MCP initialized\n")
 			}
 		}
 	}
@@ -214,7 +213,7 @@ func (a *Agent) getMCPTools() []api.Tool {
 	// Return cached tools if available
 	if a.mcpSub.GetToolsCache() != nil {
 		if a.debug {
-			a.debugLog("[tool] Using cached MCP tools: %d\n", len(a.mcpSub.GetToolsCache()))
+			a.Logger().Debug("[tool] Using cached MCP tools: %d\n", len(a.mcpSub.GetToolsCache()))
 		}
 		return a.mcpSub.GetToolsCache()
 	}
@@ -223,13 +222,13 @@ func (a *Agent) getMCPTools() []api.Tool {
 	mcpTools, err := a.mcpSub.GetManager().GetAllTools(ctx)
 	if err != nil {
 		if a.debug {
-			a.debugLog("[WARN] Warning: Failed to get MCP tools: %v\n", err)
+			a.Logger().Debug("[WARN] Warning: Failed to get MCP tools: %v\n", err)
 		}
 		return nil
 	}
 
 	if a.debug {
-		a.debugLog("[tool] Loading %d MCP tools from manager (first time)\n", len(mcpTools))
+		a.Logger().Debug("[tool] Loading %d MCP tools from manager (first time)\n", len(mcpTools))
 	}
 
 	var agentTools []api.Tool

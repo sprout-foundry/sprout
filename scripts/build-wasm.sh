@@ -149,6 +149,17 @@ build_wasm() {
 
     WASM_SIZE=$(ls -lh "$target_dir/sprout.wasm" | awk '{print $5}')
     echo "  WASM binary size: $WASM_SIZE"
+
+    # Size threshold check: the WASM binary should not exceed 100MB.
+    # As of 2025-05 with pkg/ast + gotreesitter grammars included,
+    # the stripped binary is ~61MB. The threshold allows headroom for
+    # future language additions while preventing unbounded growth.
+    WASM_SIZE_BYTES=$(stat -f%z "$target_dir/sprout.wasm" 2>/dev/null || stat -c%s "$target_dir/sprout.wasm" 2>/dev/null || echo 0)
+    WASM_MAX_BYTES=$((100 * 1024 * 1024)) # 100MB
+    if [ "$WASM_SIZE_BYTES" -gt "$WASM_MAX_BYTES" ] 2>/dev/null; then
+        echo "  ⚠ WARNING: WASM binary ($WASM_SIZE) exceeds 100MB threshold!" >&2
+        echo "  Consider auditing large dependencies or adding build tags." >&2
+    fi
 }
 
 # Escape special characters for JSON string values

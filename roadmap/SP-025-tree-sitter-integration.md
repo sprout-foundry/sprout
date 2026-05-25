@@ -110,7 +110,7 @@ The parser is a shared dependency consumed by:
 | Risk | Mitigation |
 |------|-----------|
 | Binary size increase | Grammar blobs are pre-compiled (~100-500KB total for Go+TS+JS+Python). Acceptable for the accuracy gain. |
-| WASM binary size | Gotreesitter runtime + grammar blobs add ~500KB-1MB to WASM binary. Cache grammar blobs in browser storage after first load. |
+| WASM binary size | Gotreesitter runtime + grammar blobs add ~500KB-1MB to WASM binary. Cache grammar blobs in browser storage after first load. Measured: ~61MB stripped (acceptable — well within 100MB threshold). |
 | Parse errors on malformed files | Fall back to regex for files that fail to parse. Tree-sitter is error-tolerant but edge cases exist. |
 | Build time impact | Grammar blobs are pre-compiled. No runtime compilation needed. |
 | Breaking existing symbol index format | Maintain backward-compatible JSON schema. New fields (scope, parent) are optional. |

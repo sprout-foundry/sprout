@@ -153,7 +153,7 @@
 
 ## Not Started — SP-011: Terminal Parity
 
-- [ ] SP-011-P1.1-ptyExit: In `TerminalPane.tsx`, handle `pty_exit`: write `[Process exited]`, set pane disconnected, close WebSocket cleanly
+- [x] SP-011-P1.1-ptyExit: In `TerminalPane.tsx`, handle `pty_exit`: write `[Process exited]`, set pane disconnected, close WebSocket cleanly
 - [ ] SP-011-P1.1-parentHandle: In `Terminal.tsx`, implement `handlePaneExit`: auto-close secondary split pane, auto-restart last session, close tab in multi-session pane
 - [ ] SP-011-P1.2-perPaneModel: Replace flat session model with `PaneState` (id, sessions[], activeSessionId) — each split pane has its own tab bar
 - [ ] SP-011-P1.2-rendering: Render per-pane tab bars and `TerminalPane` components mapped from `PaneState[]`

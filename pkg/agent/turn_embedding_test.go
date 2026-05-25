@@ -12,7 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
-// TestEmbedAndStoreTurn_RealProvider tests the full flow with a real static provider.
+// TestEmbedAndStoreTurn_RealProvider tests the full flow with the ONNX provider.
 // It creates an EmbeddingManager with a temp config dir, calls EmbedAndStoreTurn,
 // and verifies the record was stored by loading it back from the conversation store.
 func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
@@ -32,10 +32,10 @@ func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
 
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
-	// Initialize the manager
+	// Initialize the manager (requires ONNX runtime)
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
+		if strings.Contains(err.Error(), "ONNX") {
+			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
@@ -110,10 +110,10 @@ func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
 
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
-	// Initialize the manager
+	// Initialize the manager (requires ONNX runtime)
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
+		if strings.Contains(err.Error(), "ONNX") {
+			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
@@ -199,10 +199,10 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
 
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
-	// Initialize the manager
+	// Initialize the manager (requires ONNX runtime)
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
+		if strings.Contains(err.Error(), "ONNX") {
+			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
@@ -294,8 +294,8 @@ func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
+		if strings.Contains(err.Error(), "ONNX") {
+			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}
@@ -459,10 +459,10 @@ func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
 
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
-	// Initialize the manager
+	// Initialize the manager (requires ONNX runtime)
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
+		if strings.Contains(err.Error(), "ONNX") {
+			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
 		t.Fatalf("failed to initialize embedding manager: %v", err)
 	}

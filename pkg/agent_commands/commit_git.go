@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"golang.org/x/term"
 )
 
@@ -81,17 +82,17 @@ func parseFilenameFromStatusLine(line string) (string, bool) {
 
 // stageFiles stages a list of files and reports results.
 func stageFiles(c printlnPrintfHelper, files []string) {
-	c.println("\n[pkg] Staging files...")
+	c.println("\n" + console.GlyphAction.Prefix() + "Staging files...")
 	for _, file := range files {
 		cmd := gitCommand("add", file)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			c.printf("[FAIL] Failed to stage %s: %v\n", file, err)
+			c.printf("%sFailed to stage %s: %v\n", console.GlyphError.Prefix(), file, err)
 			if len(output) > 0 {
 				c.printf("Output: %s\n", string(output))
 			}
 		} else {
-			c.printf("[OK] Staged: %s\n", file)
+			c.printf("%sStaged: %s\n", console.GlyphSuccess.Prefix(), file)
 		}
 	}
 }

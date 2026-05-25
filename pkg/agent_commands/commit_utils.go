@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // CommitMessageHandler handles commit message generation, editing, and retry logic
@@ -65,7 +66,7 @@ Staged changes:
 Please generate only the commit message content, no additional commentary.`, string(diffOutput))
 	}
 
-	fmt.Println("[bot] Generating commit message with AI...")
+	console.GlyphAction.Print("Generating commit message with AI...")
 	commitMessage, err := h.chatAgent.ProcessQuery(commitPrompt)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate commit message: %w", err)
@@ -78,16 +79,16 @@ Please generate only the commit message content, no additional commentary.`, str
 func (h *CommitMessageHandler) HandleCommitConfirmation(commitMessage string, filename string) (string, bool, error) {
 	for {
 		// Show preview
-		fmt.Println("\n[list] Commit message preview:")
-		fmt.Println("=============================================")
+		fmt.Println()
+		console.GlyphInfo.Print("Commit message preview:")
 		fmt.Println(commitMessage)
-		fmt.Println("=============================================")
+		fmt.Println()
 
 		// Prompt for action
 		if filename != "" {
-			fmt.Printf("\n[i] Commit with this message for %s? (y)es/(n)o/(e)dit/(r)etry: ", filename)
+			fmt.Printf("%sCommit with this message for %s? (y)es/(n)o/(e)dit/(r)etry: ", console.GlyphInfo.Prefix(), filename)
 		} else {
-			fmt.Println("\n[i] Commit with this message? (y)es/(n)o/(e)dit/(r)etry:")
+			console.GlyphInfo.Print("Commit with this message? (y)es/(n)o/(e)dit/(r)etry:")
 		}
 
 		input, _ := h.reader.ReadString('\n')
@@ -97,20 +98,20 @@ func (h *CommitMessageHandler) HandleCommitConfirmation(commitMessage string, fi
 		case "y", "yes":
 			return commitMessage, true, nil
 		case "n", "no":
-			fmt.Println("[FAIL] Commit cancelled")
+			console.GlyphError.Print("Commit cancelled")
 			return "", false, nil
 		case "e", "edit":
 			editedMessage, err := h.EditCommitMessage(commitMessage)
 			if err != nil {
-				fmt.Printf("[FAIL] Failed to edit commit message: %v\n", err)
+				console.GlyphError.Printf("Failed to edit commit message: %v", err)
 				continue
 			}
 			commitMessage = editedMessage
 		case "r", "retry":
-			fmt.Println("[~] Retrying commit message generation...")
+			console.GlyphDim.Print("Retrying commit message generation...")
 			return "", true, nil // Signal to retry generation
 		default:
-			fmt.Println("[FAIL] Invalid input. Please enter y, n, e, or r")
+			console.GlyphError.Print("Invalid input. Please enter y, n, e, or r")
 		}
 	}
 }
@@ -137,8 +138,8 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	fmt.Printf("[edit] Opening %s to edit commit message...\n", editor)
-	fmt.Println("[i] Make your changes, save, and exit the editor to continue")
+	console.GlyphAction.Printf("Opening %s to edit commit message...", editor)
+	console.GlyphInfo.Print("Make your changes, save, and exit the editor to continue")
 
 	err = cmd.Run()
 	if err != nil {
@@ -156,7 +157,7 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 		return "", errors.New("commit message cannot be empty")
 	}
 
-	fmt.Println("[OK] Commit message edited successfully")
+	console.GlyphSuccess.Print("Commit message edited successfully")
 	return editedMessage, nil
 }
 
@@ -170,14 +171,15 @@ func (h *CommitMessageHandler) CreateCommit(commitMessage string) error {
 	}
 	defer os.Remove(tempFile)
 
-	fmt.Println("\n[save] Creating commit...")
+	fmt.Println()
+	console.GlyphAction.Print("Creating commit...")
 	cmd := gitCommand("commit", "-F", tempFile)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to create commit: %w", err)
 	}
 
-	fmt.Printf("[OK] Commit created successfully!\n")
+	console.GlyphSuccess.Print("Commit created successfully!")
 	fmt.Printf("Output: %s\n", string(output))
 	return nil
 }

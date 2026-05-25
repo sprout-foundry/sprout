@@ -1,11 +1,12 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	"github.com/sprout-foundry/sprout/pkg/ui"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // SessionsCommand handles session management with auto-tracking and session recovery
@@ -46,7 +47,7 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 
 		chatAgent.ApplyState(state)
-		fmt.Printf("[ok] Conversation session loaded: %s\n", sessionID)
+		console.GlyphSuccess.Printf("Conversation session loaded: %s", sessionID)
 		return nil
 	}
 
@@ -56,62 +57,61 @@ func (c *SessionsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return nil
 	}
 
-	// Use dropdown for interactive selection
-	return c.selectSessionWithDropdown(sessions, chatAgent)
+	return c.selectSessionWithPicker(sessions, chatAgent)
 }
 
-// selectSessionWithDropdown provides interactive session selection with dropdown
-func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
-	// Simple numeric selector - display sessions and prompt for choice
-	fmt.Println("\n[dir/] Available Sessions:")
-	fmt.Println("=====================")
-
-	// Display sessions in reverse order (newest first)
-	for i := len(sessions) - 1; i >= 0; i-- {
-		session := sessions[i]
-		sessionNum := len(sessions) - i
-		name := session.Name
-		if name == "" {
-			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
-		}
-		label := session.LastUpdated.Format("2006-01-02 15:04:05")
-		if name != "" {
-			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
-		}
-		fmt.Printf("%d. %s\n", sessionNum, label)
-	}
-
-	// Build simple options list for display
-	var sessionOptions []string
+// selectSessionWithPicker drives the unified SelectList picker for /sessions.
+// Sessions are presented newest-first; selection routes through
+// LoadStateScoped + ApplyState exactly like the legacy numeric flow.
+func (c *SessionsCommand) selectSessionWithPicker(sessions []agent.SessionInfo, chatAgent *agent.Agent) error {
+	items := make([]console.SelectItem, 0, len(sessions))
+	// Sessions list is oldest-first from the storage layer; reverse so the
+	// most recent session is at the top of the picker.
 	for i := len(sessions) - 1; i >= 0; i-- {
 		session := sessions[i]
 		name := session.Name
 		if name == "" {
 			name = agent.GetSessionPreviewScoped(session.SessionID, session.WorkingDirectory)
 		}
-		label := session.LastUpdated.Format("2006-01-02 15:04:05")
-		if name != "" {
-			label = fmt.Sprintf("[%s] - %s", name, session.LastUpdated.Format("2006-01-02 15:04:05"))
+		if name == "" {
+			name = session.SessionID
 		}
-		sessionOptions = append(sessionOptions, label)
+		items = append(items, console.SelectItem{
+			Label:  name,
+			Detail: session.LastUpdated.Format("2006-01-02 15:04"),
+			Value:  session.SessionID,
+		})
 	}
 
-	// Use shared numeric selector
-	selection, ok := ui.PromptForSelection(sessionOptions, "Enter session number (or 0 to cancel): ")
-	if !ok || selection == 0 {
+	picker := console.NewSelectList(console.SelectListOptions{
+		Title:      "Available Sessions",
+		Items:      items,
+		PageSize:   12,
+		Searchable: true,
+	})
+	chosenID, ok, err := picker.Run(context.Background())
+	if err != nil {
+		return fmt.Errorf("session picker: %w", err)
+	}
+	if !ok || chosenID == "" {
 		return nil
 	}
 
-	// Load the selected session (convert selection back to session index)
-	sessionIndex := len(sessions) - selection
-	selected := sessions[sessionIndex]
-	sessionID := selected.SessionID
-	state, err := chatAgent.LoadStateScoped(sessionID, selected.WorkingDirectory)
+	var selected agent.SessionInfo
+	for _, s := range sessions {
+		if s.SessionID == chosenID {
+			selected = s
+			break
+		}
+	}
+	if selected.SessionID == "" {
+		return nil
+	}
+	state, err := chatAgent.LoadStateScoped(selected.SessionID, selected.WorkingDirectory)
 	if err != nil {
 		return fmt.Errorf("failed to load session: %w", err)
 	}
-
 	chatAgent.ApplyState(state)
-	fmt.Printf("\r\n[OK] Conversation session loaded: %s\r\n", sessionID)
+	console.GlyphSuccess.Printf("Conversation session loaded: %s", selected.SessionID)
 	return nil
 }

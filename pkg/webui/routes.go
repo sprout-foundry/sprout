@@ -122,6 +122,7 @@ func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/workspace", ws.handleAPIWorkspace)
 	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
 	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
+	mux.HandleFunc("/api/workspace/projects", ws.handleAPIWorkspaceProjects)
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)

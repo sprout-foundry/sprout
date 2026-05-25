@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -113,7 +114,7 @@ description: Project-specific conventions for %s. Update this description.
 			os.Exit(1)
 		}
 		
-		fmt.Printf("[ok] Created skill '%s' at %s\n", skillID, skillFile)
+		console.GlyphSuccess.Printf("Created skill '%s' at %s", skillID, skillFile)
 		fmt.Printf("\nEdit the file to add your project-specific conventions.\n")
 		fmt.Printf("The skill will be automatically discovered when running sprout in this project.\n")
 	},

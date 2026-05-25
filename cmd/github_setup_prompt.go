@@ -12,6 +12,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -105,14 +106,14 @@ func promptGitHubMCPSetupIfNeeded(chatAgent interface{}) {
 	case "s", "setup", "yes", "y":
 		server, setupErr := runGitHubMCPSetup(context.Background(), repo, reader)
 		if setupErr != nil {
-			fmt.Printf("[WARN] GitHub MCP setup failed: %v\n", setupErr)
+			console.GlyphWarning.Printf("GitHub MCP setup failed: %v", setupErr)
 			return
 		}
 		if server == nil {
 			return // User cancelled
 		}
 		if saveErr := saveGitHubMCPServer(server); saveErr != nil {
-			fmt.Printf("[WARN] Failed to save GitHub MCP config: %v\n", saveErr)
+			console.GlyphWarning.Printf("Failed to save GitHub MCP config: %v", saveErr)
 			return
 		}
 		// Reload MCP in the running agent so tools become available immediately.
@@ -129,7 +130,7 @@ func promptGitHubMCPSetupIfNeeded(chatAgent interface{}) {
 			c.DismissedPrompts["github_mcp_setup"] = true
 			return nil
 		}); saveErr != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to save preference: %v\n", saveErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Failed to save preference: %v", saveErr)
 		}
 		fmt.Println("   Won't ask again. Re-enable with: sprout config set dismissed_prompts.github_mcp_setup false")
 	}

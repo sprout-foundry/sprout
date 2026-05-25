@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -68,6 +69,62 @@ func printContinuationHint(chatAgent *agent.Agent) {
 	fmt.Printf("To Continue: `sprout agent --session-id %s`\n", sessionID)
 }
 
+// printKeyboardHelp is a convenience wrapper that writes to stderr.
+// Triggered by typing `?` alone at the idle prompt. Writes to stderr
+// so it doesn't interleave with stdout-bound model output if the user
+// pipes the session.
+func printKeyboardHelp() {
+	writeKeyboardHelp(os.Stderr)
+}
+
+// writeKeyboardHelp emits a compact, two-column reference of the
+// non-obvious keys the CLI exposes — primarily the steer-panel keys
+// added by SP-055 since the rest of the bindings (slash commands,
+// exit) are documented in the welcome banner and `/help`. Accepts a
+// writer so tests can capture output.
+func writeKeyboardHelp(w io.Writer) {
+	colorOn := envutil.ResolveColorPreference(true)
+	dim, reset := "", ""
+	if colorOn {
+		dim, reset = "\033[2m", "\033[0m"
+	}
+	rows := [][2]string{
+		{"Steer panel (while a turn is running)", ""},
+		{"  Enter", "send mid-turn steer (default)"},
+		{"  Tab", "toggle steer ↔ queue mode"},
+		{"  ↑ / ↓", "recall prior steer messages"},
+		{"  Esc", "clear the input"},
+		{"  Ctrl+C", "interrupt the current turn"},
+		{"", ""},
+		{"Idle prompt", ""},
+		{"  /<cmd>", "slash command (/help, /commit, /persona, …)"},
+		{"  ?", "this help"},
+		{"  exit / quit", "end session + print summary"},
+		{"  Ctrl+C × 2", "force quit"},
+	}
+	fmt.Fprintln(w)
+	console.GlyphInfo.Fprintf(w, "Keyboard help")
+	for _, r := range rows {
+		if r[0] == "" {
+			fmt.Fprintln(w)
+			continue
+		}
+		if r[1] == "" {
+			// Section header — bold if color is on.
+			if colorOn {
+				fmt.Fprintf(w, "  \033[1m%s%s\n", r[0], reset)
+			} else {
+				fmt.Fprintf(w, "  %s\n", r[0])
+			}
+			continue
+		}
+		// Two-column row. Align the description column at fixed width
+		// so the descriptions stack visually.
+		fmt.Fprintf(w, "  %-18s %s%s%s\n", r[0], dim, r[1], reset)
+	}
+	fmt.Fprintln(w)
+}
+
 // RunAgent runs the agent in interactive or direct mode
 func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err error) {
 	// SP-048-5e: when stdout is being piped/redirected (i.e. not a TTY),
@@ -112,7 +169,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// all subsequent output is captured by the rotating log files.
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Could not determine home directory, skipping daemon log rotation: %v\n", homeErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Could not determine home directory, skipping daemon log rotation: %v", homeErr)
 		} else {
 			setupDaemonLogging(homeDir)
 		}
@@ -152,7 +209,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	if enableWebUI {
 		// Warn when binding to all interfaces
 		if bindAddr == "0.0.0.0" || bindAddr == "::" {
-			fmt.Fprintf(os.Stderr, "[WARN] Binding to %s — web UI is accessible from all network interfaces\n", bindAddr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Binding to %s — web UI is accessible from all network interfaces", bindAddr)
 		}
 
 		// Determine port strategy.
@@ -175,7 +232,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// Non-daemon: find a free dynamic port.
 				dynamicPort, dynErr := webui.FindAvailablePort(webui.DaemonPort + 1)
 				if dynErr != nil {
-					fmt.Fprintf(os.Stderr, "[WARN] Could not find a dynamic port: %v; web UI disabled\n", dynErr)
+					console.GlyphWarning.Fprintf(os.Stderr, "Could not find a dynamic port: %v; web UI disabled", dynErr)
 					enableWebUI = false
 				} else {
 					port = dynamicPort
@@ -246,7 +303,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 						case startErrCh <- err:
 						default:
 						}
-						fmt.Fprintf(os.Stderr, "[WARN] Web UI failed to start: %v\n", err)
+						console.GlyphWarning.Fprintf(os.Stderr, "Web UI failed to start: %v", err)
 					}
 				}()
 
@@ -308,19 +365,22 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
 						console.StopGlobalStatusFooter()
-						fmt.Printf("\n[!] Force quitting immediately...\n")
+						fmt.Println()
+						console.GlyphStopped.Printf("Force quitting immediately...")
 						os.Exit(1)
 					}
 
 					atomic.StoreInt64(&lastInterruptAt, nowUnix)
-					fmt.Printf("\n[||] Received signal %v, interrupting active task...\n", sig)
-					fmt.Printf("  (Press Ctrl+C again quickly to force quit)\n")
+					fmt.Println()
+					console.GlyphPaused.Printf("Received signal %v, interrupting active task...", sig)
+					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
 					chatAgent.TriggerInterrupt()
 					continue
 				}
 
-				fmt.Printf("\n[STOP] Received signal %v, shutting down gracefully...\n", sig)
-				fmt.Printf("  (Press Ctrl+C again to force quit)\n")
+				fmt.Println()
+				console.GlyphStopped.Printf("Received signal %v, shutting down gracefully...", sig)
+				console.GlyphDim.Printf("  (Press Ctrl+C again to force quit)")
 
 				// Cancel the context which will stop all operations
 				cancel()
@@ -335,7 +395,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				go func() {
 					time.Sleep(5 * time.Second)
 					console.StopGlobalStatusFooter()
-					fmt.Printf("\n[!] Force quitting...\n")
+					fmt.Println()
+					console.GlyphStopped.Printf("Force quitting...")
 					os.Exit(1)
 				}()
 
@@ -343,7 +404,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				for {
 					select {
 					case <-sigCh:
-						fmt.Printf("\n[!] Force quitting immediately...\n")
+						fmt.Println()
+						console.GlyphStopped.Printf("Force quitting immediately...")
 						os.Exit(1)
 					case <-ctx.Done():
 						return
@@ -435,7 +497,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				<-ctx.Done()
 				return nil
 			}
-			fmt.Println("Welcome to sprout! [bot]")
+			fmt.Println()
+			console.GlyphInfo.Print("Welcome to sprout!")
 			fmt.Println("Agent initialized successfully.")
 			fmt.Println("Use 'sprout agent \"your query\"' to execute commands.")
 			return nil
@@ -532,21 +595,21 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}()
 		select {
 		case <-done:
-			fmt.Printf("[OK] Agent shut down successfully\n")
+			console.GlyphSuccess.Print("Agent shut down successfully")
 		case <-time.After(5 * time.Second):
-			fmt.Fprintf(os.Stderr, "[WARN] Agent shutdown timed out after 5s\n")
+			console.GlyphWarning.Fprintf(os.Stderr, "Agent shutdown timed out after 5s")
 		}
 	}
 	if webUISup != nil {
 		webUISup.cleanupHostRecordIfOwned()
 	}
 	if webServer != nil && webServer.IsRunning() {
-		fmt.Printf("[~] Shutting down web server...\n")
+		console.GlyphDim.Print("Shutting down web server...")
 
 		if webErr := webServer.Shutdown(); webErr != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Error shutting down web server: %v\n", webErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Error shutting down web server: %v", webErr)
 		} else {
-			fmt.Printf("[OK] Web server shut down successfully\n")
+			console.GlyphSuccess.Print("Web server shut down successfully")
 		}
 	}
 
@@ -606,6 +669,12 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 		})
 		chatAgent.EnableStreaming(func(chunk string) {
 			indicator.Stop()
+			if chunk != "" {
+				// CompareAndSwap: only the FIRST non-empty chunk records
+				// the ttft. Subsequent chunks are a no-op so reading the
+				// timestamp later yields "first token landed at X".
+				noteFirstStreamChunk()
+			}
 			capper.Write(chunk)
 		})
 	}
@@ -627,8 +696,9 @@ func terminalLineCapChars() int {
 // After processing a task, it loops back to check for more pending tasks.
 // Exits cleanly when the queue is empty.
 func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
-	fmt.Printf("\n[bot] Starting EA queue mode — processing pending tasks autonomously\n")
-	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
+	fmt.Println()
+	console.GlyphInfo.Print("Starting EA queue mode — processing pending tasks autonomously")
+	console.GlyphInfo.Printf("Provider: %s | Model: %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -646,7 +716,8 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	for {
 		// Check for cancellation before each iteration
 		if err := ctx.Err(); err != nil {
-			fmt.Printf("\n[bot] Queue mode cancelled: %v\n", err)
+			fmt.Println()
+			console.GlyphStopped.Printf("Queue mode cancelled: %v", err)
 			break
 		}
 
@@ -658,10 +729,11 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 		// Exit cleanly when queue is empty
 		if len(tasks) == 0 {
+			fmt.Println()
 			if tasksProcessed > 0 {
-				fmt.Printf("\n[OK] Queue mode complete — processed %d task(s)\n", tasksProcessed)
+				console.GlyphSuccess.Printf("Queue mode complete — processed %d task(s)", tasksProcessed)
 			} else {
-				fmt.Printf("\n[bot] No pending tasks in queue — nothing to process\n")
+				console.GlyphInfo.Print("No pending tasks in queue — nothing to process")
 			}
 			break
 		}
@@ -670,17 +742,19 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		for _, task := range tasks {
 			// Check for cancellation before processing each task
 			if err := ctx.Err(); err != nil {
-				fmt.Printf("\n[bot] Queue mode cancelled: %v\n", err)
+				fmt.Println()
+				console.GlyphStopped.Printf("Queue mode cancelled: %v", err)
 				break
 			}
 
-			fmt.Printf("\n[bot] Processing task: %s [%s] (priority: %s)\n",
+			fmt.Println()
+			console.GlyphAction.Printf("Processing task: %s [%s] (priority: %s)",
 				task.Title, task.ID, task.Priority)
 
 			// Mark task as in_progress
 			_, err = tq.PublishTask(task.ID, "in_progress", "", nil)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[WARN] Failed to mark task %s as in_progress: %v\n", task.ID, err)
+				console.GlyphWarning.Fprintf(os.Stderr, "Failed to mark task %s as in_progress: %v", task.ID, err)
 			}
 
 			// Construct a query for the agent to process this task.
@@ -690,7 +764,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 			err = ProcessQuery(ctx, chatAgent, eventBus, query)
 			if err != nil {
-				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("[FAIL] Error processing task %s", task.ID), err))
+				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("Error processing task %s", task.ID), err))
 				// Mark task as failed
 				_, _ = tq.PublishTask(task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
 				continue
@@ -714,11 +788,11 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 			if !taskCompleted {
 				// Agent didn't update task status; mark as completed by default
-				fmt.Printf("[bot] Task %s processed — marking as completed\n", task.Title)
-				result := fmt.Sprintf("Task processed via queue mode. Agent did not explicitly set a result.")
+				console.GlyphInfo.Printf("Task %s processed — marking as completed", task.Title)
+				result := "Task processed via queue mode. Agent did not explicitly set a result."
 				_, _ = tq.PublishTask(task.ID, "completed", result, nil)
 			} else {
-				fmt.Printf("[OK] Task %s completed\n", task.Title)
+				console.GlyphSuccess.Printf("Task %s completed", task.Title)
 			}
 
 			tasksProcessed++
@@ -790,8 +864,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	footer.Start()
 	defer footer.Stop()
 
-	fmt.Printf("\n[bot] Welcome to sprout! Enhanced CLI with Web UI\n")
-	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
+	fmt.Println()
+	console.GlyphInfo.Printf("Welcome to sprout! Enhanced CLI with Web UI")
+	console.GlyphInfo.Printf("Provider: %s | Model: %s\n",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -876,6 +951,26 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			}
 
 			query = strings.TrimSpace(query)
+			// SP-055 Phase 3b: drain any messages the user queued via
+			// Tab+Enter in the steer panel during the previous turn.
+			// They prepend to the typed prompt, joined as separate
+			// blockquote-style lines so the LLM reads them as ordered
+			// context the user wants addressed this turn.
+			if queued := chatAgent.DrainDeferredMessages(); len(queued) > 0 {
+				prefix := "Queued from prior turn:\n"
+				for _, msg := range queued {
+					prefix += "  • " + msg + "\n"
+				}
+				if query == "" {
+					query = strings.TrimSpace(prefix)
+				} else {
+					query = prefix + "\n" + query
+				}
+				// Refresh the footer so the "⏸ N queued" badge clears
+				// the moment we drain. Without this nudge the badge
+				// would linger until the next tool/cost event.
+				footer.Refresh()
+			}
 			if query == "" {
 				continue
 			}
@@ -893,6 +988,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				return nil
 			}
 
+			// `?` shortcut: print a compact keyboard-help card and
+			// return to the prompt without consuming an LLM turn. Helps
+			// users discover the steer-panel keys (Tab toggle, ↑↓
+			// history) that aren't advertised elsewhere.
+			if query == "?" {
+				printKeyboardHelp()
+				continue
+			}
+
 			// Slash/bang commands run locally — they don't talk to the LLM
 			// and often own the terminal themselves (interactive `/commit`,
 			// `/persona`, etc.). They MUST NOT have the activity-indicator
@@ -904,7 +1008,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			registry := agent_commands.NewCommandRegistry()
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-					fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 				}
 				// `/model` and friends may have changed the active model;
 				// rebuild the prompt prefix so the next prompt reflects it.
@@ -920,6 +1024,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
 			turnCostStart := chatAgent.GetTotalCost()
+			// Clear the ttft tracker so the next stream chunk sets a
+			// fresh "time to first token" measurement for this turn.
+			resetTurnFirstToken()
 
 			// SP-051-2c: clear per-turn spawn dedupe so the next batch of
 			// subagents announces fresh "↳ persona spawned" lines instead of
@@ -941,17 +1048,17 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				indicator.Stop()
-				fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 			} else if !executed {
 				// Zsh detection didn't trigger, try LLM-based detection
 				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
 					indicator.Stop()
-					fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 				} else if !executed {
 					// Neither fast path triggered, process normally
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 						indicator.Stop()
-						fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+						fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 					}
 				}
 			}
@@ -986,26 +1093,72 @@ func shouldShowTurnStats() bool {
 // formatTurnStatsLine builds the dim single-line turn-summary string.
 // When color is disabled (NO_COLOR), ANSI dim codes are stripped.
 // SP-048-5a.
-func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed time.Duration) string {
+//
+// ttft (time to first token) is rendered as a separate segment when
+// non-zero. Threshold coloring (yellow >2s, red >5s) makes slow
+// provider connections visible at a glance — they're the most common
+// cause of "is sprout stuck?" perception even when the actual model
+// run is fast once it starts streaming.
+func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed, ttft time.Duration) string {
+	colorOn := envutil.ResolveColorPreference(true)
 	var dim, reset string
-	if envutil.ResolveColorPreference(true) {
+	if colorOn {
 		dim, reset = "\033[2m", "\033[0m"
 	}
-	return fmt.Sprintf("%s⎯ this turn: %s in / %s out · %s · %s ⎯%s\n",
+
+	ttftSeg := ""
+	if ttft > 0 {
+		ttftStr := compactDuration(ttft)
+		styled := ttftStr
+		if colorOn {
+			switch {
+			case ttft > 5*time.Second:
+				// Pop out of dim into red for the duration of this segment,
+				// then drop back into dim so the rest of the line stays muted.
+				styled = reset + "\033[31m" + ttftStr + reset + dim
+			case ttft > 2*time.Second:
+				styled = reset + "\033[33m" + ttftStr + reset + dim
+			}
+		}
+		ttftSeg = fmt.Sprintf(" · ttft %s", styled)
+	}
+
+	return fmt.Sprintf("%s⎯ this turn: %s in / %s out · %s · %s%s ⎯%s\n",
 		dim,
 		compactTokens(promptDelta),
 		compactTokens(completionDelta),
 		compactCost(costDelta),
 		compactDuration(elapsed),
+		ttftSeg,
 		reset,
 	)
 }
 
+// turnFirstTokenAt is set (atomically) to the Unix nano time of the
+// first non-empty stream chunk in the current turn. Read by
+// printPerTurnSummary to compute time-to-first-token, then reset to 0
+// at the start of each turn. Package-level so the streaming callback
+// in SetupAgentEvents (no agent-state to hang it on) can flip it.
+var turnFirstTokenAt int64
+
+// noteFirstStreamChunk is invoked once per turn from the streaming
+// callback. CompareAndSwap ensures only the very first non-empty chunk
+// updates the timestamp — later chunks are no-ops.
+func noteFirstStreamChunk() {
+	atomic.CompareAndSwapInt64(&turnFirstTokenAt, 0, time.Now().UnixNano())
+}
+
+// resetTurnFirstToken clears the ttft tracker. Called by the REPL just
+// before submitting a turn so each turn's measurement is independent.
+func resetTurnFirstToken() {
+	atomic.StoreInt64(&turnFirstTokenAt, 0)
+}
+
 // printPerTurnSummary emits a dim single-line summary of what just happened
 // in the LLM round-trip: input/output tokens consumed, $ spent, elapsed
-// wall time. Silent when no tokens were used (e.g. the turn was a slash
-// command or zsh fast path). Only shown when stderr is a TTY (respects
-// NO_COLOR for ANSI codes). SP-048-5a.
+// wall time, plus ttft when available. Silent when no tokens were used
+// (e.g. the turn was a slash command or zsh fast path). Only shown when
+// stderr is a TTY (respects NO_COLOR for ANSI codes). SP-048-5a.
 func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
 	if !shouldShowTurnStats() {
 		return
@@ -1018,7 +1171,15 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	costDelta := chatAgent.GetTotalCost() - costBefore
 	elapsed := time.Since(start)
 
-	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed))
+	var ttft time.Duration
+	if firstAt := atomic.LoadInt64(&turnFirstTokenAt); firstAt > 0 {
+		ttft = time.Duration(firstAt - start.UnixNano())
+		if ttft < 0 {
+			ttft = 0
+		}
+	}
+
+	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed, ttft))
 }
 
 func compactTokens(n int) string {
@@ -1105,6 +1266,17 @@ func (s *agentFooterSource) ActiveSubagents() int {
 	return agent.GetActiveSubagents()
 }
 
+// QueuedMessages satisfies the optional queuedMessagesSource interface
+// so the footer renders a "⏸ N queued" badge when the user has
+// deferred steer messages via Tab+Enter waiting for the next turn.
+// SP-055 Phase 3b.
+func (s *agentFooterSource) QueuedMessages() int {
+	if s.agent == nil {
+		return 0
+	}
+	return s.agent.DeferredMessageCount()
+}
+
 // startTerminalToolSubscriber subscribes a goroutine to the event bus that
 // translates PublishToolStart / PublishToolEnd events into terminal spinner
 // updates and ✓/✗ result lines. Runs until ctx is cancelled.
@@ -1142,6 +1314,22 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 		spawnMu.Unlock()
 	}
 
+	// Phase 3: tool-collapse state. Tracks the most recently completed
+	// tool's (name, depth, persona) so consecutive identical calls
+	// merge into "✓ read_file × N (foo, bar, baz)" instead of stacking
+	// N rows. Reset by any inter-tool event that would invalidate the
+	// row layout (currently: only sessions where < 30s elapsed since
+	// the previous end qualify for the collapse).
+	var run *toolRunState
+
+	// pendingArgs caches the `arguments` JSON string from ToolStart
+	// events keyed by tool_call_id so the corresponding ToolEnd can
+	// recover the args for preview rendering. ToolEndEvent (in
+	// pkg/events/events.go) does NOT carry arguments — so without this
+	// cache the collapsed-run line rendered as "× N (, , )" with empty
+	// parens. Entries clear on the matching ToolEnd to bound growth.
+	pendingArgs := map[string]string{}
+
 	go func() {
 		defer eventBus.Unsubscribe(subName)
 		for {
@@ -1163,6 +1351,9 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						continue
 					}
 					args, _ := data["arguments"].(string)
+					if id, _ := data["tool_call_id"].(string); id != "" && args != "" {
+						pendingArgs[id] = args
+					}
 					depth := readEventDepth(data)
 					persona := readEventPersona(data)
 					// SP-051-2c: announce subagent spawn once per (depth,
@@ -1200,17 +1391,75 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					case float64:
 						durationMs = int64(v)
 					}
-					icon := "[OK]"
+					icon := console.GlyphSuccess.Prefix()
 					if status != "completed" {
-						icon = "[FAIL]"
+						icon = console.GlyphError.Prefix()
 					}
+					// ToolEnd doesn't carry arguments; recover them from
+					// the ToolStart cache so the collapse-line preview
+					// shows real paths instead of empty parens.
 					args, _ := data["arguments"].(string)
+					if args == "" {
+						if id, _ := data["tool_call_id"].(string); id != "" {
+							if cached, ok := pendingArgs[id]; ok {
+								args = cached
+								delete(pendingArgs, id)
+							}
+						}
+					}
 					depth := readEventDepth(data)
 					persona := readEventPersona(data)
-					indicator.Replace(formatToolEndLine(depth, persona, icon, name,
-						formatToolPreview(chatAgent, name, args),
-						float64(durationMs)/1000.0))
+					preview := formatToolPreview(chatAgent, name, args)
+
+					// Phase 3 collapse: if this end matches the prior run
+					// (same name/depth/persona) AND less than 30s elapsed,
+					// merge with the prior tool-end row instead of stacking
+					// a new one. The 30s heuristic prevents collapse when
+					// the model has streamed text between calls (which
+					// would invalidate the row math).
+					now := time.Now()
+					if run != nil && run.matches(name, depth, persona) && now.Sub(run.lastEnd) < 30*time.Second {
+						run.count++
+						run.appendArg(preview)
+						run.totalMs += durationMs
+						run.lastEnd = now
+						run.lastIcon = icon
+						// 2 rows up: the spinner row (now cleared by
+						// Stop) + the blank stdout newline emitted by
+						// ToolStart + the previous tool-end row. The
+						// indicator's Stop already cleared the spinner
+						// row in place, so we walk past the blank line
+						// and the previous end-line.
+						indicator.ReplaceLastN(formatToolRunLine(
+							run.depth, run.persona, run.lastIcon, run.name,
+							run.count, run.argsTrail,
+							float64(run.totalMs)/1000.0,
+						), 2)
+					} else {
+						indicator.Replace(formatToolEndLine(depth, persona, icon, name,
+							preview, float64(durationMs)/1000.0))
+						run = &toolRunState{
+							name:      name,
+							depth:     depth,
+							persona:   persona,
+							count:     1,
+							argsTrail: []string{preview},
+							totalMs:   durationMs,
+							lastIcon:  icon,
+							lastEnd:   now,
+						}
+					}
 					footer.Refresh()
+				case events.EventTypeStreamChunk:
+					// Assistant text or reasoning chunk landed in the
+					// scroll region — any future tool-end can no longer
+					// safely use ReplaceLastN to collapse onto the prior
+					// row (the rows in between now hold model text).
+					// Break the run; the next ToolEnd will print a fresh
+					// row.
+					if _, isText := data["content_type"].(string); isText {
+						run = nil
+					}
 				case events.EventTypeSecurityApprovalRequest,
 					events.EventTypeSecurityPromptRequest,
 					events.EventTypeAskUserRequest:
@@ -1218,6 +1467,8 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					// doesn't overwrite the prompt text. Subsequent activity
 					// (next tool event, stream chunks) re-starts naturally.
 					indicator.Stop()
+					// Same row-layout invalidation as above.
+					run = nil
 				}
 			}
 		}
@@ -1289,6 +1540,72 @@ func formatToolEndLine(depth int, persona, icon, toolName, preview string, durat
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	return fmt.Sprintf("%s  %s %s%s%s · %.1fs", indent, icon, badge, toolName, preview, durationSec)
+}
+
+// formatToolRunLine renders a collapsed line for repeated calls of the
+// same tool. Replaces N stacked "✓ read_file (foo.go) · 0.1s" entries
+// with a single "✓ read_file × N (foo.go, bar.go, baz.go) · 0.3s" line
+// updated in place via ActivityIndicator.ReplaceLastN.
+//
+// argsTrail holds the most recent up-to-3 arg previews so the user can
+// still see what was touched without scrolling through identical
+// entries. totalSec is the cumulative duration across all N calls so
+// the line still surfaces "this batch took a moment" even when each
+// individual call was quick.
+func formatToolRunLine(depth int, persona, icon, toolName string, count int, argsTrail []string, totalSec float64) string {
+	indent := console.PersonaIndent(depth)
+	badge := console.PersonaBadge(depth, persona)
+	preview := ""
+	if len(argsTrail) > 0 {
+		preview = " (" + strings.Join(argsTrail, ", ") + ")"
+	}
+	return fmt.Sprintf("%s  %s%s%s × %d%s · %.1fs",
+		indent, icon, badge, toolName, count, preview, totalSec)
+}
+
+// toolRunState tracks a sequence of consecutive identical tool calls
+// so the subscriber can collapse them into a single in-place row
+// (Phase 3 of CLI ergonomics). A run is broken — set to nil — whenever
+// any non-tool event would invalidate the row math: streaming
+// assistant text, a different tool, or a user-prompt boundary.
+type toolRunState struct {
+	name      string
+	depth     int
+	persona   string
+	count     int
+	argsTrail []string // most recent up to maxArgsTrail entries
+	totalMs   int64
+	lastIcon  string
+	lastEnd   time.Time
+}
+
+// maxArgsTrail caps the per-arg preview list shown in the collapsed
+// line. The earliest entries get dropped — the user usually cares
+// about the most recent few calls in a run.
+const maxArgsTrail = 3
+
+func (r *toolRunState) matches(name string, depth int, persona string) bool {
+	return r != nil && r.name == name && r.depth == depth && r.persona == persona
+}
+
+func (r *toolRunState) appendArg(preview string) {
+	// formatToolPreview returns its result already wrapped in " (...)"
+	// so that the start/end lines render as "tool (arg)". For the
+	// collapsed run line we re-wrap argsTrail as a single parenthesised
+	// list ("(a, b, c)"), so strip the per-arg wrap here. Otherwise
+	// the line read "tool × N ( (a),  (b))" with doubled parens.
+	stripped := strings.TrimPrefix(preview, " (")
+	stripped = strings.TrimSuffix(stripped, ")")
+	stripped = strings.TrimSpace(stripped)
+	if stripped == "" {
+		// No useful arg captured — skip rather than append "" which
+		// renders as a stray comma-space ("× N (, , foo)").
+		return
+	}
+	r.argsTrail = append(r.argsTrail, stripped)
+	if len(r.argsTrail) > maxArgsTrail {
+		r.argsTrail = r.argsTrail[len(r.argsTrail)-maxArgsTrail:]
+	}
 }
 
 // formatToolPreview produces a short, single-line preview of a tool call

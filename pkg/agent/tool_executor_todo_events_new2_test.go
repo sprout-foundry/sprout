@@ -1,31 +1,33 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
-// TestTodoStatusSymbol2 tests status symbol mapping (unique name)
+// TestTodoStatusSymbol2 tests status symbol mapping (unique name).
+// Symbols are SP-057 glyphs; assert on the visible rune.
 func TestTodoStatusSymbol2(t *testing.T) {
 	tests := []struct {
 		name     string
 		status   string
-		expected string
+		wantRune string
 	}{
-		{"pending", "pending", "[ ]"},
-		{"in_progress", "in_progress", "[~]"},
-		{"completed", "completed", "[x]"},
-		{"cancelled", "cancelled", "[-]"},
-		{"unknown", "unknown", "[?]"},
-		{"empty", "", "[?]"},
+		{"pending", "pending", "·"},
+		{"in_progress", "in_progress", "→"},
+		{"completed", "completed", "✓"},
+		{"cancelled", "cancelled", "⏹"},
+		{"unknown", "unknown", "ⓘ"},
+		{"empty", "", "ⓘ"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := todoStatusSymbol(tt.status)
-			if result != tt.expected {
-				t.Errorf("todoStatusSymbol(%q) = %q; want %q", tt.status, result, tt.expected)
+			if !strings.Contains(result, tt.wantRune) {
+				t.Errorf("todoStatusSymbol(%q) = %q; want contains %q", tt.status, result, tt.wantRune)
 			}
 		})
 	}

@@ -1,35 +1,96 @@
 package configuration
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// NewTestManager creates a configuration Manager backed by an isolated temp
-// directory so that tests never read, modify, or create files in the caller's
-// real ~/.config/sprout config.  It returns the manager and a cleanup func that the
-// caller should defer.
-//
-// Usage:
-//
-//	mgr, cleanup := NewTestManager(t)
-//	defer cleanup()
-func NewTestManager(t *testing.T) (*Manager, func()) {
-	t.Helper()
+func TestNewTestManager_Isolation(t *testing.T) {
+	mgr, cleanup := NewTestManager(t)
+	defer cleanup()
 
-	tmpDir := t.TempDir()
-	configDir := filepath.Join(tmpDir, ".sprout")
+	// Manager was created successfully.
+	require.NotNil(t, mgr)
 
-	mgr, err := NewManagerWithDir(configDir)
+	// Config comes from the temp directory, not the real user config.
+	cfg := mgr.GetConfig()
+	require.NotNil(t, cfg)
+
+	// LastUsedProvider starts empty in isolated test configs: the helper
+	// deliberately does NOT preload "test" any more — that string used
+	// to leak into the user's real config when a test misbehaved. Tests
+	// that need a specific provider must set it on the returned mgr.
+	assert.Equal(t, "", cfg.LastUsedProvider,
+		"isolated test config should start with empty LastUsedProvider")
+
+	// Mutations via UpdateConfigNoSave are visible within the same manager
+	// but DO NOT leak to the real config because SPROUT_CONFIG points at the
+	// temp dir.
+	require.NoError(t, mgr.UpdateConfigNoSave(func(c *Config) error {
+		c.LastUsedProvider = "openai"
+		return nil
+	}))
+	assert.Equal(t, "openai", mgr.GetConfig().LastUsedProvider)
+}
+
+func TestNewTestManager_DoesNotTouchRealConfig(t *testing.T) {
+	// Capture the real config dir before the test.
+	realCfgDir, err := GetConfigDir()
 	if err != nil {
-		t.Fatalf("NewManagerWithDir(%q) failed: %v", configDir, err)
+		t.Skipf("cannot determine real config dir: %v", err)
+	}
+	realConfigPath := filepath.Join(realCfgDir, ConfigFileName)
+
+	// Snapshot the real config (it may not exist and that's fine).
+	realBefore, _ := os.ReadFile(realConfigPath)
+
+	mgr, cleanup := NewTestManager(t)
+	defer cleanup()
+
+	// Mutate the isolated config in a way we can detect.
+	require.NoError(t, mgr.UpdateConfig(func(c *Config) error {
+		c.LastUsedProvider = "zzz-isolated-test-marker-zzz"
+		return nil
+	}))
+
+	// Re-read the real config — it must be unchanged.
+	realAfter, _ := os.ReadFile(realConfigPath)
+	assert.Equal(t, string(realBefore), string(realAfter),
+		"test must not modify the real user config file")
+}
+
+func TestNewTestManager_DoesNotCreateFilesOutsideTempDir(t *testing.T) {
+	// After cleanup the temp dir is removed by t.TempDir(), but no files
+	// should have been created in the real config location.
+	realCfgDir, err := GetConfigDir()
+	if err != nil {
+		t.Skipf("cannot determine real config dir: %v", err)
 	}
 
-	// Keep SPROUT_CONFIG pointing at the temp dir for the test's lifetime so
-	// that any subsequent Save()/UpdateConfig calls remain isolated.
-	t.Setenv("SPROUT_CONFIG", configDir)
+	// List files in real config dir before.
+	before := listDir(t, realCfgDir)
 
-	cleanup := func() {}
+	_, cleanup := NewTestManager(t)
+	cleanup()
 
-	return mgr, cleanup
+	after := listDir(t, realCfgDir)
+	assert.Equal(t, before, after,
+		"test must not create new files in the real config directory")
+}
+
+func listDir(t *testing.T, dir string) map[string]bool {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	m := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		m[e.Name()] = true
+	}
+	return m
 }

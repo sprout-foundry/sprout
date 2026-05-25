@@ -8,17 +8,21 @@ import (
 
 // stubSource is a minimal ContentSource for tests.
 type stubSource struct {
-	model    string
-	used     int
-	limit    int
-	cost     float64
-	workdir  string
+	model       string
+	used        int
+	limit       int
+	cost        float64
+	workdir     string
+	subagents   int
+	queuedCount int
 }
 
-func (s *stubSource) Model() string                       { return s.model }
-func (s *stubSource) ContextTokens() (used, limit int)    { return s.used, s.limit }
-func (s *stubSource) TotalCost() float64                  { return s.cost }
-func (s *stubSource) WorkingDir() string                  { return s.workdir }
+func (s *stubSource) Model() string                    { return s.model }
+func (s *stubSource) ContextTokens() (used, limit int) { return s.used, s.limit }
+func (s *stubSource) TotalCost() float64               { return s.cost }
+func (s *stubSource) WorkingDir() string               { return s.workdir }
+func (s *stubSource) ActiveSubagents() int             { return s.subagents }
+func (s *stubSource) QueuedMessages() int              { return s.queuedCount }
 
 func TestStatusFooter_NoOpOnNonTTY(t *testing.T) {
 	w := &nonTTYWriter{}
@@ -184,6 +188,99 @@ func TestStatusFooter_ComposeLine_NonTTY_StillProducesString(t *testing.T) {
 	}
 	if !strings.Contains(line, "/tmp/work") {
 		t.Errorf("composeLine should include cwd; got %q", line)
+	}
+}
+
+// Per-badge color tests (footer color-coded badges).
+
+func TestStyleCtxColor_Thresholds(t *testing.T) {
+	cases := []struct {
+		name      string
+		used      int
+		limit     int
+		wantColor string
+	}{
+		{"under 50%", 1000, 10000, badgeColorCtxOK},
+		{"at 50%", 5000, 10000, badgeColorCtxWarn},
+		{"between 50 and 80%", 6500, 10000, badgeColorCtxWarn},
+		{"at 80%", 8000, 10000, badgeColorCtxAlert},
+		{"over 80%", 9500, 10000, badgeColorCtxAlert},
+		{"unknown limit", 1000, 0, footerBaseColor},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := styleCtxColor(c.used, c.limit)
+			if got != c.wantColor {
+				t.Errorf("styleCtxColor(%d, %d) = %q, want %q",
+					c.used, c.limit, got, c.wantColor)
+			}
+		})
+	}
+}
+
+func TestStatusFooter_ComposeLine_ModelBadgeBrandColor(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "gpt-4o", limit: 10000, workdir: "/x",
+	})
+	line := f.composeLine(120)
+	// Model should be wrapped in the brand-cyan (bold bright cyan) prefix.
+	if !strings.Contains(line, badgeColorModel+"gpt-4o") {
+		t.Errorf("model badge should use brand-cyan; got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_ContextBadgeColors(t *testing.T) {
+	// Low usage → green.
+	f1 := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "x", used: 1000, limit: 10000, workdir: "/x",
+	})
+	if !strings.Contains(f1.composeLine(120), badgeColorCtxOK) {
+		t.Error("low ctx usage should render green")
+	}
+	// High usage → red.
+	f2 := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "x", used: 9500, limit: 10000, workdir: "/x",
+	})
+	if !strings.Contains(f2.composeLine(120), badgeColorCtxAlert) {
+		t.Error("high ctx usage should render red")
+	}
+}
+
+func TestStatusFooter_ComposeLine_QueueBadge_HiddenWhenZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "x", limit: 10000, workdir: "/x", queuedCount: 0,
+	})
+	line := f.composeLine(120)
+	if strings.Contains(line, "queued") {
+		t.Errorf("queue badge should hide when count is 0; got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_QueueBadge_ShownWhenNonZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "x", limit: 10000, workdir: "/x", queuedCount: 3,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "⏸ 3 queued") {
+		t.Errorf("expected '⏸ 3 queued' badge; got %q", line)
+	}
+	if !strings.Contains(line, badgeColorQueue) {
+		t.Errorf("queue badge should use the queue color (%q); got %q",
+			badgeColorQueue, line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_SubagentBadge_PersonaColor(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{
+		model: "x", limit: 10000, workdir: "/x", subagents: 2,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "2 sub") {
+		t.Errorf("expected '2 sub' segment; got %q", line)
+	}
+	if !strings.Contains(line, badgeColorSubagent) {
+		t.Errorf("subagent badge should use persona color (%q); got %q",
+			badgeColorSubagent, line)
 	}
 }
 

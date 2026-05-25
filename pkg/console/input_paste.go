@@ -109,12 +109,13 @@ func (ir *InputReader) finalizePaste() bool {
 	// Check for binary image paste data (bracketed paste may contain raw image bytes)
 	if len(rawBytes) > 4 && len(rawBytes) <= MaxPastedImageSize {
 		if ext, mimeType := DetectImageMagic(rawBytes); ext != "" {
-			fmt.Fprintf(os.Stderr, "\n[img] Image paste detected (%s, %d bytes)\n", mimeType, len(rawBytes))
+			fmt.Fprintln(os.Stderr)
+			GlyphAction.Fprintf(os.Stderr, "Image paste detected (%s, %d bytes)", mimeType, len(rawBytes))
 			savedPath, err := SavePastedImage(rawBytes, "")
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[FAIL] Failed to save pasted image: %v\n", err)
+				GlyphError.Fprintf(os.Stderr, "Failed to save pasted image: %v", err)
 			} else {
-				fmt.Fprintf(os.Stderr, "[save] Saved to %s\n", savedPath)
+				GlyphSuccess.Fprintf(os.Stderr, "Saved to %s", savedPath)
 				placeholder := fmt.Sprintf("Pasted image saved to disk: %s ", savedPath)
 				// Insert placeholder at cursor position
 				before := ir.line[:ir.cursorPos]
@@ -146,40 +147,32 @@ func (ir *InputReader) finalizePaste() bool {
 	// SP-048-4c: Smart paste — if the paste is large (>100 lines OR >5KB),
 	// prompt the user to choose: insert inline, save as file & reference, or discard.
 	if ShouldSmartSavePaste(pastedContent) {
-		action := promptLargePasteAction(pastedContent, os.Stdin)
-		switch action {
-		case actionSaveAsFile:
-			if savedPath, err := SavePastedText(pastedContent, ""); err == nil {
-				lineCount := strings.Count(pastedContent, "\n") + 1
-				fmt.Fprintf(os.Stderr, "[paste] %d lines · %d bytes saved to %s\n",
-					lineCount, len(pastedContent), savedPath)
-				placeholder := "@" + savedPath + " "
-				start := ir.cursorPos
-				before := ir.line[:ir.cursorPos]
-				after := ir.line[ir.cursorPos:]
-				ir.line = before + placeholder + after
-				ir.cursorPos += len(placeholder)
-				ir.shiftPasteSpans(start, len(placeholder))
-				ir.addCollapsedPaste(start, ir.cursorPos)
-				ir.hasEditedLine = true
-				ir.historyIndex = -1
-				ir.Refresh()
-				promptWidth := visibleRuneWidth(ir.prompt)
-				lineWidth := len([]rune(ir.line))
-				newLength := promptWidth + lineWidth
-				ir.lastLineLength = newLength
-				cursorPos := promptWidth + ir.cursorPos
-				ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
-				return true
-			} else {
-				fmt.Fprintf(os.Stderr, "[FAIL] smart-paste save failed: %v (falling back to inline insert)\n", err)
-				// Fall through to inline insertion below
-			}
-		case actionCancel:
-			fmt.Fprintf(os.Stderr, "[paste] Discarded.\n")
+		if savedPath, err := SavePastedText(pastedContent, ""); err == nil {
+			lineCount := strings.Count(pastedContent, "\n") + 1
+			fmt.Fprintln(os.Stderr)
+			GlyphAction.Fprintf(os.Stderr, "%d lines · %d bytes saved to %s",
+				lineCount, len(pastedContent), savedPath)
+			placeholder := "@" + savedPath + " "
+			start := ir.cursorPos
+			before := ir.line[:ir.cursorPos]
+			after := ir.line[ir.cursorPos:]
+			ir.line = before + placeholder + after
+			ir.cursorPos += len(placeholder)
+			ir.shiftPasteSpans(start, len(placeholder))
+			ir.addCollapsedPaste(start, ir.cursorPos)
+			ir.hasEditedLine = true
+			ir.historyIndex = -1
+			ir.Refresh()
+			promptWidth := visibleRuneWidth(ir.prompt)
+			lineWidth := len([]rune(ir.line))
+			newLength := promptWidth + lineWidth
+			ir.lastLineLength = newLength
+			cursorPos := promptWidth + ir.cursorPos
+			ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
 			return true
-		case actionUseInline:
-			// Fall through to inline insertion below
+		} else {
+			GlyphError.Fprintf(os.Stderr, "smart-paste save failed: %v (falling back to inline insert)", err)
+			// fall through to inline insertion below
 		}
 	}
 

@@ -10,8 +10,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
+)
+
+var (
+	projectsCache     []ProjectInfo
+	projectsCacheTime time.Time
+	projectsCacheMu   sync.RWMutex
 )
 
 // handleAPIStats handles API requests for server statistics
@@ -296,5 +304,51 @@ func (ws *ReactWebServer) getSSHSessionForProxyRequest(r *http.Request) *sshWork
 	ws.sshSessionsMu.Lock()
 	defer ws.sshSessionsMu.Unlock()
 	return ws.sshSessions[sessionKey]
+}
+
+const projectsCacheTTL = 5 * time.Minute
+
+func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var projects []ProjectInfo
+	var cached bool
+
+	projectsCacheMu.RLock()
+	if time.Since(projectsCacheTime) < projectsCacheTTL {
+		projects = projectsCache
+		cached = true
+		projectsCacheMu.RUnlock()
+	} else {
+		projectsCacheMu.RUnlock()
+
+		// Cache miss — rebuild
+		projects = FindProjectsInDirectory(ws.GetDaemonRoot(), 2)
+
+		// Check if daemon root itself is a project and prepend it
+		if isProj, markers := IsProjectDirectory(ws.GetDaemonRoot()); isProj {
+			rootInfo := ProjectInfo{
+				Path:    ws.GetDaemonRoot(),
+				Name:    filepath.Base(ws.GetDaemonRoot()),
+				Markers: markers,
+			}
+			projects = append([]ProjectInfo{rootInfo}, projects...)
+		}
+
+		projectsCacheMu.Lock()
+		projectsCache = projects
+		projectsCacheTime = time.Now()
+		projectsCacheMu.Unlock()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"projects":    projects,
+		"daemon_root": ws.GetDaemonRoot(),
+		"cached":      cached,
+	})
 }
 

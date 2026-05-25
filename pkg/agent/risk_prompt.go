@@ -7,6 +7,12 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
+// webuiHighRiskRiskClass is the risk-class label sent to the WebUI
+// approval dialog for cascade-gated high-risk operations. It mirrors
+// the "CAUTION" label that the filesystem and git approval flows use
+// so the browser dialog renders consistently across all three.
+const webuiHighRiskRiskClass = "CAUTION"
+
 // highRiskApprovedForCommand decides whether a high-risk shell command
 // is permitted to execute. Resolution (SP-058 v2):
 //
@@ -47,11 +53,35 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 		return true
 	}
 
+	// WebUI path: when a browser tab is connected and the security
+	// approval manager is wired up, route the prompt through the
+	// event bus so the dialog renders in the browser. Mirrors the
+	// pattern in gitApprovalPrompterAdapter and handleFileSecurityError.
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() {
+		prompt := fmt.Sprintf("High-risk shell command:\n  %s", command)
+		extras := map[string]string{
+			"risk_type": "Shell command — persona risk cascade",
+			"command":   command,
+		}
+		return mgr.RequestToolApproval(
+			a.GetEventBus(),
+			a.GetEventClientID(),
+			a.GetEventUserID(),
+			"shell_command",
+			webuiHighRiskRiskClass,
+			prompt,
+			extras,
+		)
+	}
+
+	// Terminal / stdin path.
 	cfg := a.GetConfig()
 	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
 	if logger == nil || !logger.IsInteractive() {
 		// No interactive surface — refuse silently and let the
-		// caller surface a security error.
+		// caller surface a security error. Workflows / CI runs that
+		// need these operations should select a more permissive
+		// profile (or `unrestricted` for sandboxed targets).
 		return false
 	}
 

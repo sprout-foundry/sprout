@@ -70,6 +70,8 @@ In order of precedence (highest wins):
 
 A persona that defines its own `AutoApproveRules` (today: only `executive_assistant`) always wins over the profile. That's how EA keeps its tighter cascade independent of what profile you select.
 
+> **Gotcha**: this means `sprout agent --persona executive_assistant --risk-profile=readonly` does NOT make EA readonly — EA uses its own rules. If you want to lock EA down to readonly, edit `~/.config/sprout/config.json` and override EA's persona rules under `subagent_types.executive_assistant.auto_approve_rules`. The `/status` slash command shows the active risk profile so you can verify which set is in effect.
+
 ### EA & subagent delegation
 
 The Executive Assistant persona, when running **as the root agent**, follows the profile like anyone else: high-risk commands prompt you interactively, get rejected non-interactively, and Critical is blocked.

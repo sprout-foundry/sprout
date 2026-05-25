@@ -116,11 +116,11 @@ test-ci: test-unit test-integration
 	@echo "CI tests completed"
 
 # Coverage Check - Run tests with coverage and enforce minimum threshold
-# Note: timeout is 120s (vs 60s for test-unit) because race detection slows tests significantly
+# Note: timeout is 300s because race detection and full test suite (no -short) slows tests significantly
 test-coverage:
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser" ./pkg/... ./cmd/... -timeout=120s -short -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
+	go test -race -tags "browser" ./pkg/... ./cmd/... -timeout=300s -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

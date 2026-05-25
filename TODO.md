@@ -161,7 +161,7 @@
 - [ ] SP-011-P1.3-removeButtons: Remove global (+) shell picker from tab bar when split is active; each pane's tab bar gets its own (+) button
 - [x] SP-011-P2.1-exitedCSS: Add `.terminal-tab.exited` CSS (opacity 0.5, italic); show "Session ended." before auto-restart
 - [x] SP-011-P2.2-zoomVerify: Verify ZoomIn/ZoomOut buttons are correctly visible and persist to localStorage
-- [ ] SP-011-P2.3-cleanupPackagesUI: Evaluate `packages/ui/src/components/Terminal.tsx` — update to match new per-pane model or remove if unused
+- [x] SP-011-P2.3-cleanupPackagesUI: Evaluate `packages/ui/src/components/Terminal.tsx` — update to match new per-pane model or remove if unused
 - [x] SP-011-P3.1-terminalSearch: Install `@xterm/addon-search`; add search bar above terminal pane with match counter
 - [ ] SP-011-P3.2-clickablePaths: Detect `./foo.go:12:34` patterns in terminal output; dispatch event to open file in editor
 - [x] SP-011-P3.3-copyOnSelect: Auto-copy selected text to clipboard
@@ -182,7 +182,7 @@
 - [x] SP-012-U1.3-sidebarARIA: Add `role="navigation"` to Sidebar navigation sections
 - [x] SP-012-U1.4-focusIndicators: Add global `:focus-visible` outline styles and `:focus:not(:focus-visible)` outline removal
 - [x] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement
-- [ ] SP-012-U2.2-sidebarPersist: Ensure `isCollapsed`, `activeTab`, and `width` in `useSidebarState.ts` all persist to localStorage
+- [x] SP-012-U2.2-sidebarPersist: Ensure `isCollapsed`, `activeTab`, and `width` in `useSidebarState.ts` all persist to localStorage
 - [ ] SP-012-U2.3-responsiveCSS: Add tablet (768-1024px) and mobile (<768px) responsive breakpoints — icons-only sidebar, vertical stacking
 - [ ] SP-012-U2.3-touchGestures: Add swipe left/right to toggle sidebar on mobile
 - [ ] SP-012-U2.4-skeletons: Create skeleton placeholder components for FileTree, Chat history, Editor, Settings panel loading states

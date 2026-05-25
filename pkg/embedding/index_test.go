@@ -29,9 +29,10 @@ func (m *mockProvider) EmbedBatch(_ context.Context, texts []string) ([][]float3
 	return results, nil
 }
 
-func (m *mockProvider) Dimensions() int { return m.dims }
-func (m *mockProvider) Name() string    { return "mock" }
-func (m *mockProvider) ModelHash() string { return "mock-model-hash" }
+func (m *mockProvider) Dimensions() int    { return m.dims }
+func (m *mockProvider) Name() string       { return "mock" }
+func (m *mockProvider) ModelHash() string  { return "mock-model-hash" }
+func (m *mockProvider) Close() error       { return nil }
 
 func newMockProvider(dims int) *mockProvider {
 	return &mockProvider{dims: dims}

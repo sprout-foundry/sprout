@@ -26,6 +26,9 @@ type EmbeddingProvider interface {
 	// ModelHash returns a SHA-256 hex digest of the model data. Used to detect
 	// model changes and invalidate stale store records.
 	ModelHash() string
+
+	// Close releases any resources held by the provider.
+	Close() error
 }
 
 // VectorStore persists and queries vector embeddings with metadata.

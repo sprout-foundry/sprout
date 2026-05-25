@@ -318,6 +318,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
   const isSubagent = !!data.is_subagent;
   const subagentType: ToolExecution['subagentType'] =
     data.subagent_type === 'parallel' ? 'parallel' : isSubagent ? 'single' : undefined;
+  const depth = Number((event.data as Record<string, unknown>)?.subagent_depth ?? 0);
 
   setState((prev) => {
     const messagesWithNewline = prev.messages.map((msg, idx) => {
@@ -353,6 +354,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
         details: event.data,
         persona: updated[existingIdx].persona || persona,
         subagentType: updated[existingIdx].subagentType || subagentType,
+        depth: updated[existingIdx].depth ?? (depth > 0 ? depth : undefined),
       };
       const messages = [...messagesWithNewline];
       addToolRefToMessage(messages, updated[existingIdx].id);
@@ -369,6 +371,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       arguments: rawArgs,
       persona,
       subagentType,
+      depth: depth > 0 ? depth : undefined,
     };
     const messages = [...messagesWithNewline];
     addToolRefToMessage(messages, newTool.id);

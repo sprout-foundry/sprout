@@ -3,7 +3,6 @@ import { Menu, PanelRightClose } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
-import { useNotifications } from '../contexts/NotificationContext';
 import { useSproutFetch } from '../contexts/SproutAdapterContext';
 import { useActiveChatTab } from '../hooks/useActiveChatTab';
 import { useAppContentHotkeys } from '../hooks/useAppContentHotkeys';
@@ -24,7 +23,6 @@ import ContextSidebar from './ContextSidebar';
 import EditorWorkspace from './EditorWorkspace';
 import ErrorBoundary from './ErrorBoundary';
 import HeaderBar from './HeaderBar';
-import NotificationCenter from './NotificationCenter';
 import Sidebar from './Sidebar';
 import Status from './Status';
 import StatusBar from './StatusBar';
@@ -140,12 +138,9 @@ const AppContent: React.FC<AppContentProps> = ({
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
-  const { notifications } = useNotifications();
   const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
-  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
-  const notificationBellRef = useRef<HTMLDivElement>(null);
 
   const setAppState = useAppStoreSetState();
   // Opens the ModelSelectionModal for the currently active provider when
@@ -373,6 +368,8 @@ const AppContent: React.FC<AppContentProps> = ({
       isConnected: state.isConnected,
       backendReachable,
       onRetryConnection,
+      subagentActivities: state.subagentActivities,
+      delegateActivities: state.delegateActivities,
     }),
     [
       state.messages,
@@ -392,6 +389,8 @@ const AppContent: React.FC<AppContentProps> = ({
       state.isConnected,
       backendReachable,
       onRetryConnection,
+      state.subagentActivities,
+      state.delegateActivities,
     ],
   );
   const reviewProps = useMemo(
@@ -585,17 +584,9 @@ const AppContent: React.FC<AppContentProps> = ({
                 }
               : null
           }
-          notificationCount={notifications.length}
-          onToggleNotificationCenter={() => setIsNotificationCenterOpen((prev) => !prev)}
-          notificationCenterRef={notificationBellRef}
           chatStats={state.stats}
           isConnected={state.isConnected}
           onModelClick={handleStatusBarModelClick}
-        />
-        <NotificationCenter
-          isOpen={isNotificationCenterOpen}
-          onClose={() => setIsNotificationCenterOpen(false)}
-          positionRef={notificationBellRef}
         />
       </div>
       {supportsLocalTerminal && (

@@ -1,8 +1,10 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState, useCallback } from 'react';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
+import { useNotifications } from '../contexts/NotificationContext';
 import { ChatStatusBarItems } from './chat/ChatStatusBarItems';
+import NotificationCenter from './NotificationCenter';
 import './StatusBar.css';
 
 interface StatusBarBufferInfo {
@@ -18,9 +20,6 @@ interface WebuiStatusBarProps {
   buffer?: StatusBarBufferInfo | null;
   encoding?: string;
   indentation?: string;
-  notificationCount?: number;
-  onToggleNotificationCenter?: () => void;
-  notificationCenterRef?: React.RefObject<HTMLDivElement>;
   /**
    * SP-053-3b: chat stats blob (provider/model/tokens/cost). When non-empty,
    * the right section renders ChatStatusBarItems instead of editor metadata
@@ -72,13 +71,29 @@ function StatusBar({
   buffer,
   encoding,
   indentation,
-  notificationCount = 0,
-  onToggleNotificationCenter,
-  notificationCenterRef,
   chatStats,
   isConnected,
   onModelClick,
 }: WebuiStatusBarProps): JSX.Element {
+  // Notification context — derive unread count for the bell badge
+  const { notifications } = useNotifications();
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications],
+  );
+
+  // Internal notification panel state
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const bellIconRef = useRef<HTMLDivElement>(null);
+
+  const toggleNotificationCenter = useCallback(() => {
+    setIsNotificationCenterOpen((prev) => !prev);
+  }, []);
+
+  const closeNotificationCenter = useCallback(() => {
+    setIsNotificationCenterOpen(false);
+  }, []);
+
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
     if (!buffer) return undefined;
@@ -103,8 +118,6 @@ function StatusBar({
     const result = detectLineEnding(buffer?.content || '');
     return result.lineEnding;
   }, [buffer?.file, buffer?.kind]);
-
-  const bellIconRef = useRef<HTMLDivElement>(null);
 
   // SP-053-3b: chat stats outrank editor metadata in the right section.
   // When a chat is active and has any stats payload, render the chat
@@ -132,27 +145,30 @@ function StatusBar({
         showRightSection={buffer != null || showChatSegment}
         rightItems={chatRightItems}
       />
-      {onToggleNotificationCenter && (
-        <div
-          ref={notificationCenterRef ?? bellIconRef}
-          className="statusbar-item statusbar-item-notification"
-          onClick={onToggleNotificationCenter}
-          role="button"
-          tabIndex={0}
-          aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount})` : ''}`}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onToggleNotificationCenter();
-            }
-          }}
-        >
-          <BellIcon />
-          {notificationCount > 0 && (
-            <span className="statusbar-notification-badge">{notificationCount > 99 ? '99+' : notificationCount}</span>
-          )}
-        </div>
-      )}
+      <div
+        ref={bellIconRef}
+        className="statusbar-item statusbar-item-notification"
+        onClick={toggleNotificationCenter}
+        role="button"
+        tabIndex={0}
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleNotificationCenter();
+          }
+        }}
+      >
+        <BellIcon />
+        {unreadCount > 0 && (
+          <span className="statusbar-notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+        )}
+      </div>
+      <NotificationCenter
+        isOpen={isNotificationCenterOpen}
+        onClose={closeNotificationCenter}
+        positionRef={bellIconRef}
+      />
     </div>
   );
 }

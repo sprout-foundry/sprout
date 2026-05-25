@@ -13,9 +13,6 @@ func TestClearEmbeddingFiles_Code(t *testing.T) {
 		"index.hnsw",
 		"index.hnsw.meta",
 		"index.hnsw.records.json",
-		"embedding_index_onnx.hnsw",
-		"embedding_index_onnx.hnsw.meta",
-		"embedding_index_onnx.hnsw.records.json",
 	}
 	for _, f := range codeFiles {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte("test"), 0644); err != nil {
@@ -59,9 +56,6 @@ func TestClearEmbeddingFiles_ConversationTurn(t *testing.T) {
 		"conversation_turns.hnsw",
 		"conversation_turns.hnsw.meta",
 		"conversation_turns.hnsw.records.json",
-		"conversation_turns_onnx.hnsw",
-		"conversation_turns_onnx.hnsw.meta",
-		"conversation_turns_onnx.hnsw.records.json",
 	}
 	for _, f := range convFiles {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte("test"), 0644); err != nil {
@@ -101,9 +95,6 @@ func TestClearEmbeddingFiles_Memory(t *testing.T) {
 		"conversation_turns.hnsw",
 		"conversation_turns.hnsw.meta",
 		"conversation_turns.hnsw.records.json",
-		"conversation_turns_onnx.hnsw",
-		"conversation_turns_onnx.hnsw.meta",
-		"conversation_turns_onnx.hnsw.records.json",
 	}
 	for _, f := range convFiles {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte("test"), 0644); err != nil {
@@ -123,9 +114,7 @@ func TestClearEmbeddingFiles_All(t *testing.T) {
 	dir := t.TempDir()
 	allFiles := []string{
 		"index.hnsw", "index.hnsw.meta", "index.hnsw.records.json",
-		"embedding_index_onnx.hnsw", "embedding_index_onnx.hnsw.meta", "embedding_index_onnx.hnsw.records.json",
 		"conversation_turns.hnsw", "conversation_turns.hnsw.meta", "conversation_turns.hnsw.records.json",
-		"conversation_turns_onnx.hnsw", "conversation_turns_onnx.hnsw.meta", "conversation_turns_onnx.hnsw.records.json",
 	}
 	for _, f := range allFiles {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte("test"), 0644); err != nil {
@@ -155,7 +144,7 @@ func TestClearEmbeddingFiles_InvalidType(t *testing.T) {
 
 func TestClearEmbeddingFiles_MissingFiles(t *testing.T) {
 	dir := t.TempDir()
-	for _, ft := range []string{"code", "conversation_turn", "all"} {
+	for _, ft := range []string{"code", "conversation_turn", "memory", "all"} {
 		count, err := ClearEmbeddingFiles(dir, ft)
 		if err != nil {
 			t.Fatalf("ClearEmbeddingFiles(%s) error: %v", ft, err)

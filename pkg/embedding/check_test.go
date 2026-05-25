@@ -744,9 +744,10 @@ func (c *constantProvider) EmbedBatch(_ context.Context, texts []string) ([][]fl
 	return results, nil
 }
 
-func (c *constantProvider) Dimensions() int { return len(c.vec) }
-func (c *constantProvider) Name() string    { return "constant" }
-func (c *constantProvider) ModelHash() string { return "constant-model-hash" }
+func (c *constantProvider) Dimensions() int    { return len(c.vec) }
+func (c *constantProvider) Name() string       { return "constant" }
+func (c *constantProvider) ModelHash() string  { return "constant-model-hash" }
+func (c *constantProvider) Close() error       { return nil }
 
 // ─── embeddingText tests ───
 

@@ -93,11 +93,19 @@ vi.mock('@sprout/ui', () => {
           completeActivity: null,
           outputLines: [],
           depth: activity.depth ?? 0,
+          tokensUsed: 0,
+          cost: 0,
         };
         runMap.set(key, run);
       }
 
       run.activities.push(activity);
+      if (activity.tokensUsed) {
+        run.tokensUsed += activity.tokensUsed;
+      }
+      if (activity.cost) {
+        run.cost += activity.cost;
+      }
       if (activity.persona && (!run.spawnActivity || activity.phase === 'spawn')) {
         run.persona = activity.persona;
       }
@@ -129,6 +137,17 @@ vi.mock('@sprout/ui', () => {
     return Array.from(runMap.values());
   }
 
+  // ── Inline formatResourceUsage ──────────────────────────────────
+  function formatCost(cost) {
+    return '$' + cost.toFixed(4);
+  }
+  function formatTokens(tokens) {
+    if (tokens >= 1000) {
+      return (tokens / 1000).toFixed(1) + 'k';
+    }
+    return String(tokens);
+  }
+
   // ── Mock LiveLog ────────────────────────────────────────────────
   function LiveLog({ lines, maxLines }) {
     return h('div', { 'data-testid': 'live-log', 'data-max-lines': maxLines },
@@ -142,6 +161,8 @@ vi.mock('@sprout/ui', () => {
     LiveLog,
     groupSubagentRuns,
     getPersonaColor,
+    formatCost,
+    formatTokens,
     PERSONA_COLORS,
     MAX_ACTIVE_LINES: 50,
     MAX_COMPLETED_SUMMARIES: 3,
@@ -186,6 +207,8 @@ function makeRunActivities(opts: {
   isParallel?: boolean;
   completionMessage?: string;
   outputMessage?: string;
+  tokensUsed?: number;
+  cost?: number;
 }): SubagentActivity[] {
   const tc = opts.toolCallId ?? 'call-test';
   const persona = opts.persona ?? 'coder';
@@ -204,6 +227,8 @@ function makeRunActivities(opts: {
       persona,
       depth,
       isParallel: opts.isParallel ?? false,
+      tokensUsed: opts.tokensUsed,
+      cost: opts.cost,
     },
     {
       id: `${tc}-output`,
@@ -483,6 +508,149 @@ describe('SubagentActivityFeed', () => {
       // Should show the error/fail styling
       const resultEl = completedCard?.querySelector('.subagent-feed-result--fail');
       expect(resultEl).not.toBeNull();
+    });
+  });
+
+  describe('resource usage display', () => {
+    it('active card shows token count when tokensUsed > 0', () => {
+      const activities = makeRunActivities({
+        toolCallId: 'call-tok',
+        depth: 0,
+        isComplete: false,
+        tokensUsed: 1500,
+      });
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const activeCard = container.querySelector('.subagent-feed-card--active');
+      expect(activeCard).not.toBeNull();
+
+      const metrics = activeCard?.querySelectorAll('.subagent-feed-metric');
+      expect(metrics?.length).toBeGreaterThanOrEqual(1);
+      // Should show formatted tokens like "1.5k tok"
+      const metricTexts = Array.from(metrics || []).map((m) => m.textContent);
+      expect(metricTexts.some((t) => t?.includes('tok'))).toBe(true);
+      expect(metricTexts.some((t) => t?.includes('1.5k'))).toBe(true);
+    });
+
+    it('active card shows cost when cost > 0', () => {
+      const activities = makeRunActivities({
+        toolCallId: 'call-cost',
+        depth: 0,
+        isComplete: false,
+        cost: 0.0023,
+      });
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const activeCard = container.querySelector('.subagent-feed-card--active');
+      expect(activeCard).not.toBeNull();
+
+      const metrics = activeCard?.querySelectorAll('.subagent-feed-metric');
+      expect(metrics?.length).toBeGreaterThanOrEqual(1);
+      const metricTexts = Array.from(metrics || []).map((m) => m.textContent);
+      expect(metricTexts.some((t) => t?.includes('$0.0023'))).toBe(true);
+    });
+
+    it('active card shows neither tokens nor cost when both are 0 or missing', () => {
+      const activities = makeRunActivities({
+        toolCallId: 'call-notok',
+        depth: 0,
+        isComplete: false,
+      });
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const activeCard = container.querySelector('.subagent-feed-card--active');
+      expect(activeCard).not.toBeNull();
+
+      const metrics = activeCard?.querySelectorAll('.subagent-feed-metric');
+      expect(metrics?.length).toBe(0);
+    });
+
+    it('completed card shows token count when tokensUsed > 0', () => {
+      const activities = makeRunActivities({
+        toolCallId: 'call-ctok',
+        depth: 0,
+        isComplete: true,
+        tokensUsed: 850,
+      });
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const completedCard = container.querySelector('.subagent-feed-card--completed');
+      expect(completedCard).not.toBeNull();
+
+      const metrics = completedCard?.querySelectorAll('.subagent-feed-metric');
+      expect(metrics?.length).toBeGreaterThanOrEqual(1);
+      const metricTexts = Array.from(metrics || []).map((m) => m.textContent);
+      expect(metricTexts.some((t) => t?.includes('850 tok'))).toBe(true);
+    });
+
+    it('completed card shows cost when cost > 0', () => {
+      const activities = makeRunActivities({
+        toolCallId: 'call-ccost',
+        depth: 0,
+        isComplete: true,
+        cost: 0.0150,
+      });
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const completedCard = container.querySelector('.subagent-feed-card--completed');
+      expect(completedCard).not.toBeNull();
+
+      const metrics = completedCard?.querySelectorAll('.subagent-feed-metric');
+      expect(metrics?.length).toBeGreaterThanOrEqual(1);
+      const metricTexts = Array.from(metrics || []).map((m) => m.textContent);
+      expect(metricTexts.some((t) => t?.includes('$0.0150'))).toBe(true);
+    });
+
+    it('feed shows total summary when runs have tokens or cost', () => {
+      const activities: SubagentActivity[] = [
+        ...makeRunActivities({ toolCallId: 'call-s1', depth: 0, isComplete: true, tokensUsed: 1200, cost: 0.01 }),
+        ...makeRunActivities({ toolCallId: 'call-s2', depth: 0, isComplete: true, tokensUsed: 800, cost: 0.005 }),
+      ];
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const summary = container.querySelector('.subagent-feed-summary');
+      expect(summary).not.toBeNull();
+
+      const summaryMetrics = summary?.querySelectorAll('.subagent-feed-summary-metric');
+      expect(summaryMetrics?.length).toBeGreaterThanOrEqual(1);
+
+      const texts = Array.from(summaryMetrics || []).map((m) => m.textContent);
+      // Should show aggregated totals: 2000 tok, $0.0150
+      expect(texts.some((t) => t?.includes('2.0k'))).toBe(true);
+      expect(texts.some((t) => t?.includes('$0.0150'))).toBe(true);
+    });
+
+    it('feed does NOT show total summary when all runs have 0 tokens and 0 cost', () => {
+      const activities = makeRunActivities({
+        toolCallId: 'call-nosum',
+        depth: 0,
+        isComplete: true,
+      });
+
+      act(() => {
+        root.render(createElement(SubagentActivityFeed, { activities }));
+      });
+
+      const summary = container.querySelector('.subagent-feed-summary');
+      expect(summary).toBeNull();
     });
   });
 });

@@ -41,6 +41,7 @@ export interface LSPServerInfo {
   binary: string;
   available: boolean;
   binaryPath?: string;
+  installHint?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,22 @@ export const LSP_SUPPORTED_LANGUAGES: Set<string> = new Set([
   'typescript-jsx',
   'javascript',
   'javascript-jsx',
+  // Additional languages
+  'python',
+  'rust',
+  'c',
+  'cpp',
+  'csharp',
+  'java',
+  'ruby',
+  'php',
+  'swift',
+  'kotlin',
+  'dart',
+  'lua',
+  'shellscript',
+  'bash',
+  'sh',
 ]);
 
 /** Default timeout for LSP client config (10 seconds). */

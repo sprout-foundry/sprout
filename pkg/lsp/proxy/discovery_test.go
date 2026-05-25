@@ -296,6 +296,205 @@ func TestDefaultLanguageServers(t *testing.T) {
 		assert.NotEmpty(t, tsCfg.Args)
 		assert.Contains(t, tsCfg.Args, "--stdio")
 	})
+
+	t.Run("returns exactly 14 configs", func(t *testing.T) {
+		assert.Equal(t, 14, len(configs), "should have 14 language server configs")
+	})
+
+	t.Run("no duplicate IDs", func(t *testing.T) {
+		seen := make(map[string]bool)
+		for _, cfg := range configs {
+			assert.False(t, seen[cfg.ID], "duplicate language server ID: %s", cfg.ID)
+			seen[cfg.ID] = true
+		}
+	})
+
+	t.Run("all configs have non-empty InstallHint", func(t *testing.T) {
+		for _, cfg := range configs {
+			assert.NotEmpty(t, cfg.InstallHint, "config %q should have a non-empty InstallHint", cfg.ID)
+		}
+	})
+
+	t.Run("Python config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("python", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "python", cfg.ID)
+		assert.Equal(t, "pylsp", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "python")
+		assert.Equal(t, "pip install python-lsp-server", cfg.InstallHint)
+	})
+
+	t.Run("Rust config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("rust", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "rust", cfg.ID)
+		assert.Equal(t, "rust-analyzer", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "rust")
+		assert.Equal(t, "rustup component add rust-analyzer", cfg.InstallHint)
+	})
+
+	t.Run("C/C++ config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("c-cpp", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "c-cpp", cfg.ID)
+		assert.Equal(t, "clangd", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "c")
+		assert.Contains(t, cfg.LanguageIDs, "cpp")
+		assert.Contains(t, cfg.LanguageIDs, "c-cpp")
+		assert.Contains(t, cfg.InstallHint, "clangd.llvm.org")
+	})
+
+	t.Run("C# config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("csharp", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "csharp", cfg.ID)
+		assert.Equal(t, "omnisharp", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "csharp")
+		assert.Contains(t, cfg.Args, "-lsp")
+		assert.Contains(t, cfg.InstallHint, "omnisharp")
+	})
+
+	t.Run("Java config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("java", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "java", cfg.ID)
+		assert.Equal(t, "jdtls", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "java")
+		assert.Contains(t, cfg.InstallHint, "eclipse")
+	})
+
+	t.Run("Ruby config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("ruby", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "ruby", cfg.ID)
+		assert.Equal(t, "solargraph", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "ruby")
+		assert.Contains(t, cfg.Args, "stdio")
+		assert.Equal(t, "gem install solargraph", cfg.InstallHint)
+	})
+
+	t.Run("PHP config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("php", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "php", cfg.ID)
+		assert.Equal(t, "intelephense", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "php")
+		assert.Contains(t, cfg.Args, "--stdio")
+		assert.Contains(t, cfg.InstallHint, "npm install -g intelephense")
+	})
+
+	t.Run("Swift config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("swift", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "swift", cfg.ID)
+		assert.Equal(t, "sourcekit-lsp", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "swift")
+		assert.Contains(t, cfg.InstallHint, "sourcekit-lsp")
+	})
+
+	t.Run("Kotlin config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("kotlin", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "kotlin", cfg.ID)
+		assert.Equal(t, "kotlin-language-server", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "kotlin")
+		assert.Contains(t, cfg.InstallHint, "kotlin-language-server")
+	})
+
+	t.Run("Dart config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("dart", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "dart", cfg.ID)
+		assert.Equal(t, "dart", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "dart")
+		assert.Contains(t, cfg.Args, "language-server")
+		assert.Contains(t, cfg.Args, "--protocol=lsp")
+		assert.Contains(t, cfg.InstallHint, "Dart SDK")
+	})
+
+	t.Run("Lua config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("lua", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "lua", cfg.ID)
+		assert.Equal(t, "lua-language-server", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "lua")
+		assert.Contains(t, cfg.InstallHint, "lua-language-server")
+	})
+
+	t.Run("Shell config", func(t *testing.T) {
+		cfg := FindLanguageServerByID("shell", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "shell", cfg.ID)
+		assert.Equal(t, "bash-language-server", cfg.Binary)
+		assert.Contains(t, cfg.LanguageIDs, "shellscript")
+		assert.Contains(t, cfg.LanguageIDs, "bash")
+		assert.Contains(t, cfg.LanguageIDs, "sh")
+		assert.Contains(t, cfg.Args, "start")
+		assert.Contains(t, cfg.InstallHint, "npm install -g bash-language-server")
+	})
+
+	t.Run("Go config has InstallHint", func(t *testing.T) {
+		cfg := FindLanguageServerByID("go", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "go install golang.org/x/tools/gopls@latest", cfg.InstallHint)
+	})
+
+	t.Run("TypeScript config has InstallHint", func(t *testing.T) {
+		cfg := FindLanguageServerByID("typescript", configs)
+		require.NotNil(t, cfg)
+		assert.Equal(t, "npm install -g typescript-language-server typescript", cfg.InstallHint)
+	})
+}
+
+func TestDefaultLanguageServersFindLanguageServer(t *testing.T) {
+	// Verify FindLanguageServer works for ALL language IDs across all 14 configs
+	configs := DefaultLanguageServers()
+
+	expected := map[string]string{
+		// Go
+		"go": "go",
+		// TypeScript/JavaScript
+		"typescript":      "typescript",
+		"typescript-jsx":  "typescript",
+		"javascript":      "typescript",
+		"javascript-jsx":  "typescript",
+		// Python
+		"python": "python",
+		// Rust
+		"rust": "rust",
+		// C/C++
+		"c":     "c-cpp",
+		"cpp":   "c-cpp",
+		"c-cpp": "c-cpp",
+		// C#
+		"csharp": "csharp",
+		// Java
+		"java": "java",
+		// Ruby
+		"ruby": "ruby",
+		// PHP
+		"php": "php",
+		// Swift
+		"swift": "swift",
+		// Kotlin
+		"kotlin": "kotlin",
+		// Dart
+		"dart": "dart",
+		// Lua
+		"lua": "lua",
+		// Shell
+		"shellscript": "shell",
+		"bash":        "shell",
+		"sh":          "shell",
+	}
+
+	for langID, expectedConfigID := range expected {
+		t.Run("FindLanguageServer/"+langID, func(t *testing.T) {
+			cfg := FindLanguageServer(langID, configs)
+			require.NotNil(t, cfg, "FindLanguageServer(%q) should return a config", langID)
+			assert.Equal(t, expectedConfigID, cfg.ID, "FindLanguageServer(%q) should return config %q", langID, expectedConfigID)
+		})
+	}
 }
 
 func TestResolveBinaryPathSymlink(t *testing.T) {

@@ -108,6 +108,10 @@ func (m *Manager) GetOrCreate(workspacePath, languageID string) (*LSPProcess, fu
 	// Resolve the binary path
 	binaryPath, err := ResolveBinaryPath(cfg.Binary)
 	if err != nil {
+		hint := cfg.InstallHint
+		if hint != "" {
+			return nil, nil, fmt.Errorf("language server %q not found on PATH. Install with: %s", cfg.Binary, hint)
+		}
 		return nil, nil, fmt.Errorf("failed to find %s: %w", cfg.Binary, err)
 	}
 

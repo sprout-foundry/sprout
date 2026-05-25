@@ -1,5 +1,6 @@
 // Thin shell: wraps @sprout/ui StatusBar with local webui-specific prop computation
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
+import { FolderOpen } from 'lucide-react';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -20,6 +21,17 @@ interface WebuiStatusBarProps {
   buffer?: StatusBarBufferInfo | null;
   encoding?: string;
   indentation?: string;
+  /**
+   * SP-022-W2.3: Full workspace directory path. When provided, the
+   * workspace basename is shown as a clickable indicator on the left
+   * side of the status bar (before the SproutStatusBar content).
+   */
+  workspacePath?: string;
+  /**
+   * SP-022-W2.3: Callback fired when the workspace indicator is clicked.
+   * Typically used to open a workspace picker or focus the sidebar.
+   */
+  onWorkspaceClick?: () => void;
   /**
    * SP-053-3b: chat stats blob (provider/model/tokens/cost). When non-empty,
    * the right section renders ChatStatusBarItems instead of editor metadata
@@ -71,6 +83,8 @@ function StatusBar({
   buffer,
   encoding,
   indentation,
+  workspacePath,
+  onWorkspaceClick,
   chatStats,
   isConnected,
   onModelClick,
@@ -93,6 +107,15 @@ function StatusBar({
   const closeNotificationCenter = useCallback(() => {
     setIsNotificationCenterOpen(false);
   }, []);
+
+  // SP-022-W2.3: derive workspace basename from the full path
+  const workspaceName = useMemo(() => {
+    if (!workspacePath || workspacePath.trim() === '') return '';
+    // Handle trailing slashes and extract last non-empty segment
+    const trimmed = workspacePath.replace(/\/+$/, '');
+    const segments = trimmed.split('/');
+    return segments[segments.length - 1] || '';
+  }, [workspacePath]);
 
   // Language name — derived from buffer metadata using local language registry
   const language = useMemo(() => {
@@ -135,6 +158,25 @@ function StatusBar({
 
   return (
     <div className="statusbar-wrapper">
+      {workspaceName && (
+        <div
+          className="statusbar-item statusbar-item-workspace"
+          onClick={onWorkspaceClick}
+          role="button"
+          tabIndex={0}
+          title={`Workspace: ${workspacePath}`}
+          aria-label={`Workspace: ${workspaceName}`}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onWorkspaceClick?.();
+            }
+          }}
+        >
+          <FolderOpen size={12} />
+          <span className="statusbar-text">{workspaceName}</span>
+        </div>
+      )}
       <SproutStatusBar
         branch={branch}
         cursorPosition={buffer?.cursorPosition}

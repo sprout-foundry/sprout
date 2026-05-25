@@ -580,6 +580,8 @@ const AppContent: React.FC<AppContentProps> = ({
         <Status isConnected={state.isConnected} stats={state.stats} />
         <StatusBar
           branch={gitBranches.current || gitStatus?.branch}
+          workspacePath={workspaceRoot}
+          onWorkspaceClick={() => onToggleSidebar()}
           buffer={
             currentBuffer
               ? {

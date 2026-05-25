@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { Copy } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import { getPersonaColor } from '../utils/personaColors';
+import { formatCost, formatTokens } from '../utils/formatResourceUsage';
 
 interface MessageBubbleProps {
   type?: 'user' | 'assistant';
@@ -20,6 +21,9 @@ interface MessageBubbleProps {
    * delegation chain reads as a visible hierarchy. Default 0.
    */
   depth?: number;
+  tokensUsed?: number;
+  cost?: number;
+  model?: string;
   children: ReactNode;
 }
 
@@ -33,6 +37,9 @@ function MessageBubble({
   timestamp,
   persona,
   depth = 0,
+  tokensUsed,
+  cost,
+  model,
   children,
 }: MessageBubbleProps): JSX.Element {
   const handleCopy = async () => {
@@ -82,6 +89,19 @@ function MessageBubble({
         ) : null}
         <div className="message-content">{children}</div>
         {timestamp ? <div className="message-timestamp">{timestamp}</div> : null}
+        {tokensUsed != null || cost != null ? (
+          <div className="message-turn-cost" aria-hidden="true">
+            {tokensUsed != null && <span>{formatTokens(tokensUsed)} tokens</span>}
+            {tokensUsed != null && cost != null && <span className="message-turn-cost-sep"> · </span>}
+            {cost != null && <span>{formatCost(cost)}</span>}
+            {model && (
+              <>
+                <span className="message-turn-cost-sep"> · </span>
+                <span className="message-turn-cost-model">{model}</span>
+              </>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) {
@@ -53,9 +54,9 @@ func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) 
 				label = "<untitled>"
 			}
 			if existed {
-				changed = append(changed, fmt.Sprintf("%s %s (%s -> %s)", statusSymbol, label, prevStatus, t.Status))
+				changed = append(changed, fmt.Sprintf("%s%s (%s → %s)", statusSymbol, label, prevStatus, t.Status))
 			} else {
-				changed = append(changed, fmt.Sprintf("%s %s (new)", statusSymbol, label))
+				changed = append(changed, fmt.Sprintf("%s%s (new)", statusSymbol, label))
 			}
 		}
 	}
@@ -75,8 +76,13 @@ func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) 
 	// todo_update events and does not need the inline text trace.
 	if !te.agent.IsStreamingEnabled() {
 		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("[edit] Todo update: %d total | [ ] %d pending | [~] %d in progress | [x] %d completed | [-] %d cancelled",
-			len(after), pending, inProgress, completed, cancelled))
+		te.agent.PrintLine(fmt.Sprintf("%sTodos: %d total · %s%d pending · %s%d in progress · %s%d done · %s%d cancelled",
+			console.GlyphInfo.Prefix(),
+			len(after),
+			console.GlyphDim.Prefix(), pending,
+			console.GlyphAction.Prefix(), inProgress,
+			console.GlyphSuccess.Prefix(), completed,
+			console.GlyphStopped.Prefix(), cancelled))
 
 		if len(changed) == 0 {
 			te.agent.PrintLine("   No checklist changes detected.")
@@ -96,17 +102,25 @@ func (te *ToolExecutor) emitTodoChecklistUpdate(before, after []tools.TodoItem) 
 	}
 }
 
+// todoStatusSymbol returns the glyph prefix for a todo item status.
+// Maps onto the shared CLI glyph vocabulary so checklist rows match
+// other status lines:
+//
+//	pending     → · dim
+//	in_progress → → action
+//	completed   → ✓ success
+//	cancelled   → ⏹ stopped
 func todoStatusSymbol(status string) string {
 	switch status {
 	case "pending":
-		return "[ ]"
+		return console.GlyphDim.Prefix()
 	case "in_progress":
-		return "[~]"
+		return console.GlyphAction.Prefix()
 	case "completed":
-		return "[x]"
+		return console.GlyphSuccess.Prefix()
 	case "cancelled":
-		return "[-]"
+		return console.GlyphStopped.Prefix()
 	default:
-		return "[?]"
+		return console.GlyphInfo.Prefix()
 	}
 }

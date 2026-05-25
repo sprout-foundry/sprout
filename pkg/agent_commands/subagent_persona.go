@@ -7,6 +7,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // SubagentPersonasCommand implements the /subagent-personas command (list all personas)
@@ -86,20 +87,23 @@ func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) 
 
 // showAllPersonas displays all available subagent personas
 func showAllPersonas(config *configuration.Config) error {
-	fmt.Println("\n[role] Subagent Personas:")
-	fmt.Println("====================")
+	fmt.Println()
+	console.GlyphInfo.Print("Subagent Personas")
 
 	if config.SubagentTypes == nil || len(config.SubagentTypes) == 0 {
-		fmt.Println("[WARN] No personas configured")
+		console.GlyphWarning.Print("No personas configured")
 		return nil
 	}
 
 	for _, persona := range config.SubagentTypes {
-		status := "[OK] Enabled"
+		statusGlyph := console.GlyphSuccess
+		statusText := "Enabled"
 		if !persona.Enabled {
-			status = "[FAIL] Disabled"
+			statusGlyph = console.GlyphError
+			statusText = "Disabled"
 		}
-		fmt.Printf("\n%s **%s** (%s)\n", status, persona.Name, persona.ID)
+		fmt.Println()
+		fmt.Printf("%s%s  **%s** (%s)\n", statusGlyph.Prefix(), statusText, persona.Name, persona.ID)
 		fmt.Printf("   %s\n", persona.Description)
 
 		// Show configuration if different from defaults
@@ -111,10 +115,11 @@ func showAllPersonas(config *configuration.Config) error {
 		if model == "" {
 			model = "<default>"
 		}
-		fmt.Printf("   [pkg] Provider: %s | [bot] Model: %s\n", provider, model)
+		fmt.Printf("   Provider: %s | Model: %s\n", provider, model)
 	}
 
-	fmt.Println("\n[i] Usage:")
+	fmt.Println()
+	console.GlyphInfo.Print("Usage:")
 	fmt.Println("  /subagent-personas                    - List all personas")
 	fmt.Println("  /subagent-persona <name>              - Show persona details")
 	fmt.Println("  /subagent-persona <name> enable       - Enable a persona")
@@ -122,7 +127,7 @@ func showAllPersonas(config *configuration.Config) error {
 	fmt.Println("  /subagent-persona <name> provider <p> - Set provider for persona")
 	fmt.Println("  /subagent-persona <name> model <m>     - Set model for persona")
 	fmt.Println()
-	fmt.Println("[i] Use personas with: run_subagent tool with persona parameter")
+	console.GlyphInfo.Print("Use personas with: run_subagent tool with persona parameter")
 	fmt.Println("   Example: {\"tool\": \"run_subagent\", \"prompt\": \"...\", \"persona\": \"debugger\"}")
 
 	return nil
@@ -147,15 +152,15 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 			personaName, getAvailablePersonaNames(config))
 	}
 
-	fmt.Printf("\n[role] **%s** (%s)\n", persona.Name, personaID)
-	fmt.Println(strings.Repeat("=", len(persona.Name)+len(personaID)+5))
-	fmt.Printf("[edit] Description: %s\n", persona.Description)
+	fmt.Println()
+	console.GlyphInfo.Printf("**%s** (%s)", persona.Name, personaID)
+	fmt.Printf("Description: %s\n", persona.Description)
 
-	status := "[OK] Enabled"
-	if !persona.Enabled {
-		status = "[FAIL] Disabled"
+	if persona.Enabled {
+		console.GlyphSuccess.Print("Status: Enabled")
+	} else {
+		console.GlyphError.Print("Status: Disabled")
 	}
-	fmt.Printf("[signal] Status: %s\n", status)
 
 	// Configuration
 	provider := persona.Provider
@@ -167,12 +172,14 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 		model = "<default> (uses subagent-model setting)"
 	}
 
-	fmt.Printf("\n[cfg] Configuration:\n")
-	fmt.Printf("   [pkg] Provider: %s\n", provider)
-	fmt.Printf("   [bot] Model: %s\n", model)
-	fmt.Printf("   [doc] System Prompt: %s\n", persona.SystemPrompt)
+	fmt.Println()
+	fmt.Println("Configuration:")
+	fmt.Printf("   Provider:      %s\n", provider)
+	fmt.Printf("   Model:         %s\n", model)
+	fmt.Printf("   System Prompt: %s\n", persona.SystemPrompt)
 
-	fmt.Println("\n[i] Configuration Commands:")
+	fmt.Println()
+	console.GlyphInfo.Print("Configuration Commands:")
 	fmt.Printf("   /subagent-persona %s provider <provider>  - Set provider\n", persona.ID)
 	fmt.Printf("   /subagent-persona %s model <model>         - Set model\n", persona.ID)
 	fmt.Printf("   /subagent-persona %s enable               - Enable persona\n", persona.ID)
@@ -181,7 +188,8 @@ func showPersonaDetails(personaName string, config *configuration.Config) error 
 	// Check if system prompt file exists
 	if persona.SystemPrompt != "" {
 		if _, err := os.Stat(persona.SystemPrompt); os.IsNotExist(err) {
-			fmt.Printf("\n[WARN] Warning: System prompt file not found: %s\n", persona.SystemPrompt)
+			fmt.Println()
+			console.GlyphWarning.Printf("System prompt file not found: %s", persona.SystemPrompt)
 		}
 	}
 
@@ -209,7 +217,8 @@ func setPersonaEnabled(personaName string, enabled bool, configManager *configur
 		action = "disabled"
 	}
 
-	fmt.Printf("\n[OK] Persona '%s' (%s) %s\n", personaNameDisplay, personaID, action)
+	fmt.Println()
+	console.GlyphSuccess.Printf("Persona '%s' (%s) %s", personaNameDisplay, personaID, action)
 	return nil
 }
 
@@ -232,9 +241,10 @@ func setPersonaProvider(personaName, provider string, configManager *configurati
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n[OK] Provider for persona '%s' (%s) set to: %s\n",
+	fmt.Println()
+	console.GlyphSuccess.Printf("Provider for persona '%s' (%s) set to: %s",
 		personaNameDisplay, personaID, provider)
-	fmt.Println("[i] This persona will now use the specified provider instead of the default subagent provider.")
+	console.GlyphInfo.Print("This persona will now use the specified provider instead of the default subagent provider.")
 	return nil
 }
 
@@ -254,9 +264,10 @@ func setPersonaModel(personaName, model string, configManager *configuration.Man
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("\n[OK] Model for persona '%s' (%s) set to: %s\n",
+	fmt.Println()
+	console.GlyphSuccess.Printf("Model for persona '%s' (%s) set to: %s",
 		personaNameDisplay, personaID, model)
-	fmt.Println("[i] This persona will now use the specified model instead of the default subagent model.")
+	console.GlyphInfo.Print("This persona will now use the specified model instead of the default subagent model.")
 	return nil
 }
 

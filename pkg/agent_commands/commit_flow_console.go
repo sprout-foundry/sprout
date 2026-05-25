@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -26,7 +27,8 @@ func (cf *CommitFlow) executeConsoleFlow() error {
 	}
 
 	if len(unstagedFiles) == 0 {
-		fmt.Printf("\r\n[empty] No changes to commit. Working directory is clean.\r\n")
+		fmt.Print("\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No changes to commit. Working directory is clean.")
 		return nil
 	}
 
@@ -123,25 +125,27 @@ func (cf *CommitFlow) selectFilesToCommitConsole() error {
 	}
 
 	if len(unstagedFiles) == 0 {
-		fmt.Printf("\r\n[empty] No unstaged files to select.\r\n")
+		fmt.Print("\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No unstaged files to select.")
 		return nil
 	}
 
 	// Let user select files
-	selectedFiles, err := cf.promptForFiles(unstagedFiles, "[edit] Select Files to Commit")
+	selectedFiles, err := cf.promptForFiles(unstagedFiles, console.GlyphAction.Prefix()+"Select Files to Commit")
 	if err != nil {
 		fmt.Printf("\r\nFile selection cancelled.\r\n")
 		return nil
 	}
 
 	// Stage selected files
-	fmt.Printf("\r\n[up] Staging %d file(s)...\r\n", len(selectedFiles))
+	fmt.Print("\r\n")
+	console.GlyphAction.Fprintf(os.Stdout, "Staging %d file(s)...", len(selectedFiles))
 	for _, file := range selectedFiles {
 		cmd := gitCommand("add", file)
 		if output, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to stage %s: %w\n%s", file, err, output)
 		}
-		fmt.Printf("   [ok] %s\r\n", file)
+		fmt.Printf("   %s%s\r\n", console.GlyphSuccess.Prefix(), file)
 	}
 
 	// Generate commit message
@@ -159,13 +163,15 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 	// Combine all files
 	allFiles := append(stagedFiles, unstagedFiles...)
 	if len(allFiles) == 0 {
-		fmt.Printf("\r\n[empty] No files to commit.\r\n")
+		fmt.Print("\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No files to commit.")
 		return nil
 	}
 
 	// Show just one file selection
-	fmt.Printf("\r\n[doc] Select ONE file to commit:\r\n")
-	fmt.Printf("============================\r\n\r\n")
+	fmt.Print("\r\n")
+	console.GlyphAction.Fprintf(os.Stdout, "Select ONE file to commit:")
+	fmt.Print("\r\n")
 
 	for i, file := range allFiles {
 		fmt.Printf("%d. %s\r\n", i+1, file)
@@ -194,13 +200,14 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 	selectedFile := allFiles[choice-1]
 
 	// Reset any staged files first
-	fmt.Printf("\r\n[~] Resetting staged files...\r\n")
+	fmt.Print("\r\n")
+	console.GlyphDim.Fprintf(os.Stdout, "Resetting staged files...")
 	if err := gitCommand("reset", "HEAD").Run(); err != nil {
 		return fmt.Errorf("failed to reset staged files: %w", err)
 	}
 
 	// Stage only the selected file
-	fmt.Printf("[up] Staging %s...\r\n", selectedFile)
+	console.GlyphAction.Fprintf(os.Stdout, "Staging %s...", selectedFile)
 	cmd := gitCommand("add", selectedFile)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to stage %s: %w\n%s", selectedFile, err, output)
@@ -212,13 +219,14 @@ func (cf *CommitFlow) singleFileCommitConsole() error {
 
 // stageAllAndCommitConsole is the console version (same as regular since no dropdown)
 func (cf *CommitFlow) stageAllAndCommitConsole() error {
-	fmt.Printf("\r\n[*] Staging all modified files...\r\n")
+	fmt.Print("\r\n")
+	console.GlyphAction.Fprintf(os.Stdout, "Staging all modified files...")
 
 	cmd := gitCommand("add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
-	fmt.Printf("[OK] All files staged.\r\n")
+	console.GlyphSuccess.Fprintf(os.Stdout, "All files staged.")
 	return cf.generateCommitMessageAndCommit()
 }

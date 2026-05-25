@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"errors"
 	"fmt"
@@ -10,6 +9,8 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -129,7 +130,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 
 		actions = append(actions, CommitAction{
 			ID:          "commit_staged",
-			DisplayName: "[pkg] Commit Staged Files",
+			DisplayName: "Commit Staged Files",
 			Description: stagingInfo,
 			Action:      (*CommitFlow).commitStagedFiles,
 		})
@@ -139,7 +140,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 	if len(unstagedFiles) > 0 {
 		actions = append(actions, CommitAction{
 			ID:          "select_files",
-			DisplayName: "[edit] Select Files to Commit",
+			DisplayName: "Select Files to Commit",
 			Description: fmt.Sprintf("Choose from %d modified file(s)", len(unstagedFiles)),
 			Action:      (*CommitFlow).selectFilesToCommit,
 		})
@@ -149,7 +150,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 	if len(unstagedFiles) > 0 {
 		actions = append(actions, CommitAction{
 			ID:          "commit_all",
-			DisplayName: "[*] Stage All & Commit",
+			DisplayName: "Stage All & Commit",
 			Description: fmt.Sprintf("Stage and commit all %d modified file(s)", len(unstagedFiles)),
 			Action:      (*CommitFlow).stageAllAndCommit,
 		})
@@ -160,7 +161,7 @@ func (cf *CommitFlow) buildCommitActions(stagedFiles, unstagedFiles []string) []
 	if totalFiles > 1 {
 		actions = append(actions, CommitAction{
 			ID:          "single_file",
-			DisplayName: "[doc] Single File Commit",
+			DisplayName: "Single File Commit",
 			Description: "Commit changes to just one file",
 			Action:      (*CommitFlow).singleFileCommit,
 		})
@@ -207,7 +208,7 @@ func (cf *CommitFlow) getGitStatus() (staged, unstaged []string, err error) {
 // commitStagedFiles commits the currently staged files
 func (cf *CommitFlow) commitStagedFiles() error {
 	cf.println("")
-	cf.println("[pkg] Committing staged files...")
+	cf.println(console.GlyphAction.Prefix() + "Committing staged files...")
 	return cf.generateCommitMessageAndCommit()
 }
 
@@ -225,7 +226,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 
 	if len(unstagedFiles) == 0 {
 		cf.println("")
-		cf.println("[empty] No unstaged files to select.")
+		cf.println(console.GlyphInfo.Prefix() + "No unstaged files to select.")
 		return nil
 	}
 
@@ -246,7 +247,7 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 
 	if len(selectedFiles) == 0 {
 		cf.println("")
-		cf.println("[FAIL] No files selected")
+		cf.println(console.GlyphError.Prefix() + "No files selected")
 		return nil
 	}
 
@@ -257,14 +258,14 @@ func (cf *CommitFlow) selectFilesToCommit() error {
 // stageAllAndCommit stages all modified files and commits them
 func (cf *CommitFlow) stageAllAndCommit() error {
 	cf.println("")
-	cf.println("[*] Staging all modified files...")
+	cf.println(console.GlyphAction.Prefix() + "Staging all modified files...")
 
 	cmd := gitCommand("add", "-A")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage files: %w", err)
 	}
 
-	cf.println("[OK] All files staged.")
+	cf.println(console.GlyphSuccess.Prefix() + "All files staged.")
 	return cf.generateCommitMessageAndCommit()
 }
 
@@ -284,7 +285,7 @@ func (cf *CommitFlow) singleFileCommit() error {
 	allFiles := append(stagedFiles, unstagedFiles...)
 	if len(allFiles) == 0 {
 		cf.println("")
-		cf.println("[empty] No files available for commit.")
+		cf.println(console.GlyphInfo.Prefix() + "No files available for commit.")
 		return nil
 	}
 
@@ -301,10 +302,10 @@ func (cf *CommitFlow) singleFileCommit() error {
 
 	// Reset staging area and stage only the selected file
 	cf.println("")
-	cf.println("[~] Resetting staging area...")
+	cf.println(console.GlyphDim.Prefix() + "Resetting staging area...")
 	gitCommand("reset").Run() // Reset staging area
 
-	cf.printf("[up] Staging: %s\n", selectedFile)
+	cf.printf("%sStaging: %s\n", console.GlyphAction.Prefix(), selectedFile)
 	cmd := gitCommand("add", selectedFile)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stage file %s: %w", selectedFile, err)
@@ -323,14 +324,14 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 
 	if len(diffOutput) == 0 {
 		cf.println("")
-		cf.println("[empty] No staged changes to commit.")
+		cf.println(console.GlyphInfo.Prefix() + "No staged changes to commit.")
 		return nil
 	}
 
 	// Use existing commit message generation logic from the original commit command
 	// This will use the diff optimizer we already implemented
 	cf.println("")
-	cf.println("[bot] Generating commit message...")
+	cf.println(console.GlyphAction.Prefix() + "Generating commit message...")
 
 	// Create a temporary CommitCommand to reuse the existing logic
 	commitCmd := &CommitCommand{
@@ -392,6 +393,6 @@ func (cf *CommitFlow) CommitStagedWithMessage() error {
 		return fmt.Errorf("commit failed: %w", err)
 	}
 
-	cf.println("[OK] Commit created: " + commitHash)
+	cf.println(console.GlyphSuccess.Prefix() + "Commit created: " + commitHash)
 	return nil
 }

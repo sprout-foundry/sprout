@@ -29,7 +29,7 @@
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
-    opacity 100ms var(--ease-out);
+    opacity 150ms var(--ease-out);
   flex-shrink: 0;
 }
 
@@ -42,7 +42,7 @@
   opacity: 0;
   pointer-events: none;
   /* Fade faster than width transition so resizer disappears early during collapse */
-  transition: opacity 100ms var(--ease-out);
+  transition: opacity 150ms var(--ease-out);
 }
 
 .context-panel-tools-list {

@@ -42,6 +42,7 @@ function makeNotification(overrides: Partial<NotificationData> = {}): Notificati
     title: 'Default Title',
     message: 'Default message',
     createdAt: 1000,
+    read: false,
     ...overrides,
   };
 }

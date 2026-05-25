@@ -20,4 +20,5 @@ export interface NotificationData {
   duration?: number;
   createdAt: number;
   action?: NotificationAction;
+  read: boolean;
 }

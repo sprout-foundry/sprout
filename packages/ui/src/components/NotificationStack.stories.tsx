@@ -96,6 +96,7 @@ export const LongMessages: Story = {
           message: 'The build failed with the following error: Cannot find module \'@types/react\' in your project. Please install the missing dependencies and try again. This may require running npm install or updating your package.json file.',
           createdAt: Date.now(),
           duration: 10000,
+          read: false,
         },
       ]}
     />

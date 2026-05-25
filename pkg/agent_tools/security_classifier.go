@@ -65,6 +65,26 @@ func (r SecurityRisk) String() string {
 	}
 }
 
+// RiskCategory represents the specific category of risk for a classified tool call.
+type RiskCategory string
+
+const (
+	// RiskCategoryReadOnly — commands that only read data (cat, ls, head, grep, etc.)
+	RiskCategoryReadOnly RiskCategory = "read-only"
+	// RiskCategoryFileWrite — commands that modify files (write_file, edit_file, mkdir, cp, mv)
+	RiskCategoryFileWrite RiskCategory = "file-write"
+	// RiskCategoryNetwork — commands that access network (curl, wget, fetch)
+	RiskCategoryNetwork RiskCategory = "network"
+	// RiskCategoryProcessManagement — commands that manage processes (kill, pkill, docker start/stop)
+	RiskCategoryProcessManagement RiskCategory = "process-management"
+	// RiskCategoryDestructive — commands that destroy data (rm -rf, git reset --hard)
+	RiskCategoryDestructive RiskCategory = "destructive"
+	// RiskCategoryPrivileged — commands requiring elevated permissions (sudo, chmod, chown)
+	RiskCategoryPrivileged RiskCategory = "privileged"
+	// RiskCategoryUnknown — default when category cannot be determined
+	RiskCategoryUnknown RiskCategory = "unknown"
+)
+
 // SecurityResult contains the classification result for a tool call
 type SecurityResult struct {
 	Risk         SecurityRisk
@@ -72,7 +92,30 @@ type SecurityResult struct {
 	ShouldBlock  bool
 	ShouldPrompt bool
 	IsHardBlock  bool
-	RiskType     string // Risk category for user-facing messages
+	RiskType     string       // Deprecated: Use Category instead. Risk category for user-facing messages
+	Category     RiskCategory // Granular risk category for the classified operation
+}
+
+// IsDestructive returns true if the operation's risk category is destructive.
+func (r SecurityResult) IsDestructive() bool {
+	return r.Category == RiskCategoryDestructive
+}
+
+// riskCategoryFromRiskType maps a RiskType string (from getShellCommandRiskType)
+// to a RiskCategory. Returns RiskCategoryUnknown if the risk type is unrecognized.
+func riskCategoryFromRiskType(riskType string) RiskCategory {
+	switch riskType {
+	case "mass_deletion", "source_code_destruction", "directory_deletion", "destructive_git_operation":
+		return RiskCategoryDestructive
+	case "privilege_escalation", "insecure_permissions":
+		return RiskCategoryPrivileged
+	case "remote_code_execution", "arbitrary_code_execution", "system_integrity":
+		return RiskCategoryDestructive
+	case "disk_destruction", "system_instability", "critical_system_operation":
+		return RiskCategoryDestructive
+	default:
+		return RiskCategoryUnknown
+	}
 }
 
 // ClassifyToolCall classifies a tool call for security purposes based on the
@@ -92,6 +135,10 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 		return classifyShellCommand(args)
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		return classifyWriteOperation(args)
+	case "mkdir":
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in workspace", Category: RiskCategoryFileWrite}
+	case "fetch_url", "web_search":
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
 	case "git":
 		return classifyGitOperation(args)
 	default:
@@ -99,7 +146,7 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 		// The tool registry already validates that only registered tools
 		// reach this point — unregistered tools are rejected before
 		// security classification runs.
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool with no argument-level risk"}
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool with no argument-level risk", Category: RiskCategoryUnknown}
 	}
 }
 
@@ -110,44 +157,59 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	if cbRaw, ok := args["check_background"].(string); ok && cbRaw != "" {
 		cmdRaw, hasCommand := args["command"].(string)
 		if !hasCommand || cmdRaw == "" {
-			return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only background session output check"}
+			return SecurityResult{Risk: SecuritySafe, Reasoning: "Read-only background session output check", Category: RiskCategoryReadOnly}
 		}
 	}
 
 	// stop_background-only calls are session management: sends Ctrl+C and closes the session.
 	// No shell command is executed.
 	if sbRaw, ok := args["stop_background"].(string); ok && sbRaw != "" {
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Background session termination (no shell execution)"}
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Background session termination (no shell execution)", Category: RiskCategoryProcessManagement}
 	}
 
 	cmdRaw, ok := args["command"].(string)
 	if !ok || cmdRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid command", ShouldPrompt: true}
+		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid command", ShouldPrompt: true, Category: RiskCategoryUnknown}
 	}
 
 	cmd := strings.TrimSpace(cmdRaw)
 
 	if isCriticalSystemOperation("shell_command", args) {
+		rt := getShellCommandRiskType(cmd, SecurityDangerous, true)
 		return SecurityResult{
 			Risk: SecurityDangerous, Reasoning: "Critical system operation detected",
 			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
-			RiskType: getShellCommandRiskType(cmd, SecurityDangerous, true),
+			RiskType: rt, Category: riskCategoryFromRiskType(rt),
 		}
 	}
 
 	risks := classifyChainedCommand(cmd)
 	maxRisk := maxRisk(risks)
 	isPrivilegedInstall := containsPrivilegedPackageInstall(cmd)
+	isCritical := isCriticalSystemOperation("shell_command", args)
 
 	// Only DANGEROUS commands trigger blocking/prompts.
 	// Exception: privileged package installation is CAUTION but still prompts.
 	shouldPrompt := maxRisk == SecurityDangerous || isPrivilegedInstall
+
+	// Determine category based on risk level and command characteristics
+	var category RiskCategory
+	if isPrivilegedInstall {
+		category = RiskCategoryPrivileged
+	} else if maxRisk == SecurityDangerous {
+		category = riskCategoryFromRiskType(getShellCommandRiskType(cmd, maxRisk, isCritical))
+	} else if maxRisk == SecuritySafe {
+		category = RiskCategoryReadOnly
+	} else {
+		category = RiskCategoryUnknown
+	}
 	return SecurityResult{
 		Risk:         maxRisk,
 		Reasoning:    getShellCommandReasoning(cmd, maxRisk),
 		ShouldBlock:  maxRisk == SecurityDangerous,
 		ShouldPrompt: shouldPrompt,
-		RiskType:     getShellCommandRiskType(cmd, maxRisk, isCriticalSystemOperation("shell_command", args)),
+		RiskType:     getShellCommandRiskType(cmd, maxRisk, isCritical),
+		Category:     category,
 	}
 }
 
@@ -360,7 +422,7 @@ func classifyReadOnlyLoopBody(body string) SecurityRisk {
 func classifyWriteOperation(args map[string]interface{}) SecurityResult {
 	pathRaw, ok := args["path"].(string)
 	if !ok || pathRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid path", ShouldPrompt: true}
+		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid path", ShouldPrompt: true, Category: RiskCategoryFileWrite}
 	}
 
 	path := pathRaw
@@ -372,22 +434,22 @@ func classifyWriteOperation(args map[string]interface{}) SecurityResult {
 		"/usr/", "/etc/", "/bin/", "/sbin/", "/var/", "/opt/", "/boot/", "/lib/", "/lib64/",
 	} {
 		if path == critical || strings.HasPrefix(path, critical) {
-			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Writing to critical system file or directory: " + path, ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true, RiskType: "system_integrity"}
+			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Writing to critical system file or directory: " + path, ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true, RiskType: "system_integrity", Category: RiskCategoryDestructive}
 		}
 	}
 
 	if strings.HasPrefix(path, "/tmp/") || path == "/tmp" {
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Writing to temporary directory"}
+		return SecurityResult{Risk: SecuritySafe, Reasoning: "Writing to temporary directory", Category: RiskCategoryFileWrite}
 	}
 
-	return SecurityResult{Risk: SecuritySafe, Reasoning: "Workspace file operation"}
+	return SecurityResult{Risk: SecuritySafe, Reasoning: "Workspace file operation", Category: RiskCategoryFileWrite}
 }
 
 // classifyGitOperation classifies git operations
 func classifyGitOperation(args map[string]interface{}) SecurityResult {
 	opRaw, ok := args["operation"].(string)
 	if !ok || opRaw == "" {
-		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid git operation", ShouldPrompt: true}
+		return SecurityResult{Risk: SecurityCaution, Reasoning: "Empty or invalid git operation", ShouldPrompt: true, Category: RiskCategoryUnknown}
 	}
 
 	op := strings.ToLower(strings.TrimSpace(opRaw))
@@ -395,14 +457,14 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 	safeOps := []string{"commit", "add", "status", "log", "diff", "show", "branch", "remote", "stash", "tag", "revert", "fetch", "merge", "pull", "push"}
 	for _, safe := range safeOps {
 		if op == safe {
-			return SecurityResult{Risk: SecuritySafe, Reasoning: "Safe git operation: " + op}
+			return SecurityResult{Risk: SecuritySafe, Reasoning: "Safe git operation: " + op, Category: RiskCategoryReadOnly}
 		}
 	}
 
 	cautionOps := []string{"reset", "rebase", "cherry_pick", "am", "apply", "rm", "mv", "clean"}
 	for _, caution := range cautionOps {
 		if op == caution {
-			return SecurityResult{Risk: SecurityCaution, Reasoning: "Git operation may affect history: " + op, ShouldPrompt: true}
+			return SecurityResult{Risk: SecurityCaution, Reasoning: "Git operation may affect history: " + op, ShouldPrompt: true, Category: RiskCategoryFileWrite}
 		}
 	}
 
@@ -413,11 +475,11 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 	dangerousOps := []string{"branch_delete", "push --force", "push -f"}
 	for _, danger := range dangerousOps {
 		if op == danger || (strings.HasPrefix(op, "push") && strings.Contains(opRaw, "--force")) {
-			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Dangerous git operation that may force-push or delete: " + op, ShouldBlock: true, ShouldPrompt: true}
+			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Dangerous git operation that may force-push or delete: " + op, ShouldBlock: true, ShouldPrompt: true, Category: RiskCategoryDestructive}
 		}
 	}
 
-	return SecurityResult{Risk: SecurityCaution, Reasoning: "Unknown git operation: " + op, ShouldPrompt: true}
+	return SecurityResult{Risk: SecurityCaution, Reasoning: "Unknown git operation: " + op, ShouldPrompt: true, Category: RiskCategoryUnknown}
 }
 
 // isCriticalSystemOperation checks for critical system operations that should always be blocked

@@ -225,7 +225,7 @@
 - [x] SP-022-W1.5-projectsEndpoint: Add `GET /api/workspace/projects` endpoint
 - [x] SP-022-W2.1-picker: Create `WorkspacePicker.tsx` — shows current workspace, recent projects, nearby projects, "Browse..." button
 - [x] SP-022-W2.2-autoSelect: On frontend load, auto-select if exactly 1 recent workspace; show picker if multiple or none
-- [ ] SP-022-W2.3-statusBar: Add workspace indicator to status bar; clicking opens workspace picker
+- [x] SP-022-W2.3-statusBar: Add workspace indicator to status bar; clicking opens workspace picker
 - [x] SP-022-W2.4-locationSwitcher: Wire workspace picker into `LocationSwitcher.tsx` for sidebar-based workspace switching
 - [x] SP-022-W2.5-welcomeTab: Show workspace picker in `WelcomeTab.tsx` when no workspace detected
 - [x] SP-022-W2.6-workspaceApi: Add new API calls in `workspaceApi.ts` and types in `types.ts`

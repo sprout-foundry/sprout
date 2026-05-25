@@ -119,6 +119,12 @@ type TerminalSession struct {
 	Name        string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
 	AutoClose   bool   `json:"-"` // reserved for Phase B: close automatically when inactive
 
+	// NoPTY indicates this session is running in fallback mode without a real
+	// PTY (e.g. on Alpine Linux or minimal containers where /dev/pts is
+	// unavailable). Commands are run via exec.Cmd with stdin/stdout pipes
+	// instead. Terminal resize and raw terminal features are degraded.
+	NoPTY bool `json:"-"`
+
 	// History for shell command navigation.
 	History      []string
 	HistoryIndex int

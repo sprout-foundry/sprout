@@ -35,6 +35,14 @@ func (tm *TerminalManager) ResizeTerminal(sessionID string, rows, cols uint16) e
 		return fmt.Errorf("no PTY available for session %s", sessionID)
 	}
 
+	// Fallback (NoPTY) sessions use pipes which don't support TIOCSWINSZ.
+	// Record the new size for GetTerminalSize and environment variable updates
+	// but skip the ioctl.
+	if session.NoPTY {
+		session.Size = &pty.Winsize{Rows: rows, Cols: cols}
+		return nil
+	}
+
 	newSize := &pty.Winsize{Rows: rows, Cols: cols}
 	if err := pty.Setsize(session.Pty, newSize); err != nil {
 		return fmt.Errorf("failed to resize PTY: %w", err)

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/spf13/cobra"
@@ -111,14 +112,16 @@ func runPlanMode(args []string) error {
 				return fmt.Errorf("failed to load plan: %w", err)
 			}
 			query = fmt.Sprintf("Continue this planning session. Here is the current state:\n\n%s", string(planContent))
-			fmt.Printf("[doc] Loaded existing plan from: %s\n\n", args[0])
+			console.GlyphInfo.Printf("Loaded existing plan from: %s", args[0])
+			fmt.Println()
 		} else if planOutputFile != "" && filesystem.FileExists(planOutputFile) {
 			planContent, err := os.ReadFile(planOutputFile)
 			if err != nil {
 				return fmt.Errorf("failed to load plan: %w", err)
 			}
 			query = fmt.Sprintf("Continue this planning session. Here is the current state:\n\n%s", string(planContent))
-			fmt.Printf("[doc] Loaded existing plan from: %s\n\n", planOutputFile)
+			console.GlyphInfo.Printf("Loaded existing plan from: %s", planOutputFile)
+			fmt.Println()
 		} else {
 			return errors.New("no existing plan file found. path specified but file doesn't exist")
 		}
@@ -179,20 +182,22 @@ func createPlanningAgent() (*agent.Agent, error) {
 func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQuery string) error {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Printf("[*] Starting planning session: %s\n\n", initialQuery)
-	fmt.Println("[i] I'll collaborate with you to create a plan, then execute it once you approve.")
+	console.GlyphAction.Printf("Starting planning session: %s", initialQuery)
+	fmt.Println()
+	console.GlyphInfo.Print("I'll collaborate with you to create a plan, then execute it once you approve.")
 	fmt.Println("   Just type your responses. When ready, I'll ask for your approval.")
 
 	currentQuery := initialQuery
 
 	for {
 		fmt.Println("\n" + strings.Repeat("─", 60))
-		fmt.Println("[bot] Processing...")
+		console.GlyphAction.Print("Processing...")
 
 		// Process query using the agent (which handles tools, streaming, etc.)
 		_, err := chatAgent.ProcessQueryWithContinuity(currentQuery)
 		if err != nil {
-			fmt.Printf("\n[WARN] Agent error: %v\n", err)
+			fmt.Println()
+			console.GlyphWarning.Printf("Agent error: %v", err)
 		}
 
 		// Print summary after response

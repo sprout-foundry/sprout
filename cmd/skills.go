@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/spf13/cobra"
 )
 
@@ -127,14 +128,14 @@ func runSkillsAllow(ids []string) error {
 	if len(added) > 0 {
 		fmt.Printf("Added %d skill(s):\n", len(added))
 		for _, id := range added {
-			fmt.Printf("  [+] %s\n", id)
+			fmt.Printf("  %s%s\n", console.GlyphSuccess.Prefix(), id)
 		}
 	}
 
 	if len(alreadyAllowed) > 0 {
 		fmt.Printf("\nAlready allowed (%d):\n", len(alreadyAllowed))
 		for _, id := range alreadyAllowed {
-			fmt.Printf("  [~] %s\n", id)
+			fmt.Printf("  %s%s\n", console.GlyphDim.Prefix(), id)
 		}
 	}
 

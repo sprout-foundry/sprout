@@ -10,12 +10,12 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/envutil"
-
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
@@ -83,7 +83,7 @@ Requirements:
 
 Generate the command/script now:`, description, envContext)
 
-	fmt.Printf("[bot] Generating shell script with environmental context...\n")
+	console.GlyphAction.Print("Generating shell script with environmental context...")
 
 	// Send chat request directly without tools
 	messages := []api.Message{
@@ -143,12 +143,14 @@ Example format: find . -name "*.go" | wc -l`, description)},
 	isSingleCommand := !strings.Contains(generatedScript, "\n") || !strings.HasPrefix(generatedScript, "#!")
 
 	if isSingleCommand {
-		fmt.Printf("\n[doc] Generated Command:\n")
+		fmt.Println()
+		console.GlyphInfo.Print("Generated Command:")
 		fmt.Println("─" + strings.Repeat("─", 60))
 		fmt.Printf("%s\n", generatedScript)
 		fmt.Println("─" + strings.Repeat("─", 60))
 	} else {
-		fmt.Printf("\n[doc] Generated Shell Script:\n")
+		fmt.Println()
+		console.GlyphInfo.Print("Generated Shell Script:")
 		fmt.Println("═" + strings.Repeat("═", 60))
 		fmt.Printf("%s\n", generatedScript)
 		fmt.Println("═" + strings.Repeat("═", 60))
@@ -165,7 +167,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	userResponse = strings.ToLower(strings.TrimSpace(userResponse))
 	if userResponse != "yes" && userResponse != "y" {
-		fmt.Printf("[FAIL] Execution cancelled.\n")
+		console.GlyphError.Print("Execution cancelled.")
 		return nil
 	}
 
@@ -209,11 +211,11 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	// Display results (output has been streamed in real-time)
 	if execErr != nil {
-		fmt.Printf("[FAIL] Execution failed: %v\n", execErr)
+		console.GlyphError.Printf("Execution failed: %v", execErr)
 		return nil
 	}
 
-	fmt.Printf("[OK] %s executed successfully!\n", c.getScriptType(isSingleCommand))
+	console.GlyphSuccess.Printf("%s executed successfully!", c.getScriptType(isSingleCommand))
 
 	return nil
 }

@@ -63,12 +63,13 @@ func (ir *InputReader) finalizePaste() bool {
 	// Check for binary image paste data (bracketed paste may contain raw image bytes)
 	if len(rawBytes) > 4 && len(rawBytes) <= MaxPastedImageSize {
 		if ext, mimeType := DetectImageMagic(rawBytes); ext != "" {
-			fmt.Fprintf(os.Stderr, "\n[img] Image paste detected (%s, %d bytes)\n", mimeType, len(rawBytes))
+			fmt.Fprintln(os.Stderr)
+			GlyphAction.Fprintf(os.Stderr, "Image paste detected (%s, %d bytes)", mimeType, len(rawBytes))
 			savedPath, err := SavePastedImage(rawBytes, "")
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[FAIL] Failed to save pasted image: %v\n", err)
+				GlyphError.Fprintf(os.Stderr, "Failed to save pasted image: %v", err)
 			} else {
-				fmt.Fprintf(os.Stderr, "[save] Saved to %s\n", savedPath)
+				GlyphSuccess.Fprintf(os.Stderr, "Saved to %s", savedPath)
 				placeholder := fmt.Sprintf("Pasted image saved to disk: %s ", savedPath)
 				// Insert placeholder at cursor position
 				before := ir.line[:ir.cursorPos]
@@ -106,7 +107,8 @@ func (ir *InputReader) finalizePaste() bool {
 	if ShouldSmartSavePaste(pastedContent) {
 		if savedPath, err := SavePastedText(pastedContent, ""); err == nil {
 			lineCount := strings.Count(pastedContent, "\n") + 1
-			fmt.Fprintf(os.Stderr, "\n[paste] %d lines · %d bytes saved to %s\n",
+			fmt.Fprintln(os.Stderr)
+			GlyphAction.Fprintf(os.Stderr, "%d lines · %d bytes saved to %s",
 				lineCount, len(pastedContent), savedPath)
 			placeholder := "@" + savedPath + " "
 			start := ir.cursorPos
@@ -127,7 +129,7 @@ func (ir *InputReader) finalizePaste() bool {
 			ir.lastWrapPending = isWrapPending(ir.terminalWidth, newLength, cursorPos, newLength)
 			return true
 		} else {
-			fmt.Fprintf(os.Stderr, "[FAIL] smart-paste save failed: %v (falling back to inline insert)\n", err)
+			GlyphError.Fprintf(os.Stderr, "smart-paste save failed: %v (falling back to inline insert)", err)
 			// fall through to inline insertion below
 		}
 	}

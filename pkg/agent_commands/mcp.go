@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
@@ -141,7 +142,7 @@ func (m *MCPCommand) setupServerFromRegistry(mcpConfig *mcp.MCPConfig, registry 
 // setupServerFromTemplate sets up an MCP server from a specific template
 func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template mcp.MCPServerTemplate, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Printf("[tool] %s Setup\n", template.Name)
+	console.GlyphInfo.Printf("%s Setup", template.Name)
 	fmt.Println(strings.Repeat("=", len(template.Name)+7))
 	fmt.Println()
 
@@ -272,7 +273,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 	}
 
 	fmt.Println()
-	fmt.Printf("[OK] %s configured successfully!\n", template.Name)
+	console.GlyphSuccess.Printf("%s configured successfully!", template.Name)
 	if serverConfig.Type == "http" {
 		fmt.Printf("Type: Remote HTTP server\n")
 		fmt.Printf("URL: %s\n", secretdetect.RedactOpaque(serverConfig.URL))
@@ -284,7 +285,7 @@ func (m *MCPCommand) setupServerFromTemplate(mcpConfig *mcp.MCPConfig, template 
 
 	if len(template.Features) > 0 {
 		fmt.Println()
-		fmt.Println("[pkg] Features available:")
+		console.GlyphInfo.Print("Features available:")
 		for _, feature := range template.Features {
 			fmt.Printf("• %s\n", feature)
 		}
@@ -376,7 +377,7 @@ func (m *MCPCommand) removeServer(serverName string, chatAgent *agent.Agent) err
 	if err := mcp.SaveMCPConfig(config); err != nil {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
-	fmt.Printf("[OK] Server '%s' removed successfully!\n", serverName)
+	console.GlyphSuccess.Printf("Server '%s' removed successfully!", serverName)
 
 	if len(mcpConfig.Servers) == 0 {
 		fmt.Println("MCP disabled (no servers remain).")
@@ -543,13 +544,13 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 		server.Stop(context.Background())
 	}()
 
-	fmt.Println("[OK] Server started successfully!")
+	console.GlyphSuccess.Print("Server started successfully!")
 
 	fmt.Println("[~] Initializing server...")
 	if err := server.Initialize(ctx); err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
-	fmt.Println("[OK] Server initialized successfully!")
+	console.GlyphSuccess.Print("Server initialized successfully!")
 
 	fmt.Println("[search] Listing available tools...")
 	tools, err := server.ListTools(ctx)
@@ -558,11 +559,11 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	}
 
 	if len(tools) == 0 {
-		fmt.Println("[WARN] No tools available from this server.")
+		console.GlyphWarning.Print("No tools available from this server.")
 		return nil
 	}
 
-	fmt.Printf("[OK] Found %d tools:\n", len(tools))
+	console.GlyphSuccess.Printf("Found %d tools:", len(tools))
 	fmt.Println()
 
 	for i, tool := range tools {

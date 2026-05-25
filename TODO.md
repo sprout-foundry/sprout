@@ -144,10 +144,10 @@
 - [x] SP-008-A3-ciRace: Remove `-short` from CI race detector step
 - [x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
 - [x] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods
-- [ ] SP-008-B3-migrateLifecycle: Migrate agent lifecycle event logging to structured logger
-- [ ] SP-008-B3-migrateToolExec: Migrate tool execution lifecycle logging to structured logger
-- [ ] SP-008-B3-migrateConversation: Migrate conversation flow logging to structured logger
-- [ ] SP-008-B3-migrateRemaining: Migrate all remaining `fmt.Printf` calls in `pkg/agent/` to structured logger
+- [x] SP-008-B3-migrateLifecycle: Migrate agent lifecycle event logging to structured logger
+- [x] SP-008-B3-migrateToolExec: Migrate tool execution lifecycle logging to structured logger
+- [x] SP-008-B3-migrateConversation: Migrate conversation flow logging to structured logger
+- [x] SP-008-B3-migrateRemaining: Migrate all remaining `fmt.Printf` calls in `pkg/agent/` to structured logger
 - [x] SP-008-B4-retryLogic: Create `pkg/agent/retry.go` — `handleToolError()` with typed error classification
 - [x] SP-008-B4-apiTypedErrors: Replace string matching in `ErrorHandler.HandleAPIFailure()` with typed errors
 

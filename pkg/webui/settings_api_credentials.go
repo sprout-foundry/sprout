@@ -239,6 +239,9 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 		return
 	}
 
+	// Auto-truncate credential values to a reasonable maximum.
+	req.Value = truncateString(req.Value, maxSettingGenericLength)
+
 	// Validate provider is in the known providers list
 	knownProviders := cm.GetAvailableProviders()
 	validProvider := false
@@ -640,6 +643,9 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPoolPost(w http.ResponseWr
 		writeJSONError(w, http.StatusBadRequest, "key value cannot be empty")
 		return
 	}
+
+	// Auto-truncate credential values to a reasonable maximum.
+	req.Value = truncateString(req.Value, maxSettingGenericLength)
 
 	// Validate provider is known
 	knownProviders := cm.GetAvailableProviders()

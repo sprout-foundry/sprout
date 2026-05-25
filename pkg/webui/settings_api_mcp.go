@@ -195,6 +195,7 @@ func (ws *ReactWebServer) handleAPISettingsMCPPut(w http.ResponseWriter, r *http
 			cfg.MCP.AutoDiscover = *incoming.AutoDiscover
 		}
 		if incoming.Timeout != "" {
+			incoming.Timeout = truncateString(incoming.Timeout, maxSettingGenericLength)
 			d, err := time.ParseDuration(incoming.Timeout)
 			if err != nil {
 				return fmt.Errorf("invalid timeout duration: %w", err)
@@ -230,6 +231,18 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 	if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("Invalid JSON: %v", err))
 		return
+	}
+
+	// Auto-truncate string fields that exceed backend limits.
+	server.Name = truncateString(server.Name, maxSettingNameLength)
+	server.Command = truncateString(server.Command, maxSettingCommandLength)
+	server.URL = truncateString(server.URL, maxSettingURLLength)
+	server.WorkingDir = truncateString(server.WorkingDir, maxSettingPathLength)
+	for i, a := range server.Args {
+		server.Args[i] = truncateString(a, maxSettingArgLength)
+	}
+	for k, v := range server.Env {
+		server.Env[k] = truncateString(v, maxSettingGenericLength)
 	}
 
 	if server.Name == "" {
@@ -302,6 +315,17 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 
 	// Ensure the name in the body matches the URL (and always have Name populated)
 	server.Name = name
+
+	// Auto-truncate string fields that exceed backend limits.
+	server.Command = truncateString(server.Command, maxSettingCommandLength)
+	server.URL = truncateString(server.URL, maxSettingURLLength)
+	server.WorkingDir = truncateString(server.WorkingDir, maxSettingPathLength)
+	for i, a := range server.Args {
+		server.Args[i] = truncateString(a, maxSettingArgLength)
+	}
+	for k, v := range server.Env {
+		server.Env[k] = truncateString(v, maxSettingGenericLength)
+	}
 
 	// Validate server config BEFORE doing any work to avoid unnecessary side effects.
 	if err := validateMCPServer(server); err != nil {

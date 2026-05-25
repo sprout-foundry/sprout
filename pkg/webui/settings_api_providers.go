@@ -66,6 +66,9 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPost(w http.ResponseWriter, 
 		return
 	}
 
+	// Auto-truncate string fields that exceed backend limits.
+	provider = truncateCustomProvider(provider)
+
 	if provider.Name == "" {
 		writeJSONError(w, http.StatusBadRequest, "provider name is required")
 		return
@@ -130,6 +133,9 @@ func (ws *ReactWebServer) handleAPISettingsProvidersPut(w http.ResponseWriter, r
 
 	// Ensure name in body matches URL
 	provider.Name = name
+
+	// Auto-truncate string fields that exceed backend limits.
+	provider = truncateCustomProvider(provider)
 
 	if err := validateCustomProvider(provider); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())

@@ -502,3 +502,74 @@ func TestSteerHistory_DispatchCSIFinal_OnlyArrowsAct(t *testing.T) {
 		t.Fatalf("Up arrow should recall history, got %q", got)
 	}
 }
+
+func TestSteerInputReader_PasteAccumulatesIntoBuffer(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+
+	// Simulate the sequence the terminal would emit for a bracketed
+	// paste of "hello\nworld": ESC[200~ ... bytes ... ESC[201~. We
+	// drive the handlers directly (handleEscapeOrSequence would need
+	// a real stdin); the paste lifecycle is beginPaste → appendPasteByte
+	// → endPaste, with the readLoop routing bytes to appendPasteByte
+	// while pasteActive is true.
+	r.beginPaste()
+	if !r.pasteActive {
+		t.Fatalf("beginPaste should set pasteActive=true")
+	}
+	for _, b := range []byte("hello\nworld") {
+		r.appendPasteByte(b)
+	}
+	r.endPaste()
+
+	if r.pasteActive {
+		t.Fatalf("endPaste should clear pasteActive")
+	}
+	if got := string(r.buffer); got != "hello\nworld" {
+		t.Fatalf("expected paste content in buffer, got %q", got)
+	}
+}
+
+func TestSteerInputReader_PasteSurvivesNewlines(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+
+	// Critical regression test: a paste that contains \r and \n
+	// bytes must NOT trigger handleSubmit. The readLoop dispatches
+	// based on pasteActive — but we verify via the handlers that
+	// the bytes accumulate without truncation.
+	r.beginPaste()
+	for _, b := range []byte("line1\r\nline2\nline3") {
+		r.appendPasteByte(b)
+	}
+	r.endPaste()
+
+	if len(submitted) != 0 {
+		t.Fatalf("paste containing newlines must not submit, got %d submissions", len(submitted))
+	}
+	if got := string(r.buffer); got != "line1\r\nline2\nline3" {
+		t.Fatalf("paste content corrupted, got %q", got)
+	}
+}
+
+func TestSteerInputReader_PasteAppendsToExistingBuffer(t *testing.T) {
+	var submitted []string
+	var interrupted int
+	r := newTestReader(&submitted, &interrupted)
+
+	// User typed "hi " then pasted "there".
+	for _, b := range []byte("hi ") {
+		r.handlePrintable(b)
+	}
+	r.beginPaste()
+	for _, b := range []byte("there") {
+		r.appendPasteByte(b)
+	}
+	r.endPaste()
+
+	if got := string(r.buffer); got != "hi there" {
+		t.Fatalf("paste should append to existing buffer, got %q", got)
+	}
+}

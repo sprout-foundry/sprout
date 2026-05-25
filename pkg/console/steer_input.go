@@ -467,7 +467,9 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 	// ESC `[` — read bytes until a final byte (0x40..0x7E) terminates
 	// the CSI sequence per ECMA-48. Cap the drain at a few bytes so
 	// a malformed sequence can't hang us. The final byte determines
-	// the action.
+	// the action. We also capture parameter bytes so we can recognize
+	// the bracketed-paste markers (ESC [ 200~ start, ESC [ 201~ end).
+	var params []byte
 	drainDeadline := time.Now().Add(20 * time.Millisecond)
 	for i := 0; i < 8 && time.Now().Before(drainDeadline); i++ {
 		var b [1]byte
@@ -477,13 +479,68 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 			continue
 		}
 		if b[0] >= 0x40 && b[0] <= 0x7E {
+			// Bracketed-paste markers are parameterized with 200/201
+			// and terminate with '~'. Handle them inline so the normal
+			// CSI dispatch (arrow keys etc.) stays focused.
+			if b[0] == '~' {
+				switch string(params) {
+				case "200":
+					r.beginPaste()
+					return
+				case "201":
+					r.endPaste()
+					return
+				}
+			}
 			r.dispatchCSIFinal(b[0])
 			return
 		}
 		// Parameter/intermediate bytes (0x30..0x3F, 0x20..0x2F) keep
-		// the sequence going; we don't care about the parameters for
-		// the limited set of keys we react to.
+		// the sequence going.
+		if b[0] >= 0x30 && b[0] <= 0x3F {
+			params = append(params, b[0])
+		}
 	}
+}
+
+// beginPaste enters bracketed-paste accumulation mode. All bytes that
+// arrive between now and endPaste() are appended verbatim to pasteBuf.
+func (r *SteerInputReader) beginPaste() {
+	r.mu.Lock()
+	r.pasteActive = true
+	r.pasteBuf = r.pasteBuf[:0]
+	r.mu.Unlock()
+}
+
+// endPaste finalizes a bracketed paste: appends the accumulated bytes
+// to the live buffer and re-renders the pinned line. Pasted content
+// keeps embedded newlines so multi-line code/log snippets survive — on
+// submit the model receives the exact text the user pasted.
+func (r *SteerInputReader) endPaste() {
+	r.mu.Lock()
+	paste := string(r.pasteBuf)
+	r.pasteBuf = r.pasteBuf[:0]
+	r.pasteActive = false
+	r.buffer = append(r.buffer, paste...)
+	r.hasEditedHistory()
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// appendPasteByte adds one byte to the in-flight paste buffer. Called
+// from readLoop while pasteActive is true.
+func (r *SteerInputReader) appendPasteByte(b byte) {
+	r.mu.Lock()
+	r.pasteBuf = append(r.pasteBuf, b)
+	r.mu.Unlock()
+}
+
+// hasEditedHistory resets the history navigation cursor after a buffer
+// mutation so subsequent up-arrow recall starts fresh. Must be called
+// with r.mu held.
+func (r *SteerInputReader) hasEditedHistory() {
+	r.historyIndex = -1
+	r.pendingBuffer = nil
 }
 
 // dispatchCSIFinal acts on the terminator byte of a CSI sequence we

@@ -275,7 +275,7 @@
 - [x] SP-051-treeView: Implement tree/nested view for subagent activity — parent-child grouping, collapsible nesting levels
 - [x] SP-051-resourceUsage: Display per-depth-level resource usage: tokens consumed, time elapsed, cost
 - [x] SP-051-contextSidebar: Add depth information to tool execution entries in context sidebar
-- [ ] SP-051-subagentTreeComponent: Create `SubagentTree` component showing hierarchical relationship
+- [x] SP-051-subagentTreeComponent: Create `SubagentTree` component showing hierarchical relationship
 - [x] SP-051-statusIcons: Different status icons/colors for different depth levels
 
 ## Not Started — SP-053: WebUI CLI Parity

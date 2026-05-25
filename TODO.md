@@ -177,8 +177,8 @@
 - [x] SP-012-U1.3-fileTreeARIA: Add `role="treeitem"` and `aria-expanded` to FileTree items
 - [x] SP-012-U1.3-terminalARIA: Add `aria-label` to TerminalPane container
 - [x] SP-012-U1.3-commandPaletteARIA: Add `aria-live` region to CommandPalette results list
-- [ ] SP-012-U1.3-chatPanelARIA: Add `role="log"` and `aria-label` to ChatPanel messages
-- [ ] SP-012-U1.3-editorTabsARIA: Add `aria-label="Close {filename}"` to tab close buttons
+- [x] SP-012-U1.3-chatPanelARIA: Add `role="log"` and `aria-label` to ChatPanel messages
+- [x] SP-012-U1.3-editorTabsARIA: Add `aria-label="Close {filename}"` to tab close buttons
 - [ ] SP-012-U1.3-sidebarARIA: Add `role="navigation"` to Sidebar navigation sections
 - [ ] SP-012-U1.4-focusIndicators: Add global `:focus-visible` outline styles and `:focus:not(:focus-visible)` outline removal
 - [x] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement

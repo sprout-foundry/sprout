@@ -11,6 +11,7 @@ func TestApprovalDecisionString(t *testing.T) {
 		{ApprovalApproveOnce, "approve_once"},
 		{ApprovalApproveAlways, "approve_always"},
 		{ApprovalElevate, "elevate"},
+		{ApprovalAllowFolderSession, "allow_folder_session"},
 		{ApprovalDecision(999), "deny"}, // unknown → safe fallback
 	}
 	for _, tc := range tests {
@@ -32,6 +33,7 @@ func TestApprovalDecisionFromString(t *testing.T) {
 		{"approve_always", ApprovalApproveAlways},
 		{"always", ApprovalApproveAlways},
 		{"elevate", ApprovalElevate},
+		{"allow_folder_session", ApprovalAllowFolderSession},
 		{"deny", ApprovalDeny},
 		{"no", ApprovalDeny},
 		{"", ApprovalDeny},
@@ -53,6 +55,7 @@ func TestApprovalDecisionApproved(t *testing.T) {
 		{ApprovalApproveOnce, true},
 		{ApprovalApproveAlways, true},
 		{ApprovalElevate, true},
+		{ApprovalAllowFolderSession, true},
 	}
 	for _, tc := range tests {
 		if got := tc.d.Approved(); got != tc.want {

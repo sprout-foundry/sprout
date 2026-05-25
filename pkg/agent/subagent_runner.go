@@ -718,6 +718,16 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 	// during delegation.
 	agent.riskProfileOverride = r.parentAgent.riskProfileOverride
 
+	// Propagate session folder allowlist into the subagent so paths
+	// the user already approved at the root level don't re-prompt
+	// inside delegated work. The snapshot is a copy — the subagent
+	// can add its own entries without leaking back to the parent
+	// (intentional: subagent-acquired approvals shouldn't outlive
+	// the delegation).
+	for _, f := range r.parentAgent.SnapshotSessionAllowedFolders() {
+		agent.AddSessionAllowedFolder(f)
+	}
+
 	// SP-051: tag every event this subagent publishes with depth + persona
 	// so the CLI tool-timeline can indent and color-badge by who's running.
 	// Merge (not replace) so parent-set chat/client/user routing keys still

@@ -34,14 +34,33 @@ func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
 // SetUnsafeMode sets the unsafe mode flag
 func (a *Agent) SetUnsafeMode(unsafe bool) { a.security.SetUnsafeMode(unsafe) }
 
-// IsSecurityBypassApproved returns whether the user has approved filesystem access outside CWD
+// IsSecurityBypassApproved returns whether the user has approved any
+// external filesystem access this session. Coarse signal: prefer the
+// per-path IsFolderSessionAllowed for new code.
 func (a *Agent) IsSecurityBypassApproved() bool {
 	return a.security.IsSecurityBypassApproved()
 }
 
-// SetSecurityBypassApproved marks that the user has approved filesystem access outside CWD for this session
-func (a *Agent) SetSecurityBypassApproved() {
-	a.security.SetSecurityBypassApproved()
+// IsFolderSessionAllowed reports whether absPath sits under a folder
+// the user has allowlisted via "Allow this folder for the rest of the
+// session" on the filesystem approval dialog.
+func (a *Agent) IsFolderSessionAllowed(absPath string) bool {
+	return a.security.IsFolderSessionAllowed(absPath)
+}
+
+// AddSessionAllowedFolder records the folder picked by the user from
+// the filesystem approval dialog so future accesses under it are
+// auto-approved for the rest of this session.
+func (a *Agent) AddSessionAllowedFolder(folder string) {
+	a.security.AddSessionAllowedFolder(folder)
+}
+
+// SnapshotSessionAllowedFolders returns a copy of the session
+// allowlist. Used by SubagentRunner to seed a new subagent's
+// allowlist from the parent (so previously approved folders remain
+// usable inside delegated work).
+func (a *Agent) SnapshotSessionAllowedFolders() []string {
+	return a.security.SnapshotSessionAllowedFolders()
 }
 
 // CheckFileContentSecurity runs security concern detection on file content after a write.

@@ -34,6 +34,14 @@ const (
 	// only — the CLI/WebUI should tell the user to use /risk-profile
 	// permissive if they want this to survive restart.
 	ApprovalElevate
+
+	// ApprovalAllowFolderSession is the filesystem-tier-B outcome:
+	// approve this invocation AND add the prompt's target folder to
+	// the agent's session-allowed folder list (in-memory). Subsequent
+	// accesses under that folder skip the prompt for the rest of the
+	// session. The folder is conveyed via the approval request's
+	// `folder` extra so the caller knows which path to record.
+	ApprovalAllowFolderSession
 )
 
 // String returns a stable lowercase identifier for the decision, used
@@ -48,6 +56,8 @@ func (d ApprovalDecision) String() string {
 		return "approve_always"
 	case ApprovalElevate:
 		return "elevate"
+	case ApprovalAllowFolderSession:
+		return "allow_folder_session"
 	default:
 		return "deny"
 	}
@@ -63,6 +73,8 @@ func ApprovalDecisionFromString(s string) ApprovalDecision {
 		return ApprovalApproveAlways
 	case "elevate":
 		return ApprovalElevate
+	case "allow_folder_session":
+		return ApprovalAllowFolderSession
 	default:
 		return ApprovalDeny
 	}

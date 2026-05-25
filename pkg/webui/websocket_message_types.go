@@ -191,12 +191,13 @@ func (d *PersonaChangeData) Validate() error {
 
 // SecurityApprovalResponseData is the data payload for "security_approval_response" messages.
 //
-// Action carries the 4-option dialog choice (SP-058 follow-up). Legal values:
-//   - ""               → fall back to Approved bool (legacy clients)
-//   - "approve_once"   → equivalent to Approved=true
-//   - "approve_always" → approve and persist command to allowlist
-//   - "elevate"        → approve and bump session risk profile to permissive
-//   - "deny"           → equivalent to Approved=false
+// Action carries the multi-option dialog choice. Legal values:
+//   - ""                      → fall back to Approved bool (legacy clients)
+//   - "approve_once"          → equivalent to Approved=true
+//   - "approve_always"        → shell-only: approve and persist command to allowlist
+//   - "elevate"               → shell-only: approve and bump session risk profile to permissive
+//   - "allow_folder_session"  → filesystem-only: approve and allowlist the target folder for this session
+//   - "deny"                  → equivalent to Approved=false
 //
 // Old WebUI clients that only set Approved continue to work because the
 // server falls back to bool when Action is empty.
@@ -217,10 +218,10 @@ func (d *SecurityApprovalResponseData) Validate() error {
 	}
 	d.Action = strings.TrimSpace(d.Action)
 	switch d.Action {
-	case "", "approve_once", "approve_always", "elevate", "deny":
+	case "", "approve_once", "approve_always", "elevate", "allow_folder_session", "deny":
 		// ok
 	default:
-		return fmt.Errorf("action must be one of: approve_once, approve_always, elevate, deny (got %q)", d.Action)
+		return fmt.Errorf("action must be one of: approve_once, approve_always, elevate, allow_folder_session, deny (got %q)", d.Action)
 	}
 	return nil
 }

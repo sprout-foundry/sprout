@@ -1,6 +1,6 @@
 # TODO
 
-## Partially Done — SP-009: Component Library Maturation
+## Done — SP-009: Component Library Maturation
 
 - [x] SP-009-P1.1: Verify `npm run build` produces clean output in `packages/ui/`; create README.md and CHANGELOG.md
 - [x] SP-009-P1.2: Publish `@sprout/ui` to npm under `@sprout` org scope; create `.github/workflows/publish-ui.yml`
@@ -9,7 +9,7 @@
 - [x] SP-009-P2.1: Install Storybook 8 in `packages/ui/` with Vite builder and React framework
 - [x] SP-009-P2.2: Create `MockAdapter` implementing `APIAdapter`; wrap all stories in `SproutProvider` with mock
 - [x] SP-009-P2.3: Write stories for StatusBar, FileTree, Terminal, GitPanel, CommandPalette (Tier 1)
-[x] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
+- [x] SP-009-P2.3: Write stories for MessageBubble, MessageContent, MessageSegments, ChatPanel (Tier 2)
 - [x] SP-009-P2.3: Write stories for ContextMenu, NotificationItem, SelectionActionBar, CommandInput (Tier 3)
 - [x] SP-009-P2.4: Connect to Chromatic for visual regression testing on PRs
 - [x] SP-009-P2.5: Write MDX documentation pages for complex components (FileTree, ChatPanel, GitPanel)
@@ -82,55 +82,55 @@
 
 ## Partially Done — SP-046: Workspace Sync Model
 
-[x] SP-046-sync-protocol-ws: Implement WebSocket patch stream (Container → Browser) — each tool-call write emits one patch event
-[x] SP-046-sync-protocol-http: Implement HTTP POST per op (Browser → Container) — browser queues outbound ops in OPFS, flushes when WS is up
-[x] SP-046-sync-heartbeat: Implement 15s heartbeat ping; container terminates job after 60s missed heartbeat
-[x] SP-046-conflict-browserWriteOnContainerPatch: On receiving container patch with unsynced browser edits, write as `<path>.theirs` and show git-style conflict marker UI
-[x] SP-046-conflict-agentWriteRefusal: Agent's `write_file` tool wrapper refuses write if `browser_seq > last_synced_browser`
-[x] SP-046-opfs-replica: Implement OPFS browser-side replica with file-level metadata
-[x] SP-046-multiDevice: Implement single-active-session enforcement — second device gets "Take over?" prompt
-[x] SP-046-firstLoad: Implement cold-hydrate progress bar for new device first-load (container → browser via WS)
-[x] SP-046-stalenessRule: Implement 30s re-read invariant in `write_file` tool wrapper
-[x] SP-046-freeTierDegradation: Ensure sync protocol degenerates cleanly for free-tier (browser is sole authority, WASM-side tool handlers write directly to OPFS)
-[x] SP-046-failureModes: Implement recovery paths: container death (reconnect + seq reconciliation), browser crash (OPFS persist + seq replay), volume corruption (git clone + replay)
+- [x] SP-046-sync-protocol-ws: Implement WebSocket patch stream (Container → Browser) — each tool-call write emits one patch event
+- [x] SP-046-sync-protocol-http: Implement HTTP POST per op (Browser → Container) — browser queues outbound ops in OPFS, flushes when WS is up
+- [x] SP-046-sync-heartbeat: Implement 15s heartbeat ping; container terminates job after 60s missed heartbeat
+- [x] SP-046-conflict-browserWriteOnContainerPatch: On receiving container patch with unsynced browser edits, write as `<path>.theirs` and show git-style conflict marker UI
+- [x] SP-046-conflict-agentWriteRefusal: Agent's `write_file` tool wrapper refuses write if `browser_seq > last_synced_browser`
+- [x] SP-046-opfs-replica: Implement OPFS browser-side replica with file-level metadata
+- [x] SP-046-multiDevice: Implement single-active-session enforcement — second device gets "Take over?" prompt
+- [x] SP-046-firstLoad: Implement cold-hydrate progress bar for new device first-load (container → browser via WS)
+- [x] SP-046-stalenessRule: Implement 30s re-read invariant in `write_file` tool wrapper
+- [x] SP-046-freeTierDegradation: Ensure sync protocol degenerates cleanly for free-tier (browser is sole authority, WASM-side tool handlers write directly to OPFS)
+- [x] SP-046-failureModes: Implement recovery paths: container death (reconnect + seq reconciliation), browser crash (OPFS persist + seq replay), volume corruption (git clone + replay)
 
 ## Partially Done — SP-048: CLI Delight
 
 - [x] SP-048-4a: Honor `NO_COLOR` / `FORCE_COLOR` in `NewMarkdownFormatter`; stop unsetting `NO_COLOR` in `agent_exec_utils.go`
-[x] SP-048-4b: Bold the capitalized default letter in `[y/N]` prompts and the safe default option in 4-choice secret prompt
-[x] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
-[x] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop
-[x] SP-048-4f: Implement `$EDITOR` escape via Ctrl-X Ctrl-E or `/edit` — open `$EDITOR` with current buffer pre-filled
+- [x] SP-048-4b: Bold the capitalized default letter in `[y/N]` prompts and the safe default option in 4-choice secret prompt
+- [x] SP-048-4c: When bracketed paste delivers >100 lines or >5KB, show confirmation: `[Use] [Save as file & reference] [Cancel]`
+- [x] SP-048-4e: Implement Ctrl-R reverse history search (incremental substring search over history) — requires state machine in raw-mode read loop
+- [x] SP-048-4f: Implement `$EDITOR` escape via Ctrl-X Ctrl-E or `/edit` — open `$EDITOR` with current buffer pre-filled
 - [x] SP-048-5a: After each assistant turn, print dim line: `⎯ this turn: 1.2k in / 4.8k out · $0.04 · 6.1s ⎯`
-[x] SP-048-5b: Implement `/help <command>` per-command usage text
-[x] SP-048-5c: Add short aliases: `/m` → `/models`, `/p` → `/providers`, `/x` → `/exit`, `/?` → `/help`
-[x] SP-048-5d: Strip ANSI from non-TTY stdout when piped
+- [x] SP-048-5b: Implement `/help <command>` per-command usage text
+- [x] SP-048-5c: Add short aliases: `/m` → `/models`, `/p` → `/providers`, `/x` → `/exit`, `/?` → `/help`
+- [x] SP-048-5d: Strip ANSI from non-TTY stdout when piped
 
 ## Not Started — SP-006: Delegate Tool
 
-[x] SP-006-A-types: Create `pkg/agent/delegate_types.go` — `DelegateResult`, `DelegateConfig`, `ToolCallRecord` types
-[x] SP-006-A-factory: Create `pkg/agent/delegate_factory.go` — `CreateDelegateAgent(parent, cfg)` via `NewAgentWithLayers` + role overlay
-[x] SP-006-A-streamBridge: Create `pkg/agent/delegate_stream.go` — `DelegateStreamBridge` event bus bridge
-[x] SP-006-A-handler: Create `pkg/agent/tool_handlers_delegate.go` — tool handler + registration
-[x] SP-006-A-toolDef: Register `delegate` tool in `tool_definitions.go` with params: prompt, role, provider, model, tools, context, max_iterations, files
-[x] SP-006-A-events: Add delegate event types to `pkg/events/events.go`
-[x] SP-006-A-nestingLimit: Implement max nesting depth via `SPROUT_MAX_DELEGATE_DEPTH=3` env var
-[x] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
-[x] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
+- [x] SP-006-A-types: Create `pkg/agent/delegate_types.go` — `DelegateResult`, `DelegateConfig`, `ToolCallRecord` types
+- [x] SP-006-A-factory: Create `pkg/agent/delegate_factory.go` — `CreateDelegateAgent(parent, cfg)` via `NewAgentWithLayers` + role overlay
+- [x] SP-006-A-streamBridge: Create `pkg/agent/delegate_stream.go` — `DelegateStreamBridge` event bus bridge
+- [x] SP-006-A-handler: Create `pkg/agent/tool_handlers_delegate.go` — tool handler + registration
+- [x] SP-006-A-toolDef: Register `delegate` tool in `tool_definitions.go` with params: prompt, role, provider, model, tools, context, max_iterations, files
+- [x] SP-006-A-events: Add delegate event types to `pkg/events/events.go`
+- [x] SP-006-A-nestingLimit: Implement max nesting depth via `SPROUT_MAX_DELEGATE_DEPTH=3` env var
+- [x] SP-006-B-render: Render `delegate_activity` events in WebUI (expandable tool call tree)
+- [x] SP-006-B-costDisplay: Show delegate cost/token accumulation in real-time
 - [x] SP-006-C-followUp: Allow parent to inject follow-up messages into running delegate (future)
 - [x] SP-006-C-interactive: Support interactive delegation — not just blocking (future)
 - [x] SP-006-C-clarification: Allow delegate to request clarification from parent via event bus (future)
 
 ## Not Started — SP-007: Extend Configuration
 
-[x] SP-007-1-roleSchema: Create `pkg/configuration/role.go` — `RoleConfig`, `RoleMeta`, `RoleToolsConfig`, `RoleSkillsConfig`, `RoleConstraints` types + `MergeRoleConfig()`
-[x] SP-007-1-roleManager: Create `pkg/configuration/role_manager.go` — `RoleManager` with resolution chain, `Resolve()`, `List()`, `Save()`, `Delete()`
-[x] SP-007-1-roleTests: Create `pkg/configuration/role_test.go` — unit tests for resolution, merge, save
-[x] SP-007-1-configModify: Modify `pkg/configuration/config.go` — add `~/.sprout/roles/` and `{workspace}/.sprout/roles/` support
-[x] SP-007-1-personaModify: Extend `GetSubagentType()` to check RoleManager before falling back to existing `subagent_types`
-[x] SP-007-2-extendHandler: Create `pkg/agent/extend_handler.go` — guided collaborative configuration session (7-question flow)
-[x] SP-007-2-extendTests: Create `pkg/agent/extend_handler_test.go`
-[x] SP-007-2-wireCommand: Wire `/extend` into command routing in `conversation_handler.go`
+- [x] SP-007-1-roleSchema: Create `pkg/configuration/role.go` — `RoleConfig`, `RoleMeta`, `RoleToolsConfig`, `RoleSkillsConfig`, `RoleConstraints` types + `MergeRoleConfig()`
+- [x] SP-007-1-roleManager: Create `pkg/configuration/role_manager.go` — `RoleManager` with resolution chain, `Resolve()`, `List()`, `Save()`, `Delete()`
+- [x] SP-007-1-roleTests: Create `pkg/configuration/role_test.go` — unit tests for resolution, merge, save
+- [x] SP-007-1-configModify: Modify `pkg/configuration/config.go` — add `~/.sprout/roles/` and `{workspace}/.sprout/roles/` support
+- [x] SP-007-1-personaModify: Extend `GetSubagentType()` to check RoleManager before falling back to existing `subagent_types`
+- [x] SP-007-2-extendHandler: Create `pkg/agent/extend_handler.go` — guided collaborative configuration session (7-question flow)
+- [x] SP-007-2-extendTests: Create `pkg/agent/extend_handler_test.go`
+- [x] SP-007-2-wireCommand: Wire `/extend` into command routing in `conversation_handler.go`
 - [x] SP-007-3-webuiSettings: Settings panel for role CRUD; visual role editor (future)
 - [x] SP-007-3-apiEndpoints: Add REST endpoints for role CRUD: `GET/PUT/DELETE /api/settings/roles/{name}` (future)
 - [x] SP-007-3-roleSelector: Role selector in agent persona picker (future)
@@ -139,17 +139,17 @@
 
 - [ ] SP-008-A1: Replace direct method-call-from-goroutine patterns with channel-based communication for `ProcessQuery` → tool executor feedback loop
 - [ ] SP-008-A2: Systematic audit of every field access in concurrent code paths — verify correct mutex, document invariant
-[x] SP-008-A3-raceDefault: Add `-race` to default `make test` target
+- [x] SP-008-A3-raceDefault: Add `-race` to default `make test` target
 - [ ] SP-008-A3-raceTests: Create `pkg/agent/concurrency_test.go` — focused race detection tests
 - [ ] SP-008-A3-ciRace: Remove `-short` from CI race detector step
-[x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
-[x] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods
+- [x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
+- [x] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods
 - [ ] SP-008-B3-migrateLifecycle: Migrate agent lifecycle event logging to structured logger
 - [ ] SP-008-B3-migrateToolExec: Migrate tool execution lifecycle logging to structured logger
 - [ ] SP-008-B3-migrateConversation: Migrate conversation flow logging to structured logger
 - [ ] SP-008-B3-migrateRemaining: Migrate all remaining `fmt.Printf` calls in `pkg/agent/` to structured logger
-[x] SP-008-B4-retryLogic: Create `pkg/agent/retry.go` — `handleToolError()` with typed error classification
-[x] SP-008-B4-apiTypedErrors: Replace string matching in `ErrorHandler.HandleAPIFailure()` with typed errors
+- [x] SP-008-B4-retryLogic: Create `pkg/agent/retry.go` — `handleToolError()` with typed error classification
+- [x] SP-008-B4-apiTypedErrors: Replace string matching in `ErrorHandler.HandleAPIFailure()` with typed errors
 
 ## Not Started — SP-011: Terminal Parity
 
@@ -249,10 +249,6 @@
 - [ ] SP-025-P4-sizeCheck: Verify WASM binary size impact; set acceptable threshold
 - [ ] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
 - [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)
-
-## Superseded — SP-047: SQLite-vec Store
-
-> Superseded by HNSW store (`store_hnsw.go`). SQLite-vec approach was abandoned in favor of `coder/hnsw` for approximate nearest neighbor search with no CGO dependency.
 
 ## Not Started — SP-049: Shell Permission Overhaul
 

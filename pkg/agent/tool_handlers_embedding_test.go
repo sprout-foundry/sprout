@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,29 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
+
+// embeddingTestProvider is a mock EmbeddingProvider that always returns the
+// same vector, for testing without requiring ONNX or a static model.
+type embeddingTestProvider struct {
+	vec []float32
+}
+
+func (e *embeddingTestProvider) Embed(_ context.Context, _ string) ([]float32, error) {
+	out := make([]float32, len(e.vec))
+	copy(out, e.vec)
+	return out, nil
+}
+func (e *embeddingTestProvider) EmbedBatch(_ context.Context, texts []string) ([][]float32, error) {
+	results := make([][]float32, len(texts))
+	for i := range texts {
+		results[i], _ = e.Embed(nil, texts[i])
+	}
+	return results, nil
+}
+func (e *embeddingTestProvider) Dimensions() int  { return len(e.vec) }
+func (e *embeddingTestProvider) Name() string     { return "test" }
+func (e *embeddingTestProvider) ModelHash() string { return "test-hash" }
+func (e *embeddingTestProvider) Close() error    { return nil }
 
 // ─── handleEmbeddingIndex tests ───
 
@@ -151,15 +175,15 @@ func TestHandleSemanticSearch_WithResults(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Set up embedding manager with a temp directory.
+	// Set up embedding manager with a mock provider and store (no ONNX needed).
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
-	if err := em.Init(context.Background()); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
+	store, err := embedding.NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-hash")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
 	}
+	provider := &embeddingTestProvider{vec: []float32{1, 0, 0}}
+	em.SetForTesting(provider, store, embedding.NewIndexManager(provider, store, embedding.IndexOptions{BatchSize: 16, MaxBodyLen: 500}))
 	defer em.Close()
 	agent.embeddingMgr = em
 
@@ -457,15 +481,15 @@ func TestHandleSemanticSearch_NoResultsMessage(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Set up embedding manager with StaticProvider (no ORT needed).
+	// Set up embedding manager with a mock provider (no ONNX needed).
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
-	if err := em.Init(context.Background()); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
+	store, err := embedding.NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-hash")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
 	}
+	provider := &embeddingTestProvider{vec: []float32{1, 0, 0}}
+	em.SetForTesting(provider, store, embedding.NewIndexManager(provider, store, embedding.IndexOptions{BatchSize: 16, MaxBodyLen: 500}))
 	defer em.Close()
 	agent.embeddingMgr = em
 
@@ -492,12 +516,12 @@ func TestHandleSemanticSearch_QueryInNoResults(t *testing.T) {
 
 	dir := t.TempDir()
 	em := embedding.NewEmbeddingManager(nil, dir)
-	if err := em.Init(context.Background()); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
+	store, err := embedding.NewHNSWStore(filepath.Join(dir, "index.hnsw"), "test-hash")
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
 	}
+	provider := &embeddingTestProvider{vec: []float32{1, 0, 0}}
+	em.SetForTesting(provider, store, embedding.NewIndexManager(provider, store, embedding.IndexOptions{BatchSize: 16, MaxBodyLen: 500}))
 	defer em.Close()
 	agent.embeddingMgr = em
 

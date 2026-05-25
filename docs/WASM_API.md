@@ -53,38 +53,12 @@ These were present before SP-045 and are unchanged.
 | `getHistory()` | — | string[] | Shell history entries. |
 | `getEnv(name)` | `string` | string | Returns env var value. |
 
-## One-time bootstrap
-
-### `setStaticModel(bytes): {ok: true, bytes: number}` (synchronous)
-
-The native sprout binary embeds the 55MB static embedding model
-(`pkg/embedding/static_model.bin`) directly via `//go:embed`. To keep the
-WASM download small (42MB instead of 97MB), the WASM build leaves the
-model out and expects the host page to load it from a separate asset and
-hand the bytes to the runtime BEFORE the first semantic-search call:
-
-```javascript
-// During boot, alongside loading sprout.wasm:
-const modelResp = await fetch('/sprout-assets/static_model.bin');
-const modelBytes = new Uint8Array(await modelResp.arrayBuffer());
-SproutWasm.setStaticModel(modelBytes);
-// Now safe to call SproutWasm.searchSemantic / .buildSemanticIndex.
-```
-
-The model is the same bytes shipped in `pkg/embedding/static_model.bin`;
-`scripts/build-wasm.sh` copies it into the build output alongside
-`sprout.wasm` and `wasm_exec.js`. Either fetch it from your own origin
-(recommended — caches via standard HTTP) or whatever CDN you're hosting
-the WASM bundle on.
-
-If `setStaticModel` is never called, `searchSemantic` and
-`buildSemanticIndex` reject with `"static model data is empty"`.
-
 ## Tier 1 — Semantic search
 
-Static-provider only on WASM today; quality matches what native sprout
-sees when ONNX isn't installed. Tier 2a will lift this to ONNX-quality
-via the onnxruntime-web bridge.
+ONNX-quality embeddings via the `__sproutONNX` bridge (Tier 2a). When the
+bridge is installed, semantic search uses EmbeddingGemma-300M quality.
+When absent, the embedding manager returns an error — there is no static
+fallback.
 
 ### `buildSemanticIndex(): Promise<BuildStats>`
 
@@ -438,11 +412,9 @@ Stops the ticker. Idempotent: safe to call when nothing is running.
 A page can load `sprout.wasm` and use the JS API surface without any of
 the platform-side infrastructure:
 
-- **No `setStaticModel`** — `searchSemantic`/`buildSemanticIndex` reject
-  cleanly with "static model data is empty." Everything else works.
-- **No `__sproutONNX`** — ONNX-quality embeddings unavailable; the
-  manager falls back to the static provider transparently (after
-  `setStaticModel` is called).
+- **No `__sproutONNX`** — `searchSemantic`/`buildSemanticIndex`/and all
+  semantic functions return an error about ONNX bridge unavailability.
+  Memory and configuration functions work normally.
 - **No `setSyncEndpoint` / `applyFileMetadata`** — the agent's staleness
   rule still applies WITHIN a session (must read before write this turn),
   but the conflict rule's "unsynced browser edits" branch is never
@@ -458,13 +430,13 @@ go.run(wasmInstance.instance);
 const err = SproutWasm.init();
 if (err) throw new Error(err);
 
-// One-time: load the static embedding model from a sibling asset
-const modelBytes = new Uint8Array(
-  await (await fetch('/sprout-assets/static_model.bin')).arrayBuffer()
-);
-SproutWasm.setStaticModel(modelBytes);
+// Optional: install the ONNX bridge for semantic search
+// (skip this if you don't need search / memory embedding features)
+// import { installSproutONNXBridge } from './services/sproutONNXBridge';
+// const provider = installSproutONNXBridge({ dtype: 'q8', backend: 'webgpu' });
 
-// Done. searchSemantic, listMemories, etc. now work.
+// Done. listMemories, getConfig, etc. work.
+// Semantic search requires the __sproutONNX bridge to be installed first.
 ```
 
 ## Tier 2b — LLM proxy routing (foundation)

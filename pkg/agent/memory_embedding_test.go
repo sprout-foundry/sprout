@@ -218,8 +218,8 @@ func setupMemoryEmbeddingManager(t *testing.T) *embedding.EmbeddingManager {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "static model data is empty") {
-			t.Skip("Skipping: static model not available without staticmodel build tag")
+		if strings.Contains(err.Error(), "ONNX runtime not available") {
+			t.Skip("Skipping: ONNX not available")
 		}
 		t.Fatalf("failed to init embedding manager: %v", err)
 	}

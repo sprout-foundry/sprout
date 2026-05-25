@@ -30,9 +30,23 @@
 package tools
 
 import (
+	"log"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"time"
 )
+
+// auditLogger is the package-level audit logger for security decisions.
+// Set via SetAuditLogger; accessed atomically for concurrent safety.
+var auditLogger atomic.Pointer[AuditLogger]
+
+// SetAuditLogger sets the package-level audit logger for recording security
+// decisions. Must be called during initialization before concurrent goroutines
+// begin calling ClassifyToolCall.
+func SetAuditLogger(l *AuditLogger) {
+	auditLogger.Store(l)
+}
 
 // pipeToShellPattern matches pipe-to-shell patterns that can execute arbitrary code.
 // Matches: | followed by optional whitespace, optional path prefix (e.g., /bin/, /usr/bin/),
@@ -118,6 +132,18 @@ func riskCategoryFromRiskType(riskType string) RiskCategory {
 	}
 }
 
+// classifyAction returns a human-readable action string for audit logging.
+func classifyAction(result SecurityResult) string {
+	switch {
+	case result.ShouldBlock:
+		return "denied"
+	case result.ShouldPrompt:
+		return "prompted"
+	default:
+		return "allowed"
+	}
+}
+
 // ClassifyToolCall classifies a tool call for security purposes based on the
 // tool name and its arguments. It returns a SecurityResult indicating the risk
 // level, reasoning, and whether the operation should be blocked or prompt the user.
@@ -130,24 +156,42 @@ func riskCategoryFromRiskType(riskType string) RiskCategory {
 // if a tool is in the registry, it's already vetted. The only real security
 // value is inspecting the *arguments* to those risky tools.
 func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResult {
+	var result SecurityResult
 	switch toolName {
 	case "shell_command":
-		return classifyShellCommand(args)
+		result = classifyShellCommand(args)
 	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
-		return classifyWriteOperation(args)
+		result = classifyWriteOperation(args)
 	case "mkdir":
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in workspace", Category: RiskCategoryFileWrite}
+		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in workspace", Category: RiskCategoryFileWrite}
 	case "fetch_url", "web_search":
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
+		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
 	case "git":
-		return classifyGitOperation(args)
+		result = classifyGitOperation(args)
 	default:
 		// Tools whose arguments don't need runtime inspection are SAFE.
 		// The tool registry already validates that only registered tools
 		// reach this point — unregistered tools are rejected before
 		// security classification runs.
-		return SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool with no argument-level risk", Category: RiskCategoryUnknown}
+		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool with no argument-level risk", Category: RiskCategoryUnknown}
 	}
+
+	// Log the security decision (nil-safe, atomic load)
+	if l := auditLogger.Load(); l != nil {
+		if err := l.LogEntry(AuditEntry{
+			Timestamp: time.Now(),
+			Tool:      toolName,
+			RiskLevel: result.Risk.String(),
+			Category:  string(result.Category),
+			Action:    classifyAction(result),
+			Reasoning: result.Reasoning,
+			Source:    "classifier",
+		}); err != nil {
+			log.Printf("audit log write failed: %v", err)
+		}
+	}
+
+	return result
 }
 
 // classifyShellCommand classifies shell commands by risk level

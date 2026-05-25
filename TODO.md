@@ -210,7 +210,7 @@
 - [x] SP-017-S2-navigation: Rewrite `SettingsPanel.tsx` navigation — collapsible section headers with chevron toggle, replace tab bar
 - [x] SP-017-S3-mergeTabs: Merge Security → Agent > Behavior, Performance → Environment > Performance, OCR → Environment > OCR, CommitReview → Environment > Commit & Review
 - [x] SP-017-S3-splitGeneral: Split `GeneralSettingsTab` — editor prefs → Editor section, behavior → Agent section
-- [ ] SP-017-S4-providerModel: Create `ProviderModelSubsection.tsx` — reusable provider/model picker with inherited values and "Override" button
+- [x] SP-017-S4-providerModel: Create `ProviderModelSubsection.tsx` — reusable provider/model picker with inherited values and "Override" button
 - [x] SP-017-S5-removeLayerPicker: Delete session/workspace/global toggle buttons; scope determined by which section user edits
 - [x] SP-017-S6-css: Add collapsible section styles: section headers with chevron + scope badge, expand/collapse animation, subsection indentation
 - [x] SP-017-S6-scopeBadges: Implement colored scope badges: Session=blue, Workspace=green, Global=orange, Runtime=gray

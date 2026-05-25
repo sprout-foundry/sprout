@@ -140,7 +140,7 @@
 - [x] SP-008-A1: Replace direct method-call-from-goroutine patterns with channel-based communication for `ProcessQuery` → tool executor feedback loop
 - [x] SP-008-A2: Systematic audit of every field access in concurrent code paths — verify correct mutex, document invariant
 - [x] SP-008-A3-raceDefault: Add `-race` to default `make test` target
-- [ ] SP-008-A3-raceTests: Create `pkg/agent/concurrency_test.go` — focused race detection tests
+- [x] SP-008-A3-raceTests: Create `pkg/agent/concurrency_test.go` — focused race detection tests
 - [ ] SP-008-A3-ciRace: Remove `-short` from CI race detector step
 - [x] SP-008-B1-errorTypes: Create `pkg/errors/types.go` — `TransientError`, `RateLimitError`, `SecurityViolationError`, `InvalidInputError`, `ContextOverflowError`, `AuthError`
 - [x] SP-008-B2-structuredLog: Create `pkg/logging/structured.go` — `StructuredLogger` interface with `WithContext()`, `WithProvider()`, `WithTool()` methods

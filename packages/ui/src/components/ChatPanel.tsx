@@ -199,6 +199,11 @@ const MessageItem = memo(function MessageItem({
       ariaLabel={`${message.type} message`}
       copyText={message.content}
       timestamp={formatTime(message.timestamp)}
+      persona={message.persona}
+      depth={message.subagentDepth}
+      tokensUsed={message.tokensUsed}
+      cost={message.cost}
+      model={message.model}
     >
       {message.type === 'assistant' ? (
         <>

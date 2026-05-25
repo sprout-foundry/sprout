@@ -274,7 +274,7 @@
 - [x] SP-051-depthIndicator: Add visual depth indicator to `SubagentActivityFeed` — show nesting depth next to each entry
 - [x] SP-051-treeView: Implement tree/nested view for subagent activity — parent-child grouping, collapsible nesting levels
 - [x] SP-051-resourceUsage: Display per-depth-level resource usage: tokens consumed, time elapsed, cost
-- [ ] SP-051-contextSidebar: Add depth information to tool execution entries in context sidebar
+- [x] SP-051-contextSidebar: Add depth information to tool execution entries in context sidebar
 - [ ] SP-051-subagentTreeComponent: Create `SubagentTree` component showing hierarchical relationship
 - [ ] SP-051-statusIcons: Different status icons/colors for different depth levels
 

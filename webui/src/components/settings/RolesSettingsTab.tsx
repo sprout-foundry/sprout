@@ -45,8 +45,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
       setLoading(true);
       const data = await rolesApi.listRoles(fetchFn);
       setRoles(data);
-    } catch (err: any) {
-      addNotification('error', 'Load roles failed', err.message || String(err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addNotification('error', 'Load roles failed', msg);
     } finally {
       setLoading(false);
     }
@@ -113,8 +114,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
       }
       cancelForm();
       await loadRoles();
-    } catch (err: any) {
-      addNotification('error', editingRole ? 'Update failed' : 'Create failed', err.message || String(err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addNotification('error', editingRole ? 'Update failed' : 'Create failed', msg);
     } finally {
       setSaving(false);
     }
@@ -129,8 +131,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
       await rolesApi.deleteRole(fetchFn, name);
       addNotification('success', 'Role Deleted', `Role "${name}" has been deleted`);
       setRoles((prev) => prev.filter((r) => r.name !== name));
-    } catch (err: any) {
-      addNotification('error', 'Delete failed', err.message || String(err));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addNotification('error', 'Delete failed', msg);
     } finally {
       setDeletingName(null);
     }
@@ -184,8 +187,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
           <div className="role-editor-form">
             <div className="form-row-inline">
               <div className="form-row form-row-inline-half">
-                <label>Name</label>
+                <label htmlFor="role-name">Name</label>
                 <input
+                  id="role-name"
                   className="styled-input"
                   type="text"
                   value={form.name}
@@ -195,8 +199,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
                 />
               </div>
               <div className="form-row form-row-inline-half">
-                <label>Persona</label>
+                <label htmlFor="role-persona">Persona</label>
                 <input
+                  id="role-persona"
                   className="styled-input"
                   type="text"
                   value={form.persona}
@@ -207,8 +212,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
             </div>
 
             <div className="form-row">
-              <label>Description</label>
+              <label htmlFor="role-description">Description</label>
               <textarea
+                id="role-description"
                 className="styled-input"
                 value={form.description}
                 onChange={(e) => updateField('description', e.target.value)}
@@ -218,8 +224,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
             </div>
 
             <div className="form-row">
-              <label>System Prompt</label>
+              <label htmlFor="role-system-prompt">System Prompt</label>
               <textarea
+                id="role-system-prompt"
                 className="styled-input"
                 value={form.system_prompt}
                 onChange={(e) => updateField('system_prompt', e.target.value)}
@@ -230,8 +237,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
 
             <div className="form-row-inline">
               <div className="form-row form-row-inline-half">
-                <label>Temperature</label>
+                <label htmlFor="role-temperature">Temperature</label>
                 <input
+                  id="role-temperature"
                   className="styled-input"
                   type="number"
                   min={0}
@@ -243,8 +251,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
                 />
               </div>
               <div className="form-row form-row-inline-half">
-                <label>Max Tokens</label>
+                <label htmlFor="role-max-tokens">Max Tokens</label>
                 <input
+                  id="role-max-tokens"
                   className="styled-input"
                   type="number"
                   min={0}
@@ -256,7 +265,9 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
             </div>
 
             <div className="form-row">
-                              <label>Allowed Tools</label><input
+                              <label htmlFor="role-allowed-tools">Allowed Tools</label>
+                              <input
+                id="role-allowed-tools"
                 className="styled-input"
                 type="text"
                 value={form.allowed_tools}

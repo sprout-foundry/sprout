@@ -48,7 +48,7 @@ func (ws *ReactWebServer) handleAPIFiles(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
-	if !isWithinWorkspace(canonicalDir, workspaceRoot) {
+	if !isWithinWorkspace(canonicalDir, workspaceRoot) && !ws.allowExternalAccessForRequest(r, canonicalDir) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{

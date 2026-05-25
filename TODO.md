@@ -283,7 +283,7 @@
 - [ ] SP-053-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. Verify `pgrep` returns empty within 15s
 - [ ] SP-053-perTurnCost: Show per-turn cost line in WebUI after each assistant turn
 - [x] SP-053-modelInPrompt: Show active model name in WebUI chat input area or status bar
-- [ ] SP-053-NO_COLOR: Add `NO_COLOR` support for programmatic WebUI output consumption
+- [x] SP-053-NO_COLOR: Add `NO_COLOR` support for programmatic WebUI output consumption
 
 ## Not Started — SP-054: LSP Language Coverage Expansion
 

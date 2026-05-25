@@ -289,6 +289,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       clear: () => xtermRef.current?.clear(),
       focus: () => xtermRef.current?.focus(),
       cleanup: () => {
+        setIsExited(false);
         const service = terminalWSRef.current;
         if (!service) return;
 
@@ -333,7 +334,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Render
     // ═══════════════════════════════════════════════════════════════════
     return (
-      <div className={`terminal-pane${isExited ? ' terminal-pane-exited' : ''}`} ref={paneWrapperRef}>
+      <div className={`terminal-pane${isExited ? ' terminal-pane-exited' : ''}`} ref={paneWrapperRef} role="application" aria-label="Terminal">
         {showCloseButton && (
           <div className="terminal-pane-header">
             <span className={`terminal-pane-dot ${paneConnected || wasmActive ? 'connected' : 'disconnected'}`} />

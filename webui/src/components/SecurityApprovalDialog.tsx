@@ -52,6 +52,11 @@ function SecurityApprovalDialog({
   const risk = toRiskKey(riskLevel);
   const blockBtnRef = useRef<HTMLButtonElement>(null);
   const allowBtnRef = useRef<HTMLButtonElement>(null);
+  // SP-058: in 4-option mode the "Approve once" button is the safe
+  // default-focus target. Auto-focusing Elevate (which silently bumps
+  // the session to permissive) would let a fast keyboard user widen
+  // their gates by hitting Space — exactly the wrong default.
+  const approveOnceBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleAllow = useCallback(() => {
     onRespond(requestId, true, allowOptions ? 'approve_once' : undefined);
@@ -95,12 +100,16 @@ function SecurityApprovalDialog({
     const timer = setTimeout(() => {
       if (risk === 'dangerous') {
         blockBtnRef.current?.focus();
+      } else if (allowOptions) {
+        // 4-option dialog: focus the "Approve once" button so a stray
+        // Space keystroke doesn't elevate the whole session.
+        approveOnceBtnRef.current?.focus();
       } else {
         allowBtnRef.current?.focus();
       }
     }, 60);
     return () => clearTimeout(timer);
-  }, [risk]);
+  }, [risk, allowOptions]);
 
   return (
     <div className="security-approval-overlay" role="dialog" aria-modal="true" aria-label="Security approval required">
@@ -179,6 +188,7 @@ function SecurityApprovalDialog({
                 Deny
               </button>
               <button
+                ref={approveOnceBtnRef}
                 type="button"
                 className="security-approval-btn security-approval-btn--allow"
                 onClick={handleAllow}
@@ -194,7 +204,6 @@ function SecurityApprovalDialog({
                 Always approve
               </button>
               <button
-                ref={allowBtnRef}
                 type="button"
                 className="security-approval-btn security-approval-btn--allow security-approval-btn--allow--caution"
                 onClick={handleElevate}

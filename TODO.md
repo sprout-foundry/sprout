@@ -173,9 +173,9 @@
 - [ ] SP-012-U1.1-notificationCenter: Create `NotificationCenter.tsx` — history panel with bell icon in StatusBar, dismiss individual/all, copy message
 - [ ] SP-012-U1.1-markAllRead: Add `markAllRead()` method to notification bus
 - [ ] SP-012-U1.1-statusBarBell: Add bell icon with unread count badge to `StatusBar.tsx`
-- [ ] SP-012-U1.2-reducedMotion: Add `@media (prefers-reduced-motion: reduce)` CSS block — force zero animation/transition duration
+- [x] SP-012-U1.2-reducedMotion: Add `@media (prefers-reduced-motion: reduce)` CSS block — force zero animation/transition duration
 - [ ] SP-012-U1.3-fileTreeARIA: Add `role="treeitem"` and `aria-expanded` to FileTree items
-- [ ] SP-012-U1.3-terminalARIA: Add `aria-label` to TerminalPane container
+- [x] SP-012-U1.3-terminalARIA: Add `aria-label` to TerminalPane container
 - [ ] SP-012-U1.3-commandPaletteARIA: Add `aria-live` region to CommandPalette results list
 - [ ] SP-012-U1.3-chatPanelARIA: Add `role="log"` and `aria-label` to ChatPanel messages
 - [ ] SP-012-U1.3-editorTabsARIA: Add `aria-label="Close {filename}"` to tab close buttons

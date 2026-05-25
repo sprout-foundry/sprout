@@ -8,6 +8,7 @@ import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
 import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
+import { DelegateCost } from './chat/DelegateCost';
 import type { ChatProps, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
 import './Chat.css';
@@ -31,6 +32,7 @@ function Chat(props: ChatProps): JSX.Element {
     queryProgress = null,
     currentTodos: _currentTodos = [],
     subagentActivities = [],
+    delegateActivities = [],
     onToolPillClick,
     onStopProcessing,
     chatId: _chatId,
@@ -153,7 +155,7 @@ function Chat(props: ChatProps): JSX.Element {
             onRequestProviderSetup={onRequestProviderSetup}
           />
         ) : (
-          <div ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div ref={chatContainerRef} role="log" aria-label="Chat messages" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
             <Virtuoso
               ref={virtuosoRef}
               data={messages}
@@ -176,6 +178,7 @@ function Chat(props: ChatProps): JSX.Element {
                   <ChatFooter
                     hasSubagentActivity={hasSubagentActivity}
                     subagentActivities={subagentActivities}
+                    delegateActivities={delegateActivities}
                     queryProgress={
                       queryProgress as QueryProgress | null /* ChatProps.queryProgress is `unknown` in shared pkg */
                     }
@@ -223,6 +226,7 @@ function Chat(props: ChatProps): JSX.Element {
             </div>
           );
         })()}
+        <DelegateCost activities={delegateActivities} />
         <CommandInput
           value={inputValue}
           onChange={onInputChange}

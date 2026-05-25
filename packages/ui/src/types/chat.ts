@@ -76,6 +76,8 @@ export interface SubagentActivity {
   reason?: string;
   /** Tokens consumed by this subagent task */
   tokensUsed?: number;
+  /** Cost in dollars for this subagent task */
+  cost?: number;
   /** Duration in milliseconds */
   elapsedMs?: number;
   /** Nesting depth: 0=primary, 1=orchestrator, 2=specialist */
@@ -131,6 +133,10 @@ export interface SubagentRun {
   outputLines: Array<{ id: string; text: string; timestamp: Date; taskId?: string }>;
   /** Nesting depth: 0=primary, 1=orchestrator, 2=specialist */
   depth: number;
+  /** Sum of tokens used across all activities in this run */
+  tokensUsed: number;
+  /** Sum of costs across all activities in this run */
+  cost: number;
 }
 
 // ── Delegate Types ───────────────────────────────────────────────────

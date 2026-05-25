@@ -38,6 +38,7 @@ export function groupSubagentRuns(activities: SubagentActivity[]): SubagentRun[]
         spawnActivity: null,
         completeActivity: null,
         outputLines: [],
+        depth: activity.depth ?? 0,
       };
       runMap.set(key, run);
     }

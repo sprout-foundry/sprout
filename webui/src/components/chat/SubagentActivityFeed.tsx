@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import { useState, useMemo } from 'react';
 import type { SubagentActivity, SubagentRun } from './types';
 import { MAX_ACTIVE_LINES, MAX_COMPLETED_SUMMARIES } from './types';
+import './SubagentActivityFeed.css';
 
 // SP-053-1a: getPersonaColor + PERSONA_COLORS now live in @sprout/ui so the
 // chat-bubble badges, the tool timeline, and this activity feed all read
@@ -29,10 +30,13 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
   const color = getPersonaColor(run.persona);
   const startTime = run.spawnActivity?.timestamp || run.activities[0]?.timestamp;
   const hasOutput = run.outputLines.length > 0;
+  const depth = run.depth ?? 0;
 
   return (
     <div
       className="subagent-feed-card subagent-feed-card--active"
+      data-depth={depth}
+      aria-level={depth}
       style={{ '--feed-persona-color': color } as CSSProperties}
     >
       <button
@@ -47,6 +51,9 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
           </span>
           <Bot size={13} className="subagent-feed-card-icon" />
           <span className="subagent-feed-persona">{run.persona}</span>
+          {depth > 0 && (
+            <span className="subagent-feed-depth-badge">D{depth}</span>
+          )}
           {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
         </span>
         <span className="subagent-feed-card-right">
@@ -76,14 +83,24 @@ interface CompletedSubagentCardProps {
 function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element {
   const hasFailures =
     run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
+  const depth = run.depth ?? 0;
+  const color = getPersonaColor(run.persona);
 
   return (
-    <div className="subagent-feed-card subagent-feed-card--completed">
+    <div
+      className="subagent-feed-card subagent-feed-card--completed"
+      data-depth={depth}
+      aria-level={depth}
+      style={{ '--feed-persona-color': color } as CSSProperties}
+    >
       <span className="subagent-feed-status-dot subagent-feed-status-dot--completed">
         {hasFailures ? <XCircle size={9} /> : <CheckCircle2 size={9} />}
       </span>
-      <Bot size={13} className="subagent-feed-card-icon" style={{ color: getPersonaColor(run.persona) }} />
+      <Bot size={13} className="subagent-feed-card-icon" style={{ color }} />
       <span className="subagent-feed-persona">{run.persona}</span>
+      {depth > 0 && (
+        <span className="subagent-feed-depth-badge">D{depth}</span>
+      )}
       {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
       <span className="subagent-feed-sep">·</span>
       <span className={`subagent-feed-result ${hasFailures ? 'subagent-feed-result--fail' : ''}`}>

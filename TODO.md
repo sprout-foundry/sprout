@@ -156,9 +156,9 @@
 - [x] SP-011-P1.1-ptyExit: In `TerminalPane.tsx`, handle `pty_exit`: write `[Process exited]`, set pane disconnected, close WebSocket cleanly
 - [x] SP-011-P1.1-parentHandle: In `Terminal.tsx`, implement `handlePaneExit`: auto-close secondary split pane, auto-restart last session, close tab in multi-session pane
 - [x] SP-011-P1.2-perPaneModel: Replace flat session model with `PaneState` (id, sessions[], activeSessionId) — each split pane has its own tab bar
-- [ ] SP-011-P1.2-rendering: Render per-pane tab bars and `TerminalPane` components mapped from `PaneState[]`
-- [ ] SP-011-P1.2-splitBehavior: Implement `toggleSplit()`, `addSessionToPane()`, `closeSessionInPane()`, `switchSessionInPane()`
-- [ ] SP-011-P1.3-removeButtons: Remove global (+) shell picker from tab bar when split is active; each pane's tab bar gets its own (+) button
+- [x] SP-011-P1.2-rendering: Render per-pane tab bars and `TerminalPane` components mapped from `PaneState[]`
+- [x] SP-011-P1.2-splitBehavior: Implement `toggleSplit()`, `addSessionToPane()`, `closeSessionInPane()`, `switchSessionInPane()`
+- [x] SP-011-P1.3-removeButtons: Remove global (+) shell picker from tab bar when split is active; each pane's tab bar gets its own (+) button
 - [x] SP-011-P2.1-exitedCSS: Add `.terminal-tab.exited` CSS (opacity 0.5, italic); show "Session ended." before auto-restart
 - [x] SP-011-P2.2-zoomVerify: Verify ZoomIn/ZoomOut buttons are correctly visible and persist to localStorage
 - [x] SP-011-P2.3-cleanupPackagesUI: Evaluate `packages/ui/src/components/Terminal.tsx` — update to match new per-pane model or remove if unused

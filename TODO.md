@@ -245,7 +245,7 @@
 - [x] SP-025-P3-symbolIndex: Update `pkg/index/symbols.go` to use `pkg/ast` for all supported languages
 - [x] SP-025-P4-wasmVerify: Ensure `pkg/ast` compiles for GOOS=js GOARCH=wasm
 - [x] SP-025-P4-grammarCacheWasm: Implement grammar blob caching for WASM browser storage
-- [ ] SP-025-P4-wasmShell: Add `pkg/ast` to WASM shell for code intelligence features
+- [x] SP-025-P4-wasmShell: Add `pkg/ast` to WASM shell for code intelligence features
 - [ ] SP-025-P4-sizeCheck: Verify WASM binary size impact; set acceptable threshold
 - [x] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
 - [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)

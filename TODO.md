@@ -172,7 +172,7 @@
 - [ ] SP-012-U0-inlineBadges: Implement inline tool call badges in assistant messages — `display: inline-flex`, 11px font, click opens tool in context sidebar
 - [ ] SP-012-U1.1-notificationCenter: Create `NotificationCenter.tsx` — history panel with bell icon in StatusBar, dismiss individual/all, copy message
 - [x] SP-012-U1.1-markAllRead: Add `markAllRead()` method to notification bus
-- [ ] SP-012-U1.1-statusBarBell: Add bell icon with unread count badge to `StatusBar.tsx`
+- [x] SP-012-U1.1-statusBarBell: Add bell icon with unread count badge to `StatusBar.tsx`
 - [x] SP-012-U1.2-reducedMotion: Add `@media (prefers-reduced-motion: reduce)` CSS block — force zero animation/transition duration
 - [x] SP-012-U1.3-fileTreeARIA: Add `role="treeitem"` and `aria-expanded` to FileTree items
 - [x] SP-012-U1.3-terminalARIA: Add `aria-label` to TerminalPane container
@@ -190,7 +190,7 @@
 
 ## Not Started — SP-013: Agent Settings Management Tool
 
-- [ ] SP-013-1-toolDef: Register `manage_settings` tool with 4 params: operation (get/set/list_providers/test_credential), key, value, provider
+- [x] SP-013-1-toolDef: Register `manage_settings` tool with 4 params: operation (get/set/list_providers/test_credential), key, value, provider
 - [ ] SP-013-1-get: Implement `get` operation — return full config summary or specific key with type + valid values
 - [ ] SP-013-1-listProviders: Implement `list_providers` — one line per provider with credential status and current model
 - [ ] SP-013-1-testCredential: Implement `test_credential` — lightweight API validation with 60s cooldown per provider

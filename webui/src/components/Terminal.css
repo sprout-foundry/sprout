@@ -252,6 +252,17 @@
   min-height: 0;
 }
 
+/* ── Exited state: dim the terminal content and indicator ── */
+
+.terminal-pane-exited .terminal-pane-content {
+  opacity: 0.5;
+}
+
+.terminal-pane-exited .terminal-pane-dot.disconnected {
+  background: var(--accent-error);
+  box-shadow: 0 0 0 6px rgba(224, 108, 117, 0.3);
+}
+
 /* Thin header shown per-pane only in split mode */
 .terminal-pane-header {
   display: flex;

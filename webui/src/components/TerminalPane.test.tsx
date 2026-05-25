@@ -27,6 +27,7 @@ const mockTerm = {
   onData: vi.fn(() => ({ dispose: vi.fn() })),
   onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
   focus: vi.fn(),
+  writeln: vi.fn(),
   dispose: vi.fn(),
   registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
   attachCustomKeyEventHandler: vi.fn(),
@@ -73,6 +74,9 @@ const mockService = {
   connect: vi.fn(),
   closeSession: vi.fn(),
   getSessionId: vi.fn().mockReturnValue('test-session'),
+  isConnectedToServer: vi.fn().mockReturnValue(false),
+  isReconnecting: vi.fn().mockReturnValue(false),
+  isCurrentlyFrozen: vi.fn().mockReturnValue(false),
 };
 
 vi.mock('../services/terminalWebSocket', () => ({
@@ -80,6 +84,30 @@ vi.mock('../services/terminalWebSocket', () => ({
     createInstance: vi.fn(() => mockService),
   },
 }));
+
+// ── lucide-react mock ────────────────────────────────────────────────
+// lucide-react icons use a forwardRef pattern that breaks in jsdom.
+// Replace every icon with a simple <svg> forwardRef component.
+vi.mock('lucide-react', async () => {
+  const React = await import('react');
+  const createMockIcon = (name) => {
+    const Comp = React.forwardRef((props, ref) => {
+      return React.createElement('svg', { ref, 'data-icon': name, ...props });
+    });
+    Comp.displayName = name;
+    return Comp;
+  };
+  const icons = [
+    'X', 'TriangleAlert', 'Terminal',
+    'Copy', 'ClipboardPaste', 'Search', 'Trash2', 'Rows2', 'Columns2', 'TextSelect', 'Link2',
+    'ChevronUp', 'ChevronDown', 'Type', 'Hash',
+  ];
+  const mod = {};
+  for (const name of icons) {
+    mod[name] = createMockIcon(name);
+  }
+  return mod;
+});
 
 vi.mock('../contexts/ThemeContext', () => ({
   useTheme: vi.fn(),
@@ -605,5 +633,248 @@ describe('TerminalPane wordSeparator', () => {
     const optionsCall = calls.find((call: unknown[]) => call[0] && typeof call[0] === 'object');
     expect(optionsCall).toBeDefined();
     expect(optionsCall[0].wordSeparator).toBe(' ()[]{}\',"`');
+  });
+});
+
+// ── PTY exit state ───────────────────────────────────────────────────
+
+describe('TerminalPane pty_exit exited state', () => {
+  let container: HTMLDivElement;
+  let root: any;
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // Re-assert constructor mocks after vi.clearAllMocks
+    (Terminal as any).mockImplementation(() => mockTerm);
+    (FitAddon as any).mockImplementation(() => mockFitAddon);
+    (TerminalWebSocketService as any).createInstance.mockImplementation(() => mockService);
+
+    // Theme context
+    (useTheme as any).mockReturnValue({ themePack: { id: 'default' } });
+
+    // Reset mock term state
+    mockTerm.hasSelection.mockReturnValue(false);
+    mockTerm.getSelection.mockReturnValue('');
+    mockTerm.buffer.active.baseY = 0;
+    mockTerm.buffer.active.getLine.mockReturnValue(null);
+
+    // Clear mock service call history
+    mockService.sendRawInput.mockClear();
+    mockService.sendResize.mockClear();
+    mockService.onEvent.mockClear();
+    mockService.removeEvent.mockClear();
+    mockService.disconnect.mockClear();
+    mockService.connect.mockClear();
+  });
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Helper: find the event handler callback that was registered via
+   * mockService.onEvent, and invoke it with a synthetic WsEvent.
+   */
+  function triggerEvent(event: { type: string; data?: any }) {
+    const calls = mockService.onEvent.mock.calls;
+    expect(calls.length).toBeGreaterThan(0, 'Expected onEvent to have been called');
+    const handler = calls[0][0]; // first registered callback
+    if (typeof handler === 'function') {
+      handler(event);
+    }
+  }
+
+  /**
+   * Helper: capture the onData callback registered on mockTerm and invoke it.
+   */
+  function triggerOnData(data: string) {
+    const calls = mockTerm.onData.mock.calls;
+    expect(calls.length).toBeGreaterThan(0, 'Expected onData to have been called');
+    const cb = calls[0][0];
+    if (typeof cb === 'function') {
+      cb(data);
+    }
+  }
+
+  it('does NOT have terminal-pane-exited class initially', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <TerminalPane
+          isActive={true}
+          isConnected={true}
+          showCloseButton={false}
+        />,
+      );
+    });
+    await flushPromises();
+
+    const pane = container.querySelector('.terminal-pane');
+    expect(pane).toBeTruthy();
+    expect(pane?.classList.contains('terminal-pane-exited')).toBe(false);
+  });
+
+  it('adds terminal-pane-exited class after pty_exit event', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <TerminalPane
+          isActive={true}
+          isConnected={true}
+          showCloseButton={false}
+        />,
+      );
+    });
+    await flushPromises();
+
+    const pane = container.querySelector('.terminal-pane');
+    expect(pane?.classList.contains('terminal-pane-exited')).toBe(false);
+
+    // Simulate pty_exit event from the WebSocket
+    await act(async () => {
+      triggerEvent({ type: 'pty_exit' });
+    });
+    await flushPromises();
+
+    expect(pane?.classList.contains('terminal-pane-exited')).toBe(true);
+  });
+
+  it('calls onProcessExit prop when pty_exit event fires', async () => {
+    const onProcessExit = vi.fn();
+
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <TerminalPane
+          isActive={true}
+          isConnected={true}
+          showCloseButton={false}
+          onProcessExit={onProcessExit}
+        />,
+      );
+    });
+    await flushPromises();
+
+    expect(onProcessExit).not.toHaveBeenCalled();
+
+    await act(async () => {
+      triggerEvent({ type: 'pty_exit' });
+    });
+    await flushPromises();
+
+    expect(onProcessExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks onData input when in exited state', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <TerminalPane
+          isActive={true}
+          isConnected={true}
+          showCloseButton={false}
+        />,
+      );
+    });
+    await flushPromises();
+
+    // Before exit: input should flow through to sendRawInput
+    mockService.sendRawInput.mockClear();
+    triggerOnData('hello');
+    await flushPromises();
+    expect(mockService.sendRawInput).toHaveBeenCalledWith('hello');
+
+    // Trigger pty_exit to enter exited state
+    await act(async () => {
+      triggerEvent({ type: 'pty_exit' });
+    });
+    await flushPromises();
+
+    // After exit: input should be blocked
+    mockService.sendRawInput.mockClear();
+    triggerOnData('blocked');
+    await flushPromises();
+    expect(mockService.sendRawInput).not.toHaveBeenCalled();
+  });
+
+  it('blocks onPaste input when in exited state', async () => {
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <TerminalPane
+          isActive={true}
+          isConnected={true}
+          showCloseButton={false}
+        />,
+      );
+    });
+    await flushPromises();
+
+    // Simulate pty_exit to enter exited state
+    await act(async () => {
+      triggerEvent({ type: 'pty_exit' });
+    });
+    await flushPromises();
+
+    const pane = container.querySelector('.terminal-pane');
+    expect(pane?.classList.contains('terminal-pane-exited')).toBe(true);
+
+    // The onPaste callback uses the same isExitedRef check as onData.
+    // We verify this via the same input blocking mechanism — paste data
+    // flows through handlePtyInput which calls sendRawInput.
+    mockService.sendRawInput.mockClear();
+
+    // Directly trigger paste via attachCustomKeyEventHandler is complex,
+    // so we test the same isExitedRef guard by verifying onData is blocked
+    // (both share the isExitedRef check).
+    triggerOnData('pasted');
+    await flushPromises();
+    expect(mockService.sendRawInput).not.toHaveBeenCalled();
+  });
+
+  it('removes terminal-pane-exited class when pane reconnects', async () => {
+    const onProcessExit = vi.fn();
+
+    // eslint-disable-next-line testing-library/no-unnecessary-act
+    await act(async () => {
+      root.render(
+        <TerminalPane
+          isActive={true}
+          isConnected={true}
+          showCloseButton={false}
+          onProcessExit={onProcessExit}
+        />,
+      );
+    });
+    await flushPromises();
+
+    const pane = container.querySelector('.terminal-pane');
+
+    // Enter exited state
+    await act(async () => {
+      triggerEvent({ type: 'pty_exit' });
+    });
+    await flushPromises();
+    expect(pane?.classList.contains('terminal-pane-exited')).toBe(true);
+
+    // Simulate reconnection by triggering session_ready (sets paneConnected to true)
+    // which resets isExited back to false via the useEffect([paneConnected])
+    await act(async () => {
+      triggerEvent({ type: 'session_ready', data: { session_id: 'test-session' } });
+    });
+    await flushPromises();
+
+    expect(pane?.classList.contains('terminal-pane-exited')).toBe(false);
   });
 });

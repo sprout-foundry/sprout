@@ -90,6 +90,13 @@ type AgentWorkflowRuntime struct {
 	ResourceDirectory string                    `json:"resource_directory,omitempty"`
 	ReasoningEffort   string                    `json:"reasoning_effort,omitempty"`
 	SubagentOverrides WorkflowSubagentOverrides `json:"subagent_overrides,omitempty"`
+	// RiskProfile selects a named shell-command risk cascade preset
+	// for this step / initial run (SP-058). One of: readonly,
+	// cautious, default, permissive, unrestricted. Per-step values
+	// override the workflow-level initial setting and the global
+	// config. Unknown values fall through to the agent's default
+	// resolution chain (override > config > "default").
+	RiskProfile string `json:"risk_profile,omitempty"`
 }
 
 // AgentWorkflowInitial is the first run definition (can replace CLI prompt).
@@ -497,6 +504,25 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 	}
 	if runtime.ResourceDirectory != "" {
 		_ = configuration.SetEnv("RESOURCE_DIRECTORY", runtime.ResourceDirectory)
+	}
+
+	// SP-058: per-step risk-profile override. Accepts a built-in
+	// profile name OR a user-defined name from config.risk_profiles.
+	// Empty string preserves the prior setting. Unrecognized names
+	// (no built-in AND no override) are warned about.
+	if runtime.RiskProfile != "" {
+		_, hasUserOverride := func() (configuration.AutoApproveRules, bool) {
+			if cfg == nil || cfg.RiskProfiles == nil {
+				return configuration.AutoApproveRules{}, false
+			}
+			v, ok := cfg.RiskProfiles[runtime.RiskProfile]
+			return v, ok
+		}()
+		if configuration.IsValidRiskProfile(runtime.RiskProfile) || hasUserOverride {
+			chatAgent.SetRiskProfileOverride(configuration.RiskProfile(runtime.RiskProfile))
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: unknown workflow risk_profile %q. Built-in: readonly, cautious, default, permissive, unrestricted. Define custom profiles in config.risk_profiles.\n", runtime.RiskProfile)
+		}
 	}
 
 	if runtime.Provider != "" {

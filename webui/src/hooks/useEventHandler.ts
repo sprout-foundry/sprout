@@ -855,18 +855,29 @@ export function useEventHandler({
           debugLog('[security] Approval response acknowledged:', eventData?.request_id);
           break;
         }
-        setState((prev) => ({
-          securityApprovalRequest: {
-            requestId: String(eventData?.request_id || ''),
-            toolName: String(eventData?.tool_name || ''),
-            riskLevel: String(eventData?.risk_level || 'CAUTION'),
-            reasoning: String(eventData?.reasoning || ''),
-            command: eventData?.command != null ? String(eventData.command) : undefined,
-            riskType: eventData?.risk_type != null ? String(eventData.risk_type) : undefined,
-            target: eventData?.target != null ? String(eventData.target) : undefined,
-          },
-          logs: appendCappedLog(prev.logs, logEntry),
-        }));
+        setState((prev) => {
+          const kindRaw = String(eventData?.kind || '');
+          let fsKind: 'fs_external' | 'fs_sensitive' | undefined;
+          if (kindRaw === 'fs_external' || kindRaw === 'fs_sensitive') {
+            fsKind = kindRaw;
+          }
+          return {
+            securityApprovalRequest: {
+              requestId: String(eventData?.request_id || ''),
+              toolName: String(eventData?.tool_name || ''),
+              riskLevel: String(eventData?.risk_level || 'CAUTION'),
+              reasoning: String(eventData?.reasoning || ''),
+              command: eventData?.command != null ? String(eventData.command) : undefined,
+              riskType: eventData?.risk_type != null ? String(eventData.risk_type) : undefined,
+              target: eventData?.target != null ? String(eventData.target) : undefined,
+              allowOptions: String(eventData?.allow_options || '') === 'true',
+              fsKind,
+              fsFolder: eventData?.folder != null ? String(eventData.folder) : undefined,
+              fsPath: eventData?.path != null ? String(eventData.path) : undefined,
+            },
+            logs: appendCappedLog(prev.logs, logEntry),
+          };
+        });
         debugLog('[security] Approval request:', eventData?.tool_name, eventData?.risk_level);
         break;
 

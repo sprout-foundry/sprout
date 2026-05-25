@@ -68,13 +68,23 @@ func (ws *ReactWebServer) handleFileRead(w http.ResponseWriter, r *http.Request)
 	}
 
 	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
-		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
-		if consentToken == "" {
-			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
-		}
-		if !fileConsents.consume(consentToken, canonicalPath, "read") {
-			ws.writeExternalPathConsentRequired(w, canonicalPath, "read")
-			return
+		// Unified session allowlist (filesystem perms work): if the
+		// active chat agent has the file's folder on its session
+		// allowlist (because the user previously approved it via the
+		// agent's filesystem dialog), skip the token check. This
+		// makes browser file opens consistent with agent file reads:
+		// one approval covers both surfaces.
+		if a := ws.getActiveAgentForRequest(r); a != nil && a.IsFolderSessionAllowed(canonicalPath) {
+			// Allowlisted — fall through and serve the file.
+		} else {
+			consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
+			if consentToken == "" {
+				consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
+			}
+			if !fileConsents.consume(consentToken, canonicalPath, "read") {
+				ws.writeExternalPathConsentRequired(w, canonicalPath, "read")
+				return
+			}
 		}
 	}
 
@@ -140,13 +150,17 @@ func (ws *ReactWebServer) handleFileWrite(w http.ResponseWriter, r *http.Request
 	}
 
 	if !isWithinWorkspace(canonicalPath, workspaceRoot) && !isAppConfigPath(canonicalPath) {
-		consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
-		if consentToken == "" {
-			consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
-		}
-		if !fileConsents.consume(consentToken, canonicalPath, "write") {
-			ws.writeExternalPathConsentRequired(w, canonicalPath, "write")
-			return
+		if a := ws.getActiveAgentForRequest(r); a != nil && a.IsFolderSessionAllowed(canonicalPath) {
+			// Allowlisted — fall through and write the file.
+		} else {
+			consentToken := strings.TrimSpace(r.Header.Get(consentTokenHeader))
+			if consentToken == "" {
+				consentToken = strings.TrimSpace(r.URL.Query().Get("consent_token"))
+			}
+			if !fileConsents.consume(consentToken, canonicalPath, "write") {
+				ws.writeExternalPathConsentRequired(w, canonicalPath, "write")
+				return
+			}
 		}
 	}
 

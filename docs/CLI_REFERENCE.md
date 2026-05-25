@@ -213,6 +213,7 @@ sprout export-training [flags]
 | `--max-iterations <n>` | Limit iterations (default: 1000) | `sprout agent --max-iterations 50 "task"` |
 | `--no-stream` | Disable streaming for scripts | `LEDIT_NO_STREAM=1 sprout agent "task"` |
 | `--no-subagents` | Disable subagent tools | `sprout agent --no-subagents "task"` |
+| `--risk-profile <name>` | Shell-command gating profile: `readonly`, `cautious`, `default`, `permissive`, `unrestricted`. Overrides `config.risk_profile` for this session. See [SECURITY.md](SECURITY.md#risk-profiles). | `sprout agent --risk-profile readonly "audit the auth flow"` |
 | `--unsafe` | Bypass security checks (use with caution) | `sprout agent --unsafe "task"` |
 
 ### Custom Prompts
@@ -286,6 +287,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | `/plan [idea]` | Start planning mode |
 | `/custom` | Manage custom providers |
 | `/diag` | Show diagnostic information |
+| `/risk-profile [name\|clear]` | Show or change the shell-command risk profile mid-session. With no args, lists profiles and marks the active one. See [SECURITY.md](SECURITY.md#risk-profiles). |
 
 ### Help
 

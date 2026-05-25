@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -90,6 +92,10 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 				}
+				// Signal Gate 2 (persona cascade) that this command
+				// already passed an interactive approval so it doesn't
+				// re-prompt for the same execution (SP-058 follow-up).
+				ctx = WithUserApproved(ctx)
 			} else {
 				// CLI: prompt user interactively via terminal stdin
 				agentConfig := agent.GetConfig()
@@ -101,6 +107,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					if !logger.AskForConfirmation(prompt, false, false) {
 						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 					}
+					// Same approval-propagation as the webui branch above.
+					ctx = WithUserApproved(ctx)
 				} else if secResult.ShouldBlock {
 					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)
@@ -259,11 +267,18 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		return filesystem.WithSecurityBypass(ctx), true
 	}
 
-	// If user already approved filesystem access this session, skip re-prompting
-	if agent.IsSecurityBypassApproved() {
-		agent.debugLog("[UNLOCK] Session-level security bypass: allowing file access outside working directory: %s\n", filePath)
+	// Per-folder session allowlist short-circuit. If this path sits
+	// under a folder the user previously approved, skip the prompt.
+	if agent.IsFolderSessionAllowed(filePath) {
+		agent.debugLog("[UNLOCK] Folder is on session allowlist: %s\n", filePath)
 		return filesystem.WithSecurityBypass(ctx), true
 	}
+
+	// Classify the path so we can pick the right dialog mode and
+	// scope. Sensitive (system dirs, off-CWD home) gets 2 options;
+	// External gets 3 options including "Allow folder this session".
+	tier := ClassifyPathAccess(filePath, agent.GetWorkspaceRoot(), detectHomeDir(), agent.effectiveCwd())
+	folder := filepath.Dir(filePath)
 
 	// Subagents cannot prompt — return unapproved so the error propagates
 	if agent.IsSubagent() {
@@ -272,21 +287,23 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	}
 
 	// Prefer webui approval path when a browser tab is connected.
-	// Same pattern as the pre-execution security classification above.
 	if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && agent.HasActiveWebUIClients() {
-		// WEBUI: request approval via event bus for the browser dialog
-		prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory: %s", toolName, filePath)
+		kind := "fs_external"
+		if tier == PathTierSensitive {
+			kind = "fs_sensitive"
+		}
+		prompt := fmt.Sprintf("The tool '%s' is attempting to access a file outside the working directory.", toolName)
 		extras := map[string]string{
 			"risk_type": "Filesystem Security",
 			"target":    filePath,
+			"path":      filePath,
+			"kind":      kind,
 		}
-		if mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, "CAUTION", prompt, extras) {
-			agent.debugLog("[APPROVAL] User approved file access outside working directory: %s\n", filePath)
-			agent.SetSecurityBypassApproved()
-			return filesystem.WithSecurityBypass(ctx), true
+		if tier == PathTierExternal {
+			extras["folder"] = folder
 		}
-		agent.debugLog("[APPROVAL] User rejected file access outside working directory: %s\n", filePath)
-		return ctx, false
+		decision := mgr.RequestToolApprovalDecision(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, "CAUTION", prompt, extras)
+		return applyFilesystemDecision(ctx, agent, decision, filePath, folder, tier)
 	}
 
 	// CLI: prompt user interactively via terminal stdin
@@ -295,16 +312,14 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 	canPrompt := logger != nil && logger.IsInteractive()
 
 	if canPrompt {
-		// AskForConfirmation appends the "[y/N]" hint; the body
-		// ends with the question only.
-		prompt := fmt.Sprintf("⚠  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory:\n  %s\n\nDo you want to allow this?", toolName, filePath)
-		if logger.AskForConfirmation(prompt, false, false) {
-			agent.debugLog("[APPROVAL] User approved file access outside working directory: %s\n", filePath)
-			agent.SetSecurityBypassApproved()
-			return filesystem.WithSecurityBypass(ctx), true
+		promptTier := utils.FilesystemPromptExternal
+		if tier == PathTierSensitive {
+			promptTier = utils.FilesystemPromptSensitive
 		}
-		agent.debugLog("[APPROVAL] User rejected file access outside working directory: %s\n", filePath)
-		return ctx, false
+		prompt := fmt.Sprintf("⚠  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory.", toolName)
+		choice := logger.AskForFilesystemApproval(prompt, filePath, folder, promptTier)
+		decision := filesystemDecisionFromCLIChoice(choice)
+		return applyFilesystemDecision(ctx, agent, decision, filePath, folder, tier)
 	}
 
 	// No prompting available — return unapproved
@@ -312,4 +327,59 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		agent.debugLog("Cannot prompt for filesystem security approval (no mechanism): %s\n", filePath)
 	}
 	return ctx, false
+}
+
+// applyFilesystemDecision performs the side effects of the user's
+// choice on a filesystem approval dialog and returns the (ctx, ok)
+// pair the caller (handleFileSecurityError) returns to the tool layer.
+//
+//   - ApprovalDeny → reject (no ctx mutation).
+//   - ApprovalApproveOnce → allow this invocation only (ctx gets the
+//     bypass token; nothing recorded for future calls).
+//   - ApprovalAllowFolderSession → External tier only: add the folder
+//     to the agent's session allowlist AND allow this invocation.
+//     Silently demoted to ApproveOnce if the tier is Sensitive (the
+//     dialog shouldn't have offered the choice, but defense-in-depth).
+//
+// Decisions intended for the shell flow (ApproveAlways, Elevate)
+// don't apply here; if encountered they collapse to ApproveOnce so
+// the invocation still proceeds and no shell-specific side effect
+// fires for a filesystem operation.
+func applyFilesystemDecision(ctx context.Context, agent *Agent, decision security.ApprovalDecision, filePath, folder string, tier PathTier) (context.Context, bool) {
+	switch decision {
+	case security.ApprovalDeny:
+		agent.debugLog("[APPROVAL] User denied file access outside working directory: %s\n", filePath)
+		return ctx, false
+	case security.ApprovalAllowFolderSession:
+		if tier == PathTierSensitive {
+			// Sensitive paths can never be allowlisted. If we got
+			// this decision anyway (broken client / API misuse),
+			// treat it as a one-shot approval so the user isn't
+			// silently widened.
+			agent.debugLog("[APPROVAL] Refusing to allowlist Sensitive tier path %s; demoting to one-shot approval\n", filePath)
+			return filesystem.WithSecurityBypass(ctx), true
+		}
+		agent.debugLog("[APPROVAL] User approved folder %s for the rest of this session (path: %s)\n", folder, filePath)
+		agent.AddSessionAllowedFolder(folder)
+		return filesystem.WithSecurityBypass(ctx), true
+	default:
+		// ApprovalApproveOnce + any shell-only decision that doesn't
+		// belong here collapse to a single-invocation approval.
+		agent.debugLog("[APPROVAL] User approved file access (one-shot): %s\n", filePath)
+		return filesystem.WithSecurityBypass(ctx), true
+	}
+}
+
+// filesystemDecisionFromCLIChoice maps the CLI prompt's typed choice
+// to the shared security.ApprovalDecision so the post-prompt handling
+// is the same regardless of input surface.
+func filesystemDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDecision {
+	switch c {
+	case utils.ApprovalChoiceApproveOnce:
+		return security.ApprovalApproveOnce
+	case utils.ApprovalChoiceAllowFolderSession:
+		return security.ApprovalAllowFolderSession
+	default:
+		return security.ApprovalDeny
+	}
 }

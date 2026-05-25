@@ -313,6 +313,10 @@ function AppInner() {
                       command={state.securityApprovalRequest.command}
                       riskType={state.securityApprovalRequest.riskType}
                       target={state.securityApprovalRequest.target}
+                      allowOptions={state.securityApprovalRequest.allowOptions}
+                      fsKind={state.securityApprovalRequest.fsKind}
+                      fsFolder={state.securityApprovalRequest.fsFolder}
+                      fsPath={state.securityApprovalRequest.fsPath}
                       onRespond={handleSecurityApprovalResponse}
                     />
                   )}

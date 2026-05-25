@@ -507,8 +507,17 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		// Unsafe mode bypasses filesystem security checks automatically
 		alreadyApproved := a.GetUnsafeMode()
 		if !alreadyApproved {
-			// If user already approved filesystem access this session, skip re-prompting
-			alreadyApproved = a.IsSecurityBypassApproved()
+			// Per-folder allowlist: only auto-approve if EVERY outside
+			// path is covered by a folder the user previously approved.
+			// The old global flag here was the safety bug — approving
+			// one path silently allowed all paths for the session.
+			alreadyApproved = true
+			for _, p := range outsidePaths {
+				if !a.IsFolderSessionAllowed(p) {
+					alreadyApproved = false
+					break
+				}
+			}
 		}
 
 		if !alreadyApproved {
@@ -553,8 +562,13 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				return "", fmt.Errorf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths)
 			}
 
-			// Mark that user has approved filesystem access this session
-			a.SetSecurityBypassApproved()
+			// Mark each outside path's parent as session-allowed so
+			// the subagent doesn't re-prompt for the same files.
+			// Phase 3 will offer the user a "once vs folder" choice
+			// in the dialog itself; for now we widen to parents.
+			for _, p := range outsidePaths {
+				a.AddSessionAllowedFolder(filepath.Dir(p))
+			}
 		} else {
 			a.Logger().Debug("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
 		}

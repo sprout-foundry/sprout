@@ -247,9 +247,21 @@ func (d *PersonaChangeData) Validate() error {
 }
 
 // SecurityApprovalResponseData is the data payload for "security_approval_response" messages.
+//
+// Action carries the multi-option dialog choice. Legal values:
+//   - ""                      → fall back to Approved bool (legacy clients)
+//   - "approve_once"          → equivalent to Approved=true
+//   - "approve_always"        → shell-only: approve and persist command to allowlist
+//   - "elevate"               → shell-only: approve and bump session risk profile to permissive
+//   - "allow_folder_session"  → filesystem-only: approve and allowlist the target folder for this session
+//   - "deny"                  → equivalent to Approved=false
+//
+// Old WebUI clients that only set Approved continue to work because the
+// server falls back to bool when Action is empty.
 type SecurityApprovalResponseData struct {
 	RequestID string `json:"request_id"`
 	Approved  bool   `json:"approved"`
+	Action    string `json:"action,omitempty"`
 }
 
 // Validate performs field-level validation on SecurityApprovalResponseData.
@@ -260,6 +272,13 @@ func (d *SecurityApprovalResponseData) Validate() error {
 	}
 	if len(d.RequestID) > maxRequestIDLen {
 		return fmt.Errorf("request_id too long: %d characters (max %d)", len(d.RequestID), maxRequestIDLen)
+	}
+	d.Action = strings.TrimSpace(d.Action)
+	switch d.Action {
+	case "", "approve_once", "approve_always", "elevate", "allow_folder_session", "deny":
+		// ok
+	default:
+		return fmt.Errorf("action must be one of: approve_once, approve_always, elevate, allow_folder_session, deny (got %q)", d.Action)
 	}
 	return nil
 }

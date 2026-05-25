@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import type { SecurityApprovalAction } from '../hooks/useSecurityApproval';
 import './ThemedDialog.css';
 
 export interface SecurityApprovalDialogProps {
@@ -9,7 +10,19 @@ export interface SecurityApprovalDialogProps {
   command?: string;
   riskType?: string;
   target?: string;
-  onRespond: (requestId: string, approved: boolean) => void;
+  // SP-058: when true, render the 4-option dialog (Approve / Deny / Always
+  // Approve / Elevate). Default false renders the classic Allow / Block.
+  // Only shell_command opts in today; other tools stay on the legacy UI.
+  allowOptions?: boolean;
+  // Filesystem dialog mode. When set, overrides allowOptions and renders
+  // the path-tier-aware layout:
+  //   - fs_external: Allow once / Allow folder this session / Deny
+  //   - fs_sensitive: Allow once / Deny (with a note that the path can
+  //     not be added to the session allowlist).
+  fsKind?: 'fs_external' | 'fs_sensitive';
+  fsFolder?: string;
+  fsPath?: string;
+  onRespond: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
 }
 
 type RiskKey = 'safe' | 'caution' | 'dangerous';
@@ -41,18 +54,43 @@ function SecurityApprovalDialog({
   command,
   riskType,
   target,
+  allowOptions,
+  fsKind,
+  fsFolder,
+  fsPath,
   onRespond,
 }: SecurityApprovalDialogProps): JSX.Element {
   const risk = toRiskKey(riskLevel);
   const blockBtnRef = useRef<HTMLButtonElement>(null);
   const allowBtnRef = useRef<HTMLButtonElement>(null);
+  // SP-058: in 4-option mode the "Approve once" button is the safe
+  // default-focus target. Auto-focusing Elevate (which silently bumps
+  // the session to permissive) would let a fast keyboard user widen
+  // their gates by hitting Space — exactly the wrong default.
+  const approveOnceBtnRef = useRef<HTMLButtonElement>(null);
+  const isFilesystem = fsKind === 'fs_external' || fsKind === 'fs_sensitive';
 
-  const handleAllow = useCallback(() => {
-    onRespond(requestId, true);
+  const sendOnce = useCallback(() => {
+    onRespond(requestId, true, allowOptions || isFilesystem ? 'approve_once' : undefined);
+  }, [requestId, onRespond, allowOptions, isFilesystem]);
+
+  const sendDeny = useCallback(() => {
+    onRespond(requestId, false, allowOptions || isFilesystem ? 'deny' : undefined);
+  }, [requestId, onRespond, allowOptions, isFilesystem]);
+
+  const handleAllow = sendOnce;
+  const handleBlock = sendDeny;
+
+  const handleAlways = useCallback(() => {
+    onRespond(requestId, true, 'approve_always');
   }, [requestId, onRespond]);
 
-  const handleBlock = useCallback(() => {
-    onRespond(requestId, false);
+  const handleElevate = useCallback(() => {
+    onRespond(requestId, true, 'elevate');
+  }, [requestId, onRespond]);
+
+  const handleAllowFolder = useCallback(() => {
+    onRespond(requestId, true, 'allow_folder_session');
   }, [requestId, onRespond]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -81,12 +119,16 @@ function SecurityApprovalDialog({
     const timer = setTimeout(() => {
       if (risk === 'dangerous') {
         blockBtnRef.current?.focus();
+      } else if (allowOptions || isFilesystem) {
+        // Multi-option dialog: focus the "Allow once" / "Approve once"
+        // button so a stray Space keystroke doesn't widen scope.
+        approveOnceBtnRef.current?.focus();
       } else {
         allowBtnRef.current?.focus();
       }
     }, 60);
     return () => clearTimeout(timer);
-  }, [risk]);
+  }, [risk, allowOptions, isFilesystem]);
 
   return (
     <div className="security-approval-overlay" role="dialog" aria-modal="true" aria-label="Security approval required">
@@ -134,17 +176,134 @@ function SecurityApprovalDialog({
           )}
 
           {/* Target (for file write and git operations) */}
-          {target && !command && (
+          {target && !command && !isFilesystem && (
             <div className="security-approval-target-wrapper">
               <div className="security-approval-target-label">Target</div>
               <div className="security-approval-target-box">{target}</div>
             </div>
           )}
+
+          {/* Filesystem mode: show path + folder-to-allowlist */}
+          {isFilesystem && fsPath && (
+            <div className="security-approval-target-wrapper">
+              <div className="security-approval-target-label">Path</div>
+              <div className="security-approval-target-box">{fsPath}</div>
+            </div>
+          )}
+          {fsKind === 'fs_external' && fsFolder && (
+            <div className="security-approval-target-wrapper">
+              <div className="security-approval-target-label">Folder to allowlist if you pick &ldquo;Allow folder this session&rdquo;</div>
+              <div className="security-approval-target-box">{fsFolder}</div>
+            </div>
+          )}
         </div>
 
+        {/* SP-058: disclaimer for the Elevate action, shown only in 4-option mode */}
+        {allowOptions && !isFilesystem && (
+          <div className="security-approval-elevate-note" role="note">
+            <strong>Elevate</strong> bumps this session to the <code>permissive</code> risk profile —
+            you won&apos;t see high-risk prompts again until restart. Critical operations
+            (rm&nbsp;-rf&nbsp;/, fork bombs) still block. Run{' '}
+            <code>/risk-profile&nbsp;permissive</code> to make this persistent.
+          </div>
+        )}
+        {/* Filesystem sensitive-tier note: explain why "Allow folder this session" is missing */}
+        {fsKind === 'fs_sensitive' && (
+          <div className="security-approval-elevate-note" role="note">
+            This is a <strong>sensitive</strong> path (system directory, or a home-directory path while your
+            working directory is outside <code>$HOME</code>). It can&apos;t be added to the session allowlist —
+            every access will prompt.
+          </div>
+        )}
+
         {/* Footer - Cannot be dismissed, must choose */}
-        <div className="security-approval-footer">
-          {risk === 'dangerous' ? (
+        <div
+          className={`security-approval-footer${
+            allowOptions || fsKind === 'fs_external' ? ' security-approval-footer--4opt' : ''
+          }`}
+        >
+          {fsKind === 'fs_external' ? (
+            <>
+              <button
+                ref={blockBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--block"
+                onClick={handleBlock}
+              >
+                Deny
+              </button>
+              <button
+                ref={approveOnceBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={handleAllow}
+              >
+                Allow once
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow security-approval-btn--allow--caution"
+                onClick={handleAllowFolder}
+                title="Auto-approve every file under this folder for the rest of this session"
+              >
+                Allow folder this session
+              </button>
+            </>
+          ) : fsKind === 'fs_sensitive' ? (
+            <>
+              <button
+                ref={blockBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--block"
+                onClick={handleBlock}
+              >
+                Deny
+              </button>
+              <button
+                ref={approveOnceBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={handleAllow}
+              >
+                Allow once
+              </button>
+            </>
+          ) : allowOptions ? (
+            <>
+              <button
+                ref={blockBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--block"
+                onClick={handleBlock}
+              >
+                Deny
+              </button>
+              <button
+                ref={approveOnceBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={handleAllow}
+              >
+                Approve once
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={handleAlways}
+                title="Persist this exact command to your allowlist so it won't prompt again"
+              >
+                Always approve
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow security-approval-btn--allow--caution"
+                onClick={handleElevate}
+                title="Bump this session to 'permissive' — no more high-risk prompts until restart"
+              >
+                Elevate (session)
+              </button>
+            </>
+          ) : risk === 'dangerous' ? (
             <>
               <button
                 ref={allowBtnRef}

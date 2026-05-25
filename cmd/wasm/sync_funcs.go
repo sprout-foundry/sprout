@@ -386,7 +386,12 @@ func flushSyncOpsFunc(_ js.Value, _ []js.Value) interface{} {
 	batchURL := endpoint + "/api/sync/batch"
 
 	// Use the Fetch API via JS interop
-	handler := js.FuncOf(func(this js.Value, pArgs []js.Value) interface{} {
+	var handler js.Func
+	var thenHandler js.Func
+	var jsonThenHandler js.Func
+	var catchHandler js.Func
+
+	handler = js.FuncOf(func(this js.Value, pArgs []js.Value) interface{} {
 		defer handler.Release()
 		resolve := pArgs[0]
 		reject := pArgs[1]
@@ -401,7 +406,7 @@ func flushSyncOpsFunc(_ js.Value, _ []js.Value) interface{} {
 
 		fetchPromise := js.Global().Call("fetch", batchURL, opts)
 
-		thenHandler := js.FuncOf(func(this js.Value, responseArgs []js.Value) interface{} {
+		thenHandler = js.FuncOf(func(this js.Value, responseArgs []js.Value) interface{} {
 			defer thenHandler.Release()
 			response := responseArgs[0]
 			// Check if response is ok
@@ -415,7 +420,7 @@ func flushSyncOpsFunc(_ js.Value, _ []js.Value) interface{} {
 			}
 			// Parse response JSON
 			jsonPromise := response.Call("json")
-			jsonThenHandler := js.FuncOf(func(this js.Value, jsonArgs []js.Value) interface{} {
+			jsonThenHandler = js.FuncOf(func(this js.Value, jsonArgs []js.Value) interface{} {
 				defer jsonThenHandler.Release()
 				resolve.Invoke(map[string]interface{}{
 					"ok":      true,
@@ -427,7 +432,7 @@ func flushSyncOpsFunc(_ js.Value, _ []js.Value) interface{} {
 			return nil
 		})
 
-		catchHandler := js.FuncOf(func(this js.Value, catchArgs []js.Value) interface{} {
+		catchHandler = js.FuncOf(func(this js.Value, catchArgs []js.Value) interface{} {
 			defer catchHandler.Release()
 			syncMu.Lock()
 			syncOpQueue = append(ops, syncOpQueue...)

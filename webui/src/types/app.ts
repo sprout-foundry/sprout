@@ -92,6 +92,11 @@ export interface AppState {
     command?: string;
     riskType?: string;
     target?: string;
+    // SP-058: when the server sets allow_options="true" in extras, the
+    // approval dialog renders four buttons (Approve / Deny / Always /
+    // Elevate) instead of the legacy Allow / Block pair. Only shell_command
+    // currently opts into this — other tools render the classic dialog.
+    allowOptions?: boolean;
   } | null;
   securityPromptRequest: {
     requestId: string;

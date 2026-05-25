@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import type { SecurityApprovalAction } from '../hooks/useSecurityApproval';
 import './ThemedDialog.css';
 
 export interface SecurityApprovalDialogProps {
@@ -9,7 +10,11 @@ export interface SecurityApprovalDialogProps {
   command?: string;
   riskType?: string;
   target?: string;
-  onRespond: (requestId: string, approved: boolean) => void;
+  // SP-058: when true, render the 4-option dialog (Approve / Deny / Always
+  // Approve / Elevate). Default false renders the classic Allow / Block.
+  // Only shell_command opts in today; other tools stay on the legacy UI.
+  allowOptions?: boolean;
+  onRespond: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;
 }
 
 type RiskKey = 'safe' | 'caution' | 'dangerous';
@@ -41,6 +46,7 @@ function SecurityApprovalDialog({
   command,
   riskType,
   target,
+  allowOptions,
   onRespond,
 }: SecurityApprovalDialogProps): JSX.Element {
   const risk = toRiskKey(riskLevel);
@@ -48,11 +54,19 @@ function SecurityApprovalDialog({
   const allowBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleAllow = useCallback(() => {
-    onRespond(requestId, true);
-  }, [requestId, onRespond]);
+    onRespond(requestId, true, allowOptions ? 'approve_once' : undefined);
+  }, [requestId, onRespond, allowOptions]);
 
   const handleBlock = useCallback(() => {
-    onRespond(requestId, false);
+    onRespond(requestId, false, allowOptions ? 'deny' : undefined);
+  }, [requestId, onRespond, allowOptions]);
+
+  const handleAlways = useCallback(() => {
+    onRespond(requestId, true, 'approve_always');
+  }, [requestId, onRespond]);
+
+  const handleElevate = useCallback(() => {
+    onRespond(requestId, true, 'elevate');
   }, [requestId, onRespond]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -142,9 +156,54 @@ function SecurityApprovalDialog({
           )}
         </div>
 
+        {/* SP-058: disclaimer for the Elevate action, shown only in 4-option mode */}
+        {allowOptions && (
+          <div className="security-approval-elevate-note" role="note">
+            <strong>Elevate</strong> bumps this session to the <code>permissive</code> risk profile —
+            you won&apos;t see high-risk prompts again until restart. Critical operations
+            (rm&nbsp;-rf&nbsp;/, fork bombs) still block. Run{' '}
+            <code>/risk-profile&nbsp;permissive</code> to make this persistent.
+          </div>
+        )}
+
         {/* Footer - Cannot be dismissed, must choose */}
-        <div className="security-approval-footer">
-          {risk === 'dangerous' ? (
+        <div className={`security-approval-footer${allowOptions ? ' security-approval-footer--4opt' : ''}`}>
+          {allowOptions ? (
+            <>
+              <button
+                ref={blockBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--block"
+                onClick={handleBlock}
+              >
+                Deny
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={handleAllow}
+              >
+                Approve once
+              </button>
+              <button
+                type="button"
+                className="security-approval-btn security-approval-btn--allow"
+                onClick={handleAlways}
+                title="Persist this exact command to your allowlist so it won't prompt again"
+              >
+                Always approve
+              </button>
+              <button
+                ref={allowBtnRef}
+                type="button"
+                className="security-approval-btn security-approval-btn--allow security-approval-btn--allow--caution"
+                onClick={handleElevate}
+                title="Bump this session to 'permissive' — no more high-risk prompts until restart"
+              >
+                Elevate (session)
+              </button>
+            </>
+          ) : risk === 'dangerous' ? (
             <>
               <button
                 ref={allowBtnRef}

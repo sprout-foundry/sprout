@@ -155,6 +155,9 @@ func init() {
 		"javascript-jsx",
 	)
 	semanticAdapterRegistry.RegisterSingleton(goPool, "go")
+	semanticAdapterRegistry.Register("python", lspsemantic.NewPythonAdapter)
+	semanticAdapterRegistry.Register("rust", lspsemantic.NewRustAdapter)
+	semanticAdapterRegistry.RegisterAliases(lspsemantic.NewCppAdapter, "c", "cpp")
 }
 
 // startSemanticEviction runs a background goroutine that evicts idle language

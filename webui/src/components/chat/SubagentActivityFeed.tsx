@@ -1,4 +1,4 @@
-import { LiveLog, groupSubagentRuns, getPersonaColor } from '@sprout/ui';
+import { LiveLog, groupSubagentRuns, getPersonaColor, formatCost, formatTokens } from '@sprout/ui';
 import { Bot, CheckCircle2, XCircle, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { useState, useMemo } from 'react';
@@ -60,6 +60,12 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
           {run.outputLines.length > 0 && (
             <span className="subagent-feed-line-count">{run.outputLines.length} lines</span>
           )}
+          {run.tokensUsed > 0 && (
+            <span className="subagent-feed-metric">{formatTokens(run.tokensUsed)} tok</span>
+          )}
+          {run.cost > 0 && (
+            <span className="subagent-feed-metric">{formatCost(run.cost)}</span>
+          )}
           {startTime && <span className="subagent-feed-duration">{formatDuration(startTime)}</span>}
           {hasOutput && (
             <span className="subagent-feed-toggle">
@@ -114,6 +120,18 @@ function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element
           </span>
         </>
       )}
+      {run.tokensUsed > 0 && (
+        <>
+          <span className="subagent-feed-sep">·</span>
+          <span className="subagent-feed-metric">{formatTokens(run.tokensUsed)} tok</span>
+        </>
+      )}
+      {run.cost > 0 && (
+        <>
+          <span className="subagent-feed-sep">·</span>
+          <span className="subagent-feed-metric">{formatCost(run.cost)}</span>
+        </>
+      )}
     </div>
   );
 }
@@ -165,6 +183,26 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
           {completedRuns.map((run) => (
             <CompletedSubagentCard key={run.toolCallId} run={run} />
           ))}
+
+          {/* Total resource summary */}
+          {(() => {
+            const totalTokens = runs.reduce((sum, r) => sum + r.tokensUsed, 0);
+            const totalCost = runs.reduce((sum, r) => sum + r.cost, 0);
+            if (totalTokens > 0 || totalCost > 0) {
+              return (
+                <div className="subagent-feed-summary">
+                  <span className="subagent-feed-summary-label">Total</span>
+                  {totalTokens > 0 && (
+                    <span className="subagent-feed-summary-metric">{formatTokens(totalTokens)} tok</span>
+                  )}
+                  {totalCost > 0 && (
+                    <span className="subagent-feed-summary-metric">{formatCost(totalCost)}</span>
+                  )}
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
     </div>

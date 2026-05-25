@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, Wrench } from 'lucide-react';
 import type { DelegateActivity, DelegateToolCallInfo } from '@sprout/ui';
+import { formatCost, formatTokens } from '@sprout/ui';
 import './DelegateActivityTree.css';
 
 interface DelegateActivityTreeProps {
@@ -13,17 +14,6 @@ const DEPTH_COLORS = [
   'var(--delegate-depth-2, #a855f7)',
   'var(--delegate-depth-3, #c084fc)',
 ];
-
-function formatCost(cost: number): string {
-  return `$${cost.toFixed(4)}`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000) {
-    return `${(tokens / 1000).toFixed(1)}k`;
-  }
-  return String(tokens);
-}
 
 function ToolCallItem({ toolCall }: { toolCall: DelegateToolCallInfo }) {
   const [expanded, setExpanded] = useState(false);

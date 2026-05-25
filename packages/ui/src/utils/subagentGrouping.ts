@@ -39,6 +39,8 @@ export function groupSubagentRuns(activities: SubagentActivity[]): SubagentRun[]
         completeActivity: null,
         outputLines: [],
         depth: activity.depth ?? 0,
+        tokensUsed: 0,
+        cost: 0,
       };
       runMap.set(key, run);
     }
@@ -70,6 +72,14 @@ export function groupSubagentRuns(activities: SubagentActivity[]): SubagentRun[]
           taskId: activity.taskId,
         });
       }
+    }
+
+    // Aggregate resource usage from each activity
+    if (activity.tokensUsed) {
+      run.tokensUsed += activity.tokensUsed;
+    }
+    if (activity.cost) {
+      run.cost += activity.cost;
     }
   }
 

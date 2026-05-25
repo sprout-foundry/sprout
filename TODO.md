@@ -184,7 +184,7 @@
 - [x] SP-012-U2.1-remove3Pane: Change 3-pane cap to configurable `MAX_PANES` (default 6); add minimum pane width enforcement
 - [x] SP-012-U2.2-sidebarPersist: Ensure `isCollapsed`, `activeTab`, and `width` in `useSidebarState.ts` all persist to localStorage
 - [x] SP-012-U2.3-responsiveCSS: Add tablet (768-1024px) and mobile (<768px) responsive breakpoints — icons-only sidebar, vertical stacking
-- [ ] SP-012-U2.3-touchGestures: Add swipe left/right to toggle sidebar on mobile
+- [x] SP-012-U2.3-touchGestures: Add swipe left/right to toggle sidebar on mobile
 - [ ] SP-012-U2.4-skeletons: Create skeleton placeholder components for FileTree, Chat history, Editor, Settings panel loading states
 - [x] SP-012-U2.5-panelAnimation: Add `transition: width 200ms, opacity 150ms` to sidebar collapse, context panel resize, terminal toggle
 

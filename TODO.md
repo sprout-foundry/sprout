@@ -222,7 +222,7 @@
 - [x] SP-022-W1.3-restore: On first connection for new client, restore workspace from most recent session's `WorkingDirectory`
 - [x] SP-022-W1.4-recent: Create `pkg/webui/recent_workspaces.go` — `GetRecentWorkspaces()` (max 10, LRU eviction), storage in `~/.sprout/recent_workspaces.json`
 - [x] SP-022-W1.5-apiResponse: Enhance `GET /api/workspace` with `is_project`, `project_markers`, `needs_workspace_selection`, `suggested_projects` fields
-- [ ] SP-022-W1.5-projectsEndpoint: Add `GET /api/workspace/projects` endpoint
+- [x] SP-022-W1.5-projectsEndpoint: Add `GET /api/workspace/projects` endpoint
 - [x] SP-022-W2.1-picker: Create `WorkspacePicker.tsx` — shows current workspace, recent projects, nearby projects, "Browse..." button
 - [x] SP-022-W2.2-autoSelect: On frontend load, auto-select if exactly 1 recent workspace; show picker if multiple or none
 - [ ] SP-022-W2.3-statusBar: Add workspace indicator to status bar; clicking opens workspace picker

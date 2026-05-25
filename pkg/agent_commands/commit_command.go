@@ -1,8 +1,8 @@
 package commands
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +11,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	gitops "github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -202,16 +203,17 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 		return nil, fmt.Errorf("failed to get git status: %w", err)
 	}
 	var filesToAdd []string
-	fmt.Println("\n[i] Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")
+	fmt.Println()
+	console.GlyphInfo.Print("Enter file numbers to commit (comma-separated, 'a' for all, 'q' to quit):")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 	switch strings.ToLower(input) {
 	case "q", "quit":
-		fmt.Println("[FAIL] Commit cancelled")
+		console.GlyphError.Print("Commit cancelled")
 		return nil, nil
 	case "a", "all":
 		filesToAdd = selectAllModifiedFiles(validStatusLines)
-		fmt.Println("[OK] Adding all modified files")
+		console.GlyphSuccess.Print("Adding all modified files")
 	default:
 		selections := strings.Split(input, ",")
 		for _, sel := range selections {
@@ -221,12 +223,12 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 			}
 			var index int
 			if _, err := fmt.Sscanf(sel, "%d", &index); err != nil || index < 1 || index > len(validStatusLines) {
-				fmt.Printf("[FAIL] Invalid selection: %s\n", sel)
+				console.GlyphError.Printf("Invalid selection: %s", sel)
 				continue
 			}
 			if name, ok := parseFilenameFromStatusLine(validStatusLines[index-1]); ok {
 				filesToAdd = append(filesToAdd, name)
-				fmt.Printf("[OK] Adding: %s\n", name)
+				console.GlyphSuccess.Printf("Adding: %s", name)
 			}
 		}
 	}
@@ -236,12 +238,12 @@ func (c *CommitCommand) selectAndStageFiles(chatAgent *agent.Agent, reader *bufi
 		cmd := gitCommand("add", file)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			c.printf("[FAIL] Failed to stage %s: %v\n", file, err)
+			c.printf("%sFailed to stage %s: %v\n", console.GlyphError.Prefix(), file, err)
 			if len(output) > 0 {
 				c.printf("Output: %s\n", string(output))
 			}
 		} else {
-			c.printf("[OK] Staged: %s\n", file)
+			c.printf("%sStaged: %s\n", console.GlyphSuccess.Prefix(), file)
 		}
 	}
 
@@ -254,7 +256,7 @@ func (c *CommitCommand) checkForAnyChanges(chatAgent *agent.Agent) (bool, error)
 		return false, fmt.Errorf("get git status: %w", err)
 	}
 	if len(validStatusLines) == 0 {
-		chatAgent.PrintLine("[OK] No changes to commit")
+		chatAgent.PrintLine(console.GlyphInfo.Prefix() + "No changes to commit")
 		return false, nil
 	}
 	return true, nil
@@ -267,8 +269,8 @@ func (c *CommitCommand) printStatus(chatAgent *agent.Agent) error {
 		return fmt.Errorf("printStatus: %w", err)
 	}
 	// Print the current git status
-	chatAgent.PrintLine("[chart] Current git status:")
-	chatAgent.PrintLine("\n[dir/] Modified files:")
+	chatAgent.PrintLine(console.GlyphInfo.Prefix() + "Current git status:")
+	chatAgent.PrintLine("\nModified files:")
 	for i, line := range validStatusLines {
 		chatAgent.PrintLine(fmt.Sprintf("%2d. %s", i+1, line))
 	}
@@ -289,13 +291,13 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 		return fmt.Errorf("executeMultiFileCommit: get staged files: %w", err)
 	}
 	if len(staged) == 0 {
-		chatAgent.PrintLine("[OK] No staged files found")
+		chatAgent.PrintLine(console.GlyphInfo.Prefix() + "No staged files found")
 		staged, err = c.selectAndStageFiles(chatAgent, reader)
 		if err != nil {
 			return fmt.Errorf("executeMultiFileCommit: select and stage files: %w", err)
 		}
 	} else {
-		chatAgent.PrintLine(fmt.Sprintf("[pkg] Found %d staged file(s):", len(staged)))
+		chatAgent.PrintLine(fmt.Sprintf("%sFound %d staged file(s):", console.GlyphInfo.Prefix(), len(staged)))
 	}
 
 	if err := c.printStatus(chatAgent); err != nil {
@@ -303,7 +305,7 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 	}
 
 	if len(staged) == 0 {
-		fmt.Println("[FAIL] No files selected")
+		console.GlyphError.Print("No files selected")
 		return nil
 	}
 
@@ -313,8 +315,7 @@ func (c *CommitCommand) executeMultiFileCommit(chatAgent *agent.Agent) error {
 
 // showHelp displays commit command usage
 func (c *CommitCommand) showHelp() error {
-	fmt.Println("[edit] Commit Command Usage:")
-	fmt.Println("========================")
+	console.GlyphInfo.Fprintln(os.Stdout, "Commit Command Usage:")
 	fmt.Println("/commit          - Interactive commit workflow for staged files")
 	fmt.Println("/commit help     - Show this help message")
 	fmt.Println()
@@ -335,10 +336,10 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	// Load configuration to get commit provider/model settings
 	cfg, err := configuration.LoadOrInitConfig(true)
 	if err != nil {
-		c.printf("[WARN] Failed to load configuration: %v\n", err)
+		c.printf("%sFailed to load configuration: %v\n", console.GlyphWarning.Prefix(), err)
 		if chatAgent == nil {
 			if c.agentError != nil {
-				c.printf("[WARN] Using manual commit mode (AI agent unavailable: %v)", c.agentError)
+				c.printf("%sUsing manual commit mode (AI agent unavailable: %v)", console.GlyphWarning.Prefix(), c.agentError)
 			} else {
 				c.println("Using manual commit mode (no AI agent available)")
 			}
@@ -356,7 +357,7 @@ func (c *CommitCommand) generateAndCommit(chatAgent *agent.Agent, reader *bufio.
 	}
 
 	if len(strings.TrimSpace(string(diffOutput))) == 0 {
-		c.println("[FAIL] No changes staged")
+		c.println(console.GlyphError.Prefix() + "No changes staged")
 		return nil
 	}
 
@@ -429,14 +430,14 @@ retryLoop:
 		if client == nil {
 			// Manual fallback when LLM client isn't available
 			c.println("")
-			c.println("[receipt] Staged diff (truncated):")
+			c.println(console.GlyphInfo.Prefix() + "Staged diff (truncated):")
 			preview := string(diffOutput)
 			if len(preview) > 2000 {
 				preview = preview[:2000] + "\n... (truncated)"
 			}
 			c.println(preview)
 			c.println("")
-			c.println("[edit] Enter commit message (end with a blank line):")
+			c.println(console.GlyphAction.Prefix() + "Enter commit message (end with a blank line):")
 			var b strings.Builder
 			empty := 0
 			for {
@@ -453,7 +454,7 @@ retryLoop:
 			}
 			commitMessage = strings.TrimSpace(b.String())
 			if commitMessage == "" {
-				c.println("[FAIL] Empty commit message; aborting")
+				c.println(console.GlyphError.Prefix() + "Empty commit message; aborting")
 				return nil
 			}
 
@@ -471,7 +472,7 @@ retryLoop:
 		commitMessage = result.Message
 		c.printf("\n$ Tokens used: ~%d (model: %s/%s)\n", result.ApproxTokens, clientType, model)
 		for _, warning := range result.Warnings {
-			c.printf("[WARN] %s\n", warning)
+			c.printf("%s%s\n", console.GlyphWarning.Prefix(), warning)
 		}
 
 		// Show staged files summary and commit message (minimal, no emoji)
@@ -499,87 +500,51 @@ retryLoop:
 		// Handle confirmation (or auto-proceed if skipPrompt)
 		if c.skipPrompt {
 			c.println("")
-			c.println("[OK] Auto-proceeding with commit (--skip-prompt)")
+			c.println(console.GlyphSuccess.Prefix() + "Auto-proceeding with commit (--skip-prompt)")
 			break // Exit retry loop
-		} else {
-			// If TUI is active use dropdown, otherwise stdin prompt
-			if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" && chatAgent != nil {
-				// Include the commit title in the prompt so users see context even if overlay obscures preview
-				title := ""
-				if parts := strings.Split(commitMessage, "\n"); len(parts) > 0 {
-					title = strings.TrimSpace(parts[0])
-					if len(title) > 80 {
-						title = title[:77] + "..."
-					}
-				}
-				choices := []agent.ChoiceOption{
-					{Label: "Approve", Value: "y"},
-					{Label: "Retry", Value: "r"},
-					{Label: "Edit", Value: "e"},
-					{Label: "Cancel", Value: "n"},
-				}
-				c.println("-----------------------------\n")
-				prompt := "Proceed with commit?"
+		}
 
-				choice, err := chatAgent.PromptChoice(prompt, choices)
-				if err != nil {
-					return fmt.Errorf("confirmation failed: %w", err)
-				}
-				switch choice {
-				case "r":
-					c.println("Regenerating commit message...")
-					continue
-				case "e":
-					edited, err := editInEditor(commitMessage)
-					if err != nil {
-						return fmt.Errorf("editor failed: %w", err)
-					}
-					if strings.TrimSpace(edited) == "" {
-						c.println("Empty commit message; aborting")
-						return nil
-					}
-					commitMessage = edited
-					break retryLoop
-				case "y":
-					break retryLoop
-				case "n":
-					c.println("Commit cancelled")
-					return nil
-				default:
-					// Continue to confirmation prompt
-				}
-			} else {
-				// Confirmation with retry option via stdin
-				c.println("")
-				c.printf("Proceed with commit? (y/n/e to edit/r to retry): ")
-				input, _ := reader.ReadString('\n')
-				input = strings.TrimSpace(strings.ToLower(input))
-
-				if input == "r" || input == "retry" {
-					c.println("Regenerating commit message...")
-					continue // Go back to start of loop to regenerate
-				} else if input == "e" || input == "edit" {
-					// Open editor for editing
-					edited, err := editInEditor(commitMessage)
-					if err != nil {
-						return fmt.Errorf("editor failed: %w", err)
-					}
-					if strings.TrimSpace(edited) == "" {
-						c.println("Empty commit message; aborting")
-						return nil
-					}
-					commitMessage = edited
-					break
-				} else if input == "y" || input == "yes" || input == "" {
-					break // Exit retry loop and proceed with commit
-				} else if input == "n" || input == "no" {
-					c.println("Commit cancelled")
-					return nil
-				} else {
-					c.printf("Invalid option: %s. Please use y/n/e/r\n", input)
-					continue // Show the confirmation prompt again
-				}
+		// Unified picker for the commit-confirm choice. Replaces the
+		// prior dual-path (PromptChoice when AGENT_CONSOLE=1 / stdin
+		// y/n/e/r loop otherwise) with a single SelectList that
+		// degrades to numbered-list+stdin on non-TTY. The retry loop
+		// stays — Retry re-enters the LLM call, Edit opens $EDITOR
+		// and exits the retry loop.
+		picker := console.NewSelectList(console.SelectListOptions{
+			Title: "Proceed with commit?",
+			Items: []console.SelectItem{
+				{Label: "Approve", Detail: "create the commit now", Value: "y"},
+				{Label: "Retry", Detail: "regenerate message", Value: "r"},
+				{Label: "Edit", Detail: "open $EDITOR", Value: "e"},
+				{Label: "Cancel", Detail: "abort", Value: "n"},
+			},
+			PageSize: 4,
+		})
+		choice, ok, perr := picker.Run(context.Background())
+		if perr != nil {
+			return fmt.Errorf("confirmation failed: %w", perr)
+		}
+		if !ok || choice == "n" {
+			c.println("Commit cancelled")
+			return nil
+		}
+		switch choice {
+		case "r":
+			c.println("Regenerating commit message...")
+			continue
+		case "e":
+			edited, err := editInEditor(commitMessage)
+			if err != nil {
+				return fmt.Errorf("editor failed: %w", err)
 			}
+			if strings.TrimSpace(edited) == "" {
+				c.println("Empty commit message; aborting")
+				return nil
+			}
+			commitMessage = edited
+			break retryLoop
+		case "y":
+			break retryLoop
 		}
 
 	} // End of retry loop
@@ -587,9 +552,9 @@ retryLoop:
 	// Handle dry-run mode
 	if c.dryRun {
 		c.println("")
-		c.println("[search] Dry-run mode: Commit message generated successfully!")
-		c.println("[i] The commit was not created due to --dry-run flag")
-		c.println("[edit] To create the commit, run the command again without --dry-run")
+		c.println(console.GlyphInfo.Prefix() + "Dry-run mode: Commit message generated successfully!")
+		c.println(console.GlyphInfo.Prefix() + "The commit was not created due to --dry-run flag")
+		c.println(console.GlyphAction.Prefix() + "To create the commit, run the command again without --dry-run")
 		return nil
 	}
 
@@ -601,21 +566,21 @@ retryLoop:
 		if securityResult.HasConcerns && len(securityResult.Concerns) > 0 {
 			action, err := gate.Evaluate(securityResult.Concerns, "commit")
 			if err != nil {
-				c.printf("[security] commit elevation error: %v\n", err)
+				c.printf("%scommit elevation error: %v\n", console.GlyphError.Prefix(), err)
 			}
 			if err != nil || action == security.SecretBlock {
-				c.println("[security] Commit aborted: detected secrets in staged files. Use --allow-secrets to override.")
+				c.println(console.GlyphError.Prefix() + "Commit aborted: detected secrets in staged files. Use --allow-secrets to override.")
 				return nil
 			}
 			if action == security.SecretRedact {
-				c.println("[security] Warning: commit proceeding but secrets were detected in staged files.")
+				c.println(console.GlyphWarning.Prefix() + "Warning: commit proceeding but secrets were detected in staged files.")
 			}
 		}
 	}
 
 	// Create the commit
 	c.println("")
-	c.println("[save] Creating commit...")
+	c.println(console.GlyphAction.Prefix() + "Creating commit...")
 
 	// Write commit message to temporary file
 	tempFile := "commit_msg.txt"
@@ -631,7 +596,7 @@ retryLoop:
 		return fmt.Errorf("failed to create commit: %w\nOutput: %s", err, string(output))
 	}
 
-	c.println("[OK] Commit created successfully!")
+	c.println(console.GlyphSuccess.Prefix() + "Commit created successfully!")
 	c.printf("Output: %s\n", string(output))
 
 	return nil

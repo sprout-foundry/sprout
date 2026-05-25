@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -66,6 +67,62 @@ func printContinuationHint(chatAgent *agent.Agent) {
 		return
 	}
 	fmt.Printf("To Continue: `sprout agent --session-id %s`\n", sessionID)
+}
+
+// printKeyboardHelp is a convenience wrapper that writes to stderr.
+// Triggered by typing `?` alone at the idle prompt. Writes to stderr
+// so it doesn't interleave with stdout-bound model output if the user
+// pipes the session.
+func printKeyboardHelp() {
+	writeKeyboardHelp(os.Stderr)
+}
+
+// writeKeyboardHelp emits a compact, two-column reference of the
+// non-obvious keys the CLI exposes — primarily the steer-panel keys
+// added by SP-055 since the rest of the bindings (slash commands,
+// exit) are documented in the welcome banner and `/help`. Accepts a
+// writer so tests can capture output.
+func writeKeyboardHelp(w io.Writer) {
+	colorOn := envutil.ResolveColorPreference(true)
+	dim, reset := "", ""
+	if colorOn {
+		dim, reset = "\033[2m", "\033[0m"
+	}
+	rows := [][2]string{
+		{"Steer panel (while a turn is running)", ""},
+		{"  Enter", "send mid-turn steer (default)"},
+		{"  Tab", "toggle steer ↔ queue mode"},
+		{"  ↑ / ↓", "recall prior steer messages"},
+		{"  Esc", "clear the input"},
+		{"  Ctrl+C", "interrupt the current turn"},
+		{"", ""},
+		{"Idle prompt", ""},
+		{"  /<cmd>", "slash command (/help, /commit, /persona, …)"},
+		{"  ?", "this help"},
+		{"  exit / quit", "end session + print summary"},
+		{"  Ctrl+C × 2", "force quit"},
+	}
+	fmt.Fprintln(w)
+	console.GlyphInfo.Fprintf(w, "Keyboard help")
+	for _, r := range rows {
+		if r[0] == "" {
+			fmt.Fprintln(w)
+			continue
+		}
+		if r[1] == "" {
+			// Section header — bold if color is on.
+			if colorOn {
+				fmt.Fprintf(w, "  \033[1m%s%s\n", r[0], reset)
+			} else {
+				fmt.Fprintf(w, "  %s\n", r[0])
+			}
+			continue
+		}
+		// Two-column row. Align the description column at fixed width
+		// so the descriptions stack visually.
+		fmt.Fprintf(w, "  %-18s %s%s%s\n", r[0], dim, r[1], reset)
+	}
+	fmt.Fprintln(w)
 }
 
 // RunAgent runs the agent in interactive or direct mode
@@ -923,6 +980,15 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				chatAgent.PrintConversationSummary(true)
 				printContinuationHint(chatAgent)
 				return nil
+			}
+
+			// `?` shortcut: print a compact keyboard-help card and
+			// return to the prompt without consuming an LLM turn. Helps
+			// users discover the steer-panel keys (Tab toggle, ↑↓
+			// history) that aren't advertised elsewhere.
+			if query == "?" {
+				printKeyboardHelp()
+				continue
 			}
 
 			// Slash/bang commands run locally — they don't talk to the LLM

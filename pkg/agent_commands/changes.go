@@ -94,6 +94,11 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Printf("Provider: %s\n", chatAgent.GetProvider())
 	fmt.Printf("Model: %s\n", chatAgent.GetModel())
 	fmt.Printf("Persona: %s\n", chatAgent.GetActivePersona())
+	// SP-058: surface the active risk profile so users can see at a
+	// glance which gating rules apply. Persona-defined rules (e.g.
+	// EA) still take precedence — the displayed profile is what
+	// rules-less personas / non-EA flows resolve to.
+	fmt.Printf("Risk profile: %s\n", chatAgent.GetActiveRiskProfile())
 	if tools.HasVisionCapability() {
 		fmt.Printf("Vision Capability: %sAvailable\n", console.GlyphSuccess.Prefix())
 	} else {

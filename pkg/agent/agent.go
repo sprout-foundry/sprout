@@ -152,6 +152,24 @@ type Agent struct {
 	// delegateID is the ID of this agent when acting as a delegate (empty for root agents).
 	delegateID string
 
+	// riskProfileOverride is a transient (per-session) override for
+	// the risk cascade profile. Set by the --risk-profile CLI flag
+	// and by per-step risk_profile in workflow JSON. Empty means
+	// fall through to Config.RiskProfile, then to "default".
+	// See agent_getters.go:EvaluateOperationRisk for resolution.
+	riskProfileOverride configuration.RiskProfile
+
+	// recentlyApprovedShellCommands tracks shell commands that just
+	// passed Gate 1's interactive approval (in the seed pre-execute
+	// hook), so Gate 2 (persona risk cascade in tool_handlers_shell.go)
+	// doesn't re-prompt the user for the same execution. The seed
+	// hook's signature has no ctx, so we can't propagate approval via
+	// context here — this map is the bridge. Entries are consumed
+	// (read-and-delete) by the first Gate 2 check that matches.
+	// Values are timestamps; consumers ignore entries older than 30s
+	// to bound memory if a Gate 2 check is somehow skipped.
+	recentlyApprovedShellCommands sync.Map // map[string]time.Time
+
 	// filesReadThisTurn tracks paths the agent called read_file on during
 	// the current turn. Used by the SP-046 staleness rule in
 	// checkWriteStaleness — see workspace_sync.go. Reset at turn boundaries

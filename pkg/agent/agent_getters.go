@@ -34,14 +34,33 @@ func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
 // SetUnsafeMode sets the unsafe mode flag
 func (a *Agent) SetUnsafeMode(unsafe bool) { a.security.SetUnsafeMode(unsafe) }
 
-// IsSecurityBypassApproved returns whether the user has approved filesystem access outside CWD
+// IsSecurityBypassApproved returns whether the user has approved any
+// external filesystem access this session. Coarse signal: prefer the
+// per-path IsFolderSessionAllowed for new code.
 func (a *Agent) IsSecurityBypassApproved() bool {
 	return a.security.IsSecurityBypassApproved()
 }
 
-// SetSecurityBypassApproved marks that the user has approved filesystem access outside CWD for this session
-func (a *Agent) SetSecurityBypassApproved() {
-	a.security.SetSecurityBypassApproved()
+// IsFolderSessionAllowed reports whether absPath sits under a folder
+// the user has allowlisted via "Allow this folder for the rest of the
+// session" on the filesystem approval dialog.
+func (a *Agent) IsFolderSessionAllowed(absPath string) bool {
+	return a.security.IsFolderSessionAllowed(absPath)
+}
+
+// AddSessionAllowedFolder records the folder picked by the user from
+// the filesystem approval dialog so future accesses under it are
+// auto-approved for the rest of this session.
+func (a *Agent) AddSessionAllowedFolder(folder string) {
+	a.security.AddSessionAllowedFolder(folder)
+}
+
+// SnapshotSessionAllowedFolders returns a copy of the session
+// allowlist. Used by SubagentRunner to seed a new subagent's
+// allowlist from the parent (so previously approved folders remain
+// usable inside delegated work).
+func (a *Agent) SnapshotSessionAllowedFolders() []string {
+	return a.security.SnapshotSessionAllowedFolders()
 }
 
 // CheckFileContentSecurity runs security concern detection on file content after a write.
@@ -503,9 +522,23 @@ func (a *Agent) IsLocalMode() bool {
 
 // EvaluateOperationRisk determines the risk level of a command for the
 // currently active persona, using the persona's auto-approve rules.
-// Returns RiskLevelLow, RiskLevelMedium, or RiskLevelHigh.
-// For personas without auto-approve rules, returns RiskLevelLow (no EA risk cascade).
+// Returns RiskLevelCritical / High / Medium / Low.
+//
+// Resolution order (matches the SP-058 risk profile design):
+//  1. Critical patterns (rm -rf root, fork bomb) — ALWAYS return Critical,
+//     regardless of persona, profile, or active mode.
+//  2. Active persona has its own AutoApproveRules → use them (preserves
+//     EA autonomy and any other persona-specific carve-outs).
+//  3. Otherwise → resolve the agent's active risk profile and use its
+//     baked-in rules.
+//  4. No persona at all → return Low (no cascade gating, classic
+//     non-EA behavior).
 func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
+	// Step 1: Critical is absolute and orthogonal to persona/profile.
+	if configuration.IsCriticalOperation(command) {
+		return configuration.RiskLevelCritical
+	}
+
 	personaID := a.GetActivePersona()
 	if personaID == "" {
 		return configuration.RiskLevelLow
@@ -514,11 +547,48 @@ func (a *Agent) EvaluateOperationRisk(command string) configuration.RiskLevel {
 	if cfg == nil {
 		return configuration.RiskLevelLow
 	}
+
+	// Step 2: Persona-defined rules win when present.
 	persona := cfg.GetSubagentType(personaID)
-	if persona == nil || persona.AutoApproveRules == nil {
-		return configuration.RiskLevelLow
+	if persona != nil && persona.AutoApproveRules != nil {
+		return persona.EvaluateOperationRisk(command)
 	}
-	return persona.EvaluateOperationRisk(command)
+
+	// Step 3: Fall back to the active risk profile. Use the
+	// config-aware resolver so user overrides in Config.RiskProfiles
+	// take precedence over baked-in defaults. A synthetic
+	// SubagentType reuses the existing rule-matching code path.
+	rules := configuration.ResolveRiskProfileRules(cfg, a.activeRiskProfile())
+	synthetic := &configuration.SubagentType{AutoApproveRules: &rules}
+	return synthetic.EvaluateOperationRisk(command)
+}
+
+// activeRiskProfile returns the risk profile that should apply for
+// the next operation. Resolution: per-agent override (set by CLI
+// flag / workflow step) → config.RiskProfile → "default".
+func (a *Agent) activeRiskProfile() configuration.RiskProfile {
+	if a.riskProfileOverride != "" {
+		return a.riskProfileOverride
+	}
+	if cfg := a.GetConfig(); cfg != nil && cfg.RiskProfile != "" && configuration.IsValidRiskProfile(cfg.RiskProfile) {
+		return configuration.RiskProfile(cfg.RiskProfile)
+	}
+	return configuration.RiskProfileDefault
+}
+
+// SetRiskProfileOverride installs a transient risk profile that
+// overrides the config-level setting for the lifetime of this agent.
+// Used by the --risk-profile CLI flag and per-step workflow overrides.
+// Pass "" to clear.
+func (a *Agent) SetRiskProfileOverride(profile configuration.RiskProfile) {
+	a.riskProfileOverride = profile
+}
+
+// GetActiveRiskProfile returns the profile currently in effect for
+// this agent (override > config > default). Exposed for status
+// commands / debug logging.
+func (a *Agent) GetActiveRiskProfile() configuration.RiskProfile {
+	return a.activeRiskProfile()
 }
 
 // GenerateResponse generates a simple response using the current model without tool calls.

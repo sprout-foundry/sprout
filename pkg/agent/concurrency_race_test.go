@@ -317,12 +317,15 @@ func TestRaceConcurrentSecurityManager(t *testing.T) {
 	mgr := NewAgentSecurityManager()
 	var wg sync.WaitGroup
 
-	// Concurrent bypass approval
+	// Concurrent allowlist additions exercise the per-folder
+	// session allowlist's mutex. Different folder names each
+	// iteration to force the dedup path to walk the list while
+	// readers are checking it.
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for j := 0; j < 100; j++ {
-			mgr.SetSecurityBypassApproved()
+			mgr.AddSessionAllowedFolder(fmt.Sprintf("/tmp/race-%d", j))
 		}
 	}()
 

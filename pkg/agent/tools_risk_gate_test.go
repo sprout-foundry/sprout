@@ -123,10 +123,18 @@ func TestRiskGates_BothGatesEvaluate(t *testing.T) {
 			}
 
 			// Gate 2: Persona risk cascade (EA rules).
+			// SP-058: rm -rf / and similar root-targeted deletes
+			// promote to RiskLevelCritical (absolute block, never
+			// approvable). git push --force still resolves to
+			// RiskLevelHigh.
 			personaRisk := eaPersona.EvaluateOperationRisk(tt.pseudoCommand)
-			if personaRisk != configuration.RiskLevelHigh {
-				t.Errorf("Gate 2 (persona cascade): expected RiskLevelHigh for %q, got %s",
-					tt.command, personaRisk)
+			expectGate2 := configuration.RiskLevelHigh
+			if configuration.IsCriticalOperation(tt.pseudoCommand) {
+				expectGate2 = configuration.RiskLevelCritical
+			}
+			if personaRisk != expectGate2 {
+				t.Errorf("Gate 2 (persona cascade): expected %s for %q, got %s",
+					expectGate2, tt.command, personaRisk)
 			}
 		})
 	}
@@ -200,9 +208,13 @@ func TestRiskGates_GlobalClassifierBlocksEvenWithEmptyPersonaRules(t *testing.T)
 		t.Error("global classifier: expected ShouldBlock=true regardless of persona rules")
 	}
 
-	// Persona with nil rules falls back to defaults, which should still detect danger.
+	// Persona with nil rules falls back to defaults, which should still
+	// detect danger. SP-058 promoted rm-rf-root to RiskLevelCritical
+	// (a stronger signal — always blocked, no profile or persona can
+	// approve), so accept either Critical or High here as "detected
+	// danger".
 	personaRisk := noRulesPersona.EvaluateOperationRisk("rm -rf /")
-	if personaRisk != configuration.RiskLevelHigh {
-		t.Errorf("persona with nil rules (fallback to defaults): expected RiskLevelHigh for 'rm -rf /', got %s", personaRisk)
+	if personaRisk != configuration.RiskLevelCritical && personaRisk != configuration.RiskLevelHigh {
+		t.Errorf("persona with nil rules (fallback to defaults): expected Critical or High for 'rm -rf /', got %s", personaRisk)
 	}
 }

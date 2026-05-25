@@ -1,4 +1,5 @@
 import type { DelegateActivity } from '@sprout/ui';
+import './DelegateCost.css';
 
 interface DelegateCostProps {
   activities: DelegateActivity[];

@@ -1,0 +1,24 @@
+.delegate-cost-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.1);
+  font-size: 12px;
+  color: var(--text-primary, #e2e8f0);
+}
+
+.delegate-cost-label {
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.delegate-cost-value {
+  font-family: monospace;
+  color: var(--delegate-color, #6366f1);
+}
+
+.delegate-cost-separator {
+  opacity: 0.5;
+}

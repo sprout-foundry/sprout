@@ -163,6 +163,7 @@ export default function useWebSocketEvents({
             // confusing either way.
             toolExecutions: [],
             subagentActivities: [],
+            delegateActivities: [],
             currentTodos: [],
             // Clear stale security dialogs — if the backend is idle there
             // are no pending security requests; keeping them open would

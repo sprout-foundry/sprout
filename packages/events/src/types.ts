@@ -119,6 +119,27 @@ export interface SubagentActivityData {
   elapsed_ms?: number;
 }
 
+export interface DelegateToolCall {
+  tool_name: string;
+  input: string;
+  output: string;
+  timestamp: string;
+  duration_ms: number;
+  success: boolean;
+}
+
+export interface DelegateActivityData {
+  delegate_id: string;
+  action: 'started' | 'tool_call' | 'tool_result' | 'completed' | 'error';
+  summary?: string;
+  depth?: number;
+  tokens_used?: number;
+  cost?: number;
+  tools_called?: DelegateToolCall[];
+  timestamp?: string;
+  chat_id?: string;
+}
+
 export interface AgentMessageData {
   category: string;
   message: string;
@@ -234,6 +255,7 @@ export type WsEvent =
   | { type: 'tool_end'; data?: ToolEndData; id?: string; timestamp?: string }
   | { type: 'tool_execution'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'subagent_activity'; data?: SubagentActivityData; id?: string; timestamp?: string }
+  | { type: 'delegate_activity'; data?: DelegateActivityData; id?: string; timestamp?: string }
   | { type: 'agent_message'; data?: AgentMessageData; id?: string; timestamp?: string }
   | { type: 'todo_update'; data?: TodoUpdateData; id?: string; timestamp?: string }
   | { type: 'file_changed'; data?: FileChangedData; id?: string; timestamp?: string }

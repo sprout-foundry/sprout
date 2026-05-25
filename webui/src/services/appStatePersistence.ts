@@ -111,6 +111,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
           }))
         : [],
       subagentActivities: [],
+      delegateActivities: [],
     };
   } catch (error) {
     debugLog('[appStatePersistence] Failed to load saved application state:', error);

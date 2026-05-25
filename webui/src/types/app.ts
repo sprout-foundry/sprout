@@ -97,6 +97,19 @@ export interface AppState {
     // Elevate) instead of the legacy Allow / Block pair. Only shell_command
     // currently opts into this — other tools render the classic dialog.
     allowOptions?: boolean;
+    // Filesystem approval dialog mode. Set when the server sends
+    // kind="fs_external" or "fs_sensitive" in extras:
+    //   - fs_external: 3 options (Allow once / Allow folder / Deny)
+    //   - fs_sensitive: 2 options (Allow once / Deny) with a note
+    //     explaining that this path can't be added to the allowlist.
+    // When unset, the legacy / SP-058 dialog modes apply.
+    fsKind?: 'fs_external' | 'fs_sensitive';
+    // Folder the server proposes adding to the session allowlist when
+    // the user picks "Allow folder this session" (fs_external only).
+    fsFolder?: string;
+    // The exact filesystem path being accessed; shown verbatim in the
+    // dialog so the user can verify they're approving the right path.
+    fsPath?: string;
   } | null;
   securityPromptRequest: {
     requestId: string;

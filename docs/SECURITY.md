@@ -159,6 +159,45 @@ The Critical tier is hard-coded in `pkg/configuration/config.go:IsCriticalOperat
 - Fork-bomb pattern `:(){:|:&};:` (the literal `:()` shell-function-named-colon).
 - Matching is tokenized: a path that happens to *contain* one of these patterns (e.g. `rm -rf /tmp/sprout-foundry/` — has `rm` and `-rf` but targets `/tmp/...`, not `/`) is NOT Critical. It still routes to the cascade normally.
 
+## Filesystem Access Tiers
+
+When a tool (or the browser file editor) tries to read or write a path
+outside the workspace, sprout classifies it into one of three tiers
+and picks the approval flow accordingly.
+
+| Tier | Examples | Approval flow |
+|---|---|---|
+| **Workspace** | Anything under the agent's workspace root (or `~/.sprout` config dir). | No approval. |
+| **External** | An external folder that isn't a system dir, and isn't a home path while CWD is outside `$HOME`. E.g. `/tmp/scratch`, `/srv/shared`, a sibling project under your home when CWD is also in home. | Prompt with 3 options: **Allow once** / **Allow folder this session** / **Deny**. Picking the folder option adds the path's parent directory to the agent's in-memory session allowlist — future accesses under it auto-approve. |
+| **Sensitive** | System dirs (`/etc`, `/usr`, `/var`, `/Library`, `C:\Windows`, …). OR a home-directory path while CWD is outside `$HOME` (e.g. agent in `/tmp/sandbox` tries to read `~/.ssh/id_rsa`). | Prompt with 2 options: **Allow once** / **Deny**. The folder-allowlist choice is suppressed; every access prompts. |
+
+### Notes
+
+- The session allowlist is **per-agent, in-memory only**. It does NOT
+  persist across restarts. Folders are stored after `filepath.Clean()`
+  and matched component-aware (so `/etcfoo` is not under `/etc`).
+- The allowlist is the **single source of truth** for both the agent's
+  own filesystem tools (`read_file`, `write_file`, etc.) AND the WebUI
+  file API (editor file opens). One approval covers both surfaces.
+- Subagents inherit a **snapshot** of the parent's allowlist at spawn
+  time. Subagent-side additions don't leak back to the parent
+  (intentional — temporary approvals inside a delegated task
+  shouldn't outlive the delegation).
+- Critical-tier operations (rm -rf /, fork bombs) still block at every
+  tier regardless of allowlist or risk profile.
+
+### Why this design
+
+The previous flow had two bugs:
+1. A **global** session-bypass flag — approving one external path
+   (`/tmp/scratch/foo.txt`) silently auto-approved every subsequent
+   external path for the rest of the session, including `/etc/passwd`
+   and `~/.ssh/id_rsa`. The per-folder allowlist replaces it.
+2. **Two parallel approval systems** that didn't share state — the
+   WebUI file API used a 2-minute token TTL; the agent's filesystem
+   tools used the global bypass. Approving in one didn't carry over
+   to the other. The unified allowlist fixes that too.
+
 ## Data Handling
 
 ### Files on Disk

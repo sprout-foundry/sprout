@@ -317,6 +317,27 @@ func (ws *ReactWebServer) getFileConsentManagerForRequest(r *http.Request) *file
 	return ws.getClientContextForRequest(r).FileConsents
 }
 
+// getActiveAgentForRequest resolves the agent backing the request's
+// active chat session. Returns nil when there's no live agent (e.g.,
+// the browser is making a file-API call before any chat session has
+// been initialized).
+//
+// The file-API handlers use this to consult the agent's session
+// folder allowlist — paths the user previously approved via the
+// approval dialog auto-pass without needing the 2-minute token flow.
+func (ws *ReactWebServer) getActiveAgentForRequest(r *http.Request) *agent.Agent {
+	clientID := ws.resolveClientID(r)
+	_, chatID := ws.getActiveChatContext(clientID)
+	if chatID == "" {
+		return nil
+	}
+	a, err := ws.getChatAgent(clientID, chatID)
+	if err != nil {
+		return nil
+	}
+	return a
+}
+
 func (ws *ReactWebServer) getCurrentSessionIDForRequest(r *http.Request) string {
 	return ws.getClientContextForRequest(r).CurrentSessionID
 }

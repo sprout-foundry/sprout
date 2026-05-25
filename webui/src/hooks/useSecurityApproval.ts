@@ -3,10 +3,22 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useEvents } from '../contexts/EventsContext';
 import type { AppState } from '../types/app';
 
-// SP-058: the WebUI approval dialog supports a 4-option mode. The action
+// The WebUI approval dialog supports several option layouts. The action
 // names here must match the server-side ApprovalDecision wire format in
 // pkg/security/approval_manager.go (ApprovalDecisionFromString).
-export type SecurityApprovalAction = 'approve_once' | 'approve_always' | 'elevate' | 'deny';
+//
+// - approve_once / deny: every dialog mode
+// - approve_always / elevate: shell-command 4-option mode (SP-058)
+// - allow_folder_session: filesystem External-tier mode
+//
+// Backend rejects unknown values; keep this union in sync with the Go
+// validator in pkg/webui/websocket_message_types.go.
+export type SecurityApprovalAction =
+  | 'approve_once'
+  | 'approve_always'
+  | 'elevate'
+  | 'allow_folder_session'
+  | 'deny';
 
 export interface UseSecurityApprovalReturn {
   handleSecurityApprovalResponse: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;

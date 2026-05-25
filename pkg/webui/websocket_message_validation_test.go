@@ -420,6 +420,10 @@ func TestSecurityApprovalResponseData_Validate(t *testing.T) {
 			data: SecurityApprovalResponseData{RequestID: "req123", Action: "elevate"},
 		},
 		{
+			name: "action allow_folder_session",
+			data: SecurityApprovalResponseData{RequestID: "req123", Action: "allow_folder_session"},
+		},
+		{
 			name: "action deny",
 			data: SecurityApprovalResponseData{RequestID: "req123", Action: "deny"},
 		},

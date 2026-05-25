@@ -67,15 +67,21 @@ func TestAgentSecurityManager_SecurityBypass(t *testing.T) {
 		t.Error("should not be approved by default")
 	}
 
-	sm.SetSecurityBypassApproved()
+	// Adding any folder to the session allowlist flips
+	// IsSecurityBypassApproved to true (coarse "user consented to
+	// some external access" signal).
+	sm.AddSessionAllowedFolder("/tmp/foo")
 	if !sm.IsSecurityBypassApproved() {
-		t.Error("should be approved after setting")
+		t.Error("should be approved after adding a folder")
 	}
 
-	// Can't unset once set (no setter for false)
-	sm.SetSecurityBypassApproved() // calling again is a no-op
+	// Adding the same folder again is a no-op (dedup).
+	sm.AddSessionAllowedFolder("/tmp/foo")
 	if !sm.IsSecurityBypassApproved() {
 		t.Error("should remain approved")
+	}
+	if got := len(sm.SnapshotSessionAllowedFolders()); got != 1 {
+		t.Errorf("expected 1 folder after dup add, got %d", got)
 	}
 }
 

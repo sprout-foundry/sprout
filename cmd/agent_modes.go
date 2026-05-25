@@ -611,6 +611,12 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 		})
 		chatAgent.EnableStreaming(func(chunk string) {
 			indicator.Stop()
+			if chunk != "" {
+				// CompareAndSwap: only the FIRST non-empty chunk records
+				// the ttft. Subsequent chunks are a no-op so reading the
+				// timestamp later yields "first token landed at X".
+				noteFirstStreamChunk()
+			}
 			capper.Write(chunk)
 		})
 	}
@@ -946,6 +952,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
 			turnCostStart := chatAgent.GetTotalCost()
+			// Clear the ttft tracker so the next stream chunk sets a
+			// fresh "time to first token" measurement for this turn.
+			resetTurnFirstToken()
 
 			// SP-051-2c: clear per-turn spawn dedupe so the next batch of
 			// subagents announces fresh "↳ persona spawned" lines instead of
@@ -1012,26 +1021,72 @@ func shouldShowTurnStats() bool {
 // formatTurnStatsLine builds the dim single-line turn-summary string.
 // When color is disabled (NO_COLOR), ANSI dim codes are stripped.
 // SP-048-5a.
-func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed time.Duration) string {
+//
+// ttft (time to first token) is rendered as a separate segment when
+// non-zero. Threshold coloring (yellow >2s, red >5s) makes slow
+// provider connections visible at a glance — they're the most common
+// cause of "is sprout stuck?" perception even when the actual model
+// run is fast once it starts streaming.
+func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, elapsed, ttft time.Duration) string {
+	colorOn := envutil.ResolveColorPreference(true)
 	var dim, reset string
-	if envutil.ResolveColorPreference(true) {
+	if colorOn {
 		dim, reset = "\033[2m", "\033[0m"
 	}
-	return fmt.Sprintf("%s⎯ this turn: %s in / %s out · %s · %s ⎯%s\n",
+
+	ttftSeg := ""
+	if ttft > 0 {
+		ttftStr := compactDuration(ttft)
+		styled := ttftStr
+		if colorOn {
+			switch {
+			case ttft > 5*time.Second:
+				// Pop out of dim into red for the duration of this segment,
+				// then drop back into dim so the rest of the line stays muted.
+				styled = reset + "\033[31m" + ttftStr + reset + dim
+			case ttft > 2*time.Second:
+				styled = reset + "\033[33m" + ttftStr + reset + dim
+			}
+		}
+		ttftSeg = fmt.Sprintf(" · ttft %s", styled)
+	}
+
+	return fmt.Sprintf("%s⎯ this turn: %s in / %s out · %s · %s%s ⎯%s\n",
 		dim,
 		compactTokens(promptDelta),
 		compactTokens(completionDelta),
 		compactCost(costDelta),
 		compactDuration(elapsed),
+		ttftSeg,
 		reset,
 	)
 }
 
+// turnFirstTokenAt is set (atomically) to the Unix nano time of the
+// first non-empty stream chunk in the current turn. Read by
+// printPerTurnSummary to compute time-to-first-token, then reset to 0
+// at the start of each turn. Package-level so the streaming callback
+// in SetupAgentEvents (no agent-state to hang it on) can flip it.
+var turnFirstTokenAt int64
+
+// noteFirstStreamChunk is invoked once per turn from the streaming
+// callback. CompareAndSwap ensures only the very first non-empty chunk
+// updates the timestamp — later chunks are no-ops.
+func noteFirstStreamChunk() {
+	atomic.CompareAndSwapInt64(&turnFirstTokenAt, 0, time.Now().UnixNano())
+}
+
+// resetTurnFirstToken clears the ttft tracker. Called by the REPL just
+// before submitting a turn so each turn's measurement is independent.
+func resetTurnFirstToken() {
+	atomic.StoreInt64(&turnFirstTokenAt, 0)
+}
+
 // printPerTurnSummary emits a dim single-line summary of what just happened
 // in the LLM round-trip: input/output tokens consumed, $ spent, elapsed
-// wall time. Silent when no tokens were used (e.g. the turn was a slash
-// command or zsh fast path). Only shown when stderr is a TTY (respects
-// NO_COLOR for ANSI codes). SP-048-5a.
+// wall time, plus ttft when available. Silent when no tokens were used
+// (e.g. the turn was a slash command or zsh fast path). Only shown when
+// stderr is a TTY (respects NO_COLOR for ANSI codes). SP-048-5a.
 func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, completionBefore int, costBefore float64) {
 	if !shouldShowTurnStats() {
 		return
@@ -1044,7 +1099,15 @@ func printPerTurnSummary(chatAgent *agent.Agent, start time.Time, promptBefore, 
 	costDelta := chatAgent.GetTotalCost() - costBefore
 	elapsed := time.Since(start)
 
-	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed))
+	var ttft time.Duration
+	if firstAt := atomic.LoadInt64(&turnFirstTokenAt); firstAt > 0 {
+		ttft = time.Duration(firstAt - start.UnixNano())
+		if ttft < 0 {
+			ttft = 0
+		}
+	}
+
+	fmt.Fprint(os.Stderr, formatTurnStatsLine(promptDelta, completionDelta, costDelta, elapsed, ttft))
 }
 
 func compactTokens(n int) string {

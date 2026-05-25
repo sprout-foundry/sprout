@@ -3,11 +3,10 @@
 package cmd
 
 import (
-	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -96,45 +95,57 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		recent = recent[:maxRecentSessionsShown]
 	}
 
-	console.GlyphInfo.Fprintf(os.Stderr, "Recent sessions in this workspace:")
-	for i, s := range recent {
+	// Skip the interactive prompt when stdin isn't a TTY (e.g. `sprout < script`).
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		console.GlyphInfo.Fprintf(os.Stderr, "Recent sessions in this workspace:")
+		for i, s := range recent {
+			label := s.Name
+			if label == "" {
+				label = s.SessionID
+			}
+			fmt.Fprintf(os.Stderr, "  %d) %-9s  %s\n",
+				i+1,
+				humanizeAge(time.Since(s.LastUpdated)),
+				truncateLabel(label, 56),
+			)
+		}
+		fmt.Fprintln(os.Stderr)
+		return
+	}
+
+	items := make([]console.SelectItem, 0, len(recent))
+	for _, s := range recent {
 		label := s.Name
 		if label == "" {
 			label = s.SessionID
 		}
-		fmt.Fprintf(os.Stderr, "  %d) %-9s  %s\n",
-			i+1,
-			humanizeAge(time.Since(s.LastUpdated)),
-			truncateLabel(label, 56),
-		)
+		items = append(items, console.SelectItem{
+			Label:  truncateLabel(label, 56),
+			Detail: humanizeAge(time.Since(s.LastUpdated)),
+			Value:  s.SessionID,
+		})
 	}
-
-	// Skip the interactive prompt when stdin isn't a TTY (e.g. `sprout < script`).
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		fmt.Fprintln(os.Stderr)
+	picker := console.NewSelectList(console.SelectListOptions{
+		Title:    "Recent sessions in this workspace",
+		Items:    items,
+		PageSize: maxRecentSessionsShown,
+		Footer:   "↑↓ select · enter resume · esc start fresh",
+	})
+	chosenID, ok, _ := picker.Run(context.Background())
+	if !ok || chosenID == "" {
 		return
 	}
 
-	fmt.Fprintf(os.Stderr, "  Resume one? [1-%d or Enter to start fresh]: ", len(recent))
-
-	reader := bufio.NewReader(os.Stdin)
-	raw, readErr := reader.ReadString('\n')
-	if readErr != nil {
-		// Stdin closed / interrupted — proceed with fresh session.
-		fmt.Fprintln(os.Stderr)
+	var chosen agent.SessionInfo
+	for _, s := range recent {
+		if s.SessionID == chosenID {
+			chosen = s
+			break
+		}
+	}
+	if chosen.SessionID == "" {
 		return
 	}
-	choice := strings.TrimSpace(raw)
-	if choice == "" {
-		return
-	}
-	idx, parseErr := strconv.Atoi(choice)
-	if parseErr != nil || idx < 1 || idx > len(recent) {
-		console.GlyphDim.Fprintf(os.Stderr, "  %q is not a valid choice, starting fresh", choice)
-		return
-	}
-
-	chosen := recent[idx-1]
 	state, err := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
 	if err != nil {
 		console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, err)

@@ -308,19 +308,22 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {
 						console.StopGlobalStatusFooter()
-						fmt.Printf("\n[!] Force quitting immediately...\n")
+						fmt.Println()
+						console.GlyphStopped.Printf("Force quitting immediately...")
 						os.Exit(1)
 					}
 
 					atomic.StoreInt64(&lastInterruptAt, nowUnix)
-					fmt.Printf("\n[||] Received signal %v, interrupting active task...\n", sig)
-					fmt.Printf("  (Press Ctrl+C again quickly to force quit)\n")
+					fmt.Println()
+					console.GlyphPaused.Printf("Received signal %v, interrupting active task...", sig)
+					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
 					chatAgent.TriggerInterrupt()
 					continue
 				}
 
-				fmt.Printf("\n[STOP] Received signal %v, shutting down gracefully...\n", sig)
-				fmt.Printf("  (Press Ctrl+C again to force quit)\n")
+				fmt.Println()
+				console.GlyphStopped.Printf("Received signal %v, shutting down gracefully...", sig)
+				console.GlyphDim.Printf("  (Press Ctrl+C again to force quit)")
 
 				// Cancel the context which will stop all operations
 				cancel()
@@ -335,7 +338,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				go func() {
 					time.Sleep(5 * time.Second)
 					console.StopGlobalStatusFooter()
-					fmt.Printf("\n[!] Force quitting...\n")
+					fmt.Println()
+					console.GlyphStopped.Printf("Force quitting...")
 					os.Exit(1)
 				}()
 
@@ -343,7 +347,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				for {
 					select {
 					case <-sigCh:
-						fmt.Printf("\n[!] Force quitting immediately...\n")
+						fmt.Println()
+						console.GlyphStopped.Printf("Force quitting immediately...")
 						os.Exit(1)
 					case <-ctx.Done():
 						return
@@ -790,8 +795,9 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	footer.Start()
 	defer footer.Stop()
 
-	fmt.Printf("\n[bot] Welcome to sprout! Enhanced CLI with Web UI\n")
-	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
+	fmt.Println()
+	console.GlyphInfo.Printf("Welcome to sprout! Enhanced CLI with Web UI")
+	console.GlyphInfo.Printf("Provider: %s | Model: %s\n",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -891,6 +897,10 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				} else {
 					query = prefix + "\n" + query
 				}
+				// Refresh the footer so the "⏸ N queued" badge clears
+				// the moment we drain. Without this nudge the badge
+				// would linger until the next tool/cost event.
+				footer.Refresh()
 			}
 			if query == "" {
 				continue
@@ -920,7 +930,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			registry := agent_commands.NewCommandRegistry()
 			if registry.IsSlashCommand(query) {
 				if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-					fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 				}
 				// `/model` and friends may have changed the active model;
 				// rebuild the prompt prefix so the next prompt reflects it.
@@ -957,17 +967,17 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Try zsh command detection first (fast path)
 			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 				indicator.Stop()
-				fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 			} else if !executed {
 				// Zsh detection didn't trigger, try LLM-based detection
 				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
 					indicator.Stop()
-					fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 				} else if !executed {
 					// Neither fast path triggered, process normally
 					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 						indicator.Stop()
-						fmt.Fprint(os.Stderr, console.FormatErrorBlock("[FAIL] Error", err))
+						fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 					}
 				}
 			}
@@ -1121,6 +1131,17 @@ func (s *agentFooterSource) ActiveSubagents() int {
 	return agent.GetActiveSubagents()
 }
 
+// QueuedMessages satisfies the optional queuedMessagesSource interface
+// so the footer renders a "⏸ N queued" badge when the user has
+// deferred steer messages via Tab+Enter waiting for the next turn.
+// SP-055 Phase 3b.
+func (s *agentFooterSource) QueuedMessages() int {
+	if s.agent == nil {
+		return 0
+	}
+	return s.agent.DeferredMessageCount()
+}
+
 // startTerminalToolSubscriber subscribes a goroutine to the event bus that
 // translates PublishToolStart / PublishToolEnd events into terminal spinner
 // updates and ✓/✗ result lines. Runs until ctx is cancelled.
@@ -1157,6 +1178,14 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 		seenSpawn = make(map[string]bool)
 		spawnMu.Unlock()
 	}
+
+	// Phase 3: tool-collapse state. Tracks the most recently completed
+	// tool's (name, depth, persona) so consecutive identical calls
+	// merge into "✓ read_file × N (foo, bar, baz)" instead of stacking
+	// N rows. Reset by any inter-tool event that would invalidate the
+	// row layout (currently: only sessions where < 30s elapsed since
+	// the previous end qualify for the collapse).
+	var run *toolRunState
 
 	go func() {
 		defer eventBus.Unsubscribe(subName)
@@ -1216,17 +1245,64 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					case float64:
 						durationMs = int64(v)
 					}
-					icon := "[OK]"
+					icon := console.GlyphSuccess.Prefix()
 					if status != "completed" {
-						icon = "[FAIL]"
+						icon = console.GlyphError.Prefix()
 					}
 					args, _ := data["arguments"].(string)
 					depth := readEventDepth(data)
 					persona := readEventPersona(data)
-					indicator.Replace(formatToolEndLine(depth, persona, icon, name,
-						formatToolPreview(chatAgent, name, args),
-						float64(durationMs)/1000.0))
+					preview := formatToolPreview(chatAgent, name, args)
+
+					// Phase 3 collapse: if this end matches the prior run
+					// (same name/depth/persona) AND less than 30s elapsed,
+					// merge with the prior tool-end row instead of stacking
+					// a new one. The 30s heuristic prevents collapse when
+					// the model has streamed text between calls (which
+					// would invalidate the row math).
+					now := time.Now()
+					if run != nil && run.matches(name, depth, persona) && now.Sub(run.lastEnd) < 30*time.Second {
+						run.count++
+						run.appendArg(preview)
+						run.totalMs += durationMs
+						run.lastEnd = now
+						run.lastIcon = icon
+						// 2 rows up: the spinner row (now cleared by
+						// Stop) + the blank stdout newline emitted by
+						// ToolStart + the previous tool-end row. The
+						// indicator's Stop already cleared the spinner
+						// row in place, so we walk past the blank line
+						// and the previous end-line.
+						indicator.ReplaceLastN(formatToolRunLine(
+							run.depth, run.persona, run.lastIcon, run.name,
+							run.count, run.argsTrail,
+							float64(run.totalMs)/1000.0,
+						), 2)
+					} else {
+						indicator.Replace(formatToolEndLine(depth, persona, icon, name,
+							preview, float64(durationMs)/1000.0))
+						run = &toolRunState{
+							name:      name,
+							depth:     depth,
+							persona:   persona,
+							count:     1,
+							argsTrail: []string{preview},
+							totalMs:   durationMs,
+							lastIcon:  icon,
+							lastEnd:   now,
+						}
+					}
 					footer.Refresh()
+				case events.EventTypeStreamChunk:
+					// Assistant text or reasoning chunk landed in the
+					// scroll region — any future tool-end can no longer
+					// safely use ReplaceLastN to collapse onto the prior
+					// row (the rows in between now hold model text).
+					// Break the run; the next ToolEnd will print a fresh
+					// row.
+					if _, isText := data["content_type"].(string); isText {
+						run = nil
+					}
 				case events.EventTypeSecurityApprovalRequest,
 					events.EventTypeSecurityPromptRequest,
 					events.EventTypeAskUserRequest:
@@ -1234,6 +1310,8 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					// doesn't overwrite the prompt text. Subsequent activity
 					// (next tool event, stream chunks) re-starts naturally.
 					indicator.Stop()
+					// Same row-layout invalidation as above.
+					run = nil
 				}
 			}
 		}
@@ -1305,6 +1383,59 @@ func formatToolEndLine(depth int, persona, icon, toolName, preview string, durat
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	return fmt.Sprintf("%s  %s %s%s%s · %.1fs", indent, icon, badge, toolName, preview, durationSec)
+}
+
+// formatToolRunLine renders a collapsed line for repeated calls of the
+// same tool. Replaces N stacked "✓ read_file (foo.go) · 0.1s" entries
+// with a single "✓ read_file × N (foo.go, bar.go, baz.go) · 0.3s" line
+// updated in place via ActivityIndicator.ReplaceLastN.
+//
+// argsTrail holds the most recent up-to-3 arg previews so the user can
+// still see what was touched without scrolling through identical
+// entries. totalSec is the cumulative duration across all N calls so
+// the line still surfaces "this batch took a moment" even when each
+// individual call was quick.
+func formatToolRunLine(depth int, persona, icon, toolName string, count int, argsTrail []string, totalSec float64) string {
+	indent := console.PersonaIndent(depth)
+	badge := console.PersonaBadge(depth, persona)
+	preview := ""
+	if len(argsTrail) > 0 {
+		preview = " (" + strings.Join(argsTrail, ", ") + ")"
+	}
+	return fmt.Sprintf("%s  %s%s%s × %d%s · %.1fs",
+		indent, icon, badge, toolName, count, preview, totalSec)
+}
+
+// toolRunState tracks a sequence of consecutive identical tool calls
+// so the subscriber can collapse them into a single in-place row
+// (Phase 3 of CLI ergonomics). A run is broken — set to nil — whenever
+// any non-tool event would invalidate the row math: streaming
+// assistant text, a different tool, or a user-prompt boundary.
+type toolRunState struct {
+	name      string
+	depth     int
+	persona   string
+	count     int
+	argsTrail []string // most recent up to maxArgsTrail entries
+	totalMs   int64
+	lastIcon  string
+	lastEnd   time.Time
+}
+
+// maxArgsTrail caps the per-arg preview list shown in the collapsed
+// line. The earliest entries get dropped — the user usually cares
+// about the most recent few calls in a run.
+const maxArgsTrail = 3
+
+func (r *toolRunState) matches(name string, depth int, persona string) bool {
+	return r != nil && r.name == name && r.depth == depth && r.persona == persona
+}
+
+func (r *toolRunState) appendArg(preview string) {
+	r.argsTrail = append(r.argsTrail, preview)
+	if len(r.argsTrail) > maxArgsTrail {
+		r.argsTrail = r.argsTrail[len(r.argsTrail)-maxArgsTrail:]
+	}
 }
 
 // formatToolPreview produces a short, single-line preview of a tool call

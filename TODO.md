@@ -291,9 +291,9 @@
 - [x] SP-054-1.2: Add all new language IDs to `LSP_SUPPORTED_LANGUAGES` in `lspClientService.ts`
 - [x] SP-054-1.3: Add `GET /api/lsp/status` endpoint returning which language servers are available vs not installed
 - [x] SP-054-1.4: Graceful missing-server UX — clear log messages with install instructions when binary not found
-- [ ] SP-054-2.1: Add `sprout lsp install <language>` and `sprout lsp list` CLI commands
-- [ ] SP-054-2.2: User-configurable servers via configuration file with `languageServers` section
-- [ ] SP-054-2.3: Workspace activation hints — detect `Cargo.toml`, `requirements.txt`, `*.sln`, etc. and suggest servers
+- [x] SP-054-2.1: Add `sprout lsp install <language>` and `sprout lsp list` CLI commands
+- [x] SP-054-2.2: User-configurable servers via configuration file with `languageServers` section
+- [x] SP-054-2.3: Workspace activation hints — detect `Cargo.toml`, `requirements.txt`, `*.sln`, etc. and suggest servers
 - [ ] SP-054-3.1: Python semantic adapter — diagnostics via `ruff check`, hover/def/refs via LSP proxy
 - [ ] SP-054-3.2: Rust semantic adapter — diagnostics via `cargo check`, hover/def/refs via LSP proxy
 - [ ] SP-054-3.3: C/C++ semantic adapter — diagnostics via `clang-tidy`, hover/def/refs via LSP proxy

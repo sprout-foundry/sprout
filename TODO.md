@@ -191,44 +191,44 @@
 ## Not Started — SP-013: Agent Settings Management Tool
 
 - [x] SP-013-1-toolDef: Register `manage_settings` tool with 4 params: operation (get/set/list_providers/test_credential), key, value, provider
-- [ ] SP-013-1-get: Implement `get` operation — return full config summary or specific key with type + valid values
-- [ ] SP-013-1-listProviders: Implement `list_providers` — one line per provider with credential status and current model
-- [ ] SP-013-1-testCredential: Implement `test_credential` — lightweight API validation with 60s cooldown per provider
-- [ ] SP-013-1-handlers: Create `pkg/agent/tool_handlers_settings.go` with all handler implementations
-- [ ] SP-013-1-validation: Implement key whitelist, type coercion, provider lookup, unknown-key guidance message
-- [ ] SP-013-2-set: Implement `set` — type coercion, whitelist validation, invalid-value guidance with valid options
-- [ ] SP-013-2-providerModel: Special path for `provider`/`model`: session override via `SetProvider()`/`SetModel()`
-- [ ] SP-013-2-persistOther: All other keys persist via `cm.UpdateConfig()`
-- [ ] SP-013-2-getter: Add `GetConfigManager()` accessor on Agent if not already public
-- [ ] SP-013-3-verifyEnums: Verify all enum fields return valid-value lists on bad input
-- [ ] SP-013-3-verifyConfirm: Verify `set` confirms change and mentions related keys
-- [ ] SP-013-3-verifySecurity: Verify API keys never appear in output
+- [x] SP-013-1-get: Implement `get` operation — return full config summary or specific key with type + valid values
+- [x] SP-013-1-listProviders: Implement `list_providers` — one line per provider with credential status and current model
+- [x] SP-013-1-testCredential: Implement `test_credential` — lightweight API validation with 60s cooldown per provider
+- [x] SP-013-1-handlers: Create `pkg/agent/tool_handlers_settings.go` with all handler implementations
+- [x] SP-013-1-validation: Implement key whitelist, type coercion, provider lookup, unknown-key guidance message
+- [x] SP-013-2-set: Implement `set` — type coercion, whitelist validation, invalid-value guidance with valid options
+- [x] SP-013-2-providerModel: Special path for `provider`/`model`: session override via `SetProvider()`/`SetModel()`
+- [x] SP-013-2-persistOther: All other keys persist via `cm.UpdateConfig()`
+- [x] SP-013-2-getter: Add `GetConfigManager()` accessor on Agent if not already public
+- [x] SP-013-3-verifyEnums: Verify all enum fields return valid-value lists on bad input
+- [x] SP-013-3-verifyConfirm: Verify `set` confirms change and mentions related keys
+- [x] SP-013-3-verifySecurity: Verify API keys never appear in output
 
 ## Not Started — SP-017: Settings Panel Rework
 
-- [ ] SP-017-S1-dataModel: Replace `SUB_TABS` in `settings/types.ts` with `SettingsSection` and `SettingsSubsection` interface structure
-- [ ] SP-017-S2-navigation: Rewrite `SettingsPanel.tsx` navigation — collapsible section headers with chevron toggle, replace tab bar
-- [ ] SP-017-S3-mergeTabs: Merge Security → Agent > Behavior, Performance → Environment > Performance, OCR → Environment > OCR, CommitReview → Environment > Commit & Review
-- [ ] SP-017-S3-splitGeneral: Split `GeneralSettingsTab` — editor prefs → Editor section, behavior → Agent section
+- [x] SP-017-S1-dataModel: Replace `SUB_TABS` in `settings/types.ts` with `SettingsSection` and `SettingsSubsection` interface structure
+- [x] SP-017-S2-navigation: Rewrite `SettingsPanel.tsx` navigation — collapsible section headers with chevron toggle, replace tab bar
+- [x] SP-017-S3-mergeTabs: Merge Security → Agent > Behavior, Performance → Environment > Performance, OCR → Environment > OCR, CommitReview → Environment > Commit & Review
+- [x] SP-017-S3-splitGeneral: Split `GeneralSettingsTab` — editor prefs → Editor section, behavior → Agent section
 - [ ] SP-017-S4-providerModel: Create `ProviderModelSubsection.tsx` — reusable provider/model picker with inherited values and "Override" button
-- [ ] SP-017-S5-removeLayerPicker: Delete session/workspace/global toggle buttons; scope determined by which section user edits
-- [ ] SP-017-S6-css: Add collapsible section styles: section headers with chevron + scope badge, expand/collapse animation, subsection indentation
-- [ ] SP-017-S6-scopeBadges: Implement colored scope badges: Session=blue, Workspace=green, Global=orange, Runtime=gray
+- [x] SP-017-S5-removeLayerPicker: Delete session/workspace/global toggle buttons; scope determined by which section user edits
+- [x] SP-017-S6-css: Add collapsible section styles: section headers with chevron + scope badge, expand/collapse animation, subsection indentation
+- [x] SP-017-S6-scopeBadges: Implement colored scope badges: Session=blue, Workspace=green, Global=orange, Runtime=gray
 
 ## Not Started — SP-022: Workspace Management
 
-- [ ] SP-022-W1.1-detect: Create `pkg/webui/project_detect.go` — `IsProjectDirectory()`, `FindNearestProjectRoot()`, `FindProjectsInDirectory()`
-- [ ] SP-022-W1.2-validate: At server startup, validate `workspaceRoot` is a project directory; auto-correct to nearest project root if not
-- [ ] SP-022-W1.3-restore: On first connection for new client, restore workspace from most recent session's `WorkingDirectory`
-- [ ] SP-022-W1.4-recent: Create `pkg/webui/recent_workspaces.go` — `GetRecentWorkspaces()` (max 10, LRU eviction), storage in `~/.sprout/recent_workspaces.json`
-- [ ] SP-022-W1.5-apiResponse: Enhance `GET /api/workspace` with `is_project`, `project_markers`, `needs_workspace_selection`, `suggested_projects` fields
+- [x] SP-022-W1.1-detect: Create `pkg/webui/project_detect.go` — `IsProjectDirectory()`, `FindNearestProjectRoot()`, `FindProjectsInDirectory()`
+- [x] SP-022-W1.2-validate: At server startup, validate `workspaceRoot` is a project directory; auto-correct to nearest project root if not
+- [x] SP-022-W1.3-restore: On first connection for new client, restore workspace from most recent session's `WorkingDirectory`
+- [x] SP-022-W1.4-recent: Create `pkg/webui/recent_workspaces.go` — `GetRecentWorkspaces()` (max 10, LRU eviction), storage in `~/.sprout/recent_workspaces.json`
+- [x] SP-022-W1.5-apiResponse: Enhance `GET /api/workspace` with `is_project`, `project_markers`, `needs_workspace_selection`, `suggested_projects` fields
 - [ ] SP-022-W1.5-projectsEndpoint: Add `GET /api/workspace/projects` endpoint
-- [ ] SP-022-W2.1-picker: Create `WorkspacePicker.tsx` — shows current workspace, recent projects, nearby projects, "Browse..." button
-- [ ] SP-022-W2.2-autoSelect: On frontend load, auto-select if exactly 1 recent workspace; show picker if multiple or none
+- [x] SP-022-W2.1-picker: Create `WorkspacePicker.tsx` — shows current workspace, recent projects, nearby projects, "Browse..." button
+- [x] SP-022-W2.2-autoSelect: On frontend load, auto-select if exactly 1 recent workspace; show picker if multiple or none
 - [ ] SP-022-W2.3-statusBar: Add workspace indicator to status bar; clicking opens workspace picker
-- [ ] SP-022-W2.4-locationSwitcher: Wire workspace picker into `LocationSwitcher.tsx` for sidebar-based workspace switching
-- [ ] SP-022-W2.5-welcomeTab: Show workspace picker in `WelcomeTab.tsx` when no workspace detected
-- [ ] SP-022-W2.6-workspaceApi: Add new API calls in `workspaceApi.ts` and types in `types.ts`
+- [x] SP-022-W2.4-locationSwitcher: Wire workspace picker into `LocationSwitcher.tsx` for sidebar-based workspace switching
+- [x] SP-022-W2.5-welcomeTab: Show workspace picker in `WelcomeTab.tsx` when no workspace detected
+- [x] SP-022-W2.6-workspaceApi: Add new API calls in `workspaceApi.ts` and types in `types.ts`
 
 ## Not Started — SP-025: Tree-Sitter Integration
 

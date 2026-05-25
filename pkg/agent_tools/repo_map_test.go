@@ -414,23 +414,26 @@ func HelperForTest() {}
 	}
 }
 
-// TestGenerateRepoMapGoFullFileRead verifies that large Go files (>32KB) are
-// read completely for AST parsing rather than being truncated.
+// TestGenerateRepoMapGoFullFileRead verifies that large Go files are
+// read completely for AST parsing within the size limit.
 func TestGenerateRepoMapGoFullFileRead(t *testing.T) {
 	dir := t.TempDir()
 
-	// Build a Go file that exceeds 32KB with a function near the end.
+	// Build a large Go file (~1MB) with a function near the end.
 	var sb strings.Builder
 	sb.WriteString("package main\n\n")
-	// Pad with comments to push past 32KB.
-	for i := 0; i < 1000; i++ {
+	// Pad with comments to create a ~1MB file (well within the 2MB limit).
+	for i := 0; i < 17000; i++ {
 		sb.WriteString(fmt.Sprintf("// padding comment line %d to make this file large enough\n", i))
 	}
 	sb.WriteString("func DeepFunction() string { return \"found\" }\n")
 	content := sb.String()
 
-	if len(content) <= repoMapMaxFileSize {
-		t.Skipf("test content only %d bytes, need > %d", len(content), repoMapMaxFileSize)
+	if len(content) < 500*1024 {
+		t.Skipf("test content only %d bytes, need > 500KB", len(content))
+	}
+	if len(content) > repoMapMaxFullFileSize {
+		t.Skipf("test content %d bytes exceeds repoMapMaxFullFileSize %d", len(content), repoMapMaxFullFileSize)
 	}
 
 	requireErr(t, os.WriteFile(filepath.Join(dir, "large.go"), []byte(content), 0o644), "write large file")

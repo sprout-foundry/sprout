@@ -137,6 +137,198 @@ func TestManagerGetOrCreateUnknownLanguage(t *testing.T) {
 	})
 }
 
+func TestManagerGetOrCreateGracefulErrorWithInstallHint(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	t.Run("Python returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// pylsp is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "python")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "pylsp")
+		assert.Contains(t, err.Error(), "pip install python-lsp-server")
+	})
+
+	t.Run("Rust returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// rust-analyzer is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "rust")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "rust-analyzer")
+		assert.Contains(t, err.Error(), "rustup component add rust-analyzer")
+	})
+
+	t.Run("C/C++ returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// clangd is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "c")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "clangd")
+		assert.Contains(t, err.Error(), "clangd.llvm.org")
+	})
+
+	t.Run("C# returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// omnisharp is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "csharp")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "omnisharp")
+		assert.Contains(t, err.Error(), "omnisharp-roslyn")
+	})
+
+	t.Run("Java returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// jdtls is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "java")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "jdtls")
+		assert.Contains(t, err.Error(), "eclipse")
+	})
+
+	t.Run("Ruby returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// solargraph is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "ruby")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "solargraph")
+		assert.Contains(t, err.Error(), "gem install solargraph")
+	})
+
+	t.Run("PHP returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// intelephense is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "php")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "intelephense")
+		assert.Contains(t, err.Error(), "npm install -g intelephense")
+	})
+
+	t.Run("Swift returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// sourcekit-lsp is unlikely to be installed in CI (macOS only)
+		_, _, err := m.GetOrCreate("/tmp", "swift")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "sourcekit-lsp")
+		assert.Contains(t, err.Error(), "sourcekit-lsp")
+	})
+
+	t.Run("Kotlin returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// kotlin-language-server is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "kotlin")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "kotlin-language-server")
+		assert.Contains(t, err.Error(), "kotlin-language-server")
+	})
+
+	t.Run("Dart returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// dart is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "dart")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "dart")
+		assert.Contains(t, err.Error(), "Dart SDK")
+	})
+
+	t.Run("Lua returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// lua-language-server is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "lua")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "lua-language-server")
+		assert.Contains(t, err.Error(), "lua-language-server")
+	})
+
+	t.Run("Shell returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// bash-language-server is unlikely to be installed in CI
+		_, _, err := m.GetOrCreate("/tmp", "shellscript")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "bash-language-server")
+		assert.Contains(t, err.Error(), "npm install -g bash-language-server")
+	})
+
+	t.Run("error message format is user-friendly", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		_, _, err := m.GetOrCreate("/tmp", "python")
+		require.Error(t, err)
+		msg := err.Error()
+		// The message should follow the pattern: language server "X" not found on PATH. Install with: Y
+		assert.Contains(t, msg, "not found on PATH")
+		assert.Contains(t, msg, "Install with:")
+	})
+
+	t.Run("Go with gopls not installed returns error with install hint", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		// In CI, gopls IS installed, so this test verifies the error path
+		// by using a custom config that points to a non-existent binary
+		m.SetConfig([]LanguageServerConfig{
+			{
+				ID:          "go",
+				LanguageIDs: []string{"go"},
+				Binary:      "gopls-nonexistent",
+				Args:        []string{},
+				InstallHint: "go install golang.org/x/tools/gopls@latest",
+			},
+		})
+
+		_, _, err := m.GetOrCreate("/tmp", "go")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "gopls-nonexistent")
+		assert.Contains(t, err.Error(), "go install golang.org/x/tools/gopls@latest")
+	})
+
+	t.Run("empty InstallHint falls back to generic error", func(t *testing.T) {
+		m := NewManager(ctx)
+		defer m.Close()
+
+		m.SetConfig([]LanguageServerConfig{
+			{
+				ID:          "fake",
+				LanguageIDs: []string{"fake"},
+				Binary:      "nonexistent-binary-xyz-123",
+				Args:        []string{},
+				InstallHint: "",
+			},
+		})
+
+		_, _, err := m.GetOrCreate("/tmp", "fake")
+		require.Error(t, err)
+		// When InstallHint is empty, it falls back to the generic "failed to find" message
+		assert.Contains(t, err.Error(), "failed to find")
+		assert.NotContains(t, err.Error(), "Install with:")
+	})
+}
+
 func TestManagerEvictIdle(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

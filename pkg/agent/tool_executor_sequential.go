@@ -207,7 +207,11 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
 		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
 
-		if err != nil && strings.Contains(err.Error(), "unknown tool") {
+		// Check for unknown tool using typed error classification first,
+		// then fall back to string matching for untyped errors (backward compat).
+		// TODO: migrate registry to return InvalidInputError for unknown tools
+		// so this string check can be removed entirely.
+		if err != nil && (agenterrors.IsInvalidInput(err) || strings.Contains(err.Error(), "unknown tool")) {
 			if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(normalizedToolName, args); handled {
 				resultChan <- struct {
 					images []api.ImageData
@@ -247,8 +251,8 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 	if err != nil {
 		safeErr := sanitizeToolFailureMessage(err.Error())
 		
-		// Check if this is a "security caution" error that requires LLM verification
-		// Instead of treating it as a tool failure, we need to signal the LLM to re-verify
+		// Use typed error classification to detect security errors, with a
+		// fallback to string matching for untyped errors (backward compat).
 		//
 		// SECURITY BOUNDARY NOTE: The underlying classification in
 		// pkg/agent_tools/security_classifier.go is purely string-based heuristics with known
@@ -256,7 +260,8 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		// expansion). This caution flow is a defense-in-depth layer, not a security
 		// boundary. Actual enforcement relies on the user's filesystem permissions,
 		// interactive confirmation, and operating system controls.
-		if strings.Contains(err.Error(), "security caution:") {
+		action := ClassifyError(err)
+		if action == ActionEscalate || strings.Contains(err.Error(), "security caution:") {
 			// This is a caution-level operation that requires LLM verification
 			// Send it back to the LLM as a special message that indicates "verify before proceeding"
 			te.agent.PrintLine("")

@@ -3,7 +3,6 @@ package agent
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
@@ -64,7 +63,7 @@ func truncateToolResult(result string) string {
 	tailChars := 5000
 	omitted := len(result) - headChars - tailChars
 
-	log.Printf("tool result truncated: %d -> %d chars (omitted %d)", len(result), defaultToolResultMaxChars, omitted)
+	packageLogWarnf("tool result truncated: %d -> %d chars (omitted %d)", len(result), defaultToolResultMaxChars, omitted)
 
 	return result[:headChars] + fmt.Sprintf("\n[... truncated: %d chars omitted. Total was %d chars ...]\n", omitted, len(result)) + result[len(result)-tailChars:]
 }

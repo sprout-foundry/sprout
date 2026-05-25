@@ -29,6 +29,18 @@ export function useSidebarEventHandlers({
   settingsFocusTarget,
   setSettingsFocusTarget,
 }: UseSidebarEventHandlersParams): void {
+  // Ctrl+\ or Cmd+\ to toggle sidebar width (collapsed/expanded)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === '\\' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        onSidebarToggle?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onSidebarToggle]);
+
   // Open search tab on hotkey command
   useEffect(() => {
     const handleHotkey = (e: Event) => {

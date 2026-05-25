@@ -7,6 +7,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // SelfReviewGateCommand implements the /self-review-gate slash command.
@@ -51,7 +52,7 @@ func (c *SelfReviewGateCommand) Execute(args []string, chatAgent *agent.Agent) e
 	}
 
 	mode := configManager.GetConfig().GetSelfReviewGateMode()
-	fmt.Printf("[OK] Self-review gate mode set to: %s\n", mode)
+	console.GlyphSuccess.Printf("Self-review gate mode set to: %s", mode)
 	switch mode {
 	case configuration.SelfReviewGateModeOff:
 		fmt.Println("Automatic self-review gate is disabled.")

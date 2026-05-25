@@ -1,6 +1,6 @@
 # SP-055: CLI Pinned Input — Always-On Steering Panel
 
-**Status:** ✅ Shipped — all three phases landed plus a critical OPOST fix that preserves output post-processing while the steer reader is active.
+**Status:** ✅ Shipped — Phases 1/2/3 + 3b (done-queue mode) + 3c (UTF-8) + OPOST fix.
 **Date:** 2026-05-24
 **Depends on:** SP-048 (CLI Delight — established the status footer pattern this spec borrows from), `pkg/agent/seed_integration.go` steer-bridge (already landed; makes the agent-side mechanism functional), seed v0.x `InjectInput` API (already integrated)
 **Priority:** Medium-High — closes the largest remaining CLI ergonomics gap. Users on the CLI today have to wait for a turn to finish before they can redirect the agent; webui users got mid-turn steering via the floating input box. Until this lands the CLI feels "fire and forget" while the webui feels live.
@@ -133,11 +133,17 @@ prefix updates) lives in the primary reader and is untouched.
 - **Inline indicator** in the scroll region when a steer fires (so
   the user can see *what they sent* even after the input clears —
   not just `[STEER →]` flash).
-- **"Done queue" mode**: hold Shift-Enter to queue a message for the
-  *next user-prompted turn* instead of mid-turn steering. The default
-  remains mid-turn steer per the user's preference; "done queue" is a
-  fallback when the user knows the next instruction belongs to a fresh
-  turn.
+- **"Done queue" mode** (✅ shipped as Phase 3b): Tab toggles between
+  STEER (default) and QUEUE submit modes. QUEUE mode stores the typed
+  message on the agent's deferred queue via `EnqueueDeferredMessage`;
+  the REPL drains it on the next ReadLine and joins entries with the
+  user's typed prompt as "Queued from prior turn: • msg • msg ...".
+  The pinned-line prefix flips between `⇄ steer ›` and `⏸ queue ›` so
+  the user always sees what Enter will do.
+
+- **UTF-8 input** (✅ shipped as Phase 3c): Multi-byte runes (Greek,
+  Han, emoji) are accumulated as full sequences before rendering and
+  removed as full runes on backspace. International typing now works.
 
 ## Out of Scope
 

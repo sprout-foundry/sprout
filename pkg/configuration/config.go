@@ -460,40 +460,145 @@ func categorizeGitCommand(cmdLower string) string {
 
 // matchesRiskPattern checks if a command matches a risk pattern identifier.
 func matchesRiskPattern(cmdLower string, pattern string) bool {
-	// Map pattern names to actual command matching
+	// Map pattern names to actual command matching. All patterns here
+	// operate on tokenized fields rather than bare substring matches —
+	// a path component like ".../platform &&" used to false-match
+	// "rm " (the last two chars of "platform" + the space before "&&"),
+	// and "-run" used to false-match "-r" — so a benign command like
+	// `cd ~/.../platform && go test -run X` got classified as
+	// high-risk rm_recursive. See the rm_recursive case below.
+	fields := strings.Fields(cmdLower)
+	hasToken := func(target string) bool {
+		for _, f := range fields {
+			if f == target {
+				return true
+			}
+		}
+		return false
+	}
 	switch pattern {
 	case "force_flag":
 		return containsForceFlag(cmdLower)
 	case "rm_recursive":
-		return strings.Contains(cmdLower, "rm ") && (strings.Contains(cmdLower, "-r") || strings.Contains(cmdLower, "-rf") || strings.Contains(cmdLower, "--recursive"))
+		// Must actually invoke `rm` as a command — either at the very
+		// start, after `sudo`, or after a `;` / `&&` / `||` / `|`
+		// operator. A path component that happens to end in "rm"
+		// (e.g. "platform") is NOT an invocation.
+		if !invokesCommand(fields, "rm") {
+			return false
+		}
+		// And a real recursive-mode flag must appear as its own token
+		// or combined short flag (-r, -R, -rf, -fr, --recursive).
+		for _, f := range fields {
+			if f == "-r" || f == "-R" || f == "--recursive" {
+				return true
+			}
+			// Combined short flag: -rf, -fr, -Rf, -fR (any order, any
+			// length, must start with '-' and not be a long flag).
+			if len(f) > 2 && f[0] == '-' && f[1] != '-' {
+				hasR := strings.ContainsAny(f, "rR")
+				hasF := strings.Contains(f, "f")
+				if hasR && hasF {
+					return true
+				}
+			}
+		}
+		return false
 	case "git_reset_hard":
-		return strings.Contains(cmdLower, "git reset") && strings.Contains(cmdLower, "--hard")
+		return invokesGitSubcommand(fields, "reset") && hasToken("--hard")
 	case "git_clean":
-		return strings.Contains(cmdLower, "git clean")
+		return invokesGitSubcommand(fields, "clean")
 	case "git_push_force":
-		if !strings.Contains(cmdLower, "git push") {
+		if !invokesGitSubcommand(fields, "push") {
 			return false
 		}
 		// --force-with-lease is safer, don't match it
-		for _, segment := range strings.Fields(cmdLower) {
+		for _, segment := range fields {
 			if segment == "--force" || segment == "-f" {
 				return true
 			}
 		}
 		return false
 	case "docker_prune":
-		return strings.Contains(cmdLower, "docker") && strings.Contains(cmdLower, "prune")
+		if !invokesCommand(fields, "docker") {
+			return false
+		}
+		return hasToken("prune")
 	case "git_checkout":
-		return strings.Contains(cmdLower, "git checkout")
+		return invokesGitSubcommand(fields, "checkout")
 	case "git_switch":
-		return strings.Contains(cmdLower, "git switch")
+		return invokesGitSubcommand(fields, "switch")
 	case "git_restore":
-		return strings.Contains(cmdLower, "git restore")
+		return invokesGitSubcommand(fields, "restore")
 	case "git_branch_delete":
-		return strings.Contains(cmdLower, "git branch") && (strings.Contains(cmdLower, "-d") || strings.Contains(cmdLower, "-D") || strings.Contains(cmdLower, "--delete"))
+		if !invokesGitSubcommand(fields, "branch") {
+			return false
+		}
+		return hasToken("-d") || hasToken("-D") || hasToken("--delete")
 	default:
 		return false
 	}
+}
+
+// invokesCommand reports whether the tokenized command line actually
+// invokes `name` as a command — i.e. as the first token, after `sudo`,
+// or as the first token after a shell pipeline / chain operator
+// (`;`, `&&`, `||`, `|`). This avoids substring matches inside paths,
+// flag values, or arguments (the bug that made
+// `cd .../platform && go test ... -run X` match `rm_recursive`).
+func invokesCommand(fields []string, name string) bool {
+	if len(fields) == 0 {
+		return false
+	}
+	for i, f := range fields {
+		if f != name {
+			continue
+		}
+		if i == 0 {
+			return true
+		}
+		// After a chain/pipe operator — first command in the next
+		// segment. Walk backwards skipping `sudo`-like prefixes.
+		prev := fields[i-1]
+		switch prev {
+		case ";", "&&", "||", "|":
+			return true
+		case "sudo":
+			return true
+		}
+	}
+	return false
+}
+
+// invokesGitSubcommand reports whether the tokenized command line
+// invokes `git <subcmd>` — `git` must be invoked as a command (per
+// invokesCommand) AND immediately followed by the subcommand token.
+// Catches `cd /repo && git checkout main` but not `... grep 'git
+// checkout' file` or path/argument substrings that happen to spell
+// the same letters.
+func invokesGitSubcommand(fields []string, subcmd string) bool {
+	for i, f := range fields {
+		if f != "git" {
+			continue
+		}
+		if !invokesCommand(fields[i:i+1], "git") && !(i > 0 && isChainOperator(fields[i-1])) && i != 0 {
+			continue
+		}
+		if i+1 < len(fields) && fields[i+1] == subcmd {
+			return true
+		}
+	}
+	return false
+}
+
+// isChainOperator reports whether a token is a shell pipeline / chain
+// operator that ends one command and starts another.
+func isChainOperator(tok string) bool {
+	switch tok {
+	case ";", "&&", "||", "|":
+		return true
+	}
+	return false
 }
 
 // firstFieldAfter returns the first whitespace-delimited field after the given prefix.
@@ -1128,11 +1233,26 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Self-heal a config that was poisoned by a leaky test run (e.g. a
+	// past version of the codebase that wrote "test" to disk before
+	// the Save-time guard existed). On the next CLI start the value
+	// gets cleared and the user is prompted normally instead of
+	// /commit silently routing to a no-op mock.
+	sanitizeTestProvider(&config)
+
 	return &config, nil
 }
 
 // Save saves the configuration to file
 func (c *Config) Save() error {
+	// Defense-in-depth: never persist "test" as the active provider.
+	// The TestClientType sentinel is for in-process test fixtures only;
+	// if it ever reaches disk, the next CLI run picks it up and tries
+	// to route requests (including /commit) to a no-op mock. Strip it
+	// here so even tests that bypass Manager.SetProvider can't poison
+	// the real config.
+	sanitizeTestProvider(c)
+
 	// Migrate any plaintext secrets in MCP server env blocks to the
 	// credential store before persisting. This is defense-in-depth: most
 	// callers already migrate before reaching here, but this ensures the
@@ -1202,6 +1322,11 @@ func (c *Config) Save() error {
 // Use this when a Manager has an explicit configDir so that saves go to
 // the correct location even after the env var has been restored.
 func (c *Config) SaveToDir(dir string) error {
+	// Same defense as Save() — refuse to persist the test sentinel even
+	// when callers bypass GetConfigPath() and target an explicit dir.
+	// See sanitizeTestProvider for context.
+	sanitizeTestProvider(c)
+
 	// Migrate any plaintext secrets in MCP server env blocks to the
 	// credential store before persisting.
 	for name := range c.MCP.Servers {

@@ -4,13 +4,13 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // AgentResult is the structured output produced when --output-format=json is used.
@@ -185,6 +185,6 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(result); err != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] Failed to encode JSON result: %v\n", err)
+		console.GlyphWarning.Fprintf(os.Stderr, "Failed to encode JSON result: %v", err)
 	}
 }

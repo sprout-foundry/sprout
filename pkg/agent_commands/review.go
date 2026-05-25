@@ -10,6 +10,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/codereview"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/types"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -130,7 +131,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	logger.LogProcessStep(fmt.Sprintf("Optimized diff: %d -> %d lines, %d bytes saved",
 		optimizedDiff.OriginalLines, optimizedDiff.OptimizedLines, optimizedDiff.BytesSaved))
 	for _, warning := range optimizedDiff.Warnings {
-		logger.LogUserInteraction(fmt.Sprintf("[WARN] %s", warning))
+		logger.LogUserInteraction(fmt.Sprintf("%s%s", console.GlyphWarning.Prefix(), warning))
 	}
 
 	// Create the unified code review service
@@ -218,9 +219,9 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		logger.LogProcessStep("Code review completed successfully")
 	}
 
-	header := "[list] AI CODE REVIEW"
+	header := console.GlyphInfo.Prefix() + "AI CODE REVIEW"
 	if deepReview {
-		header = "[list] AI CODE REVIEW (DEEP PASS)"
+		header = console.GlyphInfo.Prefix() + "AI CODE REVIEW (DEEP PASS)"
 	}
 
 	// Build review output string for conversation history
@@ -258,7 +259,16 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 	fmt.Print(header + "\r\n")
 	fmt.Print(strings.Repeat("═", 50) + "\r\n\r\n")
 
-	fmt.Printf("Status: %s\r\n\r\n", strings.ToUpper(reviewResponse.Status))
+	statusGlyph := console.GlyphInfo
+	switch strings.ToLower(strings.TrimSpace(reviewResponse.Status)) {
+	case "approved", "accepted", "passed":
+		statusGlyph = console.GlyphSuccess
+	case "rejected", "failed":
+		statusGlyph = console.GlyphError
+	case "needs_changes", "warning":
+		statusGlyph = console.GlyphWarning
+	}
+	fmt.Printf("%sStatus: %s\r\n\r\n", statusGlyph.Prefix(), strings.ToUpper(reviewResponse.Status))
 
 	fmt.Print("Feedback:\r\n")
 	fmt.Print(strings.Repeat("-", 30) + "\r\n")

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -36,6 +37,7 @@ import (
 type SteerCoordinator struct {
 	agent  *agent.Agent
 	reader *console.SteerInputReader
+	footer *console.StatusFooter
 }
 
 // NewSteerCoordinator constructs the coordinator with the SteerInputReader's
@@ -46,13 +48,14 @@ type SteerCoordinator struct {
 // chatAgent and footer may be nil for tests; in that case StartTurn and
 // EndTurn are no-ops.
 func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *SteerCoordinator {
-	c := &SteerCoordinator{agent: chatAgent}
+	c := &SteerCoordinator{agent: chatAgent, footer: footer}
 	if chatAgent == nil || footer == nil {
 		return c
 	}
 	c.reader = console.NewSteerInputReader(
 		footer,
 		c.handleSteerSubmit,
+		c.handleQueueSubmit,
 		c.handleSteerInterrupt,
 	)
 	return c
@@ -61,11 +64,18 @@ func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *
 // StartTurn activates the steer reader for the duration of a
 // ProcessQuery call. Safe to call when the reader is already active
 // (idempotent, the reader's own Start enforces this).
+//
+// Also registers the pause/resume hooks so interactive prompts (e.g.
+// security elevation in pkg/utils.AskForConfirmation) can hand stdin
+// back to cooked mode without fighting the steer reader for bytes.
+// Without this hook the prompt's bufio.Reader hits EOF immediately
+// and auto-rejects with "stdin unavailable - rejecting for safety".
 func (c *SteerCoordinator) StartTurn() {
 	if c == nil || c.reader == nil {
 		return
 	}
 	c.reader.Start()
+	clihooks.SetSteerHooks(c.reader.Stop, c.reader.Start)
 }
 
 // EndTurn deactivates the steer reader and tears down the pinned line.
@@ -74,6 +84,7 @@ func (c *SteerCoordinator) EndTurn() {
 	if c == nil || c.reader == nil {
 		return
 	}
+	clihooks.SetSteerHooks(nil, nil)
 	c.reader.Stop()
 }
 
@@ -83,15 +94,26 @@ func (c *SteerCoordinator) EndTurn() {
 // to stderr in the scroll region so the user sees what they sent;
 // failure (channel full) is reported similarly without breaking the
 // turn.
+//
+// Timing reality: seed only consults its inputInjectionChan when the
+// model returns a response WITH NO tool calls (seed v1.1.0
+// conversation.go:476, gated by `len(assistantMsg.ToolCalls) == 0`).
+// During a tool-execution loop the injection sits buffered until the
+// model decides to stop. The ack therefore says "queued" rather than
+// implying instant takeover. Users who want guaranteed next-turn
+// behavior should toggle to QUEUE mode (Tab) which routes through
+// the deferred queue instead.
 func (c *SteerCoordinator) handleSteerSubmit(text string) {
 	if c.agent == nil {
 		return
 	}
 	if err := c.agent.InjectInputContext(text); err != nil {
-		fmt.Fprintf(os.Stderr, "\n[steer] dropped: %v\n", err)
+		fmt.Fprintln(os.Stderr)
+		console.GlyphError.Fprintf(os.Stderr, "steer dropped: %v", err)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "\n[steer →] %s\n", text)
+	fmt.Fprintln(os.Stderr)
+	console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
 }
 
 // handleSteerInterrupt routes Ctrl+C-while-steering to the same
@@ -107,4 +129,24 @@ func (c *SteerCoordinator) handleSteerInterrupt(_ string) {
 		return
 	}
 	c.agent.TriggerInterrupt()
+}
+
+// handleQueueSubmit is the QUEUE-mode counterpart to handleSteerSubmit.
+// The message is enqueued on the agent's deferred queue and will be
+// joined with the user's next typed prompt when the REPL drains it
+// (SP-055 Phase 3b). Mid-turn streaming is unaffected — nothing is
+// injected into the active turn.
+func (c *SteerCoordinator) handleQueueSubmit(text string) {
+	if c.agent == nil || text == "" {
+		return
+	}
+	c.agent.EnqueueDeferredMessage(text)
+	fmt.Fprintln(os.Stderr)
+	console.GlyphPaused.Fprintf(os.Stderr, "queued: %s", text)
+	// Refresh the footer so the new "⏸ N queued" badge appears in the
+	// same frame the user submitted. Without this nudge the badge
+	// would lag until the next tool/cost event fires.
+	if c.footer != nil {
+		c.footer.Refresh()
+	}
 }

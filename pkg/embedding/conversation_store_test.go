@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -427,6 +428,9 @@ func TestGetConversationStore_LazyInit(t *testing.T) {
 	// call Init to set up the manager, then verify convoStore was not
 	// created during Init.
 	if err := mgr.Init(context.Background()); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("Init failed: %v", err)
 	}
 
@@ -447,6 +451,9 @@ func TestGetConversationStore_SameInstance(t *testing.T) {
 
 	store1, err := mgr.GetConversationStore(context.Background())
 	if err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("first GetConversationStore failed: %v", err)
 	}
 
@@ -467,6 +474,9 @@ func TestGetConversationStore_CreatesAtCorrectPath(t *testing.T) {
 
 	store, err := mgr.GetConversationStore(context.Background())
 	if err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("GetConversationStore failed: %v", err)
 	}
 	defer store.Close()
@@ -505,6 +515,9 @@ func TestGetConversationStore_StoresAndQueries(t *testing.T) {
 
 	store, err := mgr.GetConversationStore(context.Background())
 	if err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("GetConversationStore failed: %v", err)
 	}
 	defer store.Close()
@@ -542,6 +555,9 @@ func TestEmbeddingManager_Close_ClosesConversationStore(t *testing.T) {
 	// Get the conversation store and add a record.
 	store, err := mgr.GetConversationStore(context.Background())
 	if err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("GetConversationStore failed: %v", err)
 	}
 
@@ -588,6 +604,9 @@ func TestEmbeddingManager_Close_CleanupAndReinit(t *testing.T) {
 	// Init, get conversation store, store a record, close.
 	store, err := mgr.GetConversationStore(context.Background())
 	if err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("GetConversationStore failed: %v", err)
 	}
 	if err := store.Store([]VectorRecord{

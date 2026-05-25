@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"golang.org/x/term"
 )
 
@@ -56,15 +57,16 @@ func ShowCommandSelector(registry *CommandRegistry, chatAgent *agent.Agent) (str
 
 	// Check if we're in agent console - show help instead
 	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
-		fmt.Println("\n[list] Available Commands:")
-		fmt.Println("=====================")
+		fmt.Println()
+		console.GlyphInfo.Print("Available Commands:")
 
 		for _, name := range names {
 			cmd := cmdMap[name]
 			fmt.Printf("/%s - %s\n", name, cmd.Description())
 		}
 
-		fmt.Println("\n[i] Type any command to use it")
+		fmt.Println()
+		console.GlyphInfo.Print("Type any command to use it")
 		return "", errors.New("command selector not available in agent console")
 	}
 

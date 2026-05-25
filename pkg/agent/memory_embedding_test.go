@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -217,6 +218,9 @@ func setupMemoryEmbeddingManager(t *testing.T) *embedding.EmbeddingManager {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	if err := mgr.Init(ctx); err != nil {
+		if strings.Contains(err.Error(), "static model data is empty") {
+			t.Skip("Skipping: static model not available without staticmodel build tag")
+		}
 		t.Fatalf("failed to init embedding manager: %v", err)
 	}
 

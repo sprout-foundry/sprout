@@ -12,8 +12,10 @@ package clihooks
 import "sync"
 
 var (
-	mu              sync.RWMutex
-	suspendFunc     func()
+	mu          sync.RWMutex
+	suspendFunc func()
+	steerPause  func()
+	steerResume func()
 )
 
 // SetSuspendIndicator installs (or clears, with nil) the global function
@@ -30,6 +32,47 @@ func SetSuspendIndicator(fn func()) {
 func SuspendIndicator() {
 	mu.RLock()
 	fn := suspendFunc
+	mu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+// SetSteerHooks installs the pause/resume hooks for the SP-055
+// SteerInputReader. The reader holds stdin in raw mode while a turn
+// is in flight, which blocks any cooked-mode bufio reader (e.g. the
+// security elevation prompt in pkg/utils.AskForConfirmation) from
+// receiving input. Owners — typically SteerCoordinator — register
+// the pair on StartTurn and clear it (with nil/nil) on EndTurn.
+//
+// pause must stop the reader's goroutine and restore cooked termios.
+// resume must re-enter raw mode and restart the reader. Both must be
+// idempotent.
+func SetSteerHooks(pause, resume func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	steerPause = pause
+	steerResume = resume
+}
+
+// PauseSteer runs the registered pause hook if one is set. Callers
+// that are about to read stdin in cooked mode (interactive prompts)
+// MUST pair this with a deferred ResumeSteer so the reader resumes
+// when the prompt returns. No-op when no hook is registered (e.g.
+// non-interactive run, no active turn).
+func PauseSteer() {
+	mu.RLock()
+	fn := steerPause
+	mu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+// ResumeSteer runs the registered resume hook if one is set.
+func ResumeSteer() {
+	mu.RLock()
+	fn := steerResume
 	mu.RUnlock()
 	if fn != nil {
 		fn()

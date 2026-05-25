@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -966,7 +967,8 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 
-		fmt.Printf("\n[~] Workflow step %d/%d (%s)\n", i+1, len(cfg.Steps), stepName)
+		fmt.Println()
+		console.GlyphAction.Printf("Workflow step %d/%d (%s)", i+1, len(cfg.Steps), stepName)
 		if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_started", map[string]interface{}{
 			"step_index": i,
 			"step_name":  stepName,

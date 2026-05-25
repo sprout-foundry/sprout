@@ -107,8 +107,12 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 
 	ptyFile, err := pty.StartWithSize(cmd, defaultSize)
 	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("failed to start PTY: %w", err)
+		// Primary PTY creation failed — this can happen on Alpine Linux,
+		// minimal containers, or systems without /dev/pts mounted.
+		// Fall back to a basic exec.Cmd-based approach with stdin/stdout pipes.
+		log.Printf("PTY creation failed for session %s (%v), falling back to pipe-based session", sessionID, err)
+		cancel() // cancel the original context; createFallbackUnixSession creates its own.
+		return tm.createFallbackUnixSession(sessionID, shellOverride)
 	}
 
 	session := &TerminalSession{
@@ -172,6 +176,115 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 			return
 		}
 	}
+}
+
+// createFallbackUnixSession creates a terminal session without a real PTY,
+// using exec.Cmd with stdin/stdout pipes instead. This is the fallback path
+// when pty.StartWithSize fails (e.g. on Alpine Linux, minimal containers, or
+// systems without /dev/pts mounted).
+//
+// The approach mirrors createWindowsSession: the stdin pipe is stored in
+// session.Pty (so WriteRawInput and ExecuteCommandInHidden continue to work),
+// and a goroutine reads from stdout to broadcast output to subscribers.
+//
+// Limitations of the fallback mode (session.NoPTY == true):
+//   - Terminal resize is a no-op (pipes don't support TIOCSWINSZ).
+//   - Full interactive terminal features (line editing, cursor control) are
+//     degraded because the shell is not connected to a real TTY.
+//   - Signal delivery (Ctrl+C via \x03) may not work reliably.
+func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride string) (*TerminalSession, error) {
+	shell, shellArgs, err := tm.resolveShell(shellOverride)
+	if err != nil {
+		return nil, fmt.Errorf("resolve shell: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(ctx, shell, shellArgs...)
+	if strings.TrimSpace(tm.workspaceRoot) != "" {
+		cmd.Dir = tm.workspaceRoot
+	}
+
+	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
+
+	cmd.Env = append(os.Environ(),
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+		"SHELL="+shell,
+		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
+		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
+		fmt.Sprintf("LINES=%d", defaultSize.Rows),
+	)
+
+	// Create stdin pipe — stored in session.Pty for write compatibility.
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("fallback session stdin pipe: %w", err)
+	}
+
+	// Combine stdout and stderr into a single reader.
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("fallback session stdout pipe: %w", err)
+	}
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return nil, fmt.Errorf("fallback session start: %w", err)
+	}
+
+	// Wrap the stdin pipe as an *os.File so session.Pty.Write continues to work.
+	// stdin is an *os.File on Unix (os.Pipe), so this assertion should succeed.
+	ptyFile, ok := stdin.(*os.File)
+	if !ok {
+		// Close pipes and process if type assertion fails.
+		stdin.Close()
+		stdout.Close()
+		cmd.Process.Kill()
+		cancel()
+		return nil, fmt.Errorf("fallback session: stdin pipe is not *os.File (unexpected type %T)", stdin)
+	}
+
+	session := &TerminalSession{
+		ID:        sessionID,
+		Command:   cmd,
+		Pty:       ptyFile,
+		Cancel:    cancel,
+		Active:    true,
+		LastUsed:  time.Now(),
+		StartedAt: time.Now(),
+		Size:      defaultSize,
+		ring:      newSessRing(),
+		NoPTY:     true,
+	}
+
+	// Reader goroutine — reads from stdout pipe (not from session.Pty which is stdin).
+	go func() {
+		buf := make([]byte, 32768)
+		for {
+			n, readErr := stdout.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				session.mutex.Lock()
+				session.LastUsed = time.Now()
+				session.mutex.Unlock()
+				session.broadcast(chunk)
+			}
+			if readErr != nil {
+				log.Printf("Fallback session %s stdout closed: %v", session.ID, readErr)
+				session.mutex.Lock()
+				session.Active = false
+				session.mutex.Unlock()
+				session.closeAllSubs()
+				return
+			}
+		}
+	}()
+
+	return session, nil
 }
 
 // resolveShell determines which shell to use on Unix systems.

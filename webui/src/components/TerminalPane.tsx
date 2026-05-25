@@ -1,7 +1,7 @@
 import type { SearchAddon } from '@xterm/addon-search';
 import type { Terminal as XTerm } from '@xterm/xterm';
 import { X, TriangleAlert, Terminal } from 'lucide-react';
-import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
 // Hooks extracted from this component
@@ -70,6 +70,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
   ) => {
     const { themePack } = useTheme();
 
+    // ── Exited state tracking ──
+    // Set to true when onProcessExit fires, reset when a new session connects.
+    // Used to block keyboard input and visually dim the terminal.
+    const [isExited, setIsExited] = useState(false);
+    const isExitedRef = useRef(isExited);
+    isExitedRef.current = isExited;
+
     // ── Search state (needed before hooks so we can wire callbacks) ──
     const searchAddonRef = useRef<SearchAddon | null>(null);
     const searchInitialQueryRef = useRef<string | null>(null);
@@ -114,6 +121,12 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       xtermRef: scrollbackXtermRef,
     });
 
+    // ── Wrapper: set local isExited flag when the PTY exits ──
+    const handleProcessExit = useCallback(() => {
+      setIsExited(true);
+      onProcessExit?.();
+    }, [onProcessExit]);
+
     // ═══════════════════════════════════════════════════════════════════
     // 4. PTY input handler with reverse-i-search overlay tracking
     // ═══════════════════════════════════════════════════════════════════
@@ -128,6 +141,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     const onData = useCallback(
       (data: string) => {
+        if (isExitedRef.current) return;
         if (wasmActiveRef.current) {
           handleWasmInput(data);
         } else {
@@ -139,6 +153,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
 
     const onPaste = useCallback(
       (text: string) => {
+        if (isExitedRef.current) return;
         if (wasmActiveRef.current) {
           handleWasmInput(text);
         } else {
@@ -235,7 +250,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       preferredShell: preferredShell ?? null,
       reattachSessionId: reattachSessionId ?? null,
       onConnectionChange,
-      onProcessExit,
+      onProcessExit: handleProcessExit,
       onResetSearch: resetSearch,
       onResetReverseSearch: resetReverseSearch,
       onSaveScrollback: saveScrollback,
@@ -247,6 +262,13 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       terminalWSRefForPty.current = terminalWSRef.current;
       sessionTerminalWSRef.current = terminalWSRef.current;
     });
+
+    // Reset isExited when the pane connects (new session or reconnection)
+    useEffect(() => {
+      if (paneConnected) {
+        setIsExited(false);
+      }
+    }, [paneConnected]);
 
     // ═══════════════════════════════════════════════════════════════════
     // 8. Resize observer (wires session sendResize with xterm layout)
@@ -311,7 +333,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Render
     // ═══════════════════════════════════════════════════════════════════
     return (
-      <div className="terminal-pane" ref={paneWrapperRef}>
+      <div className={`terminal-pane${isExited ? ' terminal-pane-exited' : ''}`} ref={paneWrapperRef}>
         {showCloseButton && (
           <div className="terminal-pane-header">
             <span className={`terminal-pane-dot ${paneConnected || wasmActive ? 'connected' : 'disconnected'}`} />

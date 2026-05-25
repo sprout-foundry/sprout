@@ -105,6 +105,18 @@ type Config struct {
 	// profile. See docs/SECURITY.md#risk-profiles.
 	RiskProfiles map[string]AutoApproveRules `json:"risk_profiles,omitempty"`
 
+	// ApprovedShellCommands is the user's persistent allowlist of
+	// literal shell command strings that should auto-approve through
+	// the high-risk cascade without prompting. Populated by the
+	// "Always approve this command" choice on the approval dialog
+	// (SP-058 follow-up). Stored as exact strings — matching is
+	// command-literal equality, not pattern matching, so allow-listing
+	// `rm -rf /tmp/build-cache` does NOT allow `rm -rf anything-else`.
+	// The Critical tier still blocks regardless of this allowlist.
+	// Users can edit this list directly in config.json to revoke an
+	// entry, or remove all entries to reset.
+	ApprovedShellCommands []string `json:"approved_shell_commands,omitempty"`
+
 	// DismissedPrompts tracks which one-time prompts the user has dismissed.
 	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
 
@@ -1173,6 +1185,45 @@ func MergeConfig(base, override *Config) *Config {
 	}
 	if override.SkipPrompt {
 		result.SkipPrompt = override.SkipPrompt
+	}
+
+	// SP-058: RiskProfile is a single-value selector; non-empty
+	// override wins. RiskProfiles is a map of named overrides; we
+	// merge per-key so a workspace can override just one profile
+	// without wiping out user-defined profiles from the global
+	// config.
+	if override.RiskProfile != "" {
+		result.RiskProfile = override.RiskProfile
+	}
+	if len(override.RiskProfiles) > 0 {
+		if result.RiskProfiles == nil {
+			result.RiskProfiles = make(map[string]AutoApproveRules, len(override.RiskProfiles))
+		}
+		for k, v := range override.RiskProfiles {
+			result.RiskProfiles[k] = v
+		}
+	}
+	// ApprovedShellCommands: union the two lists (override entries are
+	// additive to base). De-dupe so a workspace config that re-lists a
+	// command already in the global config doesn't grow the file.
+	if len(override.ApprovedShellCommands) > 0 {
+		seen := make(map[string]struct{}, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
+		merged := make([]string, 0, len(result.ApprovedShellCommands)+len(override.ApprovedShellCommands))
+		for _, cmd := range result.ApprovedShellCommands {
+			if _, ok := seen[cmd]; ok {
+				continue
+			}
+			seen[cmd] = struct{}{}
+			merged = append(merged, cmd)
+		}
+		for _, cmd := range override.ApprovedShellCommands {
+			if _, ok := seen[cmd]; ok {
+				continue
+			}
+			seen[cmd] = struct{}{}
+			merged = append(merged, cmd)
+		}
+		result.ApprovedShellCommands = merged
 	}
 
 	// Merge DismissedPrompts

@@ -21,6 +21,10 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	var payload struct {
 		RequestID string `json:"request_id"`
 		Response  bool   `json:"response"`
+		// Action enables the 4-option dialog (SP-058 follow-up). Optional —
+		// empty falls back to Response. See SecurityApprovalResponseData for
+		// the legal value set.
+		Action string `json:"action,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -41,11 +45,13 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 	ws.mutex.RUnlock()
 
 	if agent != nil && agent.GetSecurityApprovalMgr() != nil {
-		if agent.GetSecurityApprovalMgr().RespondToApproval(payload.RequestID, payload.Response) {
+		decision := resolveApprovalDecision(payload.Action, payload.Response)
+		if agent.GetSecurityApprovalMgr().RespondToApprovalDecision(payload.RequestID, decision) {
 			ws.publishClientEvent(defaultWebClientID, events.EventTypeSecurityApprovalRequest, map[string]interface{}{
-				"status":   "responded",
+				"status":     "responded",
 				"request_id": payload.RequestID,
-				"response": payload.Response,
+				"response":   decision.Approved(),
+				"action":     decision.String(),
 			})
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{

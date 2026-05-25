@@ -359,7 +359,7 @@ func TestFormatToolCall_TodoWriteIncludesChecklistSummary(t *testing.T) {
 	if !strings.Contains(got, "todos=3") {
 		t.Fatalf("expected todo count in formatted call, got: %q", got)
 	}
-	if !strings.Contains(got, "[ ]=1") || !strings.Contains(got, "[~]=1") || !strings.Contains(got, "[x]=1") {
+	if !strings.Contains(got, "pending=1") || !strings.Contains(got, "progress=1") || !strings.Contains(got, "done=1") {
 		t.Fatalf("expected status breakdown in formatted call, got: %q", got)
 	}
 }
@@ -382,20 +382,24 @@ func TestFormatToolCall_UsesRepairPath(t *testing.T) {
 }
 
 func TestTodoStatusSymbol(t *testing.T) {
+	// Symbols are now SP-057 glyphs with ANSI color escapes; assert
+	// against the substring rune the user sees rather than exact
+	// equality so the test stays stable across color modes.
 	tests := []struct {
-		status string
-		want   string
+		status   string
+		wantRune string
 	}{
-		{status: "pending", want: "[ ]"},
-		{status: "in_progress", want: "[~]"},
-		{status: "completed", want: "[x]"},
-		{status: "cancelled", want: "[-]"},
-		{status: "other", want: "[?]"},
+		{status: "pending", wantRune: "·"},
+		{status: "in_progress", wantRune: "→"},
+		{status: "completed", wantRune: "✓"},
+		{status: "cancelled", wantRune: "⏹"},
+		{status: "other", wantRune: "ⓘ"},
 	}
 
 	for _, tt := range tests {
-		if got := todoStatusSymbol(tt.status); got != tt.want {
-			t.Fatalf("todoStatusSymbol(%q) = %q, want %q", tt.status, got, tt.want)
+		got := todoStatusSymbol(tt.status)
+		if !strings.Contains(got, tt.wantRune) {
+			t.Fatalf("todoStatusSymbol(%q) = %q, want contains %q", tt.status, got, tt.wantRune)
 		}
 	}
 }

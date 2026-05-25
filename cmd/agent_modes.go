@@ -169,7 +169,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		// all subsequent output is captured by the rotating log files.
 		homeDir, homeErr := os.UserHomeDir()
 		if homeErr != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Could not determine home directory, skipping daemon log rotation: %v\n", homeErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Could not determine home directory, skipping daemon log rotation: %v", homeErr)
 		} else {
 			setupDaemonLogging(homeDir)
 		}
@@ -209,7 +209,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	if enableWebUI {
 		// Warn when binding to all interfaces
 		if bindAddr == "0.0.0.0" || bindAddr == "::" {
-			fmt.Fprintf(os.Stderr, "[WARN] Binding to %s — web UI is accessible from all network interfaces\n", bindAddr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Binding to %s — web UI is accessible from all network interfaces", bindAddr)
 		}
 
 		// Determine port strategy.
@@ -232,7 +232,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// Non-daemon: find a free dynamic port.
 				dynamicPort, dynErr := webui.FindAvailablePort(webui.DaemonPort + 1)
 				if dynErr != nil {
-					fmt.Fprintf(os.Stderr, "[WARN] Could not find a dynamic port: %v; web UI disabled\n", dynErr)
+					console.GlyphWarning.Fprintf(os.Stderr, "Could not find a dynamic port: %v; web UI disabled", dynErr)
 					enableWebUI = false
 				} else {
 					port = dynamicPort
@@ -303,7 +303,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 						case startErrCh <- err:
 						default:
 						}
-						fmt.Fprintf(os.Stderr, "[WARN] Web UI failed to start: %v\n", err)
+						console.GlyphWarning.Fprintf(os.Stderr, "Web UI failed to start: %v", err)
 					}
 				}()
 
@@ -497,7 +497,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				<-ctx.Done()
 				return nil
 			}
-			fmt.Println("Welcome to sprout! [bot]")
+			fmt.Println()
+			console.GlyphInfo.Print("Welcome to sprout!")
 			fmt.Println("Agent initialized successfully.")
 			fmt.Println("Use 'sprout agent \"your query\"' to execute commands.")
 			return nil
@@ -594,9 +595,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}()
 		select {
 		case <-done:
-			fmt.Printf("[OK] Agent shut down successfully\n")
+			console.GlyphSuccess.Print("Agent shut down successfully")
 		case <-time.After(5 * time.Second):
-			fmt.Fprintf(os.Stderr, "[WARN] Agent shutdown timed out after 5s\n")
+			console.GlyphWarning.Fprintf(os.Stderr, "Agent shutdown timed out after 5s")
 		}
 	}
 	if webUISup != nil {
@@ -606,9 +607,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		fmt.Printf("[~] Shutting down web server...\n")
 
 		if webErr := webServer.Shutdown(); webErr != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Error shutting down web server: %v\n", webErr)
+			console.GlyphWarning.Fprintf(os.Stderr, "Error shutting down web server: %v", webErr)
 		} else {
-			fmt.Printf("[OK] Web server shut down successfully\n")
+			console.GlyphSuccess.Print("Web server shut down successfully")
 		}
 	}
 
@@ -695,8 +696,9 @@ func terminalLineCapChars() int {
 // After processing a task, it loops back to check for more pending tasks.
 // Exits cleanly when the queue is empty.
 func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
-	fmt.Printf("\n[bot] Starting EA queue mode — processing pending tasks autonomously\n")
-	fmt.Printf("[chart] Provider: %s | Model: %s\n\n",
+	fmt.Println()
+	console.GlyphInfo.Print("Starting EA queue mode — processing pending tasks autonomously")
+	console.GlyphInfo.Printf("Provider: %s | Model: %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -714,7 +716,8 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	for {
 		// Check for cancellation before each iteration
 		if err := ctx.Err(); err != nil {
-			fmt.Printf("\n[bot] Queue mode cancelled: %v\n", err)
+			fmt.Println()
+			console.GlyphStopped.Printf("Queue mode cancelled: %v", err)
 			break
 		}
 
@@ -726,10 +729,11 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 		// Exit cleanly when queue is empty
 		if len(tasks) == 0 {
+			fmt.Println()
 			if tasksProcessed > 0 {
-				fmt.Printf("\n[OK] Queue mode complete — processed %d task(s)\n", tasksProcessed)
+				console.GlyphSuccess.Printf("Queue mode complete — processed %d task(s)", tasksProcessed)
 			} else {
-				fmt.Printf("\n[bot] No pending tasks in queue — nothing to process\n")
+				console.GlyphInfo.Print("No pending tasks in queue — nothing to process")
 			}
 			break
 		}
@@ -738,17 +742,19 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		for _, task := range tasks {
 			// Check for cancellation before processing each task
 			if err := ctx.Err(); err != nil {
-				fmt.Printf("\n[bot] Queue mode cancelled: %v\n", err)
+				fmt.Println()
+				console.GlyphStopped.Printf("Queue mode cancelled: %v", err)
 				break
 			}
 
-			fmt.Printf("\n[bot] Processing task: %s [%s] (priority: %s)\n",
+			fmt.Println()
+			console.GlyphAction.Printf("Processing task: %s [%s] (priority: %s)",
 				task.Title, task.ID, task.Priority)
 
 			// Mark task as in_progress
 			_, err = tq.PublishTask(task.ID, "in_progress", "", nil)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "[WARN] Failed to mark task %s as in_progress: %v\n", task.ID, err)
+				console.GlyphWarning.Fprintf(os.Stderr, "Failed to mark task %s as in_progress: %v", task.ID, err)
 			}
 
 			// Construct a query for the agent to process this task.
@@ -758,7 +764,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 			err = ProcessQuery(ctx, chatAgent, eventBus, query)
 			if err != nil {
-				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("[FAIL] Error processing task %s", task.ID), err))
+				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("Error processing task %s", task.ID), err))
 				// Mark task as failed
 				_, _ = tq.PublishTask(task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
 				continue
@@ -782,11 +788,11 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 			if !taskCompleted {
 				// Agent didn't update task status; mark as completed by default
-				fmt.Printf("[bot] Task %s processed — marking as completed\n", task.Title)
-				result := fmt.Sprintf("Task processed via queue mode. Agent did not explicitly set a result.")
+				console.GlyphInfo.Printf("Task %s processed — marking as completed", task.Title)
+				result := "Task processed via queue mode. Agent did not explicitly set a result."
 				_, _ = tq.PublishTask(task.ID, "completed", result, nil)
 			} else {
-				fmt.Printf("[OK] Task %s completed\n", task.Title)
+				console.GlyphSuccess.Printf("Task %s completed", task.Title)
 			}
 
 			tasksProcessed++

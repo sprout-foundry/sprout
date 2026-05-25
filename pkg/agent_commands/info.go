@@ -1,9 +1,10 @@
 package commands
 
 import (
-	"fmt"
+	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // StatsCommand implements the /stats slash command
@@ -21,8 +22,7 @@ func (s *StatsCommand) Description() string {
 
 // Execute runs the stats command
 func (s *StatsCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	fmt.Println("\n[chart] Detailed Conversation Summary:")
-	fmt.Println("=====================================")
+	console.GlyphInfo.Fprintln(os.Stdout, "Detailed Conversation Summary:")
 	chatAgent.PrintConversationSummary(true)
 	return nil
 }

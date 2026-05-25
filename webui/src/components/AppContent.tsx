@@ -13,6 +13,7 @@ import { useGitWorkspace } from '../hooks/useGitWorkspace';
 import { useHotkeysConfig } from '../hooks/useHotkeysConfig';
 import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
@@ -139,6 +140,12 @@ const AppContent: React.FC<AppContentProps> = ({
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
   const currentTodos = useCurrentTodos(state.currentTodos, state.toolExecutions);
+  // Swipe-left/right gesture to toggle the sidebar on mobile viewports.
+  useSwipeGesture({
+    onSwipeLeft: onCloseSidebar,
+    onSwipeRight: onToggleSidebar,
+    enabled: isMobile,
+  });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
 

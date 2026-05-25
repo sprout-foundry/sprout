@@ -240,7 +240,7 @@
 - [x] SP-025-P1-tests: Test parsing Go, TS, JS, Python; verify symbol names, line numbers, scopes
 - [x] SP-025-P1-wasmBuild: Verify `GOOS=js GOARCH=wasm go build ./cmd/wasm/` still works
 - [x] SP-025-P2-repoMap: Update `repo_map.go` to use `pkg/ast` for Go, TS, JS, Python
-- [ ] SP-025-P2-removeRegex: Remove regex patterns from repo_map.go
+- [x] SP-025-P2-removeRegex: Remove regex patterns from repo_map.go
 - [x] SP-025-P2-tests: Update repo map tests with AST-derived expected line numbers
 - [x] SP-025-P3-symbolIndex: Update `pkg/index/symbols.go` to use `pkg/ast` for all supported languages
 - [x] SP-025-P4-wasmVerify: Ensure `pkg/ast` compiles for GOOS=js GOARCH=wasm

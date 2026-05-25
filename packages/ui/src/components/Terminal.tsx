@@ -1,3 +1,13 @@
+/**
+ * @deprecated This component is superseded by the per-pane model used in
+ * `webui/src/components/Terminal.tsx`, which orchestrates `TerminalPane` and
+ * `TerminalTabBar` directly. The webui app no longer imports this wrapper.
+ * Retain only if a standalone, framework-agnostic terminal widget is needed
+ * outside the main webui. If no such consumer emerges, this file (and its
+ * story/test) can be removed in a future cleanup pass.
+ *
+ * See: SP-011-P2.3-cleanupPackagesUI
+ */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import React from 'react';

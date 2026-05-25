@@ -169,8 +169,8 @@
 
 ## Not Started — SP-012: UX Polish
 
-- [ ] SP-012-U0-inlineBadges: Implement inline tool call badges in assistant messages — `display: inline-flex`, 11px font, click opens tool in context sidebar
-- [ ] SP-012-U1.1-notificationCenter: Create `NotificationCenter.tsx` — history panel with bell icon in StatusBar, dismiss individual/all, copy message
+- [x] SP-012-U0-inlineBadges: Implement inline tool call badges in assistant messages — `display: inline-flex`, 11px font, click opens tool in context sidebar
+- [x] SP-012-U1.1-notificationCenter: Create `NotificationCenter.tsx` — history panel with bell icon in StatusBar, dismiss individual/all, copy message
 - [x] SP-012-U1.1-markAllRead: Add `markAllRead()` method to notification bus
 - [x] SP-012-U1.1-statusBarBell: Add bell icon with unread count badge to `StatusBar.tsx`
 - [x] SP-012-U1.2-reducedMotion: Add `@media (prefers-reduced-motion: reduce)` CSS block — force zero animation/transition duration

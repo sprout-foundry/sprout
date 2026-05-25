@@ -10,6 +10,70 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// ApprovalDecision is the user's choice from the 4-option approval dialog
+// (SP-058 follow-up). The classic yes/no path collapses to ApprovalDeny or
+// ApprovalApproveOnce so legacy bool wrappers still work; the two extra
+// outcomes — ApprovalApproveAlways and ApprovalElevate — power the
+// "always approve this command" and "elevate session permissions" buttons
+// added to the WebUI dialog and the CLI prompt.
+type ApprovalDecision int
+
+const (
+	// ApprovalDeny rejects the operation. Caller surfaces a security error.
+	ApprovalDeny ApprovalDecision = iota
+	// ApprovalApproveOnce approves this single invocation. Subsequent
+	// invocations of the same command still prompt.
+	ApprovalApproveOnce
+	// ApprovalApproveAlways approves this invocation AND persists the
+	// exact command string to Config.ApprovedShellCommands so future
+	// runs (across restarts) skip the prompt for the same literal command.
+	ApprovalApproveAlways
+	// ApprovalElevate approves this invocation AND sets the agent's
+	// risk profile override to "permissive" for the rest of this
+	// session. Critical-tier ops still block. Persistence is session
+	// only — the CLI/WebUI should tell the user to use /risk-profile
+	// permissive if they want this to survive restart.
+	ApprovalElevate
+)
+
+// String returns a stable lowercase identifier for the decision, used
+// in event payloads and tests.
+func (d ApprovalDecision) String() string {
+	switch d {
+	case ApprovalDeny:
+		return "deny"
+	case ApprovalApproveOnce:
+		return "approve_once"
+	case ApprovalApproveAlways:
+		return "approve_always"
+	case ApprovalElevate:
+		return "elevate"
+	default:
+		return "deny"
+	}
+}
+
+// ApprovalDecisionFromString parses a wire-format decision string back
+// into the typed enum. Unknown values resolve to ApprovalDeny for safety.
+func ApprovalDecisionFromString(s string) ApprovalDecision {
+	switch s {
+	case "approve_once", "approve", "yes", "true":
+		return ApprovalApproveOnce
+	case "approve_always", "always":
+		return ApprovalApproveAlways
+	case "elevate":
+		return ApprovalElevate
+	default:
+		return ApprovalDeny
+	}
+}
+
+// Approved reports whether the operation should proceed (any non-Deny
+// decision approves the current invocation).
+func (d ApprovalDecision) Approved() bool {
+	return d != ApprovalDeny
+}
+
 // ApprovalKind distinguishes between the two approval flows that share
 // this manager. The kind determines the event type published, the request
 // ID prefix, and the default response used on timeout / nil event-bus.
@@ -56,8 +120,8 @@ type ApprovalRequest struct {
 // received from the webui, a timeout elapses, or the event bus is nil.
 type ApprovalManager struct {
 	mu      sync.Mutex
-	pending map[string]chan bool // requestID -> response channel
-	timeout time.Duration        // per-request timeout; 0 ⇒ DefaultTimeout
+	pending map[string]chan ApprovalDecision // requestID -> response channel
+	timeout time.Duration                    // per-request timeout; 0 ⇒ DefaultTimeout
 }
 
 // DefaultTimeout is the maximum time a request will block waiting for a
@@ -102,7 +166,7 @@ var (
 // NewApprovalManager creates a new ApprovalManager with the default timeout.
 func NewApprovalManager() *ApprovalManager {
 	return &ApprovalManager{
-		pending: make(map[string]chan bool),
+		pending: make(map[string]chan ApprovalDecision),
 		timeout: DefaultTimeout,
 	}
 }
@@ -138,13 +202,25 @@ func generatePromptRequestID() string {
 // timeout, or nil event-bus.
 // For PromptKind: returns the user response, or DefaultResponse on timeout /
 // nil event-bus.
+//
+// Callers that need the richer 4-option outcome (ApproveAlways / Elevate)
+// should call RequestApprovalDecision; this wrapper collapses to bool.
 func (am *ApprovalManager) RequestApproval(eventBus *events.EventBus, req ApprovalRequest) bool {
+	return am.RequestApprovalDecision(eventBus, req).Approved()
+}
+
+// RequestApprovalDecision is the same as RequestApproval but returns the
+// full ApprovalDecision so the caller can distinguish ApproveOnce from
+// ApproveAlways and Elevate. The 4-option UI is currently only wired for
+// shell_command Gate 1/2 callers; everyone else collapses through the
+// bool wrapper above.
+func (am *ApprovalManager) RequestApprovalDecision(eventBus *events.EventBus, req ApprovalRequest) ApprovalDecision {
 	if eventBus == nil {
-		return am.defaultForKind(req)
+		return am.defaultDecisionForKind(req)
 	}
 
 	requestID := am.generateRequestID(req.Kind)
-	responseCh := make(chan bool, 1)
+	responseCh := make(chan ApprovalDecision, 1)
 
 	am.mu.Lock()
 	am.pending[requestID] = responseCh
@@ -192,20 +268,31 @@ func (am *ApprovalManager) RequestApproval(eventBus *events.EventBus, req Approv
 	select {
 	case result, ok := <-responseCh:
 		if !ok {
-			return am.defaultForKind(req) // channel closed without response
+			return am.defaultDecisionForKind(req) // channel closed without response
 		}
 		return result
 	case <-timer.C:
 		log.Printf("Security approval request %s timed out after %v — applying default", requestID, timeout)
-		return am.defaultForKind(req)
+		return am.defaultDecisionForKind(req)
 	}
 }
 
-// RespondToApproval resolves a pending request. Returns true if the request
-// existed and was responded to, false otherwise.
-//
-// This method handles responses for both ToolKind and PromptKind requests.
+// RespondToApproval resolves a pending request with a boolean (legacy
+// path: collapses to ApprovalApproveOnce or ApprovalDeny). Returns true
+// if the request existed and was responded to.
 func (am *ApprovalManager) RespondToApproval(requestID string, response bool) bool {
+	d := ApprovalDeny
+	if response {
+		d = ApprovalApproveOnce
+	}
+	return am.RespondToApprovalDecision(requestID, d)
+}
+
+// RespondToApprovalDecision resolves a pending request with the full
+// 4-option decision. The WebUI handler uses this to forward the user's
+// "always approve" or "elevate" choice; the bool wrapper RespondToApproval
+// stays for any caller (CLI bridge, tests) that only knows yes/no.
+func (am *ApprovalManager) RespondToApprovalDecision(requestID string, decision ApprovalDecision) bool {
 	am.mu.Lock()
 	ch, exists := am.pending[requestID]
 	am.mu.Unlock()
@@ -215,7 +302,7 @@ func (am *ApprovalManager) RespondToApproval(requestID string, response bool) bo
 	}
 
 	select {
-	case ch <- response:
+	case ch <- decision:
 		return true
 	default:
 		return false
@@ -244,15 +331,24 @@ func (am *ApprovalManager) SetTimeout(d time.Duration) {
 // RequestToolApproval is a convenience wrapper for ApprovalKindTool requests.
 // It preserves the original SecurityApprovalManager.RequestApproval signature.
 func (am *ApprovalManager) RequestToolApproval(eventBus *events.EventBus, clientID, userID, toolName, riskLevel, reasoning string, extras map[string]string) bool {
-	return am.RequestApproval(eventBus, ApprovalRequest{
-		Kind:           ApprovalKindTool,
+	return am.RequestToolApprovalDecision(eventBus, clientID, userID, toolName, riskLevel, reasoning, extras).Approved()
+}
+
+// RequestToolApprovalDecision is the 4-option variant: it returns the
+// full ApprovalDecision so callers can react to "always approve" and
+// "elevate" choices. Wire payload is the same SecurityApprovalRequest;
+// the WebUI dialog opts into the extra buttons via the matching response
+// schema (action field).
+func (am *ApprovalManager) RequestToolApprovalDecision(eventBus *events.EventBus, clientID, userID, toolName, riskLevel, reasoning string, extras map[string]string) ApprovalDecision {
+	return am.RequestApprovalDecision(eventBus, ApprovalRequest{
+		Kind:            ApprovalKindTool,
 		DefaultResponse: false, // reject for safety
-		ToolName:       toolName,
-		RiskLevel:      riskLevel,
-		Reasoning:      reasoning,
-		ClientID:       clientID,
-		UserID:         userID,
-		Extras:         extras,
+		ToolName:        toolName,
+		RiskLevel:       riskLevel,
+		Reasoning:       reasoning,
+		ClientID:        clientID,
+		UserID:          userID,
+		Extras:          extras,
 	})
 }
 
@@ -281,13 +377,20 @@ func (am *ApprovalManager) SetPromptTimeout(d time.Duration) {
 // --- Internal helpers ---
 
 func (am *ApprovalManager) defaultForKind(req ApprovalRequest) bool {
+	return am.defaultDecisionForKind(req).Approved()
+}
+
+func (am *ApprovalManager) defaultDecisionForKind(req ApprovalRequest) ApprovalDecision {
 	switch req.Kind {
 	case ApprovalKindTool:
-		return false // reject for safety
+		return ApprovalDeny // reject for safety
 	case ApprovalKindPrompt:
-		return req.DefaultResponse
+		if req.DefaultResponse {
+			return ApprovalApproveOnce
+		}
+		return ApprovalDeny
 	default:
-		return false
+		return ApprovalDeny
 	}
 }
 

@@ -406,6 +406,32 @@ func TestSecurityApprovalResponseData_Validate(t *testing.T) {
 			data:    SecurityApprovalResponseData{RequestID: string(make([]byte, maxRequestIDLen+1)), Approved: true},
 			wantErr: true,
 		},
+		// SP-058 follow-up: 4-option Action field
+		{
+			name: "action approve_once",
+			data: SecurityApprovalResponseData{RequestID: "req123", Action: "approve_once"},
+		},
+		{
+			name: "action approve_always",
+			data: SecurityApprovalResponseData{RequestID: "req123", Action: "approve_always"},
+		},
+		{
+			name: "action elevate",
+			data: SecurityApprovalResponseData{RequestID: "req123", Action: "elevate"},
+		},
+		{
+			name: "action deny",
+			data: SecurityApprovalResponseData{RequestID: "req123", Action: "deny"},
+		},
+		{
+			name: "action empty (legacy bool path)",
+			data: SecurityApprovalResponseData{RequestID: "req123", Approved: true},
+		},
+		{
+			name:    "action invalid value",
+			data:    SecurityApprovalResponseData{RequestID: "req123", Action: "yolo"},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

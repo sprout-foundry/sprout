@@ -80,6 +80,12 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
 		"embedding_index":                cfg.EmbeddingIndex,
+		// SP-058: risk profile + per-profile overrides. The single-
+		// value selector is editable via the settings UI; the
+		// per-profile map is read-only here (advanced; edit
+		// config.json directly for now).
+		"risk_profile":  cfg.RiskProfile,
+		"risk_profiles": cfg.RiskProfiles,
 	}
 	return out
 }

@@ -312,6 +312,7 @@ function AppInner() {
                       command={state.securityApprovalRequest.command}
                       riskType={state.securityApprovalRequest.riskType}
                       target={state.securityApprovalRequest.target}
+                      allowOptions={state.securityApprovalRequest.allowOptions}
                       onRespond={handleSecurityApprovalResponse}
                     />
                   )}

@@ -129,7 +129,12 @@ Validation rule: workflow must include at least one `steps` item, or an `initial
 - Runtime overrides (same fields as `initial` runtime block):
   - `skip_prompt`, `provider`, `model`, `persona`, `dry_run`, `max_iterations`, `no_stream`,
     `system_prompt`, `system_prompt_file`, `unsafe`, `no_subagents`, `resource_directory`, `reasoning_effort`,
-    `subagent_overrides`.
+    `subagent_overrides`, `risk_profile`.
+- `risk_profile` (`string`, optional): Shell-command gating profile for this step. Accepts a built-in
+  (`readonly`, `cautious`, `default`, `permissive`, `unrestricted`) or any name defined in
+  `config.risk_profiles`. Unknown values fall back to the built-in `default` with a stderr warning.
+  This is the same field as the `--risk-profile` CLI flag and overrides `config.risk_profile` for the
+  step's lifetime. Subagents spawned during the step inherit the override (see [SECURITY.md](SECURITY.md#risk-profiles)).
 
 ## Prompt and System Prompt Files
 
@@ -156,6 +161,7 @@ Runtime overrides are applied in this order for each initial/step block:
 11. `persona`
 12. `reasoning_effort`
 13. `subagent_overrides`
+14. `risk_profile`
 
 ## Subagent Overrides
 
@@ -355,6 +361,30 @@ Note: hard termination (for example `SIGKILL`) can prevent restoration.
         "code_reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
       },
       "prompt": "Review all changes."
+    }
+  ]
+}
+```
+
+### 5. Read-only audit then guarded implementation
+
+Two-phase pattern that uses `risk_profile` to lock the audit step out of any
+write operation, then loosens the gate for the implementation step. Subagents
+spawned during each step inherit the step's profile.
+
+```json
+{
+  "steps": [
+    {
+      "name": "audit",
+      "risk_profile": "readonly",
+      "prompt": "Investigate the auth flow. Read and report only — no edits."
+    },
+    {
+      "name": "implement",
+      "when": "on_success",
+      "risk_profile": "default",
+      "prompt": "Apply the fixes identified in the audit step."
     }
   ]
 }

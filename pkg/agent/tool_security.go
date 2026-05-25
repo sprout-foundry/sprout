@@ -90,6 +90,10 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 				}
+				// Signal Gate 2 (persona cascade) that this command
+				// already passed an interactive approval so it doesn't
+				// re-prompt for the same execution (SP-058 follow-up).
+				ctx = WithUserApproved(ctx)
 			} else {
 				// CLI: prompt user interactively via terminal stdin
 				agentConfig := agent.GetConfig()
@@ -101,6 +105,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					if !logger.AskForConfirmation(prompt, false, false) {
 						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 					}
+					// Same approval-propagation as the webui branch above.
+					ctx = WithUserApproved(ctx)
 				} else if secResult.ShouldBlock {
 					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)

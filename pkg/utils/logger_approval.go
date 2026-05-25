@@ -64,8 +64,13 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 		"                             to make this persistent across restarts.)",
 	}, "\n")
 
+	// Print the full prompt + menu once, then loop only the short
+	// "Choose ..." line on invalid input. Re-printing the entire block
+	// per typo would flood the terminal.
+	w.LogUserInteraction(fmt.Sprintf("%s\nCommand:\n  %s\n\n%s\n", prompt, command, menu))
+
 	for {
-		w.LogUserInteraction(fmt.Sprintf("%s\nCommand:\n  %s\n\n%s\n\nChoose [y/n/a/e]: ", prompt, command, menu))
+		w.LogUserInteraction("Choose [y/n/a/e]: ")
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			consecutiveErrors++

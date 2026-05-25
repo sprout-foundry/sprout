@@ -164,7 +164,7 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 		return false
 	}
 
-	prompt := "⚠  High-risk operation rejected by the active risk profile."
+	prompt := "⚠  High-risk operation — approve to run, or pick a wider scope."
 	choice := logger.AskForApprovalWithOptions(prompt, command)
 	decision := approvalDecisionFromCLIChoice(choice)
 	a.applyApprovalDecision(decision, command)

@@ -163,9 +163,9 @@
 - [x] SP-011-P2.2-zoomVerify: Verify ZoomIn/ZoomOut buttons are correctly visible and persist to localStorage
 - [x] SP-011-P2.3-cleanupPackagesUI: Evaluate `packages/ui/src/components/Terminal.tsx` — update to match new per-pane model or remove if unused
 - [x] SP-011-P3.1-terminalSearch: Install `@xterm/addon-search`; add search bar above terminal pane with match counter
-- [ ] SP-011-P3.2-clickablePaths: Detect `./foo.go:12:34` patterns in terminal output; dispatch event to open file in editor
+- [x] SP-011-P3.2-clickablePaths: Detect `./foo.go:12:34` patterns in terminal output; dispatch event to open file in editor
 - [x] SP-011-P3.3-copyOnSelect: Auto-copy selected text to clipboard
-- [ ] SP-011-P3.4-scrollbackPersistence: Save terminal buffer to IndexedDB on unmount; restore on reconnect
+- [x] SP-011-P3.4-scrollbackPersistence: Save terminal buffer to IndexedDB on unmount; restore on reconnect
 
 ## Not Started — SP-012: UX Polish
 

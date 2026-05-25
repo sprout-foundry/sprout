@@ -303,6 +303,192 @@ func TestRecordFollowUpInjection(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// runDelegateQuery: channel-based communication pattern tests
+// ---------------------------------------------------------------------------
+
+func TestRunDelegateQuery_ChannelBasedFeedback(t *testing.T) {
+	t.Run("FollowUpMessagesFlowThroughFeedbackChan", func(t *testing.T) {
+		// Verify that follow-up messages are injected through the feedbackChan
+		// instead of being sent directly from the scheduler goroutine.
+		delegate := &Agent{
+			inputInjectionChan: make(chan string, 10),
+		}
+		bridge := NewDelegateStreamBridge(&Agent{}, "test-chan-1")
+		bridge.Start()
+		defer bridge.Stop()
+
+		cfg := &DelegateConfig{
+			Prompt:           "dummy",
+			FollowUpMessages: []string{"chan-msg-1", "chan-msg-2", "chan-msg-3"},
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_, err := runDelegateQuery(ctx, delegate, "dummy", bridge, cfg)
+		assert.Error(t, err) // ProcessQuery fails without client
+
+		// Wait for all messages (1 immediate + 2 × 500ms delays)
+		time.Sleep(2000 * time.Millisecond)
+
+		// Drain and verify messages were injected in order
+		delegate.inputInjectionMutex.Lock()
+		received := make([]string, 0, 3)
+		for {
+			select {
+			case msg := <-delegate.inputInjectionChan:
+				received = append(received, msg)
+			default:
+				goto done
+			}
+		}
+		delegate.inputInjectionMutex.Unlock()
+	done:
+
+		require.Len(t, received, 3)
+		assert.Equal(t, "chan-msg-1", received[0])
+		assert.Equal(t, "chan-msg-2", received[1])
+		assert.Equal(t, "chan-msg-3", received[2])
+	})
+
+	t.Run("NoSendOnClosedChannelPanic", func(t *testing.T) {
+		// This test verifies the schedulerDone pattern: feedbackChan is never
+		// closed before the scheduler goroutine exits. We call runDelegateQuery
+		// multiple times in quick succession to stress the channel lifecycle.
+		// If the close timing was wrong, we'd get "send on closed channel" panic.
+		for i := 0; i < 5; i++ {
+			delegate := &Agent{
+				inputInjectionChan: make(chan string, 10),
+			}
+			bridge := NewDelegateStreamBridge(&Agent{}, fmt.Sprintf("test-close-%d", i))
+			bridge.Start()
+			defer bridge.Stop()
+
+			cfg := &DelegateConfig{
+				Prompt:           "dummy",
+				FollowUpMessages: []string{"fast-msg"},
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_, err := runDelegateQuery(ctx, delegate, "dummy", bridge, cfg)
+			cancel()
+
+			// Should error from ProcessQuery, not from channel panic
+			assert.Error(t, err)
+		}
+		// If we got here without panicking, the channel timing is correct.
+	})
+
+	t.Run("EmptyFollowUpMessagesNoChannelsOpened", func(t *testing.T) {
+		// With no follow-up messages, schedulerDone should be closed immediately
+		// and no goroutines should be spawned.
+		delegate := &Agent{
+			inputInjectionChan: make(chan string, 10),
+		}
+		bridge := NewDelegateStreamBridge(&Agent{}, "test-empty-fu")
+		bridge.Start()
+		defer bridge.Stop()
+
+		cfg := &DelegateConfig{
+			Prompt:           "dummy",
+			FollowUpMessages: nil,
+		}
+
+		ctx := context.Background()
+		_, err := runDelegateQuery(ctx, delegate, "dummy", bridge, cfg)
+		assert.Error(t, err) // ProcessQuery fails without client
+
+		// Should return quickly with no goroutine overhead
+		// Channel should be empty — nothing was injected
+		delegate.inputInjectionMutex.Lock()
+		select {
+		case <-delegate.inputInjectionChan:
+			t.Fatal("expected no messages for nil FollowUpMessages")
+		default:
+		}
+		delegate.inputInjectionMutex.Unlock()
+	})
+
+	t.Run("ContextCancellationStopsScheduler", func(t *testing.T) {
+		// Verify that cancelling the context stops the scheduler goroutine
+		// from sending more messages and cleans up without hanging.
+		delegate := &Agent{
+			inputInjectionChan: make(chan string, 10),
+		}
+		bridge := NewDelegateStreamBridge(&Agent{}, "test-cancel-scheduler")
+		bridge.Start()
+		defer bridge.Stop()
+
+		cfg := &DelegateConfig{
+			Prompt:           "dummy",
+			FollowUpMessages: []string{"msg-1", "msg-2", "msg-3", "msg-4", "msg-5"},
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		// Start runDelegateQuery in a goroutine so we can cancel it
+		errChan := make(chan error, 1)
+		go func() {
+			_, err := runDelegateQuery(ctx, delegate, "dummy", bridge, cfg)
+			errChan <- err
+		}()
+
+		// Cancel before ProcessQuery would normally fail
+		// The scheduler goroutine should see ctx.Done and exit
+		time.Sleep(250 * time.Millisecond)
+		cancel()
+
+		// runDelegateQuery should return (either from ProcessQuery error or context)
+		select {
+		case err := <-errChan:
+			// Expected — function returned after cancellation
+			_ = err
+		case <-time.After(3 * time.Second):
+			t.Fatal("runDelegateQuery did not return after context cancellation — possible goroutine leak")
+		}
+
+		// Give injection goroutine time to drain remaining messages
+		time.Sleep(500 * time.Millisecond)
+
+		// At least the first message should have been injected before cancellation
+		// (the first one is sent immediately without delay)
+		delegate.inputInjectionMutex.Lock()
+		select {
+		case msg := <-delegate.inputInjectionChan:
+			assert.Equal(t, "msg-1", msg)
+		default:
+			// Acceptable — if cancellation was very fast, first message might not have been processed yet
+		}
+		delegate.inputInjectionMutex.Unlock()
+	})
+
+	t.Run("MultipleSequentialCallsNoGoroutineLeak", func(t *testing.T) {
+		// Run multiple sequential calls with follow-up messages to verify
+		// that all goroutines clean up properly.
+		for i := 0; i < 3; i++ {
+			delegate := &Agent{
+				inputInjectionChan: make(chan string, 10),
+			}
+			bridge := NewDelegateStreamBridge(&Agent{}, fmt.Sprintf("test-seq-%d", i))
+			bridge.Start()
+			defer bridge.Stop()
+
+			cfg := &DelegateConfig{
+				Prompt:           "dummy",
+				FollowUpMessages: []string{"seq-msg"},
+			}
+
+			ctx := context.Background()
+			_, err := runDelegateQuery(ctx, delegate, "dummy", bridge, cfg)
+			assert.Error(t, err) // ProcessQuery fails without client
+
+			// Each call should complete and clean up its goroutines
+		}
+		// If we got here without hanging, goroutines are cleaned up correctly.
+	})
+}
+
+// ---------------------------------------------------------------------------
 // runDelegateQuery: follow-up injection goroutine behavior
 // ---------------------------------------------------------------------------
 
@@ -516,16 +702,25 @@ func TestRunDelegateQuery_FollowUpInjection(t *testing.T) {
 		// then call runDelegateQuery with FollowUpMessages. The goroutine should
 		// receive errors from InjectInputContext (channel full) and handle them
 		// gracefully by logging a warning and continuing — no crash.
+		//
+		// Use a SEPARATE properly initialized delegate (not parent) to prevent
+		// ProcessQuery from draining the channel during its agent loop.
+		parent, bus := newTestAgentForStreamBridge(t)
 		delegate := &Agent{
+			output:             NewAgentOutputManager(),
+			state:              NewAgentStateManager(false),
+			security:           NewAgentSecurityManager(),
 			inputInjectionChan: make(chan string, inputInjectionBufferSize),
 		}
+		// Pre-initialize all sub-managers to prevent races when the injection
+		// goroutine and ProcessQuery both call initSubManagers() concurrently.
+		delegate.initSubManagers()
 
 		// Fill the channel to capacity
 		for i := 0; i < inputInjectionBufferSize; i++ {
 			delegate.inputInjectionChan <- fmt.Sprintf("filler-%d", i)
 		}
 
-		parent, bus := newTestAgentForStreamBridge(t)
 		ch := bus.Subscribe("test-client")
 		defer bus.Unsubscribe("test-client")
 

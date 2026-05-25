@@ -287,10 +287,10 @@
 
 ## Not Started — SP-054: LSP Language Coverage Expansion
 
-- [ ] SP-054-1.1: Add `LanguageServerConfig` entries for Python, Rust, C/C++, C#, Java, Ruby, PHP, Swift, Kotlin, Dart, Lua, Shell to `DefaultLanguageServers()`
-- [ ] SP-054-1.2: Add all new language IDs to `LSP_SUPPORTED_LANGUAGES` in `lspClientService.ts`
-- [ ] SP-054-1.3: Add `GET /api/lsp/status` endpoint returning which language servers are available vs not installed
-- [ ] SP-054-1.4: Graceful missing-server UX — clear log messages with install instructions when binary not found
+- [x] SP-054-1.1: Add `LanguageServerConfig` entries for Python, Rust, C/C++, C#, Java, Ruby, PHP, Swift, Kotlin, Dart, Lua, Shell to `DefaultLanguageServers()`
+- [x] SP-054-1.2: Add all new language IDs to `LSP_SUPPORTED_LANGUAGES` in `lspClientService.ts`
+- [x] SP-054-1.3: Add `GET /api/lsp/status` endpoint returning which language servers are available vs not installed
+- [x] SP-054-1.4: Graceful missing-server UX — clear log messages with install instructions when binary not found
 - [ ] SP-054-2.1: Add `sprout lsp install <language>` and `sprout lsp list` CLI commands
 - [ ] SP-054-2.2: User-configurable servers via configuration file with `languageServers` section
 - [ ] SP-054-2.3: Workspace activation hints — detect `Cargo.toml`, `requirements.txt`, `*.sln`, etc. and suggest servers

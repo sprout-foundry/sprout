@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -63,11 +64,18 @@ func NewSteerCoordinator(chatAgent *agent.Agent, footer *console.StatusFooter) *
 // StartTurn activates the steer reader for the duration of a
 // ProcessQuery call. Safe to call when the reader is already active
 // (idempotent, the reader's own Start enforces this).
+//
+// Also registers the pause/resume hooks so interactive prompts (e.g.
+// security elevation in pkg/utils.AskForConfirmation) can hand stdin
+// back to cooked mode without fighting the steer reader for bytes.
+// Without this hook the prompt's bufio.Reader hits EOF immediately
+// and auto-rejects with "stdin unavailable - rejecting for safety".
 func (c *SteerCoordinator) StartTurn() {
 	if c == nil || c.reader == nil {
 		return
 	}
 	c.reader.Start()
+	clihooks.SetSteerHooks(c.reader.Stop, c.reader.Start)
 }
 
 // EndTurn deactivates the steer reader and tears down the pinned line.
@@ -76,6 +84,7 @@ func (c *SteerCoordinator) EndTurn() {
 	if c == nil || c.reader == nil {
 		return
 	}
+	clihooks.SetSteerHooks(nil, nil)
 	c.reader.Stop()
 }
 
@@ -85,6 +94,15 @@ func (c *SteerCoordinator) EndTurn() {
 // to stderr in the scroll region so the user sees what they sent;
 // failure (channel full) is reported similarly without breaking the
 // turn.
+//
+// Timing reality: seed only consults its inputInjectionChan when the
+// model returns a response WITH NO tool calls (seed v1.1.0
+// conversation.go:476, gated by `len(assistantMsg.ToolCalls) == 0`).
+// During a tool-execution loop the injection sits buffered until the
+// model decides to stop. The ack therefore says "queued" rather than
+// implying instant takeover. Users who want guaranteed next-turn
+// behavior should toggle to QUEUE mode (Tab) which routes through
+// the deferred queue instead.
 func (c *SteerCoordinator) handleSteerSubmit(text string) {
 	if c.agent == nil {
 		return
@@ -95,7 +113,7 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		return
 	}
 	fmt.Fprintln(os.Stderr)
-	console.GlyphAction.Fprintf(os.Stderr, "steer: %s", text)
+	console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
 }
 
 // handleSteerInterrupt routes Ctrl+C-while-steering to the same

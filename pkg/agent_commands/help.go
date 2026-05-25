@@ -2,10 +2,12 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // HelpCommand implements the /help slash command
@@ -29,9 +31,9 @@ func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) > 0 {
 		return h.printCommandHelp(strings.TrimPrefix(args[0], "/"))
 	}
+	fmt.Println()
+	console.GlyphInfo.Fprintln(os.Stdout, "Sprout - AI Coding Agent")
 	fmt.Print(`
-[bot] Sprout - AI Coding Agent
-
 A command-line coding assistant that uses AI to help you build software.
 
 USAGE:
@@ -124,7 +126,9 @@ func (h *HelpCommand) printCommandHelp(name string) error {
 		return fmt.Errorf("no such command: /%s", name)
 	}
 
-	fmt.Printf("\n[bot] /%s — %s\n\n", cmd.Name(), cmd.Description())
+	fmt.Println()
+	console.GlyphInfo.Fprintf(os.Stdout, "/%s — %s", cmd.Name(), cmd.Description())
+	fmt.Println()
 
 	aliases := h.registry.AliasesOf(cmd.Name())
 	if len(aliases) > 0 {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
@@ -229,7 +230,7 @@ func runMCPAdd() error {
 	fmt.Println()
 
 	if selectedTemplate.Docs != "" {
-		fmt.Printf("[read] Documentation: %s\n", selectedTemplate.Docs)
+		fmt.Printf("%sDocumentation: %s\n", console.GlyphInfo.Prefix(), selectedTemplate.Docs)
 	}
 
 	return nil
@@ -322,10 +323,10 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 
 	// Installation instructions
 	if installChoice == "1" || installChoice == "" {
-		fmt.Println("[pkg] Installation (if not already installed):")
+		console.GlyphInfo.Print("Installation (if not already installed):")
 		fmt.Println("No installation needed - uvx will install automatically")
 	} else {
-		fmt.Println("[pkg] Installation (if not already installed):")
+		console.GlyphInfo.Print("Installation (if not already installed):")
 		fmt.Println("pip install mcp-server-git")
 	}
 
@@ -469,7 +470,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	fmt.Println()
 	fmt.Println("To test the configuration later, run: sprout mcp test github")
 	fmt.Println()
-	fmt.Println("[pkg] Features available:")
+	console.GlyphInfo.Print("Features available:")
 	fmt.Println("• Repository management and file operations")
 	fmt.Println("• Issues and pull request automation")
 	fmt.Println("• GitHub Actions workflow monitoring")
@@ -519,7 +520,7 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 
 func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
-	fmt.Println("[role] Playwright MCP Server Setup")
+	console.GlyphInfo.Print("Playwright MCP Server Setup")
 	fmt.Println("=============================")
 	fmt.Println()
 
@@ -598,10 +599,10 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test playwright")
 	fmt.Println()
-	fmt.Println("[pkg] Installation (if not already installed):")
+	console.GlyphInfo.Print("Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
 	fmt.Println()
-	fmt.Println("[role] Features available:")
+	console.GlyphInfo.Print("Features available:")
 	fmt.Println("• Browser automation (Chromium, Firefox, WebKit)")
 	fmt.Println("• Web scraping and data extraction")
 	fmt.Println("• UI testing and validation")
@@ -679,7 +680,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test chrome-devtools")
 	fmt.Println()
-	fmt.Println("[pkg] Installation (if not already installed):")
+	console.GlyphInfo.Print("Installation (if not already installed):")
 	fmt.Println("npx will install the package automatically")
 	fmt.Println()
 	fmt.Println("ⓘ Features available:")
@@ -697,7 +698,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 
 func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, registry *mcp.MCPServerRegistry) error {
 	fmt.Println()
-	fmt.Println("[tool] Custom MCP Server Setup")
+	console.GlyphInfo.Print("Custom MCP Server Setup")
 	fmt.Println("==========================")
 	fmt.Println()
 
@@ -945,7 +946,7 @@ func runMCPList() error {
 	fmt.Println("-------------------")
 
 	for name, server := range redactedConfig.Servers {
-		fmt.Printf("[signal] %s\n", name)
+		fmt.Printf("%s%s\n", console.GlyphSuccess.Prefix(), name)
 		if server.Type == "http" {
 			fmt.Printf("   Type: HTTP Remote Server\n")
 			fmt.Printf("   URL: %s\n", secretdetect.RedactOpaque(server.URL))
@@ -1078,7 +1079,7 @@ func runMCPTest(serverName string) error {
 	}
 	fmt.Println("✓ Server initialized successfully!")
 
-	fmt.Println("[search] Listing available tools...")
+	console.GlyphAction.Print("Listing available tools...")
 	tools, err := server.ListTools(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list tools: %w", err)

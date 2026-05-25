@@ -11,6 +11,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
@@ -360,7 +361,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	// unreachable via the non-interactive path when this early check succeeds.
 	clientType, finalModel, err = configManager.ResolveProviderModel("", model)
 	if err != nil {
-		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to resolve configured provider/model: %v\n", err)))
+		console.GlyphWarning.Fprintf(os.Stderr, "Failed to resolve configured provider/model: %v", err)
 		// SSH daemon exception: allow startup even without provider
 		if isSSHDaemon() {
 			// Continue with whatever clientType was resolved (may be EditorClientType)
@@ -368,7 +369,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, err, "", "")
 		} else {
 			// Interactive mode: offer to select a provider
-			_, _ = os.Stderr.Write([]byte("[tool] Selecting an available provider...\n"))
+			console.GlyphAction.Fprintf(os.Stderr, "Selecting an available provider...")
 			clientType, err = configManager.SelectNewProvider()
 			if err != nil {
 				return nil, agenterrors.NewProviderError("failed to select provider", err, "", "")
@@ -385,7 +386,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		// SSH daemon exception: try to find a provider with API key automatically
 		if isSSHDaemon() {
 			if autoProvider, autoModel := findProviderWithAPIKey(configManager); autoProvider != "" {
-				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[SSH] Auto-selected provider %s (has API key)\n", autoProvider)))
+				console.GlyphInfo.Fprintf(os.Stderr, "SSH: Auto-selected provider %s (has API key)", autoProvider)
 				clientType = autoProvider
 				finalModel = autoModel
 			} else {
@@ -404,7 +405,7 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	var client api.ClientInterface
 	for {
 		if err := configManager.EnsureAPIKey(clientType); err != nil {
-			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Provider %s is not configured: %v\n", api.GetProviderName(clientType), err)))
+			console.GlyphWarning.Fprintf(os.Stderr, "Provider %s is not configured: %v", api.GetProviderName(clientType), err)
 			nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)
 			if recoverErr != nil {
 				return nil, agenterrors.NewProviderError("provider recovery failed after ensuring API key", recoverErr, "", "")
@@ -444,7 +445,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 				continue
 			}
 		} else if debug {
-			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[WARN] Skipping provider connection check for %s\n", api.GetProviderName(clientType))))
+			fmt.Println()
+			console.GlyphWarning.Printf("Skipping provider connection check for %s", api.GetProviderName(clientType))
 		}
 
 		break
@@ -456,7 +458,8 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	}
 	if finalModel != "" && finalModel != configManager.GetModelForProvider(clientType) && clientType != api.TestClientType {
 		if err := configManager.SetModelForProvider(clientType, finalModel); err != nil {
-			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[WARN] Warning: Failed to save model selection: %v\n", err)))
+			fmt.Println()
+			console.GlyphWarning.Printf("Failed to save model selection: %v", err)
 		}
 	}
 
@@ -530,6 +533,6 @@ func (a *Agent) autoActivateEAPersona() {
 	}
 
 	if err := a.ApplyPersona(personaID); err != nil {
-		_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to auto-activate EA persona: %v\n", err)))
+		console.GlyphWarning.Fprintf(os.Stderr, "Failed to auto-activate EA persona: %v", err)
 	}
 }

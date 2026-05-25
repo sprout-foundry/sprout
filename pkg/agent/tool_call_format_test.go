@@ -92,7 +92,7 @@ func TestSummarizeTodoWriteArgs(t *testing.T) {
 					map[string]interface{}{"status": "cancelled"},
 				},
 			},
-			expected: "todos=4 [ ]=1 [~]=1 [x]=1 [-]=1",
+			expected: "todos=4 pending=1 progress=1 done=1 cancelled=1",
 		},
 		{
 			name: "all pending",
@@ -102,7 +102,7 @@ func TestSummarizeTodoWriteArgs(t *testing.T) {
 					map[string]interface{}{"status": "pending"},
 				},
 			},
-			expected: "todos=2 [ ]=2 [~]=0 [x]=0 [-]=0",
+			expected: "todos=2 pending=2 progress=0 done=0 cancelled=0",
 		},
 		{
 			name: "item not a map",
@@ -112,7 +112,7 @@ func TestSummarizeTodoWriteArgs(t *testing.T) {
 					map[string]interface{}{"status": "pending"},
 				},
 			},
-			expected: "todos=2 [ ]=1 [~]=0 [x]=0 [-]=0",
+			expected: "todos=2 pending=1 progress=0 done=0 cancelled=0",
 		},
 		{
 			name: "unknown status ignored",
@@ -122,7 +122,7 @@ func TestSummarizeTodoWriteArgs(t *testing.T) {
 					map[string]interface{}{"status": "pending"},
 				},
 			},
-			expected: "todos=2 [ ]=1 [~]=0 [x]=0 [-]=0",
+			expected: "todos=2 pending=1 progress=0 done=0 cancelled=0",
 		},
 	}
 

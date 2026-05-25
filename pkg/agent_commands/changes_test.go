@@ -8,24 +8,28 @@ import (
 )
 
 func TestGetChangeTrackingStatus(t *testing.T) {
-	if got := getChangeTrackingStatus(nil); got != "[FAIL] Disabled" {
-		t.Fatalf("nil agent status = %q", got)
+	// Status strings are now glyph-prefixed (SP-057 Phase 1). We
+	// assert against the human-readable text suffix rather than
+	// the exact ANSI sequence so the tests stay stable across
+	// NO_COLOR / FORCE_COLOR environments.
+	if got := getChangeTrackingStatus(nil); !strings.Contains(got, "Disabled") {
+		t.Fatalf("nil agent status = %q (want contains 'Disabled')", got)
 	}
 
 	idleAgent := &agent.Agent{}
-	if got := getChangeTrackingStatus(idleAgent); got != "[i] Idle (no tracked session yet)" {
-		t.Fatalf("idle agent status = %q", got)
+	if got := getChangeTrackingStatus(idleAgent); !strings.Contains(got, "Idle") {
+		t.Fatalf("idle agent status = %q (want contains 'Idle')", got)
 	}
 
 	enabledAgent := &agent.Agent{}
 	enabledAgent.EnableChangeTracking("test")
-	if got := getChangeTrackingStatus(enabledAgent); got != "[OK] Enabled" {
-		t.Fatalf("enabled agent status = %q", got)
+	if got := getChangeTrackingStatus(enabledAgent); !strings.Contains(got, "Enabled") {
+		t.Fatalf("enabled agent status = %q (want contains 'Enabled')", got)
 	}
 
 	enabledAgent.DisableChangeTracking()
-	if got := getChangeTrackingStatus(enabledAgent); got != "[FAIL] Disabled" {
-		t.Fatalf("disabled tracker status = %q", got)
+	if got := getChangeTrackingStatus(enabledAgent); !strings.Contains(got, "Disabled") {
+		t.Fatalf("disabled tracker status = %q (want contains 'Disabled')", got)
 	}
 }
 

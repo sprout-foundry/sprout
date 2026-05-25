@@ -135,6 +135,47 @@ func (a *ActivityIndicator) Replace(line string) {
 	fmt.Fprintln(a.w, line)
 }
 
+// ReplaceLast is shorthand for ReplaceLastN(line, 1).
+func (a *ActivityIndicator) ReplaceLast(line string) {
+	a.ReplaceLastN(line, 1)
+}
+
+// ReplaceLastN stops the spinner and OVERWRITES the previous N rows
+// before printing line. Used by the tool-collapse subscriber to merge
+// a series of identical tool-end lines (separated by spinner-frame
+// blank rows) into a single "✓ read_file × N (foo.go, bar.go, …)" line
+// updated in place.
+//
+// Caller is responsible for knowing N matches the actual row layout:
+//   - n=1: overwrites the immediately preceding row (e.g. a spinner)
+//   - n=2: overwrites the prev row + the blank line above it (the
+//     pattern emitted between consecutive tool spinners in the CLI's
+//     ToolStart path)
+//
+// Only safe to call when the caller knows those rows belong to this
+// indicator — no streaming text or unrelated chrome has written there
+// since. On a non-TTY writer this degenerates to a regular Fprintln so
+// logs still show each iteration (slightly noisier but never corrupted).
+func (a *ActivityIndicator) ReplaceLastN(line string, n int) {
+	if a == nil {
+		return
+	}
+	if !a.isTTY {
+		fmt.Fprintln(a.w, line)
+		return
+	}
+	a.Stop()
+	if n < 1 {
+		n = 1
+	}
+	// \033[F moves cursor to start of previous line; \033[K clears from
+	// cursor to end of line. Repeat n times to walk up and erase.
+	for i := 0; i < n; i++ {
+		fmt.Fprint(a.w, "\033[F\033[K")
+	}
+	fmt.Fprintln(a.w, line)
+}
+
 // Elapsed returns how long the current spinner has been running. Returns
 // zero if the indicator is not active.
 func (a *ActivityIndicator) Elapsed() time.Duration {

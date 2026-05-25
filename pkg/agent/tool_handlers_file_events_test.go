@@ -220,6 +220,9 @@ func TestPatchStructuredFileEmitsFileChangedEvent(t *testing.T) {
 	err := os.WriteFile(filePath, []byte(initialContent), 0644)
 	require.NoError(t, err)
 
+	// Mark file as read this turn to satisfy the staleness check
+	agent.RecordFileReadThisTurn(filePath)
+
 	result, err := handlePatchStructuredFile(context.Background(), agent, map[string]interface{}{
 		"path":   filePath,
 		"format": "json",

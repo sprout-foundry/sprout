@@ -37,17 +37,17 @@ func runDiag() {
 
 	fmt.Printf("Global config: %s\n", globalConfigPath)
 	if info, err := os.Stat(globalConfigPath); err == nil {
-		fmt.Printf("  [OK] EXISTS (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
+		fmt.Printf("  ✓ EXISTS (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
 	} else {
-		fmt.Printf("  [FAIL] Does not exist\n")
+		fmt.Printf("  ✗ Does not exist\n")
 	}
 	fmt.Println()
 
 	fmt.Printf("Project-local config: %s\n", projectConfigPath)
 	if info, err := os.Stat(projectConfigPath); err == nil {
-		fmt.Printf("  [OK] EXISTS (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
+		fmt.Printf("  ✓ EXISTS (modified: %s)\n", info.ModTime().Format("2006-01-02 15:04:05"))
 	} else {
-		fmt.Printf("  [FAIL] Does not exist\n")
+		fmt.Printf("  ✗ Does not exist\n")
 	}
 	fmt.Println()
 
@@ -63,12 +63,12 @@ func runDiag() {
 	// Load and show custom providers
 	config, err := configuration.Load()
 	if err != nil {
-		fmt.Printf("[FAIL] Error loading config: %v\n", err)
+		fmt.Printf("✗ Error loading config: %v\n", err)
 		return
 	}
 
 	if config.CustomProviders == nil || len(config.CustomProviders) == 0 {
-		fmt.Println("[WARN] No custom providers configured")
+		fmt.Println("⚠ No custom providers configured")
 	} else {
 		fmt.Printf("Custom providers found: %d\n", len(config.CustomProviders))
 		for name, provider := range config.CustomProviders {
@@ -85,7 +85,7 @@ func runDiag() {
 	fmt.Println("=================")
 	mcpConfig, err := mcp.LoadMCPConfig()
 	if err != nil {
-		fmt.Printf("  [FAIL] Error loading MCP config: %v\n", err)
+		fmt.Printf("  ✗ Error loading MCP config: %v\n", err)
 	} else {
 		fmt.Printf("  Enabled: %t\n", mcpConfig.Enabled)
 		fmt.Printf("  Auto-start: %t\n", mcpConfig.AutoStart)
@@ -94,7 +94,7 @@ func runDiag() {
 		fmt.Println()
 
 		if len(mcpConfig.Servers) == 0 {
-			fmt.Println("  [INFO] No MCP servers configured")
+			fmt.Println("  ⓘ No MCP servers configured")
 		} else {
 			fmt.Println("  Configured Servers:")
 			redactedConfig := mcp.RedactMCPConfig(mcpConfig)
@@ -144,19 +144,19 @@ func runDiag() {
 	// Check python availability for runtime tooling
 	fmt.Println("Python runtime:")
 	if interp, err := pythonruntime.FindPython3Interpreter(); err != nil {
-		fmt.Printf("  [FAIL] Python 3 runtime not found: %v\n", err)
+		fmt.Printf("  ✗ Python 3 runtime not found: %v\n", err)
 	} else {
-		fmt.Printf("  [OK] Python 3 runtime: %s (%s)\n", interp.Path, interp.Version)
+		fmt.Printf("  ✓ Python 3 runtime: %s (%s)\n", interp.Path, interp.Version)
 	}
 	fmt.Println()
 
 	fmt.Println("PDF Python runtime (requires 3.10+):")
 	if err := tools.CheckPDFPython3Available(); err != nil {
-		fmt.Printf("  [FAIL] PDF runtime precheck failed: %v\n", err)
+		fmt.Printf("  ✗ PDF runtime precheck failed: %v\n", err)
 	} else if interp, err := pythonruntime.FindPython3InterpreterAtLeast(10); err == nil {
-		fmt.Printf("  [OK] PDF runtime: %s (%s)\n", interp.Path, interp.Version)
+		fmt.Printf("  ✓ PDF runtime: %s (%s)\n", interp.Path, interp.Version)
 	} else {
-		fmt.Println("  [OK] PDF runtime available")
+		fmt.Println("  ✓ PDF runtime available")
 	}
 	fmt.Println()
 
@@ -164,7 +164,7 @@ func runDiag() {
 	if config.ProviderModels != nil {
 		for provider, model := range config.ProviderModels {
 			if _, isCustom := config.CustomProviders[provider]; isCustom {
-				fmt.Printf("[OK] Custom provider '%s' is in provider_models (model: %s)\n", provider, model)
+				fmt.Printf("✓ Custom provider '%s' is in provider_models (model: %s)\n", provider, model)
 			}
 		}
 	}
@@ -175,11 +175,11 @@ func runDiag() {
 		for _, provider := range config.ProviderPriority {
 			if _, isCustom := config.CustomProviders[provider]; isCustom {
 				customInPriority++
-				fmt.Printf("[OK] Custom provider '%s' is in provider_priority\n", provider)
+				fmt.Printf("✓ Custom provider '%s' is in provider_priority\n", provider)
 			}
 		}
 		if customInPriority == 0 && len(config.CustomProviders) > 0 {
-			fmt.Println("[WARN] Custom providers exist but are NOT in provider_priority")
+			fmt.Println("⚠ Custom providers exist but are NOT in provider_priority")
 		}
 	}
 }

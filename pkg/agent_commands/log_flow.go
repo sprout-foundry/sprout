@@ -1,12 +1,13 @@
 package commands
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/sprout-foundry/sprout/pkg/ui"
 	"golang.org/x/term"
@@ -92,7 +93,8 @@ func (lf *LogFlow) showLogOptions() error {
 	actions := lf.buildLogActions(revisions)
 
 	if len(actions) == 0 {
-		fmt.Printf("\r\n[empty] No change history available.\r\n")
+		fmt.Print("\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No change history available.")
 		return nil
 	}
 
@@ -124,7 +126,7 @@ func (lf *LogFlow) buildLogActions(revisions []history.RevisionGroup) []LogActio
 	// Action 1: View full change log
 	actions = append(actions, LogAction{
 		ID:          "view_log",
-		DisplayName: "[list] View Change Log",
+		DisplayName: "View Change Log",
 		Description: "Display complete change history",
 		Action:      (*LogFlow).viewChangeLog,
 	})
@@ -133,7 +135,7 @@ func (lf *LogFlow) buildLogActions(revisions []history.RevisionGroup) []LogActio
 	if len(revisions) > 0 {
 		actions = append(actions, LogAction{
 			ID:          "rollback_select",
-			DisplayName: "[|<] Select Revision to Rollback",
+			DisplayName: "Select Revision to Rollback",
 			Description: fmt.Sprintf("Choose from %d available revisions", len(revisions)),
 			Action:      (*LogFlow).interactiveRollback,
 		})
@@ -142,7 +144,7 @@ func (lf *LogFlow) buildLogActions(revisions []history.RevisionGroup) []LogActio
 	// Action 3: Current session changes
 	actions = append(actions, LogAction{
 		ID:          "current_changes",
-		DisplayName: "[edit] Current Session Changes",
+		DisplayName: "Current Session Changes",
 		Description: "View changes tracked in this session",
 		Action:      (*LogFlow).showCurrentSessionChanges,
 	})
@@ -151,7 +153,7 @@ func (lf *LogFlow) buildLogActions(revisions []history.RevisionGroup) []LogActio
 	if len(revisions) > 0 {
 		actions = append(actions, LogAction{
 			ID:          "change_stats",
-			DisplayName: "[chart] Change Statistics",
+			DisplayName: "Change Statistics",
 			Description: "View statistics about file changes",
 			Action:      (*LogFlow).showChangeStatistics,
 		})
@@ -161,7 +163,7 @@ func (lf *LogFlow) buildLogActions(revisions []history.RevisionGroup) []LogActio
 	if len(revisions) > 0 {
 		actions = append(actions, LogAction{
 			ID:          "export_log",
-			DisplayName: "[up] Export Change Log",
+			DisplayName: "Export Change Log",
 			Description: "Save change history to file",
 			Action:      (*LogFlow).exportChangeLog,
 		})
@@ -179,8 +181,7 @@ func (lf *LogFlow) getAvailableRevisions() ([]history.RevisionGroup, error) {
 func (lf *LogFlow) viewChangeLog() error {
 	// Always use \r\n for consistency in agent console (raw mode)
 	// The agent console handles all output in raw mode
-	fmt.Print("[doc] Recent Change History\r\n")
-	fmt.Print("=" + fmt.Sprintf("%*s", 25, "=") + "\r\n")
+	console.GlyphInfo.Fprintf(os.Stdout, "Recent Change History")
 
 	// Use the non-interactive buffer version with proper formatting
 	historyText, err := history.PrintRevisionHistoryBuffer()
@@ -192,7 +193,8 @@ func (lf *LogFlow) viewChangeLog() error {
 	historyText = strings.ReplaceAll(historyText, "\n", "\r\n")
 
 	fmt.Print(historyText)
-	fmt.Print("\r\n[i] Use /rollback <revision-id> to revert changes\r\n")
+	fmt.Print("\r\n")
+	console.GlyphInfo.Fprintf(os.Stdout, "Use /rollback <revision-id> to revert changes")
 
 	return nil
 }
@@ -205,14 +207,15 @@ func (lf *LogFlow) interactiveRollback() error {
 	}
 
 	if len(revisions) == 0 {
-		fmt.Printf("\r\n[empty] No revisions available for rollback.\r\n")
+		fmt.Print("\r\n")
+		console.GlyphInfo.Fprintf(os.Stdout, "No revisions available for rollback.")
 		return nil
 	}
 
 	// Check if we're in agent console - show list with help
 	if envutil.GetEnvSimple("AGENT_CONSOLE") == "1" {
-		fmt.Println("\n[|<] Available Revisions:")
-		fmt.Println("=======================")
+		fmt.Println()
+		console.GlyphInfo.Print("Available Revisions:")
 
 		for i, revision := range revisions {
 			description := revision.Instructions
@@ -223,7 +226,8 @@ func (lf *LogFlow) interactiveRollback() error {
 				revision.Timestamp.Format("2006-01-02 15:04:05"))
 		}
 
-		fmt.Println("\n[i] To rollback to a revision, use: /rollback <revision-id>")
+		fmt.Println()
+		console.GlyphInfo.Print("To rollback to a revision, use: /rollback <revision-id>")
 		fmt.Println("   Example: /rollback rev_abc123")
 		return nil
 	}
@@ -236,8 +240,8 @@ func (lf *LogFlow) interactiveRollback() error {
 	}
 
 	// Numeric selector for rollback
-	fmt.Println("\n[|<] Available Revisions:")
-	fmt.Println("=======================")
+	fmt.Println()
+	console.GlyphInfo.Print("Available Revisions:")
 
 	for i, revision := range revisions {
 		description := revision.Instructions
@@ -262,7 +266,8 @@ func (lf *LogFlow) interactiveRollback() error {
 
 	// Confirm before executing rollback
 	revisionID := revisions[selection-1].RevisionID
-	fmt.Printf("\n[WARN] Confirm rollback of revision: %s\n", revisionID)
+	fmt.Println()
+	console.GlyphWarning.Printf("Confirm rollback of revision: %s", revisionID)
 	fmt.Printf("This will restore %d file(s). Continue? (y/n): ", len(revisions[selection-1].Changes))
 
 	if !ui.PromptForConfirmation("") {
@@ -271,23 +276,24 @@ func (lf *LogFlow) interactiveRollback() error {
 	}
 
 	// Perform rollback
-	fmt.Printf("\r\n[~] Rolling back to revision: %s\r\n", revisionID)
+	fmt.Print("\r\n")
+	console.GlyphDim.Fprintf(os.Stdout, "Rolling back to revision: %s", revisionID)
 
 	err = history.RevertChangeByRevisionID(revisionID)
 	if err != nil {
 		return fmt.Errorf("rollback failed: %w", err)
 	}
 
-	fmt.Printf("[OK] Successfully rolled back to revision: %s\r\n", revisionID)
-	fmt.Printf("[i] Use '/changes' to see current session changes\r\n")
+	console.GlyphSuccess.Fprintf(os.Stdout, "Successfully rolled back to revision: %s", revisionID)
+	console.GlyphInfo.Fprintf(os.Stdout, "Use '/changes' to see current session changes")
 
 	return nil
 }
 
 // showCurrentSessionChanges displays current session change tracking
 func (lf *LogFlow) showCurrentSessionChanges() error {
-	fmt.Printf("\r\n[edit] Current Session Changes\r\n")
-	fmt.Printf("==============================\r\n")
+	fmt.Print("\r\n")
+	console.GlyphInfo.Fprintf(os.Stdout, "Current Session Changes")
 
 	if !lf.agent.IsChangeTrackingEnabled() {
 		if lf.agent.GetChangeTracker() == nil {
@@ -317,8 +323,8 @@ func (lf *LogFlow) showCurrentSessionChanges() error {
 
 // showChangeStatistics displays statistics about all changes
 func (lf *LogFlow) showChangeStatistics() error {
-	fmt.Print("\r\n[chart] Change Statistics\r\n")
-	fmt.Print("=" + strings.Repeat("=", 22) + "\r\n")
+	fmt.Print("\r\n")
+	console.GlyphInfo.Fprintf(os.Stdout, "Change Statistics")
 
 	// Get current session stats
 	if lf.agent.IsChangeTrackingEnabled() {
@@ -338,7 +344,8 @@ func (lf *LogFlow) showChangeStatistics() error {
 
 // exportChangeLog exports the change log to a file
 func (lf *LogFlow) exportChangeLog() error {
-	fmt.Printf("\r\n[up] Exporting change log...\r\n")
+	fmt.Print("\r\n")
+	console.GlyphAction.Fprintf(os.Stdout, "Exporting change log...")
 
 	// Get change history
 	historyText, err := history.PrintRevisionHistoryBuffer()
@@ -356,6 +363,6 @@ func (lf *LogFlow) exportChangeLog() error {
 		return fmt.Errorf("failed to write log file: %w", err)
 	}
 
-	fmt.Printf("[OK] Change log exported to: %s\r\n", filename)
+	console.GlyphSuccess.Fprintf(os.Stdout, "Change log exported to: %s", filename)
 	return nil
 }

@@ -164,6 +164,13 @@ func AskUser(question string) (string, error) {
 	// SP-048 follow-up: stop any active CLI spinner so it doesn't overwrite
 	// the question text on stderr while we render it on stdout.
 	clihooks.SuspendIndicator()
+	// SP-057 follow-up: pause the SteerInputReader so it releases stdin
+	// back to cooked mode. The ask_user tool fires mid-turn, so without
+	// this the bufio.Reader below would hit EOF immediately (the steer
+	// reader is consuming raw-mode stdin) and the tool would silently
+	// return an empty answer.
+	clihooks.PauseSteer()
+	defer clihooks.ResumeSteer()
 	// Display the prompt
 	fmt.Printf("%s: ", question)
 	// Read user input

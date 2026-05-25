@@ -275,9 +275,24 @@ func TestMatchesRiskPattern_RmRecursive(t *testing.T) {
 	}{
 		{"rm -r", "rm -r dir/", true},
 		{"rm -rf", "rm -rf /tmp/*", true},
+		{"rm -R", "rm -R dir/", true},
 		{"rm --recursive", "rm --recursive dir/", true},
 		{"rm without -r", "rm file.txt", false},
 		{"no rm command", "cat file.txt", false},
+		// Regression: path that ends in "...rm" + a `-r`-prefixed flag
+		// elsewhere (e.g. -run, -recover) must NOT match. The classic
+		// pre-fix breakage was `cd .../platform && go test -run X` — the
+		// substring "rm " appeared inside "platform &&" and "-r" inside
+		// "-run", causing every `go test` in that directory to be
+		// auto-rejected as rm_recursive.
+		{"path ending in rm + -run flag", "cd ~/dev/sprout-foundry/platform && go test ./internal/api/ -run TestCloud -count=1 -v", false},
+		{"path ending in rm + 2>&1 pipe", "cd ~/dev/sprout-foundry/platform && go test ./internal/api/ -run X 2>&1 | tail", false},
+		// rm only inside a quoted argument — not an actual invocation
+		{"rm in quoted echo arg", "echo 'rm -rf foo' > /tmp/notes.txt", false},
+		// Real chained rm invocations still match
+		{"cd then rm -rf", "cd /tmp && rm -rf cache", true},
+		{"sudo rm -rf", "sudo rm -rf /var/cache", true},
+		{"piped rm -rf", "find . -name '*.tmp' | xargs rm -rf", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

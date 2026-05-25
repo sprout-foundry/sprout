@@ -25,6 +25,7 @@ type MCPSubManager interface {
 type AgentMCPManager struct {
 	manager     mcp.MCPManager
 	toolsCache  []api.Tool
+	stateMu     sync.RWMutex // protects initialized + initErr
 	initialized bool
 	initErr     error
 	initMu      sync.Mutex
@@ -55,18 +56,26 @@ func (m *AgentMCPManager) SetToolsCache(tools []api.Tool) {
 }
 
 func (m *AgentMCPManager) IsInitialized() bool {
+	m.stateMu.RLock()
+	defer m.stateMu.RUnlock()
 	return m.initialized
 }
 
 func (m *AgentMCPManager) SetInitialized(initialized bool) {
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
 	m.initialized = initialized
 }
 
 func (m *AgentMCPManager) GetInitError() error {
+	m.stateMu.RLock()
+	defer m.stateMu.RUnlock()
 	return m.initErr
 }
 
 func (m *AgentMCPManager) SetInitError(err error) {
+	m.stateMu.Lock()
+	defer m.stateMu.Unlock()
 	m.initErr = err
 }
 

@@ -133,7 +133,7 @@
 [x] SP-007-2-wireCommand: Wire `/extend` into command routing in `conversation_handler.go`
 - [x] SP-007-3-webuiSettings: Settings panel for role CRUD; visual role editor (future)
 - [x] SP-007-3-apiEndpoints: Add REST endpoints for role CRUD: `GET/PUT/DELETE /api/settings/roles/{name}` (future)
-- [ ] SP-007-3-roleSelector: Role selector in agent persona picker (future)
+- [x] SP-007-3-roleSelector: Role selector in agent persona picker (future)
 
 ## Not Started — SP-008: Reliability Engineering
 

@@ -2,8 +2,16 @@ import { ChevronRight } from 'lucide-react';
 import { useRef, useEffect, useState } from 'react';
 import './SettingsPanel.css';
 import type { SproutSettings } from '../services/api';
+import type { AgentConfigProps } from './settings/types';
 import { Skeleton } from '@sprout/ui';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
+import RoleSelector from './RoleSelector';
+
+// Extended agent config that adds optional role selection
+type ExtendedAgentConfig = AgentConfigProps & {
+  selectedRole?: string | null;
+  onRoleChange?: (roleId: string | null) => void;
+};
 
 // Import from settings/ subdirectory
 import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
@@ -16,6 +24,7 @@ import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
+import { RolesSettingsTab } from './settings/RolesSettingsTab';
 import SubagentSettingsTab from './settings/SubagentSettingsTab';
 import {
   SECTION_GROUPS,
@@ -238,6 +247,9 @@ function SettingsPanel({
       case 'agent-skills':
         return <SkillsSettingsTab settings={activeSettings ?? settings} toggleSkill={mutations.toggleSkill} />;
 
+      case 'agent-roles':
+        return <RolesSettingsTab addNotification={state.addNotification} />;
+
       /* ── Workspace section ─────────────────────────── */
       case 'workspace-embeddings':
         return (
@@ -356,6 +368,13 @@ function SettingsPanel({
     }
   };
 
+  /* ─── Extract typed role config to avoid repeated assertions ─── */
+  const roleConfig = (
+    agentConfig && 'selectedRole' in agentConfig && 'onRoleChange' in agentConfig
+  )
+    ? agentConfig as unknown as ExtendedAgentConfig
+    : null;
+
   /* ─── Main render ─────────────────────────────────────── */
 
   return (
@@ -439,6 +458,12 @@ function SettingsPanel({
                       )}
                     </select>
                   </div>
+                  {roleConfig && (
+                    <RoleSelector
+                      selectedRole={roleConfig.selectedRole ?? null}
+                      onRoleChange={roleConfig.onRoleChange ?? (() => {})}
+                    />
+                  )}
                 </div>
               )}
 

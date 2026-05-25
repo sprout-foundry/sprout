@@ -294,10 +294,10 @@
 - [x] SP-054-2.1: Add `sprout lsp install <language>` and `sprout lsp list` CLI commands
 - [x] SP-054-2.2: User-configurable servers via configuration file with `languageServers` section
 - [x] SP-054-2.3: Workspace activation hints — detect `Cargo.toml`, `requirements.txt`, `*.sln`, etc. and suggest servers
-- [ ] SP-054-3.1: Python semantic adapter — diagnostics via `ruff check`, hover/def/refs via LSP proxy
-- [ ] SP-054-3.2: Rust semantic adapter — diagnostics via `cargo check`, hover/def/refs via LSP proxy
-- [ ] SP-054-3.3: C/C++ semantic adapter — diagnostics via `clang-tidy`, hover/def/refs via LSP proxy
-- [ ] SP-054-3.4: Shared `lsp_query.go` helper in `pkg/lsp/semantic/` for routing adapter queries through the LSP proxy
+- [x] SP-054-3.1: Python semantic adapter — diagnostics via `ruff check`, hover/def/refs via LSP proxy
+- [x] SP-054-3.2: Rust semantic adapter — diagnostics via `cargo check`, hover/def/refs via LSP proxy
+- [x] SP-054-3.3: C/C++ semantic adapter — diagnostics via `clang-tidy`, hover/def/refs via LSP proxy
+- [x] SP-054-3.4: Shared `lsp_query.go` helper in `pkg/lsp/semantic/` for routing adapter queries through the LSP proxy
 
 ## Completed — SP-056: Remove Static Embedding Provider
 _Spec: roadmap/SP-056-remove-static-embeddings.md_

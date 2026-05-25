@@ -131,6 +131,13 @@ type Agent struct {
 	// based on the root persona (e.g., EA gets 3 levels, orchestrator gets 2).
 	rootPersonaID string
 
+	// riskProfileOverride is a transient (per-session) override for
+	// the risk cascade profile. Set by the --risk-profile CLI flag
+	// and by per-step risk_profile in workflow JSON. Empty means
+	// fall through to Config.RiskProfile, then to "default".
+	// See agent_getters.go:EvaluateOperationRisk for resolution.
+	riskProfileOverride configuration.RiskProfile
+
 	// filesReadThisTurn tracks paths the agent called read_file on during
 	// the current turn. Used by the SP-046 staleness rule in
 	// checkWriteStaleness — see workspace_sync.go. Reset at turn boundaries

@@ -87,6 +87,24 @@ type Config struct {
 	// SkipPrompt - for non-interactive mode
 	SkipPrompt bool `json:"skip_prompt,omitempty"`
 
+	// RiskProfile selects a named preset for the shell-command risk
+	// cascade: readonly / cautious / default / permissive /
+	// unrestricted. Empty or unrecognized values resolve to "default"
+	// via AutoApproveRulesForProfile. Per-persona AutoApproveRules
+	// always win over the profile. The CLI's --risk-profile flag and
+	// a workflow step's "risk_profile" field both override this
+	// value.
+	RiskProfile string `json:"risk_profile,omitempty"`
+
+	// RiskProfiles allows the user to override the baked-in rules
+	// for any named profile. Keys are profile names (readonly,
+	// cautious, default, permissive, unrestricted, or any
+	// user-defined name); values replace the built-in rules entirely
+	// for that name. Useful when the user wants a slightly different
+	// definition of "cautious" or wants to add their own named
+	// profile. See docs/SECURITY.md#risk-profiles.
+	RiskProfiles map[string]AutoApproveRules `json:"risk_profiles,omitempty"`
+
 	// DismissedPrompts tracks which one-time prompts the user has dismissed.
 	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
 
@@ -201,37 +219,246 @@ type CustomProviderConfig struct {
 type RiskLevel string
 
 const (
-	RiskLevelLow    RiskLevel = "low"    // Auto-approve (git status, read operations)
-	RiskLevelMedium RiskLevel = "medium" // Reason and decide (git commit, git push)
-	RiskLevelHigh   RiskLevel = "high"   // Always reject (force flags, rm -rf)
+	RiskLevelLow    RiskLevel = "low"      // Auto-approve (git status, read operations)
+	RiskLevelMedium RiskLevel = "medium"   // Reason and decide (git commit, git push)
+	RiskLevelHigh   RiskLevel = "high"     // Prompt the user when interactive; reject when not
+	RiskLevelCritical RiskLevel = "critical" // Never approvable: rm -rf root, fork bombs
 )
 
 // AutoApproveRules controls the EA's sliding risk cascade for operation approvals.
 type AutoApproveRules struct {
-	LowRiskOps     []string `json:"low_risk,omitempty"`      // Operations auto-approved by EA
-	MediumRiskOps  []string `json:"medium_risk,omitempty"`   // Operations the EA reasons about
-	HighRiskNever  []string `json:"high_risk_never,omitempty"` // Operations always rejected
+	LowRiskOps     []string `json:"low_risk,omitempty"`        // Operations auto-approved by EA
+	MediumRiskOps  []string `json:"medium_risk,omitempty"`     // Operations the EA reasons about
+	HighRiskNever  []string `json:"high_risk_never,omitempty"` // Pattern names always gated (rm_recursive, force_flag, ...)
+	// DefaultRisk is the level returned for operations that don't
+	// match any of the above. Default (empty) is "medium" — the
+	// classic EA behavior. Cautious profiles set this to "high"
+	// so unrecognized commands route to a prompt. Permissive /
+	// unrestricted set it to "low" so common operations auto-approve.
+	DefaultRisk RiskLevel `json:"default_risk,omitempty"`
 }
 
 // DefaultAutoApproveRules returns the default risk cascade rules for the EA persona.
 func DefaultAutoApproveRules() AutoApproveRules {
-	return AutoApproveRules{
-		LowRiskOps: []string{
-			"git_add", "git_status", "git_log", "git_diff",
-			"read_file",
-		},
-		MediumRiskOps: []string{
-			"git_commit", "git_push", "git_pull", "git_fetch",
-			"write_file", "edit_file", "shell_command",
-			"rm_command", "docker",
-			"subagent_spawn", "cross_directory",
-		},
-		HighRiskNever: []string{
-			"force_flag", "rm_recursive", "git_reset_hard",
-			"git_clean", "docker_prune", "git_push_force",
-			"git_checkout", "git_switch", "git_restore", "git_branch_delete",
-		},
+	return AutoApproveRulesForProfile(RiskProfileDefault)
+}
+
+// RiskProfile names a preset risk-cascade configuration. The active
+// profile resolves to an AutoApproveRules via AutoApproveRulesForProfile.
+// Persona-specified rules always take precedence over the profile.
+type RiskProfile string
+
+const (
+	// RiskProfileReadonly — strictest. ONLY read operations (git
+	// status / log / diff, read_file) are permitted. Every write,
+	// edit, shell command, or destructive op is BLOCKED outright
+	// (no prompt path) by promoting to the Critical tier. Use for
+	// audits, code review, or sandboxed inspection where the agent
+	// should never mutate anything.
+	RiskProfileReadonly RiskProfile = "readonly"
+
+	// RiskProfileCautious — most operations prompt the user. Suitable
+	// for sensitive workspaces or unfamiliar agents. Low-risk reads
+	// auto-approve; everything else gets routed to a prompt.
+	RiskProfileCautious RiskProfile = "cautious"
+
+	// RiskProfileDefault — sane defaults matching the historical EA
+	// cascade. Reads auto-approve, common edits/commits auto-approve,
+	// destructive operations (force flags, rm -rf, lossy git) prompt.
+	RiskProfileDefault RiskProfile = "default"
+
+	// RiskProfilePermissive — high trust. Almost everything passes
+	// without prompting; only truly destructive patterns route to a
+	// prompt. Use when the agent is well-trusted and the workspace
+	// is recoverable (clean checkout, throwaway dir).
+	RiskProfilePermissive RiskProfile = "permissive"
+
+	// RiskProfileUnrestricted — no risk cascade gating at all. Only
+	// the Critical tier (rm -rf root, fork bombs) blocks. Use with
+	// extreme care; intended for sandboxed / disposable environments.
+	RiskProfileUnrestricted RiskProfile = "unrestricted"
+)
+
+// IsValidRiskProfile reports whether s names a known profile.
+// User-defined profiles (added via Config.RiskProfiles) are NOT
+// considered "valid" by this predicate — it only covers the baked-in
+// names. Callers that need to accept user-defined profiles should
+// check Config.RiskProfiles directly via ResolveRiskProfileRules.
+func IsValidRiskProfile(s string) bool {
+	switch RiskProfile(s) {
+	case RiskProfileReadonly, RiskProfileCautious, RiskProfileDefault, RiskProfilePermissive, RiskProfileUnrestricted:
+		return true
 	}
+	return false
+}
+
+// ResolveRiskProfileRules returns the AutoApproveRules that should
+// apply for the given profile name, honoring user overrides in
+// Config.RiskProfiles before falling back to the baked-in defaults.
+//
+// Resolution order:
+//  1. cfg.RiskProfiles[name] — user override (replaces builtins
+//     entirely; the user is the source of truth for any profile name
+//     they list, including the five named built-ins).
+//  2. AutoApproveRulesForProfile(name) — baked-in defaults for the
+//     known profile names. Unknown names fall through to the Default
+//     profile here.
+//
+// cfg may be nil (no config loaded); in that case the baked-in rules
+// are always returned.
+func ResolveRiskProfileRules(cfg *Config, profile RiskProfile) AutoApproveRules {
+	if cfg != nil && len(cfg.RiskProfiles) > 0 {
+		if custom, ok := cfg.RiskProfiles[string(profile)]; ok {
+			return custom
+		}
+	}
+	return AutoApproveRulesForProfile(profile)
+}
+
+// AutoApproveRulesForProfile returns the rules baked into each named
+// profile. Unknown profiles fall back to RiskProfileDefault.
+func AutoApproveRulesForProfile(profile RiskProfile) AutoApproveRules {
+	switch profile {
+	case RiskProfileReadonly:
+		// Strictest profile: only reads permitted. Everything else
+		// (writes, edits, shell, git, etc.) promotes to Critical so
+		// even an interactive prompt cannot approve it. The Critical
+		// tier is the only one with no prompt path — that's what
+		// makes "readonly" actually readonly instead of "prompt for
+		// every write".
+		return AutoApproveRules{
+			LowRiskOps: []string{
+				"git_status", "git_log", "git_diff", "read_file",
+			},
+			MediumRiskOps: []string{},
+			HighRiskNever: []string{},
+			DefaultRisk:   RiskLevelCritical,
+		}
+
+	case RiskProfileCautious:
+		// Only reads auto-approve. Everything else (including normal
+		// edits and commits) hits the High → prompt path via
+		// DefaultRisk = High.
+		return AutoApproveRules{
+			LowRiskOps: []string{
+				"git_status", "git_log", "git_diff", "read_file",
+			},
+			MediumRiskOps: []string{},
+			HighRiskNever: []string{
+				"force_flag", "rm_recursive", "git_reset_hard",
+				"git_clean", "docker_prune", "git_push_force",
+				"git_checkout", "git_switch", "git_restore", "git_branch_delete",
+			},
+			DefaultRisk: RiskLevelHigh,
+		}
+
+	case RiskProfilePermissive:
+		// Everything common is auto-approved; only force/recursive
+		// destructive patterns route to a prompt. DefaultRisk = Low
+		// covers anything not explicitly listed.
+		return AutoApproveRules{
+			LowRiskOps: []string{
+				"git_add", "git_status", "git_log", "git_diff", "read_file",
+				"git_commit", "git_push", "git_pull", "git_fetch",
+				"write_file", "edit_file", "shell_command",
+				"rm_command", "docker", "subagent_spawn", "cross_directory",
+				"git_checkout", "git_switch",
+			},
+			MediumRiskOps: []string{},
+			HighRiskNever: []string{
+				"force_flag", "rm_recursive", "git_reset_hard",
+				"git_push_force", "git_clean", "git_restore", "git_branch_delete",
+			},
+			DefaultRisk: RiskLevelLow,
+		}
+
+	case RiskProfileUnrestricted:
+		// No gating beyond the Critical tier (handled separately by
+		// IsCriticalOperation, not via these lists). Even
+		// force_flag / rm_recursive route to Low — the deliberate
+		// "I know what I'm doing" mode for sandboxed runs.
+		return AutoApproveRules{
+			LowRiskOps:    []string{},
+			MediumRiskOps: []string{},
+			HighRiskNever: []string{},
+			DefaultRisk:   RiskLevelLow,
+		}
+
+	case RiskProfileDefault:
+		fallthrough
+	default:
+		// Backward-compatible default. DefaultRisk = Medium matches
+		// the historical behavior so existing personas with EA-style
+		// rules continue to behave exactly as before.
+		return AutoApproveRules{
+			LowRiskOps: []string{
+				"git_add", "git_status", "git_log", "git_diff",
+				"read_file",
+			},
+			MediumRiskOps: []string{
+				"git_commit", "git_push", "git_pull", "git_fetch",
+				"write_file", "edit_file", "shell_command",
+				"rm_command", "docker",
+				"subagent_spawn", "cross_directory",
+			},
+			HighRiskNever: []string{
+				"force_flag", "rm_recursive", "git_reset_hard",
+				"git_clean", "docker_prune", "git_push_force",
+				"git_checkout", "git_switch", "git_restore", "git_branch_delete",
+			},
+			DefaultRisk: RiskLevelMedium,
+		}
+	}
+}
+
+// IsCriticalOperation reports whether a command matches a pattern that
+// is NEVER allowed regardless of profile, persona, or interactive
+// approval. Reserved for operations that can permanently destroy the
+// system or leave it in an unrecoverable state.
+//
+// Currently covers:
+//   - rm -rf targeting root (`/`, `/*`, `~`, `$HOME`)
+//   - Classic fork-bomb pattern `:(){:|:&};:`
+//
+// Tokenized matching matches invokesCommand semantics so a benign
+// substring inside a path or argument can't trigger a false positive.
+func IsCriticalOperation(command string) bool {
+	cmdLower := strings.ToLower(command)
+
+	// Fork bomb — the literal `:()` shell-function-named-colon is a
+	// reliable signal. The token is unusual enough that false
+	// positives are vanishingly rare.
+	if strings.Contains(cmdLower, ":()") && strings.Contains(cmdLower, ":|:") {
+		return true
+	}
+
+	fields := strings.Fields(cmdLower)
+
+	// rm -rf <root-equivalent>. We need rm invoked as a command,
+	// with a recursive flag, AND a root-equivalent target.
+	if invokesCommand(fields, "rm") {
+		hasRecursive := false
+		for _, f := range fields {
+			if f == "-r" || f == "-R" || f == "--recursive" {
+				hasRecursive = true
+				break
+			}
+			if len(f) > 2 && f[0] == '-' && f[1] != '-' && strings.ContainsAny(f, "rR") {
+				hasRecursive = true
+				break
+			}
+		}
+		if hasRecursive {
+			for _, f := range fields {
+				switch f {
+				case "/", "/*", "~", "~/", "$home", "${home}", "${home}/", "$home/":
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
 
 // SubagentType defines a specialized subagent persona with its own configuration
@@ -265,18 +492,27 @@ func (st *SubagentType) GetAutoApproveRules() AutoApproveRules {
 
 // EvaluateOperationRisk determines the risk level of a shell operation
 // based on the persona's auto-approve rules.
-// Returns RiskLevelLow, RiskLevelMedium, or RiskLevelHigh.
+// Returns RiskLevelCritical for absolute-block patterns, otherwise
+// RiskLevelLow, RiskLevelMedium, or RiskLevelHigh per the rules.
 func (st *SubagentType) EvaluateOperationRisk(command string) RiskLevel {
+	// Critical patterns are ALWAYS blocked, regardless of persona
+	// rules or profile. Checked first so no rule lookup can shadow
+	// them.
+	if IsCriticalOperation(command) {
+		return RiskLevelCritical
+	}
+
 	rules := st.GetAutoApproveRules()
 
 	cmdLower := strings.ToLower(command)
 
-	// Always check for force flags first — -f/--force always escalates to high risk
-	if containsForceFlag(cmdLower) {
-		return RiskLevelHigh
-	}
-
-	// Check high-risk patterns
+	// HighRiskNever patterns are gated. "force_flag" is one such
+	// pattern that lives in the list for all gated profiles; the
+	// Unrestricted profile has it removed so -f / --force passes
+	// through. (Prior to SP-058 there was a hardcoded
+	// containsForceFlag short-circuit before the loop; that's been
+	// folded into the data-driven check so profiles can fully
+	// control gating.)
 	for _, pattern := range rules.HighRiskNever {
 		if matchesRiskPattern(cmdLower, pattern) {
 			return RiskLevelHigh
@@ -300,8 +536,21 @@ func (st *SubagentType) EvaluateOperationRisk(command string) RiskLevel {
 		}
 	}
 
-	// Default to medium for unrecognized operations — the EA reasons about them
-	return RiskLevelMedium
+	// Fall back to the profile's declared DefaultRisk for unknown
+	// operations. Empty / unspecified default behaves as Medium for
+	// backward compatibility with personas configured before SP-058.
+	// DefaultRisk = Critical is legitimate for the readonly profile
+	// (blocks all non-read ops outright).
+	switch rules.DefaultRisk {
+	case RiskLevelLow:
+		return RiskLevelLow
+	case RiskLevelHigh:
+		return RiskLevelHigh
+	case RiskLevelCritical:
+		return RiskLevelCritical
+	default:
+		return RiskLevelMedium
+	}
 }
 
 // containsForceFlag checks if a command string contains -f or --force flags.

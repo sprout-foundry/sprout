@@ -99,6 +99,16 @@ export default function SubagentSettingsTab({
             </div>
           )}
         </>
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          {renderNumberInput(
+            'subagent_max_depth',
+            'Maximum subagent nesting depth',
+            1,
+            5,
+            1,
+            'How many levels deep subagents may delegate to further subagents. Higher values risk runaway recursion; default is 2.',
+          )}
+        </div>
       </div>
 
       {renderSelect('default_subagent_persona', 'Default Persona', [

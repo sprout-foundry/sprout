@@ -667,6 +667,47 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		knownKeys["disable_thinking"] = true
 		cfg.DisableThinking, _ = v.(bool)
 	}
+	if v, ok := patch["ea_mode"]; ok {
+		knownKeys["ea_mode"] = true
+		s, _ := v.(string)
+		s = strings.ToLower(strings.TrimSpace(truncateString(s, maxSettingEnumLength)))
+		switch s {
+		case "", "interactive", "queue":
+			cfg.EAMode = s
+		default:
+			return nil, fmt.Errorf("validate ea_mode: must be 'interactive' or 'queue' (got %q)", s)
+		}
+	}
+	if v, ok := patch["subagent_max_depth"]; ok {
+		knownKeys["subagent_max_depth"] = true
+		n, ok2 := asInt(v)
+		if ok2 && n >= 0 && n <= 32 {
+			cfg.SubagentMaxDepth = n
+		}
+	}
+	if v, ok := patch["approved_shell_commands"]; ok {
+		knownKeys["approved_shell_commands"] = true
+		if arr, ok := v.([]interface{}); ok {
+			out := make([]string, 0, len(arr))
+			seen := make(map[string]struct{}, len(arr))
+			for _, item := range arr {
+				if s, ok := item.(string); ok {
+					trimmed := strings.TrimSpace(truncateString(s, maxSettingPathLength))
+					if trimmed == "" {
+						continue
+					}
+					if _, dup := seen[trimmed]; dup {
+						continue
+					}
+					seen[trimmed] = struct{}{}
+					out = append(out, trimmed)
+				}
+			}
+			cfg.ApprovedShellCommands = out
+		} else if v == nil {
+			cfg.ApprovedShellCommands = nil
+		}
+	}
 
 	// APITimeouts
 	if at, ok := patch["api_timeouts"]; ok {
@@ -714,6 +755,16 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 					return nil, fmt.Errorf("validate overall_timeout_sec: %w", err)
 				}
 				cfg.APITimeouts.OverallTimeoutSec = n
+			}
+			if v2, ok2 := atMap["commit_message_timeout_sec"]; ok2 {
+				n, ok3 := asInt(v2)
+				if !ok3 {
+					return nil, fmt.Errorf("api_timeouts.commit_message_timeout_sec must be a positive integer")
+				}
+				if err := validateAPITimeout(n); err != nil {
+					return nil, fmt.Errorf("validate commit_message_timeout_sec: %w", err)
+				}
+				cfg.APITimeouts.CommitMessageTimeoutSec = n
 			}
 		}
 	}
@@ -806,6 +857,71 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		ei.Provider = truncateString(ei.Provider, maxSettingNameLength)
 		ei.IndexDir = truncateString(ei.IndexDir, maxSettingPathLength)
 		cfg.EmbeddingIndex = &ei
+	}
+
+	// LanguageServers — []LanguageServerOverride, use JSON marshal/unmarshal
+	if v, ok := patch["language_servers"]; ok {
+		knownKeys["language_servers"] = true
+		if v == nil {
+			cfg.LanguageServers = nil
+		} else {
+			raw, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid language_servers config: %w", err)
+			}
+			var servers []configuration.LanguageServerOverride
+			if err := json.Unmarshal(raw, &servers); err != nil {
+				return nil, fmt.Errorf("invalid language_servers config: %w", err)
+			}
+			for i := range servers {
+				servers[i].ID = truncateString(servers[i].ID, maxSettingNameLength)
+				servers[i].Binary = truncateString(servers[i].Binary, maxSettingPathLength)
+				servers[i].InstallHint = truncateString(servers[i].InstallHint, maxSettingDescriptionLength)
+				for j := range servers[i].Args {
+					servers[i].Args[j] = truncateString(servers[i].Args[j], maxSettingPathLength)
+				}
+				for j := range servers[i].LanguageIDs {
+					servers[i].LanguageIDs[j] = truncateString(servers[i].LanguageIDs[j], maxSettingNameLength)
+				}
+			}
+			cfg.LanguageServers = servers
+		}
+	}
+
+	// SecurityPolicy — *SecurityPolicy, JSON marshal/unmarshal
+	if v, ok := patch["security_policy"]; ok {
+		knownKeys["security_policy"] = true
+		if v == nil {
+			cfg.SecurityPolicy = nil
+		} else {
+			raw, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid security_policy config: %w", err)
+			}
+			var sp configuration.SecurityPolicy
+			if err := json.Unmarshal(raw, &sp); err != nil {
+				return nil, fmt.Errorf("invalid security_policy config: %w", err)
+			}
+			cfg.SecurityPolicy = &sp
+		}
+	}
+
+	// PersistentContext — *PersistentContextConfig, JSON marshal/unmarshal
+	if v, ok := patch["persistent_context"]; ok {
+		knownKeys["persistent_context"] = true
+		if v == nil {
+			cfg.PersistentContext = nil
+		} else {
+			raw, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid persistent_context config: %w", err)
+			}
+			var pc configuration.PersistentContextConfig
+			if err := json.Unmarshal(raw, &pc); err != nil {
+				return nil, fmt.Errorf("invalid persistent_context config: %w", err)
+			}
+			cfg.PersistentContext = &pc
+		}
 	}
 
 	// SubagentTypes — map[string]SubagentType

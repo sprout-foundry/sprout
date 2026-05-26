@@ -142,7 +142,7 @@ const BillingPage: React.FC = () => {
         <>
           {/* Dunning Status Alert */}
           {billingStatus?.dunning_status === 'active' && (
-            <div className="platform-card warning" style={{ marginTop: '0' }}>
+            <div className="platform-card warning" style={{ marginTop: '0' }} data-testid="payment-failed-warning">
               <div className="platform-card-header">
                 <h3 className="platform-card-title">Payment Issue</h3>
               </div>
@@ -154,7 +154,7 @@ const BillingPage: React.FC = () => {
           )}
 
           {billingStatus?.dunning_status === 'suspended' && (
-            <div className="platform-card error" style={{ marginTop: '0' }}>
+            <div className="platform-card error" style={{ marginTop: '0' }} data-testid="suspension-notice">
               <div className="platform-card-header">
                 <h3 className="platform-card-title">Service Suspended</h3>
               </div>
@@ -169,7 +169,7 @@ const BillingPage: React.FC = () => {
           <div className="platform-card">
             <div className="platform-card-header">
               <h3 className="platform-card-title">Current Plan</h3>
-              <span className="platform-status-badge running">{billing.tier.toUpperCase()}</span>
+              <span className="platform-status-badge running" data-testid="current-tier">{billing.tier.toUpperCase()}</span>
             </div>
             <div className="platform-card-body">
               You are on the <strong>{billing.tier}</strong> plan. Usage resets on{' '}
@@ -268,10 +268,10 @@ const BillingPage: React.FC = () => {
           )}
 
           {/* Proration History */}
-          <ProrationDisplay prorationRecords={prorationRecords} />
+          <div data-testid="proration-preview"><ProrationDisplay prorationRecords={prorationRecords} /></div>
 
           {/* Invoice History */}
-          <InvoiceHistory />
+          <div data-testid="invoice-history"><InvoiceHistory /></div>
 
           {billing.overage && (
             <div className="platform-card warning">

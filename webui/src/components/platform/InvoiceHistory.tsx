@@ -56,7 +56,7 @@ export const InvoiceHistory: React.FC = () => {
   }
 
   return (
-    <div className="platform-card" style={{ marginTop: '24px' }}>
+    <div className="platform-card" style={{ marginTop: '24px' }} data-testid="invoice-history">
       <div className="platform-card-header">
         <h3 className="platform-card-title">Invoice History</h3>
       </div>

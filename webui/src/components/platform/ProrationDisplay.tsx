@@ -39,6 +39,7 @@ export const ProrationDisplay: React.FC<ProrationDisplayProps> = ({ prorationRec
           {prorationRecords.map((record) => (
             <div
               key={record.id}
+              data-testid={record.type === 'credit' ? 'proration-credit' : 'proration-charge'}
               style={{
                 padding: '12px',
                 border: '1px solid var(--border-color)',

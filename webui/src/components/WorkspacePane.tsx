@@ -3,7 +3,7 @@ import type { ComponentProps } from 'react';
 import React from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
-import Chat from './Chat';
+import Chat from './ChatView';
 import CompareTab from './CompareTab';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
 import EditorPane from './EditorPane';

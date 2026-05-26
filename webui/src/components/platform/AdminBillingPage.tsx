@@ -153,7 +153,7 @@ const AdminBillingPage: React.FC = () => {
       {activeTab === 'refunds' && (
         <>
           {/* Refund Form */}
-          <div className="platform-card">
+          <div className="platform-card" data-testid="refund-form">
             <div className="platform-card-header">
               <h3 className="platform-card-title">Process Refund</h3>
             </div>
@@ -217,7 +217,7 @@ const AdminBillingPage: React.FC = () => {
                 </div>
 
                 {refundError && (
-                  <div className="platform-card error">
+                  <div className="platform-card error" data-testid="error-message">
                     <div className="platform-card-body">
                       <p style={{ color: 'var(--accent-error)' }}>{refundError}</p>
                     </div>
@@ -225,7 +225,7 @@ const AdminBillingPage: React.FC = () => {
                 )}
 
                 {refundResult && (
-                  <div className="platform-card running">
+                  <div className="platform-card running" data-testid="success-message">
                     <div className="platform-card-body">
                       <p style={{ color: 'var(--accent-success)' }}>Refund processed successfully! ID: {refundResult.id}</p>
                     </div>
@@ -240,7 +240,7 @@ const AdminBillingPage: React.FC = () => {
           </div>
 
           {/* Refund History */}
-          <div className="platform-card" style={{ marginTop: '24px' }}>
+          <div className="platform-card" style={{ marginTop: '24px' }} data-testid="refund-history">
             <div className="platform-card-header">
               <h3 className="platform-card-title">Recent Refunds</h3>
             </div>
@@ -295,7 +295,7 @@ const AdminBillingPage: React.FC = () => {
       )}
 
       {activeTab === 'dunning' && (
-        <div className="platform-card">
+        <div className="platform-card" data-testid="dunning-report">
           <div className="platform-card-header">
             <h3 className="platform-card-title">Dunning Report</h3>
           </div>

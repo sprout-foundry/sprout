@@ -126,10 +126,11 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		})
 	}
 	picker := console.NewSelectList(console.SelectListOptions{
-		Title:    "Recent sessions in this workspace",
-		Items:    items,
-		PageSize: maxRecentSessionsShown,
-		Footer:   "↑↓ select · enter resume · esc start fresh",
+		Title:           "Recent sessions in this workspace",
+		Items:           items,
+		PageSize:        maxRecentSessionsShown,
+		DismissOnAnyKey: true,
+		Footer:          "↑↓ select · enter resume · any other key start fresh",
 	})
 	chosenID, ok, _ := picker.Run(context.Background())
 	if !ok || chosenID == "" {

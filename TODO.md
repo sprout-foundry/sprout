@@ -248,7 +248,7 @@
 - [x] SP-025-P4-wasmShell: Add `pkg/ast` to WASM shell for code intelligence features
 - [x] SP-025-P4-sizeCheck: Verify WASM binary size impact; set acceptable threshold
 - [x] SP-025-P5-embeddingExtract: Wire `pkg/ast` into embedding extractor for accurate code unit extraction (deferred)
-- [ ] SP-025-P5-functionBodies: Extract function bodies using AST scope information (deferred)
+- [x] SP-025-P5-functionBodies: Extract function bodies using AST scope information
 
 ## Completed — SP-049: Shell Permission Overhaul
 

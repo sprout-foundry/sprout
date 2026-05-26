@@ -8,10 +8,29 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
+
+// inTestBinary reports whether the current process is a Go test binary.
+// `go test` builds the test as <pkg>.test (or `___FooTest...` on some OSes
+// with -c), and the binary name is the only signal that's available before
+// any user code runs and that doesn't require importing the testing package
+// from production code.
+//
+// We use it to skip the remote provider-catalog refresh during tests so the
+// webui-server constructor doesn't spawn a goroutine that hits
+// raw.githubusercontent.com on every test run.
+func inTestBinary() bool {
+	if len(os.Args) == 0 {
+		return false
+	}
+	return strings.HasSuffix(os.Args[0], ".test") ||
+		strings.Contains(os.Args[0], "/_test/") ||
+		strings.HasSuffix(os.Args[0], ".test.exe")
+}
 
 //go:embed providers.json
 var embeddedCatalogJSON []byte
@@ -145,6 +164,13 @@ func RefreshFromRemote(ctx context.Context, url string) error {
 
 func RefreshFromRemoteAsync(url string) {
 	ensureLoaded()
+	// Skip the network fetch entirely when running under `go test`.  Without
+	// this guard every webui test that constructs a server spawns a
+	// goroutine fetching from raw.githubusercontent.com, leaking past
+	// test completion and producing flaky behavior on slow networks.
+	if inTestBinary() {
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()

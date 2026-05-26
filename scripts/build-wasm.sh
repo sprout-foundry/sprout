@@ -125,27 +125,34 @@ build_wasm() {
     # matter for stack traces inside Go's runtime panics, which the browser
     # surfaces via its own debugger anyway. Toggle with WASM_KEEP_SYMBOLS=1
     # if you need a full-detail panic trace for debugging.
+    #
+    # grammar_blobs_external disables gotreesitter's bulk grammar embed
+    # entirely. pkg/ast/grammars_embed.go (SP-058) supplies only the five
+    # grammars we actually use (go/ts/tsx/js/python — ~717KB) and overrides
+    # the gotreesitter registry entries for them. The library's filesystem
+    # blob-source path is never invoked because lookup is short-circuited
+    # by our overrides.
+    WASM_TAGS="grammar_blobs_external"
     LDFLAGS="-s -w"
     if [ "${WASM_KEEP_SYMBOLS:-}" = "1" ]; then
         LDFLAGS=""
         echo "    (WASM_KEEP_SYMBOLS=1: skipping symbol strip)"
     fi
-    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -ldflags="$LDFLAGS" -o "$target_dir/sprout.wasm" ./cmd/wasm/)
+    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -tags "$WASM_TAGS" -ldflags="$LDFLAGS" -o "$target_dir/sprout.wasm" ./cmd/wasm/)
 
     echo "    ✓ sprout.wasm"
 
     WASM_SIZE=$(ls -lh "$target_dir/sprout.wasm" | awk '{print $5}')
     echo "  WASM binary size: $WASM_SIZE"
 
-    # Size threshold check: the WASM binary should not exceed 100MB.
-    # As of 2025-05 with pkg/ast + gotreesitter grammars included,
-    # the stripped binary is ~61MB. The threshold allows headroom for
-    # future language additions while preventing unbounded growth.
+    # Size threshold check: post-SP-058 the stripped binary lands ~40MB.
+    # 50MB allows headroom for future Go runtime / dependency growth without
+    # silently regressing the grammar embed back to the full set.
     WASM_SIZE_BYTES=$(stat -f%z "$target_dir/sprout.wasm" 2>/dev/null || stat -c%s "$target_dir/sprout.wasm" 2>/dev/null || echo 0)
-    WASM_MAX_BYTES=$((100 * 1024 * 1024)) # 100MB
+    WASM_MAX_BYTES=$((50 * 1024 * 1024)) # 50MB
     if [ "$WASM_SIZE_BYTES" -gt "$WASM_MAX_BYTES" ] 2>/dev/null; then
-        echo "  ⚠ WARNING: WASM binary ($WASM_SIZE) exceeds 100MB threshold!" >&2
-        echo "  Consider auditing large dependencies or adding build tags." >&2
+        echo "  ⚠ WARNING: WASM binary ($WASM_SIZE) exceeds 50MB threshold!" >&2
+        echo "  Consider auditing large dependencies or build tags." >&2
     fi
 }
 

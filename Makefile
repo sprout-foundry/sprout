@@ -51,11 +51,19 @@ help:
 	@echo "  make verify-ui-embedded          # Ensure embedded UI is current"
 	@echo "  make test-webui                   # Test React web UI server"
 
+# Copy tree-sitter grammar blobs from the gotreesitter module cache into
+# pkg/ast/grammars/bin/ (gitignored).  Required before any go build / go test
+# because pkg/ast/grammars_embed.go references them via //go:embed.  See
+# SP-058 for the design rationale.
+.PHONY: prepare-grammars
+prepare-grammars:
+	@bash scripts/prepare-grammars.sh
+
 # Unit Tests - Fast, no external dependencies
-test-unit:
+test-unit: prepare-grammars
 	@echo "Running unit tests..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser" ./pkg/... ./cmd/... -v -timeout=300s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
+	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=300s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -155,9 +163,9 @@ test-coverage:
 
 # Build sprout binary
 # Optimized: uses build cache and parallel compilation
-build:
+build: prepare-grammars
 	@echo "Building sprout..."
-	GO111MODULE=on go build -o sprout .
+	GO111MODULE=on go build -tags grammar_blobs_external -o sprout .
 	@echo "Build completed"
 
 # Install sprout binary to all common locations
@@ -169,9 +177,9 @@ install: build
 	@echo "Install completed"
 
 # Build sprout binary with parallel compilation and cache
-build-parallel:
+build-parallel: prepare-grammars
 	@echo "Building sprout (parallel)..."
-	GO111MODULE=on GOFLAGS="-p=8" go build -o sprout .
+	GO111MODULE=on GOFLAGS="-p=8" go build -tags grammar_blobs_external -o sprout .
 	@echo "Build completed"
 
 # Build with version information
@@ -250,7 +258,7 @@ test-webui:
 	cd test && ./test_webserver
 
 # Build WASM shell module (sprout.wasm + wasm_exec.js)
-build-wasm:
+build-wasm: prepare-grammars
 	@echo "Building WASM shell module..."
 	@./scripts/build-wasm.sh
 	@echo "WASM shell module build completed"

@@ -157,5 +157,9 @@ code_review_output.json
 # Static embedding model (54MB) — not tracked, built/downloaded locally
 pkg/embedding/static_model.bin
 
+# Tree-sitter grammar blobs copied from the gotreesitter module cache by
+# scripts/prepare-grammars.sh (SP-058). Not tracked — regenerated on every build.
+pkg/ast/grammars/bin/*.bin
+
 # Archive files
 *.zip

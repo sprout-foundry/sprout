@@ -23,6 +23,21 @@ Run it at the end of every implementation task, before reporting work as complet
 make build-all
 ```
 
+### First-time setup after `git clone`
+
+`pkg/ast/grammars_embed.go` references five tree-sitter grammar blobs via
+`//go:embed`. They are gitignored — the build copies them from the
+gotreesitter module cache. Before opening the project in an IDE (gopls will
+otherwise flag the embed line red), run:
+
+```bash
+make prepare-grammars
+```
+
+The Makefile targets (`build`, `build-wasm`, `test-unit`) depend on this
+automatically, so it only needs to be run manually for IDE/editor support
+on a fresh clone.
+
 ## Roadmap
 
 Detailed roadmap specifications live in the `roadmap/` directory. Always read

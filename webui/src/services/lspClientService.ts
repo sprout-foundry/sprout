@@ -625,6 +625,14 @@ class LSPClientService {
       this.setClientState(languageId, 'connected');
 
       console.warn('[LSPClientService] Connected LSP client for:', languageId);
+      // Surface the negotiated server capabilities — invaluable when a feature
+      // (hover, completion, rename…) silently no-ops because the server didn't
+      // advertise support.  Falls back gracefully when older transports don't
+      // expose the field.
+      const caps = (client as unknown as { serverCapabilities?: unknown }).serverCapabilities;
+      if (caps) {
+        console.info('[LSPClientService]', languageId, 'capabilities:', caps);
+      }
 
       return client;
     } catch (err) {

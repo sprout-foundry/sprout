@@ -12,6 +12,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { useNotifications } from '../contexts/NotificationContext';
 import { getWebUIClientId } from '../services/clientSession';
+import { LSPClientService } from '../services/lspClientService';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
 import type { ChatSession } from '../services/chatSessions';
 import { getServerErrorCode } from '../services/errorCodes';
@@ -833,6 +834,12 @@ export function useEventHandler({
             // a DOM event so workspace-dependent UI (file tree, breadcrumbs…)
             // refreshes.
             debugLog('[workspace] Worktree switch/clear detected — refreshing workspace state without page reload');
+            // The LSP client singleton caches WebSocket connections keyed by
+            // language ID — the workspace path is baked into each URL.  Without
+            // an explicit teardown those clients survive the worktree switch
+            // and keep serving completions/diagnostics against the *previous*
+            // workspace root.
+            LSPClientService.getInstance().cleanup();
             setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
             const detail = {
               workspaceRoot: String(eventData.workspace_root || ''),

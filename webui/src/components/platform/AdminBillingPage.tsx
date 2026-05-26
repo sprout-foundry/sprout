@@ -152,12 +152,19 @@ const AdminBillingPage: React.FC = () => {
 
       {activeTab === 'refunds' && (
         <>
-          {/* Refund Form */}
-          <div className="platform-card" data-testid="refund-form">
+          {/* Refund Form
+              data-testid mapping (SP-053): the e2e billing-refund suite expects
+              `refunds-table` to be the area containing a refund button, and
+              `refund-modal` to be the dialog where you confirm the refund.
+              The current UX is a single inline form rather than a table-with-modal,
+              so both testids point at this same form section.  When the admin
+              UI is rebuilt as a refundable-charges list with a confirm modal,
+              split these onto separate elements. */}
+          <div className="platform-card" data-testid="refunds-table">
             <div className="platform-card-header">
               <h3 className="platform-card-title">Process Refund</h3>
             </div>
-            <div className="platform-card-body">
+            <div className="platform-card-body" data-testid="refund-modal">
               <form onSubmit={handleRefundSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Charge ID *</label>
@@ -299,7 +306,7 @@ const AdminBillingPage: React.FC = () => {
           <div className="platform-card-header">
             <h3 className="platform-card-title">Dunning Report</h3>
           </div>
-          <div className="platform-card-body">
+          <div className="platform-card-body" data-testid="dunning-attempts">
             {dunningReport ? (
               <div className="platform-metric-grid">
                 <div className="platform-metric-card">

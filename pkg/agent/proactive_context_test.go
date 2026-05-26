@@ -194,8 +194,8 @@ func TestDefaultProactiveContextConfig(t *testing.T) {
 	if cfg.MaxContextChars != 4000 {
 		t.Errorf("MaxContextChars: expected 4000, got %d", cfg.MaxContextChars)
 	}
-	if cfg.WorkspaceScoped != false {
-		t.Errorf("WorkspaceScoped: expected false, got %v", cfg.WorkspaceScoped)
+	if cfg.WorkspaceScoped != true {
+		t.Errorf("WorkspaceScoped: expected true (default flipped to prevent cross-workspace bleed), got %v", cfg.WorkspaceScoped)
 	}
 }
 
@@ -217,8 +217,12 @@ func TestProactiveContextConfig_Resolve_AllZero(t *testing.T) {
 	if resolved.MaxContextChars != d.MaxContextChars {
 		t.Errorf("MaxContextChars: expected %d, got %d", d.MaxContextChars, resolved.MaxContextChars)
 	}
-	if resolved.WorkspaceScoped != d.WorkspaceScoped {
-		t.Errorf("WorkspaceScoped: expected %v, got %v", d.WorkspaceScoped, resolved.WorkspaceScoped)
+	// resolve() only fills numeric zero values with defaults — booleans are
+	// passed through as-is.  A zero-value ProactiveContextConfig{} therefore
+	// has WorkspaceScoped=false even though the package default is true.
+	// Callers who want the default must start from DefaultProactiveContextConfig().
+	if resolved.WorkspaceScoped != false {
+		t.Errorf("WorkspaceScoped: expected false (zero-value bool, not inferred by resolve()), got %v", resolved.WorkspaceScoped)
 	}
 }
 
@@ -246,7 +250,9 @@ func TestProactiveContextConfig_Resolve_NonZeroPreserved(t *testing.T) {
 }
 
 func TestProactiveContextConfig_Resolve_PartialOverride(t *testing.T) {
-	// Only override MinRelevanceScore; rest should get defaults
+	// Only override MinRelevanceScore; the numeric fields get filled from
+	// defaults but WorkspaceScoped (a bool) keeps its zero value.  Callers
+	// who want the safer default must start from DefaultProactiveContextConfig().
 	cfg := ProactiveContextConfig{
 		MinRelevanceScore: 0.90,
 	}
@@ -262,7 +268,7 @@ func TestProactiveContextConfig_Resolve_PartialOverride(t *testing.T) {
 		t.Errorf("MaxContextChars: expected 4000 (default), got %d", resolved.MaxContextChars)
 	}
 	if resolved.WorkspaceScoped != false {
-		t.Errorf("WorkspaceScoped: expected false (default), got %v", resolved.WorkspaceScoped)
+		t.Errorf("WorkspaceScoped: expected false (zero-value of bool — resolve() does not infer it), got %v", resolved.WorkspaceScoped)
 	}
 }
 
@@ -334,7 +340,7 @@ func TestFormatProactiveContext_SingleResult(t *testing.T) {
 
 	output := FormatProactiveContext(results, DefaultProactiveContextConfig(), time.Now().UTC())
 
-	if !strings.Contains(output, "## Previous Work (Contextual Memory)") {
+	if !strings.Contains(output, "## Previous Work (Read-Only Reference)") {
 		t.Error("output should contain the header")
 	}
 	if !strings.Contains(output, "How do I implement a REST API?") {
@@ -774,6 +780,83 @@ func TestRetrieveProactiveContext_WorkspaceScopedFiltering(t *testing.T) {
 	}
 }
 
+// TestRetrieveProactiveContext_DefaultConfigSkipsCrossWorkspace verifies that
+// DefaultProactiveContextConfig() filters out turns from other workspaces.
+//
+// Regression test: a fresh session in workspace A used to pull in semantically-
+// similar turns from workspace B because WorkspaceScoped defaulted to false.
+// The model then treated those entries as actionable and started work in the
+// wrong directory.  WorkspaceScoped now defaults to true; this test locks that
+// in.
+func TestRetrieveProactiveContext_DefaultConfigSkipsCrossWorkspace(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store a turn from a workspace OTHER than the one we'll query from.
+	turnOther, err := NewConversationTurn("session-other", 1,
+		"Save these Zendesk support articles to the archive directory.",
+		"/home/user/other-workspace")
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turnOther.ActionableSummary = "Save Zendesk articles to archive"
+	turnOther.Timestamp = now.Add(-1 * time.Hour)
+	if err := EmbedAndStoreTurn(ctx, mgr, turnOther); err != nil {
+		t.Fatalf("failed to store turn: %v", err)
+	}
+
+	// Query from a different workspace with the default config.
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"Save Zendesk support articles", "/home/user/current-workspace", now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Errorf("expected zero results (cross-workspace filtered out), got %d", len(results))
+		for _, r := range results {
+			t.Logf("leaked record: signature=%q workingDir=%v", r.Record.Signature, r.Record.Metadata["workingDir"])
+		}
+	}
+}
+
+// TestRetrieveProactiveContext_DefaultConfigKeepsSameWorkspace verifies that
+// DefaultProactiveContextConfig() still returns turns from the SAME workspace.
+// Complements the cross-workspace regression test above.
+func TestRetrieveProactiveContext_DefaultConfigKeepsSameWorkspace(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	const wd = "/home/user/current-workspace"
+	turn, err := NewConversationTurn("session-same", 1,
+		"How do I implement a REST API?", wd)
+	if err != nil {
+		t.Fatalf("failed to create turn: %v", err)
+	}
+	turn.ActionableSummary = "Implement REST API"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
+		t.Fatalf("failed to store turn: %v", err)
+	}
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"REST API implementation", wd, now,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("expected at least one same-workspace result with default config")
+	}
+}
+
 func TestRetrieveProactiveContext_TimeDecayOrdering(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().UTC()
@@ -1084,10 +1167,10 @@ func TestProactiveContext_FullRoundTrip(t *testing.T) {
 	}
 
 	// Verify structural integrity of output
-	if !strings.Contains(output, "## Previous Work (Contextual Memory)") {
+	if !strings.Contains(output, "## Previous Work (Read-Only Reference)") {
 		t.Error("output missing header")
 	}
-	if !strings.Contains(output, "The following past work may be relevant") {
+	if !strings.Contains(output, "do NOT take any action on them") {
 		t.Error("output missing instructions")
 	}
 
@@ -1233,7 +1316,7 @@ func TestInjectProactiveContext_WithResults(t *testing.T) {
 	if supplement == "" {
 		t.Fatal("expected non-empty supplement after successful retrieval")
 	}
-	if !strings.Contains(supplement, "Previous Work (Contextual Memory)") {
+	if !strings.Contains(supplement, "Previous Work (Read-Only Reference)") {
 		t.Error("supplement should contain the Previous Work header")
 	}
 }

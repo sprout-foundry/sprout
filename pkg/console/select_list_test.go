@@ -142,3 +142,138 @@ func TestUTF8Width(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectList_DismissOnAnyKey_PrintableChar(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+			{Label: "bravo", Value: "B"},
+		},
+		DismissOnAnyKey: true,
+		Searchable:      false,
+	})
+	var buf [8]byte
+	buf[0] = 'h' // 0x68, printable ASCII
+	done, val, ok := s.processKey('h', 1, buf[:])
+	if !done {
+		t.Fatalf("expected done=true on printable key with DismissOnAnyKey")
+	}
+	if val != "" {
+		t.Fatalf("expected empty value on dismiss, got %q", val)
+	}
+	if ok {
+		t.Fatalf("expected ok=false on dismiss")
+	}
+}
+
+func TestSelectList_DismissOnAnyKey_UTF8LeadByte(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+		},
+		DismissOnAnyKey: true,
+		Searchable:      false,
+	})
+	var buf [8]byte
+	buf[0] = 0xC3 // UTF-8 lead byte (e.g. á)
+	done, val, ok := s.processKey(0xC3, 1, buf[:])
+	if !done {
+		t.Fatalf("expected done=true on UTF-8 lead byte with DismissOnAnyKey")
+	}
+	if val != "" {
+		t.Fatalf("expected empty value on dismiss, got %q", val)
+	}
+	if ok {
+		t.Fatalf("expected ok=false on dismiss")
+	}
+}
+
+func TestSelectList_DismissOnAnyKey_DoesNotAffectSearchable(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "hello", Value: "H"},
+			{Label: "world", Value: "W"},
+		},
+		DismissOnAnyKey: true,
+		Searchable:      true, // Searchable takes precedence
+	})
+	var buf [8]byte
+	buf[0] = 'h'
+	done, _, _ := s.processKey('h', 1, buf[:])
+	if done {
+		t.Fatalf("expected done=false when Searchable=true (should filter, not dismiss)")
+	}
+	// Verify it filtered instead of dismissing
+	if s.filter != "h" {
+		t.Fatalf("expected filter='h', got %q", s.filter)
+	}
+	if len(s.filtered) != 1 || s.filtered[0] != 0 {
+		t.Fatalf("expected 1 filtered item (hello), got %d", len(s.filtered))
+	}
+}
+
+func TestSelectList_DismissOnAnyKey_EnterStillWorks(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+			{Label: "bravo", Value: "B"},
+		},
+		DismissOnAnyKey: true,
+	})
+	var buf [8]byte
+	buf[0] = 0x0D // Enter
+	done, val, ok := s.processKey(0x0D, 1, buf[:])
+	if !done {
+		t.Fatalf("expected done=true on Enter")
+	}
+	if !ok {
+		t.Fatalf("expected ok=true on Enter confirm")
+	}
+	if val != "A" {
+		t.Fatalf("expected value='A' (first item), got %q", val)
+	}
+}
+
+func TestSelectList_DismissOnAnyKey_ArrowsStillWork(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+			{Label: "bravo", Value: "B"},
+			{Label: "charlie", Value: "C"},
+		},
+		DismissOnAnyKey: true,
+	})
+	// Simulate Down arrow: ESC [ B — pass the full 3-byte CSI sequence
+	// so handleEscape dispatches directly without reading from stdin.
+	csiDown := []byte{0x1B, '[', 'B'}
+	done, _, _ := s.processKey(0x1B, 3, csiDown)
+	if done {
+		t.Fatalf("expected done=false on arrow key")
+	}
+	if s.cursor != 1 {
+		t.Fatalf("expected cursor=1 after Down, got %d", s.cursor)
+	}
+
+	// Now press Enter to confirm — should select the second item.
+	var buf [8]byte
+	buf[0] = 0x0D
+	done, val, ok := s.processKey(0x0D, 1, buf[:])
+	if !done || !ok {
+		t.Fatalf("expected done=true, ok=true on Enter after arrow")
+	}
+	if val != "B" {
+		t.Fatalf("expected value='B' (second item), got %q", val)
+	}
+}
+
+func TestSelectList_DismissOff_PrintableNoOp(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "x", Value: "X"}},
+	})
+	var buf [8]byte
+	buf[0] = 'q'
+	done, _, _ := s.processKey('q', 1, buf[:])
+	if done {
+		t.Fatal("expected done=false (printable char should be ignored without DismissOnAnyKey)")
+	}
+}

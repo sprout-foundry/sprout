@@ -37,6 +37,10 @@ func (h *embeddingIndexHandler) Validate(args map[string]any) error {
 
 func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	toolName := h.Name()
+
+	var hadError bool
+
+	// EventBus events are optional — best-effort side effect only, not a gate
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
 			"tool":     toolName,
@@ -45,62 +49,62 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
 				"tool":  toolName,
-				"error": false,
+				"error": hadError,
 			})
 		}()
-
-		operation, err := extractString(args, "operation")
-		if err != nil {
-			return ToolResult{
-				Output:  err.Error(),
-				IsError: true,
-			}, nil
-		}
-
-		// Get config
-		var config *configuration.Config
-		if env.ConfigManager != nil {
-			config = env.ConfigManager.GetConfig()
-		} else {
-			manager, err := configuration.NewManager()
-			if err != nil {
-				return ToolResult{
-					Output:  fmt.Sprintf("Error getting configuration: %v", err),
-					IsError: true,
-				}, nil
-			}
-			config = manager.GetConfig()
-		}
-
-		workspaceRoot := env.WorkspaceRoot
-		if workspaceRoot == "" {
-			workspaceRoot = "."
-		}
-
-		embeddingCfg := config.EmbeddingIndex
-		if embeddingCfg == nil {
-			embeddingCfg = &configuration.EmbeddingIndexConfig{}
-		}
-
-		switch operation {
-		case "status":
-			return h.handleStatus(embeddingCfg, workspaceRoot)
-		case "build":
-			return h.handleBuild(ctx, embeddingCfg, workspaceRoot)
-		case "update":
-			return h.handleUpdate(ctx, embeddingCfg, workspaceRoot)
-		default:
-			return ToolResult{
-				Output:  fmt.Sprintf("Unknown operation '%s'. Valid operations: build, update, status", operation),
-				IsError: true,
-			}, nil
-		}
 	}
 
-	return ToolResult{
-		Output:  "No results",
-		IsError: false,
-	}, nil
+	// --- actual logic (always runs) ---
+
+	operation, err := extractString(args, "operation")
+	if err != nil {
+		hadError = true
+		return ToolResult{
+			Output:  err.Error(),
+			IsError: true,
+		}, nil
+	}
+
+	// Get config
+	var config *configuration.Config
+	if env.ConfigManager != nil {
+		config = env.ConfigManager.GetConfig()
+	} else {
+		manager, err := configuration.NewManager()
+		if err != nil {
+			hadError = true
+			return ToolResult{
+				Output:  fmt.Sprintf("Error getting configuration: %v", err),
+				IsError: true,
+			}, nil
+		}
+		config = manager.GetConfig()
+	}
+
+	workspaceRoot := env.WorkspaceRoot
+	if workspaceRoot == "" {
+		workspaceRoot = "."
+	}
+
+	embeddingCfg := config.EmbeddingIndex
+	if embeddingCfg == nil {
+		embeddingCfg = &configuration.EmbeddingIndexConfig{}
+	}
+
+	switch operation {
+	case "status":
+		return h.handleStatus(embeddingCfg, workspaceRoot)
+	case "build":
+		return h.handleBuild(ctx, embeddingCfg, workspaceRoot)
+	case "update":
+		return h.handleUpdate(ctx, embeddingCfg, workspaceRoot)
+	default:
+		hadError = true
+		return ToolResult{
+			Output:  fmt.Sprintf("Unknown operation '%s'. Valid operations: build, update, status", operation),
+			IsError: true,
+		}, nil
+	}
 }
 
 func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
@@ -140,11 +144,15 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 			sb.WriteString(fmt.Sprintf("  State: Error checking index: %v\n", err))
 		}
 	} else if info.IsDir() {
-		files, _ := os.ReadDir(indexDir)
-		sb.WriteString(fmt.Sprintf("  State: Index exists (%d file(s))\n", len(files)))
-		sb.WriteString("  Files:\n")
-		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("    - %s\n", f.Name()))
+		files, readErr := os.ReadDir(indexDir)
+		if readErr != nil {
+			sb.WriteString(fmt.Sprintf("  State: Error reading index directory: %v\n", readErr))
+		} else {
+			sb.WriteString(fmt.Sprintf("  State: Index exists (%d file(s))\n", len(files)))
+			sb.WriteString("  Files:\n")
+			for _, f := range files {
+				sb.WriteString(fmt.Sprintf("    - %s\n", f.Name()))
+			}
 		}
 	}
 
@@ -155,13 +163,14 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 }
 
 func (h *embeddingIndexHandler) handleBuild(ctx context.Context, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
-	manager := embedding.NewEmbeddingManager(cfg, workspaceRoot)
+	mgr := embedding.NewEmbeddingManager(cfg, workspaceRoot)
+	defer mgr.Close()
 
 	// Use a timeout for the build
 	buildCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	stats, err := manager.BuildIndex(buildCtx)
+	stats, err := mgr.BuildIndex(buildCtx)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("Error building embedding index: %v", err),
@@ -183,13 +192,14 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, cfg *configurat
 }
 
 func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
-	manager := embedding.NewEmbeddingManager(cfg, workspaceRoot)
+	mgr := embedding.NewEmbeddingManager(cfg, workspaceRoot)
+	defer mgr.Close()
 
 	// Use a timeout for the update
 	updateCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	stats, err := manager.UpdateFromGitDiff(updateCtx)
+	stats, err := mgr.UpdateFromGitDiff(updateCtx)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("Error updating embedding index: %v", err),

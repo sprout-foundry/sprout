@@ -20,7 +20,14 @@ export async function listRoles(fetchFn: typeof fetch): Promise<RoleConfig[]> {
   if (!response.ok) {
     throw new Error(`Failed to list roles: ${response.status} ${response.statusText}`);
   }
-  return await response.json();
+  const payload: unknown = await response.json();
+  // Server returns {"roles": [...]} (handled by pkg/webui/roles_api.go).
+  // Accept either shape so future server changes don't crash the UI.
+  if (Array.isArray(payload)) return payload as RoleConfig[];
+  if (payload && typeof payload === 'object' && Array.isArray((payload as { roles?: unknown }).roles)) {
+    return (payload as { roles: RoleConfig[] }).roles;
+  }
+  return [];
 }
 
 export async function getRole(fetchFn: typeof fetch, name: string): Promise<RoleConfig> {

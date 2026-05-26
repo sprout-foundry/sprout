@@ -1,5 +1,5 @@
 import { SkeletonText } from '@sprout/ui';
-import { Pencil, Plus, Trash2, Cog } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import { useState } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 
@@ -205,6 +205,12 @@ export default function ProviderSettingsTab({
         )}
       </div>
 
+      <ProviderPrioritySection
+        settings={settings}
+        availableProviders={availableProviders ?? []}
+        updateSetting={updateSetting}
+      />
+
       <h4 style={{ marginTop: 'var(--space-12)' }}>Custom Providers ({providerEntries.length})</h4>
 
       {providerEntries.length === 0 && !editingProvider && (
@@ -384,6 +390,183 @@ export default function ProviderSettingsTab({
             <Plus size={14} /> Add provider
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface ProviderPrioritySectionProps {
+  settings: SproutSettings;
+  availableProviders: ProviderOption[];
+  updateSetting?: (keyOrPath: string, value: unknown) => Promise<void>;
+}
+
+/**
+ * Ordered fallback list. When the active provider can't be reached (no
+ * credential, endpoint down, etc.), sprout walks this list and switches
+ * to the first usable entry. Empty list = no fallback; only the active
+ * provider is used.
+ */
+function ProviderPrioritySection({ settings, availableProviders, updateSetting }: ProviderPrioritySectionProps) {
+  const priority = ((settings as unknown as { provider_priority?: string[] }).provider_priority ?? []) as string[];
+  const [pendingAdd, setPendingAdd] = useState('');
+
+  const persist = (next: string[]) => {
+    if (!updateSetting) return;
+    void updateSetting('provider_priority', next);
+  };
+
+  const remove = (idx: number) => {
+    persist(priority.filter((_, i) => i !== idx));
+  };
+  const moveUp = (idx: number) => {
+    if (idx <= 0) return;
+    const next = [...priority];
+    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+    persist(next);
+  };
+  const moveDown = (idx: number) => {
+    if (idx >= priority.length - 1) return;
+    const next = [...priority];
+    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+    persist(next);
+  };
+  const add = () => {
+    const id = pendingAdd.trim();
+    if (!id || priority.includes(id)) {
+      setPendingAdd('');
+      return;
+    }
+    persist([...priority, id]);
+    setPendingAdd('');
+  };
+
+  const candidateOptions = availableProviders.filter((p) => !priority.includes(p.id));
+
+  // Hide the section entirely if there's no way to mutate (no updateSetting).
+  if (!updateSetting) return null;
+
+  return (
+    <div style={{ marginTop: 'var(--space-12)' }}>
+      <h4>Provider Priority</h4>
+      <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+        Fallback order when the active provider is unreachable. The first usable provider in this list wins. Empty list
+        means no fallback.
+      </div>
+
+      {priority.length === 0 ? (
+        <div className="settings-empty">No providers in priority list</div>
+      ) : (
+        <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {priority.map((id, idx) => {
+            const meta = availableProviders.find((p) => p.id === id);
+            return (
+              <li
+                key={id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  padding: 'var(--space-2) var(--space-3)',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: 'var(--space-2)',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--text-tertiary)',
+                    minWidth: 24,
+                  }}
+                >
+                  #{idx + 1}
+                </span>
+                <span style={{ flex: 1, color: 'var(--text-primary)' }}>{meta?.name ?? id}</span>
+                <button
+                  type="button"
+                  aria-label={`Move ${id} up`}
+                  title="Move up"
+                  className="settings-icon-btn"
+                  disabled={idx === 0}
+                  onClick={() => moveUp(idx)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: idx === 0 ? 'var(--text-muted)' : 'var(--text-tertiary)',
+                    cursor: idx === 0 ? 'not-allowed' : 'pointer',
+                    padding: 'var(--space-1)',
+                  }}
+                >
+                  <ArrowUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Move ${id} down`}
+                  title="Move down"
+                  className="settings-icon-btn"
+                  disabled={idx === priority.length - 1}
+                  onClick={() => moveDown(idx)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: idx === priority.length - 1 ? 'var(--text-muted)' : 'var(--text-tertiary)',
+                    cursor: idx === priority.length - 1 ? 'not-allowed' : 'pointer',
+                    padding: 'var(--space-1)',
+                  }}
+                >
+                  <ArrowDown size={14} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${id}`}
+                  title="Remove"
+                  className="settings-icon-btn"
+                  onClick={() => remove(idx)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-tertiary)',
+                    cursor: 'pointer',
+                    padding: 'var(--space-1)',
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      <div className="config-item" style={{ marginTop: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <select
+            className="styled-select"
+            value={pendingAdd}
+            onChange={(e) => setPendingAdd(e.target.value)}
+            style={{ flex: 1 }}
+          >
+            <option value="">
+              {candidateOptions.length === 0 ? 'All providers already in list' : 'Select provider to add…'}
+            </option>
+            {candidateOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="settings-action-btn"
+            onClick={add}
+            disabled={pendingAdd === '' || candidateOptions.length === 0}
+          >
+            Add
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -91,9 +91,11 @@ export type SettingsSubsection =
   | 'agent-subagents'
   | 'agent-skills'
   | 'agent-roles'
+  | 'agent-memory'
   // Workspace (workspace scope)
   | 'workspace-embeddings'
   | 'workspace-mcp'
+  | 'workspace-lsp'
   // Environment (global scope)
   | 'env-providers'
   | 'env-performance'
@@ -122,6 +124,7 @@ export const SECTION_GROUPS: SectionDef[] = [
       { id: 'agent-subagents', label: 'Subagents' },
       { id: 'agent-skills', label: 'Skills' },
       { id: 'agent-roles', label: 'Roles' },
+      { id: 'agent-memory', label: 'Memory' },
     ],
   },
   {
@@ -132,6 +135,7 @@ export const SECTION_GROUPS: SectionDef[] = [
     subsections: [
       { id: 'workspace-embeddings', label: 'Embeddings' },
       { id: 'workspace-mcp', label: 'MCP Servers' },
+      { id: 'workspace-lsp', label: 'Language Servers' },
     ],
   },
   {
@@ -178,8 +182,10 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'agent-subagents': 'subagents',
     'agent-skills': 'skills',
     'agent-roles': 'roles',
+    'agent-memory': 'general',
     'workspace-embeddings': 'embeddings',
     'workspace-mcp': 'mcp',
+    'workspace-lsp': 'general',
     'env-providers': 'providers',
     'env-performance': 'performance',
     'env-commit-review': 'commit-review',

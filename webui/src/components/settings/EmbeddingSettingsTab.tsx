@@ -1,6 +1,7 @@
 import { Loader2, Database, CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
-import { useEffect, useState, useCallback } from 'react';
-import { ApiService } from '../../services/api';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { ApiService, type SproutSettings } from '../../services/api';
+import { getNestedValue } from './settingsHelpers';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
 interface EmbeddingStatus {
@@ -12,12 +13,14 @@ interface EmbeddingStatus {
 }
 
 interface EmbeddingSettingsTabProps {
+  settings: SproutSettings | null;
   renderToggle: FieldRenderers['renderToggle'];
   renderTextInput: FieldRenderers['renderTextInput'];
   updateSetting: (keyOrPath: string, value: unknown) => Promise<void>;
 }
 
 export default function EmbeddingSettingsTab({
+  settings,
   renderToggle,
   renderTextInput,
   updateSetting,
@@ -26,6 +29,32 @@ export default function EmbeddingSettingsTab({
   const [status, setStatus] = useState<EmbeddingStatus | null>(null);
   const [isRebuilding, setIsRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const persistedExclude = settings
+    ? ((getNestedValue(settings, 'embedding_index.exclude_paths') as string[] | undefined) ?? [])
+    : [];
+  const [excludeDraft, setExcludeDraft] = useState<string>(persistedExclude.join('\n'));
+  const excludeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPersistedJoinedRef = useRef<string>(persistedExclude.join('\n'));
+
+  // Sync local draft when settings refresh from the server (e.g., scope switch).
+  useEffect(() => {
+    const joined = persistedExclude.join('\n');
+    if (joined !== lastPersistedJoinedRef.current) {
+      lastPersistedJoinedRef.current = joined;
+      setExcludeDraft(joined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistedExclude.join('\n')]);
+
+  const commitExcludePaths = (raw: string) => {
+    const list = raw
+      .split('\n')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    lastPersistedJoinedRef.current = list.join('\n');
+    void updateSetting('embedding_index.exclude_paths', list);
+  };
 
   const fetchStatus = useCallback(async (): Promise<boolean> => {
     try {
@@ -159,6 +188,38 @@ export default function EmbeddingSettingsTab({
       {renderToggle('embedding_index.auto_index', 'Auto-build on startup')}
       {renderTextInput('embedding_index.similarity_threshold', 'Similarity threshold', '0.0 – 1.0')}
       {renderTextInput('embedding_index.max_results', 'Max duplicate results', '1 – 10')}
+
+      <div className="config-item">
+        <label htmlFor="setting-embedding-exclude-paths">Exclude paths</label>
+        <textarea
+          id="setting-embedding-exclude-paths"
+          className="styled-input styled-textarea"
+          rows={6}
+          value={excludeDraft}
+          placeholder={'node_modules\n.git\ndist'}
+          onChange={(e) => {
+            const next = e.target.value;
+            setExcludeDraft(next);
+            if (excludeSaveTimer.current) clearTimeout(excludeSaveTimer.current);
+            excludeSaveTimer.current = setTimeout(() => {
+              excludeSaveTimer.current = null;
+              commitExcludePaths(next);
+            }, 500);
+          }}
+          onBlur={() => {
+            if (excludeSaveTimer.current) {
+              clearTimeout(excludeSaveTimer.current);
+              excludeSaveTimer.current = null;
+            }
+            if (excludeDraft !== lastPersistedJoinedRef.current) {
+              commitExcludePaths(excludeDraft);
+            }
+          }}
+        />
+        <div className="config-help">
+          One path per line. Matching files are skipped when indexing. Lines are trimmed; blank lines are ignored.
+        </div>
+      </div>
 
       {/* Rebuild Action — uses the now-defined .settings-action-btn CSS
        * for visual consistency with other tab-local action buttons. Inline

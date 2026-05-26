@@ -46,6 +46,11 @@ type SelectListOptions struct {
 	// Footer is the hint line shown beneath the list (dim). When empty,
 	// SelectList renders a default hint matching the current mode.
 	Footer string
+	// DismissOnAnyKey makes any printable key (that isn't navigation or
+	// Enter) dismiss the picker with ("", false, nil). Useful for
+	// "press any key to continue"-style dismissal so the user doesn't
+	// have to reach for Esc or Enter. Ignored when Searchable is true.
+	DismissOnAnyKey bool
 }
 
 // SelectList drives a single-column picker UI. The zero value is
@@ -130,6 +135,47 @@ func (s *SelectList) runFallback() (string, bool, error) {
 	return s.opts.Items[n-1].Value, true, nil
 }
 
+// processKey handles a single keypress (or escape-prefixed sequence)
+// and returns (done, val, ok). done=true means the caller should stop
+// (confirm, cancel, or dismiss).  n is the number of bytes read; buf
+// holds them.  Called from runTTY.
+func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val string, ok bool) {
+	switch {
+	case b == 0x03: // Ctrl+C
+		return true, "", false
+	case b == 0x0D, b == 0x0A: // Enter
+		val, ok := s.confirm()
+		return true, val, ok
+	case b == 0x1B: // Esc or arrow-key prefix
+		return s.handleEscape(n, buf[:])
+	case b == 0x7F, b == 0x08: // Backspace / DEL
+		if s.opts.Searchable {
+			s.filterBackspace()
+			s.render()
+		} else if s.opts.DismissOnAnyKey {
+			return true, "", false
+		}
+		return false, "", false
+	case b >= 0x20 && b < 0x7F: // printable ASCII
+		if s.opts.Searchable {
+			s.filterAppend(string(b))
+			s.render()
+		} else if s.opts.DismissOnAnyKey {
+			return true, "", false
+		}
+		return false, "", false
+	case b >= 0xC0: // UTF-8 lead byte
+		if s.opts.Searchable {
+			s.consumeUTF8(b, n, buf[:])
+			s.render()
+		} else if s.opts.DismissOnAnyKey {
+			return true, "", false
+		}
+		return false, "", false
+	}
+	return false, "", false
+}
+
 // runTTY drives the interactive picker. Returns when the user presses
 // Enter (confirm) or Esc/Ctrl+C (cancel).
 func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
@@ -169,30 +215,9 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 		// Handle the byte(s) we just read. Most actions are a single
 		// byte; ESC and arrow-key sequences read 2-3 bytes inline.
 		b := buf[0]
-		switch {
-		case b == 0x03: // Ctrl+C
-			return "", false, nil
-		case b == 0x0D, b == 0x0A: // Enter
-			val, ok := s.confirm()
+		done, val, ok := s.processKey(b, n, buf[:])
+		if done {
 			return val, ok, nil
-		case b == 0x1B: // Esc or arrow-key prefix
-			done, val, ok := s.handleEscape(n, buf[:])
-			if done {
-				return val, ok, nil
-			}
-		case b == 0x7F, b == 0x08: // Backspace / DEL
-			s.filterBackspace()
-			s.render()
-		case b >= 0x20 && b < 0x7F: // printable ASCII
-			if s.opts.Searchable {
-				s.filterAppend(string(b))
-				s.render()
-			}
-		case b >= 0xC0: // UTF-8 lead byte
-			if s.opts.Searchable {
-				s.consumeUTF8(b, n, buf[:])
-				s.render()
-			}
 		}
 	}
 }
@@ -417,6 +442,7 @@ func (s *SelectList) render() {
 	title := s.opts.Title
 	filter := s.filter
 	searchable := s.opts.Searchable
+	dismissOnAnyKey := s.opts.DismissOnAnyKey
 	pageSize := s.opts.PageSize
 	cursor := s.cursor
 	offset := s.offset
@@ -487,6 +513,8 @@ func (s *SelectList) render() {
 	if hint == "" {
 		if searchable {
 			hint = "↑↓ select · enter confirm · type to filter · esc cancel"
+		} else if dismissOnAnyKey {
+			hint = "↑↓ select · enter confirm · any other key dismiss"
 		} else {
 			hint = "↑↓ select · enter confirm · esc cancel"
 		}

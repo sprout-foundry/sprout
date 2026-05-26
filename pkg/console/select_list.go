@@ -15,6 +15,8 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/term"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 // SelectItem is a single entry in a SelectList.
@@ -498,15 +500,36 @@ func (s *SelectList) render() {
 }
 
 // renderSelectRow formats a single row with optional right-aligned
-// Detail. The active row gets the GlyphAction prefix (→), inactive
-// rows get two spaces so the columns align.
+// Detail.  The active row gets a heavier visual treatment than before
+// (filled-arrow prefix + bold label) so selection is obvious at a glance:
+//
+//	  Inactive label                                detail
+//	❯ Active label (bold)                          detail
+//
+// The prefix occupies 2 visible cells in both states so the label column
+// stays aligned.  In NO_COLOR mode the bold escape is dropped but the
+// filled arrow still differentiates the active row.
 func renderSelectRow(label, detail string, active bool, termWidth int) string {
-	prefix := "  "
+	useColor := envutil.ResolveColorPreference(true)
+
+	var prefix, labelOpen, labelClose string
 	if active {
-		prefix = GlyphAction.Prefix()
+		if useColor {
+			// Bold bright-cyan filled arrow + bold label.  Matches the
+			// GlyphAction color so picker selection looks consistent
+			// with action-in-flight indicators elsewhere in the CLI.
+			prefix = "\033[1;96m❯\033[0m "
+			labelOpen = "\033[1m"
+			labelClose = "\033[0m"
+		} else {
+			prefix = "❯ "
+		}
+	} else {
+		prefix = "  "
 	}
+
 	if detail == "" {
-		return prefix + label
+		return prefix + labelOpen + label + labelClose
 	}
 	// Pad label so detail right-aligns. Account for prefix (2 cells)
 	// and a 2-cell gutter between label and detail.
@@ -514,14 +537,14 @@ func renderSelectRow(label, detail string, active bool, termWidth int) string {
 	available := termWidth - 2 - gutter - len(detail)
 	if available < 8 {
 		// Not enough room for detail; just append it inline.
-		return prefix + label + "  " + dimString(detail)
+		return prefix + labelOpen + label + labelClose + "  " + dimString(detail)
 	}
 	labelStr := label
 	if len(labelStr) > available {
 		labelStr = labelStr[:available-1] + "…"
 	}
 	pad := available - len(labelStr)
-	return prefix + labelStr + strings.Repeat(" ", pad+gutter) + dimString(detail)
+	return prefix + labelOpen + labelStr + labelClose + strings.Repeat(" ", pad+gutter) + dimString(detail)
 }
 
 // dimString wraps text in the GlyphDim color escape (or returns it

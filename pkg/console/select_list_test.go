@@ -107,9 +107,15 @@ func TestRenderSelectRow_DetailRightAligned(t *testing.T) {
 	if !strings.Contains(row, "anthropic") {
 		t.Fatalf("row=%q missing detail", row)
 	}
-	// Active row should start with the action glyph prefix.
-	if !strings.HasPrefix(row, GlyphAction.Prefix()) {
-		t.Fatalf("active row=%q should start with GlyphAction prefix", row)
+	// Active row uses a filled-arrow prefix (heavier than `→`) so the
+	// selection stands out from inactive rows even at a glance.  The escape
+	// codes around it differ by color mode; assert on the visible glyph.
+	if !strings.Contains(row, "❯") {
+		t.Fatalf("active row=%q should contain the filled-arrow indicator", row)
+	}
+	// And the label itself should be bold-wrapped when color is enabled.
+	if !strings.Contains(row, "\x1b[1m") {
+		t.Fatalf("active row=%q should bold the label (\\x1b[1m escape)", row)
 	}
 }
 

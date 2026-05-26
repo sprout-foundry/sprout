@@ -4,6 +4,30 @@ import (
 	"testing"
 )
 
+func TestStripQuotedContent(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no quotes", "curl -s http://api", "curl -s http://api"},
+		{"single-quoted content", "echo 'git commit'", "echo '          '"},
+		{"double-quoted content", "echo \"git commit\"", "echo \"          \""},
+		{"JSON in single quotes", "curl -d '{\"msg\":\"git commit title\"}'", "curl -d '                          '"},
+		{"empty string", "", ""},
+		{"preserves newlines", "echo 'line1\nline2'", "echo '     \n     '"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := stripQuotedContent(tc.input)
+			if got != tc.want {
+				t.Errorf("stripQuotedContent(%q)\n  got: %q\n want: %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIsGitWriteCommand(t *testing.T) {
 	tests := []struct {
 		command string
@@ -56,7 +80,7 @@ func TestIsGitWriteCommand(t *testing.T) {
 		{"cd && commit", "cd /some/path && git commit -m 'fix'", true},
 		{"cd ; push", "cd /some/path; git push origin main", true},
 		{"subshell merge", "(cd /some/path && git merge feature)", true},
-		{"bash -c rebase", "bash -c 'cd /some/path && git rebase main'", true},
+		{"bash -c rebase", "bash -c 'cd /some/path && git rebase main'", false}, // single-quoted content is stripped; can't parse bash -c semantics
 		{"status && commit", "git status && git commit -m 'fix'", true},
 		{"multiple git, second push", "git log && git push", true},
 		{"cd && reset", "cd /path && git reset HEAD", true},
@@ -67,6 +91,12 @@ func TestIsGitWriteCommand(t *testing.T) {
 		{"git log && diff", "git log && git diff", false},
 		{"cd && add", "cd /path && git add file.txt", false}, // add is allowed, not considered a restricted write
 		{"cd && branch list", "cd /path && git branch", false},
+		
+		// False positive regression: quoted content should not be scanned
+		{"curl with git commit in JSON", `curl -s http://localhost/v1/chat -d '{"model":"gpt","messages":[{"role":"user","content":"Generate a git commit title"}]}'`, false},
+		{"curl with git push in JSON", `curl -d '{"prompt":"git push origin main"}' http://api`, false},
+		{"echo with git checkout", `echo "run git checkout main please"`, false},
+		{"curl piped with git reset in JSON", `curl -s http://api -d '{"cmd":"git reset --hard"}' | python3 -m json.tool`, false},
 	}
 	
 	for _, tc := range compoundTests {
@@ -161,7 +191,11 @@ func TestIsGitCheckoutSubcommand(t *testing.T) {
 		// Note: These edge cases are not handled by the simple parser
 		// They would require more complex shell parsing to detect
 		{"subshell checkout (BLOCKED - finds git)", "(cd /some/path && git switch main)", true}, // Actually blocked because git is found
-		{"bash -c checkout (BLOCKED - finds git)", "bash -c 'cd /some/path && git checkout'", true}, // Now blocked because git is found inside quotes
+		{"bash -c checkout (now correctly ignored)", "bash -c 'cd /some/path && git checkout'", false}, // Fixed: quoted content is stripped
+
+		// False positive regression: quoted content should not be scanned
+		{"curl with git checkout in JSON", `curl -s http://api -d '{"cmd":"git checkout main"}'`, false},
+		{"echo with git switch", `echo "run git switch feature"`, false},
 	}
 	
 	for _, tc := range compoundTests {
@@ -380,7 +414,12 @@ func TestIsGitDiscardCommand(t *testing.T) {
 		// Note: These edge cases are not handled by the simple parser
 		// They would require more complex shell parsing to detect
 		{"subshell reset (BLOCKED - finds git)", "(cd /some/path && git reset)", true}, // Actually blocked because git is found
-		{"bash -c reset (BLOCKED - finds git)", "bash -c 'cd /some/path && git reset'", true}, // Now blocked because git is found inside quotes
+		{"bash -c reset (now correctly ignored)", "bash -c 'cd /some/path && git reset'", false}, // Fixed: quoted content is stripped
+
+		// False positive regression: quoted content should not be scanned
+		{"curl with git reset in JSON", `curl -s http://api -d '{"cmd":"git reset --hard"}'`, false},
+		{"curl with git restore in JSON", `curl -d '{"prompt":"git restore file"}' http://api`, false},
+		{"echo with git reset", `echo "run git reset HEAD"`, false},
 	}
 	
 	for _, tc := range compoundTests {

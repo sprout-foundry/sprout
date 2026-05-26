@@ -8,11 +8,44 @@ import (
 
 // Shared utility functions for tool handlers
 
+// stripQuotedContent replaces all single-quoted and double-quoted string
+// content in a shell command with spaces, preserving quote boundaries so
+// token positions stay stable. This prevents false-positive git command
+// detection when words like "git commit" appear inside JSON payloads or
+// other quoted arguments.
+func stripQuotedContent(s string) string {
+	var b strings.Builder
+	inSingle := false
+	inDouble := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '\'' && !inDouble {
+			inSingle = !inSingle
+			b.WriteByte(ch)
+		} else if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			b.WriteByte(ch)
+		} else if inSingle || inDouble {
+			// Inside quotes: replace content with spaces (keep structural positions)
+			if ch == '\n' {
+				b.WriteByte('\n')
+			} else {
+				b.WriteByte(' ')
+			}
+		} else {
+			b.WriteByte(ch)
+		}
+	}
+	return b.String()
+}
+
 // isGitCheckoutSubcommand checks if a git command is a checkout or switch operation.
 // These are always blocked from shell_command to force use of the git tool
 // which requires explicit user approval.
 // This function checks ALL git commands in a compound shell command (e.g., "cd x && git checkout").
 func isGitCheckoutSubcommand(command string) bool {
+	// Strip quoted content to avoid false positives from JSON payloads etc.
+	command = stripQuotedContent(command)
 	// Find all occurrences of "git " in the command and check each subcommand
 	// This handles compound commands like "cd /path && git checkout branch"
 	remaining := command
@@ -60,6 +93,8 @@ func isGitCheckoutSubcommand(command string) bool {
 // isGitWriteCommand checks if a command is a git write operation (which should use git tool for approval)
 // This function checks ALL git commands in a compound shell command (e.g., "cd x && git commit").
 func isGitWriteCommand(command string) bool {
+	// Strip quoted content to avoid false positives from JSON payloads etc.
+	command = stripQuotedContent(command)
 	// Find all occurrences of "git " in the command and check each subcommand
 	remaining := command
 	for {
@@ -183,6 +218,8 @@ func isGitWriteCommand(command string) bool {
 // file paths to stage changes — this prevents accidental mass-staging.
 // This function checks ALL git add commands in a compound shell command.
 func isBroadGitAdd(command string) bool {
+	// Strip quoted content to avoid false positives from JSON payloads etc.
+	command = stripQuotedContent(command)
 	// Find all occurrences of "git add" in the command
 	remaining := command
 	for {
@@ -238,6 +275,8 @@ func isBroadGitAdd(command string) bool {
 // from shell_command regardless of orchestrator permissions.
 // This function checks ALL git commands in a compound shell command (e.g., "cd x && git reset").
 func isGitDiscardCommand(command string) bool {
+	// Strip quoted content to avoid false positives from JSON payloads etc.
+	command = stripQuotedContent(command)
 	// Find all occurrences of "git " in the command and check each subcommand
 	// This handles compound commands like "cd /path && git restore file"
 	remaining := command

@@ -156,6 +156,7 @@ export interface UseEditorExtensionsReturn {
     lsp: Compartment;
     inlayHints: Compartment;
     signatureHelp: Compartment;
+    history: Compartment;
   };
   /**
    * Build the full CodeMirror extension array for `EditorState.create()`.
@@ -184,6 +185,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
     lsp: new Compartment(),
     inlayHints: new Compartment(),
     signatureHelp: new Compartment(),
+    history: new Compartment(),
   }).current; // stable reference — never recreated
 
   // ── Extension builder ─────────────────────────────────────────────────
@@ -220,7 +222,11 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       autocompletion(),
       createHoverTooltipExtension(buffer.getFilePath, buffer.getContent),
       closeBrackets(),
-      history(),
+      // Wrapped in a compartment so useEditorFileIO can reconfigure it on
+      // buffer switch — this is the only documented way to reset CodeMirror's
+      // undo stack and prevents Cmd-Z from restoring content from a previously
+      // open file.
+      compartments.history.of(history()),
       cursorHistoryPlugin,
 
       // ── Visual aids ──

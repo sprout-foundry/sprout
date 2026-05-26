@@ -253,6 +253,7 @@ function setupHook(opts = {}) {
 
   const compartments = {
     tabSize: { reconfigure: vi.fn() },
+    history: { reconfigure: vi.fn() },
   };
 
   return { viewRef, buffer, bufferRef, indentManuallySetRef, fetchDiagnosticsRef,

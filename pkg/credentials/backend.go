@@ -236,7 +236,27 @@ func resolveBackend() (Backend, error) {
 		return NewFileBackend(), nil
 	}
 
-	// Auto-detect: try to use keyring, fall back to file
+	// Auto-detect: try to use keyring, fall back to file.
+	//
+	// Under `go test`, skip the keyring probe entirely and pick the file
+	// backend.  The probe is silent on macOS (no prompt), but a subsequent
+	// SetToActiveBackend call would write test data into the developer's
+	// real login keychain — polluting it across runs and producing
+	// confusing test failures when Save() (file path) and Resolve()
+	// (active backend) target different stores.  Tests that explicitly
+	// want the keyring path still set SPROUT_CREDENTIAL_BACKEND=keyring
+	// and use keyring.MockInit() — both code paths handled above remain
+	// fully functional.
+	//
+	// Escape hatch: tests that need to verify the autodetect logic itself
+	// (e.g. TestGetStorageBackend_AutoDetect) set
+	// SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT=1 to opt into the real
+	// probe.  They must use keyring.MockInit() to keep the probe in-memory.
+	if inTestBinary() && strings.TrimSpace(os.Getenv("SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT")) == "" {
+		log.Printf("[credentials] Test binary detected — using file backend (skipping keyring auto-detect)")
+		return NewFileBackend(), nil
+	}
+
 	log.Printf("[credentials] Auto-detecting storage backend...")
 	if IsKeyringAvailable() {
 		log.Printf("[credentials] OS keyring available, using keyring backend")
@@ -251,6 +271,19 @@ func resolveBackend() (Backend, error) {
 		log.Printf("[credentials] Warning: failed to persist file mode: %v", err)
 	}
 	return NewFileBackend(), nil
+}
+
+// inTestBinary reports whether the current process is a Go test binary.
+// See pkg/providercatalog/catalog.go for the rationale — `go test` produces
+// a binary whose name ends in `.test`, which is the cleanest signal that's
+// observable from production code without importing the testing package.
+func inTestBinary() bool {
+	if len(os.Args) == 0 {
+		return false
+	}
+	return strings.HasSuffix(os.Args[0], ".test") ||
+		strings.Contains(os.Args[0], "/_test/") ||
+		strings.HasSuffix(os.Args[0], ".test.exe")
 }
 
 // ResetStorageBackend resets the cached backend, forcing re-detection on next call.

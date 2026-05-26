@@ -62,16 +62,16 @@ func ExtractSymbolsWithMaxDepth(root *gotreesitter.Node, bt *gotreesitter.BoundT
 
 	switch lang {
 	case "go":
-		symbols = extractGoSymbols(root, bt, maxDepth)
+		symbols = extractGoSymbols(root, bt, maxDepth, lang)
 	case "typescript", "tsx":
-		symbols = extractTSSymbols(root, bt, maxDepth)
+		symbols = extractTSSymbols(root, bt, maxDepth, lang)
 	case "javascript":
-		symbols = extractTSSymbols(root, bt, maxDepth) // JS shares TS node types
+		symbols = extractTSSymbols(root, bt, maxDepth, lang) // JS shares TS node types
 	case "python":
-		symbols = extractPythonSymbols(root, bt, maxDepth)
+		symbols = extractPythonSymbols(root, bt, maxDepth, lang)
 	default:
 		// Fallback: extract top-level symbols only via the generic walker.
-		symbols = extractGenericSymbols(root, bt, maxDepth)
+		symbols = extractGenericSymbols(root, bt, maxDepth, lang)
 	}
 
 	return symbols
@@ -84,6 +84,15 @@ func scopedSymbol(name, kind, scope string, node *gotreesitter.Node, depth int) 
 		Scope:  scope,
 		Depth:  depth,
 	}
+}
+
+// scopedSymbolWithBody is like scopedSymbol but also extracts the body text
+// for function/method/class symbols via extractBody. Use this for nodes where
+// body extraction is meaningful (functions, methods, Python classes).
+func scopedSymbolWithBody(name, kind, scope string, node *gotreesitter.Node, bt *gotreesitter.BoundTree, depth int, lang string) ScopedSymbol {
+	s := scopedSymbol(name, kind, scope, node, depth)
+	s.Body = extractBody(node, bt, lang)
+	return s
 }
 
 // shouldSkipNode returns true for nodes that should never be extracted as
@@ -108,7 +117,7 @@ func shouldSkipNode(nodeType string) bool {
 // maxDepth semantics:
 //   1 — extract only top-level symbols (depth 0)
 //   2+ — also extract nested members (depth 1)
-func extractGoSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int) []ScopedSymbol {
+func extractGoSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int, lang string) []ScopedSymbol {
 	var symbols []ScopedSymbol
 
 	for i := 0; i < root.ChildCount(); i++ {
@@ -127,7 +136,7 @@ func extractGoSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 		case "function_declaration":
 			name := childText(child, bt, "name")
 			if name != "" {
-				symbols = append(symbols, scopedSymbol(name, "function", "", child, 0))
+				symbols = append(symbols, scopedSymbolWithBody(name, "function", "", child, bt, 0, lang))
 			}
 
 		case "method_declaration":
@@ -141,7 +150,7 @@ func extractGoSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 				if scope == "" {
 					continue // Skip methods with unresolvable receiver to maintain scope invariant.
 				}
-				symbols = append(symbols, scopedSymbol(name, "method", scope, child, 1))
+				symbols = append(symbols, scopedSymbolWithBody(name, "method", scope, child, bt, 1, lang))
 			}
 
 		case "type_declaration":
@@ -363,7 +372,7 @@ func extractGoInterfaceMethods(ifaceNode *gotreesitter.Node, bt *gotreesitter.Bo
 
 // extractTSSymbols walks the AST for TS/JS and extracts top-level symbols plus
 // class/interface members and enum values up to maxDepth.
-func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int) []ScopedSymbol {
+func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int, lang string) []ScopedSymbol {
 	var symbols []ScopedSymbol
 
 	for i := 0; i < root.ChildCount(); i++ {
@@ -381,7 +390,7 @@ func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 		case "function_declaration":
 			name := childText(child, bt, "name")
 			if name != "" {
-				symbols = append(symbols, scopedSymbol(name, "function", "", child, 0))
+				symbols = append(symbols, scopedSymbolWithBody(name, "function", "", child, bt, 0, lang))
 			}
 
 		case "class_declaration":
@@ -393,7 +402,7 @@ func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 
 			// Extract class body members if we have depth budget.
 			if maxDepth > 1 {
-				symbols = append(symbols, extractTSClassMembers(child, bt, name)...)
+				symbols = append(symbols, extractTSClassMembers(child, bt, name, lang)...)
 			}
 
 		case "interface_declaration":
@@ -449,7 +458,7 @@ func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 					continue
 				}
 				ecType := bt.NodeType(ec)
-				exported := extractTSSymbolScoped(ec, bt, ecType, "", maxDepth)
+				exported := extractTSSymbolScoped(ec, bt, ecType, "", maxDepth, lang)
 				if len(exported) > 0 {
 					symbols = append(symbols, exported...)
 				}
@@ -463,7 +472,7 @@ func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 					continue
 				}
 				ecType := bt.NodeType(ec)
-				ambient := extractTSSymbolScoped(ec, bt, ecType, "", maxDepth)
+				ambient := extractTSSymbolScoped(ec, bt, ecType, "", maxDepth, lang)
 				if len(ambient) > 0 {
 					symbols = append(symbols, ambient...)
 				}
@@ -479,7 +488,7 @@ func extractTSSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDe
 
 // extractTSSymbolScoped extracts a single scoped symbol (with members) from a
 // TS/JS node, given the current scope prefix.
-func extractTSSymbolScoped(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, scopePrefix string, maxDepth int) []ScopedSymbol {
+func extractTSSymbolScoped(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, scopePrefix string, maxDepth int, lang string) []ScopedSymbol {
 	var symbols []ScopedSymbol
 	currentDepth := 0
 	if scopePrefix != "" {
@@ -490,7 +499,7 @@ func extractTSSymbolScoped(node *gotreesitter.Node, bt *gotreesitter.BoundTree, 
 	case "function_declaration":
 		name := childText(node, bt, "name")
 		if name != "" {
-			symbols = append(symbols, scopedSymbol(name, "function", scopePrefix, node, currentDepth))
+			symbols = append(symbols, scopedSymbolWithBody(name, "function", scopePrefix, node, bt, currentDepth, lang))
 		}
 
 	case "class_declaration":
@@ -504,7 +513,7 @@ func extractTSSymbolScoped(node *gotreesitter.Node, bt *gotreesitter.BoundTree, 
 			symbols = append(symbols, scopedSymbol(name, "class", scopePrefix, node, currentDepth))
 		}
 		if maxDepth > currentDepth+1 {
-			symbols = append(symbols, extractTSClassMembers(node, bt, name)...)
+			symbols = append(symbols, extractTSClassMembers(node, bt, name, lang)...)
 		}
 
 	case "interface_declaration":
@@ -561,7 +570,7 @@ func extractTSSymbolScoped(node *gotreesitter.Node, bt *gotreesitter.BoundTree, 
 }
 
 // extractTSClassMembers extracts method and property definitions from a class node.
-func extractTSClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope string) []ScopedSymbol {
+func extractTSClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope, lang string) []ScopedSymbol {
 	if classNode == nil {
 		return nil
 	}
@@ -594,7 +603,7 @@ func extractTSClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundT
 		case "method_definition":
 			name := childText(member, bt, "name")
 			if name != "" {
-				symbols = append(symbols, scopedSymbol(name, "method", scope, member, 1))
+				symbols = append(symbols, scopedSymbolWithBody(name, "method", scope, member, bt, 1, lang))
 			}
 
 		case "public_field_definition", "property_signature", "field_definition":
@@ -604,7 +613,7 @@ func extractTSClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundT
 			}
 
 		case "constructor_declaration":
-			symbols = append(symbols, scopedSymbol("constructor", "method", scope, member, 1))
+			symbols = append(symbols, scopedSymbolWithBody("constructor", "method", scope, member, bt, 1, lang))
 
 		case "formal_parameter":
 			// Handle "constructor(param: Type)" — the parameter is a direct child of class_body.
@@ -720,7 +729,7 @@ func extractTSEnumMembers(enumNode *gotreesitter.Node, bt *gotreesitter.BoundTre
 
 // extractPythonSymbols walks the AST for Python and extracts top-level symbols
 // plus class methods up to maxDepth.
-func extractPythonSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int) []ScopedSymbol {
+func extractPythonSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int, lang string) []ScopedSymbol {
 	var symbols []ScopedSymbol
 
 	for i := 0; i < root.ChildCount(); i++ {
@@ -738,7 +747,7 @@ func extractPythonSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, m
 		case "function_definition", "async_function_definition":
 			name := childText(child, bt, "name")
 			if name != "" {
-				symbols = append(symbols, scopedSymbol(name, "function", "", child, 0))
+				symbols = append(symbols, scopedSymbolWithBody(name, "function", "", child, bt, 0, lang))
 			}
 
 		case "class_definition":
@@ -746,11 +755,11 @@ func extractPythonSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, m
 			if name == "" {
 				continue
 			}
-			symbols = append(symbols, scopedSymbol(name, "class", "", child, 0))
+			symbols = append(symbols, scopedSymbolWithBody(name, "class", "", child, bt, 0, lang))
 
 			// Extract class body members if we have depth budget.
 			if maxDepth > 1 {
-				symbols = append(symbols, extractPythonClassMembers(child, bt, name)...)
+				symbols = append(symbols, extractPythonClassMembers(child, bt, name, lang)...)
 			}
 
 		case "type_alias":
@@ -774,7 +783,7 @@ func extractPythonSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, m
 					continue
 				}
 				// Recurse into the decorated definition.
-				decorated := extractPythonDecoratedSymbol(dc, bt, dcType, "", maxDepth)
+				decorated := extractPythonDecoratedSymbol(dc, bt, dcType, "", maxDepth, lang)
 				for k := range decorated {
 					// Override start to include the decorator.
 					decorated[k].StartLine = outerStartLine
@@ -796,23 +805,23 @@ func extractPythonSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, m
 
 // extractPythonDecoratedSymbol handles a decorated definition (function or class)
 // and returns scoped symbols including nested members.
-func extractPythonDecoratedSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, scopePrefix string, maxDepth int) []ScopedSymbol {
+func extractPythonDecoratedSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, scopePrefix string, maxDepth int, lang string) []ScopedSymbol {
 	switch nodeType {
 	case "function_definition", "async_function_definition":
 		name := childText(node, bt, "name")
 		if name == "" {
 			return nil
 		}
-		return []ScopedSymbol{scopedSymbol(name, "function", scopePrefix, node, 0)}
+		return []ScopedSymbol{scopedSymbolWithBody(name, "function", scopePrefix, node, bt, 0, lang)}
 
 	case "class_definition":
 		name := childText(node, bt, "name")
 		if name == "" {
 			return nil
 		}
-		symbols := []ScopedSymbol{scopedSymbol(name, "class", scopePrefix, node, 0)}
+		symbols := []ScopedSymbol{scopedSymbolWithBody(name, "class", scopePrefix, node, bt, 0, lang)}
 		if maxDepth > 1 {
-			symbols = append(symbols, extractPythonClassMembers(node, bt, name)...)
+			symbols = append(symbols, extractPythonClassMembers(node, bt, name, lang)...)
 		}
 		return symbols
 	}
@@ -824,7 +833,7 @@ func extractPythonDecoratedSymbol(node *gotreesitter.Node, bt *gotreesitter.Boun
 // The tree-sitter Python grammar produces for "total: int = 0":
 //   block → assignment → identifier : type = integer
 // We check for assignment nodes whose first named child is a simple identifier.
-func extractPythonClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope string) []ScopedSymbol {
+func extractPythonClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope, lang string) []ScopedSymbol {
 	if classNode == nil {
 		return nil
 	}
@@ -857,7 +866,7 @@ func extractPythonClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.Bo
 		case "function_definition":
 			name := childText(member, bt, "name")
 			if name != "" {
-				symbols = append(symbols, scopedSymbol(name, "method", scope, member, 1))
+				symbols = append(symbols, scopedSymbolWithBody(name, "method", scope, member, bt, 1, lang))
 			}
 
 		case "decorated_definition":
@@ -874,7 +883,7 @@ func extractPythonClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.Bo
 				if mt == "function_definition" {
 					name := childText(mc, bt, "name")
 					if name != "" {
-						symbols = append(symbols, scopedSymbol(name, "method", scope, mc, 1))
+						symbols = append(symbols, scopedSymbolWithBody(name, "method", scope, mc, bt, 1, lang))
 					}
 					break
 				}
@@ -959,7 +968,7 @@ func extractPythonClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.Bo
 // extractGenericSymbols extracts top-level symbols for languages without
 // a dedicated extractor. It walks direct children of root and attempts
 // to classify them by common node types.
-func extractGenericSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int) []ScopedSymbol {
+func extractGenericSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int, lang string) []ScopedSymbol {
 	if root == nil || bt == nil {
 		return nil
 	}
@@ -987,7 +996,12 @@ func extractGenericSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, 
 		}
 
 		kind := guessKind(nodeType)
-		symbols = append(symbols, scopedSymbol(name, kind, "", child, 0))
+		switch kind {
+		case "function", "method":
+			symbols = append(symbols, scopedSymbolWithBody(name, kind, "", child, bt, 0, lang))
+		default:
+			symbols = append(symbols, scopedSymbol(name, kind, "", child, 0))
+		}
 	}
 
 	return symbols

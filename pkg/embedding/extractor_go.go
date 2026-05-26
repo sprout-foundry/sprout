@@ -93,7 +93,7 @@ func extractFuncDecl(fset *token.FileSet, path string, src string, d *ast.FuncDe
 	}
 
 	unit := CodeUnit{
-		ID:        fmt.Sprintf("%s:%s", path, name),
+		ID:        makeUnitID(path, name, startLine),
 		File:      path,
 		Name:      name,
 		Signature: signature,
@@ -124,7 +124,7 @@ func extractFuncLits(fset *token.FileSet, path string, src string, lit *ast.Func
 	}
 
 	unit := CodeUnit{
-		ID:        fmt.Sprintf("%s:%s#L%d", path, anonName, startLine),
+		ID:        makeUnitID(path, anonName, startLine),
 		File:      path,
 		Name:      anonName,
 		Signature: signature,

@@ -413,19 +413,39 @@ func (s *HNSWStore) DeleteByIDs(ids []string) error {
 }
 
 // ReplaceAll discards the existing index and builds a new one from records.
+//
+// Records are deduplicated by ID before hitting the HNSW graph. The
+// upstream extractors now produce line-disambiguated IDs (see
+// `extractor.go:makeUnitID` — every code-unit ID is
+// `<file>:<name>#L<startLine>`), so collisions should be impossible
+// at the source. This dedupe is kept as belt-and-suspenders: any
+// future extractor / caller that hands us a slice with duplicate
+// IDs (intentional or otherwise) won't trigger the coder/hnsw
+// library's `g.Len() == preLen+1` invariant panic at graph.go:405.
+// Replacement semantics match the on-disk record store: the LAST
+// record with a given ID wins.
+//
+// History: this branch was added after a real "node not added" panic
+// during sprout's first-run auto-build on a workspace where the
+// Python/TS extractors produced `path:methodname` collisions across
+// classes in the same file.
 func (s *HNSWStore) ReplaceAll(records []VectorRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	newGraph := newConfiguredGraph()
-
+	// Build the dedup'd records map first so the graph and the store
+	// agree on which record won the collision (the LAST one wins,
+	// matching `newRecords[rec.ID] = *rec` semantics).
 	newRecords := make(map[string]VectorRecord, len(records))
 	for i := range records {
-		rec := &records[i]
+		newRecords[records[i].ID] = records[i]
+	}
+
+	newGraph := newConfiguredGraph()
+	for _, rec := range newRecords {
 		if len(rec.Embedding) > 0 {
 			newGraph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
 		}
-		newRecords[rec.ID] = *rec
 	}
 
 	s.graph = &hnsw.SavedGraph[string]{
